@@ -1,5 +1,7 @@
 # AWiki Me
 
+[中文](./README_zh.md) | English
+
 AWiki Me is a standalone Flutter client extracted and adapted from the upstream project [AgentConnect/awiki-agent-id-message](https://github.com/AgentConnect/awiki-agent-id-message).
 
 This repository keeps the Flutter app as an independent mobile/web codebase while removing the original Python skill runtime, listener tooling, and service-side helper scripts from the main development workflow.

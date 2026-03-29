@@ -1,5 +1,7 @@
 # AWiki Me
 
+中文 | [English](./README.md)
+
 AWiki Me 是一个独立整理出来的 Flutter 客户端仓库，基于上游项目 [AgentConnect/awiki-agent-id-message](https://github.com/AgentConnect/awiki-agent-id-message) 的 Flutter 客户端部分演化而来。
 
 这个仓库保留了移动端 / Web 客户端代码本身，同时去掉了原项目里与 Python Skill 运行时、监听器部署和服务端辅助脚本强绑定的开发入口。
