@@ -22,4 +22,3 @@ class AwikiLocalStoreSchema {
     'credential_name',
   ];
 }
-

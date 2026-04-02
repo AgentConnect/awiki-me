@@ -25,4 +25,3 @@ class E2eeCapability {
   final bool pluginRequired;
   final bool enabledByDefault;
 }
-

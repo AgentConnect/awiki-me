@@ -1,0 +1,249 @@
+{
+  "@@locale": "zh",
+  "appTitle": "AWiki Me",
+  "commonCancel": "取消",
+  "commonConfirm": "确定",
+  "commonDone": "完成",
+  "commonSend": "发送",
+  "commonJoin": "加入",
+  "commonBack": "返回",
+  "commonNext": "下一步",
+  "commonPrevious": "上一步",
+  "commonSave": "保存",
+  "commonGotIt": "知道了",
+  "commonPleaseWait": "请稍候...",
+  "commonLoading": "加载中...",
+  "commonError": "错误",
+  "onboardingLogin": "登录",
+  "onboardingRegister": "注册",
+  "onboardingImportCredential": "导入身份凭证",
+  "onboardingRefreshCredentials": "重新识别本地凭证",
+  "onboardingSendOtp": "发送验证码",
+  "onboardingOtp": "验证码",
+  "onboardingOtpPlaceholder": "输入验证码",
+  "onboardingEmail": "邮箱",
+  "onboardingEmailPlaceholder": "输入邮箱地址",
+  "onboardingSendActivationEmail": "发送激活邮件",
+  "onboardingEmailActivated": "邮箱已激活",
+  "onboardingCheckActivationStatus": "我已激活，检查状态",
+  "onboardingHandle": "账号用户名",
+  "onboardingHandlePlaceholder": "用户名 handle",
+  "onboardingNickname": "昵称",
+  "onboardingNicknamePlaceholder": "输入昵称",
+  "onboardingCompleteRegister": "完成注册",
+  "onboardingAuthMethod": "验证方式",
+  "onboardingAccountProfile": "账号资料",
+  "onboardingPhone": "手机号",
+  "onboardingPhonePlaceholder": "输入手机号",
+  "onboardingMissingLocalCredential": "暂未识别到本地凭证，请先重新识别。",
+  "onboardingIncompletePhoneTitle": "手机号不完整",
+  "onboardingIncompletePhoneContent": "请输入正确的手机号。",
+  "onboardingMissingOtpTitle": "缺少验证码",
+  "onboardingMissingOtpContent": "请输入收到的验证码后再继续。",
+  "onboardingMissingEmailTitle": "缺少邮箱",
+  "onboardingMissingEmailContent": "请输入邮箱地址。",
+  "onboardingNotActivatedTitle": "尚未激活",
+  "onboardingNotActivatedContent": "请先完成邮箱激活并检查状态。",
+  "onboardingInvalidHandleTitle": "handle 不合法",
+  "onboardingInvalidHandleContent": "仅支持小写字母、数字、中划线，长度 2-32。",
+  "onboardingMissingNicknameTitle": "缺少昵称",
+  "onboardingMissingNicknameContent": "请输入昵称。",
+  "secureMessagingClient": "Secure messaging client",
+  "conversationsTitle": "信息",
+  "conversationsNoMessagePreview": "暂无消息",
+  "conversationsEmptyTitle": "还没有消息",
+  "conversationsEmptySubtitle": "去添加好友、关注联系人，或者先加入一个群聊吧。",
+  "friendsTitle": "朋友",
+  "profileMeTitle": "我",
+  "profileFollowers": "粉丝",
+  "profileFollowing": "关注",
+  "profileGroups": "群组",
+  "profileEmpty": "暂无 profile",
+  "profileEditTitle": "编辑个人资料",
+  "profileBioPlaceholder": "个人简介",
+  "profileTagsPlaceholder": "标签，使用英文逗号分隔",
+  "settingsTitle": "设置",
+  "settingsLanguage": "语言",
+  "settingsLanguageSystem": "跟随系统",
+  "settingsLanguageZhHans": "简体中文",
+  "settingsLanguageEnglish": "English",
+  "settingsPushNotification": "消息推送通知",
+  "settingsExportCredential": "导出身份凭证",
+  "settingsExportCurrentCredential": "导出当前凭证：{credentialName}",
+  "@settingsExportCurrentCredential": {
+    "placeholders": {
+      "credentialName": {}
+    }
+  },
+  "settingsNoCredentialToExport": "当前暂无可导出的登录凭证",
+  "settingsLogout": "退出登录",
+  "settingsLogoutSubtitle": "清除本地登录状态并返回登录页",
+  "settingsDeleteCredential": "注销当前凭证",
+  "settingsDeleteCurrentCredential": "删除本地凭证：{credentialName}",
+  "@settingsDeleteCurrentCredential": {
+    "placeholders": {
+      "credentialName": {}
+    }
+  },
+  "settingsDeleteCredentialFallback": "删除当前登录凭证",
+  "settingsLogoutConfirmTitle": "退出登录",
+  "settingsLogoutConfirmContent": "确定要退出当前账号吗？",
+  "settingsDeleteCredentialConfirmTitle": "注销当前凭证",
+  "settingsDeleteCredentialConfirmContent": "将删除本地凭证 \"{credentialName}\"，并退出登录。确定继续吗？",
+  "@settingsDeleteCredentialConfirmContent": {
+    "placeholders": {
+      "credentialName": {}
+    }
+  },
+  "settingsDeleteCredentialConfirmAction": "确认注销",
+  "quickActionsTitle": "快捷操作",
+  "quickActionCreateGroup": "发起群聊",
+  "quickActionJoinGroup": "加入群聊",
+  "quickActionAddFriend": "添加朋友",
+  "addFriendTitle": "添加朋友",
+  "addFriendPlaceholder": "输入 Handle 或 DID",
+  "addFriendAlreadyExists": "已经添加或正在申请中",
+  "addFriendFollowed": "已关注",
+  "groupListTitle": "群聊列表",
+  "groupListEmpty": "还没有群组。先创建一个群，或使用 6 位 join-code 加入。",
+  "groupListLoading": "正在加载群数据...",
+  "groupJoinDialogTitle": "通过 Join-code 入群",
+  "groupJoinDialogPlaceholder": "输入 6 位数字 join-code",
+  "groupNoDescription": "暂无群描述",
+  "groupMemberCount": "{count} 人",
+  "@groupMemberCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupMemberCountCompact": "{count}人",
+  "@groupMemberCountCompact": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupJoinCodeLabel": "Join-code: {code}",
+  "@groupJoinCodeLabel": {
+    "placeholders": {
+      "code": {}
+    }
+  },
+  "groupIdLabel": "Group ID: {groupId}",
+  "@groupIdLabel": {
+    "placeholders": {
+      "groupId": {}
+    }
+  },
+  "groupEnterChat": "进入群聊",
+  "groupGetJoinCode": "获取当前 Join-code",
+  "groupRefreshJoinCode": "刷新 Join-code",
+  "groupRefreshSnapshot": "刷新群详情与成员",
+  "groupMembersTitle": "群成员",
+  "groupMembersEmpty": "暂无成员快照，先执行一次刷新群详情与成员。",
+  "groupCreateTitle": "创建群组",
+  "groupModeTitle": "群模式",
+  "groupModeChat": "Chat",
+  "groupModeDiscovery": "Discovery",
+  "groupFieldName": "名称",
+  "groupFieldNamePlaceholder": "群组名称",
+  "groupFieldSlug": "短链接",
+  "groupFieldSlugPlaceholder": "可选，不填则自动生成",
+  "groupFieldDescription": "介绍",
+  "groupFieldDescriptionPlaceholder": "群资料介绍",
+  "groupFieldGoal": "目标",
+  "groupFieldGoalPlaceholder": "建群目标",
+  "groupFieldRules": "规则",
+  "groupFieldRulesPlaceholder": "社群规则",
+  "groupFieldPrompt": "提示",
+  "groupFieldPromptPlaceholder": "发声引导 Message Prompt",
+  "groupCreating": "正在创建群组...",
+  "chatUnknownUser": "Unknown",
+  "chatConversationUntitled": "未命名会话",
+  "chatHeaderGroup": "GROUP",
+  "chatHeaderOnline": "ONLINE",
+  "chatInputPlaceholder": "Type a message...",
+  "peerProfileLoadFailed": "无法加载该用户的信息",
+  "peerProfileTitle": "个人资料",
+  "peerProfileSendMessage": "发消息",
+  "peerProfileUnfollow": "取消关注",
+  "peerProfileDeleteThread": "删除本地聊天记录",
+  "peerProfileUnfollowed": "已取消关注",
+  "peerProfileThreadDeleted": "本地聊天记录已删除",
+  "relationshipNone": "none",
+  "relationshipFollowing": "following",
+  "relationshipFollower": "follower",
+  "relationshipFriend": "friend",
+  "profileUpdated": "个人资料已更新",
+  "exportedTo": "已导出到 {path}",
+  "@exportedTo": {
+    "placeholders": {
+      "path": {}
+    }
+  },
+  "importSuccessSelectCredential": "导入成功，请选择该凭证登录",
+  "newMessageArrived": "你收到了新消息",
+  "requestTimeoutRetry": "请求超时，请检查网络后重试。",
+  "operationFailedRetry": "操作失败，请稍后重试。",
+  "emailNotActivatedClickLink": "邮箱尚未激活，请先点击邮件中的激活链接。",
+  "sessionExpiredRelogin": "登录状态已失效，请重新登录。",
+  "localCredentialNotFound": "本地未找到凭证：{credentialName}",
+  "@localCredentialNotFound": {
+    "placeholders": {
+      "credentialName": {}
+    }
+  },
+  "setupIdentityScriptMissing": "当前仓库未内置 setup_identity.py，请通过 AWIKI_SETUP_IDENTITY_SCRIPT 显式配置脚本路径后再删除凭证。",
+  "deleteCredentialFailed": "删除凭证失败：{credentialName}",
+  "@deleteCredentialFailed": {
+    "placeholders": {
+      "credentialName": {}
+    }
+  },
+  "noCredentialToExport": "当前没有已登录凭证可导出。",
+  "credentialPackFailed": "凭证打包失败，请稍后重试。",
+  "localCredentialIndexInvalid": "本地凭证索引格式不正确。",
+  "localCredentialIndexMissingCredentials": "本地凭证索引缺少 credentials。",
+  "credentialIndexEntryInvalid": "凭证索引项格式不正确：{key}",
+  "@credentialIndexEntryInvalid": {
+    "placeholders": {
+      "key": {}
+    }
+  },
+  "localCredentialDirectoryMissing": "无法定位本地凭证目录。",
+  "exportUnsupportedOnPlatform": "当前平台暂不支持导出身份凭证。",
+  "importUnsupportedOnPlatform": "当前平台暂不支持导入身份凭证。",
+  "currentCredentialIndexMissing": "未找到当前凭证的本地索引信息。",
+  "currentCredentialDidInvalid": "当前凭证的 DID 文档格式不正确。",
+  "zipMissingMetadata": "ZIP 包缺少必要的凭证元信息。",
+  "zipCredentialIncomplete": "ZIP 包中的凭证内容不完整。",
+  "invalidFileFormat": "文件格式不正确：{path}",
+  "@invalidFileFormat": {
+    "placeholders": {
+      "path": {}
+    }
+  },
+  "phoneInvalidIntlExample": "手机号格式不正确，请使用 +国家码手机号，例如 +8613800138000",
+  "phoneInvalidIntlOrCn": "手机号格式不正确，请输入国际格式或中国大陆 11 位手机号",
+  "handleInvalidPattern": "handle 仅支持小写字母、数字、中划线，长度 2-32，不能包含下划线",
+  "didRegistrationPluginMissing": "AWiki Me 当前未接入 DID 注册插件（{authHint}注册）。请先使用 Python 脚本注册并导入会话，或接入原生插件后再在 App 内完成注册。",
+  "@didRegistrationPluginMissing": {
+    "placeholders": {
+      "authHint": {}
+    }
+  },
+  "didRegistrationRefreshUnsupported": "AWiki Me 当前未接入 DID 注册插件，无法自动刷新 token。",
+  "e2eePluginMissing": "AWiki Me 当前未启用 E2EE，请接入原生插件实现",
+  "documentPickerFailed": "文件选择失败，请稍后重试。",
+  "linkOpenFailed": "无法打开链接",
+  "linkOpenFailedWithDetail": "无法打开链接: {detail}",
+  "@linkOpenFailedWithDetail": {
+    "placeholders": {
+      "detail": {}
+    }
+  },
+  "groupNameRequired": "群名称不能为空"
+}

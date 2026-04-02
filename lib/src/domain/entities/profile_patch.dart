@@ -11,4 +11,3 @@ class ProfilePatch {
   final List<String>? tags;
   final String? profileMarkdown;
 }
-

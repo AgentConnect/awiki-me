@@ -13,4 +13,3 @@ class SessionIdentity {
   final String? handle;
   final String? jwtToken;
 }
-

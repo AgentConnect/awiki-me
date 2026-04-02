@@ -44,4 +44,3 @@ abstract class E2eeFacade {
 
   Future<void> importSessionState(Map<String, Object?> state);
 }
-

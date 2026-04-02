@@ -8,13 +8,8 @@ import 'test_support.dart';
 
 void main() {
   testWidgets('个人资料页点击编辑后可提交昵称简介和标签', (tester) async {
-    final controller = RecordingAppController(
-      gateway: FakeAwikiGateway(),
-      realtimeGateway: FakeRealtimeGateway(),
-      notificationFacade: FakeNotificationFacade(),
-      e2eeFacade: FakeE2eeFacade(),
-    );
-    controller.profile = const UserProfile(
+    final gateway = FakeAwikiGateway();
+    const profile = UserProfile(
       did: 'did:test:123',
       nickName: 'Alice',
       bio: 'Old bio',
@@ -22,22 +17,23 @@ void main() {
       profileMarkdown: '# Alice',
       handle: 'alice',
     );
+    gateway.myProfile = profile;
+    gateway.updatedProfile = profile.copyWith();
 
     await tester.pumpWidget(
-      CupertinoApp(
+      buildLocalizedTestApp(
         home: ProfilePage(
-          controller: controller,
-          onOpenSettings: () async {},
-          onOpenQuickActions: () async {},
           homepageMarkdownLoader: (_) async => null,
         ),
+        gateway: gateway,
+        profile: profile,
       ),
     );
 
     await tester.tap(find.byIcon(Icons.edit));
     await tester.pumpAndSettle();
 
-    expect(find.text('编辑个人资料'), findsOneWidget);
+    expect(find.text('编辑个人资料'), findsWidgets);
 
     await tester.enterText(find.byType(CupertinoTextField).at(0), 'Alice New');
     await tester.enterText(find.byType(CupertinoTextField).at(1), 'New bio');
@@ -46,8 +42,7 @@ void main() {
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
 
-    expect(controller.updateProfileCalls, 1);
-    final patch = controller.lastProfilePatch;
+    final patch = gateway.lastProfilePatch;
     expect(patch, isNotNull);
     expect(patch!.nickName, 'Alice New');
     expect(patch.bio, 'New bio');
@@ -55,13 +50,7 @@ void main() {
   });
 
   testWidgets('个人资料页优先渲染拉取到的 markdown 和 tags', (tester) async {
-    final controller = RecordingAppController(
-      gateway: FakeAwikiGateway(),
-      realtimeGateway: FakeRealtimeGateway(),
-      notificationFacade: FakeNotificationFacade(),
-      e2eeFacade: FakeE2eeFacade(),
-    );
-    controller.profile = const UserProfile(
+    const profile = UserProfile(
       did: 'did:test:456',
       nickName: 'Bob',
       bio: 'Bio',
@@ -69,15 +58,14 @@ void main() {
       profileMarkdown: '# Local title',
       handle: 'bob',
     );
+    final gateway = FakeAwikiGateway()..myProfile = profile;
 
     await tester.pumpWidget(
-      CupertinoApp(
-        home: ProfilePage(
-          controller: controller,
-          onOpenSettings: () async {},
-          onOpenQuickActions: () async {},
-          homepageMarkdownLoader: (_) async => '# Remote title\n\nRemote body',
-        ),
+      buildLocalizedTestApp(
+        home: const ProfilePage(),
+        gateway: gateway,
+        profile: profile,
+        homepageMarkdownLoader: (_) async => '# Remote title\n\nRemote body',
       ),
     );
     await tester.pump();

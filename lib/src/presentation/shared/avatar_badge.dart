@@ -1,5 +1,7 @@
 import 'package:flutter/cupertino.dart';
 
+import 'awiki_me_design.dart';
+
 class AvatarBadge extends StatelessWidget {
   const AvatarBadge({
     super.key,
@@ -15,7 +17,7 @@ class AvatarBadge extends StatelessWidget {
     final normalized = seed.trim();
     final initial =
         normalized.isEmpty ? '?' : normalized.substring(0, 1).toUpperCase();
-    final palette = _paletteForSeed(normalized);
+    final palette = _paletteForSeed(context, normalized);
     return Container(
       width: size,
       height: size,
@@ -35,14 +37,21 @@ class AvatarBadge extends StatelessWidget {
     );
   }
 
-  (Color, Color) _paletteForSeed(String value) {
-    const palettes = <(Color, Color)>[
-      (Color(0xFFDCEBFF), Color(0xFF2563EB)),
-      (Color(0xFFD8F8E8), Color(0xFF059669)),
-      (Color(0xFFF3E8FF), Color(0xFF9333EA)),
-      (Color(0xFFFFEDD5), Color(0xFFEA580C)),
-      (Color(0xFFFFE4E6), Color(0xFFE11D48)),
-      (Color(0xFFE0F2FE), Color(0xFF0284C7)),
+  (Color, Color) _paletteForSeed(BuildContext context, String value) {
+    final theme = context.awikiTheme;
+    final palettes = <(Color, Color)>[
+      (
+        theme.colorScheme.secondaryContainer,
+        theme.colorScheme.onSecondaryContainer
+      ),
+      (
+        theme.colorScheme.tertiaryContainer,
+        theme.colorScheme.onTertiaryContainer
+      ),
+      (theme.warningContainer, theme.primaryDark),
+      (theme.subtleSurface, theme.infoAccent),
+      (theme.dangerContainer, theme.danger),
+      (theme.mutedSurface, theme.title),
     ];
     final hash =
         value.isEmpty ? 0 : value.codeUnits.fold<int>(0, (a, b) => a + b);

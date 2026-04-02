@@ -1,29 +1,32 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Icons;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../app_shell/app_controller.dart';
+import '../../app/app_router.dart';
+import '../../l10n/app_message.dart';
+import '../../l10n/l10n.dart';
+import '../../app/ui_feedback.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/awiki_me_top_bar.dart';
+import '../shared/widgets/app_widgets.dart';
 import 'group_list_page.dart';
+import 'group_provider.dart';
 
-class CreateGroupPage extends StatefulWidget {
-  const CreateGroupPage({super.key, required this.controller});
-
-  final AppController controller;
+class CreateGroupPage extends ConsumerStatefulWidget {
+  const CreateGroupPage({super.key});
 
   @override
-  State<CreateGroupPage> createState() => _CreateGroupPageState();
+  ConsumerState<CreateGroupPage> createState() => _CreateGroupPageState();
 }
 
-class _CreateGroupPageState extends State<CreateGroupPage> {
+class _CreateGroupPageState extends ConsumerState<CreateGroupPage> {
   final _nameController = TextEditingController();
   final _slugController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _goalController = TextEditingController();
   final _rulesController = TextEditingController();
   final _promptController = TextEditingController();
-
   String _groupMode = 'chat';
   bool _isLoading = false;
 
@@ -41,42 +44,33 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
   Future<void> _create() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      _showError('群名称不能为空');
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.groupNameRequired());
       return;
     }
     final slug = _slugController.text.trim().isEmpty
         ? 'slug_${DateTime.now().millisecondsSinceEpoch}'
         : _slugController.text.trim();
-
     setState(() => _isLoading = true);
     try {
-      final group = await widget.controller.createGroup(
-        name: name,
-        slug: slug,
-        description: _descriptionController.text.trim(),
-        goal: _goalController.text.trim(),
-        rules: _rulesController.text.trim(),
-        messagePrompt: _promptController.text.trim(),
-        groupMode: _groupMode,
+      final group = await ref.read(groupProvider.notifier).createGroup(
+            name: name,
+            slug: slug,
+            description: _descriptionController.text.trim(),
+            goal: _goalController.text.trim(),
+            rules: _rulesController.text.trim(),
+            messagePrompt: _promptController.text.trim(),
+            groupMode: _groupMode,
+          );
+      await ref.read(groupProvider.notifier).loadGroupMembers(group.groupId);
+      if (!mounted) {
+        return;
+      }
+      await AppNavigator.pushReplacement<void, void>(
+        context,
+        (_) => GroupDetailPage(initialGroup: group),
       );
-      if (mounted && group != null) {
-        await widget.controller.loadGroupMembers(group.groupId);
-        if (!mounted) {
-          return;
-        }
-        Navigator.of(context).pushReplacement(
-          CupertinoPageRoute<void>(
-            builder: (_) => GroupDetailPage(
-              controller: widget.controller,
-              initialGroup: group,
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        _showError(e.toString());
-      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -84,39 +78,24 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
     }
   }
 
-  void _showError(String message) {
-    showCupertinoDialog<void>(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('错误'),
-        content: Text(message),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
     return Stack(
       children: <Widget>[
         CupertinoPageScaffold(
-          backgroundColor: AwikiMeColors.background,
+          backgroundColor: theme.background,
           child: SafeArea(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
               children: <Widget>[
                 AwikiMeTopBar(
-                  title: '创建群组',
+                  title: context.l10n.groupCreateTitle,
                   padding: EdgeInsets.zero,
                   trailingWidth: 48,
-                  leading: GestureDetector(
-                    onTap: _isLoading ? null : () => Navigator.of(context).pop(),
+                  leading: TopBarActionButton(
+                    onTap:
+                        _isLoading ? null : () => Navigator.of(context).pop(),
                     child: const Icon(
                       Icons.arrow_back,
                       color: AwikiMeColors.primaryDark,
@@ -125,12 +104,12 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
                   ),
                   trailing: _isLoading
                       ? const CupertinoActivityIndicator()
-                      : GestureDetector(
+                      : TopBarActionButton(
                           onTap: _create,
-                          child: const Text(
-                            '完成',
+                          child: Text(
+                            context.l10n.commonDone,
                             style: TextStyle(
-                              color: AwikiMeColors.primary,
+                              color: theme.primary,
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
                             ),
@@ -138,49 +117,67 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
                         ),
                 ),
                 const SizedBox(height: 16),
-                Container(
-                  decoration: AwikiMeDecorations.card(color: AwikiMeColors.surface),
-                  padding: const EdgeInsets.all(20),
+                AppCardSection(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      const Text('群模式', style: AwikiMeTextStyles.sectionTitle),
+                      Text(
+                        context.l10n.groupModeTitle,
+                        style: AwikiMeTextStyles.sectionTitle,
+                      ),
                       const SizedBox(height: 12),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: AwikiMeColors.mutedSurface,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
+                      AppSurface(
+                        color: theme.mutedSurface,
                         padding: const EdgeInsets.all(4),
+                        radius: AwikiMeRadii.pill,
                         child: Row(
                           children: <Widget>[
                             _ModeButton(
                               active: _groupMode == 'chat',
-                              label: 'Chat',
-                              onTap: _isLoading
-                                  ? () {}
-                                  : () => setState(() => _groupMode = 'chat'),
+                              label: context.l10n.groupModeChat,
+                              onTap: () => setState(() => _groupMode = 'chat'),
                             ),
                             _ModeButton(
                               active: _groupMode == 'discovery',
-                              label: 'Discovery',
-                              onTap: _isLoading
-                                  ? () {}
-                                  : () => setState(() => _groupMode = 'discovery'),
+                              label: context.l10n.groupModeDiscovery,
+                              onTap: () =>
+                                  setState(() => _groupMode = 'discovery'),
                             ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 20),
-                      _buildField('名称', _nameController, '群组名称'),
-                      _buildField('短链接', _slugController, '可选，不填则自动生成'),
-                      _buildField('介绍', _descriptionController, '群资料介绍'),
-                      _buildField('目标', _goalController, '建群目标', multiline: true),
-                      _buildField('规则', _rulesController, '社群规则', multiline: true),
                       _buildField(
-                        '提示',
+                        context.l10n.groupFieldName,
+                        _nameController,
+                        context.l10n.groupFieldNamePlaceholder,
+                      ),
+                      _buildField(
+                        context.l10n.groupFieldSlug,
+                        _slugController,
+                        context.l10n.groupFieldSlugPlaceholder,
+                      ),
+                      _buildField(
+                        context.l10n.groupFieldDescription,
+                        _descriptionController,
+                        context.l10n.groupFieldDescriptionPlaceholder,
+                      ),
+                      _buildField(
+                        context.l10n.groupFieldGoal,
+                        _goalController,
+                        context.l10n.groupFieldGoalPlaceholder,
+                        multiline: true,
+                      ),
+                      _buildField(
+                        context.l10n.groupFieldRules,
+                        _rulesController,
+                        context.l10n.groupFieldRulesPlaceholder,
+                        multiline: true,
+                      ),
+                      _buildField(
+                        context.l10n.groupFieldPrompt,
                         _promptController,
-                        '发声引导 Message Prompt',
+                        context.l10n.groupFieldPromptPlaceholder,
                         multiline: true,
                       ),
                     ],
@@ -190,7 +187,7 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
             ),
           ),
         ),
-        if (_isLoading) const AwikiMeLoadingMask(label: '正在创建群组...'),
+        if (_isLoading) AwikiMeLoadingMask(label: context.l10n.groupCreating),
       ],
     );
   }
@@ -203,36 +200,12 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AwikiMeColors.background,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AwikiMeColors.secondaryText,
-              ),
-            ),
-            const SizedBox(height: 6),
-            CupertinoTextField(
-              controller: controller,
-              placeholder: placeholder,
-              decoration: null,
-              minLines: multiline ? 3 : 1,
-              maxLines: multiline ? 5 : 1,
-              textAlign: TextAlign.left,
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              enabled: !_isLoading,
-            ),
-          ],
-        ),
+      child: AppTextField(
+        controller: controller,
+        label: label,
+        placeholder: placeholder,
+        multiline: multiline,
+        enabled: !_isLoading,
       ),
     );
   }
@@ -251,14 +224,15 @@ class _ModeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: active ? AwikiMeColors.surface : CupertinoColors.transparent,
-            borderRadius: BorderRadius.circular(999),
+            color: active ? theme.surface : CupertinoColors.transparent,
+            borderRadius: BorderRadius.circular(AwikiMeRadii.pill),
           ),
           child: Text(
             label,
@@ -266,7 +240,7 @@ class _ModeButton extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w700,
-              color: active ? AwikiMeColors.title : AwikiMeColors.primaryDark,
+              color: active ? theme.title : theme.primaryDark,
             ),
           ),
         ),

@@ -1,27 +1,37 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Icons;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../app_shell/app_controller.dart';
+import '../../app/app_locale.dart';
+import '../../app/app_services.dart';
+import '../../app/app_router.dart';
+import '../../l10n/l10n.dart';
+import '../app_shell/providers/app_runtime_provider.dart';
+import '../app_shell/providers/session_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_top_bar.dart';
+import '../shared/widgets/app_widgets.dart';
 
-class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key, required this.controller});
-
-  final AppController controller;
+class SettingsPage extends ConsumerWidget {
+  const SettingsPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final session = ref.watch(sessionProvider).session;
+    final runtime = ref.read(appRuntimeProvider.notifier);
+    final localeMode = ref.watch(appLocaleModeProvider);
+    final theme = context.awikiTheme;
     return CupertinoPageScaffold(
-      backgroundColor: AwikiMeColors.background,
+      backgroundColor: theme.background,
       child: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
           children: <Widget>[
             AwikiMeTopBar(
-              title: '设置',
+              title: l10n.settingsTitle,
               padding: EdgeInsets.zero,
-              leading: GestureDetector(
+              leading: TopBarActionButton(
                 onTap: () => Navigator.of(context).pop(),
                 child: const Icon(
                   Icons.arrow_back,
@@ -31,18 +41,27 @@ class SettingsPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            Container(
-              decoration: AwikiMeDecorations.card(color: AwikiMeColors.surface),
+            AppCardSection(
+              padding: EdgeInsets.zero,
               child: Column(
                 children: <Widget>[
-                  _SettingsRow(
-                    icon: Icons.notifications_none,
-                    title: '消息推送通知',
+                  AppListTile(
+                    title: l10n.settingsLanguage,
+                    subtitle: _languageLabel(context, localeMode),
+                    leading: const _SettingsIconBadge(icon: Icons.language),
+                    onTap: () => _showLanguageSheet(context, ref, localeMode),
+                  ),
+                  const AppSectionDivider(),
+                  AppListTile(
+                    title: l10n.settingsPushNotification,
+                    leading: const _SettingsIconBadge(
+                      icon: Icons.notifications_none,
+                    ),
                     trailing: Transform.scale(
                       scale: 0.88,
-                      child: const CupertinoSwitch(
+                      child: CupertinoSwitch(
                         value: true,
-                        activeColor: AwikiMeColors.online,
+                        activeColor: theme.success,
                         onChanged: null,
                       ),
                     ),
@@ -51,37 +70,53 @@ class SettingsPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            Container(
-              decoration: AwikiMeDecorations.card(color: AwikiMeColors.surface),
+            AppCardSection(
+              padding: EdgeInsets.zero,
               child: Column(
                 children: <Widget>[
-                  _SettingsRow(
-                    icon: Icons.ios_share,
-                    title: '导出身份凭证',
-                    subtitle: controller.session?.credentialName != null
-                        ? '导出当前凭证：${controller.session!.credentialName}'
-                        : '当前暂无可导出的登录凭证',
-                    onTap: controller.session == null || controller.isBusy
+                  AppListTile(
+                    title: l10n.settingsExportCredential,
+                    subtitle: session?.credentialName != null
+                        ? l10n.settingsExportCurrentCredential(
+                            session!.credentialName,
+                          )
+                        : l10n.settingsNoCredentialToExport,
+                    leading: const _SettingsIconBadge(icon: Icons.ios_share),
+                    onTap: session == null
                         ? null
-                        : controller.exportCurrentCredential,
+                        : runtime.exportCurrentCredential,
                   ),
-                  const _Divider(),
-                  _SettingsRow(
-                    icon: Icons.logout,
-                    title: '退出登录',
-                    subtitle: '清除本地登录状态并返回登录页',
+                  const AppSectionDivider(),
+                  AppListTile(
+                    title: l10n.settingsLogout,
+                    subtitle: l10n.settingsLogoutSubtitle,
                     destructive: true,
-                    onTap: () => _showLogoutDialog(context),
+                    leading: const _SettingsIconBadge(
+                      icon: Icons.logout,
+                      destructive: true,
+                    ),
+                    onTap: () => _showLogoutDialog(context, runtime),
                   ),
-                  const _Divider(),
-                  _SettingsRow(
-                    icon: Icons.delete_outline,
-                    title: '注销当前凭证',
-                    subtitle: controller.session?.credentialName != null
-                        ? '删除本地凭证：${controller.session!.credentialName}'
-                        : '删除当前登录凭证',
+                  const AppSectionDivider(),
+                  AppListTile(
+                    title: l10n.settingsDeleteCredential,
+                    subtitle: session?.credentialName != null
+                        ? l10n.settingsDeleteCurrentCredential(
+                            session!.credentialName,
+                          )
+                        : l10n.settingsDeleteCredentialFallback,
                     destructive: true,
-                    onTap: () => _showDeleteCredentialDialog(context),
+                    leading: const _SettingsIconBadge(
+                      icon: Icons.delete_outline,
+                      destructive: true,
+                    ),
+                    onTap: session == null
+                        ? null
+                        : () => _showDeleteCredentialDialog(
+                              context,
+                              runtime,
+                              session.credentialName,
+                            ),
                   ),
                 ],
               ),
@@ -92,58 +127,126 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  void _showLogoutDialog(BuildContext context) {
-    showCupertinoDialog<void>(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('退出登录'),
-        content: const Text('确定要退出当前账号吗？'),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
+  String _languageLabel(BuildContext context, AppLocaleMode mode) {
+    final l10n = context.l10n;
+    switch (mode) {
+      case AppLocaleMode.system:
+        return l10n.settingsLanguageSystem;
+      case AppLocaleMode.zhHans:
+        return l10n.settingsLanguageZhHans;
+      case AppLocaleMode.english:
+        return l10n.settingsLanguageEnglish;
+    }
+  }
+
+  Future<void> _showLanguageSheet(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocaleMode currentMode,
+  ) {
+    final l10n = context.l10n;
+    return AppNavigator.showSheet<void>(
+      context,
+      (sheetContext) => AppDropMenu(
+        title: l10n.settingsLanguage.toUpperCase(),
+        items: <AppDropMenuItem>[
+          _buildLanguageAction(
+            ref: ref,
+            mode: AppLocaleMode.system,
+            currentMode: currentMode,
+            label: l10n.settingsLanguageSystem,
           ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              await controller.logout();
-              if (context.mounted) {
-                Navigator.of(context).pop();
-              }
-            },
-            child: const Text('退出'),
+          _buildLanguageAction(
+            ref: ref,
+            mode: AppLocaleMode.zhHans,
+            currentMode: currentMode,
+            label: l10n.settingsLanguageZhHans,
+          ),
+          _buildLanguageAction(
+            ref: ref,
+            mode: AppLocaleMode.english,
+            currentMode: currentMode,
+            label: l10n.settingsLanguageEnglish,
           ),
         ],
       ),
     );
   }
 
-  void _showDeleteCredentialDialog(BuildContext context) {
-    final credentialName = controller.session?.credentialName;
-    if (credentialName == null || credentialName.isEmpty) {
-      return;
-    }
-    showCupertinoDialog<void>(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('注销当前凭证'),
-        content: Text('将删除本地凭证 "$credentialName"，并退出登录。确定继续吗？'),
+  AppDropMenuItem _buildLanguageAction({
+    required WidgetRef ref,
+    required AppLocaleMode mode,
+    required AppLocaleMode currentMode,
+    required String label,
+  }) {
+    final isSelected = currentMode == mode;
+    return AppDropMenuItem(
+      label: label,
+      highlighted: isSelected,
+      onTap: () async {
+        await ref.read(localePreferenceServiceProvider).saveMode(mode);
+        ref.read(appLocaleModeProvider.notifier).state = mode;
+      },
+    );
+  }
+
+  void _showLogoutDialog(
+    BuildContext context,
+    AppRuntimeController runtime,
+  ) {
+    AppNavigator.showDialog<void>(
+      context,
+      (ctx) => CupertinoAlertDialog(
+        title: Text(context.l10n.settingsLogoutConfirmTitle),
+        content: Text(context.l10n.settingsLogoutConfirmContent),
         actions: <Widget>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
+            child: Text(context.l10n.commonCancel),
           ),
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () async {
               Navigator.of(ctx).pop();
-              await controller.deleteCurrentCredential();
+              await runtime.logout();
               if (context.mounted) {
                 Navigator.of(context).pop();
               }
             },
-            child: const Text('确认注销'),
+            child: Text(context.l10n.settingsLogout),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteCredentialDialog(
+    BuildContext context,
+    AppRuntimeController runtime,
+    String credentialName,
+  ) {
+    AppNavigator.showDialog<void>(
+      context,
+      (ctx) => CupertinoAlertDialog(
+        title: Text(context.l10n.settingsDeleteCredentialConfirmTitle),
+        content: Text(
+          context.l10n.settingsDeleteCredentialConfirmContent(credentialName),
+        ),
+        actions: <Widget>[
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(context.l10n.commonCancel),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              await runtime.deleteCurrentCredential();
+              if (context.mounted) {
+                Navigator.of(context).pop();
+              }
+            },
+            child: Text(context.l10n.settingsDeleteCredentialConfirmAction),
           ),
         ],
       ),
@@ -151,96 +254,27 @@ class SettingsPage extends StatelessWidget {
   }
 }
 
-class _SettingsRow extends StatelessWidget {
-  const _SettingsRow({
+class _SettingsIconBadge extends StatelessWidget {
+  const _SettingsIconBadge({
     required this.icon,
-    required this.title,
-    this.subtitle,
-    this.trailing,
-    this.onTap,
     this.destructive = false,
   });
 
   final IconData icon;
-  final String title;
-  final String? subtitle;
-  final Widget? trailing;
-  final VoidCallback? onTap;
   final bool destructive;
 
   @override
   Widget build(BuildContext context) {
-    final content = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: destructive
-                  ? const Color(0xFFFFEBEB)
-                  : AwikiMeColors.subtleSurface,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              icon,
-              size: 20,
-              color: destructive ? AwikiMeColors.danger : AwikiMeColors.primaryDark,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: destructive ? AwikiMeColors.danger : AwikiMeColors.title,
-                  ),
-                ),
-                if (subtitle != null) ...<Widget>[
-                  const SizedBox(height: 2),
-                  Text(subtitle!, style: AwikiMeTextStyles.cardSubtitle),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          trailing ??
-              Icon(
-                Icons.chevron_right,
-                size: 18,
-                color: onTap == null
-                    ? AwikiMeColors.border
-                    : AwikiMeColors.tertiaryText,
-              ),
-        ],
-      ),
-    );
-
-    if (onTap == null) {
-      return content;
-    }
-    return GestureDetector(onTap: onTap, child: content);
-  }
-}
-
-class _Divider extends StatelessWidget {
-  const _Divider();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16),
-      child: SizedBox(
-        height: 1,
-        child: DecoratedBox(
-          decoration: BoxDecoration(color: AwikiMeColors.border),
-        ),
+    final theme = context.awikiTheme;
+    return AppSurface(
+      padding: EdgeInsets.zero,
+      color: destructive ? const Color(0xFFFFEBEB) : theme.subtleSurface,
+      radius: 12,
+      constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+      child: Icon(
+        icon,
+        size: 20,
+        color: destructive ? theme.danger : theme.primaryDark,
       ),
     );
   }

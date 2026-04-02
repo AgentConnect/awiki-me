@@ -9,4 +9,3 @@ class RelationshipSummary {
   final String displayName;
   final String relationship;
 }
-

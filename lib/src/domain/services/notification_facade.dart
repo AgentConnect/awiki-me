@@ -6,4 +6,3 @@ abstract class NotificationFacade {
 
   Future<void> updateBadgeCount(int count);
 }
-

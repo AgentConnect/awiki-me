@@ -1,0 +1,249 @@
+{
+  "@@locale": "en",
+  "appTitle": "AWiki Me",
+  "commonCancel": "Cancel",
+  "commonConfirm": "Confirm",
+  "commonDone": "Done",
+  "commonSend": "Send",
+  "commonJoin": "Join",
+  "commonBack": "Back",
+  "commonNext": "Next",
+  "commonPrevious": "Previous",
+  "commonSave": "Save",
+  "commonGotIt": "Got it",
+  "commonPleaseWait": "Please wait...",
+  "commonLoading": "Loading...",
+  "commonError": "Error",
+  "onboardingLogin": "Log in",
+  "onboardingRegister": "Register",
+  "onboardingImportCredential": "Import identity credential",
+  "onboardingRefreshCredentials": "Rescan local credentials",
+  "onboardingSendOtp": "Send verification code",
+  "onboardingOtp": "Verification code",
+  "onboardingOtpPlaceholder": "Enter verification code",
+  "onboardingEmail": "Email",
+  "onboardingEmailPlaceholder": "Enter email address",
+  "onboardingSendActivationEmail": "Send activation email",
+  "onboardingEmailActivated": "Email activated",
+  "onboardingCheckActivationStatus": "I've activated it, check status",
+  "onboardingHandle": "Username",
+  "onboardingHandlePlaceholder": "Username handle",
+  "onboardingNickname": "Nickname",
+  "onboardingNicknamePlaceholder": "Enter nickname",
+  "onboardingCompleteRegister": "Complete registration",
+  "onboardingAuthMethod": "Verification",
+  "onboardingAccountProfile": "Account profile",
+  "onboardingPhone": "Phone",
+  "onboardingPhonePlaceholder": "Enter phone number",
+  "onboardingMissingLocalCredential": "No local credential detected yet. Please rescan first.",
+  "onboardingIncompletePhoneTitle": "Incomplete phone number",
+  "onboardingIncompletePhoneContent": "Please enter a valid phone number.",
+  "onboardingMissingOtpTitle": "Verification code missing",
+  "onboardingMissingOtpContent": "Enter the verification code before continuing.",
+  "onboardingMissingEmailTitle": "Email missing",
+  "onboardingMissingEmailContent": "Please enter your email address.",
+  "onboardingNotActivatedTitle": "Not activated yet",
+  "onboardingNotActivatedContent": "Please finish email activation and check the status first.",
+  "onboardingInvalidHandleTitle": "Invalid handle",
+  "onboardingInvalidHandleContent": "Only lowercase letters, numbers, and hyphens are allowed, 2-32 characters.",
+  "onboardingMissingNicknameTitle": "Nickname missing",
+  "onboardingMissingNicknameContent": "Please enter a nickname.",
+  "secureMessagingClient": "Secure messaging client",
+  "conversationsTitle": "Messages",
+  "conversationsNoMessagePreview": "No messages yet",
+  "conversationsEmptyTitle": "No messages yet",
+  "conversationsEmptySubtitle": "Add friends, follow contacts, or join a group chat to get started.",
+  "friendsTitle": "Friends",
+  "profileMeTitle": "Me",
+  "profileFollowers": "Followers",
+  "profileFollowing": "Following",
+  "profileGroups": "Groups",
+  "profileEmpty": "No profile yet",
+  "profileEditTitle": "Edit profile",
+  "profileBioPlaceholder": "Bio",
+  "profileTagsPlaceholder": "Tags, separated by commas",
+  "settingsTitle": "Settings",
+  "settingsLanguage": "Language",
+  "settingsLanguageSystem": "Follow system",
+  "settingsLanguageZhHans": "简体中文",
+  "settingsLanguageEnglish": "English",
+  "settingsPushNotification": "Push notifications",
+  "settingsExportCredential": "Export identity credential",
+  "settingsExportCurrentCredential": "Export current credential: {credentialName}",
+  "@settingsExportCurrentCredential": {
+    "placeholders": {
+      "credentialName": {}
+    }
+  },
+  "settingsNoCredentialToExport": "No signed-in credential available to export",
+  "settingsLogout": "Log out",
+  "settingsLogoutSubtitle": "Clear local sign-in state and return to the sign-in page",
+  "settingsDeleteCredential": "Delete current credential",
+  "settingsDeleteCurrentCredential": "Delete local credential: {credentialName}",
+  "@settingsDeleteCurrentCredential": {
+    "placeholders": {
+      "credentialName": {}
+    }
+  },
+  "settingsDeleteCredentialFallback": "Delete current signed-in credential",
+  "settingsLogoutConfirmTitle": "Log out",
+  "settingsLogoutConfirmContent": "Are you sure you want to log out of the current account?",
+  "settingsDeleteCredentialConfirmTitle": "Delete current credential",
+  "settingsDeleteCredentialConfirmContent": "This will delete the local credential \"{credentialName}\" and log you out. Continue?",
+  "@settingsDeleteCredentialConfirmContent": {
+    "placeholders": {
+      "credentialName": {}
+    }
+  },
+  "settingsDeleteCredentialConfirmAction": "Delete credential",
+  "quickActionsTitle": "Quick actions",
+  "quickActionCreateGroup": "Start group chat",
+  "quickActionJoinGroup": "Join group chat",
+  "quickActionAddFriend": "Add friend",
+  "addFriendTitle": "Add friend",
+  "addFriendPlaceholder": "Enter Handle or DID",
+  "addFriendAlreadyExists": "Already added or pending approval",
+  "addFriendFollowed": "Followed",
+  "groupListTitle": "Group chats",
+  "groupListEmpty": "No groups yet. Create one or join with a 6-digit join code.",
+  "groupListLoading": "Loading group data...",
+  "groupJoinDialogTitle": "Join with a join code",
+  "groupJoinDialogPlaceholder": "Enter a 6-digit join code",
+  "groupNoDescription": "No group description yet",
+  "groupMemberCount": "{count} members",
+  "@groupMemberCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupMemberCountCompact": "{count} members",
+  "@groupMemberCountCompact": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupJoinCodeLabel": "Join code: {code}",
+  "@groupJoinCodeLabel": {
+    "placeholders": {
+      "code": {}
+    }
+  },
+  "groupIdLabel": "Group ID: {groupId}",
+  "@groupIdLabel": {
+    "placeholders": {
+      "groupId": {}
+    }
+  },
+  "groupEnterChat": "Enter group chat",
+  "groupGetJoinCode": "Get current join code",
+  "groupRefreshJoinCode": "Refresh join code",
+  "groupRefreshSnapshot": "Refresh group details and members",
+  "groupMembersTitle": "Members",
+  "groupMembersEmpty": "No member snapshot yet. Refresh group details and members first.",
+  "groupCreateTitle": "Create group",
+  "groupModeTitle": "Group mode",
+  "groupModeChat": "Chat",
+  "groupModeDiscovery": "Discovery",
+  "groupFieldName": "Name",
+  "groupFieldNamePlaceholder": "Group name",
+  "groupFieldSlug": "Slug",
+  "groupFieldSlugPlaceholder": "Optional, auto-generated if empty",
+  "groupFieldDescription": "Description",
+  "groupFieldDescriptionPlaceholder": "Group description",
+  "groupFieldGoal": "Goal",
+  "groupFieldGoalPlaceholder": "Group goal",
+  "groupFieldRules": "Rules",
+  "groupFieldRulesPlaceholder": "Community rules",
+  "groupFieldPrompt": "Prompt",
+  "groupFieldPromptPlaceholder": "Message prompt for participation",
+  "groupCreating": "Creating group...",
+  "chatUnknownUser": "Unknown",
+  "chatConversationUntitled": "Untitled conversation",
+  "chatHeaderGroup": "GROUP",
+  "chatHeaderOnline": "ONLINE",
+  "chatInputPlaceholder": "Type a message...",
+  "peerProfileLoadFailed": "Unable to load this user's profile",
+  "peerProfileTitle": "Profile",
+  "peerProfileSendMessage": "Send message",
+  "peerProfileUnfollow": "Unfollow",
+  "peerProfileDeleteThread": "Delete local chat history",
+  "peerProfileUnfollowed": "Unfollowed",
+  "peerProfileThreadDeleted": "Local chat history deleted",
+  "relationshipNone": "none",
+  "relationshipFollowing": "following",
+  "relationshipFollower": "follower",
+  "relationshipFriend": "friend",
+  "profileUpdated": "Profile updated",
+  "exportedTo": "Exported to {path}",
+  "@exportedTo": {
+    "placeholders": {
+      "path": {}
+    }
+  },
+  "importSuccessSelectCredential": "Import succeeded. Please choose this credential to log in.",
+  "newMessageArrived": "You received a new message",
+  "requestTimeoutRetry": "The request timed out. Please check your network and try again.",
+  "operationFailedRetry": "The operation failed. Please try again later.",
+  "emailNotActivatedClickLink": "The email is not activated yet. Please click the activation link in the email first.",
+  "sessionExpiredRelogin": "Your sign-in session has expired. Please log in again.",
+  "localCredentialNotFound": "Local credential not found: {credentialName}",
+  "@localCredentialNotFound": {
+    "placeholders": {
+      "credentialName": {}
+    }
+  },
+  "setupIdentityScriptMissing": "This repository does not include setup_identity.py. Configure AWIKI_SETUP_IDENTITY_SCRIPT explicitly before deleting the credential.",
+  "deleteCredentialFailed": "Failed to delete credential: {credentialName}",
+  "@deleteCredentialFailed": {
+    "placeholders": {
+      "credentialName": {}
+    }
+  },
+  "noCredentialToExport": "There is no signed-in credential available to export.",
+  "credentialPackFailed": "Failed to package the credential. Please try again later.",
+  "localCredentialIndexInvalid": "The local credential index format is invalid.",
+  "localCredentialIndexMissingCredentials": "The local credential index is missing the credentials field.",
+  "credentialIndexEntryInvalid": "The credential index entry format is invalid: {key}",
+  "@credentialIndexEntryInvalid": {
+    "placeholders": {
+      "key": {}
+    }
+  },
+  "localCredentialDirectoryMissing": "Unable to locate the local credential directory.",
+  "exportUnsupportedOnPlatform": "Exporting identity credentials is not supported on this platform yet.",
+  "importUnsupportedOnPlatform": "Importing identity credentials is not supported on this platform yet.",
+  "currentCredentialIndexMissing": "Unable to find the local index info for the current credential.",
+  "currentCredentialDidInvalid": "The DID document for the current credential is invalid.",
+  "zipMissingMetadata": "The ZIP package is missing required credential metadata.",
+  "zipCredentialIncomplete": "The credential content inside the ZIP package is incomplete.",
+  "invalidFileFormat": "Invalid file format: {path}",
+  "@invalidFileFormat": {
+    "placeholders": {
+      "path": {}
+    }
+  },
+  "phoneInvalidIntlExample": "Invalid phone number format. Use a number with country code, for example +8613800138000.",
+  "phoneInvalidIntlOrCn": "Invalid phone number format. Use international format or an 11-digit mainland China number.",
+  "handleInvalidPattern": "Handle may only contain lowercase letters, numbers, and hyphens, 2-32 characters, with no underscores.",
+  "didRegistrationPluginMissing": "AWiki Me does not currently include a DID registration plugin ({authHint} registration). Please register with the Python script and import the session first, or add the native plugin to complete registration in the app.",
+  "@didRegistrationPluginMissing": {
+    "placeholders": {
+      "authHint": {}
+    }
+  },
+  "didRegistrationRefreshUnsupported": "AWiki Me does not currently include a DID registration plugin, so token refresh is unavailable.",
+  "e2eePluginMissing": "AWiki Me does not currently have E2EE enabled. Please integrate the native plugin.",
+  "documentPickerFailed": "File selection failed. Please try again later.",
+  "linkOpenFailed": "Unable to open the link",
+  "linkOpenFailedWithDetail": "Unable to open the link: {detail}",
+  "@linkOpenFailedWithDetail": {
+    "placeholders": {
+      "detail": {}
+    }
+  },
+  "groupNameRequired": "Group name cannot be empty"
+}

@@ -13,39 +13,42 @@ class AwikiMeToast {
       return;
     }
     final entry = OverlayEntry(
-      builder: (context) => Positioned(
-        left: 20,
-        right: 20,
-        bottom: 110,
-        child: IgnorePointer(
-          child: SafeArea(
-            child: Center(
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 360),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: danger
-                      ? const Color(0xE6B42318)
-                      : CupertinoColors.black.withOpacity(0.82),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AwikiMeColors.surface,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+      builder: (context) {
+        final theme = context.awikiTheme;
+        return Positioned(
+          left: 20,
+          right: 20,
+          bottom: 110,
+          child: IgnorePointer(
+            child: SafeArea(
+              child: Center(
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 360),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: danger
+                        ? theme.danger.withOpacity(0.9)
+                        : theme.title.withOpacity(0.82),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: theme.surface,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
     overlay.insert(entry);
     Future<void>.delayed(const Duration(seconds: 2), () {
@@ -59,7 +62,7 @@ class AwikiMeToast {
 class AwikiMeLoadingMask extends StatelessWidget {
   const AwikiMeLoadingMask({
     super.key,
-    this.label = '加载中...',
+    this.label = '',
     this.opacity = 0.18,
   });
 
@@ -68,6 +71,7 @@ class AwikiMeLoadingMask extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
     return Positioned.fill(
       child: AbsorbPointer(
         child: ColoredBox(
@@ -79,15 +83,9 @@ class AwikiMeLoadingMask extends StatelessWidget {
                 vertical: 18,
               ),
               decoration: BoxDecoration(
-                color: const Color(0xF7FFFFFF),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: const <BoxShadow>[
-                  BoxShadow(
-                    color: Color(0x14000000),
-                    blurRadius: 24,
-                    offset: Offset(0, 8),
-                  ),
-                ],
+                color: theme.surface.withOpacity(0.97),
+                borderRadius: BorderRadius.circular(AwikiMeRadii.lg),
+                boxShadow: theme.overlayShadow,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -96,8 +94,8 @@ class AwikiMeLoadingMask extends StatelessWidget {
                   const SizedBox(height: 12),
                   Text(
                     label,
-                    style: const TextStyle(
-                      color: AwikiMeColors.title,
+                    style: TextStyle(
+                      color: theme.title,
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),

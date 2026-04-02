@@ -21,4 +21,3 @@ class ConversationSummary {
   final String? groupId;
   final String? avatarSeed;
 }
-

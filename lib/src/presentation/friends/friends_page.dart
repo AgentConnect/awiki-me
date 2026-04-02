@@ -1,160 +1,141 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Icons;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/app_router.dart';
 import '../../domain/entities/conversation_summary.dart';
-import '../app_shell/app_controller.dart';
+import '../../l10n/l10n.dart';
 import '../chat/chat_page.dart';
+import '../chat/chat_provider.dart';
+import '../conversation_list/conversation_provider.dart';
+import '../group/create_group_page.dart';
+import '../group/group_list_page.dart';
+import '../profile/profile_provider.dart';
+import '../settings/settings_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
+import '../shared/formatters/display_formatters.dart';
+import '../shared/widgets/app_widgets.dart';
+import 'friends_provider.dart';
 
-class FriendsPage extends StatelessWidget {
-  const FriendsPage({
-    super.key,
-    required this.controller,
-    required this.onOpenGroups,
-    required this.onOpenSettings,
-    required this.onOpenQuickActions,
-  });
-
-  final AppController controller;
-  final VoidCallback onOpenGroups;
-  final Future<void> Function() onOpenSettings;
-  final Future<void> Function() onOpenQuickActions;
-
-  static final RegExp _didUserPattern = RegExp(r':(?:user:)?([^:]+):k1_');
-  static final RegExp _didTailPattern = RegExp(r':([^:]+)$');
+class FriendsPage extends ConsumerWidget {
+  const FriendsPage({super.key});
 
   String _calcThreadId(String myDid, String peerDid) {
-    final list = [myDid, peerDid]..sort();
+    final list = <String>[myDid, peerDid]..sort();
     return 'dm:${list[0]}:${list[1]}';
-  }
-
-  String _compactUserName(String displayName, String did) {
-    if (displayName.isNotEmpty && !displayName.startsWith('did:')) {
-      return displayName;
-    }
-    final didMatch = _didUserPattern.firstMatch(did);
-    if (didMatch != null) {
-      return didMatch.group(1)!;
-    }
-    final tailMatch = _didTailPattern.firstMatch(did);
-    if (tailMatch != null) {
-      return tailMatch.group(1)!;
-    }
-    return did;
   }
 
   Future<void> _sendMessage(
     BuildContext context,
+    WidgetRef ref,
     String peerDid,
     String peerName,
   ) async {
-    final myDid = controller.profile?.did;
-    if (myDid == null) return;
-
-    final threadId = _calcThreadId(myDid, peerDid);
-    ConversationSummary? targetConv;
-    for (final conv in controller.conversations) {
-      if (conv.threadId == threadId) {
-        targetConv = conv;
-        break;
-      }
+    final myDid = ref.read(profileProvider).profile?.did;
+    if (myDid == null) {
+      return;
     }
-
+    final threadId = _calcThreadId(myDid, peerDid);
+    final conversations = ref.read(conversationListProvider).conversations;
+    var targetConv = conversations
+        .where((item) => item.threadId == threadId)
+        .cast<ConversationSummary?>()
+        .firstWhere((_) => true, orElse: () => null);
     targetConv ??= ConversationSummary(
       threadId: threadId,
-      displayName: peerName.isNotEmpty ? peerName : peerDid,
+      displayName: peerName,
       lastMessagePreview: '',
       lastMessageAt: DateTime.now(),
       unreadCount: 0,
       isGroup: false,
       targetDid: peerDid,
     );
-
-    await controller.openConversation(targetConv);
-    if (!context.mounted) return;
-
-    await Navigator.of(context).push(
-      CupertinoPageRoute<void>(
-        builder: (_) => ChatPage(
-          controller: controller,
-          conversation: targetConv!,
-        ),
-      ),
+    await ref.read(chatThreadsProvider.notifier).openConversation(targetConv);
+    if (!context.mounted) {
+      return;
+    }
+    await AppNavigator.push(
+      context,
+      (_) => ChatPage(conversation: targetConv!),
     );
   }
 
-  List<_FriendListItem> _items() {
-    final items = <_FriendListItem>[
-      const _FriendListItem.group(),
-    ];
-
-    for (final item in controller.following) {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(friendsProvider);
+    final theme = context.awikiTheme;
+    final items = <_FriendListItem>[const _FriendListItem.group()];
+    for (final item in state.following) {
       items.add(
         _FriendListItem.contact(
-          title: _compactUserName(item.displayName, item.did),
+          title: DidDisplayFormatter.compactDisplayName(
+            displayName: item.displayName,
+            fallbackDid: item.did,
+          ),
           did: item.did,
-          seed: _compactUserName(item.displayName, item.did),
         ),
       );
     }
-
     if (items.length == 1) {
-      for (final item in controller.followers) {
+      for (final item in state.followers) {
         items.add(
           _FriendListItem.contact(
-            title: _compactUserName(item.displayName, item.did),
+            title: DidDisplayFormatter.compactDisplayName(
+              displayName: item.displayName,
+              fallbackDid: item.did,
+            ),
             did: item.did,
-            seed: _compactUserName(item.displayName, item.did),
           ),
         );
       }
     }
 
-    return items;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final items = _items();
     return Stack(
       children: <Widget>[
         ListView.separated(
           padding: const EdgeInsets.fromLTRB(22, 18, 22, 120),
           itemCount: items.length + 1,
-          separatorBuilder: (_, __) => const SizedBox(height: 0),
+          separatorBuilder: (_, __) => const SizedBox.shrink(),
           itemBuilder: (context, index) {
             if (index == 0) {
               return AwikiMeTopBar(
-                title: '朋友',
-                leading: GestureDetector(
-                  onTap: onOpenSettings,
-                  child: const Icon(
+                title: context.l10n.friendsTitle,
+                leading: TopBarActionButton(
+                  onTap: () => AppNavigator.push(
+                    context,
+                    (_) => const SettingsPage(),
+                  ),
+                  child: Icon(
                     Icons.settings_outlined,
                     size: 24,
-                    color: AwikiMeColors.title,
+                    color: theme.title,
                   ),
                 ),
-                trailing: GestureDetector(
-                  onTap: onOpenQuickActions,
-                  child: const Icon(
+                trailing: TopBarActionButton(
+                  onTap: () => _showQuickActions(context),
+                  child: Icon(
                     Icons.add,
                     size: 26,
-                    color: AwikiMeColors.title,
+                    color: theme.title,
                   ),
                 ),
               );
             }
-
             final item = items[index - 1];
             if (item.isGroup) {
-              return _FriendRow.group(onTap: onOpenGroups);
+              return _FriendRow.group(
+                onTap: () => AppNavigator.push(
+                  context,
+                  (_) => const GroupListPage(),
+                ),
+              );
             }
             return _FriendRow.contact(
-              seed: item.seed!,
+              seed: item.title!,
               title: item.title!,
-              onTap: () => _sendMessage(context, item.did!, item.title!),
+              onTap: () => _sendMessage(context, ref, item.did!, item.title!),
             );
           },
         ),
@@ -165,6 +146,29 @@ class FriendsPage extends StatelessWidget {
           child: _IndexRail(),
         ),
       ],
+    );
+  }
+
+  Future<void> _showQuickActions(BuildContext context) async {
+    await AppNavigator.showSheet<void>(
+      context,
+      (sheetContext) => AppDropMenu(
+        title: context.l10n.quickActionsTitle.toUpperCase(),
+        items: <AppDropMenuItem>[
+          AppDropMenuItem(
+            label: context.l10n.quickActionCreateGroup,
+            onTap: () {
+              AppNavigator.push(context, (_) => const CreateGroupPage());
+            },
+          ),
+          AppDropMenuItem(
+            label: context.l10n.quickActionJoinGroup,
+            onTap: () {
+              AppNavigator.push(context, (_) => const GroupListPage());
+            },
+          ),
+        ],
+      ),
     );
   }
 }
@@ -188,45 +192,33 @@ class _FriendRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: const BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: Color(0xFFEAE7F2)),
-          ),
+    final theme = context.awikiTheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: theme.border),
         ),
-        child: Row(
-          children: <Widget>[
-            isGroup
-                ? Container(
-                    width: 32,
-                    height: 32,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFDCE9FF),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.group,
-                      color: Color(0xFF2F6BFF),
-                      size: 20,
-                    ),
-                  )
-                : AvatarBadge(seed: seed, size: 32),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: AwikiMeColors.title,
+      ),
+      child: AppListTile(
+        title: title,
+        leading: isGroup
+            ? AppSurface(
+                padding: EdgeInsets.zero,
+                color: theme.colorScheme.secondaryContainer,
+                radius: AwikiMeRadii.pill,
+                constraints: const BoxConstraints.tightFor(
+                  width: 32,
+                  height: 32,
                 ),
-              ),
-            ),
-          ],
-        ),
+                child: Icon(
+                  Icons.group,
+                  color: theme.colorScheme.onSecondaryContainer,
+                  size: 20,
+                ),
+              )
+            : AvatarBadge(seed: seed, size: 32),
+        onTap: onTap,
       ),
     );
   }
@@ -237,6 +229,7 @@ class _IndexRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
     const letters = <String>[
       'A',
       'B',
@@ -249,9 +242,8 @@ class _IndexRail extends StatelessWidget {
       'J',
       'M',
       'S',
-      '#',
+      '#'
     ];
-
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: letters
@@ -263,9 +255,7 @@ class _IndexRail extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: letter == 'E' ? FontWeight.w700 : FontWeight.w500,
-                  color: letter == 'E'
-                      ? AwikiMeColors.primaryDark
-                      : const Color(0xFFC4A981),
+                  color: letter == 'E' ? theme.primaryDark : theme.tertiaryText,
                 ),
               ),
             ),
@@ -279,17 +269,14 @@ class _FriendListItem {
   const _FriendListItem.contact({
     required this.title,
     required this.did,
-    required this.seed,
   }) : isGroup = false;
 
   const _FriendListItem.group()
       : isGroup = true,
         title = null,
-        did = null,
-        seed = null;
+        did = null;
 
   final bool isGroup;
   final String? title;
   final String? did;
-  final String? seed;
 }

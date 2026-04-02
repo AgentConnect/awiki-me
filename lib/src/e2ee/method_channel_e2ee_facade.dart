@@ -31,7 +31,8 @@ class MethodChannelE2eeFacade implements E2eeFacade {
         message: 'E2EE decrypt result is empty',
       );
     }
-    return message.copyWith(content: result['content']?.toString() ?? message.content);
+    return message.copyWith(
+        content: result['content']?.toString() ?? message.content);
   }
 
   @override
@@ -63,7 +64,8 @@ class MethodChannelE2eeFacade implements E2eeFacade {
 
   @override
   Future<Map<String, Object?>> exportSessionState() async {
-    final result = await _channel.invokeMapMethod<String, Object?>('exportSessionState');
+    final result =
+        await _channel.invokeMapMethod<String, Object?>('exportSessionState');
     return result ?? const <String, Object?>{};
   }
 
@@ -92,7 +94,8 @@ class MethodChannelE2eeFacade implements E2eeFacade {
   }
 
   @override
-  Future<E2eeProcessResult> processIncomingProtocolMessage(ChatMessage message) async {
+  Future<E2eeProcessResult> processIncomingProtocolMessage(
+      ChatMessage message) async {
     final result = await _channel.invokeMapMethod<String, Object?>(
       'processIncomingProtocolMessage',
       <String, Object?>{
@@ -103,14 +106,15 @@ class MethodChannelE2eeFacade implements E2eeFacade {
       },
     );
     return E2eeProcessResult(
-      protocolResponses: (result?['protocolResponses'] as List<Object?>? ?? const <Object?>[])
-          .whereType<Map<Object?, Object?>>()
-          .map(
-            (item) => item.map<String, Object?>(
-              (key, value) => MapEntry(key.toString(), value),
-            ),
-          )
-          .toList(),
+      protocolResponses:
+          (result?['protocolResponses'] as List<Object?>? ?? const <Object?>[])
+              .whereType<Map<Object?, Object?>>()
+              .map(
+                (item) => item.map<String, Object?>(
+                  (key, value) => MapEntry(key.toString(), value),
+                ),
+              )
+              .toList(),
     );
   }
 
@@ -122,4 +126,3 @@ class MethodChannelE2eeFacade implements E2eeFacade {
     );
   }
 }
-
