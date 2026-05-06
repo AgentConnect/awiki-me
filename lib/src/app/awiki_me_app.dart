@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart' as material;
@@ -27,11 +27,13 @@ class AwikiMeApp extends StatelessWidget {
       overrides: <Override>[
         awikiGatewayProvider.overrideWithValue(bootstrap.gateway),
         realtimeGatewayProvider.overrideWithValue(bootstrap.realtimeGateway),
-        notificationFacadeProvider
-            .overrideWithValue(bootstrap.notificationFacade),
+        notificationFacadeProvider.overrideWithValue(
+          bootstrap.notificationFacade,
+        ),
         e2eeFacadeProvider.overrideWithValue(bootstrap.e2eeFacade),
-        localePreferenceServiceProvider
-            .overrideWithValue(bootstrap.localePreferenceService),
+        localePreferenceServiceProvider.overrideWithValue(
+          bootstrap.localePreferenceService,
+        ),
         ...providerOverrides,
       ],
       child: const _AwikiMeRoot(),

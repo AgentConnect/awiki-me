@@ -11,13 +11,11 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
     String? wsBaseUrl,
     Duration reconnectBaseDelay = const Duration(seconds: 1),
     Duration reconnectMaxDelay = const Duration(seconds: 30),
-  })  : _wsBaseUrl = wsBaseUrl ??
-            const String.fromEnvironment(
-              'AWIKI_WS_URL',
-              defaultValue: '',
-            ),
-        _reconnectBaseDelay = reconnectBaseDelay,
-        _reconnectMaxDelay = reconnectMaxDelay;
+  }) : _wsBaseUrl =
+           wsBaseUrl ??
+           const String.fromEnvironment('AWIKI_WS_URL', defaultValue: ''),
+       _reconnectBaseDelay = reconnectBaseDelay,
+       _reconnectMaxDelay = reconnectMaxDelay;
 
   final String _wsBaseUrl;
   final Duration _reconnectBaseDelay;
@@ -33,6 +31,8 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
 
   @override
   bool get isConnected => _channel != null;
+
+  Uri buildUriForTest(String token) => _buildWsUri(token);
 
   @override
   Future<void> connect({
@@ -93,7 +93,11 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
       return;
     }
     final method = decoded['method']?.toString() ?? '';
-    if (method != 'new_message') {
+    if (method != 'new_message' &&
+        method != 'direct.new_message' &&
+        method != 'group.new_message' &&
+        method != 'inbox.updated' &&
+        method != 'message.new') {
       return;
     }
     final params = decoded['params'];
@@ -117,8 +121,10 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
     _reconnectTimer = Timer(_currentDelay, () async {
       await _openSocket();
     });
-    final nextSeconds = (_currentDelay.inSeconds * 2)
-        .clamp(_reconnectBaseDelay.inSeconds, _reconnectMaxDelay.inSeconds);
+    final nextSeconds = (_currentDelay.inSeconds * 2).clamp(
+      _reconnectBaseDelay.inSeconds,
+      _reconnectMaxDelay.inSeconds,
+    );
     _currentDelay = Duration(seconds: nextSeconds);
   }
 
@@ -128,7 +134,16 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
       final base = configured.endsWith('/')
           ? configured.substring(0, configured.length - 1)
           : configured;
-      return Uri.parse('$base/message/ws?token=$token');
+      final uri = Uri.parse(base);
+      if (uri.path.endsWith('/im/ws')) {
+        return uri.replace(
+          queryParameters: <String, String>{
+            ...uri.queryParameters,
+            'token': token,
+          },
+        );
+      }
+      return Uri.parse('$base/im/ws?token=$token');
     }
     const messageService = String.fromEnvironment(
       'AWIKI_MESSAGE_SERVICE_URL',
@@ -140,7 +155,7 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
       scheme: scheme,
       host: uri.host,
       port: uri.hasPort ? uri.port : null,
-      path: '/message/ws',
+      path: '/im/ws',
       queryParameters: <String, String>{'token': token},
     );
   }

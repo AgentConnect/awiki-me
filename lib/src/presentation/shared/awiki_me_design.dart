@@ -62,19 +62,11 @@ class AwikiMeRadii {
 
 class AwikiMeShadows {
   static const List<BoxShadow> card = <BoxShadow>[
-    BoxShadow(
-      color: Color(0x0C000000),
-      blurRadius: 18,
-      offset: Offset(0, 8),
-    ),
+    BoxShadow(color: Color(0x0C000000), blurRadius: 18, offset: Offset(0, 8)),
   ];
 
   static const List<BoxShadow> overlay = <BoxShadow>[
-    BoxShadow(
-      color: Color(0x14000000),
-      blurRadius: 24,
-      offset: Offset(0, 8),
-    ),
+    BoxShadow(color: Color(0x14000000), blurRadius: 24, offset: Offset(0, 8)),
   ];
 }
 
@@ -243,10 +235,7 @@ class AwikiMeTheme {
     barBackgroundColor: colorScheme.surface,
     textTheme: CupertinoTextThemeData(
       primaryColor: colorScheme.primary,
-      textStyle: TextStyle(
-        color: colorScheme.onSurface,
-        fontSize: 15,
-      ),
+      textStyle: TextStyle(color: colorScheme.onSurface, fontSize: 15),
     ),
   );
 }
@@ -298,13 +287,14 @@ class AwikiMeWidgets {
   static Widget frostedBottomBar({required Widget child}) {
     return Builder(
       builder: (context) => ClipRRect(
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(AwikiMeRadii.lg)),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AwikiMeRadii.lg),
+        ),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: context.awikiTheme.surface.withOpacity(0.8),
+              color: context.awikiTheme.surface.withValues(alpha: 0.8),
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(AwikiMeRadii.lg),
               ),

@@ -1,12 +1,7 @@
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:awiki_me/l10n/app_localizations.dart';
 
 class AppMessage {
-  const AppMessage._(
-    this.id, {
-    this.path,
-    this.value,
-    this.detail,
-  });
+  const AppMessage._(this.id, {this.path, this.value, this.detail});
 
   final String id;
   final String? path;
@@ -128,7 +123,8 @@ class AppMessage {
     }
     if (raw.startsWith('本地未找到凭证：')) {
       return AppMessage.localCredentialNotFound(
-          raw.substring('本地未找到凭证：'.length));
+        raw.substring('本地未找到凭证：'.length),
+      );
     }
     if (raw ==
         '当前仓库未内置 setup_identity.py，请通过 AWIKI_SETUP_IDENTITY_SCRIPT 显式配置脚本路径后再删除凭证。') {
@@ -191,8 +187,9 @@ class AppMessage {
         raw.endsWith('或接入原生插件后再在 App 内完成注册。')) {
       final start = raw.indexOf('（');
       final end = raw.indexOf('注册）');
-      final authHint =
-          start >= 0 && end > start ? raw.substring(start + 1, end) : '手机号+验证码';
+      final authHint = start >= 0 && end > start
+          ? raw.substring(start + 1, end)
+          : '手机号+验证码';
       return AppMessage.didRegistrationPluginMissing(authHint);
     }
     if (raw == 'AWiki Me 当前未接入 DID 注册插件，无法自动刷新 token。') {

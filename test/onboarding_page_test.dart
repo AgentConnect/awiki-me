@@ -2,7 +2,6 @@ import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
-import 'package:flutter/widgets.dart' show Offset;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
@@ -12,10 +11,7 @@ void main() {
     final gateway = FakeAwikiGateway();
 
     await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const OnboardingPage(),
-        gateway: gateway,
-      ),
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
     await tester.pump();
 
@@ -47,10 +43,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const OnboardingPage(),
-        gateway: gateway,
-      ),
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
     await tester.pump();
 

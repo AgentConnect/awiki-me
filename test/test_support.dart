@@ -20,7 +20,7 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/data/services/locale_preference_service.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 Widget buildLocalizedTestApp({
@@ -48,8 +48,9 @@ Widget buildLocalizedTestApp({
       realtimeGatewayProvider.overrideWithValue(resolvedRealtime),
       notificationFacadeProvider.overrideWithValue(resolvedNotification),
       e2eeFacadeProvider.overrideWithValue(resolvedE2ee),
-      localePreferenceServiceProvider
-          .overrideWithValue(resolvedLocalePreference),
+      localePreferenceServiceProvider.overrideWithValue(
+        resolvedLocalePreference,
+      ),
       appLocaleModeProvider.overrideWith((ref) => localeMode),
       sessionProvider.overrideWith((ref) {
         final controller = SessionController();
@@ -65,8 +66,9 @@ Widget buildLocalizedTestApp({
         return TestProfileController(ref, initialProfile: profile);
       }),
       if (homepageMarkdownLoader != null)
-        homepageMarkdownLoaderProvider
-            .overrideWithValue(homepageMarkdownLoader),
+        homepageMarkdownLoaderProvider.overrideWithValue(
+          homepageMarkdownLoader,
+        ),
       appRuntimeProvider.overrideWith((ref) => AppRuntimeController(ref)),
     ],
     child: CupertinoApp(
@@ -153,7 +155,8 @@ class FakeAwikiGateway implements AwikiGateway {
 
   @override
   Future<RealtimeUpdate?> consumeRealtimeEvent(
-      Map<String, Object?> event) async {
+    Map<String, Object?> event,
+  ) async {
     return null;
   }
 
@@ -240,7 +243,8 @@ class FakeAwikiGateway implements AwikiGateway {
 
   @override
   Future<SessionIdentity> loginWithLocalCredential(
-      String credentialName) async {
+    String credentialName,
+  ) async {
     loginCalls += 1;
     lastLoginCredentialName = credentialName;
     if (loginResult != null) {
@@ -332,10 +336,10 @@ class FakeAwikiGateway implements AwikiGateway {
 }
 
 class FakeLocalePreferenceService extends LocalePreferenceService {
-  FakeLocalePreferenceService(
-      {AppLocaleMode initialMode = AppLocaleMode.system})
-      : _storedMode = initialMode,
-        super();
+  FakeLocalePreferenceService({
+    AppLocaleMode initialMode = AppLocaleMode.system,
+  }) : _storedMode = initialMode,
+       super();
 
   AppLocaleMode _storedMode;
   int saveCalls = 0;

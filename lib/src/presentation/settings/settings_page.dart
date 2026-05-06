@@ -61,7 +61,7 @@ class SettingsPage extends ConsumerWidget {
                       scale: 0.88,
                       child: CupertinoSwitch(
                         value: true,
-                        activeColor: theme.success,
+                        activeTrackColor: theme.success,
                         onChanged: null,
                       ),
                     ),
@@ -113,10 +113,10 @@ class SettingsPage extends ConsumerWidget {
                     onTap: session == null
                         ? null
                         : () => _showDeleteCredentialDialog(
-                              context,
-                              runtime,
-                              session.credentialName,
-                            ),
+                            context,
+                            runtime,
+                            session.credentialName,
+                          ),
                   ),
                 ],
               ),
@@ -190,10 +190,7 @@ class SettingsPage extends ConsumerWidget {
     );
   }
 
-  void _showLogoutDialog(
-    BuildContext context,
-    AppRuntimeController runtime,
-  ) {
+  void _showLogoutDialog(BuildContext context, AppRuntimeController runtime) {
     AppNavigator.showDialog<void>(
       context,
       (ctx) => CupertinoAlertDialog(
@@ -255,10 +252,7 @@ class SettingsPage extends ConsumerWidget {
 }
 
 class _SettingsIconBadge extends StatelessWidget {
-  const _SettingsIconBadge({
-    required this.icon,
-    this.destructive = false,
-  });
+  const _SettingsIconBadge({required this.icon, this.destructive = false});
 
   final IconData icon;
   final bool destructive;

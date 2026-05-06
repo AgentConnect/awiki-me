@@ -1,14 +1,11 @@
 import 'package:flutter/widgets.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:awiki_me/l10n/app_localizations.dart';
 
 extension AppL10nX on BuildContext {
   AppLocalizations get l10n => AppLocalizations.of(this);
 }
 
-String localizeRelationshipLabel(
-  AppLocalizations l10n,
-  String relationship,
-) {
+String localizeRelationshipLabel(AppLocalizations l10n, String relationship) {
   switch (relationship) {
     case 'friend':
       return l10n.relationshipFriend;

@@ -5,16 +5,18 @@ publish_to: "none"
 version: 0.1.0+1
 
 environment:
-  sdk: ">=3.5.0 <4.0.0"
+  sdk: ">=3.8.0 <4.0.0"
   flutter: ">=3.24.0"
 
 dependencies:
+  anp:
+    path: ../anp/dart
   flutter:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
   archive: ^3.6.1
-  intl: ^0.19.0
+  intl: ">=0.19.0 <0.21.0"
   http: ^1.2.2
   path_provider: ^2.1.5
   web_socket_channel: ^3.0.1

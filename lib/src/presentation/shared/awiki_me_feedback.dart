@@ -30,8 +30,8 @@ class AwikiMeToast {
                   ),
                   decoration: BoxDecoration(
                     color: danger
-                        ? theme.danger.withOpacity(0.9)
-                        : theme.title.withOpacity(0.82),
+                        ? theme.danger.withValues(alpha: 0.9)
+                        : theme.title.withValues(alpha: 0.82),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Text(
@@ -60,11 +60,7 @@ class AwikiMeToast {
 }
 
 class AwikiMeLoadingMask extends StatelessWidget {
-  const AwikiMeLoadingMask({
-    super.key,
-    this.label = '',
-    this.opacity = 0.18,
-  });
+  const AwikiMeLoadingMask({super.key, this.label = '', this.opacity = 0.18});
 
   final String label;
   final double opacity;
@@ -75,15 +71,12 @@ class AwikiMeLoadingMask extends StatelessWidget {
     return Positioned.fill(
       child: AbsorbPointer(
         child: ColoredBox(
-          color: CupertinoColors.black.withOpacity(opacity),
+          color: CupertinoColors.black.withValues(alpha: opacity),
           child: Center(
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 18,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
               decoration: BoxDecoration(
-                color: theme.surface.withOpacity(0.97),
+                color: theme.surface.withValues(alpha: 0.97),
                 borderRadius: BorderRadius.circular(AwikiMeRadii.lg),
                 boxShadow: theme.overlayShadow,
               ),
