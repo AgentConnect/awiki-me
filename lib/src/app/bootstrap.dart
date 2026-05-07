@@ -1,5 +1,4 @@
 import '../data/gateways/awiki_anp_gateway.dart';
-import '../data/gateways/awiki_rpc_gateway.dart';
 import '../data/services/awiki_local_cache.dart';
 import '../data/services/awiki_ws_realtime_gateway.dart';
 import '../data/services/app_notification_facade.dart';
@@ -31,21 +30,11 @@ class AppBootstrap {
   static Future<AppBootstrap> create() async {
     final didRegistrationFacade = _buildDidRegistrationFacade();
     final localCache = AwikiLocalCache();
-    const useLegacyRpc = bool.fromEnvironment(
-      'AWIKI_USE_LEGACY_RPC',
-      defaultValue: false,
+    final gateway = AwikiAnpGateway.fromEnvironment(
+      localCache: localCache,
+      didRegistrationFacade: didRegistrationFacade,
+      documentPickerService: MethodChannelDocumentPickerService(),
     );
-    final gateway = useLegacyRpc
-        ? AwikiRpcGateway.fromEnvironment(
-            localCache: localCache,
-            didRegistrationFacade: didRegistrationFacade,
-            documentPickerService: MethodChannelDocumentPickerService(),
-          )
-        : AwikiAnpGateway.fromEnvironment(
-            localCache: localCache,
-            didRegistrationFacade: didRegistrationFacade,
-            documentPickerService: MethodChannelDocumentPickerService(),
-          );
     final realtimeGateway = AwikiWsRealtimeGateway();
     final notificationFacade = AppNotificationFacade();
     final e2eeFacade = NoopE2eeFacade();

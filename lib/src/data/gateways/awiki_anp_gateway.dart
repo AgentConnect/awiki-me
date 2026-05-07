@@ -1361,6 +1361,7 @@ class AwikiAnpGateway implements AwikiGateway {
 
   Map<String, Object?> _normalizeRealtimeEvent(Map<String, Object?> event) {
     final params = event['params'];
+    final meta = event['meta'];
     final body = event['body'];
     final message = event['message'];
     final normalized = <String, Object?>{};
@@ -1376,9 +1377,30 @@ class AwikiAnpGateway implements AwikiGateway {
 
     merge(event);
     merge(params);
+    merge(meta);
     merge(body);
     merge(message);
+    final normalizedMeta = _asStringKeyMap(meta);
+    final normalizedTarget = _asStringKeyMap(normalizedMeta['target']);
+    final targetDid = normalizedTarget['did']?.toString() ?? '';
+    if (targetDid.isNotEmpty) {
+      final targetKind = normalizedTarget['kind']?.toString() ?? '';
+      if (targetKind == 'group') {
+        normalized.putIfAbsent('group_did', () => targetDid);
+      } else {
+        normalized.putIfAbsent('target_did', () => targetDid);
+      }
+    }
     return normalized;
+  }
+
+  Map<String, Object?> _asStringKeyMap(Object? value) {
+    if (value is! Map) {
+      return const <String, Object?>{};
+    }
+    return value.map<String, Object?>(
+      (key, entryValue) => MapEntry(key.toString(), entryValue),
+    );
   }
 
   bool _isE1Identity(SessionIdentity identity) => _isE1Did(identity.did);

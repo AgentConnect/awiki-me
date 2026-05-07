@@ -5,19 +5,24 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../../domain/entities/session_identity.dart';
 import '../../domain/services/realtime_gateway.dart';
+import 'awiki_ws_channel_connector.dart'
+    if (dart.library.io) 'awiki_ws_channel_connector_io.dart';
 
 class AwikiWsRealtimeGateway implements RealtimeGateway {
   AwikiWsRealtimeGateway({
-    String? wsBaseUrl,
+    String? messageServiceUrl,
     Duration reconnectBaseDelay = const Duration(seconds: 1),
     Duration reconnectMaxDelay = const Duration(seconds: 30),
-  }) : _wsBaseUrl =
-           wsBaseUrl ??
-           const String.fromEnvironment('AWIKI_WS_URL', defaultValue: ''),
+  }) : _messageServiceUrl =
+           messageServiceUrl ??
+           const String.fromEnvironment(
+             'AWIKI_MESSAGE_SERVICE_URL',
+             defaultValue: 'https://awiki.ai',
+           ),
        _reconnectBaseDelay = reconnectBaseDelay,
        _reconnectMaxDelay = reconnectMaxDelay;
 
-  final String _wsBaseUrl;
+  final String _messageServiceUrl;
   final Duration _reconnectBaseDelay;
   final Duration _reconnectMaxDelay;
 
@@ -32,7 +37,7 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
   @override
   bool get isConnected => _channel != null;
 
-  Uri buildUriForTest(String token) => _buildWsUri(token);
+  Uri buildUriForTest() => _buildWsUri();
 
   @override
   Future<void> connect({
@@ -68,8 +73,11 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
       throw StateError('Realtime connect requires jwt token.');
     }
 
-    final uri = _buildWsUri(token);
-    final channel = WebSocketChannel.connect(uri);
+    final uri = _buildWsUri();
+    final channel = connectAwikiWebSocket(
+      uri,
+      headers: <String, String>{'Authorization': 'Bearer $token'},
+    );
     _channel = channel;
     _subscription = channel.stream.listen(
       (event) async {
@@ -93,11 +101,9 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
       return;
     }
     final method = decoded['method']?.toString() ?? '';
-    if (method != 'new_message' &&
-        method != 'direct.new_message' &&
-        method != 'group.new_message' &&
-        method != 'inbox.updated' &&
-        method != 'message.new') {
+    if (method != 'direct.incoming' &&
+        method != 'group.incoming' &&
+        method != 'group.state_changed') {
       return;
     }
     final params = decoded['params'];
@@ -128,35 +134,17 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
     _currentDelay = Duration(seconds: nextSeconds);
   }
 
-  Uri _buildWsUri(String token) {
-    final configured = _wsBaseUrl.trim();
-    if (configured.isNotEmpty) {
-      final base = configured.endsWith('/')
-          ? configured.substring(0, configured.length - 1)
-          : configured;
-      final uri = Uri.parse(base);
-      if (uri.path.endsWith('/im/ws')) {
-        return uri.replace(
-          queryParameters: <String, String>{
-            ...uri.queryParameters,
-            'token': token,
-          },
-        );
-      }
-      return Uri.parse('$base/im/ws?token=$token');
-    }
-    const messageService = String.fromEnvironment(
-      'AWIKI_MESSAGE_SERVICE_URL',
-      defaultValue: 'https://awiki.ai',
-    );
-    final uri = Uri.parse(messageService);
+  Uri _buildWsUri() {
+    final uri = Uri.parse(_messageServiceUrl.trim());
     final scheme = uri.scheme == 'https' ? 'wss' : 'ws';
+    final normalizedBasePath = uri.path.endsWith('/')
+        ? uri.path.substring(0, uri.path.length - 1)
+        : uri.path;
     return Uri(
       scheme: scheme,
       host: uri.host,
       port: uri.hasPort ? uri.port : null,
-      path: '/im/ws',
-      queryParameters: <String, String>{'token': token},
+      path: '$normalizedBasePath/im/ws',
     );
   }
 }

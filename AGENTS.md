@@ -1,26 +1,28 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-`scripts/` contains the CLI entry points for identity, messaging, groups, storage, and listener management. Shared SDK logic lives in `scripts/utils/`. `tests/` holds `pytest` suites and should mirror the module under test, for example `tests/test_local_store.py`. `service/` contains listener deployment templates, and `references/` stores protocol, schema, and integration notes. Top-level docs such as `README.md`, `README_zh.md`, `SKILL.md`, and `CLAUDE.md` explain user flows and agent-facing behavior.
+`lib/` contains the Flutter application. Core app wiring lives in `lib/src/app/`, domain models and repository contracts in `lib/src/domain/`, data gateways and services in `lib/src/data/`, and screens/providers in `lib/src/presentation/`. Localization files live under `lib/l10n/` and `lib/src/l10n/`. Tests are in `test/` and should mirror the behavior under test, for example `test/awiki_ws_realtime_gateway_test.dart`. Bundled images and icons live in `assets/`; platform runners live in `android/`, `ios/`, and `web/`.
+
+## AWiki Me Source of Truth
+For message, identity, and realtime behavior, use the sibling `../awiki-cli` repository as the reference implementation. Do not preserve old `molt-message` or `/message/*` compatibility paths unless explicitly requested. Message-service integration should follow awiki-cli's current v2 behavior: `/im/rpc`, `/im/ws`, Bearer-authenticated WebSocket upgrades, and ANP notification methods such as `direct.incoming`, `group.incoming`, and `group.state_changed`.
 
 ## Build, Test, and Development Commands
-Use `uv` for all local development tasks.
-
-- `uv sync` installs and locks project dependencies from `pyproject.toml` and `uv.lock`.
-- `uv run pytest` runs the unit test suite.
-- `uv run python scripts/setup_identity.py --list` checks that the CLI and credential loading work.
-- `uv run python scripts/check_inbox.py --limit 5` is a quick functional smoke test for message retrieval.
-- `uv run python scripts/ws_listener.py run --credential default --mode smart --verbose` runs the WebSocket listener in the foreground for debugging.
+- `flutter pub get` installs Dart and Flutter dependencies.
+- `flutter analyze` runs static analysis using `analysis_options.yaml`.
+- `flutter test` runs all unit and widget tests.
+- `flutter test test/awiki_ws_realtime_gateway_test.dart` runs a focused realtime gateway suite.
+- `flutter run` starts the app on the selected device or emulator.
+- `dart run flutter_launcher_icons` regenerates app icons from `assets/branding/awiki-me-logo.png`.
+- `dart run flutter_native_splash:create` regenerates the splash screen.
 
 ## Coding Style & Naming Conventions
-Target Python 3.10+ and follow Google-style Python conventions. Use 4-space indentation, explicit type hints on public functions, and short English docstrings where behavior is not obvious. Keep files and functions in `snake_case`, classes in `PascalCase`, and constants in `UPPER_SNAKE_CASE`. Keep CLI wrappers thin; move reusable logic into helper modules such as `scripts/utils/` or storage/service helpers.
+Use Dart 3 with `flutter_lints`. Format changed Dart files with `dart format`. Use 2-space indentation, `PascalCase` for classes and widgets, `camelCase` for methods, variables, and providers, and `snake_case.dart` filenames. Keep UI state in Riverpod providers, domain contracts in `lib/src/domain/`, and service-specific protocol logic in `lib/src/data/`.
 
 ## Testing Guidelines
-Tests use `pytest`. Name files `test_*.py` and test functions `test_*`. Prefer focused unit tests with `tmp_path`, `monkeypatch`, and temporary SQLite state instead of relying on shared local data. No coverage threshold is enforced in the repository, so contributors should add or update tests whenever they change database schema, query behavior, message routing, or environment-variable based configuration.
-When changing feature behavior in this repository, also update the corresponding system tests in the sibling repository at `../awiki-system-test/tests/`. Match the system-test location to the changed module's parent area whenever possible, such as `tests/cli/`, `tests/did/`, or `tests/listener/`.
+Use `flutter_test` for unit and widget coverage. Name test files `*_test.dart` and write behavior-focused test names, such as `maps direct.incoming meta body envelope`. Add or update focused tests when changing RPC mapping, WebSocket connection behavior, local credential handling, localization, or user-visible UI states.
 
 ## Commit & Pull Request Guidelines
-Recent commits favor short, imperative subjects with conventional prefixes when useful, such as `feat:` and `fix:`. Keep the first line concise and scoped to one change. Pull requests should summarize the behavioral change, link any related issue, and list the verification commands you ran, typically `uv run pytest`. Include sample CLI output or config snippets when changing listener flows, settings, or user-facing commands.
+Recent history uses concise imperative subjects, often with conventional prefixes such as `feat:` and `fix:`. Keep each commit scoped to one behavior change. Pull requests should describe the user-facing change, note protocol or configuration changes, link related issues, include screenshots for UI changes, and list verification commands such as `flutter analyze` and `flutter test`.
 
 ## Security & Configuration Tips
-Do not commit real credentials, generated data, or local runtime state from `.credentials/`, `.data/`, or custom `settings.json` files. Start from `service/settings.example.json` for new listener setups, and prefer `AWIKI_DATA_DIR` to isolate local test data.
+Do not commit local credentials, build outputs, or device-specific files. Configure service endpoints with compile-time environment values such as `AWIKI_MESSAGE_SERVICE_URL`; keep secrets out of source and test fixtures.

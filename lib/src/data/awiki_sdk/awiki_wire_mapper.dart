@@ -37,7 +37,9 @@ class AwikiWireMapper {
     String? forceThreadId,
     String? forceGroupId,
   }) {
+    final meta = _nestedMap(item['meta']);
     final body = _nestedMap(item['body']);
+    final target = _nestedMap(meta['target']);
     final content = _firstString(<Object?>[
       item['content'],
       item['text'],
@@ -47,6 +49,7 @@ class AwikiWireMapper {
     final senderDid = _firstString(<Object?>[
       item['sender_did'],
       item['from'],
+      meta['sender_did'],
       body['sender_did'],
     ]);
     final receiverDid = _firstNullableString(<Object?>[
@@ -54,6 +57,8 @@ class AwikiWireMapper {
       item['target_did'],
       item['recipient_did'],
       item['peer_did'],
+      target['did'],
+      meta['target_did'],
       body['receiver_did'],
     ]);
     final groupId =
@@ -63,6 +68,7 @@ class AwikiWireMapper {
           item['group_id'],
           body['group_did'],
           body['group_id'],
+          target['kind'] == 'group' ? target['did'] : null,
         ]);
     final messageId = messageIdOf(item);
     return ChatMessage(
@@ -93,6 +99,8 @@ class AwikiWireMapper {
               item['created_at'],
               item['accepted_at'],
               item['timestamp'],
+              meta['created_at'],
+              body['accepted_at'],
             ]),
           ) ??
           DateTime.now(),
@@ -104,6 +112,7 @@ class AwikiWireMapper {
           item['server_sequence'],
           item['seq'],
           item['group_event_seq'],
+          body['group_event_seq'],
         ]),
       ),
       isEncrypted:
@@ -327,12 +336,20 @@ class AwikiWireMapper {
     Map<String, Object?> item, {
     required String ownerDid,
   }) {
-    final senderDid = _firstString(<Object?>[item['sender_did'], item['from']]);
+    final meta = _nestedMap(item['meta']);
+    final target = _nestedMap(meta['target']);
+    final senderDid = _firstString(<Object?>[
+      item['sender_did'],
+      item['from'],
+      meta['sender_did'],
+    ]);
     final receiverDid = _firstString(<Object?>[
       item['receiver_did'],
       item['target_did'],
       item['recipient_did'],
       item['peer_did'],
+      target['did'],
+      meta['target_did'],
     ]);
     if (senderDid == ownerDid && receiverDid.isNotEmpty) {
       return receiverDid;
@@ -344,11 +361,13 @@ class AwikiWireMapper {
   }
 
   String messageIdOf(Map<String, Object?> item) {
+    final meta = _nestedMap(item['meta']);
     return _firstString(<Object?>[
       item['message_id'],
       item['id'],
       item['msg_id'],
       item['remote_id'],
+      meta['message_id'],
     ]);
   }
 
@@ -360,12 +379,15 @@ class AwikiWireMapper {
   }
 
   String _groupIdFromMessage(Map<String, Object?> item) {
+    final meta = _nestedMap(item['meta']);
+    final target = _nestedMap(meta['target']);
     final body = _nestedMap(item['body']);
     return _firstString(<Object?>[
       item['group_did'],
       item['group_id'],
       body['group_did'],
       body['group_id'],
+      target['kind'] == 'group' ? target['did'] : null,
     ]);
   }
 

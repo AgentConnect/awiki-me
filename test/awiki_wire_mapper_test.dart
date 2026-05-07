@@ -41,6 +41,50 @@ void main() {
     expect(message.serverSequence, 11);
   });
 
+  test('maps direct.incoming meta body envelope', () {
+    final message = mapper.toChatMessage(<String, Object?>{
+      'meta': <String, Object?>{
+        'message_id': 'msg-3',
+        'sender_did': 'did:wba:awiki.ai:user:bob',
+        'target': <String, Object?>{
+          'kind': 'agent',
+          'did': 'did:wba:awiki.ai:user:alice',
+        },
+        'created_at': '2026-05-06T03:00:00Z',
+      },
+      'body': <String, Object?>{'text': 'new ws hello'},
+    }, ownerDid: 'did:wba:awiki.ai:user:alice');
+
+    expect(message.remoteId, 'msg-3');
+    expect(message.senderDid, 'did:wba:awiki.ai:user:bob');
+    expect(message.receiverDid, 'did:wba:awiki.ai:user:alice');
+    expect(message.content, 'new ws hello');
+    expect(
+      message.threadId,
+      'dm:did:wba:awiki.ai:user:alice:did:wba:awiki.ai:user:bob',
+    );
+  });
+
+  test('maps group.incoming meta body envelope', () {
+    final message = mapper.toChatMessage(<String, Object?>{
+      'meta': <String, Object?>{
+        'message_id': 'msg-4',
+        'sender_did': 'did:wba:awiki.ai:user:bob',
+      },
+      'body': <String, Object?>{
+        'text': 'new group ws hello',
+        'group_did': 'did:wba:awiki.ai:group:two',
+        'group_event_seq': '12',
+      },
+    }, ownerDid: 'did:wba:awiki.ai:user:alice');
+
+    expect(message.remoteId, 'msg-4');
+    expect(message.groupId, 'did:wba:awiki.ai:group:two');
+    expect(message.threadId, 'group:did:wba:awiki.ai:group:two');
+    expect(message.content, 'new group ws hello');
+    expect(message.serverSequence, 12);
+  });
+
   test('builds conversations from inbox messages', () {
     final conversations = mapper.conversationsFromInbox(
       ownerDid: 'did:wba:awiki.ai:user:alice',
