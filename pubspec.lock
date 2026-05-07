@@ -4,10 +4,11 @@ packages:
   anp:
     dependency: "direct main"
     description:
-      path: "../anp/dart"
-      relative: true
-    source: path
-    version: "0.1.0"
+      name: anp
+      sha256: e0dcd63c70fce0b362be39e81f5aefee8545aeb8c277cd03508f28e8cf5ea08f
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "0.8.7"
   archive:
     dependency: "direct main"
     description:

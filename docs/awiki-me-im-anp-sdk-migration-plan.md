@@ -117,15 +117,14 @@ lib/src/data/gateways/awiki_anp_gateway.dart
 
 ## 5. 依赖与版本策略
 
-在 `awiki-me/pubspec.yaml` 中增加本地 path 依赖：
+在 `awiki-me/pubspec.yaml` 中依赖已发布的 Dart SDK：
 
 ```yaml
 dependencies:
-  anp:
-    path: ../anp/dart
+  anp: ^0.8.7
 ```
 
-需要注意 `anp/dart/pubspec.yaml` 当前 Dart SDK constraint 是：
+需要注意 `anp` Dart SDK 当前 Dart SDK constraint 是：
 
 ```yaml
 environment:
@@ -438,7 +437,7 @@ thread id 规则保持当前 UI 兼容：
 
 ## 13. 实施步骤
 
-1. 增加 `anp` path dependency，并确认 Flutter/Dart SDK 版本是否满足 Dart 3.8。
+1. 增加已发布的 `anp` SDK dependency，并确认 Flutter/Dart SDK 版本是否满足 Dart 3.8。
 2. 新增 `awiki_sdk` 内部模块，实现 service client、user client、message client、proof builder、mapper、error 类型。
 3. 新增 message wire 单元测试，对齐 `awiki-cli` 的 `/im/rpc`、`direct.send`、`inbox.get`、`group.send` 等请求结构。
 4. 新增 `AwikiAnpGateway implements AwikiGateway`，先覆盖私聊、inbox、历史、mark read。
@@ -526,7 +525,7 @@ thread id 规则保持当前 UI 兼容：
 ## 16. 默认假设
 
 - `awiki-me/docs` 用于保存本方案文档。
-- `anp/dart` 作为本地 path dependency 使用，路径为 `../anp/dart`。
+- `awiki-me` 依赖 pub.dev 上发布的 `anp` Dart SDK，版本号与其他语言 SDK 保持一致。
 - message service 新版 API 以 `awiki-cli/internal/message` 当前实现为准。
 - user service 新版 API 以 `awiki-cli/internal/identity` 当前实现为准。
 - 第一阶段只迁移移动端现有 IM 能力，不扩大到附件和 E2EE。

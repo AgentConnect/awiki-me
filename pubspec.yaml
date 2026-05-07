@@ -9,8 +9,7 @@ environment:
   flutter: ">=3.24.0"
 
 dependencies:
-  anp:
-    path: ../anp/dart
+  anp: ^0.8.7
   flutter:
     sdk: flutter
   flutter_localizations:
