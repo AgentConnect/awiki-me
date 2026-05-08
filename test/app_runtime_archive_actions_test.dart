@@ -18,11 +18,13 @@ void main() {
       container = ProviderContainer(
         overrides: <Override>[
           awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
           realtimeGatewayProvider.overrideWithValue(FakeRealtimeGateway()),
           notificationFacadeProvider.overrideWithValue(
             FakeNotificationFacade(),
           ),
           e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
       );
       addTearDown(container.dispose);
@@ -36,9 +38,7 @@ void main() {
         handle: 'alice',
         jwtToken: 'token-123',
       );
-      gateway.localCredentials = <SessionIdentity>[
-        gateway.importedCredential!,
-      ];
+      gateway.localCredentials = <SessionIdentity>[gateway.importedCredential!];
 
       await container
           .read(appRuntimeProvider.notifier)
@@ -46,10 +46,7 @@ void main() {
 
       expect(gateway.importCalls, 1);
       expect(gateway.listLocalCredentialsCalls, 1);
-      expect(
-        container.read(sessionProvider).localCredentials,
-        hasLength(1),
-      );
+      expect(container.read(sessionProvider).localCredentials, hasLength(1));
       expect(
         container.read(uiFeedbackProvider)?.message.id,
         'importSuccessSelectCredential',
@@ -57,7 +54,9 @@ void main() {
     });
 
     test('导出成功后写入成功提示', () async {
-      container.read(sessionProvider.notifier).setSession(
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
             const SessionIdentity(
               did: 'did:test:123',
               credentialName: 'default',

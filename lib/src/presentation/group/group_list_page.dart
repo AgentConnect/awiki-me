@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
@@ -7,12 +6,15 @@ import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_summary.dart';
 import '../../l10n/l10n.dart';
+import '../app_shell/providers/navigation_provider.dart';
+import '../app_shell/providers/selected_conversation_provider.dart';
 import '../chat/chat_page.dart';
 import '../chat/chat_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/avatar_badge.dart';
+import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'group_provider.dart';
 
@@ -27,9 +29,11 @@ class GroupListPage extends ConsumerWidget {
       children: <Widget>[
         CupertinoPageScaffold(
           backgroundColor: theme.background,
-          child: SafeArea(
+          child: AwikiAdaptiveScaffold(
+            maxWidth: 900,
+            includeBottomSafeArea: true,
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+              padding: const EdgeInsets.fromLTRB(0, 14, 0, 24),
               children: <Widget>[
                 AwikiMeTopBar(
                   title: context.l10n.groupListTitle,
@@ -37,8 +41,8 @@ class GroupListPage extends ConsumerWidget {
                   trailingWidth: 64,
                   leading: TopBarActionButton(
                     onTap: () => Navigator.of(context).pop(),
-                    child: Icon(
-                      Icons.arrow_back,
+                    child: AwikiAssetIcon(
+                      assetName: 'assets/icons/icon_left.svg',
                       color: theme.primaryDark,
                       size: 22,
                     ),
@@ -49,7 +53,7 @@ class GroupListPage extends ConsumerWidget {
                       TopBarActionButton(
                         onTap: () => ref.read(groupProvider.notifier).refresh(),
                         child: Icon(
-                          Icons.refresh,
+                          CupertinoIcons.refresh,
                           color: theme.title,
                           size: 20,
                         ),
@@ -57,8 +61,8 @@ class GroupListPage extends ConsumerWidget {
                       const SizedBox(width: 12),
                       TopBarActionButton(
                         onTap: () => _showJoinDialog(context, ref),
-                        child: Icon(
-                          Icons.group_add,
+                        child: AwikiAssetIcon(
+                          assetName: 'assets/icons/icon_add.svg',
                           color: theme.primary,
                           size: 22,
                         ),
@@ -125,6 +129,14 @@ class GroupListPage extends ConsumerWidget {
     );
     await ref.read(chatThreadsProvider.notifier).openConversation(conversation);
     if (!context.mounted) {
+      return;
+    }
+    if (context.awikiResponsive.supportsTwoPane) {
+      ref
+          .read(selectedConversationProvider.notifier)
+          .selectConversation(conversation);
+      ref.read(shellTabProvider.notifier).setTab(0);
+      Navigator.of(context).pop();
       return;
     }
     await AppNavigator.push(
@@ -212,9 +224,11 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
       children: <Widget>[
         CupertinoPageScaffold(
           backgroundColor: theme.background,
-          child: SafeArea(
+          child: AwikiAdaptiveScaffold(
+            maxWidth: 900,
+            includeBottomSafeArea: true,
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+              padding: const EdgeInsets.fromLTRB(0, 14, 0, 24),
               children: <Widget>[
                 Row(
                   children: <Widget>[
@@ -222,8 +236,8 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                       onTap: () => Navigator.of(context).pop(),
                       child: Padding(
                         padding: const EdgeInsets.all(8),
-                        child: Icon(
-                          Icons.arrow_back,
+                        child: AwikiAssetIcon(
+                          assetName: 'assets/icons/icon_left.svg',
                           color: theme.primaryDark,
                           size: 22,
                         ),
@@ -400,8 +414,9 @@ class _GroupCard extends StatelessWidget {
             const SizedBox(width: 12),
             GestureDetector(
               onTap: onOpenDetail,
-              child: Icon(
-                Icons.chevron_right,
+              child: AwikiAssetIcon(
+                assetName: 'assets/icons/icon_right.svg',
+                size: context.awikiResponsive.iconSm,
                 color: context.awikiTheme.tertiaryText,
               ),
             ),

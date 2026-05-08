@@ -1,49 +1,82 @@
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
+# OS and editor files
 .DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.tmp
+*.temp
+*.log
+*.class
 .atom/
+.build/
 .buildlog/
-.history
+.history/
 .svn/
-migrate_working_dir/
-
-# IntelliJ related
+.swiftpm/
+.idea/
+.vscode/
 *.iml
 *.ipr
 *.iws
-.idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-.vscode/
-.venv/
-.pytest_cache/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
+# Dart and Flutter
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
+.packages
 .pub-cache/
 .pub/
-/build/
+build/
+**/doc/api/
+**/ios/Flutter/.last_build_id
 
-# Symbolication related
+# Flutter symbolication and obfuscation outputs
 app.*.symbols
-
-# Obfuscation related
 app.*.map.json
 
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
-/android/.gradle/
-/android/local.properties
-awiki_me/
-icons/
+# Android local state and signing material
+android/.gradle/
+android/.kotlin/
+android/captures/
+android/local.properties
+android/key.properties
+android/*.jks
+android/*.keystore
+android/app/debug/
+android/app/profile/
+android/app/release/
+
+# iOS and macOS local build state
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Pods/
+ios/.symlinks/
+ios/Runner.xcworkspace/xcuserdata/
+ios/Runner.xcodeproj/xcuserdata/
+ios/Runner.xcodeproj/project.xcworkspace/xcuserdata/
+macos/Flutter/GeneratedPluginRegistrant.swift
+macos/Flutter/ephemeral/
+macos/Flutter/Generated.xcconfig
+macos/Flutter/flutter_export_environment.sh
+macos/Pods/
+macos/.symlinks/
+macos/Runner.xcworkspace/xcuserdata/
+macos/Runner.xcodeproj/xcuserdata/
+macos/Runner.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Web and desktop transient outputs
+web/.dart_tool/
+linux/flutter/ephemeral/
+windows/flutter/ephemeral/
+
+# Local Python/tooling caches kept out during the Dart-only migration
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Local project scratch/output directories
+/migrate_working_dir/
+/awiki_me/
+/icons/

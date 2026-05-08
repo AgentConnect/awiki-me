@@ -13,11 +13,13 @@ void main() {
 
     setUp(() {
       bootstrap = AppBootstrap(
+        accountGateway: FakeAwikiGateway(),
         gateway: FakeAwikiGateway(),
         realtimeGateway: FakeRealtimeGateway(),
         notificationFacade: FakeNotificationFacade(),
         e2eeFacade: FakeE2eeFacade(),
         localePreferenceService: FakeLocalePreferenceService(),
+        updateService: FakeUpdateService(),
       );
     });
 
@@ -34,8 +36,9 @@ void main() {
       expect(find.text('Import identity credential'), findsOneWidget);
     });
 
-    testWidgets('falls back to Chinese for unsupported locales',
-        (tester) async {
+    testWidgets('falls back to Chinese for unsupported locales', (
+      tester,
+    ) async {
       tester.binding.platformDispatcher.localesTestValue = const <Locale>[
         Locale('fr'),
       ];
@@ -48,8 +51,9 @@ void main() {
       expect(find.text('导入身份凭证'), findsOneWidget);
     });
 
-    testWidgets('uses explicit locale override from settings provider',
-        (tester) async {
+    testWidgets('uses explicit locale override from settings provider', (
+      tester,
+    ) async {
       tester.binding.platformDispatcher.localesTestValue = const <Locale>[
         Locale('zh'),
       ];
@@ -67,6 +71,64 @@ void main() {
 
       expect(find.text('Log in'), findsWidgets);
       expect(find.text('Import identity credential'), findsOneWidget);
+    });
+
+    testWidgets('tapping outside an input dismisses keyboard focus', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        AwikiMeApp(
+          bootstrap: bootstrap,
+          providerOverrides: <Override>[
+            appLocaleModeProvider.overrideWith((ref) => AppLocaleMode.english),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('Register'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(CupertinoTextField).first);
+      await tester.pump();
+
+      final focusNode = tester
+          .widget<EditableText>(find.byType(EditableText).first)
+          .focusNode;
+      expect(focusNode.hasFocus, isTrue);
+
+      await tester.tap(find.text('Register'));
+      await tester.pump();
+
+      expect(focusNode.hasFocus, isFalse);
+    });
+
+    testWidgets('tapping the focused input keeps keyboard focus', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        AwikiMeApp(
+          bootstrap: bootstrap,
+          providerOverrides: <Override>[
+            appLocaleModeProvider.overrideWith((ref) => AppLocaleMode.english),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('Register'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(CupertinoTextField).first);
+      await tester.pump();
+
+      final focusNode = tester
+          .widget<EditableText>(find.byType(EditableText).first)
+          .focusNode;
+      expect(focusNode.hasFocus, isTrue);
+
+      await tester.tap(find.byType(CupertinoTextField).first);
+      await tester.pump();
+
+      expect(focusNode.hasFocus, isTrue);
     });
   });
 }

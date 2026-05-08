@@ -1,12 +1,7 @@
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:awiki_me/l10n/app_localizations.dart';
 
 class AppMessage {
-  const AppMessage._(
-    this.id, {
-    this.path,
-    this.value,
-    this.detail,
-  });
+  const AppMessage._(this.id, {this.path, this.value, this.detail});
 
   final String id;
   final String? path;
@@ -23,6 +18,27 @@ class AppMessage {
 
   factory AppMessage.newMessageArrived() =>
       const AppMessage._('newMessageArrived');
+
+  factory AppMessage.updateAlreadyLatest() =>
+      const AppMessage._('updateAlreadyLatest');
+
+  factory AppMessage.updateCheckFailed() =>
+      const AppMessage._('updateCheckFailed');
+
+  factory AppMessage.updateOpenReleaseNotesFailed() =>
+      const AppMessage._('updateOpenReleaseNotesFailed');
+
+  factory AppMessage.updateOpenDownloadFailed() =>
+      const AppMessage._('updateOpenDownloadFailed');
+
+  factory AppMessage.updateReadyToInstall() =>
+      const AppMessage._('updateReadyToInstall');
+
+  factory AppMessage.updatePermissionRequired() =>
+      const AppMessage._('updatePermissionRequired');
+
+  factory AppMessage.updateInstallFailed() =>
+      const AppMessage._('updateInstallFailed');
 
   factory AppMessage.requestTimeoutRetry() =>
       const AppMessage._('requestTimeoutRetry');
@@ -50,15 +66,6 @@ class AppMessage {
 
   factory AppMessage.credentialPackFailed() =>
       const AppMessage._('credentialPackFailed');
-
-  factory AppMessage.localCredentialIndexInvalid() =>
-      const AppMessage._('localCredentialIndexInvalid');
-
-  factory AppMessage.localCredentialIndexMissingCredentials() =>
-      const AppMessage._('localCredentialIndexMissingCredentials');
-
-  factory AppMessage.credentialIndexEntryInvalid(String key) =>
-      AppMessage._('credentialIndexEntryInvalid', value: key);
 
   factory AppMessage.localCredentialDirectoryMissing() =>
       const AppMessage._('localCredentialDirectoryMissing');
@@ -111,6 +118,9 @@ class AppMessage {
   factory AppMessage.groupNameRequired() =>
       const AppMessage._('groupNameRequired');
 
+  factory AppMessage.peerProfileThreadDeleted() =>
+      const AppMessage._('peerProfileThreadDeleted');
+
   factory AppMessage.fromError(Object error) {
     final raw = _normalize(error);
     if (raw.isEmpty) {
@@ -128,10 +138,10 @@ class AppMessage {
     }
     if (raw.startsWith('本地未找到凭证：')) {
       return AppMessage.localCredentialNotFound(
-          raw.substring('本地未找到凭证：'.length));
+        raw.substring('本地未找到凭证：'.length),
+      );
     }
-    if (raw ==
-        '当前仓库未内置 setup_identity.py，请通过 AWIKI_SETUP_IDENTITY_SCRIPT 显式配置脚本路径后再删除凭证。') {
+    if (raw == '当前版本不再支持旧版脚本凭证，请重新创建或导入新版 e1 DID 凭证。') {
       return AppMessage.setupIdentityScriptMissing();
     }
     if (raw.startsWith('删除凭证失败：')) {
@@ -142,17 +152,6 @@ class AppMessage {
     }
     if (raw == '凭证打包失败，请稍后重试。') {
       return AppMessage.credentialPackFailed();
-    }
-    if (raw == '本地凭证索引格式不正确。') {
-      return AppMessage.localCredentialIndexInvalid();
-    }
-    if (raw == '本地凭证索引缺少 credentials。') {
-      return AppMessage.localCredentialIndexMissingCredentials();
-    }
-    if (raw.startsWith('凭证索引项格式不正确：')) {
-      return AppMessage.credentialIndexEntryInvalid(
-        raw.substring('凭证索引项格式不正确：'.length),
-      );
     }
     if (raw == '无法定位本地凭证目录。') {
       return AppMessage.localCredentialDirectoryMissing();
@@ -191,8 +190,9 @@ class AppMessage {
         raw.endsWith('或接入原生插件后再在 App 内完成注册。')) {
       final start = raw.indexOf('（');
       final end = raw.indexOf('注册）');
-      final authHint =
-          start >= 0 && end > start ? raw.substring(start + 1, end) : '手机号+验证码';
+      final authHint = start >= 0 && end > start
+          ? raw.substring(start + 1, end)
+          : '手机号+验证码';
       return AppMessage.didRegistrationPluginMissing(authHint);
     }
     if (raw == 'AWiki Me 当前未接入 DID 注册插件，无法自动刷新 token。') {
@@ -217,6 +217,20 @@ class AppMessage {
         return l10n.importSuccessSelectCredential;
       case 'newMessageArrived':
         return l10n.newMessageArrived;
+      case 'updateAlreadyLatest':
+        return l10n.updateAlreadyLatest;
+      case 'updateCheckFailed':
+        return l10n.updateCheckFailed;
+      case 'updateOpenReleaseNotesFailed':
+        return l10n.updateOpenReleaseNotesFailed;
+      case 'updateOpenDownloadFailed':
+        return l10n.updateOpenDownloadFailed;
+      case 'updateReadyToInstall':
+        return l10n.updateReadyToInstall;
+      case 'updatePermissionRequired':
+        return l10n.updatePermissionRequired;
+      case 'updateInstallFailed':
+        return l10n.updateInstallFailed;
       case 'requestTimeoutRetry':
         return l10n.requestTimeoutRetry;
       case 'operationFailedRetry':
@@ -235,12 +249,6 @@ class AppMessage {
         return l10n.noCredentialToExport;
       case 'credentialPackFailed':
         return l10n.credentialPackFailed;
-      case 'localCredentialIndexInvalid':
-        return l10n.localCredentialIndexInvalid;
-      case 'localCredentialIndexMissingCredentials':
-        return l10n.localCredentialIndexMissingCredentials;
-      case 'credentialIndexEntryInvalid':
-        return l10n.credentialIndexEntryInvalid(value ?? '');
       case 'localCredentialDirectoryMissing':
         return l10n.localCredentialDirectoryMissing;
       case 'exportUnsupportedOnPlatform':
@@ -277,6 +285,8 @@ class AppMessage {
             : l10n.linkOpenFailedWithDetail(detail!);
       case 'groupNameRequired':
         return l10n.groupNameRequired;
+      case 'peerProfileThreadDeleted':
+        return l10n.peerProfileThreadDeleted;
       case 'raw':
         return detail ?? l10n.operationFailedRetry;
       default:

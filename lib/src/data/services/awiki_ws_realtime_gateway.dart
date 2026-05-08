@@ -5,34 +5,52 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../../domain/entities/session_identity.dart';
 import '../../domain/services/realtime_gateway.dart';
+import 'awiki_ws_channel_connector.dart'
+    if (dart.library.io) 'awiki_ws_channel_connector_io.dart';
 
 class AwikiWsRealtimeGateway implements RealtimeGateway {
   AwikiWsRealtimeGateway({
-    String? wsBaseUrl,
+    String? messageServiceUrl,
     Duration reconnectBaseDelay = const Duration(seconds: 1),
     Duration reconnectMaxDelay = const Duration(seconds: 30),
-  })  : _wsBaseUrl = wsBaseUrl ??
-            const String.fromEnvironment(
-              'AWIKI_WS_URL',
-              defaultValue: '',
-            ),
-        _reconnectBaseDelay = reconnectBaseDelay,
-        _reconnectMaxDelay = reconnectMaxDelay;
+    Duration connectTimeout = const Duration(seconds: 3),
+  }) : _messageServiceUrl =
+           messageServiceUrl ??
+           const String.fromEnvironment(
+             'AWIKI_MESSAGE_SERVICE_URL',
+             defaultValue: 'https://awiki.ai',
+           ),
+       _reconnectBaseDelay = reconnectBaseDelay,
+       _reconnectMaxDelay = reconnectMaxDelay,
+       _connectTimeout = connectTimeout;
 
-  final String _wsBaseUrl;
+  final String _messageServiceUrl;
   final Duration _reconnectBaseDelay;
   final Duration _reconnectMaxDelay;
+  final Duration _connectTimeout;
 
   WebSocketChannel? _channel;
   StreamSubscription<dynamic>? _subscription;
   Timer? _reconnectTimer;
+  final StreamController<RealtimeConnectionStatus> _statusController =
+      StreamController<RealtimeConnectionStatus>.broadcast();
   SessionIdentity? _session;
   RealtimeMessageHandler? _onMessage;
   bool _shouldRun = false;
+  RealtimeConnectionStatus _status = RealtimeConnectionStatus.idle;
   Duration _currentDelay = const Duration(seconds: 1);
 
   @override
   bool get isConnected => _channel != null;
+
+  @override
+  RealtimeConnectionStatus get connectionStatus => _status;
+
+  @override
+  Stream<RealtimeConnectionStatus> get connectionStatusStream =>
+      _statusController.stream;
+
+  Uri buildUriForTest() => _buildWsUri();
 
   @override
   Future<void> connect({
@@ -43,6 +61,7 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
     _onMessage = onMessage;
     _shouldRun = true;
     _currentDelay = _reconnectBaseDelay;
+    _setStatus(RealtimeConnectionStatus.connecting);
     await _openSocket();
   }
 
@@ -53,8 +72,9 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
     _reconnectTimer = null;
     await _subscription?.cancel();
     _subscription = null;
-    await _channel?.sink.close();
+    await _closeChannel(_channel);
     _channel = null;
+    _setStatus(RealtimeConnectionStatus.idle);
   }
 
   Future<void> _openSocket() async {
@@ -65,12 +85,32 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
     }
     final token = session.jwtToken ?? '';
     if (token.isEmpty) {
+      _setStatus(RealtimeConnectionStatus.failed);
       throw StateError('Realtime connect requires jwt token.');
     }
 
-    final uri = _buildWsUri(token);
-    final channel = WebSocketChannel.connect(uri);
+    WebSocketChannel? channel;
+    try {
+      final uri = _buildWsUri();
+      channel = connectAwikiWebSocket(
+        uri,
+        headers: <String, String>{'Authorization': 'Bearer $token'},
+      );
+      await channel.ready.timeout(_connectTimeout);
+    } catch (_) {
+      await _closeChannel(channel);
+      _scheduleReconnect();
+      return;
+    }
+
+    if (!_shouldRun) {
+      await _closeChannel(channel);
+      return;
+    }
+
     _channel = channel;
+    _currentDelay = _reconnectBaseDelay;
+    _setStatus(RealtimeConnectionStatus.connected);
     _subscription = channel.stream.listen(
       (event) async {
         await _handleSocketEvent(event, onMessage: onMessage);
@@ -93,7 +133,14 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
       return;
     }
     final method = decoded['method']?.toString() ?? '';
-    if (method != 'new_message') {
+    if (method != 'direct.incoming' &&
+        method != 'group.incoming' &&
+        method != 'group.state_changed' &&
+        method != 'new_message' &&
+        method != 'direct.new_message' &&
+        method != 'group.new_message' &&
+        method != 'inbox.updated' &&
+        method != 'message.new') {
       return;
     }
     final params = decoded['params'];
@@ -113,35 +160,54 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
     if (!_shouldRun) {
       return;
     }
+    _setStatus(RealtimeConnectionStatus.reconnecting);
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(_currentDelay, () async {
-      await _openSocket();
+      try {
+        await _openSocket();
+      } catch (_) {
+        _scheduleReconnect();
+      }
     });
-    final nextSeconds = (_currentDelay.inSeconds * 2)
-        .clamp(_reconnectBaseDelay.inSeconds, _reconnectMaxDelay.inSeconds);
+    final nextSeconds = (_currentDelay.inSeconds * 2).clamp(
+      _reconnectBaseDelay.inSeconds,
+      _reconnectMaxDelay.inSeconds,
+    );
     _currentDelay = Duration(seconds: nextSeconds);
   }
 
-  Uri _buildWsUri(String token) {
-    final configured = _wsBaseUrl.trim();
-    if (configured.isNotEmpty) {
-      final base = configured.endsWith('/')
-          ? configured.substring(0, configured.length - 1)
-          : configured;
-      return Uri.parse('$base/message/ws?token=$token');
+  void _setStatus(RealtimeConnectionStatus status) {
+    if (_status == status) {
+      return;
     }
-    const messageService = String.fromEnvironment(
-      'AWIKI_MESSAGE_SERVICE_URL',
-      defaultValue: 'https://awiki.ai',
-    );
-    final uri = Uri.parse(messageService);
+    _status = status;
+    if (!_statusController.isClosed) {
+      _statusController.add(status);
+    }
+  }
+
+  Future<void> _closeChannel(WebSocketChannel? channel) async {
+    if (channel == null) {
+      return;
+    }
+    try {
+      await channel.sink.close().timeout(const Duration(seconds: 1));
+    } catch (_) {
+      // Closing can hang or fail when the remote peer already disappeared.
+    }
+  }
+
+  Uri _buildWsUri() {
+    final uri = Uri.parse(_messageServiceUrl.trim());
     final scheme = uri.scheme == 'https' ? 'wss' : 'ws';
+    final normalizedBasePath = uri.path.endsWith('/')
+        ? uri.path.substring(0, uri.path.length - 1)
+        : uri.path;
     return Uri(
       scheme: scheme,
       host: uri.host,
       port: uri.hasPort ? uri.port : null,
-      path: '/message/ws',
-      queryParameters: <String, String>{'token': token},
+      path: '$normalizedBasePath/im/ws',
     );
   }
 }

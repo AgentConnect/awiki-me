@@ -1,7 +1,7 @@
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
+import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/presentation/profile/profile_page.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
@@ -22,15 +22,13 @@ void main() {
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
-        home: ProfilePage(
-          homepageMarkdownLoader: (_) async => null,
-        ),
+        home: ProfilePage(homepageMarkdownLoader: (_) async => null),
         gateway: gateway,
         profile: profile,
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.edit));
+    await tester.tap(find.byIcon(CupertinoIcons.pencil));
     await tester.pumpAndSettle();
 
     expect(find.text('编辑个人资料'), findsWidgets);
@@ -71,9 +69,56 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text('Remote title'), findsOneWidget);
+    expect(find.text('Remote title'), findsNothing);
     expect(find.text('Remote body'), findsOneWidget);
     expect(find.text('ai'), findsOneWidget);
     expect(find.text('agent'), findsOneWidget);
+  });
+
+  testWidgets('个人资料页显示粉丝和关注数量', (tester) async {
+    const profile = UserProfile(
+      did: 'did:test:789',
+      nickName: 'Elena',
+      bio: 'Bio',
+      tags: <String>[],
+      handle: 'elena',
+      profileMarkdown: '# Elena',
+    );
+    final gateway = FakeAwikiGateway()
+      ..myProfile = profile
+      ..followers = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: 'did:test:follower-1',
+          displayName: 'Follower 1',
+          relationship: 'follower',
+        ),
+        RelationshipSummary(
+          did: 'did:test:follower-2',
+          displayName: 'Follower 2',
+          relationship: 'follower',
+        ),
+      ]
+      ..following = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: 'did:test:following-1',
+          displayName: 'Following 1',
+          relationship: 'following',
+        ),
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: ProfilePage(homepageMarkdownLoader: (_) async => null),
+        gateway: gateway,
+        profile: profile,
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('2'), findsOneWidget);
+    expect(find.text('粉丝'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+    expect(find.text('关注'), findsOneWidget);
   });
 }

@@ -13,10 +13,8 @@ class ConversationListState {
   final List<ConversationSummary> conversations;
   final bool isLoading;
 
-  int get unreadCount => conversations.fold<int>(
-        0,
-        (sum, item) => sum + item.unreadCount,
-      );
+  int get unreadCount =>
+      conversations.fold<int>(0, (sum, item) => sum + item.unreadCount);
 
   ConversationListState copyWith({
     List<ConversationSummary>? conversations,
@@ -38,12 +36,10 @@ class ConversationListController extends StateNotifier<ConversationListState> {
 
   Future<void> refresh() async {
     state = state.copyWith(isLoading: true);
-    final conversations =
-        await ref.read(awikiGatewayProvider).listConversations();
-    state = state.copyWith(
-      conversations: conversations,
-      isLoading: false,
-    );
+    final conversations = await ref
+        .read(awikiGatewayProvider)
+        .listConversations();
+    state = state.copyWith(conversations: conversations, isLoading: false);
     await _notification.updateBadgeCount(state.unreadCount);
   }
 
@@ -58,6 +54,27 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     _notification.updateBadgeCount(state.unreadCount);
   }
 
+  void markThreadReadLocal(String threadId) {
+    final next = state.conversations.map((item) {
+      if (item.threadId != threadId || item.unreadCount == 0) {
+        return item;
+      }
+      return ConversationSummary(
+        threadId: item.threadId,
+        displayName: item.displayName,
+        lastMessagePreview: item.lastMessagePreview,
+        lastMessageAt: item.lastMessageAt,
+        unreadCount: 0,
+        isGroup: item.isGroup,
+        targetDid: item.targetDid,
+        groupId: item.groupId,
+        avatarSeed: item.avatarSeed,
+      );
+    }).toList();
+    state = state.copyWith(conversations: next);
+    _notification.updateBadgeCount(state.unreadCount);
+  }
+
   Future<void> clear() async {
     state = const ConversationListState();
     await _notification.updateBadgeCount(0);
@@ -66,5 +83,5 @@ class ConversationListController extends StateNotifier<ConversationListState> {
 
 final conversationListProvider =
     StateNotifierProvider<ConversationListController, ConversationListState>(
-  (ref) => ConversationListController(ref),
-);
+      (ref) => ConversationListController(ref),
+    );

@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
@@ -7,6 +6,8 @@ import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../shared/awiki_me_design.dart';
+import '../shared/avatar_badge.dart';
+import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'onboarding_provider.dart';
 
@@ -42,23 +43,32 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final credentials = ref.watch(sessionProvider).localCredentials;
     final runtime = ref.read(appRuntimeProvider.notifier);
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     return CupertinoPageScaffold(
       backgroundColor: theme.background,
-      child: SafeArea(
+      child: AwikiAdaptiveScaffold(
+        alignment: responsive.isPhone ? Alignment.topCenter : Alignment.center,
+        maxWidth: responsive.formMaxWidth,
+        includeBottomSafeArea: true,
+        padding: EdgeInsets.fromLTRB(
+          responsive.isPhone ? 24 : 0,
+          responsive.isPhone ? 40 : 32,
+          responsive.isPhone ? 24 : 0,
+          24,
+        ),
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
           children: <Widget>[
-            const SizedBox(height: 20),
+            SizedBox(height: responsive.spacing(responsive.isPhone ? 20 : 8)),
             Center(
               child: Image.asset(
                 'assets/branding/awiki-me-logo.png',
-                width: 125,
-                height: 125,
+                width: responsive.scaled(125),
+                height: responsive.scaled(125),
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => Text(
                   '@_',
                   style: TextStyle(
-                    fontSize: 72,
+                    fontSize: responsive.isPhone ? 72 : responsive.scaled(58),
                     fontWeight: FontWeight.w700,
                     color: theme.primary,
                     height: 1,
@@ -66,7 +76,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 ),
               ),
             ),
-            const SizedBox(height: 48),
+            SizedBox(
+              height: responsive.spacing(responsive.isPhone ? 48 : 40),
+            ),
             _SegmentedPill(
               value: onboarding.entryMode,
               options: <String, String>{
@@ -75,42 +87,41 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               },
               onChanged: ref.read(onboardingProvider.notifier).setEntryMode,
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: responsive.spacing(24)),
             if (onboarding.entryMode == 'login') ...<Widget>[
               _LocalCredentialsCard(
                 credentials: credentials,
                 onLogin: runtime.loginWithLocalCredential,
               ),
-              const SizedBox(height: 12),
-              _SecondaryActionButton(
-                label: context.l10n.onboardingImportCredential,
-                onPressed: runtime.importCredentialArchive,
-                icon: Icons.file_upload_outlined,
-              ),
-              const SizedBox(height: 12),
-              _SecondaryActionButton(
-                label: context.l10n.onboardingRefreshCredentials,
-                onPressed: () =>
+              SizedBox(height: responsive.spacing(16)),
+              _LoginToolRow(
+                importLabel: context.l10n.onboardingImportCredential,
+                refreshLabel: context.l10n.onboardingRefreshCredentials,
+                onImport: runtime.importCredentialArchive,
+                onRefresh: () =>
                     ref.read(appRuntimeProvider.notifier).initialize(),
-                icon: Icons.fingerprint,
               ),
             ] else ...<Widget>[
-              _RegisterProgress(step: onboarding.registerStep),
-              const SizedBox(height: 20),
               if (onboarding.registerStep == 1) ...<Widget>[
                 _AuthModeToggle(
                   value: onboarding.authMode,
                   onChanged: ref.read(onboardingProvider.notifier).setAuthMode,
                 ),
-                const SizedBox(height: 24),
+                SizedBox(
+                  height: responsive.spacing(responsive.isPhone ? 32 : 24),
+                ),
                 if (onboarding.authMode == 'phone') ...<Widget>[
                   AppTextField(
                     controller: phoneController,
                     label: context.l10n.onboardingPhone,
                     placeholder: context.l10n.onboardingPhonePlaceholder,
                     keyboardType: TextInputType.phone,
+                    showLabel: !responsive.isPhone,
+                    prefix: responsive.isPhone
+                        ? const _PhoneFieldPrefix(code: '+86')
+                        : null,
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: responsive.spacing(12)),
                   AppPrimaryButton(
                     label: context.l10n.onboardingSendOtp,
                     onPressed: onboarding.isBusy
@@ -119,12 +130,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                             .read(onboardingProvider.notifier)
                             .requestOtp(_normalizedPhone),
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: responsive.spacing(12)),
                   AppTextField(
                     controller: otpController,
                     label: context.l10n.onboardingOtp,
                     placeholder: context.l10n.onboardingOtpPlaceholder,
                     keyboardType: TextInputType.number,
+                    showLabel: !responsive.isPhone,
                   ),
                 ] else ...<Widget>[
                   AppTextField(
@@ -132,51 +144,68 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     label: context.l10n.onboardingEmail,
                     placeholder: context.l10n.onboardingEmailPlaceholder,
                     keyboardType: TextInputType.emailAddress,
+                    showLabel: !responsive.isPhone,
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: responsive.spacing(12)),
                   AppPrimaryButton(
-                    label: context.l10n.onboardingSendActivationEmail,
-                    onPressed: onboarding.isBusy
-                        ? null
-                        : () => ref
-                            .read(onboardingProvider.notifier)
-                            .requestEmailActivation(
-                                emailController.text.trim()),
+                    label: onboarding.isEmailResendCoolingDown
+                        ? context.l10n.onboardingResendActivationEmailIn(
+                            onboarding.emailResendCountdown,
+                          )
+                        : context.l10n.onboardingSendActivationEmail,
+                    onPressed:
+                        onboarding.isBusy || onboarding.isEmailResendCoolingDown
+                            ? null
+                            : () => ref
+                                .read(onboardingProvider.notifier)
+                                .requestEmailActivation(
+                                    emailController.text.trim()),
                   ),
-                  const SizedBox(height: 12),
-                  AppSecondaryButton(
-                    label: onboarding.emailVerified
-                        ? context.l10n.onboardingEmailActivated
-                        : context.l10n.onboardingCheckActivationStatus,
-                    onPressed: onboarding.isBusy
-                        ? null
-                        : () => ref
-                            .read(onboardingProvider.notifier)
-                            .checkEmailActivation(emailController.text.trim()),
-                  ),
+                  SizedBox(height: responsive.spacing(12)),
+                  (onboarding.emailVerified
+                      ? AppPrimaryButton(
+                          label: context.l10n.commonNext,
+                          onPressed: onboarding.isBusy
+                              ? null
+                              : () => ref
+                                  .read(onboardingProvider.notifier)
+                                  .setRegisterStep(2),
+                        )
+                      : AppSecondaryButton(
+                          label: onboarding.emailVerified
+                              ? context.l10n.onboardingEmailActivated
+                              : context.l10n.onboardingCheckActivationStatus,
+                          onPressed: onboarding.isBusy
+                              ? null
+                              : () => ref
+                                  .read(onboardingProvider.notifier)
+                                  .checkEmailActivation(
+                                      emailController.text.trim()),
+                        )),
                 ],
-                const SizedBox(height: 20),
-                AppPrimaryButton(
-                  label: context.l10n.commonNext,
-                  onPressed: onboarding.isBusy
-                      ? null
-                      : () => ref
-                          .read(onboardingProvider.notifier)
-                          .setRegisterStep(2),
-                ),
+                SizedBox(height: responsive.spacing(16)),
+                if (onboarding.authMode == 'phone')
+                  AppPrimaryButton(
+                    label: context.l10n.commonNext,
+                    onPressed: onboarding.isBusy
+                        ? null
+                        : () => ref
+                            .read(onboardingProvider.notifier)
+                            .setRegisterStep(2),
+                  ),
               ] else ...<Widget>[
                 AppTextField(
                   controller: handleController,
                   label: context.l10n.onboardingHandle,
                   placeholder: context.l10n.onboardingHandlePlaceholder,
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: responsive.spacing(12)),
                 AppTextField(
                   controller: nickController,
                   label: context.l10n.onboardingNickname,
                   placeholder: context.l10n.onboardingNicknamePlaceholder,
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: responsive.spacing(20)),
                 Row(
                   children: <Widget>[
                     Expanded(
@@ -187,7 +216,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                             .setRegisterStep(1),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    SizedBox(width: responsive.spacing(12)),
                     Expanded(
                       child: AppPrimaryButton(
                         label: context.l10n.onboardingCompleteRegister,
@@ -200,13 +229,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 ),
               ],
             ],
-            const SizedBox(height: 56),
+            SizedBox(height: responsive.spacing(56)),
             Center(
               child: Text(
-                'Secure messaging client',
+                'Base on awiki.ai',
                 style: TextStyle(
                   color: theme.infoAccent,
-                  fontSize: 16,
+                  fontSize: responsive.titleLg,
                   fontStyle: FontStyle.italic,
                   fontWeight: FontWeight.w500,
                 ),
@@ -254,10 +283,11 @@ class _SegmentedPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     return AppSurface(
       color: theme.mutedSurface,
       radius: AwikiMeRadii.pill,
-      padding: const EdgeInsets.all(4),
+      padding: responsive.scaledInsets(const EdgeInsets.all(4)),
       child: Row(
         children: options.entries
             .map(
@@ -265,7 +295,9 @@ class _SegmentedPill extends StatelessWidget {
                 child: GestureDetector(
                   onTap: () => onChanged(entry.key),
                   child: AppSurface(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: EdgeInsets.symmetric(
+                      vertical: responsive.spacing(12),
+                    ),
                     color: value == entry.key
                         ? theme.surface
                         : CupertinoColors.transparent,
@@ -274,6 +306,7 @@ class _SegmentedPill extends StatelessWidget {
                       entry.value,
                       textAlign: TextAlign.center,
                       style: TextStyle(
+                        fontSize: responsive.bodyMd,
                         fontWeight: FontWeight.w700,
                         color: value == entry.key
                             ? theme.title
@@ -290,47 +323,6 @@ class _SegmentedPill extends StatelessWidget {
   }
 }
 
-class _RegisterProgress extends StatelessWidget {
-  const _RegisterProgress({required this.step});
-
-  final int step;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Expanded(child: _ProgressNode(index: 1, step: step, label: '1')),
-        const SizedBox(width: 12),
-        Expanded(child: _ProgressNode(index: 2, step: step, label: '2')),
-      ],
-    );
-  }
-}
-
-class _ProgressNode extends StatelessWidget {
-  const _ProgressNode({
-    required this.index,
-    required this.step,
-    required this.label,
-  });
-
-  final int index;
-  final int step;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final active = step >= index;
-    return AppSurface(
-      padding: EdgeInsets.zero,
-      color: active ? context.awikiTheme.primary : context.awikiTheme.border,
-      radius: AwikiMeRadii.pill,
-      constraints: const BoxConstraints.tightFor(height: 6),
-      child: const SizedBox.shrink(),
-    );
-  }
-}
-
 class _AuthModeToggle extends StatelessWidget {
   const _AuthModeToggle({
     required this.value,
@@ -342,13 +334,112 @@ class _AuthModeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SegmentedPill(
-      value: value,
-      options: <String, String>{
-        'phone': context.l10n.onboardingPhone,
-        'email': context.l10n.onboardingEmail,
-      },
-      onChanged: onChanged,
+    final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: <Widget>[
+        _AuthModeOption(
+          key: const Key('auth-mode-phone'),
+          selected: value == 'phone',
+          assetName: 'assets/icons/icon_mobile.svg',
+          label: context.l10n.onboardingPhone,
+          activeColor: theme.primary,
+          inactiveColor: theme.mutedSurface,
+          onTap: () => onChanged('phone'),
+        ),
+        SizedBox(width: responsive.spacing(14)),
+        _AuthModeOption(
+          key: const Key('auth-mode-email'),
+          selected: value == 'email',
+          assetName: 'assets/icons/icon_mail.svg',
+          label: context.l10n.onboardingEmail,
+          activeColor: theme.primary,
+          inactiveColor: theme.mutedSurface,
+          onTap: () => onChanged('email'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AuthModeOption extends StatelessWidget {
+  const _AuthModeOption({
+    super.key,
+    required this.selected,
+    required this.assetName,
+    required this.label,
+    required this.activeColor,
+    required this.inactiveColor,
+    required this.onTap,
+  });
+
+  final bool selected;
+  final String assetName;
+  final String label;
+  final Color activeColor;
+  final Color inactiveColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
+    final buttonSize = responsive.isPhone ? 72.0 : responsive.scaled(36);
+    return Semantics(
+      label: label,
+      button: true,
+      selected: selected,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: buttonSize,
+          height: buttonSize,
+          decoration: BoxDecoration(
+            color: selected ? activeColor : inactiveColor,
+            borderRadius: BorderRadius.circular(buttonSize / 2),
+          ),
+          child: Center(
+            child: AwikiAssetIcon(
+              assetName: assetName,
+              size: responsive.isPhone ? 30 : responsive.iconMd,
+              color: theme.title,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PhoneFieldPrefix extends StatelessWidget {
+  const _PhoneFieldPrefix({required this.code});
+
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(
+          code,
+          style: TextStyle(
+            fontSize: responsive.bodyMd,
+            fontWeight: FontWeight.w700,
+            color: theme.title,
+          ),
+        ),
+        SizedBox(width: responsive.spacing(10)),
+        Container(
+          width: 1,
+          height: responsive.scaled(26),
+          color: theme.border,
+        ),
+      ],
     );
   }
 }
@@ -364,83 +455,239 @@ class _LocalCredentialsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     return AppCardSection(
-      color: context.awikiTheme.subtleSurface,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            context.l10n.onboardingLogin,
-            style: AwikiMeTextStyles.sectionTitle,
-          ),
-          const SizedBox(height: 12),
-          if (credentials.isEmpty)
-            Text(
-              context.l10n.onboardingMissingLocalCredential,
-              style: AwikiMeTextStyles.cardSubtitle,
-            )
-          else
-            ...credentials.map(
-              (item) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: AppSurface(
-                  padding: EdgeInsets.zero,
-                  radius: 12,
-                  child: AppListTile(
-                    title: item.displayName,
-                    subtitle: item.credentialName,
-                    leading: Icon(
-                      Icons.fingerprint,
-                      color: context.awikiTheme.primary,
+      color: theme.subtleSurface,
+      padding: responsive.scaledInsets(
+        const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      ),
+      child: credentials.isEmpty
+          ? SizedBox(
+              height: responsive.scaled(120),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Container(
+                      width: responsive.scaled(44),
+                      height: responsive.scaled(44),
+                      decoration: BoxDecoration(
+                        color: theme.surface,
+                        borderRadius: BorderRadius.circular(
+                          responsive.radius(22),
+                        ),
+                      ),
+                      child: Center(
+                        child: AwikiAssetIcon(
+                          assetName: 'assets/icons/icon_keyoff.svg',
+                          color: theme.tertiaryText,
+                          size: responsive.iconMd,
+                        ),
+                      ),
                     ),
-                    onTap: () => onLogin(item.credentialName),
-                  ),
+                    SizedBox(height: responsive.spacing(12)),
+                    Text(
+                      context.l10n.onboardingMissingLocalCredential,
+                      textAlign: TextAlign.center,
+                      style: AwikiMeTextStyles.cardSubtitle.copyWith(
+                        fontSize: responsive.bodySm,
+                      ),
+                    ),
+                  ],
                 ),
               ),
+            )
+          : Column(
+              children: credentials
+                  .map(
+                    (item) => Padding(
+                      padding: EdgeInsets.only(
+                        bottom: item == credentials.last
+                            ? 0
+                            : responsive.spacing(10),
+                      ),
+                      child: _CredentialCardTile(
+                        identity: item,
+                        onTap: () => onLogin(item.credentialName),
+                      ),
+                    ),
+                  )
+                  .toList(),
             ),
+    );
+  }
+}
+
+class _CredentialCardTile extends StatelessWidget {
+  const _CredentialCardTile({
+    required this.identity,
+    required this.onTap,
+  });
+
+  final SessionIdentity identity;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
+    final subtitle = (identity.handle?.trim().isNotEmpty == true)
+        ? identity.handle!.trim()
+        : identity.credentialName;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AppSurface(
+        padding: responsive.scaledInsets(
+          const EdgeInsets.fromLTRB(14, 16, 14, 16),
+        ),
+        color: theme.subtleSurface,
+        radius: responsive.radius(20),
+        child: Row(
+          children: <Widget>[
+            AvatarBadge(
+              seed: identity.displayName,
+              size: responsive.isPhone ? 56 : responsive.avatarSizeMd,
+            ),
+            SizedBox(width: responsive.spacing(14)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    identity.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: responsive.titleLg,
+                      fontWeight: FontWeight.w700,
+                      color: theme.title,
+                    ),
+                  ),
+                  SizedBox(height: responsive.spacing(4)),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: responsive.bodyMd,
+                      color: theme.secondaryText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: responsive.spacing(12)),
+            AwikiAssetIcon(
+              assetName: 'assets/icons/icon_right.svg',
+              size: responsive.iconSm,
+              color: theme.tertiaryText,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LoginToolRow extends StatelessWidget {
+  const _LoginToolRow({
+    required this.importLabel,
+    required this.refreshLabel,
+    required this.onImport,
+    required this.onRefresh,
+  });
+
+  final String importLabel;
+  final String refreshLabel;
+  final VoidCallback? onImport;
+  final VoidCallback? onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCardSection(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: <Widget>[
+          _LoginToolButton(
+            label: importLabel,
+            assetName: 'assets/icons/icon_key.svg',
+            onPressed: onImport,
+          ),
+          const AppSectionDivider(),
+          _LoginToolButton(
+            label: refreshLabel,
+            assetName: 'assets/icons/icon_reload.svg',
+            onPressed: onRefresh,
+          ),
         ],
       ),
     );
   }
 }
 
-class _SecondaryActionButton extends StatelessWidget {
-  const _SecondaryActionButton({
+class _LoginToolButton extends StatelessWidget {
+  const _LoginToolButton({
     required this.label,
+    required this.assetName,
     this.onPressed,
-    this.icon,
   });
 
   final String label;
+  final String assetName;
   final VoidCallback? onPressed;
-  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     return GestureDetector(
       onTap: onPressed,
       behavior: HitTestBehavior.opaque,
       child: Opacity(
         opacity: onPressed == null ? 0.5 : 1,
-        child: AppSurface(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          color: theme.warningContainer,
-          radius: 12,
+        child: Padding(
+          padding: responsive.scaledInsets(
+            const EdgeInsets.fromLTRB(16, 18, 16, 18),
+          ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              if (icon != null) ...<Widget>[
-                Icon(icon, color: theme.primaryDark),
-                const SizedBox(width: 8),
-              ],
-              Text(
-                label,
-                style: TextStyle(
-                  color: theme.primaryDark,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
+              Container(
+                width: responsive.scaled(44),
+                height: responsive.scaled(44),
+                decoration: BoxDecoration(
+                  color: theme.subtleSurface,
+                  borderRadius: BorderRadius.circular(
+                    responsive.radius(22),
+                  ),
                 ),
+                child: Center(
+                  child: AwikiAssetIcon(
+                    assetName: assetName,
+                    size: responsive.iconMd,
+                    color: theme.title,
+                  ),
+                ),
+              ),
+              SizedBox(width: responsive.spacing(16)),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: theme.title,
+                    fontSize: responsive.titleLg,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              SizedBox(width: responsive.spacing(12)),
+              AwikiAssetIcon(
+                assetName: 'assets/icons/icon_right.svg',
+                size: responsive.iconSm,
+                color: theme.tertiaryText,
               ),
             ],
           ),

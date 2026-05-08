@@ -14,6 +14,9 @@
   "commonPleaseWait": "请稍候...",
   "commonLoading": "加载中...",
   "commonError": "错误",
+  "realtimeStatusConnecting": "正在连接消息服务...",
+  "realtimeStatusReconnecting": "消息连接中断，正在重连...",
+  "realtimeStatusDisconnected": "消息服务已断开，正在尝试恢复",
   "onboardingLogin": "登录",
   "onboardingRegister": "注册",
   "onboardingImportCredential": "导入身份凭证",
@@ -24,6 +27,12 @@
   "onboardingEmail": "邮箱",
   "onboardingEmailPlaceholder": "输入邮箱地址",
   "onboardingSendActivationEmail": "发送激活邮件",
+  "onboardingResendActivationEmailIn": "重新发送（{seconds}s）",
+  "@onboardingResendActivationEmailIn": {
+    "placeholders": {
+      "seconds": {}
+    }
+  },
   "onboardingEmailActivated": "邮箱已激活",
   "onboardingCheckActivationStatus": "我已激活，检查状态",
   "onboardingHandle": "账号用户名",
@@ -68,6 +77,49 @@
   "settingsLanguageZhHans": "简体中文",
   "settingsLanguageEnglish": "English",
   "settingsPushNotification": "消息推送通知",
+  "settingsCurrentVersion": "当前版本",
+  "settingsCurrentVersionValue": "当前版本：{version}",
+  "@settingsCurrentVersionValue": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "settingsCheckForUpdates": "检查更新",
+  "settingsViewReleaseNotes": "查看更新日志",
+  "settingsInstallUpdate": "立即更新",
+  "settingsInstallUpdateVersion": "安装新版本：{version}",
+  "@settingsInstallUpdateVersion": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "settingsDownloadUpdate": "下载更新",
+  "settingsDownloadUpdateVersion": "下载新版本：{version}",
+  "@settingsDownloadUpdateVersion": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "settingsUpdateAvailable": "发现新版本：{version}",
+  "@settingsUpdateAvailable": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "settingsAlreadyLatestVersion": "已是最新版本",
+  "settingsUpdateStatusLoading": "正在读取版本信息...",
+  "settingsUpdateStatusChecking": "正在检查更新...",
+  "settingsUpdateStatusDownloading": "正在下载更新...",
+  "settingsUpdateStatusInstalling": "正在准备安装更新...",
+  "settingsUpdateStatusFailed": "检查更新失败，请稍后重试",
+  "settingsUpdateReleaseNotesVersion": "查看版本 {version} 的更新日志",
+  "@settingsUpdateReleaseNotesVersion": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "settingsUpdateOpenGitHubHistory": "前往 GitHub 查阅历史版本",
+  "settingsUpdateOpenGitHubDownload": "前往 GitHub 下载当前版本",
   "settingsExportCredential": "导出身份凭证",
   "settingsExportCurrentCredential": "导出当前凭证：{credentialName}",
   "@settingsExportCurrentCredential": {
@@ -186,6 +238,13 @@
   },
   "importSuccessSelectCredential": "导入成功，请选择该凭证登录",
   "newMessageArrived": "你收到了新消息",
+  "updateAlreadyLatest": "已是最新版本",
+  "updateCheckFailed": "检查更新失败，请稍后重试。",
+  "updateOpenReleaseNotesFailed": "无法打开更新日志，请稍后重试。",
+  "updateOpenDownloadFailed": "无法打开下载页面，请前往 GitHub Release。",
+  "updateReadyToInstall": "下载完成，准备安装。",
+  "updatePermissionRequired": "请允许安装未知应用后重试。",
+  "updateInstallFailed": "更新失败，请前往 GitHub 下载。",
   "requestTimeoutRetry": "请求超时，请检查网络后重试。",
   "operationFailedRetry": "操作失败，请稍后重试。",
   "emailNotActivatedClickLink": "邮箱尚未激活，请先点击邮件中的激活链接。",
@@ -196,7 +255,7 @@
       "credentialName": {}
     }
   },
-  "setupIdentityScriptMissing": "当前仓库未内置 setup_identity.py，请通过 AWIKI_SETUP_IDENTITY_SCRIPT 显式配置脚本路径后再删除凭证。",
+  "setupIdentityScriptMissing": "当前版本不再支持旧版脚本凭证，请重新创建或导入新版 e1 DID 凭证。",
   "deleteCredentialFailed": "删除凭证失败：{credentialName}",
   "@deleteCredentialFailed": {
     "placeholders": {
@@ -205,14 +264,6 @@
   },
   "noCredentialToExport": "当前没有已登录凭证可导出。",
   "credentialPackFailed": "凭证打包失败，请稍后重试。",
-  "localCredentialIndexInvalid": "本地凭证索引格式不正确。",
-  "localCredentialIndexMissingCredentials": "本地凭证索引缺少 credentials。",
-  "credentialIndexEntryInvalid": "凭证索引项格式不正确：{key}",
-  "@credentialIndexEntryInvalid": {
-    "placeholders": {
-      "key": {}
-    }
-  },
   "localCredentialDirectoryMissing": "无法定位本地凭证目录。",
   "exportUnsupportedOnPlatform": "当前平台暂不支持导出身份凭证。",
   "importUnsupportedOnPlatform": "当前平台暂不支持导入身份凭证。",
@@ -229,7 +280,7 @@
   "phoneInvalidIntlExample": "手机号格式不正确，请使用 +国家码手机号，例如 +8613800138000",
   "phoneInvalidIntlOrCn": "手机号格式不正确，请输入国际格式或中国大陆 11 位手机号",
   "handleInvalidPattern": "handle 仅支持小写字母、数字、中划线，长度 2-32，不能包含下划线",
-  "didRegistrationPluginMissing": "AWiki Me 当前未接入 DID 注册插件（{authHint}注册）。请先使用 Python 脚本注册并导入会话，或接入原生插件后再在 App 内完成注册。",
+  "didRegistrationPluginMissing": "AWiki Me 当前无法创建 DID（{authHint}注册）。请确认 Dart ANP SDK 初始化成功。",
   "@didRegistrationPluginMissing": {
     "placeholders": {
       "authHint": {}

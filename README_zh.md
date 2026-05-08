@@ -1,27 +1,27 @@
 # AWiki Me Flutter 应用
 
-AWiki Me 是一个独立发布的 Flutter 消息客户端仓库。
+AWiki Me 是一个纯 Dart/Flutter 消息客户端，基于 ANP Dart SDK 构建。账号创建、
+DID-WBA 认证、User Service 调用、IM 与消息 proof 生成都由 Dart 侧完成。
 
 ## 环境要求
 
-- Flutter 3.24.0 或更高版本
-- Dart 3.5.0 或更高版本
+- Flutter 3.24.0 或更高版本，并包含 Dart 3.8.0 或更高版本
 
 ## 快速开始
 
 ```bash
-flutter pub get
-flutter analyze
+PUB_HOSTED_URL=https://mirrors.tuna.tsinghua.edu.cn/dart-pub flutter pub get
+dart analyze
 flutter test
 flutter run
 ```
 
 ## 项目结构
 
-- `lib/`：应用源码
-- `assets/`：图片与 SVG 资源
-- `test/`：单元测试与组件测试
-- `android/`、`ios/`、`web/`：平台工程
+- `lib/`：应用、领域、数据与界面源码
+- `assets/`：品牌与 UI 资源
+- `test/`：Dart 单元测试与组件测试
+- `android/`、`ios/`、`macos/`、`web/`：平台工程
 
 ## 重新生成应用图标
 
@@ -30,11 +30,3 @@ dart run flutter_launcher_icons
 ```
 
 图标源文件位于 `assets/branding/awiki-me-logo.png`。
-
-## 重新生成启动图
-
-```bash
-dart run flutter_native_splash:create
-```
-
-启动图资源同样位于 `assets/branding/awiki-me-logo.png`。

@@ -13,6 +13,7 @@ class OnboardingState {
     this.authMode = 'phone',
     this.registerStep = 1,
     this.emailVerified = false,
+    this.emailResendCountdown = 0,
     this.isBusy = false,
   });
 
@@ -20,13 +21,17 @@ class OnboardingState {
   final String authMode;
   final int registerStep;
   final bool emailVerified;
+  final int emailResendCountdown;
   final bool isBusy;
+
+  bool get isEmailResendCoolingDown => emailResendCountdown > 0;
 
   OnboardingState copyWith({
     String? entryMode,
     String? authMode,
     int? registerStep,
     bool? emailVerified,
+    int? emailResendCountdown,
     bool? isBusy,
   }) {
     return OnboardingState(
@@ -34,6 +39,7 @@ class OnboardingState {
       authMode: authMode ?? this.authMode,
       registerStep: registerStep ?? this.registerStep,
       emailVerified: emailVerified ?? this.emailVerified,
+      emailResendCountdown: emailResendCountdown ?? this.emailResendCountdown,
       isBusy: isBusy ?? this.isBusy,
     );
   }
@@ -44,16 +50,34 @@ class OnboardingController extends StateNotifier<OnboardingState> {
 
   final Ref ref;
   static const Duration _requestTimeout = Duration(seconds: 20);
+  static const int _emailResendCooldownSeconds = 60;
+  Timer? _emailResendTimer;
+
+  @override
+  void dispose() {
+    _emailResendTimer?.cancel();
+    super.dispose();
+  }
 
   void setEntryMode(String value) {
     state = state.copyWith(
       entryMode: value,
       registerStep: value == 'login' ? 1 : state.registerStep,
+      emailVerified: value == 'login' ? false : state.emailVerified,
+      emailResendCountdown: value == 'login' ? 0 : state.emailResendCountdown,
     );
+    if (value == 'login') {
+      _cancelEmailResendCountdown();
+    }
   }
 
   void setAuthMode(String value) {
-    state = state.copyWith(authMode: value, emailVerified: false);
+    state = state.copyWith(
+      authMode: value,
+      emailVerified: false,
+      emailResendCountdown: 0,
+    );
+    _cancelEmailResendCountdown();
   }
 
   void setRegisterStep(int step) {
@@ -61,20 +85,30 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   }
 
   Future<void> requestOtp(String phone) async {
-    await _runBusy(() => ref.read(awikiGatewayProvider).sendOtp(phone: phone));
+    await _runBusy(
+      () => ref.read(awikiAccountGatewayProvider).sendOtp(phone: phone),
+    );
   }
 
   Future<void> requestEmailActivation(String email) async {
-    await _runBusy(
-      () => ref.read(awikiGatewayProvider).sendEmailVerification(email: email),
-    );
+    var success = false;
+    await _runBusy(() async {
+      await ref
+          .read(awikiAccountGatewayProvider)
+          .sendEmailVerification(email: email);
+      success = true;
+    });
+    if (success) {
+      _startEmailResendCountdown();
+    }
   }
 
   Future<bool> checkEmailActivation(String email) async {
     var verified = false;
     await _runBusy(() async {
-      verified =
-          await ref.read(awikiGatewayProvider).checkEmailVerified(email: email);
+      verified = await ref
+          .read(awikiAccountGatewayProvider)
+          .checkEmailVerified(email: email);
       if (!verified) {
         ref
             .read(uiFeedbackProvider.notifier)
@@ -93,13 +127,14 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String profileMarkdown,
   }) async {
     await _runBusy(() async {
-      final session = await ref.read(awikiGatewayProvider).registerHandle(
-            phone: phone,
-            otp: otp,
-            handle: handle,
-            nickName: nickName,
-            profileMarkdown: profileMarkdown,
-          );
+      final session =
+          await ref.read(awikiAccountGatewayProvider).registerHandle(
+                phone: phone,
+                otp: otp,
+                handle: handle,
+                nickName: nickName,
+                profileMarkdown: profileMarkdown,
+              );
       await ref.read(appRuntimeProvider.notifier).activateSession(session);
     });
   }
@@ -110,7 +145,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String handle,
   }) async {
     await _runBusy(() async {
-      final session = await ref.read(awikiGatewayProvider).recoverHandle(
+      final session = await ref.read(awikiAccountGatewayProvider).recoverHandle(
             phone: phone,
             otp: otp,
             handle: handle,
@@ -126,13 +161,14 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String profileMarkdown,
   }) async {
     await _runBusy(() async {
-      final verified =
-          await ref.read(awikiGatewayProvider).checkEmailVerified(email: email);
+      final verified = await ref
+          .read(awikiAccountGatewayProvider)
+          .checkEmailVerified(email: email);
       if (!verified) {
         throw StateError('邮箱尚未激活，请先点击邮件中的激活链接。');
       }
       final session =
-          await ref.read(awikiGatewayProvider).registerHandleWithEmail(
+          await ref.read(awikiAccountGatewayProvider).registerHandleWithEmail(
                 email: email,
                 handle: handle,
                 nickName: nickName,
@@ -157,6 +193,25 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     } finally {
       state = state.copyWith(isBusy: false);
     }
+  }
+
+  void _startEmailResendCountdown() {
+    _emailResendTimer?.cancel();
+    state = state.copyWith(emailResendCountdown: _emailResendCooldownSeconds);
+    _emailResendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      final next = state.emailResendCountdown - 1;
+      if (next <= 0) {
+        timer.cancel();
+        state = state.copyWith(emailResendCountdown: 0);
+        return;
+      }
+      state = state.copyWith(emailResendCountdown: next);
+    });
+  }
+
+  void _cancelEmailResendCountdown() {
+    _emailResendTimer?.cancel();
+    _emailResendTimer = null;
   }
 }
 

@@ -2,15 +2,20 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
+import '../../domain/services/realtime_gateway.dart';
 import '../../l10n/l10n.dart';
-import '../conversation_list/conversation_list_page.dart';
-import '../friends/friends_page.dart';
+import '../conversation_list/conversation_workspace_page.dart';
+import '../friends/friends_workspace_page.dart';
 import '../onboarding/onboarding_page.dart';
-import '../profile/profile_page.dart';
+import '../profile/profile_workspace_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
+import '../shared/responsive_layout.dart';
+import 'providers/app_update_provider.dart';
 import 'providers/app_runtime_provider.dart';
+import 'providers/navigation_provider.dart';
 import 'providers/session_provider.dart';
 
 class AppShell extends ConsumerStatefulWidget {
@@ -21,7 +26,6 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  int _tabIndex = 0;
   int? _lastFeedbackId;
 
   @override
@@ -29,6 +33,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(appRuntimeProvider.notifier).initialize();
+      ref.read(appUpdateProvider.notifier).initialize();
     });
   }
 
@@ -53,6 +58,14 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     final runtime = ref.watch(appRuntimeProvider);
     final session = ref.watch(sessionProvider);
+    final realtimeStatus = ref
+        .watch(realtimeConnectionStatusProvider)
+        .maybeWhen(
+          data: (status) => status,
+          orElse: () => ref.watch(realtimeGatewayProvider).connectionStatus,
+        );
+    final responsive = context.awikiResponsive;
+    final tabIndex = ref.watch(shellTabProvider);
 
     if (!session.isLoggedIn) {
       return Stack(
@@ -63,11 +76,22 @@ class _AppShellState extends ConsumerState<AppShell> {
       );
     }
 
-    final tabs = <Widget>[
-      const ConversationListPage(),
-      const FriendsPage(),
-      const ProfilePage(),
-    ];
+    final bottomNav = _BottomNavBar(
+      currentIndex: tabIndex,
+      onTap: (index) {
+        ref.read(shellTabProvider.notifier).setTab(index);
+      },
+    );
+    final embeddedBottomNav = _BottomNavBar(
+      currentIndex: tabIndex,
+      embedded: true,
+      onTap: (index) {
+        ref.read(shellTabProvider.notifier).setTab(index);
+      },
+    );
+
+    final page = _buildCurrentPage(tabIndex, responsive, embeddedBottomNav);
+    final showsGlobalBottomNav = responsive.isPhone;
 
     return Stack(
       children: <Widget>[
@@ -76,23 +100,74 @@ class _AppShellState extends ConsumerState<AppShell> {
             bottom: false,
             child: Column(
               children: <Widget>[
-                Expanded(
-                  child: IndexedStack(index: _tabIndex, children: tabs),
-                ),
-                _BottomNavBar(
-                  currentIndex: _tabIndex,
-                  onTap: (index) {
-                    setState(() => _tabIndex = index);
-                  },
-                ),
+                Expanded(child: page),
+                if (showsGlobalBottomNav) bottomNav,
               ],
             ),
           ),
         ),
         if (runtime.isBusy)
           AwikiMeLoadingMask(label: context.l10n.commonPleaseWait),
+        if (_shouldShowRealtimeToast(realtimeStatus))
+          AwikiMePersistentToast(
+            message: _realtimeToastMessage(context, realtimeStatus),
+            danger:
+                realtimeStatus == RealtimeConnectionStatus.disconnected ||
+                realtimeStatus == RealtimeConnectionStatus.failed,
+            showSpinner:
+                realtimeStatus == RealtimeConnectionStatus.connecting ||
+                realtimeStatus == RealtimeConnectionStatus.reconnecting,
+            bottom: responsive.isPhone ? 96 : 32,
+          ),
       ],
     );
+  }
+
+  bool _shouldShowRealtimeToast(RealtimeConnectionStatus status) {
+    return status == RealtimeConnectionStatus.connecting ||
+        status == RealtimeConnectionStatus.reconnecting ||
+        status == RealtimeConnectionStatus.disconnected ||
+        status == RealtimeConnectionStatus.failed;
+  }
+
+  String _realtimeToastMessage(
+    BuildContext context,
+    RealtimeConnectionStatus status,
+  ) {
+    switch (status) {
+      case RealtimeConnectionStatus.connecting:
+        return context.l10n.realtimeStatusConnecting;
+      case RealtimeConnectionStatus.reconnecting:
+        return context.l10n.realtimeStatusReconnecting;
+      case RealtimeConnectionStatus.disconnected:
+      case RealtimeConnectionStatus.failed:
+        return context.l10n.realtimeStatusDisconnected;
+      case RealtimeConnectionStatus.idle:
+      case RealtimeConnectionStatus.connected:
+        return '';
+    }
+  }
+
+  Widget _buildCurrentPage(
+    int tabIndex,
+    AwikiResponsiveInfo responsive,
+    Widget embeddedBottomNav,
+  ) {
+    switch (tabIndex) {
+      case 0:
+        return ConversationWorkspacePage(
+          listFooter: responsive.supportsTwoPane ? embeddedBottomNav : null,
+        );
+      case 1:
+        return FriendsWorkspacePage(
+          listFooter: responsive.supportsTwoPane ? embeddedBottomNav : null,
+        );
+      case 2:
+        return ProfileWorkspacePage(
+          listFooter: responsive.supportsTwoPane ? embeddedBottomNav : null,
+        );
+    }
+    return const SizedBox.shrink();
   }
 }
 
@@ -100,60 +175,85 @@ class _BottomNavBar extends StatelessWidget {
   const _BottomNavBar({
     required this.currentIndex,
     required this.onTap,
+    this.embedded = false,
   });
 
   final int currentIndex;
   final ValueChanged<int> onTap;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     final bottomInset = MediaQuery.of(context).padding.bottom;
+    final horizontalPadding = embedded ? 0.0 : responsive.spacing(24);
+    final bottomPadding = embedded
+        ? 0.0
+        : (bottomInset > 0 ? responsive.spacing(8) : 16.0);
     return SafeArea(
       top: false,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(24, 8, 24, bottomInset > 0 ? 8 : 18),
+        padding: EdgeInsets.fromLTRB(
+          horizontalPadding,
+          embedded ? 0 : responsive.spacing(8),
+          horizontalPadding,
+          bottomPadding,
+        ),
         child: Center(
-          child: Container(
-            width: 272,
-            height: 64,
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
-            decoration: BoxDecoration(
-              color: theme.surface,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: const <BoxShadow>[
-                BoxShadow(
-                  color: Color(0x10000000),
-                  blurRadius: 28,
-                  offset: Offset(0, 8),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final navWidth = constraints.maxWidth.isFinite
+                  ? constraints.maxWidth.clamp(
+                      0.0,
+                      responsive.isPhone ? responsive.scaled(272.0) : 220.0,
+                    )
+                  : (responsive.isPhone ? responsive.scaled(272.0) : 220.0);
+              return Container(
+                width: navWidth,
+                height: responsive.navBarHeight,
+                padding: EdgeInsets.symmetric(
+                  horizontal: responsive.spacing(18),
+                  vertical: responsive.spacing(8),
                 ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                _NavButton(
-                  activeAsset: 'assets/icons/message_Active.svg',
-                  inactiveAsset: 'assets/icons/message_Inactive.svg',
-                  active: currentIndex == 0,
-                  onTap: () => onTap(0),
+                decoration: BoxDecoration(
+                  color: theme.surface,
+                  borderRadius: BorderRadius.circular(
+                    embedded ? 24 : responsive.radius(24),
+                  ),
+                  boxShadow: const <BoxShadow>[
+                    BoxShadow(
+                      color: Color(0x10000000),
+                      blurRadius: 28,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 42),
-                _NavButton(
-                  activeAsset: 'assets/icons/friend_Active.svg',
-                  inactiveAsset: 'assets/icons/friend_Inactive.svg',
-                  active: currentIndex == 1,
-                  onTap: () => onTap(1),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: <Widget>[
+                    _NavButton(
+                      activeAsset: 'assets/icons/message_Active.svg',
+                      inactiveAsset: 'assets/icons/message_Inactive.svg',
+                      active: currentIndex == 0,
+                      onTap: () => onTap(0),
+                    ),
+                    _NavButton(
+                      activeAsset: 'assets/icons/friend_Active.svg',
+                      inactiveAsset: 'assets/icons/friend_Inactive.svg',
+                      active: currentIndex == 1,
+                      onTap: () => onTap(1),
+                    ),
+                    _NavButton(
+                      activeAsset: 'assets/icons/me_Active.svg',
+                      inactiveAsset: 'assets/icons/me_Inactive.svg',
+                      active: currentIndex == 2,
+                      onTap: () => onTap(2),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 42),
-                _NavButton(
-                  activeAsset: 'assets/icons/me_Active.svg',
-                  inactiveAsset: 'assets/icons/me_Inactive.svg',
-                  active: currentIndex == 2,
-                  onTap: () => onTap(2),
-                ),
-              ],
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -176,13 +276,17 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double navIconSize = 48;
+    final responsive = context.awikiResponsive;
+    final navIconSize = responsive.isPhone ? 42.0 : responsive.iconLg * 2;
+    final tapSize = responsive.isPhone
+        ? responsive.compactControlHeight + responsive.spacing(6)
+        : 44.0;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        width: 48,
-        height: 48,
+        width: tapSize,
+        height: tapSize,
         child: Center(
           child: SvgPicture.asset(
             active ? activeAsset : inactiveAsset,

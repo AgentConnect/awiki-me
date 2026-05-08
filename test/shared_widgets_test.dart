@@ -1,12 +1,11 @@
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
 
 void main() {
-  testWidgets('AppListTile 默认使用 Material 右箭头图标', (tester) async {
+  testWidgets('AppListTile 默认使用资源右箭头图标', (tester) async {
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const CupertinoPageScaffold(
@@ -20,8 +19,14 @@ void main() {
         ),
       ),
     );
-
-    expect(find.byIcon(Icons.chevron_right_rounded), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is AwikiAssetIcon &&
+            widget.assetName == 'assets/icons/icon_right.svg',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('AppListTile 点击空白区域也会触发 onTap', (tester) async {

@@ -1,0 +1,17 @@
+{
+  "version": "0.1.0",
+  "buildNumber": 1,
+  "publishedAt": "2026-04-05T00:00:00Z",
+  "releaseNotesUrl": "https://agentconnect.github.io/awiki-me/updates/notes/v0.1.0.html",
+  "githubReleaseUrl": "https://github.com/AgentConnect/awiki-me/releases",
+  "platforms": {
+    "macos": {
+      "downloadUrl": "https://github.com/AgentConnect/awiki-me/releases"
+    },
+    "android": {
+      "downloadUrl": "https://github.com/AgentConnect/awiki-me/releases",
+      "sha256": "",
+      "minSupportedBuildNumber": 1
+    }
+  }
+}

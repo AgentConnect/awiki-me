@@ -1,18 +1,17 @@
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
 import '../../app/app_locale.dart';
+import 'app_key_value_store.dart';
 
 class LocalePreferenceService {
   LocalePreferenceService({
-    FlutterSecureStorage? secureStorage,
-  }) : _secureStorage = secureStorage ?? const FlutterSecureStorage();
+    AppKeyValueStore? storage,
+  }) : _storage = storage ?? SecureAppKeyValueStore();
 
   static const String _localeModeKey = 'awiki_me_locale_mode';
 
-  final FlutterSecureStorage _secureStorage;
+  final AppKeyValueStore _storage;
 
   Future<AppLocaleMode> loadMode() async {
-    final raw = await _secureStorage.read(key: _localeModeKey);
+    final raw = await _storage.read(key: _localeModeKey);
     switch (raw) {
       case 'zhHans':
         return AppLocaleMode.zhHans;
@@ -27,9 +26,9 @@ class LocalePreferenceService {
 
   Future<void> saveMode(AppLocaleMode mode) async {
     if (mode == AppLocaleMode.system) {
-      await _secureStorage.delete(key: _localeModeKey);
+      await _storage.delete(key: _localeModeKey);
       return;
     }
-    await _secureStorage.write(key: _localeModeKey, value: mode.name);
+    await _storage.write(key: _localeModeKey, value: mode.name);
   }
 }

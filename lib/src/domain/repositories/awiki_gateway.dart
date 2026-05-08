@@ -6,54 +6,10 @@ import '../entities/group_summary.dart';
 import '../entities/profile_patch.dart';
 import '../entities/realtime_update.dart';
 import '../entities/relationship_summary.dart';
-import '../entities/session_identity.dart';
 import '../entities/user_profile.dart';
 
 abstract class AwikiGateway {
   Future<BridgeCapabilities> loadCapabilities();
-
-  Future<SessionIdentity?> restoreSession();
-
-  Future<void> logout();
-
-  Future<List<SessionIdentity>> listLocalCredentials();
-
-  Future<SessionIdentity> loginWithLocalCredential(String credentialName);
-
-  Future<void> deleteLocalCredential(String credentialName);
-
-  Future<String?> exportCurrentCredentialAsZip();
-
-  Future<SessionIdentity?> importCredentialFromZip();
-
-  Future<void> sendOtp({required String phone});
-
-  Future<void> sendEmailVerification({required String email});
-
-  Future<bool> checkEmailVerified({required String email});
-
-  Future<SessionIdentity> registerHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-    String? inviteCode,
-    String? nickName,
-    String? profileMarkdown,
-  });
-
-  Future<SessionIdentity> registerHandleWithEmail({
-    required String email,
-    required String handle,
-    String? inviteCode,
-    String? nickName,
-    String? profileMarkdown,
-  });
-
-  Future<SessionIdentity> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-  });
 
   Future<UserProfile> loadMyProfile();
 

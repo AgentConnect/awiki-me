@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:awiki_me/src/data/awiki_sdk/awiki_anp_session.dart';
 import 'package:awiki_me/src/domain/entities/bridge_capabilities.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
@@ -8,19 +11,22 @@ import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
+import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
 import 'package:awiki_me/src/domain/repositories/awiki_gateway.dart';
 import 'package:awiki_me/src/domain/services/e2ee_facade.dart';
 import 'package:awiki_me/src/domain/services/notification_facade.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
+import 'package:awiki_me/src/domain/services/update_service.dart';
 import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/data/services/locale_preference_service.dart';
+import 'package:awiki_me/src/domain/entities/app_update_manifest.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 Widget buildLocalizedTestApp({
@@ -31,10 +37,12 @@ Widget buildLocalizedTestApp({
   FakeNotificationFacade? notificationFacade,
   FakeE2eeFacade? e2eeFacade,
   FakeLocalePreferenceService? localePreferenceService,
+  FakeUpdateService? updateService,
   SessionIdentity? session,
   UserProfile? profile,
   AppLocaleMode localeMode = AppLocaleMode.system,
   Future<String?> Function(String url)? homepageMarkdownLoader,
+  List<Override> providerOverrides = const <Override>[],
 }) {
   final resolvedGateway = gateway ?? FakeAwikiGateway();
   final resolvedRealtime = realtimeGateway ?? FakeRealtimeGateway();
@@ -42,14 +50,18 @@ Widget buildLocalizedTestApp({
   final resolvedE2ee = e2eeFacade ?? FakeE2eeFacade();
   final resolvedLocalePreference =
       localePreferenceService ?? FakeLocalePreferenceService();
+  final resolvedUpdateService = updateService ?? FakeUpdateService();
   return ProviderScope(
     overrides: <Override>[
       awikiGatewayProvider.overrideWithValue(resolvedGateway),
+      awikiAccountGatewayProvider.overrideWithValue(resolvedGateway),
       realtimeGatewayProvider.overrideWithValue(resolvedRealtime),
       notificationFacadeProvider.overrideWithValue(resolvedNotification),
       e2eeFacadeProvider.overrideWithValue(resolvedE2ee),
-      localePreferenceServiceProvider
-          .overrideWithValue(resolvedLocalePreference),
+      localePreferenceServiceProvider.overrideWithValue(
+        resolvedLocalePreference,
+      ),
+      updateServiceProvider.overrideWithValue(resolvedUpdateService),
       appLocaleModeProvider.overrideWith((ref) => localeMode),
       sessionProvider.overrideWith((ref) {
         final controller = SessionController();
@@ -65,9 +77,11 @@ Widget buildLocalizedTestApp({
         return TestProfileController(ref, initialProfile: profile);
       }),
       if (homepageMarkdownLoader != null)
-        homepageMarkdownLoaderProvider
-            .overrideWithValue(homepageMarkdownLoader),
+        homepageMarkdownLoaderProvider.overrideWithValue(
+          homepageMarkdownLoader,
+        ),
       appRuntimeProvider.overrideWith((ref) => AppRuntimeController(ref)),
+      ...providerOverrides,
     ],
     child: CupertinoApp(
       locale: locale,
@@ -83,20 +97,89 @@ Widget buildLocalizedTestApp({
   );
 }
 
-class FakeAwikiGateway implements AwikiGateway {
+class FakeUpdateService implements UpdateService {
+  AppVersion currentVersion = const AppVersion(
+    version: '0.1.0',
+    buildNumber: 1,
+  );
+  AppUpdateManifest? latestManifest;
+  bool openReleaseNotesCalled = false;
+  bool openDownloadPageCalled = false;
+  bool installUpdateCalled = false;
+  bool openInstallPermissionSettingsCalled = false;
+  Object? checkError;
+  Object? installError;
+
+  @override
+  Future<AppUpdateCheckResult> checkForUpdates({required bool force}) async {
+    if (checkError != null) {
+      throw checkError!;
+    }
+    return AppUpdateCheckResult(
+      currentVersion: currentVersion,
+      latestManifest: latestManifest,
+    );
+  }
+
+  @override
+  Future<AppVersion> getCurrentVersion() async => currentVersion;
+
+  @override
+  Future<void> installUpdate(AppUpdateManifest manifest) async {
+    installUpdateCalled = true;
+    if (installError != null) {
+      throw installError!;
+    }
+  }
+
+  @override
+  Future<void> openDownloadPage(AppUpdateManifest? manifest) async {
+    openDownloadPageCalled = true;
+  }
+
+  @override
+  Future<void> openInstallPermissionSettings() async {
+    openInstallPermissionSettingsCalled = true;
+  }
+
+  @override
+  Future<void> openReleaseNotes(AppUpdateManifest? manifest) async {
+    openReleaseNotesCalled = true;
+  }
+}
+
+class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   List<SessionIdentity> localCredentials = const <SessionIdentity>[];
+  List<ConversationSummary> conversations = const <ConversationSummary>[];
+  Map<String, List<ChatMessage>> dmHistoryByPeerDid =
+      <String, List<ChatMessage>>{};
+  Map<String, List<ChatMessage>> groupHistoryByGroupId =
+      <String, List<ChatMessage>>{};
+  List<RelationshipSummary> followers = const <RelationshipSummary>[];
+  List<RelationshipSummary> following = const <RelationshipSummary>[];
   SessionIdentity? importedCredential;
   String? exportedPath;
   UserProfile? myProfile;
   UserProfile? publicProfile;
   UserProfile? updatedProfile;
   SessionIdentity? loginResult;
+  bool emailVerificationResult = false;
   String? lastLoginCredentialName;
   ProfilePatch? lastProfilePatch;
+  RealtimeUpdate? nextRealtimeUpdate;
+  bool failNextSend = false;
+  String? lastSentThreadId;
+  String? lastSentContent;
   int listLocalCredentialsCalls = 0;
   int importCalls = 0;
   int exportCalls = 0;
   int loginCalls = 0;
+  int fetchDmHistoryCalls = 0;
+  int fetchGroupHistoryCalls = 0;
+  int markReadCalls = 0;
+  int listConversationsCalls = 0;
+  int sendEmailVerificationCalls = 0;
+  int checkEmailVerifiedCalls = 0;
 
   @override
   Future<BridgeCapabilities> loadCapabilities() async {
@@ -127,12 +210,14 @@ class FakeAwikiGateway implements AwikiGateway {
 
   @override
   Future<List<ChatMessage>> fetchDmHistory(String peerDid) async {
-    return const <ChatMessage>[];
+    fetchDmHistoryCalls += 1;
+    return dmHistoryByPeerDid[peerDid] ?? const <ChatMessage>[];
   }
 
   @override
   Future<List<ChatMessage>> fetchGroupHistory(String groupId) async {
-    return const <ChatMessage>[];
+    fetchGroupHistoryCalls += 1;
+    return groupHistoryByGroupId[groupId] ?? const <ChatMessage>[];
   }
 
   @override
@@ -153,8 +238,9 @@ class FakeAwikiGateway implements AwikiGateway {
 
   @override
   Future<RealtimeUpdate?> consumeRealtimeEvent(
-      Map<String, Object?> event) async {
-    return null;
+    Map<String, Object?> event,
+  ) async {
+    return nextRealtimeUpdate;
   }
 
   @override
@@ -185,17 +271,19 @@ class FakeAwikiGateway implements AwikiGateway {
 
   @override
   Future<bool> checkEmailVerified({required String email}) async {
-    return false;
+    checkEmailVerifiedCalls += 1;
+    return emailVerificationResult;
   }
 
   @override
   Future<List<ConversationSummary>> listConversations() async {
-    return const <ConversationSummary>[];
+    listConversationsCalls += 1;
+    return conversations;
   }
 
   @override
   Future<List<RelationshipSummary>> listFollowers() async {
-    return const <RelationshipSummary>[];
+    return followers;
   }
 
   @override
@@ -216,7 +304,7 @@ class FakeAwikiGateway implements AwikiGateway {
 
   @override
   Future<List<RelationshipSummary>> listFollowing() async {
-    return const <RelationshipSummary>[];
+    return following;
   }
 
   @override
@@ -240,7 +328,8 @@ class FakeAwikiGateway implements AwikiGateway {
 
   @override
   Future<SessionIdentity> loginWithLocalCredential(
-      String credentialName) async {
+    String credentialName,
+  ) async {
     loginCalls += 1;
     lastLoginCredentialName = credentialName;
     if (loginResult != null) {
@@ -253,7 +342,9 @@ class FakeAwikiGateway implements AwikiGateway {
   Future<void> logout() async {}
 
   @override
-  Future<void> markRead(String threadId) async {}
+  Future<void> markRead(String threadId) async {
+    markReadCalls += 1;
+  }
 
   @override
   Future<String?> refreshGroupJoinCode(String groupId) async {
@@ -298,12 +389,47 @@ class FakeAwikiGateway implements AwikiGateway {
   }
 
   @override
-  Future<ChatMessage> retryMessage(ChatMessage message) async {
-    throw UnimplementedError();
+  Future<SessionIdentity?> currentSession() async {
+    return loginResult ??
+        (localCredentials.isNotEmpty ? localCredentials.first : null);
   }
 
   @override
-  Future<void> sendEmailVerification({required String email}) async {}
+  Future<SessionIdentity?> refreshSession() => currentSession();
+
+  @override
+  Future<AwikiAnpSession> currentAnpSession({
+    bool requireSigning = false,
+  }) async {
+    final session = await currentSession();
+    if (session == null) {
+      throw StateError('No active test session.');
+    }
+    return AwikiAnpSession(
+      did: session.did,
+      jwtToken: session.jwtToken ?? '',
+      didDocument: <String, Object?>{
+        'id': session.did,
+        'authentication': <String>['${session.did}#key-1'],
+      },
+      privateKeyPem: 'test-private-key',
+    );
+  }
+
+  @override
+  Future<ChatMessage> retryMessage(ChatMessage message) async {
+    return sendTextMessage(
+      threadId: message.threadId,
+      peerDid: message.receiverDid,
+      groupId: message.groupId,
+      content: message.content,
+    );
+  }
+
+  @override
+  Future<void> sendEmailVerification({required String email}) async {
+    sendEmailVerificationCalls += 1;
+  }
 
   @override
   Future<void> sendOtp({required String phone}) async {}
@@ -315,7 +441,24 @@ class FakeAwikiGateway implements AwikiGateway {
     String? groupId,
     required String content,
   }) async {
-    throw UnimplementedError();
+    lastSentThreadId = threadId;
+    lastSentContent = content;
+    if (failNextSend) {
+      failNextSend = false;
+      throw StateError('send failed');
+    }
+    return ChatMessage(
+      localId: 'sent-${DateTime.now().microsecondsSinceEpoch}',
+      threadId: threadId,
+      senderDid: loginResult?.did ?? 'did:test:sender',
+      senderName: loginResult?.displayName ?? loginResult?.handle ?? 'tester',
+      receiverDid: peerDid,
+      groupId: groupId,
+      content: content,
+      createdAt: DateTime.now(),
+      isMine: true,
+      sendState: MessageSendState.sent,
+    );
   }
 
   @override
@@ -332,10 +475,10 @@ class FakeAwikiGateway implements AwikiGateway {
 }
 
 class FakeLocalePreferenceService extends LocalePreferenceService {
-  FakeLocalePreferenceService(
-      {AppLocaleMode initialMode = AppLocaleMode.system})
-      : _storedMode = initialMode,
-        super();
+  FakeLocalePreferenceService({
+    AppLocaleMode initialMode = AppLocaleMode.system,
+  }) : _storedMode = initialMode,
+       super();
 
   AppLocaleMode _storedMode;
   int saveCalls = 0;
@@ -353,28 +496,80 @@ class FakeLocalePreferenceService extends LocalePreferenceService {
 }
 
 class FakeRealtimeGateway implements RealtimeGateway {
+  RealtimeMessageHandler? onMessage;
+  bool _isConnected = false;
+  RealtimeConnectionStatus _status = RealtimeConnectionStatus.idle;
+  final StreamController<RealtimeConnectionStatus> _statusController =
+      StreamController<RealtimeConnectionStatus>.broadcast();
+
   @override
-  bool get isConnected => false;
+  bool get isConnected => _isConnected;
+
+  @override
+  RealtimeConnectionStatus get connectionStatus => _status;
+
+  @override
+  Stream<RealtimeConnectionStatus> get connectionStatusStream =>
+      _statusController.stream;
 
   @override
   Future<void> connect({
     required SessionIdentity session,
     required RealtimeMessageHandler onMessage,
-  }) async {}
+  }) async {
+    setStatus(RealtimeConnectionStatus.connecting);
+    _isConnected = true;
+    this.onMessage = onMessage;
+    setStatus(RealtimeConnectionStatus.connected);
+  }
 
   @override
-  Future<void> disconnect() async {}
+  Future<void> disconnect() async {
+    _isConnected = false;
+    onMessage = null;
+    setStatus(RealtimeConnectionStatus.idle);
+  }
+
+  Future<void> emit(Map<String, Object?> event) async {
+    await onMessage?.call(event);
+  }
+
+  void setStatus(RealtimeConnectionStatus status) {
+    _status = status;
+    _isConnected = status == RealtimeConnectionStatus.connected;
+    _statusController.add(status);
+  }
 }
 
 class FakeNotificationFacade implements NotificationFacade {
+  String? lastInAppTitle;
+  String? lastInAppBody;
+  String? lastSystemTitle;
+  String? lastSystemBody;
+  int lastBadgeCount = 0;
+
+  @override
+  Future<void> showSystemNotification({
+    required String title,
+    required String body,
+  }) async {
+    lastSystemTitle = title;
+    lastSystemBody = body;
+  }
+
   @override
   Future<void> showInAppBanner({
     required String title,
     required String body,
-  }) async {}
+  }) async {
+    lastInAppTitle = title;
+    lastInAppBody = body;
+  }
 
   @override
-  Future<void> updateBadgeCount(int count) async {}
+  Future<void> updateBadgeCount(int count) async {
+    lastBadgeCount = count;
+  }
 }
 
 class FakeE2eeFacade implements E2eeFacade {

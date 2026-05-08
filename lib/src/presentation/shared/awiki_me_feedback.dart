@@ -30,8 +30,8 @@ class AwikiMeToast {
                   ),
                   decoration: BoxDecoration(
                     color: danger
-                        ? theme.danger.withOpacity(0.9)
-                        : theme.title.withOpacity(0.82),
+                        ? theme.danger.withValues(alpha: 0.9)
+                        : theme.title.withValues(alpha: 0.82),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Text(
@@ -59,12 +59,69 @@ class AwikiMeToast {
   }
 }
 
-class AwikiMeLoadingMask extends StatelessWidget {
-  const AwikiMeLoadingMask({
+class AwikiMePersistentToast extends StatelessWidget {
+  const AwikiMePersistentToast({
     super.key,
-    this.label = '',
-    this.opacity = 0.18,
+    required this.message,
+    this.danger = false,
+    this.showSpinner = false,
+    this.bottom = 110,
   });
+
+  final String message;
+  final bool danger;
+  final bool showSpinner;
+  final double bottom;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return Positioned(
+      left: 20,
+      right: 20,
+      bottom: bottom,
+      child: IgnorePointer(
+        child: SafeArea(
+          child: Center(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 360),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: danger
+                    ? theme.danger.withValues(alpha: 0.9)
+                    : theme.title.withValues(alpha: 0.82),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  if (showSpinner) ...<Widget>[
+                    CupertinoActivityIndicator(color: theme.surface, radius: 8),
+                    const SizedBox(width: 10),
+                  ],
+                  Flexible(
+                    child: Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: theme.surface,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AwikiMeLoadingMask extends StatelessWidget {
+  const AwikiMeLoadingMask({super.key, this.label = '', this.opacity = 0.18});
 
   final String label;
   final double opacity;
@@ -75,15 +132,12 @@ class AwikiMeLoadingMask extends StatelessWidget {
     return Positioned.fill(
       child: AbsorbPointer(
         child: ColoredBox(
-          color: CupertinoColors.black.withOpacity(opacity),
+          color: CupertinoColors.black.withValues(alpha: opacity),
           child: Center(
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 18,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
               decoration: BoxDecoration(
-                color: theme.surface.withOpacity(0.97),
+                color: theme.surface.withValues(alpha: 0.97),
                 borderRadius: BorderRadius.circular(AwikiMeRadii.lg),
                 boxShadow: theme.overlayShadow,
               ),

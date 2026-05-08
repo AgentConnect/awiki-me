@@ -1,10 +1,10 @@
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../../../domain/entities/conversation_summary.dart';
 import '../../../domain/entities/user_profile.dart';
 
 class DidDisplayFormatter {
-  static final RegExp _didUserPattern = RegExp(r':(?:user:)?([^:]+):k1_');
+  static final RegExp _didUserPattern = RegExp(r':(?:user:)?([^:]+):e1_');
   static final RegExp _didTailPattern = RegExp(r':([^:]+)$');
 
   static String compactDid(String source) {
@@ -37,8 +37,8 @@ class DidDisplayFormatter {
     final source = conversation.isGroup
         ? conversation.displayName
         : (conversation.targetDid?.trim().isNotEmpty == true
-            ? conversation.targetDid!.trim()
-            : conversation.displayName);
+              ? conversation.targetDid!.trim()
+              : conversation.displayName);
     final compact = compactDisplayName(
       displayName: conversation.displayName,
       fallbackDid: source,
@@ -58,8 +58,9 @@ class DidDisplayFormatter {
 
   static String homepageUrl(UserProfile profile) {
     final handle = profile.handle?.trim();
-    final username =
-        handle != null && handle.isNotEmpty ? handle : profileName(profile);
+    final username = handle != null && handle.isNotEmpty
+        ? handle
+        : profileName(profile);
     return 'https://$username.awiki.ai';
   }
 }
