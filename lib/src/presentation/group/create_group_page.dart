@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
@@ -54,7 +53,9 @@ class _CreateGroupPageState extends ConsumerState<CreateGroupPage> {
         : _slugController.text.trim();
     setState(() => _isLoading = true);
     try {
-      final group = await ref.read(groupProvider.notifier).createGroup(
+      final group = await ref
+          .read(groupProvider.notifier)
+          .createGroup(
             name: name,
             slug: slug,
             description: _descriptionController.text.trim(),
@@ -94,10 +95,11 @@ class _CreateGroupPageState extends ConsumerState<CreateGroupPage> {
                   padding: EdgeInsets.zero,
                   trailingWidth: 48,
                   leading: TopBarActionButton(
-                    onTap:
-                        _isLoading ? null : () => Navigator.of(context).pop(),
-                    child: const Icon(
-                      Icons.arrow_back,
+                    onTap: _isLoading
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    child: const AwikiAssetIcon(
+                      assetName: 'assets/icons/icon_left.svg',
                       color: AwikiMeColors.primaryDark,
                       size: 22,
                     ),
@@ -234,13 +236,21 @@ class _ModeButton extends StatelessWidget {
             color: active ? theme.surface : CupertinoColors.transparent,
             borderRadius: BorderRadius.circular(AwikiMeRadii.pill),
           ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: active ? theme.title : theme.primaryDark,
+          child: Center(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              strutStyle: const StrutStyle(
+                fontSize: 14,
+                height: 1,
+                forceStrutHeight: true,
+              ),
+              style: TextStyle(
+                fontSize: 14,
+                height: 1,
+                fontWeight: FontWeight.w700,
+                color: active ? theme.title : theme.primaryDark,
+              ),
             ),
           ),
         ),

@@ -1,40 +1,33 @@
 # AWiki Me Flutter App
 
-AWiki Me is a Flutter messaging client extracted into a standalone Flutter repository layout.
+AWiki Me is a Dart-only Flutter messaging client built on the ANP Dart SDK.
+Account creation, DID-WBA authentication, User Service calls, IM, and message
+proof generation all run through Dart code.
 
 ## Requirements
 
-- Flutter 3.24.0 or newer
-- Dart 3.5.0 or newer
+- Flutter 3.24.0 or newer with Dart 3.8.0 or newer
 
 ## Getting Started
 
 ```bash
-flutter pub get
-flutter analyze
+PUB_HOSTED_URL=https://mirrors.tuna.tsinghua.edu.cn/dart-pub flutter pub get
+dart analyze
 flutter test
 flutter run
 ```
 
 ## Project Structure
 
-- `lib/`: application code
-- `assets/`: bundled images and SVG assets
-- `test/`: widget and unit tests
-- `android/`, `ios/`, `web/`: platform runners
+- `lib/`: application, domain, data, and presentation code
+- `assets/`: bundled branding and UI assets
+- `test/`: Dart unit and widget tests
+- `android/`, `ios/`, `macos/`, `web/`: platform runners
 
-## Regenerate App Icons
+## App Icons
 
 ```bash
 dart run flutter_launcher_icons
 ```
 
 The icon source lives at `assets/branding/awiki-me-logo.png`.
-
-## Regenerate Splash Screen
-
-```bash
-dart run flutter_native_splash:create
-```
-
-The splash image source also lives at `assets/branding/awiki-me-logo.png`.

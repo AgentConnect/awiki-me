@@ -14,6 +14,9 @@
   "commonPleaseWait": "Please wait...",
   "commonLoading": "Loading...",
   "commonError": "Error",
+  "realtimeStatusConnecting": "Connecting to message service...",
+  "realtimeStatusReconnecting": "Message connection interrupted. Reconnecting...",
+  "realtimeStatusDisconnected": "Message service is disconnected. Trying to recover.",
   "onboardingLogin": "Log in",
   "onboardingRegister": "Register",
   "onboardingImportCredential": "Import identity credential",
@@ -24,6 +27,12 @@
   "onboardingEmail": "Email",
   "onboardingEmailPlaceholder": "Enter email address",
   "onboardingSendActivationEmail": "Send activation email",
+  "onboardingResendActivationEmailIn": "Resend ({seconds}s)",
+  "@onboardingResendActivationEmailIn": {
+    "placeholders": {
+      "seconds": {}
+    }
+  },
   "onboardingEmailActivated": "Email activated",
   "onboardingCheckActivationStatus": "I've activated it, check status",
   "onboardingHandle": "Username",
@@ -68,6 +77,49 @@
   "settingsLanguageZhHans": "简体中文",
   "settingsLanguageEnglish": "English",
   "settingsPushNotification": "Push notifications",
+  "settingsCurrentVersion": "Current version",
+  "settingsCurrentVersionValue": "Current version: {version}",
+  "@settingsCurrentVersionValue": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "settingsCheckForUpdates": "Check for updates",
+  "settingsViewReleaseNotes": "View release notes",
+  "settingsInstallUpdate": "Install update",
+  "settingsInstallUpdateVersion": "Install version {version}",
+  "@settingsInstallUpdateVersion": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "settingsDownloadUpdate": "Download update",
+  "settingsDownloadUpdateVersion": "Download version {version}",
+  "@settingsDownloadUpdateVersion": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "settingsUpdateAvailable": "New version available: {version}",
+  "@settingsUpdateAvailable": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "settingsAlreadyLatestVersion": "You're on the latest version",
+  "settingsUpdateStatusLoading": "Loading version details...",
+  "settingsUpdateStatusChecking": "Checking for updates...",
+  "settingsUpdateStatusDownloading": "Downloading update...",
+  "settingsUpdateStatusInstalling": "Preparing installation...",
+  "settingsUpdateStatusFailed": "Update check failed. Please try again later.",
+  "settingsUpdateReleaseNotesVersion": "View release notes for {version}",
+  "@settingsUpdateReleaseNotesVersion": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "settingsUpdateOpenGitHubHistory": "Open GitHub to browse release history",
+  "settingsUpdateOpenGitHubDownload": "Open GitHub to download the current build",
   "settingsExportCredential": "Export identity credential",
   "settingsExportCurrentCredential": "Export current credential: {credentialName}",
   "@settingsExportCurrentCredential": {
@@ -186,6 +238,13 @@
   },
   "importSuccessSelectCredential": "Import succeeded. Please choose this credential to log in.",
   "newMessageArrived": "You received a new message",
+  "updateAlreadyLatest": "You're already on the latest version.",
+  "updateCheckFailed": "Update check failed. Please try again later.",
+  "updateOpenReleaseNotesFailed": "Couldn't open the release notes.",
+  "updateOpenDownloadFailed": "Couldn't open the download page. Please use GitHub Releases.",
+  "updateReadyToInstall": "Download complete. Ready to install.",
+  "updatePermissionRequired": "Please allow installs from this source and try again.",
+  "updateInstallFailed": "Update failed. Please download it from GitHub.",
   "requestTimeoutRetry": "The request timed out. Please check your network and try again.",
   "operationFailedRetry": "The operation failed. Please try again later.",
   "emailNotActivatedClickLink": "The email is not activated yet. Please click the activation link in the email first.",
@@ -196,7 +255,7 @@
       "credentialName": {}
     }
   },
-  "setupIdentityScriptMissing": "This repository does not include setup_identity.py. Configure AWIKI_SETUP_IDENTITY_SCRIPT explicitly before deleting the credential.",
+  "setupIdentityScriptMissing": "Legacy script credentials are no longer supported. Create or import a new e1 DID credential.",
   "deleteCredentialFailed": "Failed to delete credential: {credentialName}",
   "@deleteCredentialFailed": {
     "placeholders": {
@@ -205,14 +264,6 @@
   },
   "noCredentialToExport": "There is no signed-in credential available to export.",
   "credentialPackFailed": "Failed to package the credential. Please try again later.",
-  "localCredentialIndexInvalid": "The local credential index format is invalid.",
-  "localCredentialIndexMissingCredentials": "The local credential index is missing the credentials field.",
-  "credentialIndexEntryInvalid": "The credential index entry format is invalid: {key}",
-  "@credentialIndexEntryInvalid": {
-    "placeholders": {
-      "key": {}
-    }
-  },
   "localCredentialDirectoryMissing": "Unable to locate the local credential directory.",
   "exportUnsupportedOnPlatform": "Exporting identity credentials is not supported on this platform yet.",
   "importUnsupportedOnPlatform": "Importing identity credentials is not supported on this platform yet.",
@@ -229,7 +280,7 @@
   "phoneInvalidIntlExample": "Invalid phone number format. Use a number with country code, for example +8613800138000.",
   "phoneInvalidIntlOrCn": "Invalid phone number format. Use international format or an 11-digit mainland China number.",
   "handleInvalidPattern": "Handle may only contain lowercase letters, numbers, and hyphens, 2-32 characters, with no underscores.",
-  "didRegistrationPluginMissing": "AWiki Me does not currently include a DID registration plugin ({authHint} registration). Please register with the Python script and import the session first, or add the native plugin to complete registration in the app.",
+  "didRegistrationPluginMissing": "AWiki Me cannot create a DID right now ({authHint} registration). Check that the Dart ANP SDK initialized successfully.",
   "@didRegistrationPluginMissing": {
     "placeholders": {
       "authHint": {}

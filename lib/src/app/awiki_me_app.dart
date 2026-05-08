@@ -1,12 +1,14 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart' as material;
 
 import '../presentation/app_shell/app_shell.dart';
+import '../presentation/app_shell/providers/app_lifecycle_provider.dart';
 import '../presentation/shared/awiki_me_design.dart';
+import 'app_orientation.dart';
 import 'app_locale.dart';
 import 'app_services.dart';
 import 'bootstrap.dart';
@@ -25,13 +27,17 @@ class AwikiMeApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ProviderScope(
       overrides: <Override>[
+        awikiAccountGatewayProvider.overrideWithValue(bootstrap.accountGateway),
         awikiGatewayProvider.overrideWithValue(bootstrap.gateway),
         realtimeGatewayProvider.overrideWithValue(bootstrap.realtimeGateway),
-        notificationFacadeProvider
-            .overrideWithValue(bootstrap.notificationFacade),
+        notificationFacadeProvider.overrideWithValue(
+          bootstrap.notificationFacade,
+        ),
         e2eeFacadeProvider.overrideWithValue(bootstrap.e2eeFacade),
-        localePreferenceServiceProvider
-            .overrideWithValue(bootstrap.localePreferenceService),
+        localePreferenceServiceProvider.overrideWithValue(
+          bootstrap.localePreferenceService,
+        ),
+        updateServiceProvider.overrideWithValue(bootstrap.updateService),
         ...providerOverrides,
       ],
       child: const _AwikiMeRoot(),
@@ -39,11 +45,34 @@ class AwikiMeApp extends StatelessWidget {
   }
 }
 
-class _AwikiMeRoot extends ConsumerWidget {
+class _AwikiMeRoot extends ConsumerStatefulWidget {
   const _AwikiMeRoot();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_AwikiMeRoot> createState() => _AwikiMeRootState();
+}
+
+class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    ref.read(appLifecycleProvider.notifier).setLifecycle(state);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final localeMode = ref.watch(appLocaleModeProvider);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -78,13 +107,61 @@ class _AwikiMeRoot extends ConsumerWidget {
         },
         theme: AwikiMeTheme.cupertinoTheme,
         builder: (context, child) {
-          return material.Theme(
-            data: AwikiMeTheme.materialTheme,
-            child: child ?? const SizedBox.shrink(),
+          return _KeyboardDismissScope(
+            child: material.Theme(
+              data: AwikiMeTheme.materialTheme,
+              child: AppOrientationScope(
+                child: child ?? const SizedBox.shrink(),
+              ),
+            ),
           );
         },
         home: const AppShell(),
       ),
     );
+  }
+}
+
+class _KeyboardDismissScope extends StatelessWidget {
+  const _KeyboardDismissScope({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (event) {
+        if (_isPointerInsideEditable(context, event.position)) {
+          return;
+        }
+        FocusManager.instance.primaryFocus?.unfocus();
+      },
+      child: child,
+    );
+  }
+
+  bool _isPointerInsideEditable(BuildContext context, Offset globalPosition) {
+    var found = false;
+
+    void visit(Element element) {
+      if (found) {
+        return;
+      }
+      if (element.widget is EditableText) {
+        final renderObject = element.renderObject;
+        if (renderObject is RenderBox && renderObject.attached) {
+          final localPosition = renderObject.globalToLocal(globalPosition);
+          if (renderObject.size.contains(localPosition)) {
+            found = true;
+            return;
+          }
+        }
+      }
+      element.visitChildren(visit);
+    }
+
+    (context as Element).visitChildren(visit);
+    return found;
   }
 }

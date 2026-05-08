@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
@@ -13,22 +12,46 @@ import '../profile/peer_profile_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/formatters/display_formatters.dart';
+import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'chat_provider.dart';
 
-class ChatPage extends ConsumerStatefulWidget {
-  const ChatPage({
-    super.key,
-    required this.conversation,
-  });
+class ChatPage extends StatelessWidget {
+  const ChatPage({super.key, required this.conversation});
 
   final ConversationSummary conversation;
 
   @override
-  ConsumerState<ChatPage> createState() => _ChatPageState();
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return CupertinoPageScaffold(
+      backgroundColor: theme.background,
+      child: ChatView(
+        conversation: conversation,
+        embedded: false,
+        onBack: () => Navigator.of(context).pop(),
+      ),
+    );
+  }
 }
 
-class _ChatPageState extends ConsumerState<ChatPage> {
+class ChatView extends ConsumerStatefulWidget {
+  const ChatView({
+    super.key,
+    required this.conversation,
+    required this.embedded,
+    this.onBack,
+  });
+
+  final ConversationSummary conversation;
+  final bool embedded;
+  final VoidCallback? onBack;
+
+  @override
+  ConsumerState<ChatView> createState() => _ChatViewState();
+}
+
+class _ChatViewState extends ConsumerState<ChatView> {
   final textController = TextEditingController();
   final scrollController = ScrollController();
 
@@ -47,64 +70,90 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     final thread = ref.watch(chatThreadProvider(widget.conversation.threadId));
     ref.listen<ChatThreadState>(
       chatThreadProvider(widget.conversation.threadId),
-      (_, __) => WidgetsBinding.instance
-          .addPostFrameCallback((_) => _scrollToBottom()),
+      (_, __) => WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _scrollToBottom(),
+      ),
     );
     final messages = thread.messages;
-    return CupertinoPageScaffold(
-      backgroundColor: theme.background,
-      child: AwikiMeWidgets.pageBackground(
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            children: <Widget>[
-              _ChatHeader(
-                conversation: widget.conversation,
-                onBack: () => Navigator.of(context).pop(),
-                onDetails: _openDetails,
-              ),
-              Expanded(
-                child: ListView.builder(
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 140),
-                  itemCount: messages.length + 1,
-                  itemBuilder: (_, index) {
-                    if (index == 0) {
-                      final firstDate = messages.isEmpty
-                          ? DateTime.now()
-                          : messages.first.createdAt;
-                      return _DateDivider(label: _dateLabel(firstDate));
-                    }
-                    final message = messages[index - 1];
-                    final senderLabel =
-                        _displayNameForMessage(context, message);
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 24),
-                      child: _MessageBubble(
-                        message: message,
-                        senderLabel: senderLabel,
-                      ),
-                    );
-                  },
+    return AwikiMeWidgets.pageBackground(
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: <Widget>[
+            _ChatHeader(
+              conversation: widget.conversation,
+              embedded: widget.embedded,
+              onBack: widget.onBack,
+              onDetails: _openDetails,
+            ),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                padding: EdgeInsets.fromLTRB(
+                  widget.embedded
+                      ? responsive.spacing(32)
+                      : responsive.tabContentHorizontalPadding,
+                  responsive.spacing(24),
+                  widget.embedded
+                      ? responsive.spacing(32)
+                      : responsive.tabContentHorizontalPadding,
+                  responsive.spacing(widget.embedded ? 124 : 140),
                 ),
-              ),
-              _Composer(
-                controller: textController,
-                onSend: () async {
-                  final value = textController.text;
-                  textController.clear();
-                  await ref.read(chatThreadsProvider.notifier).sendMessage(
-                        conversation: widget.conversation,
-                        content: value,
-                      );
+                itemCount: messages.length,
+                itemBuilder: (_, index) {
+                  final message = messages[index];
+                  final previous = index == 0 ? null : messages[index - 1];
+                  final senderLabel = _displayNameForMessage(context, message);
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: responsive.spacing(24)),
+                    child: Column(
+                      children: <Widget>[
+                        if (_shouldShowDivider(previous, message))
+                          _DateDivider(
+                            label: _timeDividerLabel(
+                              message.createdAt,
+                              previous: previous?.createdAt,
+                            ),
+                          ),
+                        _MessageBubble(
+                          message: message,
+                          senderLabel: senderLabel,
+                          onRetry: message.sendState == MessageSendState.failed
+                              ? () async {
+                                  await ref
+                                      .read(chatThreadsProvider.notifier)
+                                      .retryMessage(
+                                        conversation: widget.conversation,
+                                        message: message,
+                                      );
+                                }
+                              : null,
+                        ),
+                      ],
+                    ),
+                  );
                 },
               ),
-            ],
-          ),
+            ),
+            _Composer(
+              embedded: widget.embedded,
+              controller: textController,
+              onSend: () async {
+                final value = textController.text;
+                textController.clear();
+                await ref
+                    .read(chatThreadsProvider.notifier)
+                    .sendMessage(
+                      conversation: widget.conversation,
+                      content: value,
+                    );
+              },
+            ),
+          ],
         ),
       ),
     );
@@ -139,6 +188,25 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     return '$month-$day';
   }
 
+  bool _shouldShowDivider(ChatMessage? previous, ChatMessage current) {
+    if (previous == null) {
+      return true;
+    }
+    return current.createdAt.difference(previous.createdAt).inMinutes >= 30;
+  }
+
+  String _timeDividerLabel(DateTime date, {DateTime? previous}) {
+    final time =
+        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    if (previous != null &&
+        previous.year == date.year &&
+        previous.month == date.month &&
+        previous.day == date.day) {
+      return time;
+    }
+    return '${_dateLabel(date)} $time';
+  }
+
   String _displayNameForMessage(BuildContext context, ChatMessage message) {
     final senderName = message.senderName?.trim() ?? '';
     if (senderName.isNotEmpty) {
@@ -168,53 +236,102 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 class _ChatHeader extends StatelessWidget {
   const _ChatHeader({
     required this.conversation,
-    required this.onBack,
+    required this.embedded,
     required this.onDetails,
+    this.onBack,
   });
 
   final ConversationSummary conversation;
-  final VoidCallback onBack;
+  final bool embedded;
+  final VoidCallback? onBack;
   final VoidCallback onDetails;
 
   @override
   Widget build(BuildContext context) {
-    final compactName =
-        DidDisplayFormatter.conversationTitle(conversation, context.l10n);
+    final compactName = DidDisplayFormatter.conversationTitle(
+      conversation,
+      context.l10n,
+    );
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+      padding: EdgeInsets.fromLTRB(
+        embedded
+            ? responsive.spacing(24)
+            : responsive.tabContentHorizontalPadding,
+        responsive.spacing(embedded ? 18 : 8),
+        embedded
+            ? responsive.spacing(24)
+            : responsive.tabContentHorizontalPadding,
+        responsive.spacing(12),
+      ),
       child: Row(
         children: <Widget>[
-          TopBarActionButton(
-            onTap: onBack,
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Icon(
-                Icons.arrow_back,
-                color: theme.primaryDark,
-                size: 22,
+          SizedBox(
+            width: responsive.scaled(40),
+            child: TopBarActionButton(
+              onTap: onBack,
+              child: Padding(
+                padding: EdgeInsets.all(responsive.spacing(8)),
+                child: AwikiAssetIcon(
+                  assetName: 'assets/icons/icon_left.svg',
+                  color: theme.primaryDark,
+                  size: responsive.iconMd,
+                ),
               ),
             ),
           ),
-          const SizedBox(width: 4),
-          AvatarBadge(seed: compactName, size: 40),
-          const SizedBox(width: 12),
+          SizedBox(width: responsive.spacing(4)),
+          AvatarBadge(seed: compactName, size: responsive.avatarSizeMd),
+          SizedBox(width: responsive.spacing(12)),
           Expanded(
-            child: Text(
-              compactName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AwikiMeTextStyles.sectionTitle,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  compactName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: responsive.titleLg,
+                    fontWeight: FontWeight.w700,
+                    color: theme.title,
+                  ),
+                ),
+                SizedBox(height: responsive.spacing(2)),
+                Row(
+                  children: <Widget>[
+                    Container(
+                      width: responsive.scaled(8),
+                      height: responsive.scaled(8),
+                      decoration: BoxDecoration(
+                        color: theme.success,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    SizedBox(width: responsive.spacing(6)),
+                    Text(
+                      'ONLINE',
+                      style: TextStyle(
+                        fontSize: responsive.metaSm,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1,
+                        color: theme.primaryDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
           TopBarActionButton(
             onTap: onDetails,
             child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Icon(
-                Icons.info_outline,
+              padding: EdgeInsets.all(responsive.spacing(8)),
+              child: AwikiAssetIcon(
+                assetName: 'assets/icons/dot_vertical.svg',
                 color: theme.title,
-                size: 22,
+                size: responsive.iconMd,
               ),
             ),
           ),
@@ -231,16 +348,16 @@ class _DateDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
     return Center(
       child: AppSurface(
-        margin: const EdgeInsets.only(bottom: 24),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        margin: EdgeInsets.only(bottom: responsive.spacing(24)),
+        padding: responsive.scaledInsets(
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        ),
         color: context.awikiTheme.subtleSurface,
         radius: AwikiMeRadii.pill,
-        child: Text(
-          label,
-          style: AwikiMeTextStyles.meta,
-        ),
+        child: Text(label, style: AwikiMeTextStyles.meta),
       ),
     );
   }
@@ -250,50 +367,118 @@ class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
     required this.senderLabel,
+    this.onRetry,
   });
 
   final ChatMessage message;
   final String senderLabel;
+  final Future<void> Function()? onRetry;
 
   @override
   Widget build(BuildContext context) {
     final isMine = message.isMine;
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     return Row(
-      mainAxisAlignment:
-          isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+      mainAxisAlignment: isMine
+          ? MainAxisAlignment.end
+          : MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         if (!isMine) ...<Widget>[
-          AvatarBadge(seed: senderLabel, size: 32),
-          const SizedBox(width: 12),
+          AvatarBadge(seed: senderLabel, size: responsive.scaled(28)),
+          SizedBox(width: responsive.spacing(12)),
         ],
         Flexible(
-          child: Column(
-            crossAxisAlignment:
-                isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-            children: <Widget>[
-              if (!isMine)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: responsive.isLarge ? 500 : 640,
+            ),
+            child: Column(
+              crossAxisAlignment: isMine
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
+              children: <Widget>[
+                if (!isMine)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      bottom: responsive.spacing(6),
+                      left: responsive.spacing(4),
+                    ),
+                    child: Text(
+                      senderLabel,
+                      style: TextStyle(
+                        fontSize: responsive.metaSm,
+                        fontWeight: FontWeight.w700,
+                        color: theme.primaryDark,
+                      ),
+                    ),
+                  ),
+                Container(
+                  padding: responsive.scaledInsets(
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                  ),
+                  decoration: BoxDecoration(
+                    color: isMine
+                        ? theme.warningContainer
+                        : theme.subtleSurface,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(isMine ? 22 : 6),
+                      topRight: Radius.circular(isMine ? 6 : 22),
+                      bottomLeft: const Radius.circular(22),
+                      bottomRight: const Radius.circular(22),
+                    ),
+                  ),
                   child: Text(
-                    senderLabel,
-                    style: AwikiMeTextStyles.meta,
+                    message.content,
+                    style: TextStyle(
+                      color: theme.title,
+                      fontSize: responsive.bodyMd,
+                      height: responsive.isPhone ? 1.5 : 1.4,
+                    ),
                   ),
                 ),
-              AppSurface(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                color: isMine ? theme.primary : theme.surface,
-                radius: 18,
-                child: Text(
-                  message.content,
-                  style: TextStyle(
-                    color: isMine ? theme.primaryForeground : theme.title,
+                if (message.sendState == MessageSendState.failed) ...<Widget>[
+                  SizedBox(height: responsive.spacing(8)),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        '发送失败',
+                        style: TextStyle(
+                          fontSize: responsive.metaSm,
+                          color: theme.danger,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(width: responsive.spacing(10)),
+                      GestureDetector(
+                        onTap: onRetry,
+                        behavior: HitTestBehavior.opaque,
+                        child: Text(
+                          '重试',
+                          style: TextStyle(
+                            fontSize: responsive.metaSm,
+                            color: theme.primaryDark,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ),
-            ],
+                ] else if (message.sendState ==
+                    MessageSendState.sending) ...<Widget>[
+                  SizedBox(height: responsive.spacing(8)),
+                  Text(
+                    '发送中...',
+                    style: TextStyle(
+                      fontSize: responsive.metaSm,
+                      color: theme.tertiaryText,
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       ],
@@ -303,43 +488,100 @@ class _MessageBubble extends StatelessWidget {
 
 class _Composer extends StatelessWidget {
   const _Composer({
+    required this.embedded,
     required this.controller,
     required this.onSend,
   });
 
+  final bool embedded;
   final TextEditingController controller;
   final Future<void> Function() onSend;
+
+  Future<void> _submitIfNeeded() async {
+    if (controller.text.trim().isEmpty) {
+      return;
+    }
+    await onSend();
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
+    final outerPadding = embedded
+        ? const EdgeInsets.fromLTRB(16, 8, 16, 16)
+        : responsive.scaledInsets(const EdgeInsets.fromLTRB(16, 8, 16, 16));
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: AppTextField(
-                controller: controller,
-                label: context.l10n.commonSend,
-                placeholder: context.l10n.chatInputPlaceholder,
-              ),
+        padding: outerPadding,
+        child: Container(
+          constraints: embedded
+              ? BoxConstraints.tightFor(height: responsive.navBarHeight)
+              : BoxConstraints(minHeight: responsive.controlHeight),
+          padding: responsive.scaledInsets(
+            EdgeInsets.fromLTRB(14, embedded ? 8 : 10, 14, embedded ? 8 : 10),
+          ),
+          decoration: BoxDecoration(
+            color: theme.surface,
+            borderRadius: BorderRadius.circular(
+              embedded ? 24 : responsive.radius(26),
             ),
-            const SizedBox(width: 12),
-            TopBarActionButton(
-              onTap: onSend,
-              child: AppSurface(
-                padding: const EdgeInsets.all(12),
-                color: theme.primary,
-                radius: AwikiMeRadii.pill,
-                child: Icon(
-                  Icons.send,
-                  color: theme.primaryForeground,
+            boxShadow: const <BoxShadow>[
+              BoxShadow(
+                color: Color(0x0F000000),
+                blurRadius: 18,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: <Widget>[
+              TopBarActionButton(
+                onTap: () {},
+                child: Padding(
+                  padding: EdgeInsets.all(responsive.spacing(6)),
+                  child: AwikiAssetIcon(
+                    assetName: 'assets/icons/icon_plus.svg',
+                    size: responsive.iconMd,
+                  ),
                 ),
               ),
-            ),
-          ],
+              SizedBox(width: responsive.spacing(8)),
+              Expanded(
+                child: CupertinoTextField(
+                  controller: controller,
+                  placeholder: context.l10n.chatInputPlaceholder,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) async => _submitIfNeeded(),
+                  decoration: null,
+                  padding: EdgeInsets.symmetric(
+                    vertical: responsive.spacing(10),
+                  ),
+                  style: TextStyle(
+                    fontSize: responsive.bodyMd,
+                    color: theme.title,
+                  ),
+                  placeholderStyle: TextStyle(
+                    fontSize: responsive.bodyMd,
+                    color: theme.secondaryText,
+                  ),
+                ),
+              ),
+              SizedBox(width: responsive.spacing(8)),
+              TopBarActionButton(
+                onTap: _submitIfNeeded,
+                child: Padding(
+                  padding: EdgeInsets.all(responsive.spacing(6)),
+                  child: AwikiAssetIcon(
+                    assetName: 'assets/icons/icon_send.svg',
+                    color: theme.primary,
+                    size: responsive.iconMd,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

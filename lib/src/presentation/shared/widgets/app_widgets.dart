@@ -1,16 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Icons;
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../awiki_me_design.dart';
+import '../responsive_layout.dart';
 
 class TopBarActionButton extends StatelessWidget {
-  const TopBarActionButton({
-    super.key,
-    required this.child,
-    this.onTap,
-  });
+  const TopBarActionButton({super.key, required this.child, this.onTap});
 
   final Widget child;
   final VoidCallback? onTap;
@@ -21,6 +18,31 @@ class TopBarActionButton extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: child,
+    );
+  }
+}
+
+class AwikiAssetIcon extends StatelessWidget {
+  const AwikiAssetIcon({
+    super.key,
+    required this.assetName,
+    this.size = 24,
+    this.color,
+  });
+
+  final String assetName;
+  final double size;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SvgPicture.asset(
+      assetName,
+      width: size,
+      height: size,
+      colorFilter: color == null
+          ? null
+          : ColorFilter.mode(color!, BlendMode.srcIn),
     );
   }
 }
@@ -95,8 +117,11 @@ class AppPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: responsive.scaledInsets(
+        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      ),
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(AwikiMeRadii.pill),
@@ -104,7 +129,7 @@ class AppPill extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          fontSize: 12,
+          fontSize: responsive.metaSm,
           fontWeight: FontWeight.w700,
           color: foregroundColor == AwikiMeColors.primaryDark
               ? theme.primaryDark
@@ -120,8 +145,11 @@ class AppSectionDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: responsive.scaledInsets(
+        const EdgeInsets.symmetric(horizontal: 16),
+      ),
       child: SizedBox(
         height: 1,
         child: DecoratedBox(
@@ -149,11 +177,7 @@ class AppDropMenuItem {
 }
 
 class AppDropMenu extends StatelessWidget {
-  const AppDropMenu({
-    super.key,
-    this.title,
-    required this.items,
-  });
+  const AppDropMenu({super.key, this.title, required this.items});
 
   final String? title;
   final List<AppDropMenuItem> items;
@@ -161,15 +185,16 @@ class AppDropMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     return SafeArea(
       child: Align(
         alignment: Alignment.bottomCenter,
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: responsive.scaledInsets(const EdgeInsets.all(16)),
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: theme.surface,
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(responsive.radius(24)),
               boxShadow: const <BoxShadow>[
                 BoxShadow(
                   color: Color(0x14000000),
@@ -183,12 +208,14 @@ class AppDropMenu extends StatelessWidget {
               children: <Widget>[
                 if (title != null && title!.trim().isNotEmpty) ...<Widget>[
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 18, 24, 14),
+                    padding: responsive.scaledInsets(
+                      const EdgeInsets.fromLTRB(24, 18, 24, 14),
+                    ),
                     child: Text(
                       title!,
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: responsive.metaSm,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1.2,
                         color: theme.secondaryText,
@@ -219,6 +246,7 @@ class _AppDropMenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     Color foregroundColor = theme.title;
     if (item.destructive) {
       foregroundColor = theme.alert;
@@ -233,14 +261,14 @@ class _AppDropMenuButton extends StatelessWidget {
       },
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        height: 68,
+        height: responsive.isPhone ? 68 : responsive.scaled(56),
         child: Center(
           child: item.icon == null
               ? Text(
                   item.label,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: responsive.titleLg,
                     fontWeight: item.highlighted || item.destructive
                         ? FontWeight.w600
                         : FontWeight.w500,
@@ -250,13 +278,17 @@ class _AppDropMenuButton extends StatelessWidget {
               : Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: <Widget>[
-                    Icon(item.icon, size: 24, color: foregroundColor),
-                    const SizedBox(width: 12),
+                    Icon(
+                      item.icon,
+                      size: responsive.iconMd,
+                      color: foregroundColor,
+                    ),
+                    SizedBox(width: responsive.spacing(12)),
                     Text(
                       item.label,
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: responsive.titleLg,
                         fontWeight: item.highlighted || item.destructive
                             ? FontWeight.w600
                             : FontWeight.w500,
@@ -280,6 +312,9 @@ class AppTextField extends StatelessWidget {
     this.enabled = true,
     this.multiline = false,
     this.keyboardType,
+    this.showLabel = true,
+    this.prefix,
+    this.backgroundColor,
   });
 
   final TextEditingController controller;
@@ -288,36 +323,66 @@ class AppTextField extends StatelessWidget {
   final bool enabled;
   final bool multiline;
   final TextInputType? keyboardType;
+  final bool showLabel;
+  final Widget? prefix;
+  final Color? backgroundColor;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
+    final textField = CupertinoTextField(
+      controller: controller,
+      placeholder: placeholder,
+      decoration: null,
+      minLines: multiline ? 3 : 1,
+      maxLines: multiline ? 5 : 1,
+      textAlign: TextAlign.left,
+      keyboardType: keyboardType,
+      padding: multiline
+          ? EdgeInsets.symmetric(vertical: responsive.spacing(10))
+          : EdgeInsets.zero,
+      enabled: enabled,
+      style: TextStyle(fontSize: responsive.bodyMd, color: theme.title),
+      placeholderStyle: TextStyle(
+        fontSize: responsive.bodyMd,
+        color: theme.secondaryText,
+      ),
+    );
     return AppSurface(
-      color: theme.background,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: backgroundColor ?? theme.subtleSurface,
+      padding: responsive.scaledInsets(
+        const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: theme.secondaryText,
+          if (showLabel) ...<Widget>[
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: responsive.metaSm,
+                fontWeight: FontWeight.w600,
+                color: theme.secondaryText,
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          CupertinoTextField(
-            controller: controller,
-            placeholder: placeholder,
-            decoration: null,
-            minLines: multiline ? 3 : 1,
-            maxLines: multiline ? 5 : 1,
-            textAlign: TextAlign.left,
-            keyboardType: keyboardType,
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            enabled: enabled,
-          ),
+            SizedBox(height: responsive.spacing(6)),
+          ],
+          if (multiline)
+            textField
+          else
+            SizedBox(
+              height: responsive.compactControlHeight,
+              child: Row(
+                children: <Widget>[
+                  if (prefix != null) ...<Widget>[
+                    prefix!,
+                    SizedBox(width: responsive.spacing(10)),
+                  ],
+                  Expanded(child: Center(child: textField)),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -325,11 +390,7 @@ class AppTextField extends StatelessWidget {
 }
 
 class AppPrimaryButton extends StatelessWidget {
-  const AppPrimaryButton({
-    super.key,
-    required this.label,
-    this.onPressed,
-  });
+  const AppPrimaryButton({super.key, required this.label, this.onPressed});
 
   final String label;
   final VoidCallback? onPressed;
@@ -337,24 +398,36 @@ class AppPrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     return GestureDetector(
       onTap: onPressed,
       behavior: HitTestBehavior.opaque,
       child: Opacity(
         opacity: onPressed == null ? 0.5 : 1,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          constraints: BoxConstraints(minHeight: responsive.controlHeight),
+          padding: EdgeInsets.symmetric(vertical: responsive.spacing(10)),
           decoration: BoxDecoration(
             color: theme.primary,
-            borderRadius: BorderRadius.circular(AwikiMeRadii.sm),
+            borderRadius: BorderRadius.circular(
+              responsive.radius(AwikiMeRadii.sm),
+            ),
           ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: theme.primaryForeground,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
+          child: Center(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              strutStyle: StrutStyle(
+                fontSize: responsive.bodyMd,
+                height: 1,
+                forceStrutHeight: true,
+              ),
+              style: TextStyle(
+                color: theme.primaryForeground,
+                fontSize: responsive.bodyMd,
+                height: 1,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),
@@ -364,11 +437,7 @@ class AppPrimaryButton extends StatelessWidget {
 }
 
 class AppSecondaryButton extends StatelessWidget {
-  const AppSecondaryButton({
-    super.key,
-    required this.label,
-    this.onPressed,
-  });
+  const AppSecondaryButton({super.key, required this.label, this.onPressed});
 
   final String label;
   final VoidCallback? onPressed;
@@ -376,24 +445,36 @@ class AppSecondaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     return GestureDetector(
       onTap: onPressed,
       behavior: HitTestBehavior.opaque,
       child: Opacity(
         opacity: onPressed == null ? 0.5 : 1,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          constraints: BoxConstraints(minHeight: responsive.controlHeight),
+          padding: EdgeInsets.symmetric(vertical: responsive.spacing(10)),
           decoration: BoxDecoration(
             color: theme.warningContainer,
-            borderRadius: BorderRadius.circular(AwikiMeRadii.sm),
+            borderRadius: BorderRadius.circular(
+              responsive.radius(AwikiMeRadii.sm),
+            ),
           ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: theme.primaryDark,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
+          child: Center(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              strutStyle: StrutStyle(
+                fontSize: responsive.bodyMd,
+                height: 1,
+                forceStrutHeight: true,
+              ),
+              style: TextStyle(
+                color: theme.primaryDark,
+                fontSize: responsive.bodyMd,
+                height: 1,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),
@@ -403,11 +484,7 @@ class AppSecondaryButton extends StatelessWidget {
 }
 
 class AppDangerButton extends StatelessWidget {
-  const AppDangerButton({
-    super.key,
-    required this.label,
-    this.onPressed,
-  });
+  const AppDangerButton({super.key, required this.label, this.onPressed});
 
   final String label;
   final VoidCallback? onPressed;
@@ -415,22 +492,32 @@ class AppDangerButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     return GestureDetector(
       onTap: onPressed,
       behavior: HitTestBehavior.opaque,
       child: Opacity(
         opacity: onPressed == null ? 0.5 : 1,
         child: AppSurface(
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          padding: EdgeInsets.symmetric(vertical: responsive.spacing(10)),
           color: theme.dangerContainer,
           radius: AwikiMeRadii.sm,
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: theme.danger,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
+          constraints: BoxConstraints(minHeight: responsive.controlHeight),
+          child: Center(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              strutStyle: StrutStyle(
+                fontSize: responsive.bodyMd,
+                height: 1,
+                forceStrutHeight: true,
+              ),
+              style: TextStyle(
+                color: theme.danger,
+                fontSize: responsive.bodyMd,
+                height: 1,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),
@@ -444,36 +531,44 @@ class AppInlineLinkRow extends StatelessWidget {
     super.key,
     required this.label,
     this.icon = CupertinoIcons.link,
+    this.iconAsset,
     this.onTap,
   });
 
   final String label;
   final IconData icon;
+  final String? iconAsset;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: AppSurface(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: responsive.scaledInsets(
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        ),
         color: theme.subtleSurface,
         radius: 12,
         child: Row(
           children: <Widget>[
-            Icon(
-              icon,
-              color: theme.primaryDark,
-              size: 18,
-            ),
-            const SizedBox(width: 8),
+            if (iconAsset != null)
+              AwikiAssetIcon(
+                assetName: iconAsset!,
+                color: theme.primaryDark,
+                size: responsive.iconSm,
+              )
+            else
+              Icon(icon, color: theme.primaryDark, size: responsive.iconSm),
+            SizedBox(width: responsive.spacing(8)),
             Expanded(
               child: Text(
                 label,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: responsive.bodySm,
                   color: theme.primaryDark,
                 ),
               ),
@@ -528,8 +623,13 @@ class EmptyStateCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(title, style: AwikiMeTextStyles.sectionTitle),
-          const SizedBox(height: 8),
-          Text(subtitle, style: AwikiMeTextStyles.cardSubtitle),
+          SizedBox(height: context.awikiResponsive.spacing(8)),
+          Text(
+            subtitle,
+            style: AwikiMeTextStyles.cardSubtitle.copyWith(
+              fontSize: context.awikiResponsive.bodySm,
+            ),
+          ),
         ],
       ),
     );
@@ -545,6 +645,7 @@ class AppListTile extends StatelessWidget {
     this.trailing,
     this.onTap,
     this.destructive = false,
+    this.horizontalPadding,
   });
 
   final String title;
@@ -553,17 +654,21 @@ class AppListTile extends StatelessWidget {
   final Widget? trailing;
   final VoidCallback? onTap;
   final bool destructive;
+  final double? horizontalPadding;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     final content = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      padding: responsive.scaledInsets(
+        EdgeInsets.symmetric(horizontal: horizontalPadding ?? 16, vertical: 16),
+      ),
       child: Row(
         children: <Widget>[
           if (leading != null) ...<Widget>[
             leading!,
-            const SizedBox(width: 16),
+            SizedBox(width: responsive.spacing(16)),
           ],
           Expanded(
             child: Column(
@@ -572,23 +677,28 @@ class AppListTile extends StatelessWidget {
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: responsive.bodyMd,
                     fontWeight: FontWeight.w700,
                     color: destructive ? theme.danger : theme.title,
                   ),
                 ),
                 if (subtitle != null) ...<Widget>[
-                  const SizedBox(height: 2),
-                  Text(subtitle!, style: AwikiMeTextStyles.cardSubtitle),
+                  SizedBox(height: responsive.spacing(2)),
+                  Text(
+                    subtitle!,
+                    style: AwikiMeTextStyles.cardSubtitle.copyWith(
+                      fontSize: responsive.bodySm,
+                    ),
+                  ),
                 ],
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: responsive.spacing(12)),
           trailing ??
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 18,
+              AwikiAssetIcon(
+                assetName: 'assets/icons/icon_right.svg',
+                size: responsive.iconSm,
                 color: onTap == null ? theme.border : theme.tertiaryText,
               ),
         ],

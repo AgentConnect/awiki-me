@@ -24,12 +24,22 @@ class AppNavigator {
     systemNavigationBarDividerColor: Color(0xFFD8D7DC),
   );
 
-  static Future<T?> push<T>(
+  static Future<T?> push<T>(BuildContext context, WidgetBuilder builder) {
+    return Navigator.of(
+      context,
+    ).push<T>(CupertinoPageRoute<T>(builder: builder));
+  }
+
+  static Future<T?> pushWithoutAnimation<T>(
     BuildContext context,
     WidgetBuilder builder,
   ) {
     return Navigator.of(context).push<T>(
-      CupertinoPageRoute<T>(builder: builder),
+      PageRouteBuilder<T>(
+        pageBuilder: (context, _, __) => builder(context),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
     );
   }
 
@@ -37,15 +47,12 @@ class AppNavigator {
     BuildContext context,
     WidgetBuilder builder,
   ) {
-    return Navigator.of(context).pushReplacement<T, TO>(
-      CupertinoPageRoute<T>(builder: builder),
-    );
+    return Navigator.of(
+      context,
+    ).pushReplacement<T, TO>(CupertinoPageRoute<T>(builder: builder));
   }
 
-  static Future<T?> showDialog<T>(
-    BuildContext context,
-    WidgetBuilder builder,
-  ) {
+  static Future<T?> showDialog<T>(BuildContext context, WidgetBuilder builder) {
     return showCupertinoDialog<T>(context: context, builder: builder);
   }
 

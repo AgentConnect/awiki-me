@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
@@ -17,10 +19,7 @@ class ChatThreadState {
   final List<ChatMessage> messages;
   final bool isLoading;
 
-  ChatThreadState copyWith({
-    List<ChatMessage>? messages,
-    bool? isLoading,
-  }) {
+  ChatThreadState copyWith({List<ChatMessage>? messages, bool? isLoading}) {
     return ChatThreadState(
       threadId: threadId,
       messages: messages ?? this.messages,
@@ -40,24 +39,59 @@ class ChatThreadsController
   }
 
   Future<void> openConversation(ConversationSummary conversation) async {
+    final current = thread(conversation.threadId);
+    if (current.messages.isEmpty && !current.isLoading) {
+      unawaited(_loadHistory(conversation));
+    }
+    if (conversation.unreadCount > 0) {
+      ref
+          .read(conversationListProvider.notifier)
+          .markThreadReadLocal(conversation.threadId);
+      unawaited(
+        ref
+            .read(awikiGatewayProvider)
+            .markRead(conversation.threadId)
+            .catchError((_) {}),
+      );
+    }
+  }
+
+  Future<void> _loadHistory(ConversationSummary conversation) async {
     _setThreadLoading(conversation.threadId, true);
-    final history = conversation.isGroup
-        ? await ref.read(awikiGatewayProvider).fetchGroupHistory(
-              conversation.groupId ?? '',
-            )
-        : await ref.read(awikiGatewayProvider).fetchDmHistory(
-              conversation.targetDid ?? '',
-            );
-    state = <String, ChatThreadState>{
-      ...state,
-      conversation.threadId: ChatThreadState(
-        threadId: conversation.threadId,
-        messages: _sortMessages(history),
-        isLoading: false,
-      ),
-    };
-    await ref.read(awikiGatewayProvider).markRead(conversation.threadId);
-    await ref.read(conversationListProvider.notifier).refresh();
+    try {
+      final history = conversation.isGroup
+          ? await ref
+                .read(awikiGatewayProvider)
+                .fetchGroupHistory(conversation.groupId ?? '')
+          : await ref
+                .read(awikiGatewayProvider)
+                .fetchDmHistory(conversation.targetDid ?? '');
+      final current = List<ChatMessage>.from(
+        thread(conversation.threadId).messages,
+      );
+      for (final message in history) {
+        final index = current.indexWhere(
+          (item) =>
+              (message.remoteId != null && item.remoteId == message.remoteId) ||
+              item.localId == message.localId,
+        );
+        if (index >= 0) {
+          current[index] = message;
+        } else {
+          current.add(message);
+        }
+      }
+      state = <String, ChatThreadState>{
+        ...state,
+        conversation.threadId: ChatThreadState(
+          threadId: conversation.threadId,
+          messages: _sortMessages(current),
+          isLoading: false,
+        ),
+      };
+    } catch (_) {
+      _setThreadLoading(conversation.threadId, false);
+    }
   }
 
   Future<void> sendMessage({
@@ -80,12 +114,14 @@ class ChatThreadsController
       isMine: true,
       sendState: MessageSendState.sending,
     );
-    final current =
-        List<ChatMessage>.from(thread(conversation.threadId).messages)
-          ..add(pending);
+    final current = List<ChatMessage>.from(
+      thread(conversation.threadId).messages,
+    )..add(pending);
     _setMessages(conversation.threadId, current);
     try {
-      final sent = await ref.read(awikiGatewayProvider).sendTextMessage(
+      final sent = await ref
+          .read(awikiGatewayProvider)
+          .sendTextMessage(
             threadId: conversation.threadId,
             peerDid: conversation.targetDid,
             groupId: conversation.groupId,
@@ -109,12 +145,30 @@ class ChatThreadsController
     required ConversationSummary conversation,
     required ChatMessage message,
   }) async {
-    final retried = await ref.read(awikiGatewayProvider).retryMessage(message);
-    final updated = thread(conversation.threadId)
-        .messages
-        .map((item) => item.localId == message.localId ? retried : item)
-        .toList();
-    _setMessages(conversation.threadId, updated);
+    final retrying = message.copyWith(sendState: MessageSendState.sending);
+    _setMessages(
+      conversation.threadId,
+      thread(conversation.threadId).messages
+          .map((item) => item.localId == message.localId ? retrying : item)
+          .toList(),
+    );
+    try {
+      final retried = await ref
+          .read(awikiGatewayProvider)
+          .retryMessage(retrying);
+      final updated = thread(conversation.threadId).messages
+          .map((item) => item.localId == message.localId ? retried : item)
+          .toList();
+      _setMessages(conversation.threadId, updated);
+    } catch (_) {
+      final failed = retrying.copyWith(sendState: MessageSendState.failed);
+      _setMessages(
+        conversation.threadId,
+        thread(conversation.threadId).messages
+            .map((item) => item.localId == message.localId ? failed : item)
+            .toList(),
+      );
+    }
     await ref.read(conversationListProvider.notifier).refresh();
   }
 
@@ -184,11 +238,13 @@ class ChatThreadsController
 
 final chatThreadsProvider =
     StateNotifierProvider<ChatThreadsController, Map<String, ChatThreadState>>(
-  (ref) => ChatThreadsController(ref),
-);
+      (ref) => ChatThreadsController(ref),
+    );
 
-final chatThreadProvider =
-    Provider.family<ChatThreadState, String>((ref, threadId) {
+final chatThreadProvider = Provider.family<ChatThreadState, String>((
+  ref,
+  threadId,
+) {
   final threads = ref.watch(chatThreadsProvider);
   return threads[threadId] ?? ChatThreadState(threadId: threadId);
 });

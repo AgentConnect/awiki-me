@@ -63,16 +63,24 @@ class ProfileController extends StateNotifier<ProfileState> {
 
   Future<void> refreshWithHomepage(String url) async {
     await refresh();
+    await loadHomepageMarkdown(url);
+  }
+
+  Future<void> loadHomepageMarkdown(String url) async {
     final current = state.profile;
-    if (current == null) {
+    if (current == null || url.trim().isEmpty) {
       return;
     }
     final markdown = await ref.read(homepageMarkdownLoaderProvider)(url);
     if (markdown == null || markdown.trim().isEmpty) {
       return;
     }
-    state =
-        state.copyWith(profile: current.copyWith(profileMarkdown: markdown));
+    if (current.profileMarkdown.trim() == markdown.trim()) {
+      return;
+    }
+    state = state.copyWith(
+      profile: current.copyWith(profileMarkdown: markdown),
+    );
   }
 
   Future<void> updateProfile(ProfilePatch patch) async {

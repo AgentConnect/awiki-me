@@ -1,170 +1,98 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
 import '../../core/date_time_formatter.dart';
+import '../../domain/entities/conversation_summary.dart';
 import '../../l10n/l10n.dart';
 import '../chat/chat_page.dart';
 import '../chat/chat_provider.dart';
-import '../friends/friends_provider.dart';
-import '../group/create_group_page.dart';
-import '../group/group_list_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/formatters/display_formatters.dart';
+import '../shared/quick_actions.dart';
+import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../settings/settings_page.dart';
 import 'conversation_provider.dart';
 
+typedef ConversationSelectionHandler =
+    Future<void> Function(ConversationSummary conversation);
+
 class ConversationListPage extends ConsumerWidget {
-  const ConversationListPage({super.key});
+  const ConversationListPage({
+    super.key,
+    this.onConversationSelected,
+    this.selectedThreadId,
+    this.embedded = false,
+    this.bottomInset = 120,
+  });
+
+  final ConversationSelectionHandler? onConversationSelected;
+  final String? selectedThreadId;
+  final bool embedded;
+  final double bottomInset;
+
+  bool get _usesEmbeddedSelection => onConversationSelected != null;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(conversationListProvider);
-    final theme = context.awikiTheme;
-    return Column(
-      children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 18, 22, 8),
-          child: AwikiMeTopBar(
-            title: context.l10n.conversationsTitle,
-            padding: EdgeInsets.zero,
-            leading: TopBarActionButton(
-              onTap: () => AppNavigator.push(
-                context,
-                (_) => const SettingsPage(),
+    final responsive = context.awikiResponsive;
+    return AwikiMeShellTabPage(
+      title: context.l10n.conversationsTitle,
+      onSettingsTap: () => AppNavigator.pushWithoutAnimation(
+        context,
+        (_) => const SettingsPage(),
+      ),
+      onQuickActionsTap: () => showCommonQuickActionsMenu(context, ref),
+      child: state.conversations.isEmpty
+          ? _EmptyState(
+              embedded: embedded,
+              title: context.l10n.conversationsEmptyTitle,
+              subtitle: context.l10n.conversationsEmptySubtitle,
+            )
+          : ListView.builder(
+              padding: EdgeInsets.only(
+                top: responsive.spacing(8),
+                bottom: bottomInset,
               ),
-              child: Icon(
-                Icons.settings_outlined,
-                size: 24,
-                color: theme.title,
-              ),
+              itemCount: state.conversations.length,
+              itemBuilder: (_, index) {
+                final item = state.conversations[index];
+                return _ConversationRow(
+                  title: DidDisplayFormatter.conversationTitle(
+                    item,
+                    context.l10n,
+                  ),
+                  preview: item.lastMessagePreview,
+                  timeLabel: DateTimeFormatter.conversationTime(
+                    item.lastMessageAt,
+                  ),
+                  unreadCount: item.unreadCount,
+                  isSelected: selectedThreadId == item.threadId,
+                  onTap: () => _openConversation(context, ref, item),
+                );
+              },
             ),
-            trailing: TopBarActionButton(
-              onTap: () => _showQuickActions(context, ref),
-              child: Icon(
-                Icons.add,
-                size: 26,
-                color: theme.title,
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          child: state.conversations.isEmpty
-              ? _EmptyState(
-                  title: context.l10n.conversationsEmptyTitle,
-                  subtitle: context.l10n.conversationsEmptySubtitle)
-              : ListView.builder(
-                  padding: const EdgeInsets.only(top: 8, bottom: 12),
-                  itemCount: state.conversations.length,
-                  itemBuilder: (_, index) {
-                    final item = state.conversations[index];
-                    return _ConversationRow(
-                      title: DidDisplayFormatter.conversationTitle(
-                        item,
-                        context.l10n,
-                      ),
-                      preview: item.lastMessagePreview,
-                      timeLabel: DateTimeFormatter.conversationTime(
-                        item.lastMessageAt,
-                      ),
-                      unreadCount: item.unreadCount,
-                      onTap: () async {
-                        await ref
-                            .read(chatThreadsProvider.notifier)
-                            .openConversation(item);
-                        if (!context.mounted) {
-                          return;
-                        }
-                        await AppNavigator.push(
-                          context,
-                          (_) => ChatPage(conversation: item),
-                        );
-                      },
-                    );
-                  },
-                ),
-        ),
-      ],
     );
   }
 
-  Future<void> _showQuickActions(BuildContext context, WidgetRef ref) async {
-    final l10n = context.l10n;
-    final rootContext = context;
-    await AppNavigator.showSheet<void>(
-      context,
-      (sheetContext) => AppDropMenu(
-        title: l10n.quickActionsTitle.toUpperCase(),
-        items: <AppDropMenuItem>[
-          AppDropMenuItem(
-            label: l10n.quickActionCreateGroup,
-            onTap: () {
-              AppNavigator.push(rootContext, (_) => const CreateGroupPage());
-            },
-          ),
-          AppDropMenuItem(
-            label: l10n.quickActionJoinGroup,
-            onTap: () {
-              AppNavigator.push(rootContext, (_) => const GroupListPage());
-            },
-          ),
-          AppDropMenuItem(
-            label: l10n.quickActionAddFriend,
-            highlighted: true,
-            onTap: () {
-              _showAddFriendDialog(rootContext, ref);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAddFriendDialog(BuildContext context, WidgetRef ref) {
-    final textController = TextEditingController();
-    AppNavigator.showDialog<void>(
-      context,
-      (ctx) => CupertinoAlertDialog(
-        title: Text(context.l10n.addFriendTitle),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 12),
-          child: AppTextField(
-            controller: textController,
-            label: context.l10n.addFriendTitle,
-            placeholder: context.l10n.addFriendPlaceholder,
-          ),
-        ),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(context.l10n.commonCancel),
-          ),
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () async {
-              final value = textController.text.trim();
-              if (value.isEmpty) {
-                return;
-              }
-              Navigator.of(ctx).pop();
-              final status = await ref
-                  .read(friendsProvider.notifier)
-                  .checkRelationship(value);
-              if (status != null && status.relationship != 'none') {
-                return;
-              }
-              await ref.read(friendsProvider.notifier).follow(value);
-            },
-            child: Text(context.l10n.commonSend),
-          ),
-        ],
-      ),
-    );
+  Future<void> _openConversation(
+    BuildContext context,
+    WidgetRef ref,
+    ConversationSummary item,
+  ) async {
+    await ref.read(chatThreadsProvider.notifier).openConversation(item);
+    if (!context.mounted) {
+      return;
+    }
+    if (_usesEmbeddedSelection) {
+      await onConversationSelected?.call(item);
+      return;
+    }
+    await AppNavigator.push(context, (_) => ChatPage(conversation: item));
   }
 }
 
@@ -175,6 +103,7 @@ class _ConversationRow extends StatelessWidget {
     required this.timeLabel,
     required this.unreadCount,
     required this.onTap,
+    required this.isSelected,
   });
 
   final String title;
@@ -182,52 +111,104 @@ class _ConversationRow extends StatelessWidget {
   final String timeLabel;
   final int unreadCount;
   final VoidCallback onTap;
+  final bool isSelected;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: theme.border),
-          ),
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.tabContentHorizontalPadding,
+      ),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        padding: responsive.scaledInsets(
+          const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
         ),
-        child: AppListTile(
-          title: title,
-          subtitle: preview.isEmpty
-              ? context.l10n.conversationsNoMessagePreview
-              : preview,
-          leading: AvatarBadge(seed: title, size: 48),
+        decoration: BoxDecoration(
+          color: isSelected ? theme.subtleSurface : CupertinoColors.transparent,
+          borderRadius: BorderRadius.circular(responsive.radius(18)),
+          border: Border(bottom: BorderSide(color: theme.border)),
+        ),
+        child: GestureDetector(
           onTap: onTap,
-          trailing: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
+          behavior: HitTestBehavior.opaque,
+          child: Row(
             children: <Widget>[
-              Text(
-                timeLabel,
-                style: AwikiMeTextStyles.meta.copyWith(letterSpacing: 0),
-              ),
-              if (unreadCount > 0) ...<Widget>[
-                const SizedBox(height: 8),
-                AppSurface(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 4,
-                  ),
-                  color: theme.primary,
-                  radius: AwikiMeRadii.pill,
-                  child: Text(
-                    unreadCount > 999 ? '999+' : '$unreadCount',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: theme.primaryForeground,
-                      fontWeight: FontWeight.w700,
+              AvatarBadge(seed: title, size: responsive.avatarSizeMd),
+              SizedBox(width: responsive.spacing(14)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: responsive.bodyMd,
+                        fontWeight: FontWeight.w700,
+                        color: theme.title,
+                      ),
                     ),
-                  ),
+                    SizedBox(height: responsive.spacing(4)),
+                    Text(
+                      preview.isEmpty
+                          ? context.l10n.conversationsNoMessagePreview
+                          : preview,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: responsive.bodySm,
+                        height: 1.2,
+                        color: theme.secondaryText,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
+              SizedBox(width: responsive.spacing(10)),
+              SizedBox(
+                width: responsive.scaled(58),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: <Widget>[
+                    Text(
+                      timeLabel,
+                      style: AwikiMeTextStyles.meta.copyWith(
+                        fontSize: responsive.metaSm,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    if (unreadCount > 0) ...<Widget>[
+                      SizedBox(height: responsive.spacing(8)),
+                      Container(
+                        padding: responsive.scaledInsets(
+                          const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 3,
+                          ),
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.primary,
+                          borderRadius: BorderRadius.circular(
+                            AwikiMeRadii.pill,
+                          ),
+                        ),
+                        child: Text(
+                          unreadCount > 999 ? '999+' : '$unreadCount',
+                          style: TextStyle(
+                            fontSize: responsive.metaSm,
+                            color: theme.primaryForeground,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -237,18 +218,29 @@ class _ConversationRow extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.title, required this.subtitle});
+  const _EmptyState({
+    required this.title,
+    required this.subtitle,
+    required this.embedded,
+  });
 
   final String title;
   final String subtitle;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(24, 32, 24, 12),
-      children: <Widget>[
-        EmptyStateCard(title: title, subtitle: subtitle),
-      ],
+      padding: responsive.scaledInsets(
+        EdgeInsets.fromLTRB(
+          responsive.tabInnerPadding.left,
+          32,
+          responsive.tabInnerPadding.right,
+          embedded ? 24 : 12,
+        ),
+      ),
+      children: <Widget>[EmptyStateCard(title: title, subtitle: subtitle)],
     );
   }
 }
