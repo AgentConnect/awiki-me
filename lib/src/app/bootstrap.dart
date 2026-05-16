@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 import '../data/gateways/awiki_anp_gateway.dart';
 import '../data/services/awiki_account_service.dart';
 import '../data/services/awiki_local_cache.dart';
@@ -40,7 +42,7 @@ class AppBootstrap {
 
   static Future<AppBootstrap> create() async {
     final didRegistrationFacade = _buildDidRegistrationFacade();
-    final accountStorage = SecureAppKeyValueStore();
+    final accountStorage = await _buildAccountStore();
     final preferenceStorage = await _buildPreferenceStore();
     final documentPickerService = MethodChannelDocumentPickerService();
     final accountGateway = AwikiAccountService.fromEnvironment(
@@ -72,6 +74,20 @@ class AppBootstrap {
 
   static DidRegistrationFacade _buildDidRegistrationFacade() {
     return DartDidRegistrationFacade();
+  }
+
+  @visibleForTesting
+  static Future<AppKeyValueStore> buildAccountStoreForTesting() {
+    return _buildAccountStore();
+  }
+
+  static Future<AppKeyValueStore> _buildAccountStore() async {
+    if (Platform.isMacOS && !kReleaseMode) {
+      // Local macOS debug/profile builds are usually ad-hoc signed, and
+      // Keychain writes can fail after a successful backend registration.
+      return FileAppKeyValueStore.create(fileName: 'awiki_me_credentials.json');
+    }
+    return SecureAppKeyValueStore();
   }
 
   static Future<AppKeyValueStore> _buildPreferenceStore() async {

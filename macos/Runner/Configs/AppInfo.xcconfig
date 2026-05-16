@@ -4,11 +4,28 @@
 // future. If not, the values below would default to using the project name when this becomes a
 // 'flutter create' template.
 
+// CocoaPods generated settings. These files are created by `pod install`;
+// optional includes keep the project loadable before bootstrap.
+#include? "../../Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"
+#include? "../../Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
+#include? "../../Pods/Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"
+
 // The application's name. By default this is also the title of the Flutter window.
 PRODUCT_NAME = AWiki Me
 
 // The application's bundle identifier
 PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikiMe
+
+// Fallback CocoaPods paths for direct Xcode builds.
+//
+// Xcode resolves the [CP] file-list paths before it can print the manifest
+// check error when Pods have not been generated yet. Keeping canonical paths
+// here prevents empty ${PODS_ROOT} expansion such as:
+//   /Target Support Files/Pods-Runner/...
+// If these files are missing, run scripts/bootstrap_macos.sh to regenerate
+// macos/Pods and open Runner.xcworkspace.
+PODS_ROOT = ${SRCROOT}/Pods
+PODS_PODFILE_DIR_PATH = ${SRCROOT}
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 ai.awiki. All rights reserved.

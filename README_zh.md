@@ -16,6 +16,24 @@ flutter test
 flutter run
 ```
 
+## 在 macOS / Xcode 中编译
+
+打开 Xcode 前先生成 CocoaPods 支持文件：
+
+```bash
+scripts/bootstrap_macos.sh
+open macos/Runner.xcworkspace
+```
+
+请打开 `Runner.xcworkspace`，不要直接打开 `Runner.xcodeproj`。如果 Xcode
+提示类似 `Unable to load contents of file list: '/Target Support Files/Pods-Runner/...'`，
+说明 `macos/Pods` 生成文件缺失或 `pod` 不在 `PATH`，重新运行上面的
+bootstrap 脚本即可。
+
+开发版 macOS 构建通常是 ad-hoc 签名。为避免后端注册成功后因 Keychain
+写入失败而表现为“注册失败”，debug/profile 构建会把账号凭证写入应用支持目录下的
+`awiki_me_credentials.json`；release 构建仍使用平台安全存储。
+
 ## 项目结构
 
 - `lib/`：应用、领域、数据与界面源码

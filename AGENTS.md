@@ -31,6 +31,15 @@ the feature under change. Prefer focused unit tests for account/session storage,
 ANP wire mapping, and service clients; use widget tests for onboarding,
 settings, and chat flows.
 
+## Multi-Platform Safety
+AWiki Me supports Android, iOS, macOS, and web. When fixing or changing one
+platform, keep the diff scoped to that platform plus shared Dart code that is
+strictly required. Do not modify another platform runner, generated registrant,
+Pod/Gradle/Xcode metadata, entitlements, bundle IDs, signing settings, or
+runtime behavior unless the task explicitly requires it. If a tool regenerates
+unrelated platform files, inspect and revert those unrelated changes before
+committing.
+
 ## ANP SDK Direction
 The app is Dart-only. Do not add Python CLI tools, Python dependency manifests,
 legacy credential migrations, or old RPC gateway paths. Account creation,

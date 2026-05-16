@@ -17,6 +17,26 @@ flutter test
 flutter run
 ```
 
+## Building on macOS with Xcode
+
+Before opening the project in Xcode, generate the CocoaPods support files:
+
+```bash
+scripts/bootstrap_macos.sh
+open macos/Runner.xcworkspace
+```
+
+Use `Runner.xcworkspace`, not `Runner.xcodeproj`. If Xcode reports
+`Unable to load contents of file list: '/Target Support Files/Pods-Runner/...'`,
+the generated `macos/Pods` support files are missing or CocoaPods is not on
+`PATH`; rerun the bootstrap script.
+
+Local macOS debug/profile builds are usually ad-hoc signed. To avoid a
+successful backend registration surfacing as a registration failure because a
+Keychain write failed, debug/profile builds store account credentials in
+`awiki_me_credentials.json` under the app support directory; release builds still
+use platform secure storage.
+
 ## Project Structure
 
 - `lib/`: application, domain, data, and presentation code
