@@ -1,10 +1,14 @@
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/entities/user_profile.dart';
+import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_list_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -43,12 +47,164 @@ void main() {
     ),
   ];
 
+  testWidgets('macOS 宽度下使用三栏消息工作区与身份卡', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('最近会话'), findsOneWidget);
+    expect(find.byType(ChatView), findsNothing);
+
+    await tester.tap(find.text('Marcus Chen'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatView), findsOneWidget);
+    expect(find.text('Agent 身份卡'), findsOneWidget);
+    expect(find.text('安全协作中'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 主导航点击会切换模块并保持图标可点', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'me.json',
+      displayName: 'Mia',
+      handle: 'mia',
+      jwtToken: 'token',
+    );
+    const profile = UserProfile(
+      did: 'did:test:me',
+      nickName: 'Mia',
+      bio: 'Product lead',
+      tags: <String>['agent'],
+      profileMarkdown: '',
+      handle: 'mia',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1280, 720));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gateway,
+        session: session,
+        profile: profile,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('最近会话'), findsOneWidget);
+
+    await tester.tap(find.text('任务'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('任务视图即将接入'), findsOneWidget);
+
+    await tester.tap(find.text('联系人'));
+    await tester.pumpAndSettle();
+    expect(find.text('朋友'), findsOneWidget);
+
+    await tester.tap(find.text('配置'));
+    await tester.pumpAndSettle();
+    expect(find.text('我'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 主窗口压缩高度和宽度时不会出现布局溢出', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'me.json',
+      displayName: 'Mia',
+      handle: 'mia',
+      jwtToken: 'token',
+    );
+    const profile = UserProfile(
+      did: 'did:test:me',
+      nickName: 'Mia',
+      bio: 'Product lead',
+      tags: <String>['agent'],
+      profileMarkdown: '',
+      handle: 'mia',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+
+    for (final size in <Size>[
+      const Size(1280, 600),
+      const Size(960, 560),
+      const Size(720, 520),
+    ]) {
+      await tester.binding.setSurfaceSize(size);
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AppShell(),
+          gateway: gateway,
+          session: session,
+          profile: profile,
+          providerOverrides: <Override>[
+            conversationListProvider.overrideWith(
+              (ref) =>
+                  _StaticConversationListController(ref, gateway.conversations),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('最近会话'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
   testWidgets('手机宽度下点击会话进入独立聊天页', (tester) async {
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[conversation]
-      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
-        'did:peer': history,
-      };
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.binding.setSurfaceSize(const Size(390, 844));
 
@@ -58,10 +214,8 @@ void main() {
         gateway: gateway,
         providerOverrides: <Override>[
           conversationListProvider.overrideWith(
-            (ref) => _StaticConversationListController(
-              ref,
-              gateway.conversations,
-            ),
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
           ),
         ],
       ),
@@ -78,9 +232,7 @@ void main() {
   testWidgets('Pad 宽度下展示双栏并在右侧更新聊天内容', (tester) async {
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[conversation]
-      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
-        'did:peer': history,
-      };
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.binding.setSurfaceSize(const Size(1024, 768));
 
@@ -90,10 +242,8 @@ void main() {
         gateway: gateway,
         providerOverrides: <Override>[
           conversationListProvider.overrideWith(
-            (ref) => _StaticConversationListController(
-              ref,
-              gateway.conversations,
-            ),
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
           ),
         ],
       ),

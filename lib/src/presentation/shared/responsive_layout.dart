@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 
 import 'awiki_me_design.dart';
 
@@ -28,6 +29,9 @@ class AwikiResponsiveInfo {
   bool get isDesktop => isLarge;
 
   bool get supportsTwoPane => !isPhone;
+
+  bool get isMacDesktop =>
+      supportsTwoPane && defaultTargetPlatform == TargetPlatform.macOS;
 
   double get uiScale {
     switch (breakpoint) {

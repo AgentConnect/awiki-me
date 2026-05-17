@@ -2,11 +2,63 @@ import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
 
 void main() {
+  testWidgets('macOS 聊天输入条保持发送能力', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:mac',
+      displayName: 'Mac Agent',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1100, 760));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(
+            conversation: conversation,
+            embedded: true,
+            macStyle: true,
+          ),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+
+    expect(find.text('身份卡'), findsOneWidget);
+
+    await tester.enterText(find.byType(CupertinoTextField), 'hello mac');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastSentThreadId, 'dm:mac');
+    expect(gateway.lastSentContent, 'hello mac');
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
   testWidgets('聊天输入框回车后直接发送消息', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(

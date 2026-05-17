@@ -27,12 +27,14 @@ class ConversationListPage extends ConsumerWidget {
     this.selectedThreadId,
     this.embedded = false,
     this.bottomInset = 120,
+    this.macStyle = false,
   });
 
   final ConversationSelectionHandler? onConversationSelected;
   final String? selectedThreadId;
   final bool embedded;
   final double bottomInset;
+  final bool macStyle;
 
   bool get _usesEmbeddedSelection => onConversationSelected != null;
 
@@ -40,6 +42,14 @@ class ConversationListPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(conversationListProvider);
     final responsive = context.awikiResponsive;
+    if (macStyle && responsive.isMacDesktop) {
+      return _MacConversationList(
+        conversations: state.conversations,
+        selectedThreadId: selectedThreadId,
+        bottomInset: bottomInset,
+        onOpen: (item) => _openConversation(context, ref, item),
+      );
+    }
     return AwikiMeShellTabPage(
       title: context.l10n.conversationsTitle,
       onSettingsTap: () => AppNavigator.pushWithoutAnimation(
@@ -93,6 +103,276 @@ class ConversationListPage extends ConsumerWidget {
       return;
     }
     await AppNavigator.push(context, (_) => ChatPage(conversation: item));
+  }
+}
+
+class _MacConversationList extends StatelessWidget {
+  const _MacConversationList({
+    required this.conversations,
+    required this.selectedThreadId,
+    required this.bottomInset,
+    required this.onOpen,
+  });
+
+  final List<ConversationSummary> conversations;
+  final String? selectedThreadId;
+  final double bottomInset;
+  final ValueChanged<ConversationSummary> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(color: Color(0xFFFBFDFF)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const Padding(
+            padding: EdgeInsets.fromLTRB(22, 26, 22, 14),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    '最近会话',
+                    style: TextStyle(
+                      color: Color(0xFF101B32),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                _MacListIconButton(icon: CupertinoIcons.slider_horizontal_3),
+                SizedBox(width: 12),
+                _MacListIconButton(icon: CupertinoIcons.square_pencil),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            child: CupertinoSearchTextField(
+              placeholder: '搜索会话或 Agent',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF17213A)),
+              placeholderStyle: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF8A96AA),
+              ),
+              prefixIcon: const Icon(
+                CupertinoIcons.search,
+                color: Color(0xFF34415C),
+                size: 18,
+              ),
+              suffixIcon: const Icon(
+                CupertinoIcons.xmark_circle_fill,
+                color: Color(0xFFB3BDCD),
+                size: 16,
+              ),
+              decoration: BoxDecoration(
+                color: CupertinoColors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFDDE5F0)),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Expanded(
+            child: conversations.isEmpty
+                ? const _MacConversationEmptyState()
+                : ListView.builder(
+                    padding: EdgeInsets.fromLTRB(14, 0, 14, bottomInset),
+                    itemCount: conversations.length,
+                    itemBuilder: (context, index) {
+                      final item = conversations[index];
+                      return _MacConversationRow(
+                        title: DidDisplayFormatter.conversationTitle(
+                          item,
+                          context.l10n,
+                        ),
+                        preview: item.lastMessagePreview,
+                        timeLabel: DateTimeFormatter.conversationTime(
+                          item.lastMessageAt,
+                        ),
+                        unreadCount: item.unreadCount,
+                        isGroup: item.isGroup,
+                        isSelected: selectedThreadId == item.threadId,
+                        onTap: () => onOpen(item),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MacListIconButton extends StatelessWidget {
+  const _MacListIconButton({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Icon(icon, color: const Color(0xFF34415C), size: 20);
+  }
+}
+
+class _MacConversationRow extends StatelessWidget {
+  const _MacConversationRow({
+    required this.title,
+    required this.preview,
+    required this.timeLabel,
+    required this.unreadCount,
+    required this.isGroup,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String title;
+  final String preview;
+  final String timeLabel;
+  final int unreadCount;
+  final bool isGroup;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFFEAF2FF) : CupertinoColors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isSelected
+                  ? const Color(0xFFD3E3FF)
+                  : const Color(0x00FFFFFF),
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              Stack(
+                clipBehavior: Clip.none,
+                children: <Widget>[
+                  AvatarBadge(seed: title, size: 46),
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isGroup
+                            ? const Color(0xFFEFE4FF)
+                            : const Color(0xFFEAF2FF),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: CupertinoColors.white),
+                      ),
+                      child: Text(
+                        isGroup ? '群' : 'AI',
+                        style: TextStyle(
+                          color: isGroup
+                              ? const Color(0xFF8B5CF6)
+                              : const Color(0xFF0B65F8),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF17213A),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          timeLabel,
+                          style: const TextStyle(
+                            color: Color(0xFF66728A),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            preview.isEmpty
+                                ? context.l10n.conversationsNoMessagePreview
+                                : preview,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF66728A),
+                              fontSize: 12,
+                              height: 1.25,
+                            ),
+                          ),
+                        ),
+                        if (unreadCount > 0) ...<Widget>[
+                          const SizedBox(width: 8),
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0B65F8),
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MacConversationEmptyState extends StatelessWidget {
+  const _MacConversationEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Text(
+          '还没有会话',
+          style: TextStyle(color: Color(0xFF7B879D), fontSize: 14),
+        ),
+      ),
+    );
   }
 }
 

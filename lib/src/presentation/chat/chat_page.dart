@@ -41,11 +41,13 @@ class ChatView extends ConsumerStatefulWidget {
     required this.conversation,
     required this.embedded,
     this.onBack,
+    this.macStyle = false,
   });
 
   final ConversationSummary conversation;
   final bool embedded;
   final VoidCallback? onBack;
+  final bool macStyle;
 
   @override
   ConsumerState<ChatView> createState() => _ChatViewState();
@@ -71,6 +73,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final macStyle = widget.macStyle && responsive.isMacDesktop;
     final thread = ref.watch(chatThreadProvider(widget.conversation.threadId));
     ref.listen<ChatThreadState>(
       chatThreadProvider(widget.conversation.threadId),
@@ -79,84 +82,100 @@ class _ChatViewState extends ConsumerState<ChatView> {
       ),
     );
     final messages = thread.messages;
-    return AwikiMeWidgets.pageBackground(
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          children: <Widget>[
-            _ChatHeader(
-              conversation: widget.conversation,
-              embedded: widget.embedded,
-              onBack: widget.onBack,
-              onDetails: _openDetails,
-            ),
-            Expanded(
-              child: ListView.builder(
-                controller: scrollController,
-                padding: EdgeInsets.fromLTRB(
-                  widget.embedded
-                      ? responsive.spacing(32)
-                      : responsive.tabContentHorizontalPadding,
-                  responsive.spacing(24),
-                  widget.embedded
-                      ? responsive.spacing(32)
-                      : responsive.tabContentHorizontalPadding,
-                  responsive.spacing(widget.embedded ? 124 : 140),
-                ),
-                itemCount: messages.length,
-                itemBuilder: (_, index) {
-                  final message = messages[index];
-                  final previous = index == 0 ? null : messages[index - 1];
-                  final senderLabel = _displayNameForMessage(context, message);
-                  return Padding(
-                    padding: EdgeInsets.only(bottom: responsive.spacing(24)),
-                    child: Column(
-                      children: <Widget>[
-                        if (_shouldShowDivider(previous, message))
-                          _DateDivider(
-                            label: _timeDividerLabel(
-                              message.createdAt,
-                              previous: previous?.createdAt,
-                            ),
-                          ),
-                        _MessageBubble(
-                          message: message,
-                          senderLabel: senderLabel,
-                          onRetry: message.sendState == MessageSendState.failed
-                              ? () async {
-                                  await ref
-                                      .read(chatThreadsProvider.notifier)
-                                      .retryMessage(
-                                        conversation: widget.conversation,
-                                        message: message,
-                                      );
-                                }
-                              : null,
-                        ),
-                      ],
-                    ),
-                  );
-                },
+    final page = SafeArea(
+      bottom: false,
+      child: Column(
+        children: <Widget>[
+          _ChatHeader(
+            conversation: widget.conversation,
+            embedded: widget.embedded,
+            macStyle: macStyle,
+            onBack: widget.onBack,
+            onDetails: _openDetails,
+          ),
+          Expanded(
+            child: ListView.builder(
+              controller: scrollController,
+              padding: EdgeInsets.fromLTRB(
+                macStyle
+                    ? 28
+                    : (widget.embedded
+                          ? responsive.spacing(32)
+                          : responsive.tabContentHorizontalPadding),
+                macStyle ? 24 : responsive.spacing(24),
+                macStyle
+                    ? 28
+                    : (widget.embedded
+                          ? responsive.spacing(32)
+                          : responsive.tabContentHorizontalPadding),
+                macStyle
+                    ? 106
+                    : responsive.spacing(widget.embedded ? 124 : 140),
               ),
-            ),
-            _Composer(
-              embedded: widget.embedded,
-              controller: textController,
-              onSend: () async {
-                final value = textController.text;
-                textController.clear();
-                await ref
-                    .read(chatThreadsProvider.notifier)
-                    .sendMessage(
-                      conversation: widget.conversation,
-                      content: value,
-                    );
+              itemCount: messages.length,
+              itemBuilder: (_, index) {
+                final message = messages[index];
+                final previous = index == 0 ? null : messages[index - 1];
+                final senderLabel = _displayNameForMessage(context, message);
+                return Padding(
+                  padding: EdgeInsets.only(
+                    bottom: macStyle ? 18 : responsive.spacing(24),
+                  ),
+                  child: Column(
+                    children: <Widget>[
+                      if (_shouldShowDivider(previous, message))
+                        _DateDivider(
+                          label: _timeDividerLabel(
+                            message.createdAt,
+                            previous: previous?.createdAt,
+                          ),
+                        ),
+                      _MessageBubble(
+                        message: message,
+                        senderLabel: senderLabel,
+                        macStyle: macStyle,
+                        onRetry: message.sendState == MessageSendState.failed
+                            ? () async {
+                                await ref
+                                    .read(chatThreadsProvider.notifier)
+                                    .retryMessage(
+                                      conversation: widget.conversation,
+                                      message: message,
+                                    );
+                              }
+                            : null,
+                      ),
+                    ],
+                  ),
+                );
               },
             ),
-          ],
-        ),
+          ),
+          _Composer(
+            embedded: widget.embedded,
+            macStyle: macStyle,
+            controller: textController,
+            onSend: () async {
+              final value = textController.text;
+              textController.clear();
+              await ref
+                  .read(chatThreadsProvider.notifier)
+                  .sendMessage(
+                    conversation: widget.conversation,
+                    content: value,
+                  );
+            },
+          ),
+        ],
       ),
     );
+    if (macStyle) {
+      return DecoratedBox(
+        decoration: const BoxDecoration(color: CupertinoColors.white),
+        child: page,
+      );
+    }
+    return AwikiMeWidgets.pageBackground(child: page);
   }
 
   Future<void> _openDetails() async {
@@ -237,6 +256,7 @@ class _ChatHeader extends StatelessWidget {
   const _ChatHeader({
     required this.conversation,
     required this.embedded,
+    required this.macStyle,
     required this.onDetails,
     this.onBack,
   });
@@ -244,6 +264,7 @@ class _ChatHeader extends StatelessWidget {
   final ConversationSummary conversation;
   final bool embedded;
   final VoidCallback? onBack;
+  final bool macStyle;
   final VoidCallback onDetails;
 
   @override
@@ -254,6 +275,88 @@ class _ChatHeader extends StatelessWidget {
     );
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    if (macStyle) {
+      return Container(
+        height: 72,
+        padding: const EdgeInsets.fromLTRB(24, 0, 22, 0),
+        decoration: const BoxDecoration(
+          color: CupertinoColors.white,
+          border: Border(bottom: BorderSide(color: Color(0xFFE5EAF2))),
+        ),
+        child: Row(
+          children: <Widget>[
+            AvatarBadge(seed: compactName, size: 44),
+            const SizedBox(width: 12),
+            Text(
+              compactName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF101B32),
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(width: 10),
+            const _MacChatPill(
+              label: '我的智能体',
+              color: Color(0xFFEAF2FF),
+              textColor: Color(0xFF0B65F8),
+            ),
+            const SizedBox(width: 8),
+            const _MacChatPill(
+              label: '安全协作中',
+              color: Color(0xFFE6F8EE),
+              textColor: Color(0xFF10A85A),
+            ),
+            const Spacer(),
+            const Icon(
+              CupertinoIcons.search,
+              color: Color(0xFF34415C),
+              size: 22,
+            ),
+            const SizedBox(width: 22),
+            const Icon(
+              CupertinoIcons.ellipsis,
+              color: Color(0xFF34415C),
+              size: 24,
+            ),
+            const SizedBox(width: 18),
+            GestureDetector(
+              onTap: onDetails,
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: CupertinoColors.white,
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(color: const Color(0xFFDDE5F0)),
+                ),
+                child: const Row(
+                  children: <Widget>[
+                    Icon(
+                      CupertinoIcons.person_crop_square,
+                      color: Color(0xFF34415C),
+                      size: 18,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      '身份卡',
+                      style: TextStyle(
+                        color: Color(0xFF17213A),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Padding(
       padding: EdgeInsets.fromLTRB(
         embedded
@@ -341,6 +444,37 @@ class _ChatHeader extends StatelessWidget {
   }
 }
 
+class _MacChatPill extends StatelessWidget {
+  const _MacChatPill({
+    required this.label,
+    required this.color,
+    required this.textColor,
+  });
+
+  final String label;
+  final Color color;
+  final Color textColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
 class _DateDivider extends StatelessWidget {
   const _DateDivider({required this.label});
 
@@ -367,18 +501,100 @@ class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
     required this.senderLabel,
+    this.macStyle = false,
     this.onRetry,
   });
 
   final ChatMessage message;
   final String senderLabel;
+  final bool macStyle;
   final Future<void> Function()? onRetry;
+
+  Widget _buildMacBubble(BuildContext context, bool isMine) {
+    final bubble = Column(
+      crossAxisAlignment: isMine
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
+      children: <Widget>[
+        Container(
+          constraints: const BoxConstraints(maxWidth: 420),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: isMine ? const Color(0xFFEAF2FF) : CupertinoColors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isMine ? const Color(0xFFEAF2FF) : const Color(0xFFDDE5F0),
+            ),
+          ),
+          child: Text(
+            message.content,
+            style: const TextStyle(
+              color: Color(0xFF17213A),
+              fontSize: 15,
+              height: 1.45,
+            ),
+          ),
+        ),
+        if (message.sendState == MessageSendState.failed) ...<Widget>[
+          const SizedBox(height: 8),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const Text(
+                '发送失败',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFFFF3B30),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: onRetry,
+                behavior: HitTestBehavior.opaque,
+                child: const Text(
+                  '重试',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF0B65F8),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ] else if (message.sendState == MessageSendState.sending) ...<Widget>[
+          const SizedBox(height: 8),
+          const Text(
+            '发送中...',
+            style: TextStyle(fontSize: 12, color: Color(0xFF8A96AA)),
+          ),
+        ],
+      ],
+    );
+    return Row(
+      mainAxisAlignment: isMine
+          ? MainAxisAlignment.end
+          : MainAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (!isMine) ...<Widget>[
+          AvatarBadge(seed: senderLabel, size: 36),
+          const SizedBox(width: 10),
+        ],
+        Flexible(child: bubble),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final isMine = message.isMine;
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    if (macStyle) {
+      return _buildMacBubble(context, isMine);
+    }
     return Row(
       mainAxisAlignment: isMine
           ? MainAxisAlignment.end
@@ -489,11 +705,13 @@ class _MessageBubble extends StatelessWidget {
 class _Composer extends StatelessWidget {
   const _Composer({
     required this.embedded,
+    required this.macStyle,
     required this.controller,
     required this.onSend,
   });
 
   final bool embedded;
+  final bool macStyle;
   final TextEditingController controller;
   final Future<void> Function() onSend;
 
@@ -508,6 +726,82 @@ class _Composer extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    if (macStyle) {
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 18),
+          child: Container(
+            height: 58,
+            padding: const EdgeInsets.fromLTRB(14, 0, 10, 0),
+            decoration: BoxDecoration(
+              color: CupertinoColors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFDDE5F0)),
+              boxShadow: const <BoxShadow>[
+                BoxShadow(
+                  color: Color(0x0F0B1F3A),
+                  blurRadius: 20,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Row(
+              children: <Widget>[
+                const Icon(
+                  CupertinoIcons.paperclip,
+                  color: Color(0xFF34415C),
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: CupertinoTextField(
+                    controller: controller,
+                    placeholder: context.l10n.chatInputPlaceholder,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) async => _submitIfNeeded(),
+                    decoration: null,
+                    padding: EdgeInsets.zero,
+                    style: const TextStyle(
+                      color: Color(0xFF17213A),
+                      fontSize: 14,
+                    ),
+                    placeholderStyle: const TextStyle(
+                      color: Color(0xFF8A96AA),
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Icon(
+                  CupertinoIcons.smiley,
+                  color: Color(0xFF34415C),
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: _submitIfNeeded,
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0B65F8),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      CupertinoIcons.paperplane_fill,
+                      color: CupertinoColors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     final outerPadding = embedded
         ? const EdgeInsets.fromLTRB(16, 8, 16, 16)
         : responsive.scaledInsets(const EdgeInsets.fromLTRB(16, 8, 16, 16));

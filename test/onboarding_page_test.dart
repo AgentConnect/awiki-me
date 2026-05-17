@@ -3,20 +3,69 @@ import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
 
 void main() {
+  testWidgets('macOS 桌面登录页使用参考图左右分栏布局', (tester) async {
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage()),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('AWiki'), findsOneWidget);
+    expect(find.text('身份凭证'), findsOneWidget);
+    expect(find.text('导入身份凭证'), findsOneWidget);
+    expect(find.text('安全可靠'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 桌面注册页保留邮箱注册动作', (tester) async {
+    final gateway = FakeAwikiGateway();
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('注册'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('auth-mode-email')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(CupertinoTextField).first, 'a@b.com');
+    await tester.tap(find.text('发送激活邮件'));
+    await tester.pump();
+
+    expect(gateway.sendEmailVerificationCalls, 1);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
   testWidgets('登录 tab 展示导入身份凭证并触发导入动作', (tester) async {
     final gateway = FakeAwikiGateway();
 
     await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const OnboardingPage(),
-        gateway: gateway,
-      ),
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
     await tester.pump();
 
@@ -48,10 +97,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const OnboardingPage(),
-        gateway: gateway,
-      ),
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
     await tester.pump();
 
@@ -68,9 +114,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1280, 900));
 
     await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const OnboardingPage(),
-      ),
+      buildLocalizedTestApp(home: const OnboardingPage()),
     );
     await tester.pump();
 
@@ -82,10 +126,7 @@ void main() {
     final gateway = FakeAwikiGateway();
 
     await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const OnboardingPage(),
-        gateway: gateway,
-      ),
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
     await tester.pump();
 
@@ -106,10 +147,7 @@ void main() {
     final gateway = FakeAwikiGateway()..emailVerificationResult = true;
 
     await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const OnboardingPage(),
-        gateway: gateway,
-      ),
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
     await tester.pump();
 
