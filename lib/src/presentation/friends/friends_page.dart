@@ -16,6 +16,7 @@ import '../shared/awiki_me_design.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/formatters/display_formatters.dart';
+import '../shared/identity_flow.dart';
 import '../shared/quick_actions.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
@@ -27,11 +28,6 @@ class FriendsPage extends ConsumerWidget {
   final bool embedded;
   final double bottomInset;
 
-  String _calcThreadId(String myDid, String peerDid) {
-    final list = <String>[myDid, peerDid]..sort();
-    return 'dm:${list[0]}:${list[1]}';
-  }
-
   Future<void> _sendMessage(
     BuildContext context,
     WidgetRef ref,
@@ -42,7 +38,7 @@ class FriendsPage extends ConsumerWidget {
     if (myDid == null) {
       return;
     }
-    final threadId = _calcThreadId(myDid, peerDid);
+    final threadId = dmThreadIdForDids(myDid, peerDid);
     final conversations = ref.read(conversationListProvider).conversations;
     var targetConv = conversations
         .where((item) => item.threadId == threadId)
@@ -57,6 +53,7 @@ class FriendsPage extends ConsumerWidget {
       isGroup: false,
       targetDid: peerDid,
     );
+    ref.read(conversationListProvider.notifier).upsertConversation(targetConv);
     await ref.read(chatThreadsProvider.notifier).openConversation(targetConv);
     if (!context.mounted) {
       return;

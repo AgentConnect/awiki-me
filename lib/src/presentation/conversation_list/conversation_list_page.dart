@@ -11,6 +11,7 @@ import '../shared/awiki_me_design.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/formatters/display_formatters.dart';
+import '../shared/identity_flow.dart';
 import '../shared/quick_actions.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
@@ -48,6 +49,8 @@ class ConversationListPage extends ConsumerWidget {
         selectedThreadId: selectedThreadId,
         bottomInset: bottomInset,
         onOpen: (item) => _openConversation(context, ref, item),
+        onShowActions: () => showCommonQuickActionsMenu(context, ref),
+        onStartConversation: () => showStartConversationDialog(context, ref),
       );
     }
     return AwikiMeShellTabPage(
@@ -112,12 +115,16 @@ class _MacConversationList extends StatelessWidget {
     required this.selectedThreadId,
     required this.bottomInset,
     required this.onOpen,
+    required this.onShowActions,
+    required this.onStartConversation,
   });
 
   final List<ConversationSummary> conversations;
   final String? selectedThreadId;
   final double bottomInset;
   final ValueChanged<ConversationSummary> onOpen;
+  final VoidCallback onShowActions;
+  final VoidCallback onStartConversation;
 
   @override
   Widget build(BuildContext context) {
@@ -126,11 +133,11 @@ class _MacConversationList extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const Padding(
-            padding: EdgeInsets.fromLTRB(22, 26, 22, 14),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 26, 22, 14),
             child: Row(
               children: <Widget>[
-                Expanded(
+                const Expanded(
                   child: Text(
                     '最近会话',
                     style: TextStyle(
@@ -140,9 +147,19 @@ class _MacConversationList extends StatelessWidget {
                     ),
                   ),
                 ),
-                _MacListIconButton(icon: CupertinoIcons.slider_horizontal_3),
-                SizedBox(width: 12),
-                _MacListIconButton(icon: CupertinoIcons.square_pencil),
+                _MacListIconButton(
+                  key: const Key('conversation-quick-actions-button'),
+                  semanticLabel: '快捷操作',
+                  icon: CupertinoIcons.slider_horizontal_3,
+                  onTap: onShowActions,
+                ),
+                const SizedBox(width: 12),
+                _MacListIconButton(
+                  key: const Key('start-conversation-button'),
+                  semanticLabel: '发起新消息',
+                  icon: CupertinoIcons.square_pencil,
+                  onTap: onStartConversation,
+                ),
               ],
             ),
           ),
@@ -206,13 +223,38 @@ class _MacConversationList extends StatelessWidget {
 }
 
 class _MacListIconButton extends StatelessWidget {
-  const _MacListIconButton({required this.icon});
+  const _MacListIconButton({
+    super.key,
+    required this.icon,
+    required this.semanticLabel,
+    this.onTap,
+  });
 
   final IconData icon;
+  final String semanticLabel;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Icon(icon, color: const Color(0xFF34415C), size: 20);
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: CupertinoColors.white,
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(color: const Color(0xFFE5EAF2)),
+          ),
+          child: Icon(icon, color: const Color(0xFF34415C), size: 20),
+        ),
+      ),
+    );
   }
 }
 

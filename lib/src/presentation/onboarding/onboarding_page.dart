@@ -477,25 +477,34 @@ class _MacOnboardingHero extends StatelessWidget {
         const SizedBox(height: 34),
         const Expanded(child: _MacAgentOrbit()),
         const SizedBox(height: 24),
-        const Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: <Widget>[
-            _MacFeatureItem(
-              icon: CupertinoIcons.shield,
-              title: '安全可靠',
-              subtitle: '企业级安全防护体系',
+        const SizedBox(
+          width: double.infinity,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                _MacFeatureItem(
+                  icon: CupertinoIcons.shield,
+                  title: '安全可靠',
+                  subtitle: '企业级安全防护体系',
+                ),
+                SizedBox(width: 34),
+                _MacFeatureItem(
+                  icon: CupertinoIcons.person_2,
+                  title: '高效协作',
+                  subtitle: '人机协同，信息无缝流转',
+                ),
+                SizedBox(width: 34),
+                _MacFeatureItem(
+                  icon: CupertinoIcons.lock,
+                  title: '权限可控',
+                  subtitle: '精细化权限，数据更安心',
+                ),
+              ],
             ),
-            _MacFeatureItem(
-              icon: CupertinoIcons.person_2,
-              title: '高效协作',
-              subtitle: '人机协同，信息无缝流转',
-            ),
-            _MacFeatureItem(
-              icon: CupertinoIcons.lock,
-              title: '权限可控',
-              subtitle: '精细化权限，数据更安心',
-            ),
-          ],
+          ),
         ),
       ],
     );
@@ -815,77 +824,80 @@ class _MacAuthCard extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(22),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(44, 34, 44, 0),
-              child: Column(
-                children: <Widget>[
-                  _MacAuthTabs(
-                    value: onboarding.entryMode,
-                    onChanged: onModeChanged,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(44, 34, 44, 0),
+                child: Column(
+                  children: <Widget>[
+                    _MacAuthTabs(
+                      value: onboarding.entryMode,
+                      onChanged: onModeChanged,
+                    ),
+                    const SizedBox(height: 28),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      child: onboarding.entryMode == 'login'
+                          ? _MacLoginForm(
+                              key: const ValueKey<String>('mac-login-form'),
+                              credentials: credentials,
+                              onLogin: onLogin,
+                              onImport: onImport,
+                              onRefresh: onRefresh,
+                            )
+                          : _MacRegisterForm(
+                              key: const ValueKey<String>('mac-register-form'),
+                              onboarding: onboarding,
+                              phoneController: phoneController,
+                              otpController: otpController,
+                              emailController: emailController,
+                              handleController: handleController,
+                              nickController: nickController,
+                              onAuthModeChanged: onAuthModeChanged,
+                              onRequestOtp: onRequestOtp,
+                              onRequestEmailActivation:
+                                  onRequestEmailActivation,
+                              onCheckEmailActivation: onCheckEmailActivation,
+                              onRegisterStepChanged: onRegisterStepChanged,
+                              onSubmitRegister: onSubmitRegister,
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 28),
+              Container(height: 1, color: const Color(0xFFE6ECF5)),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 22),
+                child: GestureDetector(
+                  onTap: () => onModeChanged(
+                    onboarding.entryMode == 'login' ? 'register' : 'login',
                   ),
-                  const SizedBox(height: 28),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
-                    child: onboarding.entryMode == 'login'
-                        ? _MacLoginForm(
-                            key: const ValueKey<String>('mac-login-form'),
-                            credentials: credentials,
-                            onLogin: onLogin,
-                            onImport: onImport,
-                            onRefresh: onRefresh,
-                          )
-                        : _MacRegisterForm(
-                            key: const ValueKey<String>('mac-register-form'),
-                            onboarding: onboarding,
-                            phoneController: phoneController,
-                            otpController: otpController,
-                            emailController: emailController,
-                            handleController: handleController,
-                            nickController: nickController,
-                            onAuthModeChanged: onAuthModeChanged,
-                            onRequestOtp: onRequestOtp,
-                            onRequestEmailActivation: onRequestEmailActivation,
-                            onCheckEmailActivation: onCheckEmailActivation,
-                            onRegisterStepChanged: onRegisterStepChanged,
-                            onSubmitRegister: onSubmitRegister,
+                  behavior: HitTestBehavior.opaque,
+                  child: Text.rich(
+                    TextSpan(
+                      text: onboarding.entryMode == 'login'
+                          ? '还没有账号？ '
+                          : '已有账号？ ',
+                      style: const TextStyle(color: Color(0xFF7B879D)),
+                      children: <InlineSpan>[
+                        TextSpan(
+                          text: onboarding.entryMode == 'login' ? '去注册' : '去登录',
+                          style: const TextStyle(
+                            color: Color(0xFF0B65F8),
+                            fontWeight: FontWeight.w800,
                           ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-            Container(height: 1, color: const Color(0xFFE6ECF5)),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 22),
-              child: GestureDetector(
-                onTap: () => onModeChanged(
-                  onboarding.entryMode == 'login' ? 'register' : 'login',
-                ),
-                behavior: HitTestBehavior.opaque,
-                child: Text.rich(
-                  TextSpan(
-                    text: onboarding.entryMode == 'login'
-                        ? '还没有账号？ '
-                        : '已有账号？ ',
-                    style: const TextStyle(color: Color(0xFF7B879D)),
-                    children: <InlineSpan>[
-                      TextSpan(
-                        text: onboarding.entryMode == 'login' ? '去注册' : '去登录',
-                        style: const TextStyle(
-                          color: Color(0xFF0B65F8),
-                          fontWeight: FontWeight.w800,
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                    style: const TextStyle(fontSize: 14),
                   ),
-                  style: const TextStyle(fontSize: 14),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

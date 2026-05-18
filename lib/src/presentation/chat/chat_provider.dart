@@ -40,7 +40,7 @@ class ChatThreadsController
 
   Future<void> openConversation(ConversationSummary conversation) async {
     final current = thread(conversation.threadId);
-    if (current.messages.isEmpty && !current.isLoading) {
+    if (_shouldLoadHistory(current, conversation)) {
       unawaited(_loadHistory(conversation));
     }
     if (conversation.unreadCount > 0) {
@@ -57,6 +57,9 @@ class ChatThreadsController
   }
 
   Future<void> _loadHistory(ConversationSummary conversation) async {
+    if (!mounted) {
+      return;
+    }
     _setThreadLoading(conversation.threadId, true);
     try {
       final history = conversation.isGroup
@@ -66,6 +69,9 @@ class ChatThreadsController
           : await ref
                 .read(awikiGatewayProvider)
                 .fetchDmHistory(conversation.targetDid ?? '');
+      if (!mounted) {
+        return;
+      }
       final current = List<ChatMessage>.from(
         thread(conversation.threadId).messages,
       );
@@ -90,6 +96,9 @@ class ChatThreadsController
         ),
       };
     } catch (_) {
+      if (!mounted) {
+        return;
+      }
       _setThreadLoading(conversation.threadId, false);
     }
   }
@@ -139,6 +148,8 @@ class ChatThreadsController
       _setMessages(conversation.threadId, replaced);
     }
     await ref.read(conversationListProvider.notifier).refresh();
+    final refreshedConversation = _refreshedConversationFor(conversation);
+    unawaited(_loadHistory(refreshedConversation));
   }
 
   Future<void> retryMessage({
@@ -170,6 +181,7 @@ class ChatThreadsController
       );
     }
     await ref.read(conversationListProvider.notifier).refresh();
+    unawaited(_loadHistory(_refreshedConversationFor(conversation)));
   }
 
   Future<void> deleteThread(String threadId) async {
@@ -214,6 +226,33 @@ class ChatThreadsController
         messages: _sortMessages(messages),
       ),
     };
+  }
+
+  bool _shouldLoadHistory(
+    ChatThreadState current,
+    ConversationSummary conversation,
+  ) {
+    if (current.isLoading) {
+      return false;
+    }
+    if (current.messages.isEmpty) {
+      return true;
+    }
+    if (conversation.unreadCount > 0) {
+      return true;
+    }
+    final latestLocalAt = current.messages
+        .map((message) => message.createdAt)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
+    return conversation.lastMessageAt.isAfter(latestLocalAt);
+  }
+
+  ConversationSummary _refreshedConversationFor(ConversationSummary fallback) {
+    final refreshed = ref
+        .read(conversationListProvider)
+        .conversations
+        .where((item) => item.threadId == fallback.threadId);
+    return refreshed.isEmpty ? fallback : refreshed.first;
   }
 
   List<ChatMessage> _sortMessages(List<ChatMessage> messages) {

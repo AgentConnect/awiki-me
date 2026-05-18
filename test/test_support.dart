@@ -97,6 +97,14 @@ Widget buildLocalizedTestApp({
   );
 }
 
+String normalizeTestIdentity(String rawValue) {
+  var value = rawValue.trim();
+  while (value.startsWith('@')) {
+    value = value.substring(1).trimLeft();
+  }
+  return value;
+}
+
 class FakeUpdateService implements UpdateService {
   AppVersion currentVersion = const AppVersion(
     version: '0.1.0',
@@ -157,6 +165,12 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       <String, List<ChatMessage>>{};
   List<RelationshipSummary> followers = const <RelationshipSummary>[];
   List<RelationshipSummary> following = const <RelationshipSummary>[];
+  List<GroupSummary> groups = const <GroupSummary>[];
+  Map<String, List<GroupMemberSummary>> groupMembersByGroupId =
+      <String, List<GroupMemberSummary>>{};
+  Map<String, UserProfile> publicProfilesByQuery = <String, UserProfile>{};
+  Map<String, RelationshipSummary> relationshipsByDidOrHandle =
+      <String, RelationshipSummary>{};
   SessionIdentity? importedCredential;
   String? exportedPath;
   UserProfile? myProfile;
@@ -168,7 +182,17 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   ProfilePatch? lastProfilePatch;
   RealtimeUpdate? nextRealtimeUpdate;
   bool failNextSend = false;
+  String? lastFollowedDidOrHandle;
+  String? lastCreatedGroupName;
+  String? lastCreatedGroupSlug;
+  String? lastCreatedGroupDescription;
+  String? lastCreatedGroupGoal;
+  String? lastCreatedGroupRules;
+  String? lastCreatedGroupPrompt;
+  String? lastCreatedGroupMode;
   String? lastSentThreadId;
+  String? lastSentPeerDid;
+  String? lastSentGroupId;
   String? lastSentContent;
   int listLocalCredentialsCalls = 0;
   int importCalls = 0;
@@ -221,7 +245,28 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   }
 
   @override
-  Future<void> follow(String didOrHandle) async {}
+  Future<void> follow(String didOrHandle) async {
+    lastFollowedDidOrHandle = didOrHandle;
+    final profile =
+        publicProfilesByQuery[didOrHandle] ??
+        publicProfilesByQuery[normalizeTestIdentity(didOrHandle)] ??
+        publicProfile;
+    final summary = RelationshipSummary(
+      did: profile?.did ?? didOrHandle,
+      displayName: profile == null
+          ? didOrHandle
+          : (profile.nickName.isNotEmpty
+                ? profile.nickName
+                : profile.handle ?? profile.did),
+      relationship: 'following',
+    );
+    following = <RelationshipSummary>[
+      ...following.where((item) => item.did != summary.did),
+      summary,
+    ];
+    relationshipsByDidOrHandle[didOrHandle] = summary;
+    relationshipsByDidOrHandle[summary.did] = summary;
+  }
 
   @override
   Future<GroupSummary> createGroup({
@@ -233,7 +278,37 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     String? messagePrompt,
     String? groupMode,
   }) async {
-    throw UnimplementedError();
+    lastCreatedGroupName = name;
+    lastCreatedGroupSlug = slug;
+    lastCreatedGroupDescription = description;
+    lastCreatedGroupGoal = goal;
+    lastCreatedGroupRules = rules;
+    lastCreatedGroupPrompt = messagePrompt;
+    lastCreatedGroupMode = groupMode;
+    final group = GroupSummary(
+      groupId: 'group-${groups.length + 1}',
+      name: name,
+      description: description,
+      memberCount: 1,
+      lastMessageAt: DateTime.now(),
+      myRole: 'owner',
+    );
+    groups = <GroupSummary>[
+      ...groups.where((item) => item.groupId != group.groupId),
+      group,
+    ];
+    groupMembersByGroupId[group.groupId] =
+        groupMembersByGroupId[group.groupId] ??
+        <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: loginResult?.did ?? 'did:test:sender',
+            did: loginResult?.did ?? 'did:test:sender',
+            handle: loginResult?.handle ?? 'tester',
+            role: 'owner',
+            profileUrl: null,
+          ),
+        ];
+    return group;
   }
 
   @override
@@ -250,12 +325,27 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
 
   @override
   Future<GroupSummary> getGroup(String groupId) async {
-    throw UnimplementedError();
+    return groups.firstWhere(
+      (item) => item.groupId == groupId,
+      orElse: () => GroupSummary(
+        groupId: groupId,
+        name: groupId,
+        description: '',
+        memberCount: 0,
+        lastMessageAt: null,
+      ),
+    );
   }
 
   @override
   Future<RelationshipSummary> getRelationshipStatus(String didOrHandle) async {
-    throw UnimplementedError();
+    return relationshipsByDidOrHandle[didOrHandle] ??
+        relationshipsByDidOrHandle[normalizeTestIdentity(didOrHandle)] ??
+        RelationshipSummary(
+          did: didOrHandle,
+          displayName: didOrHandle,
+          relationship: 'none',
+        );
   }
 
   @override
@@ -266,7 +356,19 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
 
   @override
   Future<GroupSummary> joinGroup(String joinCode) async {
-    throw UnimplementedError();
+    final group = GroupSummary(
+      groupId: 'group:$joinCode',
+      name: 'Joined $joinCode',
+      description: '',
+      memberCount: 1,
+      lastMessageAt: DateTime.now(),
+      myRole: 'member',
+    );
+    groups = <GroupSummary>[
+      ...groups.where((item) => item.groupId != group.groupId),
+      group,
+    ];
+    return group;
   }
 
   @override
@@ -288,12 +390,12 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
 
   @override
   Future<List<GroupMemberSummary>> listGroupMembers(String groupId) async {
-    return const <GroupMemberSummary>[];
+    return groupMembersByGroupId[groupId] ?? const <GroupMemberSummary>[];
   }
 
   @override
   Future<List<GroupSummary>> listGroups() async {
-    return const <GroupSummary>[];
+    return groups;
   }
 
   @override
@@ -320,6 +422,13 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
 
   @override
   Future<UserProfile> loadPublicProfile(String didOrHandle) async {
+    final normalized = normalizeTestIdentity(didOrHandle);
+    if (publicProfilesByQuery.containsKey(didOrHandle)) {
+      return publicProfilesByQuery[didOrHandle]!;
+    }
+    if (publicProfilesByQuery.containsKey(normalized)) {
+      return publicProfilesByQuery[normalized]!;
+    }
     if (publicProfile != null) {
       return publicProfile!;
     }
@@ -442,6 +551,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     required String content,
   }) async {
     lastSentThreadId = threadId;
+    lastSentPeerDid = peerDid;
+    lastSentGroupId = groupId;
     lastSentContent = content;
     if (failNextSend) {
       failNextSend = false;

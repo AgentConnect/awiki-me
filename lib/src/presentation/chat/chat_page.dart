@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +8,7 @@ import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_summary.dart';
 import '../../l10n/l10n.dart';
+import '../conversation_list/conversation_provider.dart';
 import '../group/group_list_page.dart';
 import '../group/group_provider.dart';
 import '../profile/peer_profile_page.dart';
@@ -81,6 +84,21 @@ class _ChatViewState extends ConsumerState<ChatView> {
         (_) => _scrollToBottom(),
       ),
     );
+    ref.listen<ConversationListState>(conversationListProvider, (_, next) {
+      final updated = _matchingConversation(next.conversations);
+      if (updated == null) {
+        return;
+      }
+      final currentThread = ref.read(
+        chatThreadProvider(widget.conversation.threadId),
+      );
+      if (!_threadNeedsHistorySync(currentThread, updated)) {
+        return;
+      }
+      unawaited(
+        ref.read(chatThreadsProvider.notifier).openConversation(updated),
+      );
+    });
     final messages = thread.messages;
     final page = SafeArea(
       bottom: false,
@@ -199,6 +217,33 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return;
     }
     scrollController.jumpTo(scrollController.position.maxScrollExtent);
+  }
+
+  ConversationSummary? _matchingConversation(
+    List<ConversationSummary> conversations,
+  ) {
+    for (final conversation in conversations) {
+      if (conversation.threadId == widget.conversation.threadId) {
+        return conversation;
+      }
+    }
+    return null;
+  }
+
+  bool _threadNeedsHistorySync(
+    ChatThreadState thread,
+    ConversationSummary conversation,
+  ) {
+    if (thread.isLoading) {
+      return false;
+    }
+    if (thread.messages.isEmpty || conversation.unreadCount > 0) {
+      return true;
+    }
+    final latestLocalAt = thread.messages
+        .map((message) => message.createdAt)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
+    return conversation.lastMessageAt.isAfter(latestLocalAt);
   }
 
   String _dateLabel(DateTime date) {

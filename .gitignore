@@ -19,6 +19,9 @@ Thumbs.db
 *.ipr
 *.iws
 
+principles.md
+awiki-me-prd.md
+
 # Dart and Flutter
 .dart_tool/
 .flutter-plugins

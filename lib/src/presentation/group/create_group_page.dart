@@ -1,7 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../app/app_router.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../../app/ui_feedback.dart';
@@ -9,7 +8,7 @@ import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/widgets/app_widgets.dart';
-import 'group_list_page.dart';
+import 'group_chat_navigation.dart';
 import 'group_provider.dart';
 
 class CreateGroupPage extends ConsumerStatefulWidget {
@@ -68,10 +67,17 @@ class _CreateGroupPageState extends ConsumerState<CreateGroupPage> {
       if (!mounted) {
         return;
       }
-      await AppNavigator.pushReplacement<void, void>(
+      await openGroupChat(
         context,
-        (_) => GroupDetailPage(initialGroup: group),
+        ref,
+        group,
+        closeCurrentRouteOnDesktop: true,
+        replaceCurrentRouteOnPhone: true,
       );
+    } catch (error) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

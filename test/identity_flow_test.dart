@@ -1,0 +1,133 @@
+import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/entities/user_profile.dart';
+import 'package:awiki_me/src/presentation/chat/chat_page.dart';
+import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
+import 'package:awiki_me/src/presentation/shared/identity_flow.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'test_support.dart';
+
+void main() {
+  const session = SessionIdentity(
+    did: 'did:test:me',
+    credentialName: 'me.json',
+    displayName: 'Me',
+    handle: 'me',
+    jwtToken: 'token',
+  );
+
+  const peerProfile = UserProfile(
+    did: 'did:test:peer',
+    nickName: 'CGW Agent',
+    bio: '融资协作 Agent',
+    tags: <String>['Agent'],
+    profileMarkdown: '',
+    handle: 'cgw.awiki.ai',
+  );
+
+  testWidgets('通过 handle 发起新消息后打开空单聊', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..publicProfilesByQuery = <String, UserProfile>{
+        'cgw.awiki.ai': peerProfile,
+      };
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1280, 820));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('start-conversation-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('identity-lookup-input')),
+      '@cgw.awiki.ai',
+    );
+    await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('CGW Agent'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('identity-start-chat-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatView), findsOneWidget);
+    expect(find.text('CGW Agent'), findsWidgets);
+    expect(gateway.fetchDmHistoryCalls, 1);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('添加联系人先解析身份再发送关注请求', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..publicProfilesByQuery = <String, UserProfile>{
+        'cgw.awiki.ai': peerProfile,
+      };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const _IdentityFlowHarness(),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('添加联系人'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('identity-lookup-input')),
+      'cgw.awiki.ai',
+    );
+    await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const Key('identity-add-reason-field')),
+        matching: find.byType(CupertinoTextField),
+      ),
+      '希望协作测试消息收发',
+    );
+    await tester.ensureVisible(
+      find.byKey(const Key('identity-add-contact-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('identity-add-contact-button')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastFollowedDidOrHandle, 'did:test:peer');
+    expect(gateway.following.single.did, 'did:test:peer');
+  });
+}
+
+class _IdentityFlowHarness extends ConsumerWidget {
+  const _IdentityFlowHarness();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return CupertinoPageScaffold(
+      child: Center(
+        child: SizedBox(
+          width: 240,
+          child: AppPrimaryButton(
+            label: '添加联系人',
+            onPressed: () => showAddIdentityDialog(context, ref),
+          ),
+        ),
+      ),
+    );
+  }
+}

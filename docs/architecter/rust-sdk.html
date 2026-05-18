@@ -1,0 +1,433 @@
+<!doctype html>
+  <html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>IM Core SDK 是否适合 App 与 CLI 共用 Rust SDK：调研报告</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+        line-height: 1.65;
+        max-width: 1040px;
+        margin: 32px auto;
+        padding: 0 24px;
+        color: #1f2937;
+        background: #ffffff;
+      }
+      h1, h2, h3 { color: #111827; line-height: 1.25; }
+      h1 { border-bottom: 2px solid #e5e7eb; padding-bottom: 12px; }
+      code {
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.92em;
+      }
+      pre {
+        background: #111827;
+        color: #f9fafb;
+        padding: 14px 16px;
+        border-radius: 8px;
+        overflow-x: auto;
+      }
+      pre code {
+        background: transparent;
+        border: 0;
+        padding: 0;
+        color: inherit;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 16px 0 24px;
+        font-size: 0.95em;
+      }
+      th, td {
+        border: 1px solid #d1d5db;
+        padding: 9px 11px;
+        vertical-align: top;
+      }
+      th { background: #f9fafb; text-align: left; }
+      .badge {
+        display: inline-block;
+        border-radius: 999px;
+        padding: 2px 9px;
+        font-size: 0.85em;
+        font-weight: 700;
+      }
+      .ok { color: #065f46; background: #d1fae5; }
+      .warn { color: #92400e; background: #fef3c7; }
+      .bad { color: #991b1b; background: #fee2e2; }
+      .info { color: #1e40af; background: #dbeafe; }
+      .note {
+        background: #f9fafb;
+        border-left: 4px solid #9ca3af;
+        padding: 12px 16px;
+        margin: 16px 0;
+      }
+      .summary {
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        border-radius: 10px;
+        padding: 14px 18px;
+      }
+      ul { padding-left: 22px; }
+    </style>
+  </head>
+  <body>
+    <h1>IM Core SDK 是否适合 App 与 CLI 共用 Rust SDK：调研报告</h1>
+    <section>
+      <h2>1. 调研计划与执行范围</h2>
+      <p>本次调研按只读方式执行，没有修改任何文件。计划如下：</p>
+      <ol>
+        <li>梳理当前 Awiki Me App 新增的 <code>lib/src/im_core</code> API、DTO、事件、错误与 reserved 接口。</li>
+        <li>梳理 <code>../awiki-cli</code> 中 IM 相关命令和服务能力，包括 <code>msg</code>、<code>attachment</code>、<code>group</code>、<code>msg.secure</code>、
+  <code>group.e2ee</code>、runtime listener / host notify。</li>
+        <li>按能力维度对比 App IM Core 与 CLI IM 能力，判断是否可以抽象成同一套 Rust SDK。</li>
+        <li>输出结论、差距、风险和建议架构。</li>
+      </ol>
+
+      <div class="summary">
+        <strong>总判断：</strong>
+        当前 IM Core API 的能力面 <strong>基本适合作为 App 与 CLI 共用 Rust SDK 的语义蓝图</strong>。
+        但当前 Dart API 不应被直接视为 Rust ABI；更合理的结构是：
+        Rust SDK 定义 canonical core API，然后分别提供 Dart adapter 和 Go/CLI adapter。
+      </div>
+    </section>
+    <section>
+      <h2>2. 总体结论</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>问题</th>
+            <th>结论</th>
+            <th>置信度</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>当前 IM Core API 是否覆盖 App 和 CLI 共同需要的核心 IM 能力？</td>
+            <td><span class="badge ok">基本覆盖</span> direct/group 消息、会话/历史、附件、群组、实时事件、本地状态、outbox、reserved secure/E2EE。</td>
+            <td>高</td>
+          </tr>
+          <tr>
+            <td>是否可以让 Awiki CLI 和 Awiki Me App 底层共用一套 Rust SDK？</td>
+            <td><span class="badge ok">可以</span>，但应通过 Rust canonical core + 双端 adapter，而不是让 CLI 直接依赖 Dart facade。</td>
+            <td>高</td>
+          </tr>
+          <tr>
+            <td>当前接口是否已经完全满足 CLI 当前全部能力？</td>
+            <td><span class="badge warn">接近但不完全</span>，CLI 的 inbox 语义、secure/group E2EE 当前实现程度、runtime listener/host-notify 边界需要进一步明确。</td>
+            <td>中高</td>
+          </tr>
+          <tr>
+            <td>当前 Dart IM Core 是否可以直接成为 Rust SDK ABI？</td>
+            <td><span class="badge bad">不建议</span>，Dart 中有 <code>Stream</code>、<code>DateTime</code>、<code>Uri</code>、<code>Map&lt;String,Object?&gt;</code> 等
+  语言/平台相关类型。</td>
+            <td>高</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    <section>
+      <h2>3. 关键证据</h2>
+
+      <h3>3.1 App IM Core API 证据</h3>
+      <ul>
+        <li>
+          <code>lib/src/im_core/awiki_im_client.dart:14-39</code>：
+          <code>AwikiImClient</code> 已暴露 lifecycle、session、auth update、status、capabilities、events、
+          conversations、messages、groups、realtime、attachments、outbox、localStore、directSecure、groupE2ee、migration、advancedAttachments。
+        </li>
+        <li>
+          <code>lib/src/im_core/apis/message_api.dart:4-109</code>：
+          <code>ImMessageApi</code> 覆盖 <code>list</code>、<code>send</code>、<code>markRead</code>、<code>sync</code>；
+          <code>ImSendMessageRequest</code> 支持 direct/group target、text、messageType、securityMode、attachments、operation id、metadata。
+        </li>
+        <li>
+          <code>lib/src/im_core/apis/conversation_api.dart:4-23</code>：
+          <code>ImConversationApi</code> 覆盖聊天列表、单会话读取、整会话已读、本地删除。
+        </li>
+        <li>
+          <code>lib/src/im_core/apis/group_api.dart:5-117</code>：
+          <code>ImGroupApi</code> 覆盖 create/get/join/add/remove/leave/update/listMembers/listMessages。
+        </li>
+        <li>
+          <code>lib/src/im_core/apis/reserved_apis.dart:6-278</code>：
+          已预留 direct secure、group E2EE、migration、advanced attachment 接口。
+        </li>
+        <li>
+          <code>lib/src/im_core/models/event_models.dart:7-45</code>：
+          事件模型包含 message、conversation、group、outbox、connection、sync、warning、error。
+        </li>
+        <li>
+          <code>lib/src/im_core/models/client_models.dart:88-150</code>：
+          状态与能力模型包含 initialized/session/runtimeMode/connectionState/store/schema/lastError/capabilities。
+        </li>
+      </ul>
+
+      <h3>3.2 Awiki CLI IM 能力证据</h3>
+      <ul>
+        <li>
+          <code>../awiki-cli/internal/cmdmeta/catalog.go:136-142</code>：
+          CLI 已实现 <code>msg.send</code>、<code>msg.attachment.download</code>、<code>msg.inbox</code>、<code>msg.history</code>、<code>msg.mark-read</code>。
+        </li>
+        <li>
+          <code>../awiki-cli/internal/cmdmeta/catalog.go:152-158</code>：
+          CLI 已有 <code>msg.secure.status/init/repair/failed/retry/drop</code> 命令面。
+        </li>
+        <li>
+          <code>../awiki-cli/internal/cmdmeta/catalog.go:159-168</code>：
+          CLI 已实现 group create/get/join/add/remove/leave/update/members/messages。
+        </li>
+        <li>
+          <code>../awiki-cli/internal/cmdmeta/catalog.go:169-177</code>：
+          CLI 已有 group.e2ee status/publish-key-package/pending/repair/update-key/rejoin/recover-member/process-leave-request。
+        </li>
+        <li>
+          <code>../awiki-cli/internal/message/types.go:43-103</code>：
+          CLI message request 类型覆盖 Send、Inbox、History、MarkRead、AttachmentDownload、SecureStatus/SecurePeer/SecureOutboxAction。
+        </li>
+        <li>
+          <code>../awiki-cli/internal/message/types.go:115-223</code>：
+          CLI group request 类型覆盖 create/get/info/join/member/leave/E2EE/update/members/messages。
+        </li>
+        <li>
+          <code>../awiki-cli/internal/message/service.go:55-99</code>：
+          CLI Send 能根据 attachment/group/secure/direct 分流，说明底层 core 需要统一处理 direct、group、attachment、secure mode。
+        </li>
+        <li>
+          <code>../awiki-cli/internal/message/service.go:102-135</code> 与 <code>267-410</code>：
+          CLI Inbox/History 有 scope、peer handle/DID resolve、本地 cache fallback、HTTP/WebSocket fallback 等行为。
+        </li>
+        <li>
+          <code>../awiki-cli/internal/cmdmeta/catalog.go:182-210</code>：
+          runtime listener 与 host-notify 是 CLI runtime 层能力，应与 IM Core event stream 分层。
+        </li>
+      </ul>
+    </section>
+    <section>
+      <h2>4. 能力匹配矩阵</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>能力域</th>
+            <th>IM Core API</th>
+            <th>CLI 当前能力</th>
+            <th>匹配结论</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>初始化 / 会话 / 认证</td>
+            <td><code>initialize</code>、<code>setSession</code>、<code>updateAuth</code>、<code>clearSession</code>、<code>status</code>、<code>capabilities</code></td>
+            <td>CLI request 中有 <code>IdentityName</code>，service 内部 require active identity、refresh JWT。</td>
+            <td><span class="badge ok">匹配</span>。Rust SDK 应统一 session/auth 上下文，CLI/App adapter 负责传入身份。</td>
+          </tr>
+          <tr>
+            <td>发送 direct/group 消息</td>
+            <td><code>ImMessageApi.send</code> + <code>ImSendTarget(peerDidOrHandle/groupId)</code></td>
+            <td><code>msg.send --to/--group --text --file --secure</code></td>
+            <td><span class="badge ok">匹配</span>。CLI 参数可自然映射到 send request。</td>
+          </tr>
+          <tr>
+            <td>聊天列表</td>
+            <td><code>ImConversationApi.list</code></td>
+            <td>CLI 没有“聊天列表”UI概念，主要是 <code>msg.inbox</code>。</td>
+            <td><span class="badge ok">App 适配</span>。这是 App 必需能力，对 CLI 非核心但可复用。</td>
+          </tr>
+          <tr>
+            <td>Inbox / 最近消息</td>
+            <td>可由 <code>messages.list/sync</code>、<code>conversations.list</code> 组合，但没有显式 <code>inbox</code> API。</td>
+            <td><code>msg.inbox</code> 支持 scope、with、group、unread、mark-read。</td>
+            <td><span class="badge warn">建议补强</span>。若 CLI 直接复用 Rust SDK，建议新增 <code>inbox/listRecent</code> 或定义组合规范。</td>
+          </tr>
+          <tr>
+            <td>历史消息</td>
+            <td><code>ImMessageApi.list(thread, limit, cursor, sinceSequence)</code></td>
+            <td><code>msg.history --with --limit --cursor</code>，group messages 也有 limit/cursor。</td>
+            <td><span class="badge ok">基本匹配</span>。CLI adapter 负责把 with/group 转为 <code>ImThreadRef</code>。</td>
+          </tr>
+          <tr>
+            <td>已读</td>
+            <td><code>messages.markRead</code>、<code>conversations.markThreadRead</code></td>
+            <td><code>msg.mark-read [MESSAGE_ID...]</code>，inbox 支持 <code>--mark-read</code>。</td>
+            <td><span class="badge ok">匹配</span>。</td>
+          </tr>
+          <tr>
+            <td>附件</td>
+            <td><code>sendAttachment</code>、<code>download</code>、<code>transferEvents</code></td>
+            <td><code>msg send --file</code>、<code>msg.attachment.download</code></td>
+            <td><span class="badge ok">能力匹配</span>。需要在 Rust canonical 层定义 file path / bytes / output path 策略。</td>
+          </tr>
+          <tr>
+            <td>群组 lifecycle</td>
+            <td><code>create/get/join/addMember/removeMember/leave/update/listMembers/listMessages</code></td>
+            <td>CLI group create/get/join/add/remove/leave/update/members/messages 均已实现。</td>
+            <td><span class="badge ok">高度匹配</span>。</td>
+          </tr>
+          <tr>
+            <td>Direct secure</td>
+            <td><code>ImDirectSecureApi</code> reserved。</td>
+            <td>CLI <code>msg.secure.*</code> 已有命令与服务实现。</td>
+            <td><span class="badge warn">阶段差异</span>。如果 Rust SDK 要替代 CLI 当前能力，reserved 需要升级为真实实现或明确分阶段。</td>
+          </tr>
+          <tr>
+            <td>Group E2EE</td>
+            <td><code>ImGroupE2eeApi</code> reserved。</td>
+            <td>CLI <code>group.e2ee.*</code> 已有较丰富命令面。</td>
+            <td><span class="badge warn">阶段差异</span>。接口形状接近，但真实能力等级需要重新定义。</td>
+          </tr>
+          <tr>
+            <td>Realtime</td>
+            <td><code>events</code>、<code>connectionStates</code>、<code>realtime.connect/disconnect/status</code></td>
+            <td>CLI runtime listener/status/install/start/stop 等。</td>
+            <td><span class="badge ok">核心匹配</span>。Rust SDK 提供事件流；CLI listener 是外层 runtime 管理。</td>
+          </tr>
+          <tr>
+            <td>Host notification / Push / UI notification</td>
+            <td>不在 IM Core；只提供事件。</td>
+            <td>CLI 有 host-notify/openclaw/hermes；App 有 Flutter notification/push/UI。</td>
+            <td><span class="badge ok">边界正确</span>。这些不应进共用 Rust IM Core。</td>
+          </tr>
+          <tr>
+            <td>Local store / outbox</td>
+            <td><code>localStore</code>、<code>outbox</code>、reserved migration。</td>
+            <td>CLI service 已有 local cache/fallback/secure outbox 等逻辑。</td>
+            <td><span class="badge ok">方向正确</span>。共用 Rust SDK 时应把 IM store/outbox 收敛到 Rust。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    <section>
+      <h2>5. 是否能“一套 Rust SDK 同时给 CLI 和 App 用”</h2>
+
+      <p><strong>答案：可以，但要分清三层接口。</strong></p>
+
+      <pre><code>Rust awiki_im_core
+
+  ├─ canonical IM engine
+  │   ├─ protocol / RPC / signing boundary
+  │   ├─ direct & group message send/list/read
+  │   ├─ attachment upload/download
+  │   ├─ group lifecycle
+  │   ├─ realtime event stream
+  │   ├─ local IM store / unread / outbox
+  │   └─ direct secure / group E2EE / migration
+  │
+  ├─ Dart binding adapter
+  │   └─ implements AwikiImClient for Awiki Me App
+  │
+  └─ Go/CLI binding adapter
+  └─ maps Rust DTOs to awiki-cli CommandResult / json / pretty / table</code></pre>
+
+      <p>
+        当前 <code>lib/src/im_core</code> 的设计适合做 <strong>Dart binding facade</strong>。
+        它不是最终 Rust ABI，但可以反推 Rust SDK 需要提供的能力。
+      </p>
+    </section>
+    <section>
+      <h2>6. 主要差距与需要补强的接口点</h2>
+
+      <ol>
+        <li>
+          <strong>需要 Rust canonical API 设计层。</strong>
+          当前 Dart API 使用 <code>Stream</code>、<code>DateTime</code>、<code>Uri</code>、<code>Map&lt;String,Object?&gt;</code>，
+          这些不适合作为 Rust/Go/Dart 共同 ABI。Rust 层应定义语言无关 DTO，再由 Dart/Go adapter 转换。
+        </li>
+        <li>
+          <strong>CLI inbox 语义需要明确。</strong>
+          CLI 的 <code>msg.inbox</code> 支持 scope、with、group、unread、mark-read。
+          当前 IM Core 没有同名 API，可以组合实现，但若要让 CLI adapter 简洁，建议 Rust SDK 增加 <code>inbox/listRecent</code>。
+        </li>
+        <li>
+          <strong>Secure/E2EE 的阶段语义要重新定级。</strong>
+          App Phase 1 中 directSecure/groupE2ee 是 reserved；CLI 目前已有实现面。
+          如果共用 Rust SDK 的目标包含替换 CLI secure/E2EE，则这些能力不能长期 reserved。
+        </li>
+        <li>
+          <strong>CommandResult 不应进入 Rust Core。</strong>
+          CLI 的 <code>CommandResult{Data, Summary, Warnings}</code> 是命令行输出模型。
+          Rust SDK 应返回领域 DTO / error / warning；CLI adapter 再渲染 json/pretty/table。
+        </li>
+        <li>
+          <strong>runtime listener/host-notify 应保持在外层。</strong>
+          Rust IM Core 只负责连接和事件；CLI listener service、host-notify、App push/UI notification 由各自 runtime 层处理。
+        </li>
+        <li>
+          <strong>文件/附件 IO 策略需要跨端统一。</strong>
+          App 可能传 bytes/localPath；CLI 主要传 file path/output path。
+          Rust SDK 需要明确支持 byte stream、local path、download output 的跨平台边界。
+        </li>
+      </ol>
+    </section>
+    <section>
+      <h2>7. 推荐的下一步接口调整</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>优先级</th>
+            <th>建议</th>
+            <th>原因</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>P0</td>
+            <td>定义 Rust canonical IM Core API，不直接复用 Dart API 作为 ABI。</td>
+            <td>避免 Dart/Flutter 类型泄漏到 CLI/Rust 层。</td>
+          </tr>
+          <tr>
+            <td>P0</td>
+            <td>明确 adapter 边界：Dart adapter 实现 <code>AwikiImClient</code>；Go adapter 服务 CLI command handlers。</td>
+            <td>保证 App/CLI 共享核心但保留各自输出/UI/runtime 逻辑。</td>
+          </tr>
+          <tr>
+            <td>P1</td>
+            <td>补一个 Rust SDK <code>InboxApi</code> 或定义 CLI inbox 如何组合 <code>sync + messages.list + markRead</code>。</td>
+            <td>CLI <code>msg.inbox</code> 是核心命令，语义比 App conversation list 更偏消息流。</td>
+          </tr>
+          <tr>
+            <td>P1</td>
+            <td>重新标定 directSecure/groupE2ee：App Phase 1 reserved，Rust SDK shared target 可以是 v2/v3 required。</td>
+            <td>CLI 已有 secure/E2EE 命令面，共用 SDK 最终应承接这些能力。</td>
+          </tr>
+          <tr>
+            <td>P1</td>
+            <td>为 warnings/errors 定义跨端结构。</td>
+            <td>CLI 当前依赖 warnings；App 依赖 event/error DTO；Rust SDK 应统一错误/警告模型。</td>
+          </tr>
+          <tr>
+            <td>P2</td>
+            <td>把 runtime listener/host-notify 明确排除在 IM Core 外，只消费 event stream。</td>
+            <td>防止 CLI runtime 和 App notification 逻辑污染 SDK core。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    <section>
+      <h2>8. 最终判断</h2>
+
+      <div class="summary">
+        <p>
+          <strong>当前 IM Core SDK 接口设计方向是对的。</strong>
+          它已经覆盖 App 与 CLI 共同需要的大部分 IM 能力，尤其是消息、附件、群组、实时事件、本地状态、outbox、reserved secure/E2EE。
+        </p>
+        <p>
+          但如果目标是“Awiki CLI 和 Awiki Me App 底下都用同一套 Rust SDK”，下一步不应该直接实现 Dart API 的 Rust 版本，
+          而应该先定义一个 <strong>语言无关的 Rust canonical IM Core API</strong>，
+          然后让 Dart 和 Go 各自适配。
+        </p>
+        <p>
+          推荐结论：
+          <span class="badge ok">可以共用一套 Rust SDK</span>
+          ，当前接口可以作为能力蓝图；
+          但需要补充 <span class="badge warn">Rust canonical API / CLI inbox / secure-E2EE 阶段 / adapter 边界</span>。
+        </p>
+      </div>
+    </section>
+  </body>
+  </html>

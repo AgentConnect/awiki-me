@@ -2,20 +2,17 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
-import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_summary.dart';
 import '../../l10n/l10n.dart';
-import '../app_shell/providers/navigation_provider.dart';
-import '../app_shell/providers/selected_conversation_provider.dart';
-import '../chat/chat_page.dart';
-import '../chat/chat_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
+import 'create_group_page.dart';
+import 'group_chat_navigation.dart';
 import 'group_provider.dart';
 
 class GroupListPage extends ConsumerWidget {
@@ -38,7 +35,7 @@ class GroupListPage extends ConsumerWidget {
                 AwikiMeTopBar(
                   title: context.l10n.groupListTitle,
                   padding: EdgeInsets.zero,
-                  trailingWidth: 64,
+                  trailingWidth: 108,
                   leading: TopBarActionButton(
                     onTap: () => Navigator.of(context).pop(),
                     child: AwikiAssetIcon(
@@ -60,11 +57,23 @@ class GroupListPage extends ConsumerWidget {
                       ),
                       const SizedBox(width: 12),
                       TopBarActionButton(
-                        onTap: () => _showJoinDialog(context, ref),
-                        child: AwikiAssetIcon(
-                          assetName: 'assets/icons/icon_add.svg',
+                        onTap: () => AppNavigator.push(
+                          context,
+                          (_) => const CreateGroupPage(),
+                        ),
+                        child: Icon(
+                          CupertinoIcons.person_3_fill,
                           color: theme.primary,
-                          size: 22,
+                          size: 21,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      TopBarActionButton(
+                        onTap: () => _showJoinDialog(context, ref),
+                        child: Icon(
+                          CupertinoIcons.link,
+                          color: theme.primary,
+                          size: 21,
                         ),
                       ),
                     ],
@@ -86,7 +95,12 @@ class GroupListPage extends ConsumerWidget {
                       padding: const EdgeInsets.only(bottom: 10),
                       child: _GroupCard(
                         group: group,
-                        onTap: () => _openGroupChat(context, ref, group),
+                        onTap: () => openGroupChat(
+                          context,
+                          ref,
+                          group,
+                          closeCurrentRouteOnDesktop: true,
+                        ),
                         onOpenDetail: () async {
                           await ref
                               .read(groupProvider.notifier)
@@ -109,39 +123,6 @@ class GroupListPage extends ConsumerWidget {
         if (state.isLoading)
           AwikiMeLoadingMask(label: context.l10n.groupListLoading),
       ],
-    );
-  }
-
-  Future<void> _openGroupChat(
-    BuildContext context,
-    WidgetRef ref,
-    GroupSummary group,
-  ) async {
-    final conversation = ConversationSummary(
-      threadId: 'group:${group.groupId}',
-      displayName: group.name,
-      lastMessagePreview: '',
-      lastMessageAt: group.lastMessageAt ?? DateTime.now(),
-      unreadCount: 0,
-      isGroup: true,
-      groupId: group.groupId,
-      avatarSeed: group.groupId,
-    );
-    await ref.read(chatThreadsProvider.notifier).openConversation(conversation);
-    if (!context.mounted) {
-      return;
-    }
-    if (context.awikiResponsive.supportsTwoPane) {
-      ref
-          .read(selectedConversationProvider.notifier)
-          .selectConversation(conversation);
-      ref.read(shellTabProvider.notifier).setTab(0);
-      Navigator.of(context).pop();
-      return;
-    }
-    await AppNavigator.push(
-      context,
-      (_) => ChatPage(conversation: conversation),
     );
   }
 
@@ -173,17 +154,20 @@ class GroupListPage extends ConsumerWidget {
                 return;
               }
               Navigator.of(ctx).pop();
-              final group =
-                  await ref.read(groupProvider.notifier).joinGroup(joinCode);
+              final group = await ref
+                  .read(groupProvider.notifier)
+                  .joinGroup(joinCode);
               await ref
                   .read(groupProvider.notifier)
                   .loadGroupMembers(group.groupId);
               if (!context.mounted) {
                 return;
               }
-              await AppNavigator.push(
+              await openGroupChat(
                 context,
-                (_) => GroupDetailPage(initialGroup: group),
+                ref,
+                group,
+                closeCurrentRouteOnDesktop: true,
               );
             },
             child: Text(context.l10n.commonJoin),
@@ -195,10 +179,7 @@ class GroupListPage extends ConsumerWidget {
 }
 
 class GroupDetailPage extends ConsumerStatefulWidget {
-  const GroupDetailPage({
-    super.key,
-    required this.initialGroup,
-  });
+  const GroupDetailPage({super.key, required this.initialGroup});
 
   final GroupSummary initialGroup;
 
@@ -267,8 +248,10 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
-                                Text(_group.name,
-                                    style: AwikiMeTextStyles.sectionTitle),
+                                Text(
+                                  _group.name,
+                                  style: AwikiMeTextStyles.sectionTitle,
+                                ),
                                 const SizedBox(height: 4),
                                 Text(
                                   _group.description.isEmpty
@@ -287,8 +270,9 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                         runSpacing: 8,
                         children: <Widget>[
                           AppPill(
-                            label: context.l10n
-                                .groupMemberCount(_group.memberCount),
+                            label: context.l10n.groupMemberCount(
+                              _group.memberCount,
+                            ),
                           ),
                           AppPill(label: _group.myRole ?? 'member'),
                           if (_joinCode?.isNotEmpty == true)
@@ -353,10 +337,12 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                         )
                       : Column(
                           children: members
-                              .map((item) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: _MemberRow(item: item),
-                                  ))
+                              .map(
+                                (item) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: _MemberRow(item: item),
+                                ),
+                              )
                               .toList(),
                         ),
                 ),
@@ -405,8 +391,9 @@ class _GroupCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   AppPill(
-                    label:
-                        context.l10n.groupMemberCountCompact(group.memberCount),
+                    label: context.l10n.groupMemberCountCompact(
+                      group.memberCount,
+                    ),
                   ),
                 ],
               ),
@@ -428,10 +415,7 @@ class _GroupCard extends StatelessWidget {
 }
 
 class _ActionRow extends StatelessWidget {
-  const _ActionRow({
-    required this.title,
-    required this.onTap,
-  });
+  const _ActionRow({required this.title, required this.onTap});
 
   final String title;
   final VoidCallback onTap;
@@ -440,10 +424,7 @@ class _ActionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
-      child: AppActionRow(
-        title: title,
-        onTap: onTap,
-      ),
+      child: AppActionRow(title: title, onTap: onTap),
     );
   }
 }
@@ -460,9 +441,7 @@ class _MemberRow extends StatelessWidget {
       children: <Widget>[
         AvatarBadge(seed: title, size: 36),
         const SizedBox(width: 12),
-        Expanded(
-          child: Text(title, style: AwikiMeTextStyles.cardTitle),
-        ),
+        Expanded(child: Text(title, style: AwikiMeTextStyles.cardTitle)),
         AppPill(label: item.role),
       ],
     );

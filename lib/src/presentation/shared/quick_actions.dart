@@ -2,12 +2,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
-import '../../app/ui_feedback.dart';
-import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
-import '../friends/friends_provider.dart';
 import '../group/create_group_page.dart';
 import '../group/group_list_page.dart';
+import 'identity_flow.dart';
 import 'widgets/app_widgets.dart';
 
 Future<void> showCommonQuickActionsMenu(
@@ -23,13 +21,22 @@ Future<void> showCommonQuickActionsMenu(
       title: l10n.quickActionsTitle.toUpperCase(),
       items: <AppDropMenuItem>[
         AppDropMenuItem(
+          label: '发起新消息',
+          icon: CupertinoIcons.square_pencil,
+          onTap: () {
+            showStartConversationDialog(rootContext, ref);
+          },
+        ),
+        AppDropMenuItem(
           label: l10n.quickActionCreateGroup,
+          icon: CupertinoIcons.person_3_fill,
           onTap: () {
             AppNavigator.push(rootContext, (_) => const CreateGroupPage());
           },
         ),
         AppDropMenuItem(
           label: l10n.quickActionJoinGroup,
+          icon: CupertinoIcons.link,
           onTap: () {
             AppNavigator.push(rootContext, (_) => const GroupListPage());
           },
@@ -37,8 +44,9 @@ Future<void> showCommonQuickActionsMenu(
         if (includeAddFriend)
           AppDropMenuItem(
             label: l10n.quickActionAddFriend,
+            icon: CupertinoIcons.person_badge_plus,
             onTap: () {
-              showAddFriendDialog(rootContext, ref);
+              showAddIdentityDialog(rootContext, ref);
             },
           ),
       ],
@@ -47,49 +55,5 @@ Future<void> showCommonQuickActionsMenu(
 }
 
 void showAddFriendDialog(BuildContext context, WidgetRef ref) {
-  final textController = TextEditingController();
-  AppNavigator.showDialog<void>(
-    context,
-    (ctx) => CupertinoAlertDialog(
-      title: Text(context.l10n.addFriendTitle),
-      content: Padding(
-        padding: const EdgeInsets.only(top: 12),
-        child: AppTextField(
-          controller: textController,
-          label: context.l10n.addFriendTitle,
-          placeholder: context.l10n.addFriendPlaceholder,
-        ),
-      ),
-      actions: <Widget>[
-        CupertinoDialogAction(
-          onPressed: () => Navigator.of(ctx).pop(),
-          child: Text(context.l10n.commonCancel),
-        ),
-        CupertinoDialogAction(
-          isDefaultAction: true,
-          onPressed: () async {
-            final value = textController.text.trim();
-            if (value.isEmpty) {
-              return;
-            }
-            Navigator.of(ctx).pop();
-            try {
-              final status = await ref
-                  .read(friendsProvider.notifier)
-                  .checkRelationship(value);
-              if (status != null && status.relationship != 'none') {
-                return;
-              }
-              await ref.read(friendsProvider.notifier).follow(value);
-            } catch (error) {
-              ref
-                  .read(uiFeedbackProvider.notifier)
-                  .showError(AppMessage.fromError(error));
-            }
-          },
-          child: Text(context.l10n.commonSend),
-        ),
-      ],
-    ),
-  );
+  showAddIdentityDialog(context, ref);
 }

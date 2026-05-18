@@ -1,8 +1,11 @@
+import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
+import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
@@ -94,6 +97,71 @@ void main() {
     expect(gateway.lastSentThreadId, 'dm:1');
     expect(gateway.lastSentContent, 'hello');
     expect(find.text('hello'), findsOneWidget);
+  });
+
+  testWidgets('聊天窗口在会话列表刷新到新消息时补拉历史', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:refresh',
+      displayName: 'cgw',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 5, 8, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:cgw',
+    );
+    final reply = ChatMessage(
+      localId: 'reply-cgw',
+      remoteId: 'reply-cgw',
+      threadId: conversation.threadId,
+      senderDid: 'did:test:cgw',
+      receiverDid: session.did,
+      content: '你好。欢迎',
+      createdAt: DateTime(2026, 5, 8, 12, 1),
+      isMine: false,
+      sendState: MessageSendState.sent,
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+
+    gateway
+      ..conversations = <ConversationSummary>[
+        ConversationSummary(
+          threadId: conversation.threadId,
+          displayName: conversation.displayName,
+          lastMessagePreview: reply.content,
+          lastMessageAt: reply.createdAt,
+          unreadCount: 1,
+          isGroup: false,
+          targetDid: conversation.targetDid,
+        ),
+      ]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
+        'did:test:cgw': <ChatMessage>[reply],
+      };
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await container.read(conversationListProvider.notifier).refresh();
+    await tester.pump();
+
+    expect(find.text('你好。欢迎'), findsOneWidget);
+    expect(gateway.fetchDmHistoryCalls, 1);
   });
 
   testWidgets('消息发送失败时显示失败状态并可重试', (tester) async {
