@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -10,11 +11,21 @@ class AppNotificationFacade implements NotificationFacade {
 
   final FlutterLocalNotificationsPlugin _plugin;
   int _lastBadgeCount = 0;
+  Future<void>? _initialization;
 
   static Future<AppNotificationFacade> create() async {
     final facade = AppNotificationFacade._(FlutterLocalNotificationsPlugin());
-    await facade._initialize();
+    facade._initializeInBackground();
     return facade;
+  }
+
+  void _initializeInBackground() {
+    _initialization = _initialize()
+        .timeout(const Duration(seconds: 5))
+        .catchError((Object error, StackTrace stackTrace) {
+          debugPrint('[awiki_me][notification-init][error] $error');
+        });
+    unawaited(_initialization);
   }
 
   Future<void> _initialize() async {
@@ -33,26 +44,21 @@ class AppNotificationFacade implements NotificationFacade {
 
     await _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.requestNotificationsPermission();
 
     await _plugin
         .resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin>()
-        ?.requestPermissions(
-          alert: true,
-          badge: true,
-          sound: true,
-        );
+          IOSFlutterLocalNotificationsPlugin
+        >()
+        ?.requestPermissions(alert: true, badge: true, sound: true);
 
     await _plugin
         .resolvePlatformSpecificImplementation<
-            MacOSFlutterLocalNotificationsPlugin>()
-        ?.requestPermissions(
-          alert: true,
-          badge: true,
-          sound: true,
-        );
+          MacOSFlutterLocalNotificationsPlugin
+        >()
+        ?.requestPermissions(alert: true, badge: true, sound: true);
   }
 
   @override
@@ -61,6 +67,10 @@ class AppNotificationFacade implements NotificationFacade {
     required String body,
   }) async {
     try {
+      await _initialization?.timeout(
+        const Duration(milliseconds: 500),
+        onTimeout: () {},
+      );
       final id =
           DateTime.now().millisecondsSinceEpoch & Random().nextInt(0x7fffffff);
       const android = AndroidNotificationDetails(

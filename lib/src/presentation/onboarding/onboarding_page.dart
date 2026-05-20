@@ -912,21 +912,30 @@ class _MacAuthTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: <Widget>[
-        _MacAuthTab(
-          label: context.l10n.onboardingLogin,
-          selected: value == 'login',
-          onTap: () => onChanged('login'),
-        ),
-        const SizedBox(width: 58),
-        _MacAuthTab(
-          label: context.l10n.onboardingRegister,
-          selected: value == 'register',
-          onTap: () => onChanged('register'),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final gap = constraints.maxWidth < 220 ? 24.0 : 58.0;
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Flexible(
+              child: _MacAuthTab(
+                label: context.l10n.onboardingLogin,
+                selected: value == 'login',
+                onTap: () => onChanged('login'),
+              ),
+            ),
+            SizedBox(width: gap),
+            Flexible(
+              child: _MacAuthTab(
+                label: context.l10n.onboardingRegister,
+                selected: value == 'register',
+                onTap: () => onChanged('register'),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -1028,24 +1037,30 @@ class _MacCredentialPicker extends StatelessWidget {
         height: 106,
         decoration: _macFieldDecoration(),
         child: const Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Icon(
-                CupertinoIcons.person_crop_circle_badge_exclam,
-                color: Color(0xFF7B879D),
-                size: 20,
-              ),
-              SizedBox(width: 10),
-              Text(
-                '本机暂无已保存身份凭证',
-                style: TextStyle(
-                  color: Color(0xFF98A3B8),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(
+                  CupertinoIcons.person_crop_circle_badge_exclam,
+                  color: Color(0xFF7B879D),
+                  size: 20,
                 ),
-              ),
-            ],
+                SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    '本机暂无已保存身份凭证',
+                    style: TextStyle(
+                      color: Color(0xFF98A3B8),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
