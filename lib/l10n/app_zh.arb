@@ -157,10 +157,10 @@
   "addFriendAlreadyExists": "已经添加或正在申请中",
   "addFriendFollowed": "已关注",
   "groupListTitle": "群聊列表",
-  "groupListEmpty": "还没有群组。先创建一个群，或使用 6 位 join-code 加入。",
+  "groupListEmpty": "还没有群组。先创建一个群，或使用 Group DID 加入。",
   "groupListLoading": "正在加载群数据...",
-  "groupJoinDialogTitle": "通过 Join-code 入群",
-  "groupJoinDialogPlaceholder": "输入 6 位数字 join-code",
+  "groupJoinDialogTitle": "通过 Group DID 入群",
+  "groupJoinDialogPlaceholder": "输入群组 Group DID",
   "groupNoDescription": "暂无群描述",
   "groupMemberCount": "{count} 人",
   "@groupMemberCount": {
@@ -178,28 +178,17 @@
       }
     }
   },
-  "groupJoinCodeLabel": "Join-code: {code}",
-  "@groupJoinCodeLabel": {
-    "placeholders": {
-      "code": {}
-    }
-  },
-  "groupIdLabel": "Group ID: {groupId}",
+  "groupIdLabel": "Group DID: {groupId}",
   "@groupIdLabel": {
     "placeholders": {
       "groupId": {}
     }
   },
   "groupEnterChat": "进入群聊",
-  "groupGetJoinCode": "获取当前 Join-code",
-  "groupRefreshJoinCode": "刷新 Join-code",
   "groupRefreshSnapshot": "刷新群详情与成员",
   "groupMembersTitle": "群成员",
   "groupMembersEmpty": "暂无成员快照，先执行一次刷新群详情与成员。",
   "groupCreateTitle": "创建群组",
-  "groupModeTitle": "群模式",
-  "groupModeChat": "Chat",
-  "groupModeDiscovery": "Discovery",
   "groupFieldName": "名称",
   "groupFieldNamePlaceholder": "群组名称",
   "groupFieldSlug": "短链接",

@@ -81,6 +81,144 @@ void main() {
     expect(result['message_id'], 'msg-remote');
   });
 
+  test(
+    'group.create uses backend-aligned profile and policy defaults',
+    () async {
+      late Map<String, Object?> capturedPayload;
+      final client = MockClient((request) async {
+        capturedPayload = jsonDecode(request.body) as Map<String, Object?>;
+        return http.Response(
+          jsonEncode(<String, Object?>{
+            'jsonrpc': '2.0',
+            'id': 'req-1',
+            'result': <String, Object?>{
+              'group_did': 'did:wba:awiki.ai:group:e1_group',
+            },
+          }),
+          200,
+        );
+      });
+
+      final key = generatePrivateKeyMaterial(KeyType.ed25519);
+      const senderDid = 'did:wba:awiki.ai:user:alice:e1_sender';
+      const serviceDid = 'did:wba:awiki.ai:service:im:e1_service';
+      final session = AwikiAnpSession(
+        did: senderDid,
+        jwtToken: 'token',
+        didDocument: <String, Object?>{
+          'id': senderDid,
+          'authentication': <String>['$senderDid#key-1'],
+        },
+        privateKeyPem: key.toPem(),
+      );
+      final messageClient = AwikiMessageClient(
+        serviceClient: AwikiServiceClient(
+          baseUrl: 'https://awiki.ai',
+          httpClient: client,
+        ),
+      );
+
+      await messageClient.createGroup(
+        session: session,
+        serviceDid: serviceDid,
+        name: '融资协作群',
+        description: 'Group description',
+        slug: 'funding',
+        goal: 'Coordinate funding',
+        rules: 'Be kind',
+        messagePrompt: 'Share progress',
+      );
+
+      expect(capturedPayload['method'], 'group.create');
+      final params = capturedPayload['params'] as Map<String, Object?>;
+      final meta = params['meta'] as Map<String, Object?>;
+      final body = params['body'] as Map<String, Object?>;
+      expect(meta['profile'], 'anp.group.base.v1');
+      expect(meta['target'], <String, Object?>{
+        'kind': 'service',
+        'did': serviceDid,
+      });
+
+      final profile = body['group_profile'] as Map<String, Object?>;
+      expect(profile['display_name'], '融资协作群');
+      expect(profile['description'], 'Group description');
+      expect(profile['slug'], 'funding');
+      expect(profile['goal'], 'Coordinate funding');
+      expect(profile['rules'], 'Be kind');
+      expect(profile['message_prompt'], 'Share progress');
+      expect(profile['discoverability'], 'private');
+
+      final policy = body['group_policy'] as Map<String, Object?>;
+      expect(policy['admission_mode'], 'open-join');
+      expect(policy['attachments_allowed'], isTrue);
+      expect(policy['max_members'], 500);
+      expect(policy['message_security_profile'], 'transport-protected');
+      expect(policy['bootstrap_security_profile'], 'transport-protected');
+    },
+  );
+
+  test(
+    'group.add sends member DID and role through group mutation envelope',
+    () async {
+      late Map<String, Object?> capturedPayload;
+      final client = MockClient((request) async {
+        capturedPayload = jsonDecode(request.body) as Map<String, Object?>;
+        return http.Response(
+          jsonEncode(<String, Object?>{
+            'jsonrpc': '2.0',
+            'id': 'req-1',
+            'result': <String, Object?>{
+              'group_did': 'did:wba:awiki.ai:group:e1_group',
+              'member_did': 'did:wba:awiki.ai:user:bob:e1_member',
+            },
+          }),
+          200,
+        );
+      });
+
+      final key = generatePrivateKeyMaterial(KeyType.ed25519);
+      const senderDid = 'did:wba:awiki.ai:user:alice:e1_sender';
+      const groupDid = 'did:wba:awiki.ai:group:e1_group';
+      const memberDid = 'did:wba:awiki.ai:user:bob:e1_member';
+      final session = AwikiAnpSession(
+        did: senderDid,
+        jwtToken: 'token',
+        didDocument: <String, Object?>{
+          'id': senderDid,
+          'authentication': <String>['$senderDid#key-1'],
+        },
+        privateKeyPem: key.toPem(),
+      );
+      final messageClient = AwikiMessageClient(
+        serviceClient: AwikiServiceClient(
+          baseUrl: 'https://awiki.ai',
+          httpClient: client,
+        ),
+      );
+
+      await messageClient.addGroupMember(
+        session: session,
+        groupDid: groupDid,
+        memberDid: memberDid,
+        role: 'admin',
+        reasonText: 'invite',
+      );
+
+      expect(capturedPayload['method'], 'group.add');
+      final params = capturedPayload['params'] as Map<String, Object?>;
+      final meta = params['meta'] as Map<String, Object?>;
+      final body = params['body'] as Map<String, Object?>;
+      expect(meta['profile'], 'anp.group.base.v1');
+      expect(meta['target'], <String, Object?>{
+        'kind': 'group',
+        'did': groupDid,
+      });
+      expect(body['member_did'], memberDid);
+      expect(body['role'], 'admin');
+      expect(body['reason_text'], 'invite');
+    },
+  );
+
   test('message service methods reject legacy non-e1 DID identities', () async {
     final key = generatePrivateKeyMaterial(KeyType.ed25519);
     final messageClient = AwikiMessageClient(

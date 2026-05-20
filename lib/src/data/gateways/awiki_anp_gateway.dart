@@ -104,7 +104,6 @@ class AwikiAnpGateway implements AwikiGateway {
   Future<BridgeCapabilities> loadCapabilities() async {
     return const BridgeCapabilities(
       profileMarkdown: true,
-      groupJoinCode: false,
       localDeleteOnly: true,
       systemPushStub: true,
       e2ee: E2eeCapability(
@@ -463,7 +462,6 @@ class AwikiAnpGateway implements AwikiGateway {
     required String goal,
     required String rules,
     String? messagePrompt,
-    String? groupMode,
   }) async {
     final session = await _requireAnpSession(requireSigning: true);
     final serviceDid = await _resolveMessageServiceDid(session);
@@ -476,14 +474,16 @@ class AwikiAnpGateway implements AwikiGateway {
       goal: goal,
       rules: rules,
       messagePrompt: messagePrompt,
-      admissionMode: groupMode == null || groupMode.isEmpty
-          ? 'open-join'
-          : groupMode,
     );
     final created = _mapper.toGroupSummary(result);
-    final summary = created.groupId.isNotEmpty
-        ? await getGroup(created.groupId)
-        : created;
+    var summary = created;
+    if (created.groupId.isNotEmpty) {
+      try {
+        summary = await getGroup(created.groupId);
+      } catch (error) {
+        _logGateway('group.create snapshot fallback: $error');
+      }
+    }
     await _localCache.upsertGroups(
       ownerDid: session.did,
       groups: <GroupSummary>[summary],
@@ -492,19 +492,64 @@ class AwikiAnpGateway implements AwikiGateway {
   }
 
   @override
-  Future<GroupSummary> joinGroup(String joinCode) async {
-    if (!joinCode.startsWith('did:')) {
-      throw ArgumentError('新版群组加入只支持 group DID。');
+  Future<GroupSummary> joinGroup(String groupDid) async {
+    final normalizedGroupDid = groupDid.trim();
+    if (!normalizedGroupDid.startsWith('did:')) {
+      throw ArgumentError('请输入有效的 Group DID。');
     }
     final session = await _requireAnpSession(requireSigning: true);
     final result = await _messageService.joinGroup(
       session: session,
-      groupDid: joinCode,
+      groupDid: normalizedGroupDid,
     );
-    final summary = _mapper.toGroupSummary(<String, Object?>{
-      'group_did': joinCode,
+    final fallback = _mapper.toGroupSummary(<String, Object?>{
       ...result,
+      'group_did': normalizedGroupDid,
     });
+    var summary = fallback;
+    try {
+      summary = await getGroup(normalizedGroupDid);
+    } catch (error) {
+      _logGateway('group.join snapshot fallback: $error');
+    }
+    await _localCache.upsertGroups(
+      ownerDid: session.did,
+      groups: <GroupSummary>[summary],
+    );
+    return summary;
+  }
+
+  @override
+  Future<GroupSummary> addGroupMember({
+    required String groupId,
+    required String memberDid,
+    String role = 'member',
+  }) async {
+    final normalizedGroupId = groupId.trim();
+    final normalizedMemberDid = memberDid.trim();
+    if (!normalizedGroupId.startsWith('did:')) {
+      throw ArgumentError('请输入有效的 Group DID。');
+    }
+    if (!normalizedMemberDid.startsWith('did:')) {
+      throw ArgumentError('请输入有效的成员 DID。');
+    }
+    final session = await _requireAnpSession(requireSigning: true);
+    final result = await _messageService.addGroupMember(
+      session: session,
+      groupDid: normalizedGroupId,
+      memberDid: normalizedMemberDid,
+      role: role,
+    );
+    final fallback = _mapper.toGroupSummary(<String, Object?>{
+      ...result,
+      'group_did': normalizedGroupId,
+    });
+    var summary = fallback;
+    try {
+      summary = await getGroup(normalizedGroupId);
+    } catch (error) {
+      _logGateway('group.add snapshot fallback: $error');
+    }
     await _localCache.upsertGroups(
       ownerDid: session.did,
       groups: <GroupSummary>[summary],
@@ -520,8 +565,8 @@ class AwikiAnpGateway implements AwikiGateway {
       groupDid: groupId,
     );
     final summary = _mapper.toGroupSummary(<String, Object?>{
-      'group_did': groupId,
       ...result,
+      'group_did': groupId,
     });
     await _localCache.upsertGroups(
       ownerDid: session.did,
@@ -529,12 +574,6 @@ class AwikiAnpGateway implements AwikiGateway {
     );
     return summary;
   }
-
-  @override
-  Future<String?> getGroupJoinCode(String groupId) async => null;
-
-  @override
-  Future<String?> refreshGroupJoinCode(String groupId) async => null;
 
   @override
   Future<List<GroupSummary>> listGroups() async {

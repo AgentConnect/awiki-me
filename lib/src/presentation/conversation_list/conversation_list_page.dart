@@ -129,12 +129,12 @@ class _MacConversationList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(color: Color(0xFFFBFDFF)),
+      decoration: const BoxDecoration(color: Color(0xFFF8FAFD)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Padding(
-            padding: const EdgeInsets.fromLTRB(22, 26, 22, 14),
+            padding: const EdgeInsets.fromLTRB(20, 22, 20, 12),
             child: Row(
               children: <Widget>[
                 const Expanded(
@@ -142,7 +142,7 @@ class _MacConversationList extends StatelessWidget {
                     '最近会话',
                     style: TextStyle(
                       color: Color(0xFF101B32),
-                      fontSize: 17,
+                      fontSize: 16,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -153,7 +153,7 @@ class _MacConversationList extends StatelessWidget {
                   icon: CupertinoIcons.slider_horizontal_3,
                   onTap: onShowActions,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 _MacListIconButton(
                   key: const Key('start-conversation-button'),
                   semanticLabel: '发起新消息',
@@ -164,7 +164,7 @@ class _MacConversationList extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 22),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             child: CupertinoSearchTextField(
               placeholder: '搜索会话或 Agent',
               style: const TextStyle(fontSize: 13, color: Color(0xFF17213A)),
@@ -184,18 +184,18 @@ class _MacConversationList extends StatelessWidget {
               ),
               decoration: BoxDecoration(
                 color: CupertinoColors.white,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(9),
                 border: Border.all(color: const Color(0xFFDDE5F0)),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Expanded(
             child: conversations.isEmpty
                 ? const _MacConversationEmptyState()
                 : ListView.builder(
-                    padding: EdgeInsets.fromLTRB(14, 0, 14, bottomInset),
+                    padding: EdgeInsets.fromLTRB(12, 0, 12, bottomInset),
                     itemCount: conversations.length,
                     itemBuilder: (context, index) {
                       final item = conversations[index];
@@ -243,15 +243,15 @@ class _MacListIconButton extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
-          width: 34,
-          height: 34,
+          width: 32,
+          height: 32,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: CupertinoColors.white,
-            borderRadius: BorderRadius.circular(9),
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(color: const Color(0xFFE5EAF2)),
           ),
-          child: Icon(icon, color: const Color(0xFF34415C), size: 20),
+          child: Icon(icon, color: const Color(0xFF34415C), size: 19),
         ),
       ),
     );
@@ -280,19 +280,19 @@ class _MacConversationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 6),
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFFEAF2FF) : CupertinoColors.white,
-            borderRadius: BorderRadius.circular(14),
+            color: isSelected ? const Color(0xFFE8F0FF) : CupertinoColors.white,
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: isSelected
-                  ? const Color(0xFFD3E3FF)
+                  ? const Color(0xFFCFE0FF)
                   : const Color(0x00FFFFFF),
             ),
           ),
@@ -301,7 +301,7 @@ class _MacConversationRow extends StatelessWidget {
               Stack(
                 clipBehavior: Clip.none,
                 children: <Widget>[
-                  AvatarBadge(seed: title, size: 46),
+                  AvatarBadge(seed: title, size: 42),
                   Positioned(
                     right: -2,
                     bottom: -2,
@@ -314,7 +314,7 @@ class _MacConversationRow extends StatelessWidget {
                         color: isGroup
                             ? const Color(0xFFEFE4FF)
                             : const Color(0xFFEAF2FF),
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(5),
                         border: Border.all(color: CupertinoColors.white),
                       ),
                       child: Text(
@@ -331,7 +331,7 @@ class _MacConversationRow extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,7 +345,7 @@ class _MacConversationRow extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: Color(0xFF17213A),
-                              fontSize: 14,
+                              fontSize: 13.5,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -355,12 +355,12 @@ class _MacConversationRow extends StatelessWidget {
                           timeLabel,
                           style: const TextStyle(
                             color: Color(0xFF66728A),
-                            fontSize: 11,
+                            fontSize: 10.5,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 5),
                     Row(
                       children: <Widget>[
                         Expanded(
@@ -372,7 +372,7 @@ class _MacConversationRow extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: Color(0xFF66728A),
-                              fontSize: 12,
+                              fontSize: 11.5,
                               height: 1.25,
                             ),
                           ),

@@ -194,8 +194,54 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('最近会话'), findsOneWidget);
+      await tester.tap(find.text('Marcus Chen').first);
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatView), findsOneWidget);
       expect(tester.takeException(), isNull);
     }
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 最近会话列表分栏可以拖动调整宽度', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1280, 720));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final before = tester
+        .getSize(find.byKey(const Key('mac-conversation-list-pane')))
+        .width;
+    await tester.drag(
+      find.byKey(const Key('awiki-pane-divider')),
+      const Offset(80, 0),
+    );
+    await tester.pumpAndSettle();
+    final after = tester
+        .getSize(find.byKey(const Key('mac-conversation-list-pane')))
+        .width;
+
+    expect(after, greaterThan(before));
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

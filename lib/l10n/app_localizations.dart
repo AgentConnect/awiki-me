@@ -773,7 +773,7 @@ abstract class AppLocalizations {
   /// No description provided for @groupListEmpty.
   ///
   /// In zh, this message translates to:
-  /// **'还没有群组。先创建一个群，或使用 6 位 join-code 加入。'**
+  /// **'还没有群组。先创建一个群，或使用 Group DID 加入。'**
   String get groupListEmpty;
 
   /// No description provided for @groupListLoading.
@@ -785,13 +785,13 @@ abstract class AppLocalizations {
   /// No description provided for @groupJoinDialogTitle.
   ///
   /// In zh, this message translates to:
-  /// **'通过 Join-code 入群'**
+  /// **'通过 Group DID 入群'**
   String get groupJoinDialogTitle;
 
   /// No description provided for @groupJoinDialogPlaceholder.
   ///
   /// In zh, this message translates to:
-  /// **'输入 6 位数字 join-code'**
+  /// **'输入群组 Group DID'**
   String get groupJoinDialogPlaceholder;
 
   /// No description provided for @groupNoDescription.
@@ -812,16 +812,10 @@ abstract class AppLocalizations {
   /// **'{count}人'**
   String groupMemberCountCompact(int count);
 
-  /// No description provided for @groupJoinCodeLabel.
-  ///
-  /// In zh, this message translates to:
-  /// **'Join-code: {code}'**
-  String groupJoinCodeLabel(Object code);
-
   /// No description provided for @groupIdLabel.
   ///
   /// In zh, this message translates to:
-  /// **'Group ID: {groupId}'**
+  /// **'Group DID: {groupId}'**
   String groupIdLabel(Object groupId);
 
   /// No description provided for @groupEnterChat.
@@ -829,18 +823,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'进入群聊'**
   String get groupEnterChat;
-
-  /// No description provided for @groupGetJoinCode.
-  ///
-  /// In zh, this message translates to:
-  /// **'获取当前 Join-code'**
-  String get groupGetJoinCode;
-
-  /// No description provided for @groupRefreshJoinCode.
-  ///
-  /// In zh, this message translates to:
-  /// **'刷新 Join-code'**
-  String get groupRefreshJoinCode;
 
   /// No description provided for @groupRefreshSnapshot.
   ///
@@ -865,24 +847,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'创建群组'**
   String get groupCreateTitle;
-
-  /// No description provided for @groupModeTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'群模式'**
-  String get groupModeTitle;
-
-  /// No description provided for @groupModeChat.
-  ///
-  /// In zh, this message translates to:
-  /// **'Chat'**
-  String get groupModeChat;
-
-  /// No description provided for @groupModeDiscovery.
-  ///
-  /// In zh, this message translates to:
-  /// **'Discovery'**
-  String get groupModeDiscovery;
 
   /// No description provided for @groupFieldName.
   ///

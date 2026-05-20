@@ -1,14 +1,12 @@
 class BridgeCapabilities {
   const BridgeCapabilities({
     required this.profileMarkdown,
-    required this.groupJoinCode,
     required this.localDeleteOnly,
     required this.systemPushStub,
     required this.e2ee,
   });
 
   final bool profileMarkdown;
-  final bool groupJoinCode;
   final bool localDeleteOnly;
   final bool systemPushStub;
   final E2eeCapability e2ee;

@@ -363,16 +363,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get groupListTitle => '群聊列表';
 
   @override
-  String get groupListEmpty => '还没有群组。先创建一个群，或使用 6 位 join-code 加入。';
+  String get groupListEmpty => '还没有群组。先创建一个群，或使用 Group DID 加入。';
 
   @override
   String get groupListLoading => '正在加载群数据...';
 
   @override
-  String get groupJoinDialogTitle => '通过 Join-code 入群';
+  String get groupJoinDialogTitle => '通过 Group DID 入群';
 
   @override
-  String get groupJoinDialogPlaceholder => '输入 6 位数字 join-code';
+  String get groupJoinDialogPlaceholder => '输入群组 Group DID';
 
   @override
   String get groupNoDescription => '暂无群描述';
@@ -388,23 +388,12 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String groupJoinCodeLabel(Object code) {
-    return 'Join-code: $code';
-  }
-
-  @override
   String groupIdLabel(Object groupId) {
-    return 'Group ID: $groupId';
+    return 'Group DID: $groupId';
   }
 
   @override
   String get groupEnterChat => '进入群聊';
-
-  @override
-  String get groupGetJoinCode => '获取当前 Join-code';
-
-  @override
-  String get groupRefreshJoinCode => '刷新 Join-code';
 
   @override
   String get groupRefreshSnapshot => '刷新群详情与成员';
@@ -417,15 +406,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get groupCreateTitle => '创建群组';
-
-  @override
-  String get groupModeTitle => '群模式';
-
-  @override
-  String get groupModeChat => 'Chat';
-
-  @override
-  String get groupModeDiscovery => 'Discovery';
 
   @override
   String get groupFieldName => '名称';

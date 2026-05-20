@@ -40,8 +40,9 @@ class GroupController extends StateNotifier<GroupState> {
   }
 
   Future<List<GroupMemberSummary>> loadGroupMembers(String groupId) async {
-    final members =
-        await ref.read(awikiGatewayProvider).listGroupMembers(groupId);
+    final members = await ref
+        .read(awikiGatewayProvider)
+        .listGroupMembers(groupId);
     state = state.copyWith(
       membersByGroup: <String, List<GroupMemberSummary>>{
         ...state.membersByGroup,
@@ -65,41 +66,38 @@ class GroupController extends StateNotifier<GroupState> {
     required String goal,
     required String rules,
     String? messagePrompt,
-    String? groupMode,
   }) async {
-    final created = await ref.read(awikiGatewayProvider).createGroup(
+    final created = await ref
+        .read(awikiGatewayProvider)
+        .createGroup(
           name: name,
           slug: slug,
           description: description,
           goal: goal,
           rules: rules,
           messagePrompt: messagePrompt,
-          groupMode: groupMode,
         );
     upsertGroup(created);
     return created;
   }
 
-  Future<GroupSummary> joinGroup(String joinCode) async {
-    final joined = await ref.read(awikiGatewayProvider).joinGroup(joinCode);
+  Future<GroupSummary> joinGroup(String groupDid) async {
+    final joined = await ref.read(awikiGatewayProvider).joinGroup(groupDid);
     upsertGroup(joined);
     return joined;
   }
 
-  Future<String?> getJoinCode(String groupId) async {
-    final joinCode =
-        await ref.read(awikiGatewayProvider).getGroupJoinCode(groupId);
-    final refreshed = await ref.read(awikiGatewayProvider).getGroup(groupId);
-    upsertGroup(refreshed);
-    return joinCode;
-  }
-
-  Future<String?> refreshJoinCode(String groupId) async {
-    final joinCode =
-        await ref.read(awikiGatewayProvider).refreshGroupJoinCode(groupId);
-    final refreshed = await ref.read(awikiGatewayProvider).getGroup(groupId);
-    upsertGroup(refreshed);
-    return joinCode;
+  Future<GroupSummary> addGroupMember({
+    required String groupId,
+    required String memberDid,
+    String role = 'member',
+  }) async {
+    final updated = await ref
+        .read(awikiGatewayProvider)
+        .addGroupMember(groupId: groupId, memberDid: memberDid, role: role);
+    upsertGroup(updated);
+    await loadGroupMembers(groupId);
+    return updated;
   }
 
   void upsertGroup(GroupSummary group) {
@@ -111,8 +109,8 @@ class GroupController extends StateNotifier<GroupState> {
       ..sort(
         (a, b) => (b.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0))
             .compareTo(
-          a.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0),
-        ),
+              a.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+            ),
       );
     state = state.copyWith(groups: merged);
   }
@@ -126,8 +124,10 @@ final groupProvider = StateNotifierProvider<GroupController, GroupState>(
   (ref) => GroupController(ref),
 );
 
-final groupMembersProvider =
-    Provider.family<List<GroupMemberSummary>, String>((ref, groupId) {
+final groupMembersProvider = Provider.family<List<GroupMemberSummary>, String>((
+  ref,
+  groupId,
+) {
   return ref.watch(groupProvider).membersByGroup[groupId] ??
       const <GroupMemberSummary>[];
 });

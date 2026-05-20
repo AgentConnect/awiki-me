@@ -219,7 +219,7 @@ class _MacDesktopShell extends StatelessWidget {
     return Row(
       children: <Widget>[
         SizedBox(
-          width: 84,
+          width: 72,
           child: _MacDesktopRail(currentIndex: currentIndex, onTap: onTap),
         ),
         Container(width: 1, color: const Color(0xFFE5EAF2)),
@@ -242,21 +242,21 @@ class _MacDesktopRail extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxHeight < 760;
-          final gap = compact ? 8.0 : 12.0;
+          final gap = compact ? 7.0 : 10.0;
           return Column(
             children: <Widget>[
-              SizedBox(height: compact ? 24 : 34),
+              SizedBox(height: compact ? 22 : 30),
               const Text(
                 'AW',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Color(0xFF0B65F8),
-                  fontSize: 24,
+                  fontSize: 23,
                   fontWeight: FontWeight.w900,
                   letterSpacing: -2,
                 ),
               ),
-              SizedBox(height: compact ? 24 : 32),
+              SizedBox(height: compact ? 22 : 28),
               Expanded(
                 child: SingleChildScrollView(
                   padding: EdgeInsets.zero,
@@ -351,7 +351,7 @@ class _MacDesktopRailItem extends StatelessWidget {
     final foreground = selected
         ? const Color(0xFF0B65F8)
         : const Color(0xFF34415C);
-    final height = compact ? 52.0 : 60.0;
+    final height = compact ? 50.0 : 56.0;
     return Semantics(
       button: true,
       selected: selected,
@@ -360,21 +360,21 @@ class _MacDesktopRailItem extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: SizedBox(
-          width: 64,
+          width: 58,
           height: height,
           child: Stack(
             clipBehavior: Clip.none,
             children: <Widget>[
               AnimatedContainer(
                 duration: const Duration(milliseconds: 140),
-                width: 64,
+                width: 58,
                 height: height,
                 padding: EdgeInsets.symmetric(vertical: compact ? 6 : 8),
                 decoration: BoxDecoration(
                   color: selected
                       ? const Color(0xFFEAF2FF)
                       : const Color(0x00FFFFFF),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -383,7 +383,7 @@ class _MacDesktopRailItem extends StatelessWidget {
                       width: 30,
                       height: 24,
                       child: Center(
-                        child: Icon(icon, color: foreground, size: 22),
+                        child: Icon(icon, color: foreground, size: 20),
                       ),
                     ),
                     SizedBox(height: compact ? 2 : 4),
@@ -392,7 +392,7 @@ class _MacDesktopRailItem extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: foreground,
-                        fontSize: 11,
+                        fontSize: 10.5,
                         fontWeight: FontWeight.w700,
                         height: 1,
                       ),

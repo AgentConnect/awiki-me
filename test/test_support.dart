@@ -189,7 +189,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   String? lastCreatedGroupGoal;
   String? lastCreatedGroupRules;
   String? lastCreatedGroupPrompt;
-  String? lastCreatedGroupMode;
+  String? lastJoinedGroupDid;
+  String? lastAddedGroupId;
+  String? lastAddedMemberDid;
+  String? lastAddedMemberRole;
   String? lastSentThreadId;
   String? lastSentPeerDid;
   String? lastSentGroupId;
@@ -209,7 +212,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   Future<BridgeCapabilities> loadCapabilities() async {
     return const BridgeCapabilities(
       profileMarkdown: true,
-      groupJoinCode: true,
       localDeleteOnly: true,
       systemPushStub: true,
       e2ee: E2eeCapability(
@@ -276,7 +278,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     required String goal,
     required String rules,
     String? messagePrompt,
-    String? groupMode,
   }) async {
     lastCreatedGroupName = name;
     lastCreatedGroupSlug = slug;
@@ -284,7 +285,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     lastCreatedGroupGoal = goal;
     lastCreatedGroupRules = rules;
     lastCreatedGroupPrompt = messagePrompt;
-    lastCreatedGroupMode = groupMode;
     final group = GroupSummary(
       groupId: 'group-${groups.length + 1}',
       name: name,
@@ -319,11 +319,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   }
 
   @override
-  Future<String?> getGroupJoinCode(String groupId) async {
-    return null;
-  }
-
-  @override
   Future<GroupSummary> getGroup(String groupId) async {
     return groups.firstWhere(
       (item) => item.groupId == groupId,
@@ -355,10 +350,11 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   }
 
   @override
-  Future<GroupSummary> joinGroup(String joinCode) async {
+  Future<GroupSummary> joinGroup(String groupDid) async {
+    lastJoinedGroupDid = groupDid;
     final group = GroupSummary(
-      groupId: 'group:$joinCode',
-      name: 'Joined $joinCode',
+      groupId: groupDid,
+      name: 'Joined $groupDid',
       description: '',
       memberCount: 1,
       lastMessageAt: DateTime.now(),
@@ -369,6 +365,46 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       group,
     ];
     return group;
+  }
+
+  @override
+  Future<GroupSummary> addGroupMember({
+    required String groupId,
+    required String memberDid,
+    String role = 'member',
+  }) async {
+    lastAddedGroupId = groupId;
+    lastAddedMemberDid = memberDid;
+    lastAddedMemberRole = role;
+    final members = <GroupMemberSummary>[
+      ...(groupMembersByGroupId[groupId] ?? const <GroupMemberSummary>[]),
+    ];
+    if (!members.any((item) => item.did == memberDid)) {
+      members.add(
+        GroupMemberSummary(
+          userId: memberDid,
+          did: memberDid,
+          handle: memberDid,
+          role: role,
+          profileUrl: null,
+        ),
+      );
+    }
+    groupMembersByGroupId[groupId] = members;
+    final current = await getGroup(groupId);
+    final updated = GroupSummary(
+      groupId: current.groupId,
+      name: current.name,
+      description: current.description,
+      memberCount: members.length,
+      lastMessageAt: current.lastMessageAt,
+      myRole: current.myRole,
+    );
+    groups = <GroupSummary>[
+      ...groups.where((item) => item.groupId != updated.groupId),
+      updated,
+    ];
+    return updated;
   }
 
   @override
@@ -453,11 +489,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   @override
   Future<void> markRead(String threadId) async {
     markReadCalls += 1;
-  }
-
-  @override
-  Future<String?> refreshGroupJoinCode(String groupId) async {
-    return null;
   }
 
   @override

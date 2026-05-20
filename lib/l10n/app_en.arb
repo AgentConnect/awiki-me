@@ -157,10 +157,10 @@
   "addFriendAlreadyExists": "Already added or pending approval",
   "addFriendFollowed": "Followed",
   "groupListTitle": "Group chats",
-  "groupListEmpty": "No groups yet. Create one or join with a 6-digit join code.",
+  "groupListEmpty": "No groups yet. Create one or join with a Group DID.",
   "groupListLoading": "Loading group data...",
-  "groupJoinDialogTitle": "Join with a join code",
-  "groupJoinDialogPlaceholder": "Enter a 6-digit join code",
+  "groupJoinDialogTitle": "Join with a Group DID",
+  "groupJoinDialogPlaceholder": "Enter the group DID",
   "groupNoDescription": "No group description yet",
   "groupMemberCount": "{count} members",
   "@groupMemberCount": {
@@ -178,28 +178,17 @@
       }
     }
   },
-  "groupJoinCodeLabel": "Join code: {code}",
-  "@groupJoinCodeLabel": {
-    "placeholders": {
-      "code": {}
-    }
-  },
-  "groupIdLabel": "Group ID: {groupId}",
+  "groupIdLabel": "Group DID: {groupId}",
   "@groupIdLabel": {
     "placeholders": {
       "groupId": {}
     }
   },
   "groupEnterChat": "Enter group chat",
-  "groupGetJoinCode": "Get current join code",
-  "groupRefreshJoinCode": "Refresh join code",
   "groupRefreshSnapshot": "Refresh group details and members",
   "groupMembersTitle": "Members",
   "groupMembersEmpty": "No member snapshot yet. Refresh group details and members first.",
   "groupCreateTitle": "Create group",
-  "groupModeTitle": "Group mode",
-  "groupModeChat": "Chat",
-  "groupModeDiscovery": "Discovery",
   "groupFieldName": "Name",
   "groupFieldNamePlaceholder": "Group name",
   "groupFieldSlug": "Slug",

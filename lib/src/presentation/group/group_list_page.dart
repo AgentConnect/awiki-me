@@ -2,8 +2,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
+import '../../app/ui_feedback.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_summary.dart';
+import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
@@ -138,7 +140,7 @@ class GroupListPage extends ConsumerWidget {
             controller: textController,
             label: context.l10n.groupJoinDialogTitle,
             placeholder: context.l10n.groupJoinDialogPlaceholder,
-            keyboardType: TextInputType.number,
+            keyboardType: TextInputType.text,
           ),
         ),
         actions: <Widget>[
@@ -149,26 +151,32 @@ class GroupListPage extends ConsumerWidget {
           CupertinoDialogAction(
             isDefaultAction: true,
             onPressed: () async {
-              final joinCode = textController.text.trim();
-              if (joinCode.isEmpty) {
+              final groupDid = textController.text.trim();
+              if (groupDid.isEmpty) {
                 return;
               }
               Navigator.of(ctx).pop();
-              final group = await ref
-                  .read(groupProvider.notifier)
-                  .joinGroup(joinCode);
-              await ref
-                  .read(groupProvider.notifier)
-                  .loadGroupMembers(group.groupId);
-              if (!context.mounted) {
-                return;
+              try {
+                final group = await ref
+                    .read(groupProvider.notifier)
+                    .joinGroup(groupDid);
+                await ref
+                    .read(groupProvider.notifier)
+                    .loadGroupMembers(group.groupId);
+                if (!context.mounted) {
+                  return;
+                }
+                await openGroupChat(
+                  context,
+                  ref,
+                  group,
+                  closeCurrentRouteOnDesktop: true,
+                );
+              } catch (error) {
+                ref
+                    .read(uiFeedbackProvider.notifier)
+                    .showError(AppMessage.fromError(error));
               }
-              await openGroupChat(
-                context,
-                ref,
-                group,
-                closeCurrentRouteOnDesktop: true,
-              );
             },
             child: Text(context.l10n.commonJoin),
           ),
@@ -188,7 +196,6 @@ class GroupDetailPage extends ConsumerStatefulWidget {
 }
 
 class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
-  String? _joinCode;
   late GroupSummary _group;
 
   @override
@@ -275,8 +282,9 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                             ),
                           ),
                           AppPill(label: _group.myRole ?? 'member'),
-                          if (_joinCode?.isNotEmpty == true)
-                            AppPill(label: _joinCode!),
+                          AppPill(
+                            label: context.l10n.groupIdLabel(_group.groupId),
+                          ),
                         ],
                       ),
                     ],
@@ -286,8 +294,10 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                 AppCardSection(
                   child: Column(
                     children: <Widget>[
+                      _ActionRow(title: '添加成员', onTap: _showAddMemberDialog),
+                      const AppSectionDivider(),
                       _ActionRow(
-                        title: 'Refresh',
+                        title: context.l10n.groupRefreshSnapshot,
                         onTap: () async {
                           final refreshed = await ref
                               .read(groupProvider.notifier)
@@ -296,32 +306,6 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                             return;
                           }
                           setState(() => _group = refreshed);
-                        },
-                      ),
-                      const AppSectionDivider(),
-                      _ActionRow(
-                        title: context.l10n.groupGetJoinCode,
-                        onTap: () async {
-                          final code = await ref
-                              .read(groupProvider.notifier)
-                              .getJoinCode(_group.groupId);
-                          if (!mounted) {
-                            return;
-                          }
-                          setState(() => _joinCode = code);
-                        },
-                      ),
-                      const AppSectionDivider(),
-                      _ActionRow(
-                        title: context.l10n.groupRefreshJoinCode,
-                        onTap: () async {
-                          final code = await ref
-                              .read(groupProvider.notifier)
-                              .refreshJoinCode(_group.groupId);
-                          if (!mounted) {
-                            return;
-                          }
-                          setState(() => _joinCode = code);
                         },
                       ),
                     ],
@@ -351,6 +335,58 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
           ),
         ),
       ],
+    );
+  }
+
+  void _showAddMemberDialog() {
+    final memberController = TextEditingController();
+    AppNavigator.showDialog<void>(
+      context,
+      (ctx) => CupertinoAlertDialog(
+        title: const Text('添加成员'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: AppTextField(
+            controller: memberController,
+            label: '成员 DID',
+            placeholder: '请输入成员 DID',
+            keyboardType: TextInputType.text,
+          ),
+        ),
+        actions: <Widget>[
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(context.l10n.commonCancel),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () async {
+              final memberDid = memberController.text.trim();
+              if (memberDid.isEmpty) {
+                return;
+              }
+              Navigator.of(ctx).pop();
+              try {
+                final updated = await ref
+                    .read(groupProvider.notifier)
+                    .addGroupMember(
+                      groupId: _group.groupId,
+                      memberDid: memberDid,
+                    );
+                if (!mounted) {
+                  return;
+                }
+                setState(() => _group = updated);
+              } catch (error) {
+                ref
+                    .read(uiFeedbackProvider.notifier)
+                    .showError(AppMessage.fromError(error));
+              }
+            },
+            child: const Text('添加'),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -83,45 +83,25 @@ class _MacConversationWorkspace extends StatelessWidget {
           final availableWidth = constraints.maxWidth.isFinite
               ? constraints.maxWidth
               : 1200.0;
-          final listWidth = _listPaneWidth(availableWidth);
-          final detailWidth = _detailPaneWidth(availableWidth);
-          final canShowIdentityPanel =
-              selectedConversation != null &&
-              availableWidth - listWidth - detailWidth - 3 >= 360;
 
-          return Row(
-            children: <Widget>[
-              SizedBox(
-                width: listWidth,
-                child: ConversationListPage(
-                  embedded: true,
-                  macStyle: true,
-                  selectedThreadId: selectedConversation?.threadId,
-                  bottomInset: 18,
-                  onConversationSelected: onConversationSelected,
-                ),
+          return AwikiPaneLayout(
+            listPaneWidth: _listPaneWidth(availableWidth),
+            minListPaneWidth: _minListPaneWidth(availableWidth),
+            minDetailPaneWidth: _minDetailPaneWidth(availableWidth),
+            listPane: SizedBox(
+              key: const Key('mac-conversation-list-pane'),
+              child: ConversationListPage(
+                embedded: true,
+                macStyle: true,
+                selectedThreadId: selectedConversation?.threadId,
+                bottomInset: 18,
+                onConversationSelected: onConversationSelected,
               ),
-              Container(width: 1, color: const Color(0xFFE5EAF2)),
-              Expanded(
-                child: selectedConversation == null
-                    ? const AwikiWorkspaceEmptyDetail()
-                    : ChatView(
-                        conversation: selectedConversation!,
-                        embedded: true,
-                        macStyle: true,
-                        onBack: onClearSelection,
-                      ),
-              ),
-              if (canShowIdentityPanel) ...<Widget>[
-                Container(width: 1, color: const Color(0xFFE5EAF2)),
-                SizedBox(
-                  width: detailWidth,
-                  child: _MacAgentDetailPanel(
-                    conversation: selectedConversation!,
-                  ),
-                ),
-              ],
-            ],
+            ),
+            detailPane: _MacConversationDetailArea(
+              selectedConversation: selectedConversation,
+              onClearSelection: onClearSelection,
+            ),
           );
         },
       ),
@@ -141,8 +121,64 @@ class _MacConversationWorkspace extends StatelessWidget {
     return 340;
   }
 
+  double _minListPaneWidth(double availableWidth) {
+    return availableWidth < 700 ? 220 : 240;
+  }
+
+  double _minDetailPaneWidth(double availableWidth) {
+    return availableWidth < 760 ? 320 : 360;
+  }
+}
+
+class _MacConversationDetailArea extends StatelessWidget {
+  const _MacConversationDetailArea({
+    required this.selectedConversation,
+    required this.onClearSelection,
+  });
+
+  final ConversationSummary? selectedConversation;
+  final VoidCallback onClearSelection;
+
+  @override
+  Widget build(BuildContext context) {
+    if (selectedConversation == null) {
+      return const AwikiWorkspaceEmptyDetail();
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : 640.0;
+        final detailWidth = _detailPaneWidth(availableWidth);
+        final canShowIdentityPanel = availableWidth >= detailWidth + 370;
+
+        return Row(
+          children: <Widget>[
+            Expanded(
+              child: ChatView(
+                conversation: selectedConversation!,
+                embedded: true,
+                macStyle: true,
+                onBack: onClearSelection,
+              ),
+            ),
+            if (canShowIdentityPanel) ...<Widget>[
+              Container(width: 1, color: const Color(0xFFE5EAF2)),
+              SizedBox(
+                width: detailWidth,
+                child: _MacAgentDetailPanel(
+                  conversation: selectedConversation!,
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
   double _detailPaneWidth(double availableWidth) {
-    if (availableWidth < 1180) {
+    if (availableWidth < 820) {
       return 244;
     }
     return 270;
@@ -164,11 +200,11 @@ class _MacAgentDetailPanel extends StatelessWidget {
         ? conversation.targetDid!.trim()
         : conversation.groupId ?? conversation.threadId;
     return DecoratedBox(
-      decoration: const BoxDecoration(color: Color(0xFFFBFDFF)),
+      decoration: const BoxDecoration(color: Color(0xFFF8FAFD)),
       child: SafeArea(
         bottom: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+          padding: const EdgeInsets.fromLTRB(18, 22, 18, 22),
           children: <Widget>[
             const Row(
               children: <Widget>[
@@ -177,15 +213,15 @@ class _MacAgentDetailPanel extends StatelessWidget {
                     'Agent 身份卡',
                     style: TextStyle(
                       color: Color(0xFF101B32),
-                      fontSize: 17,
+                      fontSize: 16,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
                 ),
-                Icon(CupertinoIcons.xmark, size: 18, color: Color(0xFF34415C)),
+                Icon(CupertinoIcons.xmark, size: 17, color: Color(0xFF34415C)),
               ],
             ),
-            const SizedBox(height: 26),
+            const SizedBox(height: 22),
             const _MacDetailRow(
               label: '身份状态:',
               child: Row(
@@ -200,7 +236,7 @@ class _MacAgentDetailPanel extends StatelessWidget {
                     '已验证',
                     style: TextStyle(
                       color: Color(0xFF17BF63),
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -216,7 +252,7 @@ class _MacAgentDetailPanel extends StatelessWidget {
               label: '类型:',
               text: conversation.isGroup ? 'Group Agent' : 'Personal Agent',
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             const _MacDetailCard(
               title: '会话能力',
               children: <Widget>[
@@ -235,7 +271,7 @@ class _MacAgentDetailPanel extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
             _MacDetailCard(
               title: '会话状态',
               children: <Widget>[
@@ -275,17 +311,17 @@ class _MacDetailRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           SizedBox(
-            width: 76,
+            width: 70,
             child: Text(
               label,
               style: const TextStyle(
                 color: Color(0xFF34415C),
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -299,7 +335,7 @@ class _MacDetailRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Color(0xFF17213A),
-                    fontSize: 13,
+                    fontSize: 12,
                     height: 1.35,
                   ),
                 ),
@@ -319,10 +355,10 @@ class _MacDetailCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: CupertinoColors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFFE5EAF2)),
       ),
       child: Column(
@@ -332,11 +368,11 @@ class _MacDetailCard extends StatelessWidget {
             title,
             style: const TextStyle(
               color: Color(0xFF17213A),
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: FontWeight.w900,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Wrap(spacing: 8, runSpacing: 8, children: children),
         ],
       ),
@@ -353,17 +389,17 @@ class _MacAbilityGridItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 104,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      width: 96,
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
       decoration: BoxDecoration(
         color: const Color(0xFFFBFDFF),
-        borderRadius: BorderRadius.circular(9),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFFE5EAF2)),
       ),
       child: Row(
         children: <Widget>[
-          Icon(icon, size: 16, color: const Color(0xFF34415C)),
-          const SizedBox(width: 7),
+          Icon(icon, size: 15, color: const Color(0xFF34415C)),
+          const SizedBox(width: 6),
           Expanded(
             child: Text(
               label,
@@ -371,7 +407,7 @@ class _MacAbilityGridItem extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Color(0xFF34415C),
-                fontSize: 11,
+                fontSize: 10.5,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -395,35 +431,32 @@ class _MacStatusLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 210,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5),
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(color: Color(0xFF66728A), fontSize: 12),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: Color(0xFF66728A), fontSize: 12),
+            ),
+          ),
+          Icon(CupertinoIcons.circle_fill, color: color, size: 7),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              value,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: Color(0xFF17213A),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            Icon(CupertinoIcons.circle_fill, color: color, size: 8),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                value,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                  color: Color(0xFF17213A),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

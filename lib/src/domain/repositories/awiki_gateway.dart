@@ -49,16 +49,17 @@ abstract class AwikiGateway {
     required String goal,
     required String rules,
     String? messagePrompt,
-    String? groupMode,
   });
 
-  Future<GroupSummary> joinGroup(String joinCode);
+  Future<GroupSummary> joinGroup(String groupDid);
+
+  Future<GroupSummary> addGroupMember({
+    required String groupId,
+    required String memberDid,
+    String role = 'member',
+  });
 
   Future<GroupSummary> getGroup(String groupId);
-
-  Future<String?> getGroupJoinCode(String groupId);
-
-  Future<String?> refreshGroupJoinCode(String groupId);
 
   Future<List<GroupSummary>> listGroups();
 

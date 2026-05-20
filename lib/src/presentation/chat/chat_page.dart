@@ -120,15 +120,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
                     : (widget.embedded
                           ? responsive.spacing(32)
                           : responsive.tabContentHorizontalPadding),
-                macStyle ? 24 : responsive.spacing(24),
+                macStyle ? 20 : responsive.spacing(24),
                 macStyle
                     ? 28
                     : (widget.embedded
                           ? responsive.spacing(32)
                           : responsive.tabContentHorizontalPadding),
-                macStyle
-                    ? 106
-                    : responsive.spacing(widget.embedded ? 124 : 140),
+                macStyle ? 92 : responsive.spacing(widget.embedded ? 124 : 140),
               ),
               itemCount: messages.length,
               itemBuilder: (_, index) {
@@ -137,7 +135,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                 final senderLabel = _displayNameForMessage(context, message);
                 return Padding(
                   padding: EdgeInsets.only(
-                    bottom: macStyle ? 18 : responsive.spacing(24),
+                    bottom: macStyle ? 16 : responsive.spacing(24),
                   ),
                   child: Column(
                     children: <Widget>[
@@ -322,83 +320,77 @@ class _ChatHeader extends StatelessWidget {
     final responsive = context.awikiResponsive;
     if (macStyle) {
       return Container(
-        height: 72,
-        padding: const EdgeInsets.fromLTRB(24, 0, 22, 0),
+        height: 64,
+        padding: const EdgeInsets.fromLTRB(22, 0, 18, 0),
         decoration: const BoxDecoration(
           color: CupertinoColors.white,
           border: Border(bottom: BorderSide(color: Color(0xFFE5EAF2))),
         ),
-        child: Row(
-          children: <Widget>[
-            AvatarBadge(seed: compactName, size: 44),
-            const SizedBox(width: 12),
-            Text(
-              compactName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xFF101B32),
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(width: 10),
-            const _MacChatPill(
-              label: '我的智能体',
-              color: Color(0xFFEAF2FF),
-              textColor: Color(0xFF0B65F8),
-            ),
-            const SizedBox(width: 8),
-            const _MacChatPill(
-              label: '安全协作中',
-              color: Color(0xFFE6F8EE),
-              textColor: Color(0xFF10A85A),
-            ),
-            const Spacer(),
-            const Icon(
-              CupertinoIcons.search,
-              color: Color(0xFF34415C),
-              size: 22,
-            ),
-            const SizedBox(width: 22),
-            const Icon(
-              CupertinoIcons.ellipsis,
-              color: Color(0xFF34415C),
-              size: 24,
-            ),
-            const SizedBox(width: 18),
-            GestureDetector(
-              onTap: onDetails,
-              behavior: HitTestBehavior.opaque,
-              child: Container(
-                height: 36,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: CupertinoColors.white,
-                  borderRadius: BorderRadius.circular(9),
-                  border: Border.all(color: const Color(0xFFDDE5F0)),
-                ),
-                child: const Row(
-                  children: <Widget>[
-                    Icon(
-                      CupertinoIcons.person_crop_square,
-                      color: Color(0xFF34415C),
-                      size: 18,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      '身份卡',
-                      style: TextStyle(
-                        color: Color(0xFF17213A),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final showPills = width >= 500;
+            final showSecurityPill = width >= 620;
+            final showSearch = width >= 430;
+            final showMore = width >= 380;
+            final showIdentityLabel = width >= 470;
+            final avatarSize = width >= 360 ? 40.0 : 36.0;
+            final actionGap = width >= 520 ? 12.0 : 8.0;
+
+            return Row(
+              children: <Widget>[
+                AvatarBadge(seed: compactName, size: avatarSize),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Row(
+                    children: <Widget>[
+                      Flexible(
+                        child: Text(
+                          compactName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF101B32),
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                      if (showPills) ...<Widget>[
+                        const SizedBox(width: 8),
+                        const _MacChatPill(
+                          label: '我的智能体',
+                          color: Color(0xFFEAF2FF),
+                          textColor: Color(0xFF0B65F8),
+                        ),
+                      ],
+                      if (showSecurityPill) ...<Widget>[
+                        const SizedBox(width: 6),
+                        const _MacChatPill(
+                          label: '安全协作中',
+                          color: Color(0xFFE6F8EE),
+                          textColor: Color(0xFF10A85A),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-              ),
-            ),
-          ],
+                if (showSearch) ...<Widget>[
+                  SizedBox(width: actionGap),
+                  const _MacChatHeaderIcon(icon: CupertinoIcons.search),
+                ],
+                if (showMore) ...<Widget>[
+                  SizedBox(width: actionGap),
+                  const _MacChatHeaderIcon(icon: CupertinoIcons.ellipsis),
+                ],
+                SizedBox(width: actionGap),
+                _MacChatIdentityButton(
+                  showLabel: showIdentityLabel,
+                  onTap: onDetails,
+                ),
+              ],
+            );
+          },
         ),
       );
     }
@@ -503,7 +495,7 @@ class _MacChatPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(999),
@@ -512,8 +504,68 @@ class _MacChatPill extends StatelessWidget {
         label,
         style: TextStyle(
           color: textColor,
-          fontSize: 12,
+          fontSize: 11.5,
           fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _MacChatHeaderIcon extends StatelessWidget {
+  const _MacChatHeaderIcon({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Icon(icon, color: const Color(0xFF34415C), size: 21);
+  }
+}
+
+class _MacChatIdentityButton extends StatelessWidget {
+  const _MacChatIdentityButton({required this.showLabel, required this.onTap});
+
+  final bool showLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 34,
+        width: showLabel ? null : 34,
+        padding: showLabel
+            ? const EdgeInsets.symmetric(horizontal: 12)
+            : EdgeInsets.zero,
+        decoration: BoxDecoration(
+          color: CupertinoColors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFDDE5F0)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const Icon(
+              CupertinoIcons.person_crop_square,
+              color: Color(0xFF34415C),
+              size: 17,
+            ),
+            if (showLabel) ...<Widget>[
+              const SizedBox(width: 7),
+              const Text(
+                '身份卡',
+                style: TextStyle(
+                  color: Color(0xFF17213A),
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -563,10 +615,10 @@ class _MessageBubble extends StatelessWidget {
       children: <Widget>[
         Container(
           constraints: const BoxConstraints(maxWidth: 420),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
             color: isMine ? const Color(0xFFEAF2FF) : CupertinoColors.white,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: isMine ? const Color(0xFFEAF2FF) : const Color(0xFFDDE5F0),
             ),
@@ -575,7 +627,7 @@ class _MessageBubble extends StatelessWidget {
             message.content,
             style: const TextStyle(
               color: Color(0xFF17213A),
-              fontSize: 15,
+              fontSize: 14,
               height: 1.45,
             ),
           ),
@@ -624,7 +676,7 @@ class _MessageBubble extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         if (!isMine) ...<Widget>[
-          AvatarBadge(seed: senderLabel, size: 36),
+          AvatarBadge(seed: senderLabel, size: 34),
           const SizedBox(width: 10),
         ],
         Flexible(child: bubble),
@@ -774,76 +826,88 @@ class _Composer extends StatelessWidget {
     if (macStyle) {
       return SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 18),
-          child: Container(
-            height: 58,
-            padding: const EdgeInsets.fromLTRB(14, 0, 10, 0),
-            decoration: BoxDecoration(
-              color: CupertinoColors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFDDE5F0)),
-              boxShadow: const <BoxShadow>[
-                BoxShadow(
-                  color: Color(0x0F0B1F3A),
-                  blurRadius: 20,
-                  offset: Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Row(
-              children: <Widget>[
-                const Icon(
-                  CupertinoIcons.paperclip,
-                  color: Color(0xFF34415C),
-                  size: 24,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: CupertinoTextField(
-                    controller: controller,
-                    placeholder: context.l10n.chatInputPlaceholder,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) async => _submitIfNeeded(),
-                    decoration: null,
-                    padding: EdgeInsets.zero,
-                    style: const TextStyle(
-                      color: Color(0xFF17213A),
-                      fontSize: 14,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 360;
+            final showAttachment = constraints.maxWidth >= 280;
+            final showEmoji = constraints.maxWidth >= 330;
+            final horizontal = compact ? 14.0 : 22.0;
+            return Padding(
+              padding: EdgeInsets.fromLTRB(horizontal, 8, horizontal, 16),
+              child: Container(
+                height: 52,
+                padding: const EdgeInsets.fromLTRB(12, 0, 8, 0),
+                decoration: BoxDecoration(
+                  color: CupertinoColors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFDDE5F0)),
+                  boxShadow: const <BoxShadow>[
+                    BoxShadow(
+                      color: Color(0x0F0B1F3A),
+                      blurRadius: 18,
+                      offset: Offset(0, 6),
                     ),
-                    placeholderStyle: const TextStyle(
-                      color: Color(0xFF8A96AA),
-                      fontSize: 14,
-                    ),
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                const Icon(
-                  CupertinoIcons.smiley,
-                  color: Color(0xFF34415C),
-                  size: 24,
-                ),
-                const SizedBox(width: 12),
-                GestureDetector(
-                  onTap: _submitIfNeeded,
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0B65F8),
-                      borderRadius: BorderRadius.circular(10),
+                child: Row(
+                  children: <Widget>[
+                    if (showAttachment) ...<Widget>[
+                      const Icon(
+                        CupertinoIcons.paperclip,
+                        color: Color(0xFF34415C),
+                        size: 22,
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                    Expanded(
+                      child: CupertinoTextField(
+                        controller: controller,
+                        placeholder: context.l10n.chatInputPlaceholder,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) async => _submitIfNeeded(),
+                        decoration: null,
+                        padding: EdgeInsets.zero,
+                        style: const TextStyle(
+                          color: Color(0xFF17213A),
+                          fontSize: 13.5,
+                        ),
+                        placeholderStyle: const TextStyle(
+                          color: Color(0xFF8A96AA),
+                          fontSize: 13.5,
+                        ),
+                      ),
                     ),
-                    child: const Icon(
-                      CupertinoIcons.paperplane_fill,
-                      color: CupertinoColors.white,
-                      size: 20,
+                    if (showEmoji) ...<Widget>[
+                      const SizedBox(width: 10),
+                      const Icon(
+                        CupertinoIcons.smiley,
+                        color: Color(0xFF34415C),
+                        size: 22,
+                      ),
+                    ],
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap: _submitIfNeeded,
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0B65F8),
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: const Icon(
+                          CupertinoIcons.paperplane_fill,
+                          color: CupertinoColors.white,
+                          size: 18,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
       );
     }

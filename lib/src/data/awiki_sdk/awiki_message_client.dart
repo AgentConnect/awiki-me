@@ -9,9 +9,9 @@ class AwikiMessageClient {
     required AwikiServiceClient serviceClient,
     AwikiAnpProofBuilder? proofBuilder,
     Random? random,
-  })  : _serviceClient = serviceClient,
-        _proofBuilder = proofBuilder ?? AwikiAnpProofBuilder(),
-        _random = random ?? Random.secure();
+  }) : _serviceClient = serviceClient,
+       _proofBuilder = proofBuilder ?? AwikiAnpProofBuilder(),
+       _random = random ?? Random.secure();
 
   static const String rpcEndpoint = '/im/rpc';
 
@@ -190,7 +190,10 @@ class AwikiMessageClient {
     required String goal,
     required String rules,
     String? messagePrompt,
-    String? admissionMode,
+    String discoverability = 'private',
+    String admissionMode = 'open-join',
+    String messageSecurityProfile = 'transport-protected',
+    String bootstrapSecurityProfile = 'transport-protected',
   }) async {
     _requireE1Session(session);
     const method = 'group.create';
@@ -205,13 +208,18 @@ class AwikiMessageClient {
       'group_profile': <String, Object?>{
         'display_name': name,
         if (description.isNotEmpty) 'description': description,
+        if (discoverability.isNotEmpty) 'discoverability': discoverability,
         if (slug.isNotEmpty) 'slug': slug,
         if (goal.isNotEmpty) 'goal': goal,
         if (rules.isNotEmpty) 'rules': rules,
         if (messagePrompt != null && messagePrompt.isNotEmpty)
           'message_prompt': messagePrompt,
       },
-      'group_policy': _groupPolicy(admissionMode),
+      'group_policy': _groupPolicy(
+        admissionMode: admissionMode,
+        messageSecurityProfile: messageSecurityProfile,
+        bootstrapSecurityProfile: bootstrapSecurityProfile,
+      ),
     };
     final params = await _signedParams(
       session: session,
@@ -238,6 +246,32 @@ class AwikiMessageClient {
       groupDid: groupDid,
       method: 'group.join',
       body: <String, Object?>{
+        if (reasonText != null && reasonText.isNotEmpty)
+          'reason_text': reasonText,
+      },
+    );
+  }
+
+  Future<Map<String, Object?>> addGroupMember({
+    required AwikiAnpSession session,
+    required String groupDid,
+    required String memberDid,
+    String role = 'member',
+    String? reasonText,
+  }) async {
+    _requireE1Session(session);
+    final normalizedMemberDid = memberDid.trim();
+    if (normalizedMemberDid.isEmpty) {
+      throw ArgumentError('memberDid is required.');
+    }
+    final normalizedRole = role.trim();
+    return _groupMutation(
+      session: session,
+      groupDid: groupDid,
+      method: 'group.add',
+      body: <String, Object?>{
+        'member_did': normalizedMemberDid,
+        if (normalizedRole.isNotEmpty) 'role': normalizedRole,
         if (reasonText != null && reasonText.isNotEmpty)
           'reason_text': reasonText,
       },
@@ -410,15 +444,21 @@ class AwikiMessageClient {
     };
   }
 
-  Map<String, Object?> _groupPolicy(String? admissionMode) {
+  Map<String, Object?> _groupPolicy({
+    required String admissionMode,
+    required String messageSecurityProfile,
+    required String bootstrapSecurityProfile,
+  }) {
     return <String, Object?>{
-      'admission_mode': admissionMode != null && admissionMode.isNotEmpty
-          ? admissionMode
-          : 'open-join',
+      'admission_mode': admissionMode.isNotEmpty ? admissionMode : 'open-join',
       'attachments_allowed': true,
-      'max_members': '500',
-      'message_security_profile': 'transport-protected',
-      'bootstrap_security_profile': 'transport-protected',
+      'max_members': 500,
+      'message_security_profile': messageSecurityProfile.isNotEmpty
+          ? messageSecurityProfile
+          : 'transport-protected',
+      'bootstrap_security_profile': bootstrapSecurityProfile.isNotEmpty
+          ? bootstrapSecurityProfile
+          : 'transport-protected',
       'permissions': <String, Object?>{
         'send': 'member',
         'add': 'admin',

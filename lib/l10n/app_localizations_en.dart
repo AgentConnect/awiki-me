@@ -382,16 +382,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get groupListEmpty =>
-      'No groups yet. Create one or join with a 6-digit join code.';
+      'No groups yet. Create one or join with a Group DID.';
 
   @override
   String get groupListLoading => 'Loading group data...';
 
   @override
-  String get groupJoinDialogTitle => 'Join with a join code';
+  String get groupJoinDialogTitle => 'Join with a Group DID';
 
   @override
-  String get groupJoinDialogPlaceholder => 'Enter a 6-digit join code';
+  String get groupJoinDialogPlaceholder => 'Enter the group DID';
 
   @override
   String get groupNoDescription => 'No group description yet';
@@ -407,23 +407,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String groupJoinCodeLabel(Object code) {
-    return 'Join code: $code';
-  }
-
-  @override
   String groupIdLabel(Object groupId) {
-    return 'Group ID: $groupId';
+    return 'Group DID: $groupId';
   }
 
   @override
   String get groupEnterChat => 'Enter group chat';
-
-  @override
-  String get groupGetJoinCode => 'Get current join code';
-
-  @override
-  String get groupRefreshJoinCode => 'Refresh join code';
 
   @override
   String get groupRefreshSnapshot => 'Refresh group details and members';
@@ -437,15 +426,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get groupCreateTitle => 'Create group';
-
-  @override
-  String get groupModeTitle => 'Group mode';
-
-  @override
-  String get groupModeChat => 'Chat';
-
-  @override
-  String get groupModeDiscovery => 'Discovery';
 
   @override
   String get groupFieldName => 'Name';

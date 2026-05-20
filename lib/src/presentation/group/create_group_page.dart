@@ -25,7 +25,6 @@ class _CreateGroupPageState extends ConsumerState<CreateGroupPage> {
   final _goalController = TextEditingController();
   final _rulesController = TextEditingController();
   final _promptController = TextEditingController();
-  String _groupMode = 'chat';
   bool _isLoading = false;
 
   @override
@@ -61,7 +60,6 @@ class _CreateGroupPageState extends ConsumerState<CreateGroupPage> {
             goal: _goalController.text.trim(),
             rules: _rulesController.text.trim(),
             messagePrompt: _promptController.text.trim(),
-            groupMode: _groupMode,
           );
       await ref.read(groupProvider.notifier).loadGroupMembers(group.groupId);
       if (!mounted) {
@@ -129,32 +127,6 @@ class _CreateGroupPageState extends ConsumerState<CreateGroupPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(
-                        context.l10n.groupModeTitle,
-                        style: AwikiMeTextStyles.sectionTitle,
-                      ),
-                      const SizedBox(height: 12),
-                      AppSurface(
-                        color: theme.mutedSurface,
-                        padding: const EdgeInsets.all(4),
-                        radius: AwikiMeRadii.pill,
-                        child: Row(
-                          children: <Widget>[
-                            _ModeButton(
-                              active: _groupMode == 'chat',
-                              label: context.l10n.groupModeChat,
-                              onTap: () => setState(() => _groupMode = 'chat'),
-                            ),
-                            _ModeButton(
-                              active: _groupMode == 'discovery',
-                              label: context.l10n.groupModeDiscovery,
-                              onTap: () =>
-                                  setState(() => _groupMode = 'discovery'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
                       _buildField(
                         context.l10n.groupFieldName,
                         _nameController,
@@ -214,52 +186,6 @@ class _CreateGroupPageState extends ConsumerState<CreateGroupPage> {
         placeholder: placeholder,
         multiline: multiline,
         enabled: !_isLoading,
-      ),
-    );
-  }
-}
-
-class _ModeButton extends StatelessWidget {
-  const _ModeButton({
-    required this.active,
-    required this.label,
-    required this.onTap,
-  });
-
-  final bool active;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: active ? theme.surface : CupertinoColors.transparent,
-            borderRadius: BorderRadius.circular(AwikiMeRadii.pill),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              strutStyle: const StrutStyle(
-                fontSize: 14,
-                height: 1,
-                forceStrutHeight: true,
-              ),
-              style: TextStyle(
-                fontSize: 14,
-                height: 1,
-                fontWeight: FontWeight.w700,
-                color: active ? theme.title : theme.primaryDark,
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
