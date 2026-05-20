@@ -40,6 +40,8 @@ dev_dependencies:
   flutter_native_splash: ^2.4.4
 
 flutter:
+  config:
+    enable-swift-package-manager: false
   generate: true
   uses-material-design: true
   assets:
