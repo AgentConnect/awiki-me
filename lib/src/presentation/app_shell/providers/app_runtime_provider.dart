@@ -47,6 +47,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   final Ref ref;
   static const Duration _requestTimeout = Duration(seconds: 20);
+  bool _isRecoveringRealtimeSession = false;
   late final ProviderSubscription<AppLifecycleState> _lifecycleSubscription;
   late final ProviderSubscription<AsyncValue<RealtimeConnectionStatus>>
   _realtimeStatusSubscription;
@@ -247,10 +248,18 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     AsyncValue<RealtimeConnectionStatus> next,
   ) {
     final status = next.valueOrNull;
+    final previousStatus = previous?.valueOrNull;
+    if (status == RealtimeConnectionStatus.failed ||
+        status == RealtimeConnectionStatus.disconnected) {
+      final session = ref.read(sessionProvider).session;
+      if (session != null) {
+        unawaited(_recoverRealtimeSession(session));
+      }
+      return;
+    }
     if (status != RealtimeConnectionStatus.connected) {
       return;
     }
-    final previousStatus = previous?.valueOrNull;
     if (previousStatus != RealtimeConnectionStatus.reconnecting &&
         previousStatus != RealtimeConnectionStatus.disconnected &&
         previousStatus != RealtimeConnectionStatus.failed) {
@@ -275,6 +284,39 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
           .connect(session: session, onMessage: _handleRealtimeMessage)
           .catchError((_) {}),
     );
+  }
+
+  Future<void> _recoverRealtimeSession(SessionIdentity session) async {
+    if (_isRecoveringRealtimeSession) {
+      return;
+    }
+    _isRecoveringRealtimeSession = true;
+    try {
+      final refreshed = await ref
+          .read(awikiAccountGatewayProvider)
+          .refreshSession();
+      if (!mounted) {
+        return;
+      }
+      final effectiveSession = refreshed ?? session;
+      if (effectiveSession.jwtToken?.isNotEmpty == true) {
+        ref.read(sessionProvider.notifier).setSession(effectiveSession);
+      }
+      await _refreshAuthenticatedDataInBackground();
+      if (!mounted) {
+        return;
+      }
+      if (effectiveSession.jwtToken == session.jwtToken) {
+        return;
+      }
+      _ensureRealtimeConnected(effectiveSession);
+    } catch (_) {
+      if (mounted) {
+        await _refreshAuthenticatedDataInBackground();
+      }
+    } finally {
+      _isRecoveringRealtimeSession = false;
+    }
   }
 
   void _applyRealtimeUpdate(RealtimeUpdate update) {

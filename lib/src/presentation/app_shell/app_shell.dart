@@ -2,14 +2,17 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/app_router.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../domain/services/realtime_gateway.dart';
 import '../../l10n/l10n.dart';
 import '../conversation_list/conversation_workspace_page.dart';
+import '../conversation_list/conversation_provider.dart';
 import '../friends/friends_workspace_page.dart';
 import '../onboarding/onboarding_page.dart';
 import '../profile/profile_workspace_page.dart';
+import '../settings/settings_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/responsive_layout.dart';
@@ -66,6 +69,9 @@ class _AppShellState extends ConsumerState<AppShell> {
         );
     final responsive = context.awikiResponsive;
     final tabIndex = ref.watch(shellTabProvider);
+    final unreadCount = ref.watch(
+      conversationListProvider.select((state) => state.unreadCount),
+    );
 
     if (!session.isLoggedIn) {
       return Stack(
@@ -95,9 +101,14 @@ class _AppShellState extends ConsumerState<AppShell> {
     final content = responsive.isMacDesktop
         ? _MacDesktopShell(
             currentIndex: tabIndex,
+            unreadCount: unreadCount,
             onTap: (index) {
               ref.read(shellTabProvider.notifier).setTab(index);
             },
+            onOpenSettings: () => AppNavigator.pushWithoutAnimation(
+              context,
+              (_) => const SettingsPage(),
+            ),
             child: page,
           )
         : Column(
@@ -131,9 +142,7 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   bool _shouldShowRealtimeToast(RealtimeConnectionStatus status) {
     return status == RealtimeConnectionStatus.connecting ||
-        status == RealtimeConnectionStatus.reconnecting ||
-        status == RealtimeConnectionStatus.disconnected ||
-        status == RealtimeConnectionStatus.failed;
+        status == RealtimeConnectionStatus.reconnecting;
   }
 
   String _realtimeToastMessage(
@@ -206,12 +215,16 @@ class _AppShellState extends ConsumerState<AppShell> {
 class _MacDesktopShell extends StatelessWidget {
   const _MacDesktopShell({
     required this.currentIndex,
+    required this.unreadCount,
     required this.onTap,
+    required this.onOpenSettings,
     required this.child,
   });
 
   final int currentIndex;
+  final int unreadCount;
   final ValueChanged<int> onTap;
+  final VoidCallback onOpenSettings;
   final Widget child;
 
   @override
@@ -220,7 +233,12 @@ class _MacDesktopShell extends StatelessWidget {
       children: <Widget>[
         SizedBox(
           width: 72,
-          child: _MacDesktopRail(currentIndex: currentIndex, onTap: onTap),
+          child: _MacDesktopRail(
+            currentIndex: currentIndex,
+            unreadCount: unreadCount,
+            onTap: onTap,
+            onOpenSettings: onOpenSettings,
+          ),
         ),
         Container(width: 1, color: const Color(0xFFE5EAF2)),
         Expanded(child: child),
@@ -230,10 +248,17 @@ class _MacDesktopShell extends StatelessWidget {
 }
 
 class _MacDesktopRail extends StatelessWidget {
-  const _MacDesktopRail({required this.currentIndex, required this.onTap});
+  const _MacDesktopRail({
+    required this.currentIndex,
+    required this.unreadCount,
+    required this.onTap,
+    required this.onOpenSettings,
+  });
 
   final int currentIndex;
+  final int unreadCount;
   final ValueChanged<int> onTap;
+  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -246,15 +271,11 @@ class _MacDesktopRail extends StatelessWidget {
           return Column(
             children: <Widget>[
               SizedBox(height: compact ? 22 : 30),
-              const Text(
-                'AW',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Color(0xFF0B65F8),
-                  fontSize: 23,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -2,
-                ),
+              _MacRailAvatar(
+                key: const Key('mac-me-rail-avatar'),
+                label: 'Me',
+                selected: currentIndex == 5,
+                onTap: () => onTap(5),
               ),
               SizedBox(height: compact ? 22 : 28),
               Expanded(
@@ -266,7 +287,7 @@ class _MacDesktopRail extends StatelessWidget {
                         icon: CupertinoIcons.chat_bubble_2_fill,
                         label: '消息',
                         selected: currentIndex == 0,
-                        badge: '12',
+                        badge: _formatUnreadBadge(unreadCount),
                         compact: compact,
                         onTap: () => onTap(0),
                       ),
@@ -306,26 +327,27 @@ class _MacDesktopRail extends StatelessWidget {
                       _MacDesktopRailItem(
                         icon: CupertinoIcons.gear_alt,
                         label: '配置',
-                        selected: currentIndex == 5,
+                        selected: false,
                         compact: compact,
-                        onTap: () => onTap(5),
+                        onTap: onOpenSettings,
                       ),
                     ],
                   ),
                 ),
               ),
-              Padding(
-                padding: EdgeInsets.only(
-                  top: compact ? 10 : 14,
-                  bottom: compact ? 12 : 18,
-                ),
-                child: _MacRailAvatar(label: 'M', selected: currentIndex == 5),
-              ),
+              SizedBox(height: compact ? 12 : 18),
             ],
           );
         },
       ),
     );
+  }
+
+  String? _formatUnreadBadge(int count) {
+    if (count <= 0) {
+      return null;
+    }
+    return count > 99 ? '99+' : '$count';
   }
 }
 
@@ -434,30 +456,47 @@ class _MacDesktopRailItem extends StatelessWidget {
 }
 
 class _MacRailAvatar extends StatelessWidget {
-  const _MacRailAvatar({required this.label, required this.selected});
+  const _MacRailAvatar({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   final String label;
   final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 38,
-      height: 38,
-      decoration: BoxDecoration(
-        color: selected ? const Color(0xFFDDEBFF) : const Color(0xFFEAF2FF),
-        borderRadius: BorderRadius.circular(19),
-        border: Border.all(
-          color: selected ? const Color(0xFF0B65F8) : const Color(0x00FFFFFF),
-        ),
-      ),
-      child: Center(
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: Color(0xFF0B65F8),
-            fontSize: 16,
-            fontWeight: FontWeight.w900,
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '我',
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFDDEBFF) : const Color(0xFFEAF2FF),
+            borderRadius: BorderRadius.circular(19),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFF0B65F8)
+                  : const Color(0x00FFFFFF),
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF0B65F8),
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
           ),
         ),
       ),

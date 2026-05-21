@@ -75,6 +75,58 @@ void main() {
     expect(find.text('agent'), findsOneWidget);
   });
 
+  testWidgets('个人资料页在主页 markdown 成功返回空正文时显示空状态', (tester) async {
+    const profile = UserProfile(
+      did: 'did:test:visible-profile',
+      nickName: 'Alice',
+      bio: 'Bio',
+      tags: <String>[],
+      profileMarkdown: '# Alice\n\n# 如何与我通信\n\nKeep this copy',
+      handle: 'alice',
+    );
+    final gateway = FakeAwikiGateway()..myProfile = profile;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ProfilePage(),
+        gateway: gateway,
+        profile: profile,
+        homepageMarkdownLoader: (_) async => '# Alice\n\n',
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('Keep this copy'), findsNothing);
+    expect(find.text('暂无 profile'), findsOneWidget);
+  });
+
+  testWidgets('个人资料页不会用主页 HTML 覆盖已有正文', (tester) async {
+    const profile = UserProfile(
+      did: 'did:test:html-profile',
+      nickName: 'Alice',
+      bio: 'Bio',
+      tags: <String>[],
+      profileMarkdown: '# Alice\n\n# 如何与我通信\n\nKeep this copy',
+      handle: 'alice',
+    );
+    final gateway = FakeAwikiGateway()..myProfile = profile;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ProfilePage(),
+        gateway: gateway,
+        profile: profile,
+        homepageMarkdownLoader: (_) async =>
+            '<!doctype html><html><body></body></html>',
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('Keep this copy'), findsOneWidget);
+  });
+
   testWidgets('个人资料页显示粉丝和关注数量', (tester) async {
     const profile = UserProfile(
       did: 'did:test:789',

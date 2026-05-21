@@ -354,7 +354,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsDeleteCredentialConfirmAction => 'Delete credential';
 
   @override
-  String get quickActionsTitle => 'Quick actions';
+  String get quickActionsTitle => 'More actions';
 
   @override
   String get quickActionCreateGroup => 'Start group chat';

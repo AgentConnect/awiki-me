@@ -148,7 +148,7 @@
     }
   },
   "settingsDeleteCredentialConfirmAction": "Delete credential",
-  "quickActionsTitle": "Quick actions",
+  "quickActionsTitle": "More actions",
   "quickActionCreateGroup": "Start group chat",
   "quickActionJoinGroup": "Join group chat",
   "quickActionAddFriend": "Add friend",

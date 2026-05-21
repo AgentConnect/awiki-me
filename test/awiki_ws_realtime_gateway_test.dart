@@ -180,4 +180,52 @@ void main() {
     await gateway.disconnect();
     await server.close(force: true);
   });
+
+  test(
+    'stops reconnecting after repeated websocket handshake failures',
+    () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      var requestCount = 0;
+      unawaited(
+        server.listen((request) async {
+          requestCount += 1;
+          request.response.statusCode = HttpStatus.serviceUnavailable;
+          await request.response.close();
+        }).asFuture<void>(),
+      );
+      final gateway = AwikiWsRealtimeGateway(
+        messageServiceUrl: 'http://127.0.0.1:${server.port}',
+        reconnectBaseDelay: const Duration(milliseconds: 10),
+        reconnectMaxDelay: const Duration(milliseconds: 20),
+      );
+      final disconnected = Completer<void>();
+      final statusSubscription = gateway.connectionStatusStream.listen((
+        status,
+      ) {
+        if (status == RealtimeConnectionStatus.disconnected &&
+            !disconnected.isCompleted) {
+          disconnected.complete();
+        }
+      });
+
+      await gateway.connect(
+        session: const SessionIdentity(
+          did: 'did:wba:awiki.ai:agents:alice:e1_alice',
+          credentialName: 'default',
+          displayName: 'Alice',
+          jwtToken: 'jwt-token',
+        ),
+        onMessage: (_) async {},
+      );
+
+      await disconnected.future.timeout(const Duration(seconds: 5));
+
+      expect(requestCount, 3);
+      expect(gateway.connectionStatus, RealtimeConnectionStatus.disconnected);
+
+      await statusSubscription.cancel();
+      await gateway.disconnect();
+      await server.close(force: true);
+    },
+  );
 }

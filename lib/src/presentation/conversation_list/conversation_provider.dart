@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
+import '../../core/group_display_name.dart';
 import '../../domain/entities/conversation_summary.dart';
+import '../../domain/entities/group_summary.dart';
 import '../../domain/services/notification_facade.dart';
 
 class ConversationListState {
@@ -52,6 +54,44 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       ..sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
     state = state.copyWith(conversations: merged);
     _notification.updateBadgeCount(state.unreadCount);
+  }
+
+  void applyGroupNames(List<GroupSummary> groups) {
+    final groupNamesById = <String, String>{
+      for (final group in groups)
+        if (!GroupDisplayName.isIdLike(group.name, group.groupId))
+          group.groupId: group.name,
+    };
+    if (groupNamesById.isEmpty || state.conversations.isEmpty) {
+      return;
+    }
+
+    var changed = false;
+    final next = state.conversations.map((conversation) {
+      final groupId = conversation.groupId?.trim() ?? '';
+      final groupName = groupNamesById[groupId];
+      if (!conversation.isGroup ||
+          groupName == null ||
+          groupName == conversation.displayName) {
+        return conversation;
+      }
+      changed = true;
+      return ConversationSummary(
+        threadId: conversation.threadId,
+        displayName: groupName,
+        lastMessagePreview: conversation.lastMessagePreview,
+        lastMessageAt: conversation.lastMessageAt,
+        unreadCount: conversation.unreadCount,
+        isGroup: conversation.isGroup,
+        targetDid: conversation.targetDid,
+        groupId: conversation.groupId,
+        avatarSeed: conversation.avatarSeed,
+      );
+    }).toList();
+    if (!changed) {
+      return;
+    }
+    state = state.copyWith(conversations: next);
   }
 
   void markThreadReadLocal(String threadId) {

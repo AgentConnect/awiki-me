@@ -48,6 +48,7 @@ class ConversationListPage extends ConsumerWidget {
         conversations: state.conversations,
         selectedThreadId: selectedThreadId,
         bottomInset: bottomInset,
+        onRefresh: () => ref.read(conversationListProvider.notifier).refresh(),
         onOpen: (item) => _openConversation(context, ref, item),
         onShowActions: () => showCommonQuickActionsMenu(context, ref),
         onStartConversation: () => showStartConversationDialog(context, ref),
@@ -60,35 +61,14 @@ class ConversationListPage extends ConsumerWidget {
         (_) => const SettingsPage(),
       ),
       onQuickActionsTap: () => showCommonQuickActionsMenu(context, ref),
-      child: state.conversations.isEmpty
-          ? _EmptyState(
-              embedded: embedded,
-              title: context.l10n.conversationsEmptyTitle,
-              subtitle: context.l10n.conversationsEmptySubtitle,
-            )
-          : ListView.builder(
-              padding: EdgeInsets.only(
-                top: responsive.spacing(8),
-                bottom: bottomInset,
-              ),
-              itemCount: state.conversations.length,
-              itemBuilder: (_, index) {
-                final item = state.conversations[index];
-                return _ConversationRow(
-                  title: DidDisplayFormatter.conversationTitle(
-                    item,
-                    context.l10n,
-                  ),
-                  preview: item.lastMessagePreview,
-                  timeLabel: DateTimeFormatter.conversationTime(
-                    item.lastMessageAt,
-                  ),
-                  unreadCount: item.unreadCount,
-                  isSelected: selectedThreadId == item.threadId,
-                  onTap: () => _openConversation(context, ref, item),
-                );
-              },
-            ),
+      child: _ConversationRefreshView(
+        conversations: state.conversations,
+        selectedThreadId: selectedThreadId,
+        embedded: embedded,
+        bottomInset: bottomInset,
+        onRefresh: () => ref.read(conversationListProvider.notifier).refresh(),
+        onOpen: (item) => _openConversation(context, ref, item),
+      ),
     );
   }
 
@@ -114,6 +94,7 @@ class _MacConversationList extends StatelessWidget {
     required this.conversations,
     required this.selectedThreadId,
     required this.bottomInset,
+    required this.onRefresh,
     required this.onOpen,
     required this.onShowActions,
     required this.onStartConversation,
@@ -122,6 +103,7 @@ class _MacConversationList extends StatelessWidget {
   final List<ConversationSummary> conversations;
   final String? selectedThreadId;
   final double bottomInset;
+  final Future<void> Function() onRefresh;
   final ValueChanged<ConversationSummary> onOpen;
   final VoidCallback onShowActions;
   final VoidCallback onStartConversation;
@@ -149,15 +131,15 @@ class _MacConversationList extends StatelessWidget {
                 ),
                 _MacListIconButton(
                   key: const Key('conversation-quick-actions-button'),
-                  semanticLabel: '快捷操作',
-                  icon: CupertinoIcons.slider_horizontal_3,
+                  semanticLabel: '更多操作',
+                  icon: CupertinoIcons.ellipsis,
                   onTap: onShowActions,
                 ),
                 const SizedBox(width: 10),
                 _MacListIconButton(
                   key: const Key('start-conversation-button'),
                   semanticLabel: '发起新消息',
-                  icon: CupertinoIcons.square_pencil,
+                  icon: CupertinoIcons.plus,
                   onTap: onStartConversation,
                 ),
               ],
@@ -192,32 +174,106 @@ class _MacConversationList extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Expanded(
-            child: conversations.isEmpty
-                ? const _MacConversationEmptyState()
-                : ListView.builder(
+            child: CustomScrollView(
+              slivers: <Widget>[
+                CupertinoSliverRefreshControl(onRefresh: onRefresh),
+                if (conversations.isEmpty)
+                  const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _MacConversationEmptyState(),
+                  )
+                else
+                  SliverPadding(
                     padding: EdgeInsets.fromLTRB(12, 0, 12, bottomInset),
-                    itemCount: conversations.length,
-                    itemBuilder: (context, index) {
-                      final item = conversations[index];
-                      return _MacConversationRow(
-                        title: DidDisplayFormatter.conversationTitle(
-                          item,
-                          context.l10n,
-                        ),
-                        preview: item.lastMessagePreview,
-                        timeLabel: DateTimeFormatter.conversationTime(
-                          item.lastMessageAt,
-                        ),
-                        unreadCount: item.unreadCount,
-                        isGroup: item.isGroup,
-                        isSelected: selectedThreadId == item.threadId,
-                        onTap: () => onOpen(item),
-                      );
-                    },
+                    sliver: SliverList.builder(
+                      itemCount: conversations.length,
+                      itemBuilder: (context, index) {
+                        final item = conversations[index];
+                        return _MacConversationRow(
+                          title: DidDisplayFormatter.conversationTitle(
+                            item,
+                            context.l10n,
+                          ),
+                          preview: item.lastMessagePreview,
+                          timeLabel: DateTimeFormatter.conversationTime(
+                            item.lastMessageAt,
+                          ),
+                          unreadCount: item.unreadCount,
+                          isGroup: item.isGroup,
+                          isSelected: selectedThreadId == item.threadId,
+                          onTap: () => onOpen(item),
+                        );
+                      },
+                    ),
                   ),
+              ],
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ConversationRefreshView extends StatelessWidget {
+  const _ConversationRefreshView({
+    required this.conversations,
+    required this.selectedThreadId,
+    required this.embedded,
+    required this.bottomInset,
+    required this.onRefresh,
+    required this.onOpen,
+  });
+
+  final List<ConversationSummary> conversations;
+  final String? selectedThreadId;
+  final bool embedded;
+  final double bottomInset;
+  final Future<void> Function() onRefresh;
+  final ValueChanged<ConversationSummary> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return CustomScrollView(
+      slivers: <Widget>[
+        CupertinoSliverRefreshControl(onRefresh: onRefresh),
+        if (conversations.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _EmptyState(
+              embedded: embedded,
+              title: context.l10n.conversationsEmptyTitle,
+              subtitle: context.l10n.conversationsEmptySubtitle,
+            ),
+          )
+        else
+          SliverPadding(
+            padding: EdgeInsets.only(
+              top: responsive.spacing(8),
+              bottom: bottomInset,
+            ),
+            sliver: SliverList.builder(
+              itemCount: conversations.length,
+              itemBuilder: (_, index) {
+                final item = conversations[index];
+                return _ConversationRow(
+                  title: DidDisplayFormatter.conversationTitle(
+                    item,
+                    context.l10n,
+                  ),
+                  preview: item.lastMessagePreview,
+                  timeLabel: DateTimeFormatter.conversationTime(
+                    item.lastMessageAt,
+                  ),
+                  unreadCount: item.unreadCount,
+                  isSelected: selectedThreadId == item.threadId,
+                  onTap: () => onOpen(item),
+                );
+              },
+            ),
+          ),
+      ],
     );
   }
 }
@@ -553,7 +609,7 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return ListView(
+    return Padding(
       padding: responsive.scaledInsets(
         EdgeInsets.fromLTRB(
           responsive.tabInnerPadding.left,
@@ -562,7 +618,10 @@ class _EmptyState extends StatelessWidget {
           embedded ? 24 : 12,
         ),
       ),
-      children: <Widget>[EmptyStateCard(title: title, subtitle: subtitle)],
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: EmptyStateCard(title: title, subtitle: subtitle),
+      ),
     );
   }
 }

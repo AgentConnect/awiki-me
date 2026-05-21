@@ -336,7 +336,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsDeleteCredentialConfirmAction => '确认注销';
 
   @override
-  String get quickActionsTitle => '快捷操作';
+  String get quickActionsTitle => '更多操作';
 
   @override
   String get quickActionCreateGroup => '发起群聊';

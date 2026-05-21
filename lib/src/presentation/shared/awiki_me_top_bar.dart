@@ -58,12 +58,12 @@ class AwikiMeShellTopBar extends StatelessWidget {
   const AwikiMeShellTopBar({
     super.key,
     required this.title,
-    required this.onSettingsTap,
+    this.onSettingsTap,
     this.onQuickActionsTap,
   });
 
   final String title;
-  final VoidCallback onSettingsTap;
+  final VoidCallback? onSettingsTap;
   final VoidCallback? onQuickActionsTap;
 
   @override
@@ -73,22 +73,26 @@ class AwikiMeShellTopBar extends StatelessWidget {
     return AwikiMeTopBar(
       title: title,
       padding: EdgeInsets.zero,
-      leading: TopBarActionButton(
-        onTap: onSettingsTap,
-        child: AwikiAssetIcon(
-          assetName: 'assets/icons/icon_settings.svg',
-          size: responsive.iconLg,
-          color: theme.title,
-        ),
-      ),
-      trailing: TopBarActionButton(
-        onTap: onQuickActionsTap,
-        child: AwikiAssetIcon(
-          assetName: 'assets/icons/icon_add.svg',
-          size: responsive.iconLg,
-          color: theme.title,
-        ),
-      ),
+      leading: onSettingsTap == null
+          ? const SizedBox.shrink()
+          : TopBarActionButton(
+              onTap: onSettingsTap,
+              child: AwikiAssetIcon(
+                assetName: 'assets/icons/icon_settings.svg',
+                size: responsive.iconLg,
+                color: theme.title,
+              ),
+            ),
+      trailing: onQuickActionsTap == null
+          ? const SizedBox.shrink()
+          : TopBarActionButton(
+              onTap: onQuickActionsTap,
+              child: AwikiAssetIcon(
+                assetName: 'assets/icons/icon_add.svg',
+                size: responsive.iconLg,
+                color: theme.title,
+              ),
+            ),
     );
   }
 }
@@ -97,13 +101,13 @@ class AwikiMeShellTabPage extends StatelessWidget {
   const AwikiMeShellTabPage({
     super.key,
     required this.title,
-    required this.onSettingsTap,
     required this.child,
+    this.onSettingsTap,
     this.onQuickActionsTap,
   });
 
   final String title;
-  final VoidCallback onSettingsTap;
+  final VoidCallback? onSettingsTap;
   final VoidCallback? onQuickActionsTap;
   final Widget child;
 
@@ -114,9 +118,7 @@ class AwikiMeShellTabPage extends StatelessWidget {
     return Column(
       children: <Widget>[
         Padding(
-          padding: responsive.scaledInsets(
-            innerPadding.copyWith(bottom: 8),
-          ),
+          padding: responsive.scaledInsets(innerPadding.copyWith(bottom: 8)),
           child: AwikiMeShellTopBar(
             title: title,
             onSettingsTap: onSettingsTap,

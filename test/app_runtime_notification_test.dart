@@ -5,8 +5,10 @@ import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
+import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
@@ -39,6 +41,7 @@ void main() {
       container = ProviderContainer(
         overrides: <Override>[
           awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
           e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
@@ -213,6 +216,28 @@ void main() {
       expect(container.read(groupProvider).groups.single.groupId, 'group-1');
       directThread = container.read(chatThreadProvider('dm:1'));
       expect(directThread.messages.single.content, 'hello');
+    });
+
+    test('实时连接失败时刷新会话数据但不使用相同 token 循环重连', () async {
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:test:me',
+              credentialName: 'default',
+              displayName: 'Me',
+              handle: 'me',
+              jwtToken: 'token',
+            ),
+          );
+      container.read(appRuntimeProvider);
+
+      realtimeGateway.setStatus(RealtimeConnectionStatus.failed);
+      await pumpEventQueue();
+
+      expect(gateway.refreshSessionCalls, 1);
+      expect(gateway.listConversationsCalls, 1);
+      expect(realtimeGateway.connectionStatus, RealtimeConnectionStatus.failed);
     });
   });
 }

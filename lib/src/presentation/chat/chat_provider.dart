@@ -33,6 +33,9 @@ class ChatThreadsController
   ChatThreadsController(this.ref) : super(const <String, ChatThreadState>{});
 
   final Ref ref;
+  static const Duration _pendingMatchWindow = Duration(minutes: 2);
+  static const Duration _staleSendingAge = Duration(seconds: 30);
+  static const Duration _sendTimeout = Duration(seconds: 20);
 
   ChatThreadState thread(String threadId) {
     return state[threadId] ?? ChatThreadState(threadId: threadId);
@@ -72,29 +75,12 @@ class ChatThreadsController
       if (!mounted) {
         return;
       }
-      final current = List<ChatMessage>.from(
-        thread(conversation.threadId).messages,
+      _mergeMessages(
+        conversation.threadId,
+        history,
+        isLoading: false,
+        resolveStaleSending: true,
       );
-      for (final message in history) {
-        final index = current.indexWhere(
-          (item) =>
-              (message.remoteId != null && item.remoteId == message.remoteId) ||
-              item.localId == message.localId,
-        );
-        if (index >= 0) {
-          current[index] = message;
-        } else {
-          current.add(message);
-        }
-      }
-      state = <String, ChatThreadState>{
-        ...state,
-        conversation.threadId: ChatThreadState(
-          threadId: conversation.threadId,
-          messages: _sortMessages(current),
-          isLoading: false,
-        ),
-      };
     } catch (_) {
       if (!mounted) {
         return;
@@ -135,17 +121,12 @@ class ChatThreadsController
             peerDid: conversation.targetDid,
             groupId: conversation.groupId,
             content: content.trim(),
-          );
-      final replaced = current
-          .map((item) => item.localId == pending.localId ? sent : item)
-          .toList();
-      _setMessages(conversation.threadId, replaced);
+          )
+          .timeout(_sendTimeout);
+      _replaceMessage(conversation.threadId, pending.localId, sent);
     } catch (_) {
       final failed = pending.copyWith(sendState: MessageSendState.failed);
-      final replaced = current
-          .map((item) => item.localId == pending.localId ? failed : item)
-          .toList();
-      _setMessages(conversation.threadId, replaced);
+      _replaceMessage(conversation.threadId, pending.localId, failed);
     }
     await ref.read(conversationListProvider.notifier).refresh();
     final refreshedConversation = _refreshedConversationFor(conversation);
@@ -166,19 +147,12 @@ class ChatThreadsController
     try {
       final retried = await ref
           .read(awikiGatewayProvider)
-          .retryMessage(retrying);
-      final updated = thread(conversation.threadId).messages
-          .map((item) => item.localId == message.localId ? retried : item)
-          .toList();
-      _setMessages(conversation.threadId, updated);
+          .retryMessage(retrying)
+          .timeout(_sendTimeout);
+      _replaceMessage(conversation.threadId, message.localId, retried);
     } catch (_) {
       final failed = retrying.copyWith(sendState: MessageSendState.failed);
-      _setMessages(
-        conversation.threadId,
-        thread(conversation.threadId).messages
-            .map((item) => item.localId == message.localId ? failed : item)
-            .toList(),
-      );
+      _replaceMessage(conversation.threadId, message.localId, failed);
     }
     await ref.read(conversationListProvider.notifier).refresh();
     unawaited(_loadHistory(_refreshedConversationFor(conversation)));
@@ -192,18 +166,12 @@ class ChatThreadsController
   }
 
   void applyRealtimeUpdate(ChatMessage message) {
-    final current = List<ChatMessage>.from(thread(message.threadId).messages);
-    final index = current.indexWhere(
-      (item) =>
-          (message.remoteId != null && item.remoteId == message.remoteId) ||
-          item.localId == message.localId,
-    );
-    if (index >= 0) {
-      current[index] = message;
-    } else {
-      current.add(message);
-    }
-    _setMessages(message.threadId, current);
+    _mergeMessages(message.threadId, <ChatMessage>[message]);
+  }
+
+  Future<void> refreshConversation(ConversationSummary conversation) async {
+    await ref.read(conversationListProvider.notifier).refresh();
+    await _loadHistory(_refreshedConversationFor(conversation));
   }
 
   void clear() {
@@ -226,6 +194,101 @@ class ChatThreadsController
         messages: _sortMessages(messages),
       ),
     };
+  }
+
+  void _replaceMessage(
+    String threadId,
+    String localId,
+    ChatMessage replacement,
+  ) {
+    final current = List<ChatMessage>.from(thread(threadId).messages);
+    final index = current.indexWhere((item) => item.localId == localId);
+    if (index >= 0) {
+      current.removeAt(index);
+    } else if (replacement.sendState != MessageSendState.sent) {
+      return;
+    }
+    final replacementIndex = _matchingMessageIndex(current, replacement);
+    if (replacementIndex >= 0) {
+      current[replacementIndex] = replacement;
+    } else {
+      current.add(replacement);
+    }
+    _setMessages(threadId, current);
+  }
+
+  void _mergeMessages(
+    String threadId,
+    List<ChatMessage> incoming, {
+    bool? isLoading,
+    bool resolveStaleSending = false,
+  }) {
+    final current = List<ChatMessage>.from(thread(threadId).messages);
+    for (final message in incoming) {
+      final index = _matchingMessageIndex(current, message);
+      if (index >= 0) {
+        current[index] = message;
+      } else {
+        current.add(message);
+      }
+    }
+    final messages = resolveStaleSending
+        ? _markStaleSendingFailed(current)
+        : current;
+    state = <String, ChatThreadState>{
+      ...state,
+      threadId: ChatThreadState(
+        threadId: threadId,
+        messages: _sortMessages(messages),
+        isLoading: isLoading ?? thread(threadId).isLoading,
+      ),
+    };
+  }
+
+  List<ChatMessage> _markStaleSendingFailed(List<ChatMessage> messages) {
+    final now = DateTime.now();
+    return messages.map((message) {
+      if (!message.isMine ||
+          message.sendState != MessageSendState.sending ||
+          now.difference(message.createdAt) < _staleSendingAge) {
+        return message;
+      }
+      return message.copyWith(sendState: MessageSendState.failed);
+    }).toList();
+  }
+
+  int _matchingMessageIndex(List<ChatMessage> current, ChatMessage incoming) {
+    final remoteId = incoming.remoteId;
+    if (remoteId != null && remoteId.isNotEmpty) {
+      final remoteIndex = current.indexWhere(
+        (item) => item.remoteId == remoteId,
+      );
+      if (remoteIndex >= 0) {
+        return remoteIndex;
+      }
+    }
+    final localIndex = current.indexWhere(
+      (item) => item.localId == incoming.localId,
+    );
+    if (localIndex >= 0) {
+      return localIndex;
+    }
+    if (!incoming.isMine || incoming.sendState != MessageSendState.sent) {
+      return -1;
+    }
+    return current.indexWhere((item) => _isMatchingPending(item, incoming));
+  }
+
+  bool _isMatchingPending(ChatMessage pending, ChatMessage sent) {
+    if (!pending.isMine ||
+        pending.threadId != sent.threadId ||
+        pending.content != sent.content ||
+        pending.senderDid != sent.senderDid ||
+        pending.sendState == MessageSendState.sent) {
+      return false;
+    }
+    final delta = pending.createdAt.difference(sent.createdAt).abs();
+    return delta <= _pendingMatchWindow;
   }
 
   bool _shouldLoadHistory(

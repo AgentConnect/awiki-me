@@ -1,7 +1,9 @@
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
+import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -106,6 +108,169 @@ void main() {
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 群聊头部不显示我的智能体标签', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'group:mac',
+      displayName: '融资协作群',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'group:mac',
+    );
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1100, 760));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(
+            conversation: conversation,
+            embedded: true,
+            macStyle: true,
+          ),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('融资协作群'), findsOneWidget);
+    expect(find.text('我的智能体'), findsNothing);
+    expect(find.text('安全协作中'), findsOneWidget);
+    expect(find.text('身份卡'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 聊天头部刷新按钮会同步当前会话消息', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:refresh-button',
+      displayName: 'Mac Agent',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    final message = ChatMessage(
+      localId: 'remote-refresh',
+      remoteId: 'remote-refresh',
+      threadId: conversation.threadId,
+      senderDid: 'did:test:peer',
+      content: 'synced message',
+      createdAt: DateTime(2026, 4, 5, 12, 1),
+      isMine: false,
+      sendState: MessageSendState.sent,
+    );
+    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:test:peer': <ChatMessage>[message],
+    };
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1100, 760));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(
+            conversation: conversation,
+            embedded: true,
+            macStyle: true,
+          ),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('chat-refresh-button')));
+    await tester.pump();
+
+    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+
+    await tester.pumpAndSettle();
+
+    expect(gateway.listConversationsCalls, 1);
+    expect(gateway.fetchDmHistoryCalls, 1);
+    expect(find.text('synced message'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('群聊标题优先显示已知群名称', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'group:did:test:group:funding',
+      displayName: 'Group did:test:group:funding',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:test:group:funding',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          groupProvider.overrideWith((ref) {
+            final controller = GroupController(ref);
+            controller.upsertGroup(
+              GroupSummary(
+                groupId: conversation.groupId!,
+                name: '融资协作群',
+                description: '',
+                memberCount: 3,
+                lastMessageAt: null,
+              ),
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('融资协作群'), findsOneWidget);
+    expect(find.text('funding'), findsNothing);
   });
 
   testWidgets('聊天输入框回车后直接发送消息', (tester) async {

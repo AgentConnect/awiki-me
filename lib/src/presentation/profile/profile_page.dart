@@ -10,14 +10,13 @@ import '../../domain/entities/user_profile.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../friends/friends_provider.dart';
-import '../settings/settings_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/formatters/display_formatters.dart';
-import '../shared/quick_actions.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
+import 'profile_markdown.dart';
 import 'profile_provider.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {
@@ -62,17 +61,14 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
     final title = DidDisplayFormatter.profileName(profile);
     final homepageUrl = DidDisplayFormatter.homepageUrl(profile);
-    final profileContent = _profileContent(profile);
+    final profileContent = ref
+        .read(profileProvider.notifier)
+        .visibleProfileContent();
     final responsive = context.awikiResponsive;
     final friendsState = ref.watch(friendsProvider);
 
     final content = AwikiMeShellTabPage(
       title: context.l10n.profileMeTitle,
-      onSettingsTap: () => AppNavigator.pushWithoutAnimation(
-        context,
-        (_) => const SettingsPage(),
-      ),
-      onQuickActionsTap: () => showCommonQuickActionsMenu(context, ref),
       child: ListView(
         padding: EdgeInsets.fromLTRB(
           responsive.tabContentHorizontalPadding,
@@ -199,14 +195,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.linkOpenFailed());
     }
-  }
-
-  String _profileContent(UserProfile profile) {
-    final markdown = profile.profileMarkdown.trim();
-    if (markdown.isNotEmpty) {
-      return markdown;
-    }
-    return profile.bio.trim();
   }
 
   Future<void> _showEditProfileDialog(
@@ -400,7 +388,7 @@ class _ProfileContentSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final article = _ProfileArticle.fromMarkdown(content);
+    final article = ProfileArticle.fromMarkdown(content);
     if (content.trim().isEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -415,6 +403,15 @@ class _ProfileContentSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           MarkdownBody(data: content, styleSheet: _markdownStyleSheet(context)),
+          _TagWrap(tags: tags),
+        ],
+      );
+    }
+    if (article.body.trim().isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(emptyText, style: AwikiMeTextStyles.cardSubtitle),
           _TagWrap(tags: tags),
         ],
       );
@@ -466,36 +463,5 @@ class _TagWrap extends StatelessWidget {
         children: tags.map((tag) => AppPill(label: tag)).toList(),
       ),
     );
-  }
-}
-
-class _ProfileArticle {
-  const _ProfileArticle({required this.body});
-
-  final String body;
-
-  static _ProfileArticle? fromMarkdown(String raw) {
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-    final blocks = trimmed
-        .split(RegExp(r'\n\s*\n'))
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .toList();
-    if (blocks.isEmpty) {
-      return null;
-    }
-    final first = blocks.first;
-    if (!first.startsWith('# ')) {
-      return null;
-    }
-    final bodyBlocks = blocks.skip(1).toList();
-    if (bodyBlocks.isNotEmpty && bodyBlocks.first.startsWith('#')) {
-      bodyBlocks.removeAt(0);
-    }
-    final body = bodyBlocks.join('\n\n');
-    return _ProfileArticle(body: body);
   }
 }

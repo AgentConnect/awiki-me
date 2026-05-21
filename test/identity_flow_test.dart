@@ -71,6 +71,36 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
+  testWidgets('最近会话更多操作菜单使用更多操作标题', (tester) async {
+    final gateway = FakeAwikiGateway();
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1280, 820));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const Key('conversation-quick-actions-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('更多操作'), findsOneWidget);
+    expect(find.text('快捷操作'), findsNothing);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
   testWidgets('添加联系人先解析身份再发送关注请求', (tester) async {
     final gateway = FakeAwikiGateway()
       ..publicProfilesByQuery = <String, UserProfile>{

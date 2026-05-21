@@ -79,7 +79,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ChatView), findsOneWidget);
-    expect(find.text('Agent 身份卡'), findsOneWidget);
+    expect(find.text('会话信息'), findsOneWidget);
     expect(find.text('安全协作中'), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = null;
@@ -128,6 +128,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('AW'), findsNothing);
+    expect(find.text('Me'), findsOneWidget);
     expect(find.text('最近会话'), findsOneWidget);
 
     await tester.tap(find.text('任务'));
@@ -138,9 +140,120 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('朋友'), findsOneWidget);
 
-    await tester.tap(find.text('配置'));
+    await tester.tap(find.byKey(const Key('mac-me-rail-avatar')));
     await tester.pumpAndSettle();
     expect(find.text('我'), findsOneWidget);
+
+    await tester.tap(find.text('配置'));
+    await tester.pumpAndSettle();
+    expect(find.text('设置'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 主导航无未读时不显示消息角标', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'me.json',
+      displayName: 'Mia',
+      handle: 'mia',
+      jwtToken: 'token',
+    );
+    final readConversation = ConversationSummary(
+      threadId: 'dm:read',
+      displayName: 'Read Chat',
+      lastMessagePreview: 'read',
+      lastMessageAt: DateTime(2026, 3, 28, 10, 24),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:read',
+    );
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1280, 720));
+
+    final readOnlyGateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[readConversation];
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: readOnlyGateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) => _StaticConversationListController(
+              ref,
+              <ConversationSummary>[readConversation],
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('12'), findsNothing);
+    expect(find.text('2'), findsNothing);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 主导航消息角标显示真实未读数量', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'me.json',
+      displayName: 'Mia',
+      handle: 'mia',
+      jwtToken: 'token',
+    );
+    final conversations = <ConversationSummary>[
+      ConversationSummary(
+        threadId: 'dm:read',
+        displayName: 'Read Chat',
+        lastMessagePreview: 'read',
+        lastMessageAt: DateTime(2026, 3, 28, 10, 24),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:read',
+      ),
+      ConversationSummary(
+        threadId: 'dm:unread',
+        displayName: 'Unread Chat',
+        lastMessagePreview: 'unread',
+        lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+        unreadCount: 2,
+        isGroup: false,
+        targetDid: 'did:unread',
+      ),
+    ];
+    final gateway = FakeAwikiGateway()..conversations = conversations;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1280, 720));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) => _StaticConversationListController(ref, conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('12'), findsNothing);
+    expect(find.text('2'), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

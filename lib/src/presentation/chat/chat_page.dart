@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
+import '../../core/group_display_name.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_summary.dart';
@@ -59,6 +60,7 @@ class ChatView extends ConsumerStatefulWidget {
 class _ChatViewState extends ConsumerState<ChatView> {
   final textController = TextEditingController();
   final scrollController = ScrollController();
+  bool _isRefreshingCurrentConversation = false;
 
   @override
   void initState() {
@@ -78,6 +80,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final responsive = context.awikiResponsive;
     final macStyle = widget.macStyle && responsive.isMacDesktop;
     final thread = ref.watch(chatThreadProvider(widget.conversation.threadId));
+    final currentConversation = _currentConversationForTitle();
     ref.listen<ChatThreadState>(
       chatThreadProvider(widget.conversation.threadId),
       (_, __) => WidgetsBinding.instance.addPostFrameCallback(
@@ -105,11 +108,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
       child: Column(
         children: <Widget>[
           _ChatHeader(
-            conversation: widget.conversation,
+            conversation: currentConversation,
             embedded: widget.embedded,
             macStyle: macStyle,
+            isRefreshing: _isRefreshingCurrentConversation || thread.isLoading,
             onBack: widget.onBack,
             onDetails: _openDetails,
+            onRefresh: () => _refreshCurrentConversation(currentConversation),
           ),
           Expanded(
             child: ListView.builder(
@@ -210,6 +215,34 @@ class _ChatViewState extends ConsumerState<ChatView> {
     );
   }
 
+  Future<void> _refreshCurrentConversation(
+    ConversationSummary conversation,
+  ) async {
+    if (_isRefreshingCurrentConversation) {
+      return;
+    }
+    setState(() {
+      _isRefreshingCurrentConversation = true;
+    });
+    final startedAt = DateTime.now();
+    try {
+      await ref
+          .read(chatThreadsProvider.notifier)
+          .refreshConversation(conversation);
+      final elapsed = DateTime.now().difference(startedAt);
+      const minimumVisibleTime = Duration(milliseconds: 350);
+      if (elapsed < minimumVisibleTime) {
+        await Future<void>.delayed(minimumVisibleTime - elapsed);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRefreshingCurrentConversation = false;
+        });
+      }
+    }
+  }
+
   void _scrollToBottom() {
     if (!scrollController.hasClients) {
       return;
@@ -223,6 +256,41 @@ class _ChatViewState extends ConsumerState<ChatView> {
     for (final conversation in conversations) {
       if (conversation.threadId == widget.conversation.threadId) {
         return conversation;
+      }
+    }
+    return null;
+  }
+
+  ConversationSummary _currentConversationForTitle() {
+    final conversations = ref.watch(conversationListProvider).conversations;
+    final latest = _matchingConversation(conversations);
+    final base = latest ?? widget.conversation;
+    if (!base.isGroup || base.groupId == null || base.groupId!.isEmpty) {
+      return base;
+    }
+    final groupName = _currentGroupName(base.groupId!);
+    if (groupName == null || groupName == base.displayName) {
+      return base;
+    }
+    return ConversationSummary(
+      threadId: base.threadId,
+      displayName: groupName,
+      lastMessagePreview: base.lastMessagePreview,
+      lastMessageAt: base.lastMessageAt,
+      unreadCount: base.unreadCount,
+      isGroup: base.isGroup,
+      targetDid: base.targetDid,
+      groupId: base.groupId,
+      avatarSeed: base.avatarSeed,
+    );
+  }
+
+  String? _currentGroupName(String groupId) {
+    final groups = ref.watch(groupProvider).groups;
+    for (final group in groups) {
+      if (group.groupId == groupId &&
+          !GroupDisplayName.isIdLike(group.name, groupId)) {
+        return group.name;
       }
     }
     return null;
@@ -300,7 +368,9 @@ class _ChatHeader extends StatelessWidget {
     required this.conversation,
     required this.embedded,
     required this.macStyle,
+    required this.isRefreshing,
     required this.onDetails,
+    required this.onRefresh,
     this.onBack,
   });
 
@@ -308,7 +378,9 @@ class _ChatHeader extends StatelessWidget {
   final bool embedded;
   final VoidCallback? onBack;
   final bool macStyle;
+  final bool isRefreshing;
   final VoidCallback onDetails;
+  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -331,8 +403,6 @@ class _ChatHeader extends StatelessWidget {
             final width = constraints.maxWidth;
             final showPills = width >= 500;
             final showSecurityPill = width >= 620;
-            final showSearch = width >= 430;
-            final showMore = width >= 380;
             final showIdentityLabel = width >= 470;
             final avatarSize = width >= 360 ? 40.0 : 36.0;
             final actionGap = width >= 520 ? 12.0 : 8.0;
@@ -356,7 +426,7 @@ class _ChatHeader extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (showPills) ...<Widget>[
+                      if (showPills && !conversation.isGroup) ...<Widget>[
                         const SizedBox(width: 8),
                         const _MacChatPill(
                           label: '我的智能体',
@@ -375,15 +445,15 @@ class _ChatHeader extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (showSearch) ...<Widget>[
-                  SizedBox(width: actionGap),
-                  const _MacChatHeaderIcon(icon: CupertinoIcons.search),
-                ],
-                if (showMore) ...<Widget>[
-                  SizedBox(width: actionGap),
-                  const _MacChatHeaderIcon(icon: CupertinoIcons.ellipsis),
-                ],
                 SizedBox(width: actionGap),
+                _MacChatHeaderButton(
+                  key: const Key('chat-refresh-button'),
+                  semanticLabel: '刷新当前会话',
+                  icon: CupertinoIcons.refresh,
+                  isLoading: isRefreshing,
+                  onTap: onRefresh,
+                ),
+                const SizedBox(width: 8),
                 _MacChatIdentityButton(
                   showLabel: showIdentityLabel,
                   onTap: onDetails,
@@ -512,17 +582,6 @@ class _MacChatPill extends StatelessWidget {
   }
 }
 
-class _MacChatHeaderIcon extends StatelessWidget {
-  const _MacChatHeaderIcon({required this.icon});
-
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Icon(icon, color: const Color(0xFF34415C), size: 21);
-  }
-}
-
 class _MacChatIdentityButton extends StatelessWidget {
   const _MacChatIdentityButton({required this.showLabel, required this.onTap});
 
@@ -566,6 +625,47 @@ class _MacChatIdentityButton extends StatelessWidget {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MacChatHeaderButton extends StatelessWidget {
+  const _MacChatHeaderButton({
+    super.key,
+    required this.semanticLabel,
+    required this.icon,
+    required this.onTap,
+    this.isLoading = false,
+  });
+
+  final String semanticLabel;
+  final IconData icon;
+  final Future<void> Function() onTap;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      enabled: !isLoading,
+      child: GestureDetector(
+        onTap: isLoading ? null : onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          height: 34,
+          width: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: CupertinoColors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFDDE5F0)),
+          ),
+          child: isLoading
+              ? const CupertinoActivityIndicator(radius: 8)
+              : Icon(icon, color: const Color(0xFF34415C), size: 17),
         ),
       ),
     );
@@ -830,7 +930,6 @@ class _Composer extends StatelessWidget {
           builder: (context, constraints) {
             final compact = constraints.maxWidth < 360;
             final showAttachment = constraints.maxWidth >= 280;
-            final showEmoji = constraints.maxWidth >= 330;
             final horizontal = compact ? 14.0 : 22.0;
             return Padding(
               padding: EdgeInsets.fromLTRB(horizontal, 8, horizontal, 16),
@@ -877,14 +976,6 @@ class _Composer extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (showEmoji) ...<Widget>[
-                      const SizedBox(width: 10),
-                      const Icon(
-                        CupertinoIcons.smiley,
-                        color: Color(0xFF34415C),
-                        size: 22,
-                      ),
-                    ],
                     const SizedBox(width: 10),
                     GestureDetector(
                       onTap: _submitIfNeeded,

@@ -148,7 +148,7 @@
     }
   },
   "settingsDeleteCredentialConfirmAction": "确认注销",
-  "quickActionsTitle": "快捷操作",
+  "quickActionsTitle": "更多操作",
   "quickActionCreateGroup": "发起群聊",
   "quickActionJoinGroup": "加入群聊",
   "quickActionAddFriend": "添加朋友",

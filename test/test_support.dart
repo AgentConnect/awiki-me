@@ -182,6 +182,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   ProfilePatch? lastProfilePatch;
   RealtimeUpdate? nextRealtimeUpdate;
   bool failNextSend = false;
+  Duration sendDelay = Duration.zero;
+  SessionIdentity? refreshedSession;
   String? lastFollowedDidOrHandle;
   String? lastCreatedGroupName;
   String? lastCreatedGroupSlug;
@@ -201,6 +203,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int importCalls = 0;
   int exportCalls = 0;
   int loginCalls = 0;
+  int refreshSessionCalls = 0;
   int fetchDmHistoryCalls = 0;
   int fetchGroupHistoryCalls = 0;
   int markReadCalls = 0;
@@ -535,7 +538,14 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   }
 
   @override
-  Future<SessionIdentity?> refreshSession() => currentSession();
+  Future<SessionIdentity?> refreshSession() async {
+    refreshSessionCalls += 1;
+    if (refreshedSession != null) {
+      loginResult = refreshedSession;
+      return refreshedSession;
+    }
+    return currentSession();
+  }
 
   @override
   Future<AwikiAnpSession> currentAnpSession({
@@ -588,6 +598,9 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     if (failNextSend) {
       failNextSend = false;
       throw StateError('send failed');
+    }
+    if (sendDelay > Duration.zero) {
+      await Future<void>.delayed(sendDelay);
     }
     return ChatMessage(
       localId: 'sent-${DateTime.now().microsecondsSinceEpoch}',

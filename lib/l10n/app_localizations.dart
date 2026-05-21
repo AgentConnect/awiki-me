@@ -719,7 +719,7 @@ abstract class AppLocalizations {
   /// No description provided for @quickActionsTitle.
   ///
   /// In zh, this message translates to:
-  /// **'快捷操作'**
+  /// **'更多操作'**
   String get quickActionsTitle;
 
   /// No description provided for @quickActionCreateGroup.

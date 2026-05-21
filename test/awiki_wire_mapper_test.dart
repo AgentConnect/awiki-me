@@ -1,4 +1,5 @@
 import 'package:awiki_me/src/data/awiki_sdk/awiki_wire_mapper.dart';
+import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -109,5 +110,73 @@ void main() {
     expect(conversations, hasLength(1));
     expect(conversations.single.lastMessagePreview, 'new');
     expect(conversations.single.unreadCount, 2);
+  });
+
+  test('builds group conversation title from nested group profile', () {
+    final conversations = mapper.conversationsFromInbox(
+      ownerDid: 'did:wba:awiki.ai:user:alice',
+      messages: <Map<String, Object?>>[
+        <String, Object?>{
+          'message_id': 'group-message',
+          'sender_did': 'did:wba:awiki.ai:user:bob',
+          'group_did': 'did:wba:awiki.ai:group:funding',
+          'text': 'group hello',
+          'created_at': '2026-05-06T02:00:00Z',
+          'group_profile': <String, Object?>{'display_name': '融资协作群'},
+        },
+      ],
+    );
+
+    expect(conversations, hasLength(1));
+    expect(conversations.single.isGroup, isTrue);
+    expect(conversations.single.displayName, '融资协作群');
+  });
+
+  test('maps group summary name from nested body group profile', () {
+    final group = mapper.toGroupSummary(<String, Object?>{
+      'body': <String, Object?>{
+        'group_did': 'did:wba:awiki.ai:group:funding',
+        'group_profile': <String, Object?>{
+          'display_name': '融资协作群',
+          'description': '融资协作',
+        },
+      },
+      'member_count': '3',
+    });
+
+    expect(group.groupId, 'did:wba:awiki.ai:group:funding');
+    expect(group.name, '融资协作群');
+    expect(group.description, '融资协作');
+    expect(group.memberCount, 3);
+  });
+
+  test('preserves friendly cached group name when inbox only has group id', () {
+    final previous = ConversationSummary(
+      threadId: 'group:did:wba:awiki.ai:group:funding',
+      displayName: '融资协作群',
+      lastMessagePreview: 'old',
+      lastMessageAt: DateTime(2026, 5, 6, 1),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:wba:awiki.ai:group:funding',
+    );
+    final incoming = ConversationSummary(
+      threadId: previous.threadId,
+      displayName: 'Group did:wba:awiki.ai:group:funding',
+      lastMessagePreview: 'new',
+      lastMessageAt: DateTime(2026, 5, 6, 2),
+      unreadCount: 1,
+      isGroup: true,
+      groupId: previous.groupId,
+    );
+
+    final merged = mapper.mergeConversations(
+      <ConversationSummary>[previous],
+      <ConversationSummary>[incoming],
+    );
+
+    expect(merged.single.displayName, '融资协作群');
+    expect(merged.single.lastMessagePreview, 'new');
+    expect(merged.single.unreadCount, 1);
   });
 }

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_services.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_summary.dart';
+import '../app_shell/providers/selected_conversation_provider.dart';
+import '../conversation_list/conversation_provider.dart';
 
 class GroupState {
   const GroupState({
@@ -37,6 +39,7 @@ class GroupController extends StateNotifier<GroupState> {
     state = state.copyWith(isLoading: true);
     final groups = await ref.read(awikiGatewayProvider).listGroups();
     state = state.copyWith(groups: groups, isLoading: false);
+    _applyGroupsToConversations(groups);
   }
 
   Future<List<GroupMemberSummary>> loadGroupMembers(String groupId) async {
@@ -113,6 +116,12 @@ class GroupController extends StateNotifier<GroupState> {
             ),
       );
     state = state.copyWith(groups: merged);
+    _applyGroupsToConversations(merged);
+  }
+
+  void _applyGroupsToConversations(List<GroupSummary> groups) {
+    ref.read(conversationListProvider.notifier).applyGroupNames(groups);
+    ref.read(selectedConversationProvider.notifier).applyGroupNames(groups);
   }
 
   void clear() {

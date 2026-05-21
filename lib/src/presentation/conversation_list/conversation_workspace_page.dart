@@ -206,20 +206,13 @@ class _MacAgentDetailPanel extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(18, 22, 18, 22),
           children: <Widget>[
-            const Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    'Agent 身份卡',
-                    style: TextStyle(
-                      color: Color(0xFF101B32),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-                Icon(CupertinoIcons.xmark, size: 17, color: Color(0xFF34415C)),
-              ],
+            const Text(
+              '会话信息',
+              style: TextStyle(
+                color: Color(0xFF101B32),
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+              ),
             ),
             const SizedBox(height: 22),
             const _MacDetailRow(

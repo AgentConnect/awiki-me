@@ -54,4 +54,21 @@ void main() {
 
     expect(find.text('消息连接中断，正在重连...'), findsNothing);
   });
+
+  testWidgets('连接失败时不显示持续重连 toast', (tester) async {
+    final realtimeGateway = FakeRealtimeGateway()
+      ..setStatus(RealtimeConnectionStatus.failed);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        session: session,
+        realtimeGateway: realtimeGateway,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('消息连接中断，正在重连...'), findsNothing);
+    expect(find.text('消息服务已断开，正在尝试恢复'), findsNothing);
+  });
 }

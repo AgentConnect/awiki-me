@@ -6,19 +6,26 @@ import '../../domain/entities/profile_patch.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
+import '../shared/formatters/display_formatters.dart';
+import 'profile_markdown.dart';
 
 typedef HomepageMarkdownLoader = Future<String?> Function(String url);
 
 final homepageMarkdownLoaderProvider = Provider<HomepageMarkdownLoader>((ref) {
   return (String url) async {
     try {
-      final response =
-          await http.get(Uri.parse(url)).timeout(const Duration(seconds: 20));
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 20));
       if (response.statusCode != 200) {
         return null;
       }
+      final contentType = response.headers['content-type']?.toLowerCase() ?? '';
+      if (contentType.contains('text/html')) {
+        return null;
+      }
       final body = response.body.trim();
-      return body.isEmpty ? null : body;
+      return body;
     } catch (_) {
       return null;
     }
@@ -30,22 +37,41 @@ class ProfileState {
     this.profile,
     this.isLoading = false,
     this.isSaving = false,
+    this.homepageUrl,
+    this.homepageMarkdown,
+    this.homepageMarkdownLoaded = false,
   });
 
   final UserProfile? profile;
   final bool isLoading;
   final bool isSaving;
+  final String? homepageUrl;
+  final String? homepageMarkdown;
+  final bool homepageMarkdownLoaded;
 
   ProfileState copyWith({
     UserProfile? profile,
     bool? isLoading,
     bool? isSaving,
+    String? homepageUrl,
+    String? homepageMarkdown,
+    bool? homepageMarkdownLoaded,
     bool clearProfile = false,
+    bool clearHomepageMarkdown = false,
   }) {
     return ProfileState(
       profile: clearProfile ? null : (profile ?? this.profile),
       isLoading: isLoading ?? this.isLoading,
       isSaving: isSaving ?? this.isSaving,
+      homepageUrl: clearHomepageMarkdown
+          ? null
+          : (homepageUrl ?? this.homepageUrl),
+      homepageMarkdown: clearHomepageMarkdown
+          ? null
+          : (homepageMarkdown ?? this.homepageMarkdown),
+      homepageMarkdownLoaded: clearHomepageMarkdown
+          ? false
+          : (homepageMarkdownLoaded ?? this.homepageMarkdownLoaded),
     );
   }
 }
@@ -58,7 +84,7 @@ class ProfileController extends StateNotifier<ProfileState> {
   Future<void> refresh() async {
     state = state.copyWith(isLoading: true);
     final profile = await ref.read(awikiGatewayProvider).loadMyProfile();
-    state = state.copyWith(profile: profile, isLoading: false);
+    state = _profileStateAfterRefresh(profile, isLoading: false);
   }
 
   Future<void> refreshWithHomepage(String url) async {
@@ -67,31 +93,72 @@ class ProfileController extends StateNotifier<ProfileState> {
   }
 
   Future<void> loadHomepageMarkdown(String url) async {
+    final homepageUrl = url.trim();
+    if (state.profile == null || homepageUrl.isEmpty) {
+      return;
+    }
+    final markdown = await ref.read(homepageMarkdownLoaderProvider)(
+      homepageUrl,
+    );
+    if (markdown == null) {
+      return;
+    }
+    final normalizedMarkdown = markdown.trim();
+    if (looksLikeHtmlDocument(normalizedMarkdown)) {
+      return;
+    }
     final current = state.profile;
-    if (current == null || url.trim().isEmpty) {
-      return;
-    }
-    final markdown = await ref.read(homepageMarkdownLoaderProvider)(url);
-    if (markdown == null || markdown.trim().isEmpty) {
-      return;
-    }
-    if (current.profileMarkdown.trim() == markdown.trim()) {
+    if (current == null ||
+        DidDisplayFormatter.homepageUrl(current) != homepageUrl) {
       return;
     }
     state = state.copyWith(
-      profile: current.copyWith(profileMarkdown: markdown),
+      homepageUrl: homepageUrl,
+      homepageMarkdown: normalizedMarkdown,
+      homepageMarkdownLoaded: true,
     );
   }
 
   Future<void> updateProfile(ProfilePatch patch) async {
     state = state.copyWith(isSaving: true);
     final profile = await ref.read(awikiGatewayProvider).updateProfile(patch);
-    state = state.copyWith(profile: profile, isSaving: false);
+    state = _profileStateAfterRefresh(profile, isSaving: false);
     ref.read(uiFeedbackProvider.notifier).showInfo(AppMessage.profileUpdated());
   }
 
   void clear() {
-    state = state.copyWith(clearProfile: true);
+    state = state.copyWith(clearProfile: true, clearHomepageMarkdown: true);
+  }
+
+  ProfileState _profileStateAfterRefresh(
+    UserProfile profile, {
+    bool? isLoading,
+    bool? isSaving,
+  }) {
+    final homepageUrl = DidDisplayFormatter.homepageUrl(profile);
+    final shouldKeepHomepageMarkdown =
+        state.homepageMarkdownLoaded && state.homepageUrl == homepageUrl;
+    return state.copyWith(
+      profile: profile,
+      isLoading: isLoading,
+      isSaving: isSaving,
+      clearHomepageMarkdown: !shouldKeepHomepageMarkdown,
+    );
+  }
+
+  String visibleProfileContent() {
+    if (state.homepageMarkdownLoaded) {
+      return state.homepageMarkdown?.trim() ?? '';
+    }
+    final profile = state.profile;
+    if (profile == null) {
+      return '';
+    }
+    final markdown = profile.profileMarkdown.trim();
+    if (markdown.isNotEmpty) {
+      return markdown;
+    }
+    return profile.bio.trim();
   }
 }
 

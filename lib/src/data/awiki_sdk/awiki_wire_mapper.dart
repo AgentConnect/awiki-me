@@ -1,3 +1,4 @@
+import '../../core/group_display_name.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_member_summary.dart';
@@ -125,41 +126,109 @@ class AwikiWireMapper {
   }
 
   GroupSummary toGroupSummary(Map<String, Object?> map) {
+    final body = _nestedMap(map['body']);
+    final meta = _nestedMap(map['meta']);
     final profile = _nestedMap(map['group_profile']);
     final snapshot = _nestedMap(map['group_snapshot']);
     final group = _nestedMap(map['group']);
-    final source = <String, Object?>{...snapshot, ...group, ...profile, ...map};
+    final bodyProfile = _nestedMap(body['group_profile']);
+    final bodySnapshot = _nestedMap(body['group_snapshot']);
+    final metaProfile = _nestedMap(meta['group_profile']);
+    final metaSnapshot = _nestedMap(meta['group_snapshot']);
     final groupId = _firstString(<Object?>[
-      source['group_did'],
-      source['group_id'],
-      source['did'],
-      source['id'],
+      map['group_did'],
+      map['group_id'],
+      body['group_did'],
+      body['group_id'],
+      group['group_did'],
+      group['group_id'],
+      group['did'],
+      snapshot['group_did'],
+      snapshot['group_id'],
+      snapshot['did'],
+      profile['group_did'],
+      profile['group_id'],
+      profile['did'],
+      meta['group_did'],
+      meta['group_id'],
+      map['did'],
+      map['id'],
     ]);
+    final name = GroupDisplayName.firstFriendly(<Object?>[
+      map['group_name'],
+      map['group_display_name'],
+      body['group_name'],
+      body['group_display_name'],
+      profile['display_name'],
+      profile['name'],
+      snapshot['display_name'],
+      snapshot['name'],
+      group['display_name'],
+      group['name'],
+      bodyProfile['display_name'],
+      bodyProfile['name'],
+      bodySnapshot['display_name'],
+      bodySnapshot['name'],
+      metaProfile['display_name'],
+      metaProfile['name'],
+      metaSnapshot['display_name'],
+      metaSnapshot['name'],
+      map['display_name'],
+      map['name'],
+    ], groupId: groupId);
     return GroupSummary(
       groupId: groupId,
-      name: _firstString(<Object?>[
-        source['display_name'],
-        source['name'],
-      ], fallback: groupId.isNotEmpty ? 'Group $groupId' : 'Unnamed Group'),
-      description: _firstString(<Object?>[source['description']]),
+      name: name ?? GroupDisplayName.fallback(groupId),
+      description: _firstString(<Object?>[
+        map['description'],
+        body['description'],
+        profile['description'],
+        snapshot['description'],
+        group['description'],
+        bodyProfile['description'],
+        bodySnapshot['description'],
+        metaProfile['description'],
+        metaSnapshot['description'],
+      ]),
       memberCount:
           int.tryParse(
             _firstString(<Object?>[
-              source['member_count'],
-              source['members_count'],
+              map['member_count'],
+              map['members_count'],
+              body['member_count'],
+              body['members_count'],
+              profile['member_count'],
+              profile['members_count'],
+              snapshot['member_count'],
+              snapshot['members_count'],
+              group['member_count'],
+              group['members_count'],
             ]),
           ) ??
           0,
       lastMessageAt: parseDate(
         _firstNullableString(<Object?>[
-          source['last_message_at'],
-          source['updated_at'],
-          source['created_at'],
+          map['last_message_at'],
+          map['updated_at'],
+          map['created_at'],
+          body['last_message_at'],
+          body['updated_at'],
+          body['created_at'],
+          snapshot['last_message_at'],
+          snapshot['updated_at'],
+          snapshot['created_at'],
+          group['last_message_at'],
+          group['updated_at'],
+          group['created_at'],
         ]),
       ),
       myRole: _firstNullableString(<Object?>[
-        source['my_role'],
-        source['role'],
+        map['my_role'],
+        map['role'],
+        body['my_role'],
+        body['role'],
+        meta['my_role'],
+        meta['role'],
       ]),
     );
   }
@@ -235,10 +304,11 @@ class AwikiWireMapper {
           ? ''
           : peerDidFromMessage(item, ownerDid: ownerDid);
       final displayName = isGroup
-          ? _firstString(<Object?>[
-              item['group_name'],
-              item['display_name'],
-            ], fallback: groupId.isNotEmpty ? 'Group $groupId' : 'Group')
+          ? groupDisplayNameFromWire(
+              item,
+              groupId: groupId,
+              fallback: GroupDisplayName.fallback(groupId),
+            )
           : _firstString(<Object?>[
               item['sender_name'],
               item['display_name'],
@@ -273,11 +343,12 @@ class AwikiWireMapper {
         ? ''
         : peerDidFromMessage(event, ownerDid: ownerDid);
     final displayName = isGroup
-        ? _firstString(<Object?>[
-            event['group_name'],
-            previous?.displayName,
-            message.groupId,
-          ], fallback: 'Group')
+        ? groupDisplayNameFromWire(
+            event,
+            groupId: message.groupId,
+            previousDisplayName: previous?.displayName,
+            fallback: GroupDisplayName.fallback(message.groupId),
+          )
         : _firstString(<Object?>[
             event['sender_name'],
             message.senderName,
@@ -306,11 +377,41 @@ class AwikiWireMapper {
       byThread[item.threadId] = item;
     }
     for (final item in remote) {
-      byThread[item.threadId] = item;
+      byThread[item.threadId] = _mergeConversation(
+        previous: byThread[item.threadId],
+        incoming: item,
+      );
     }
     final merged = byThread.values.toList();
     merged.sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
     return merged;
+  }
+
+  ConversationSummary _mergeConversation({
+    required ConversationSummary? previous,
+    required ConversationSummary incoming,
+  }) {
+    if (previous == null || !incoming.isGroup) {
+      return incoming;
+    }
+    final groupId = incoming.groupId?.trim() ?? '';
+    final previousName = previous.displayName.trim();
+    if (groupId.isEmpty ||
+        GroupDisplayName.isIdLike(previousName, groupId) ||
+        !GroupDisplayName.isIdLike(incoming.displayName, groupId)) {
+      return incoming;
+    }
+    return ConversationSummary(
+      threadId: incoming.threadId,
+      displayName: previous.displayName,
+      lastMessagePreview: incoming.lastMessagePreview,
+      lastMessageAt: incoming.lastMessageAt,
+      unreadCount: incoming.unreadCount,
+      isGroup: incoming.isGroup,
+      targetDid: incoming.targetDid,
+      groupId: incoming.groupId,
+      avatarSeed: incoming.avatarSeed,
+    );
   }
 
   String threadIdForMessage(
@@ -378,6 +479,49 @@ class AwikiWireMapper {
     return DateTime.tryParse(raw.toString());
   }
 
+  String groupIdFromWire(Map<String, Object?> item) {
+    return _groupIdFromMessage(item);
+  }
+
+  String groupDisplayNameFromWire(
+    Map<String, Object?> item, {
+    String? groupId,
+    String? previousDisplayName,
+    String fallback = 'Group',
+  }) {
+    final body = _nestedMap(item['body']);
+    final meta = _nestedMap(item['meta']);
+    final group = _nestedMap(item['group']);
+    final profile = _nestedMap(item['group_profile']);
+    final snapshot = _nestedMap(item['group_snapshot']);
+    final bodyProfile = _nestedMap(body['group_profile']);
+    final bodySnapshot = _nestedMap(body['group_snapshot']);
+    final metaProfile = _nestedMap(meta['group_profile']);
+    final metaSnapshot = _nestedMap(meta['group_snapshot']);
+    return GroupDisplayName.firstFriendly(<Object?>[
+          item['group_name'],
+          item['group_display_name'],
+          body['group_name'],
+          body['group_display_name'],
+          profile['display_name'],
+          profile['name'],
+          snapshot['display_name'],
+          snapshot['name'],
+          group['display_name'],
+          group['name'],
+          bodyProfile['display_name'],
+          bodyProfile['name'],
+          bodySnapshot['display_name'],
+          bodySnapshot['name'],
+          metaProfile['display_name'],
+          metaProfile['name'],
+          metaSnapshot['display_name'],
+          metaSnapshot['name'],
+          previousDisplayName,
+        ], groupId: groupId) ??
+        fallback;
+  }
+
   String _groupIdFromMessage(Map<String, Object?> item) {
     final meta = _nestedMap(item['meta']);
     final target = _nestedMap(meta['target']);
@@ -387,6 +531,8 @@ class AwikiWireMapper {
       item['group_id'],
       body['group_did'],
       body['group_id'],
+      meta['group_did'],
+      meta['group_id'],
       target['kind'] == 'group' ? target['did'] : null,
     ]);
   }

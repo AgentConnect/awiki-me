@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../core/group_display_name.dart';
 import '../awiki_sdk/awiki_anp_session.dart';
 import '../awiki_sdk/awiki_message_client.dart';
 import '../awiki_sdk/awiki_service_client.dart';
@@ -251,7 +252,10 @@ class AwikiAnpGateway implements AwikiGateway {
         ownerDid: session.did,
       );
       final cached = await _localCache.loadConversations(ownerDid: session.did);
-      final merged = _mapper.mergeConversations(cached, built);
+      final merged = await _applyCachedGroupNames(
+        ownerDid: session.did,
+        conversations: _mapper.mergeConversations(cached, built),
+      );
       await _localCache.upsertConversations(
         ownerDid: session.did,
         conversations: merged,
@@ -396,12 +400,17 @@ class AwikiAnpGateway implements AwikiGateway {
       threadId: threadId,
       messages: <ChatMessage>[sent],
     );
+    final groupDisplayName = isGroup
+        ? await _cachedGroupDisplayName(ownerDid: session.did, groupId: groupId)
+        : null;
     await _localCache.upsertConversations(
       ownerDid: session.did,
       conversations: <ConversationSummary>[
         ConversationSummary(
           threadId: threadId,
-          displayName: peerDid ?? groupId ?? threadId,
+          displayName: isGroup
+              ? groupDisplayName ?? GroupDisplayName.fallback(groupId)
+              : peerDid ?? threadId,
           lastMessagePreview: content,
           lastMessageAt: sent.createdAt,
           unreadCount: 0,
@@ -588,8 +597,7 @@ class AwikiAnpGateway implements AwikiGateway {
         for (final item in cachedGroups) item.groupId: item,
       };
       for (final item in _extractMessages(inbox)) {
-        final groupId =
-            item['group_did']?.toString() ?? item['group_id']?.toString() ?? '';
+        final groupId = _mapper.groupIdFromWire(item);
         if (groupId.isEmpty) {
           continue;
         }
@@ -600,15 +608,34 @@ class AwikiAnpGateway implements AwikiGateway {
         if (current == null ||
             (sentAt != null &&
                 (current.lastMessageAt ?? DateTime(1970)).isBefore(sentAt))) {
+          final groupName = _mapper.groupDisplayNameFromWire(
+            item,
+            groupId: groupId,
+            previousDisplayName: current?.name,
+            fallback: GroupDisplayName.fallback(groupId),
+          );
           grouped[groupId] = GroupSummary(
             groupId: groupId,
-            name: item['group_name']?.toString() ?? 'Group $groupId',
-            description: item['group_description']?.toString() ?? '',
+            name: groupName,
+            description: _groupDescriptionFromWire(item, current),
             memberCount:
                 int.tryParse(item['member_count']?.toString() ?? '') ?? 0,
             lastMessageAt: sentAt,
             myRole: current?.myRole,
           );
+        }
+      }
+      for (final entry in List<MapEntry<String, GroupSummary>>.from(
+        grouped.entries,
+      )) {
+        final group = entry.value;
+        if (!GroupDisplayName.isIdLike(group.name, group.groupId)) {
+          continue;
+        }
+        try {
+          grouped[entry.key] = await getGroup(group.groupId);
+        } catch (error) {
+          _logGateway('group.list snapshot fallback: $error');
         }
       }
       final merged = grouped.values.toList()
@@ -875,11 +902,17 @@ class AwikiAnpGateway implements AwikiGateway {
       ownerDid: session.did,
       threadId: message.threadId,
     );
+    final cachedGroupName = groupId.isNotEmpty
+        ? await _cachedGroupDisplayName(ownerDid: session.did, groupId: groupId)
+        : null;
+    final mappingEvent = cachedGroupName == null
+        ? normalized
+        : <String, Object?>{...normalized, 'group_name': cachedGroupName};
     final conversation = _mapper.conversationFromMessage(
       message: message,
       ownerDid: session.did,
       previous: existingConversation,
-      event: normalized,
+      event: mappingEvent,
     );
     await _localCache.upsertMessages(
       ownerDid: session.did,
@@ -893,12 +926,14 @@ class AwikiAnpGateway implements AwikiGateway {
 
     GroupSummary? group;
     if ((message.groupId ?? '').isNotEmpty) {
+      final groupName = _mapper.groupDisplayNameFromWire(
+        mappingEvent,
+        previousDisplayName: existingConversation?.displayName,
+        fallback: GroupDisplayName.fallback(message.groupId),
+      );
       group = GroupSummary(
         groupId: message.groupId!,
-        name:
-            normalized['group_name']?.toString() ??
-            existingConversation?.displayName ??
-            'Group ${message.groupId}',
+        name: groupName,
         description: normalized['group_description']?.toString() ?? '',
         memberCount:
             int.tryParse(normalized['member_count']?.toString() ?? '') ?? 0,
@@ -999,6 +1034,108 @@ class AwikiAnpGateway implements AwikiGateway {
       }
     }
     return null;
+  }
+
+  Future<String?> _cachedGroupDisplayName({
+    required String ownerDid,
+    required String? groupId,
+  }) async {
+    final normalizedGroupId = groupId?.trim() ?? '';
+    if (normalizedGroupId.isEmpty) {
+      return null;
+    }
+    final groups = await _localCache.loadGroups(ownerDid: ownerDid);
+    for (final group in groups) {
+      if (group.groupId == normalizedGroupId &&
+          !GroupDisplayName.isIdLike(group.name, normalizedGroupId)) {
+        return group.name;
+      }
+    }
+    final conversations = await _localCache.loadConversations(
+      ownerDid: ownerDid,
+    );
+    for (final conversation in conversations) {
+      if (conversation.groupId == normalizedGroupId &&
+          !GroupDisplayName.isIdLike(
+            conversation.displayName,
+            normalizedGroupId,
+          )) {
+        return conversation.displayName;
+      }
+    }
+    return null;
+  }
+
+  Future<List<ConversationSummary>> _applyCachedGroupNames({
+    required String ownerDid,
+    required List<ConversationSummary> conversations,
+  }) async {
+    final groups = await _localCache.loadGroups(ownerDid: ownerDid);
+    if (groups.isEmpty) {
+      return conversations;
+    }
+    final groupNamesById = <String, String>{
+      for (final group in groups)
+        if (!GroupDisplayName.isIdLike(group.name, group.groupId))
+          group.groupId: group.name,
+    };
+    if (groupNamesById.isEmpty) {
+      return conversations;
+    }
+    return conversations.map((conversation) {
+      final groupId = conversation.groupId?.trim() ?? '';
+      final groupName = groupNamesById[groupId];
+      if (!conversation.isGroup ||
+          groupName == null ||
+          groupName == conversation.displayName) {
+        return conversation;
+      }
+      return ConversationSummary(
+        threadId: conversation.threadId,
+        displayName: groupName,
+        lastMessagePreview: conversation.lastMessagePreview,
+        lastMessageAt: conversation.lastMessageAt,
+        unreadCount: conversation.unreadCount,
+        isGroup: conversation.isGroup,
+        targetDid: conversation.targetDid,
+        groupId: conversation.groupId,
+        avatarSeed: conversation.avatarSeed,
+      );
+    }).toList();
+  }
+
+  String _groupDescriptionFromWire(
+    Map<String, Object?> item,
+    GroupSummary? current,
+  ) {
+    final body = _asStringKeyMap(item['body']);
+    final group = _asStringKeyMap(item['group']);
+    final profile = _asStringKeyMap(item['group_profile']);
+    final snapshot = _asStringKeyMap(item['group_snapshot']);
+    final bodyProfile = _asStringKeyMap(body['group_profile']);
+    final bodySnapshot = _asStringKeyMap(body['group_snapshot']);
+    return _firstString(<Object?>[
+      item['group_description'],
+      item['description'],
+      body['group_description'],
+      body['description'],
+      profile['description'],
+      snapshot['description'],
+      group['description'],
+      bodyProfile['description'],
+      bodySnapshot['description'],
+      current?.description,
+    ]);
+  }
+
+  String _firstString(List<Object?> values, {String fallback = ''}) {
+    for (final value in values) {
+      final text = value?.toString().trim() ?? '';
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return fallback;
   }
 
   Map<String, Object?> _normalizeRealtimeEvent(Map<String, Object?> event) {

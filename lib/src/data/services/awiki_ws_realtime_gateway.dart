@@ -39,6 +39,7 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
   bool _shouldRun = false;
   RealtimeConnectionStatus _status = RealtimeConnectionStatus.idle;
   Duration _currentDelay = const Duration(seconds: 1);
+  int _handshakeFailureCount = 0;
 
   @override
   bool get isConnected => _channel != null;
@@ -97,9 +98,14 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
         headers: <String, String>{'Authorization': 'Bearer $token'},
       );
       await channel.ready.timeout(_connectTimeout);
-    } catch (_) {
+    } catch (error) {
       await _closeChannel(channel);
-      _scheduleReconnect();
+      if (_isAuthFailure(error)) {
+        _shouldRun = false;
+        _setStatus(RealtimeConnectionStatus.failed);
+        return;
+      }
+      _scheduleReconnect(afterHandshakeFailure: true);
       return;
     }
 
@@ -110,6 +116,7 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
 
     _channel = channel;
     _currentDelay = _reconnectBaseDelay;
+    _handshakeFailureCount = 0;
     _setStatus(RealtimeConnectionStatus.connected);
     _subscription = channel.stream.listen(
       (event) async {
@@ -153,12 +160,20 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
     await onMessage(normalized);
   }
 
-  void _scheduleReconnect() {
+  void _scheduleReconnect({bool afterHandshakeFailure = false}) {
     _channel = null;
     _subscription?.cancel();
     _subscription = null;
     if (!_shouldRun) {
       return;
+    }
+    if (afterHandshakeFailure) {
+      _handshakeFailureCount += 1;
+      if (_handshakeFailureCount >= 3) {
+        _shouldRun = false;
+        _setStatus(RealtimeConnectionStatus.disconnected);
+        return;
+      }
     }
     _setStatus(RealtimeConnectionStatus.reconnecting);
     _reconnectTimer?.cancel();
@@ -166,7 +181,7 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
       try {
         await _openSocket();
       } catch (_) {
-        _scheduleReconnect();
+        _scheduleReconnect(afterHandshakeFailure: true);
       }
     });
     final nextSeconds = (_currentDelay.inSeconds * 2).clamp(
@@ -174,6 +189,15 @@ class AwikiWsRealtimeGateway implements RealtimeGateway {
       _reconnectMaxDelay.inSeconds,
     );
     _currentDelay = Duration(seconds: nextSeconds);
+  }
+
+  bool _isAuthFailure(Object error) {
+    final raw = error.toString().toLowerCase();
+    return raw.contains('401') ||
+        raw.contains('unauthorized') ||
+        raw.contains('invalidtoken') ||
+        raw.contains('invalid token') ||
+        raw.contains('session_unauthorized');
   }
 
   void _setStatus(RealtimeConnectionStatus status) {
