@@ -1,6 +1,8 @@
 import '../../data/awiki_sdk/awiki_anp_session.dart';
 import '../entities/session_identity.dart';
 
+enum HandleRegistrationStatus { registered, notRegistered }
+
 abstract class AwikiAccountGateway {
   Future<SessionIdentity?> restoreSession();
 
@@ -27,6 +29,10 @@ abstract class AwikiAccountGateway {
   Future<void> sendEmailVerification({required String email});
 
   Future<bool> checkEmailVerified({required String email});
+
+  Future<HandleRegistrationStatus> lookupHandleRegistration({
+    required String handle,
+  });
 
   Future<SessionIdentity> registerHandle({
     required String phone,

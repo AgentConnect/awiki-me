@@ -23,7 +23,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   final otpController = TextEditingController();
   final emailController = TextEditingController();
   final handleController = TextEditingController(text: 'awikime');
-  final nickController = TextEditingController(text: 'AWiki Me');
 
   String get _normalizedPhone => phoneController.text.trim();
 
@@ -33,7 +32,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     otpController.dispose();
     emailController.dispose();
     handleController.dispose();
-    nickController.dispose();
     super.dispose();
   }
 
@@ -52,10 +50,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         otpController: otpController,
         emailController: emailController,
         handleController: handleController,
-        nickController: nickController,
         onLogin: runtime.loginWithLocalCredential,
         onImport: runtime.importCredentialArchive,
-        onRefresh: () => ref.read(appRuntimeProvider.notifier).initialize(),
+        onRefresh: runtime.refreshLocalCredentials,
         onModeChanged: ref.read(onboardingProvider.notifier).setEntryMode,
         onAuthModeChanged: ref.read(onboardingProvider.notifier).setAuthMode,
         onRequestOtp: () =>
@@ -108,8 +105,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             _SegmentedPill(
               value: onboarding.entryMode,
               options: <String, String>{
-                'login': context.l10n.onboardingLogin,
                 'register': context.l10n.onboardingRegister,
+                'login': context.l10n.onboardingLogin,
               },
               onChanged: ref.read(onboardingProvider.notifier).setEntryMode,
             ),
@@ -124,8 +121,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 importLabel: context.l10n.onboardingImportCredential,
                 refreshLabel: context.l10n.onboardingRefreshCredentials,
                 onImport: runtime.importCredentialArchive,
-                onRefresh: () =>
-                    ref.read(appRuntimeProvider.notifier).initialize(),
+                onRefresh: runtime.refreshLocalCredentials,
               ),
             ] else ...<Widget>[
               if (onboarding.registerStep == 1) ...<Widget>[
@@ -136,6 +132,15 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 SizedBox(
                   height: responsive.spacing(responsive.isPhone ? 32 : 24),
                 ),
+                Text(
+                  context.l10n.onboardingLoginRegisterHint,
+                  style: TextStyle(
+                    color: theme.secondaryText,
+                    fontSize: responsive.bodySm,
+                    height: 1.35,
+                  ),
+                ),
+                SizedBox(height: responsive.spacing(16)),
                 if (onboarding.authMode == 'phone') ...<Widget>[
                   AppTextField(
                     controller: phoneController,
@@ -149,8 +154,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   ),
                   SizedBox(height: responsive.spacing(12)),
                   AppPrimaryButton(
-                    label: context.l10n.onboardingSendOtp,
-                    onPressed: onboarding.isBusy
+                    label: onboarding.isOtpResendCoolingDown
+                        ? context.l10n.onboardingResendOtpIn(
+                            onboarding.otpResendCountdown,
+                          )
+                        : context.l10n.onboardingSendOtp,
+                    onPressed:
+                        onboarding.isBusy || onboarding.isOtpResendCoolingDown
                         ? null
                         : () => ref
                               .read(onboardingProvider.notifier)
@@ -227,12 +237,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   label: context.l10n.onboardingHandle,
                   placeholder: context.l10n.onboardingHandlePlaceholder,
                 ),
-                SizedBox(height: responsive.spacing(12)),
-                AppTextField(
-                  controller: nickController,
-                  label: context.l10n.onboardingNickname,
-                  placeholder: context.l10n.onboardingNicknamePlaceholder,
-                ),
                 SizedBox(height: responsive.spacing(20)),
                 Row(
                   children: <Widget>[
@@ -247,7 +251,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     SizedBox(width: responsive.spacing(12)),
                     Expanded(
                       child: AppPrimaryButton(
-                        label: context.l10n.onboardingCompleteRegister,
+                        label: onboarding.authMode == 'phone'
+                            ? context.l10n.onboardingCompleteRegister
+                            : context.l10n.onboardingCompleteEmailRegister,
                         onPressed: onboarding.isBusy
                             ? null
                             : () => _submitRegister(context),
@@ -277,21 +283,22 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
 
   Future<void> _submitRegister(BuildContext context) async {
     final notifier = ref.read(onboardingProvider.notifier);
-    final profileMarkdown = '# ${nickController.text.trim()}\n\n';
+    final handle = handleController.text.trim();
+    final profileMarkdown = '# $handle\n\n';
     if (ref.read(onboardingProvider).authMode == 'phone') {
-      await notifier.registerWithPhone(
+      await notifier.loginOrRegisterWithPhone(
         phone: _normalizedPhone,
         otp: otpController.text.trim(),
-        handle: handleController.text.trim(),
-        nickName: nickController.text.trim(),
+        handle: handle,
+        nickName: handle,
         profileMarkdown: profileMarkdown,
       );
       return;
     }
     await notifier.registerWithEmail(
       email: emailController.text.trim(),
-      handle: handleController.text.trim(),
-      nickName: nickController.text.trim(),
+      handle: handle,
+      nickName: handle,
       profileMarkdown: profileMarkdown,
     );
   }
@@ -305,7 +312,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.otpController,
     required this.emailController,
     required this.handleController,
-    required this.nickController,
     required this.onLogin,
     required this.onImport,
     required this.onRefresh,
@@ -324,7 +330,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final TextEditingController otpController;
   final TextEditingController emailController;
   final TextEditingController handleController;
-  final TextEditingController nickController;
   final Future<void> Function(String credentialName) onLogin;
   final VoidCallback? onImport;
   final VoidCallback? onRefresh;
@@ -366,7 +371,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
                       otpController: otpController,
                       emailController: emailController,
                       handleController: handleController,
-                      nickController: nickController,
                       onLogin: onLogin,
                       onImport: onImport,
                       onRefresh: onRefresh,
@@ -775,7 +779,6 @@ class _MacAuthCard extends StatelessWidget {
     required this.otpController,
     required this.emailController,
     required this.handleController,
-    required this.nickController,
     required this.onLogin,
     required this.onImport,
     required this.onRefresh,
@@ -794,7 +797,6 @@ class _MacAuthCard extends StatelessWidget {
   final TextEditingController otpController;
   final TextEditingController emailController;
   final TextEditingController handleController;
-  final TextEditingController nickController;
   final Future<void> Function(String credentialName) onLogin;
   final VoidCallback? onImport;
   final VoidCallback? onRefresh;
@@ -854,7 +856,6 @@ class _MacAuthCard extends StatelessWidget {
                               otpController: otpController,
                               emailController: emailController,
                               handleController: handleController,
-                              nickController: nickController,
                               onAuthModeChanged: onAuthModeChanged,
                               onRequestOtp: onRequestOtp,
                               onRequestEmailActivation:
@@ -884,7 +885,9 @@ class _MacAuthCard extends StatelessWidget {
                       style: const TextStyle(color: Color(0xFF7B879D)),
                       children: <InlineSpan>[
                         TextSpan(
-                          text: onboarding.entryMode == 'login' ? '去注册' : '去登录',
+                          text: onboarding.entryMode == 'login'
+                              ? '去登录或注册'
+                              : '去登录',
                           style: const TextStyle(
                             color: Color(0xFF0B65F8),
                             fontWeight: FontWeight.w800,
@@ -920,17 +923,17 @@ class _MacAuthTabs extends StatelessWidget {
           children: <Widget>[
             Flexible(
               child: _MacAuthTab(
-                label: context.l10n.onboardingLogin,
-                selected: value == 'login',
-                onTap: () => onChanged('login'),
+                label: context.l10n.onboardingRegister,
+                selected: value == 'register',
+                onTap: () => onChanged('register'),
               ),
             ),
             SizedBox(width: gap),
             Flexible(
               child: _MacAuthTab(
-                label: context.l10n.onboardingRegister,
-                selected: value == 'register',
-                onTap: () => onChanged('register'),
+                label: context.l10n.onboardingLogin,
+                selected: value == 'login',
+                onTap: () => onChanged('login'),
               ),
             ),
           ],
@@ -1151,7 +1154,6 @@ class _MacRegisterForm extends StatelessWidget {
     required this.otpController,
     required this.emailController,
     required this.handleController,
-    required this.nickController,
     required this.onAuthModeChanged,
     required this.onRequestOtp,
     required this.onRequestEmailActivation,
@@ -1165,7 +1167,6 @@ class _MacRegisterForm extends StatelessWidget {
   final TextEditingController otpController;
   final TextEditingController emailController;
   final TextEditingController handleController;
-  final TextEditingController nickController;
   final ValueChanged<String> onAuthModeChanged;
   final VoidCallback onRequestOtp;
   final VoidCallback onRequestEmailActivation;
@@ -1185,13 +1186,6 @@ class _MacRegisterForm extends StatelessWidget {
             placeholder: context.l10n.onboardingHandlePlaceholder,
             icon: CupertinoIcons.at,
           ),
-          const SizedBox(height: 18),
-          _MacOutlinedField(
-            controller: nickController,
-            label: context.l10n.onboardingNickname,
-            placeholder: context.l10n.onboardingNicknamePlaceholder,
-            icon: CupertinoIcons.person,
-          ),
           const SizedBox(height: 24),
           Row(
             children: <Widget>[
@@ -1204,7 +1198,9 @@ class _MacRegisterForm extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: _MacPrimaryAction(
-                  label: context.l10n.onboardingCompleteRegister,
+                  label: onboarding.authMode == 'phone'
+                      ? context.l10n.onboardingCompleteRegister
+                      : context.l10n.onboardingCompleteEmailRegister,
                   onPressed: onboarding.isBusy ? null : onSubmitRegister,
                 ),
               ),
@@ -1221,6 +1217,8 @@ class _MacRegisterForm extends StatelessWidget {
           value: onboarding.authMode,
           onChanged: onAuthModeChanged,
         ),
+        const SizedBox(height: 12),
+        _MacAuthHint(text: context.l10n.onboardingLoginRegisterHint),
         const SizedBox(height: 20),
         if (onboarding.authMode == 'phone') ...<Widget>[
           _MacOutlinedField(
@@ -1232,8 +1230,14 @@ class _MacRegisterForm extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           _MacPrimaryAction(
-            label: context.l10n.onboardingSendOtp,
-            onPressed: onboarding.isBusy ? null : onRequestOtp,
+            label: onboarding.isOtpResendCoolingDown
+                ? context.l10n.onboardingResendOtpIn(
+                    onboarding.otpResendCountdown,
+                  )
+                : context.l10n.onboardingSendOtp,
+            onPressed: onboarding.isBusy || onboarding.isOtpResendCoolingDown
+                ? null
+                : onRequestOtp,
           ),
           const SizedBox(height: 14),
           _MacOutlinedField(
@@ -1371,6 +1375,25 @@ class _MacAuthModeButton extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _MacAuthHint extends StatelessWidget {
+  const _MacAuthHint({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: Color(0xFF7B879D),
+        fontSize: 12,
+        height: 1.35,
+        fontWeight: FontWeight.w500,
       ),
     );
   }

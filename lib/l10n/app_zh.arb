@@ -17,11 +17,17 @@
   "realtimeStatusConnecting": "正在连接消息服务...",
   "realtimeStatusReconnecting": "消息连接中断，正在重连...",
   "realtimeStatusDisconnected": "消息服务已断开，正在尝试恢复",
-  "onboardingLogin": "登录",
-  "onboardingRegister": "注册",
+  "onboardingLogin": "切换身份",
+  "onboardingRegister": "登录或注册",
   "onboardingImportCredential": "导入身份凭证",
   "onboardingRefreshCredentials": "重新识别本地凭证",
   "onboardingSendOtp": "发送验证码",
+  "onboardingResendOtpIn": "重新发送（{seconds}s）",
+  "@onboardingResendOtpIn": {
+    "placeholders": {
+      "seconds": {}
+    }
+  },
   "onboardingOtp": "验证码",
   "onboardingOtpPlaceholder": "输入验证码",
   "onboardingEmail": "邮箱",
@@ -39,7 +45,9 @@
   "onboardingHandlePlaceholder": "用户名 handle",
   "onboardingNickname": "昵称",
   "onboardingNicknamePlaceholder": "输入昵称",
-  "onboardingCompleteRegister": "完成注册",
+  "onboardingCompleteRegister": "完成",
+  "onboardingCompleteEmailRegister": "完成注册",
+  "onboardingLoginRegisterHint": "手机号会自动判断登录已有 Handle 或注册新 Handle；邮箱暂时仅支持注册新 Handle。",
   "onboardingAuthMethod": "验证方式",
   "onboardingAccountProfile": "账号资料",
   "onboardingPhone": "手机号",
@@ -58,6 +66,9 @@
   "onboardingMissingNicknameTitle": "缺少昵称",
   "onboardingMissingNicknameContent": "请输入昵称。",
   "secureMessagingClient": "Secure messaging client",
+  "shellNavMessages": "消息",
+  "shellNavFriends": "朋友",
+  "shellNavMe": "我",
   "conversationsTitle": "信息",
   "conversationsNoMessagePreview": "暂无消息",
   "conversationsEmptyTitle": "还没有消息",
@@ -226,6 +237,13 @@
     }
   },
   "importSuccessSelectCredential": "导入成功，请选择该凭证登录",
+  "localCredentialsRefreshed": "已重新识别到 {count} 个本地凭证",
+  "@localCredentialsRefreshed": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "noLocalCredentialsFound": "未识别到本地凭证",
   "newMessageArrived": "你收到了新消息",
   "updateAlreadyLatest": "已是最新版本",
   "updateCheckFailed": "检查更新失败，请稍后重试。",
@@ -236,6 +254,9 @@
   "updateInstallFailed": "更新失败，请前往 GitHub 下载。",
   "requestTimeoutRetry": "请求超时，请检查网络后重试。",
   "operationFailedRetry": "操作失败，请稍后重试。",
+  "otpSent": "验证码已发送，请留意短信。",
+  "activationEmailSent": "激活邮件已发送，请查收邮箱。",
+  "emailLoginUnsupportedForRegisteredHandle": "该 handle 已注册。邮箱当前仅支持新注册，请使用手机号验证码登录或导入身份凭证。",
   "emailNotActivatedClickLink": "邮箱尚未激活，请先点击邮件中的激活链接。",
   "sessionExpiredRelogin": "登录状态已失效，请重新登录。",
   "localCredentialNotFound": "本地未找到凭证：{credentialName}",

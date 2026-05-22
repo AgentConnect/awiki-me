@@ -326,7 +326,7 @@ class _MacDesktopRail extends StatelessWidget {
                       SizedBox(height: gap),
                       _MacDesktopRailItem(
                         icon: CupertinoIcons.gear_alt,
-                        label: '配置',
+                        label: '设置',
                         selected: false,
                         compact: compact,
                         onTap: onOpenSettings,
@@ -574,11 +574,14 @@ class _BottomNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    final l10n = context.l10n;
     final bottomInset = MediaQuery.of(context).padding.bottom;
+    final showLabels = responsive.isPhone && !embedded;
     final horizontalPadding = embedded ? 0.0 : responsive.spacing(24);
     final bottomPadding = embedded
         ? 0.0
         : (bottomInset > 0 ? responsive.spacing(8) : 16.0);
+    final navHeight = showLabels ? 64.0 : responsive.navBarHeight;
     return SafeArea(
       top: false,
       child: Padding(
@@ -594,15 +597,19 @@ class _BottomNavBar extends StatelessWidget {
               final navWidth = constraints.maxWidth.isFinite
                   ? constraints.maxWidth.clamp(
                       0.0,
-                      responsive.isPhone ? responsive.scaled(272.0) : 220.0,
+                      responsive.isPhone ? responsive.scaled(312.0) : 220.0,
                     )
-                  : (responsive.isPhone ? responsive.scaled(272.0) : 220.0);
+                  : (responsive.isPhone ? responsive.scaled(312.0) : 220.0);
               return Container(
                 width: navWidth,
-                height: responsive.navBarHeight,
+                height: navHeight,
                 padding: EdgeInsets.symmetric(
-                  horizontal: responsive.spacing(18),
-                  vertical: responsive.spacing(8),
+                  horizontal: showLabels
+                      ? responsive.spacing(10)
+                      : responsive.spacing(18),
+                  vertical: showLabels
+                      ? responsive.spacing(1)
+                      : responsive.spacing(8),
                 ),
                 decoration: BoxDecoration(
                   color: theme.surface,
@@ -618,25 +625,36 @@ class _BottomNavBar extends StatelessWidget {
                   ],
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: <Widget>[
-                    _NavButton(
-                      activeAsset: 'assets/icons/message_Active.svg',
-                      inactiveAsset: 'assets/icons/message_Inactive.svg',
-                      active: currentIndex == 0,
-                      onTap: () => onTap(0),
+                    Expanded(
+                      child: _NavButton(
+                        label: l10n.shellNavMessages,
+                        activeAsset: 'assets/icons/message_Active.svg',
+                        inactiveAsset: 'assets/icons/message_Inactive.svg',
+                        active: currentIndex == 0,
+                        showLabel: showLabels,
+                        onTap: () => onTap(0),
+                      ),
                     ),
-                    _NavButton(
-                      activeAsset: 'assets/icons/friend_Active.svg',
-                      inactiveAsset: 'assets/icons/friend_Inactive.svg',
-                      active: currentIndex == 1,
-                      onTap: () => onTap(1),
+                    Expanded(
+                      child: _NavButton(
+                        label: l10n.shellNavFriends,
+                        activeAsset: 'assets/icons/friend_Active.svg',
+                        inactiveAsset: 'assets/icons/friend_Inactive.svg',
+                        active: currentIndex == 1,
+                        showLabel: showLabels,
+                        onTap: () => onTap(1),
+                      ),
                     ),
-                    _NavButton(
-                      activeAsset: 'assets/icons/me_Active.svg',
-                      inactiveAsset: 'assets/icons/me_Inactive.svg',
-                      active: currentIndex == 2,
-                      onTap: () => onTap(2),
+                    Expanded(
+                      child: _NavButton(
+                        label: l10n.shellNavMe,
+                        activeAsset: 'assets/icons/me_Active.svg',
+                        inactiveAsset: 'assets/icons/me_Inactive.svg',
+                        active: currentIndex == 2,
+                        showLabel: showLabels,
+                        onTap: () => onTap(2),
+                      ),
                     ),
                   ],
                 ),
@@ -651,35 +669,103 @@ class _BottomNavBar extends StatelessWidget {
 
 class _NavButton extends StatelessWidget {
   const _NavButton({
+    required this.label,
     required this.activeAsset,
     required this.inactiveAsset,
     required this.active,
+    required this.showLabel,
     required this.onTap,
   });
 
+  final String label;
   final String activeAsset;
   final String inactiveAsset;
   final bool active;
+  final bool showLabel;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
-    final navIconSize = responsive.isPhone ? 42.0 : responsive.iconLg * 2;
+    final navIconSize = showLabel
+        ? 74.0
+        : (responsive.isPhone ? 42.0 : responsive.iconLg * 2);
     final tapSize = responsive.isPhone
         ? responsive.compactControlHeight + responsive.spacing(6)
         : 44.0;
-    return GestureDetector(
+    final foreground = active ? theme.primaryDark : theme.secondaryText;
+    return Semantics(
+      button: true,
+      selected: active,
+      label: label,
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: tapSize,
-        height: tapSize,
-        child: Center(
-          child: SvgPicture.asset(
-            active ? activeAsset : inactiveAsset,
-            width: navIconSize,
-            height: navIconSize,
+      child: ExcludeSemantics(
+        child: GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOut,
+            width: showLabel ? double.infinity : tapSize,
+            height: showLabel ? double.infinity : tapSize,
+            padding: EdgeInsets.fromLTRB(
+              showLabel ? 4 : 0,
+              showLabel ? 4 : 0,
+              showLabel ? 4 : 0,
+              showLabel ? 4 : 0,
+            ),
+            decoration: BoxDecoration(
+              color: active && showLabel
+                  ? theme.primary.withValues(alpha: 0.12)
+                  : const Color(0x00FFFFFF),
+              borderRadius: BorderRadius.circular(showLabel ? 18 : 0),
+            ),
+            child: showLabel
+                ? Stack(
+                    clipBehavior: Clip.none,
+                    children: <Widget>[
+                      Positioned(
+                        top: -20,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: SvgPicture.asset(
+                            active ? activeAsset : inactiveAsset,
+                            width: navIconSize,
+                            height: navIconSize,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: foreground,
+                              fontSize: 15,
+                              fontWeight: active
+                                  ? FontWeight.w800
+                                  : FontWeight.w700,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : Center(
+                    child: SvgPicture.asset(
+                      active ? activeAsset : inactiveAsset,
+                      width: navIconSize,
+                      height: navIconSize,
+                    ),
+                  ),
           ),
         ),
       ),

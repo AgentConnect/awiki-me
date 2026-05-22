@@ -203,13 +203,13 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingLogin.
   ///
   /// In zh, this message translates to:
-  /// **'登录'**
+  /// **'切换身份'**
   String get onboardingLogin;
 
   /// No description provided for @onboardingRegister.
   ///
   /// In zh, this message translates to:
-  /// **'注册'**
+  /// **'登录或注册'**
   String get onboardingRegister;
 
   /// No description provided for @onboardingImportCredential.
@@ -229,6 +229,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'发送验证码'**
   String get onboardingSendOtp;
+
+  /// No description provided for @onboardingResendOtpIn.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新发送（{seconds}s）'**
+  String onboardingResendOtpIn(Object seconds);
 
   /// No description provided for @onboardingOtp.
   ///
@@ -305,8 +311,20 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingCompleteRegister.
   ///
   /// In zh, this message translates to:
-  /// **'完成注册'**
+  /// **'完成'**
   String get onboardingCompleteRegister;
+
+  /// No description provided for @onboardingCompleteEmailRegister.
+  ///
+  /// In zh, this message translates to:
+  /// **'完成注册'**
+  String get onboardingCompleteEmailRegister;
+
+  /// No description provided for @onboardingLoginRegisterHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'手机号会自动判断登录已有 Handle 或注册新 Handle；邮箱暂时仅支持注册新 Handle。'**
+  String get onboardingLoginRegisterHint;
 
   /// No description provided for @onboardingAuthMethod.
   ///
@@ -415,6 +433,24 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'Secure messaging client'**
   String get secureMessagingClient;
+
+  /// No description provided for @shellNavMessages.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息'**
+  String get shellNavMessages;
+
+  /// No description provided for @shellNavFriends.
+  ///
+  /// In zh, this message translates to:
+  /// **'朋友'**
+  String get shellNavFriends;
+
+  /// No description provided for @shellNavMe.
+  ///
+  /// In zh, this message translates to:
+  /// **'我'**
+  String get shellNavMe;
 
   /// No description provided for @conversationsTitle.
   ///
@@ -1040,6 +1076,18 @@ abstract class AppLocalizations {
   /// **'导入成功，请选择该凭证登录'**
   String get importSuccessSelectCredential;
 
+  /// No description provided for @localCredentialsRefreshed.
+  ///
+  /// In zh, this message translates to:
+  /// **'已重新识别到 {count} 个本地凭证'**
+  String localCredentialsRefreshed(Object count);
+
+  /// No description provided for @noLocalCredentialsFound.
+  ///
+  /// In zh, this message translates to:
+  /// **'未识别到本地凭证'**
+  String get noLocalCredentialsFound;
+
   /// No description provided for @newMessageArrived.
   ///
   /// In zh, this message translates to:
@@ -1099,6 +1147,24 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'操作失败，请稍后重试。'**
   String get operationFailedRetry;
+
+  /// No description provided for @otpSent.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证码已发送，请留意短信。'**
+  String get otpSent;
+
+  /// No description provided for @activationEmailSent.
+  ///
+  /// In zh, this message translates to:
+  /// **'激活邮件已发送，请查收邮箱。'**
+  String get activationEmailSent;
+
+  /// No description provided for @emailLoginUnsupportedForRegisteredHandle.
+  ///
+  /// In zh, this message translates to:
+  /// **'该 handle 已注册。邮箱当前仅支持新注册，请使用手机号验证码登录或导入身份凭证。'**
+  String get emailLoginUnsupportedForRegisteredHandle;
 
   /// No description provided for @emailNotActivatedClickLink.
   ///

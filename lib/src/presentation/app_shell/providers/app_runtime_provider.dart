@@ -105,6 +105,19 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     });
   }
 
+  Future<void> refreshLocalCredentials() async {
+    await _runBusy(() async {
+      final credentials = await ref
+          .read(awikiAccountGatewayProvider)
+          .listLocalCredentials();
+      ref.read(sessionProvider.notifier).setLocalCredentials(credentials);
+      final feedback = credentials.isEmpty
+          ? AppMessage.noLocalCredentialsFound()
+          : AppMessage.localCredentialsRefreshed(credentials.length);
+      ref.read(uiFeedbackProvider.notifier).showInfo(feedback);
+    });
+  }
+
   Future<void> logout() async {
     await _runBusy(() async {
       await ref.read(realtimeGatewayProvider).disconnect();

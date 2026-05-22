@@ -246,6 +246,11 @@ class _FakeAccountGateway implements AwikiAccountGateway {
   ) async => _session;
 
   @override
+  Future<HandleRegistrationStatus> lookupHandleRegistration({
+    required String handle,
+  }) async => throw UnimplementedError();
+
+  @override
   Future<void> logout() async {}
 
   @override

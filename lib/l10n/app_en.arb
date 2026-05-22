@@ -17,11 +17,17 @@
   "realtimeStatusConnecting": "Connecting to message service...",
   "realtimeStatusReconnecting": "Message connection interrupted. Reconnecting...",
   "realtimeStatusDisconnected": "Message service is disconnected. Trying to recover.",
-  "onboardingLogin": "Log in",
-  "onboardingRegister": "Register",
+  "onboardingLogin": "Switch identity",
+  "onboardingRegister": "Log in or register",
   "onboardingImportCredential": "Import identity credential",
   "onboardingRefreshCredentials": "Rescan local credentials",
   "onboardingSendOtp": "Send verification code",
+  "onboardingResendOtpIn": "Resend ({seconds}s)",
+  "@onboardingResendOtpIn": {
+    "placeholders": {
+      "seconds": {}
+    }
+  },
   "onboardingOtp": "Verification code",
   "onboardingOtpPlaceholder": "Enter verification code",
   "onboardingEmail": "Email",
@@ -39,7 +45,9 @@
   "onboardingHandlePlaceholder": "Username handle",
   "onboardingNickname": "Nickname",
   "onboardingNicknamePlaceholder": "Enter nickname",
-  "onboardingCompleteRegister": "Complete registration",
+  "onboardingCompleteRegister": "Continue",
+  "onboardingCompleteEmailRegister": "Complete registration",
+  "onboardingLoginRegisterHint": "Phone automatically logs in to an existing Handle or registers a new one. Email currently only registers new Handles.",
   "onboardingAuthMethod": "Verification",
   "onboardingAccountProfile": "Account profile",
   "onboardingPhone": "Phone",
@@ -58,6 +66,9 @@
   "onboardingMissingNicknameTitle": "Nickname missing",
   "onboardingMissingNicknameContent": "Please enter a nickname.",
   "secureMessagingClient": "Secure messaging client",
+  "shellNavMessages": "Messages",
+  "shellNavFriends": "Friends",
+  "shellNavMe": "Me",
   "conversationsTitle": "Messages",
   "conversationsNoMessagePreview": "No messages yet",
   "conversationsEmptyTitle": "No messages yet",
@@ -226,6 +237,13 @@
     }
   },
   "importSuccessSelectCredential": "Import succeeded. Please choose this credential to log in.",
+  "localCredentialsRefreshed": "Found {count} local credential(s)",
+  "@localCredentialsRefreshed": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "noLocalCredentialsFound": "No local credentials found",
   "newMessageArrived": "You received a new message",
   "updateAlreadyLatest": "You're already on the latest version.",
   "updateCheckFailed": "Update check failed. Please try again later.",
@@ -236,6 +254,9 @@
   "updateInstallFailed": "Update failed. Please download it from GitHub.",
   "requestTimeoutRetry": "The request timed out. Please check your network and try again.",
   "operationFailedRetry": "The operation failed. Please try again later.",
+  "otpSent": "Verification code sent. Please check your messages.",
+  "activationEmailSent": "Activation email sent. Please check your inbox.",
+  "emailLoginUnsupportedForRegisteredHandle": "This handle is already registered. Email currently supports new registration only. Use phone verification or import an identity credential to log in.",
   "emailNotActivatedClickLink": "The email is not activated yet. Please click the activation link in the email first.",
   "sessionExpiredRelogin": "Your sign-in session has expired. Please log in again.",
   "localCredentialNotFound": "Local credential not found: {credentialName}",

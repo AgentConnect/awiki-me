@@ -16,6 +16,12 @@ class AppMessage {
   factory AppMessage.importSuccessSelectCredential() =>
       const AppMessage._('importSuccessSelectCredential');
 
+  factory AppMessage.localCredentialsRefreshed(int count) =>
+      AppMessage._('localCredentialsRefreshed', value: '$count');
+
+  factory AppMessage.noLocalCredentialsFound() =>
+      const AppMessage._('noLocalCredentialsFound');
+
   factory AppMessage.newMessageArrived() =>
       const AppMessage._('newMessageArrived');
 
@@ -45,6 +51,14 @@ class AppMessage {
 
   factory AppMessage.operationFailedRetry() =>
       const AppMessage._('operationFailedRetry');
+
+  factory AppMessage.otpSent() => const AppMessage._('otpSent');
+
+  factory AppMessage.activationEmailSent() =>
+      const AppMessage._('activationEmailSent');
+
+  factory AppMessage.emailLoginUnsupportedForRegisteredHandle() =>
+      const AppMessage._('emailLoginUnsupportedForRegisteredHandle');
 
   factory AppMessage.emailNotActivatedClickLink() =>
       const AppMessage._('emailNotActivatedClickLink');
@@ -139,6 +153,9 @@ class AppMessage {
     if (raw == '邮箱尚未激活，请先点击邮件中的激活链接。') {
       return AppMessage.emailNotActivatedClickLink();
     }
+    if (raw == '该 handle 已注册。邮箱当前仅支持新注册，请使用手机号验证码登录或导入身份凭证。') {
+      return AppMessage.emailLoginUnsupportedForRegisteredHandle();
+    }
     if (raw == '登录状态已失效，请重新登录。') {
       return AppMessage.sessionExpiredRelogin();
     }
@@ -221,6 +238,10 @@ class AppMessage {
         return l10n.exportedTo(path ?? '');
       case 'importSuccessSelectCredential':
         return l10n.importSuccessSelectCredential;
+      case 'localCredentialsRefreshed':
+        return l10n.localCredentialsRefreshed(value ?? '0');
+      case 'noLocalCredentialsFound':
+        return l10n.noLocalCredentialsFound;
       case 'newMessageArrived':
         return l10n.newMessageArrived;
       case 'updateAlreadyLatest':
@@ -241,6 +262,12 @@ class AppMessage {
         return l10n.requestTimeoutRetry;
       case 'operationFailedRetry':
         return l10n.operationFailedRetry;
+      case 'otpSent':
+        return l10n.otpSent;
+      case 'activationEmailSent':
+        return l10n.activationEmailSent;
+      case 'emailLoginUnsupportedForRegisteredHandle':
+        return l10n.emailLoginUnsupportedForRegisteredHandle;
       case 'emailNotActivatedClickLink':
         return l10n.emailNotActivatedClickLink;
       case 'sessionExpiredRelogin':
@@ -312,6 +339,12 @@ class AppMessage {
         return 'The request timed out. Please check your network and try again.';
       case 'operationFailedRetry':
         return 'The operation failed. Please try again later.';
+      case 'otpSent':
+        return 'Verification code sent. Please check your messages.';
+      case 'activationEmailSent':
+        return 'Activation email sent. Please check your inbox.';
+      case 'emailLoginUnsupportedForRegisteredHandle':
+        return 'This handle is already registered. Email currently supports new registration only.';
       case 'raw':
         return detail ?? 'The operation failed. Please try again later.';
       default:
@@ -335,6 +368,9 @@ class AppMessage {
     }
     if (raw.startsWith('ArgumentError: ')) {
       return raw.substring('ArgumentError: '.length);
+    }
+    if (raw.startsWith('Bad state: ')) {
+      return raw.substring('Bad state: '.length);
     }
     return raw;
   }

@@ -213,7 +213,7 @@ class AwikiResponsiveInfo {
   EdgeInsets get tabInnerPadding {
     switch (breakpoint) {
       case AwikiBreakpoint.phone:
-        return const EdgeInsets.fromLTRB(22, 18, 22, 0);
+        return const EdgeInsets.fromLTRB(22, 0, 22, 0);
       case AwikiBreakpoint.large:
         return const EdgeInsets.fromLTRB(18, 18, 18, 0);
     }

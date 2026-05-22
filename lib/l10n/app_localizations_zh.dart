@@ -60,10 +60,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get realtimeStatusDisconnected => '消息服务已断开，正在尝试恢复';
 
   @override
-  String get onboardingLogin => '登录';
+  String get onboardingLogin => '切换身份';
 
   @override
-  String get onboardingRegister => '注册';
+  String get onboardingRegister => '登录或注册';
 
   @override
   String get onboardingImportCredential => '导入身份凭证';
@@ -73,6 +73,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get onboardingSendOtp => '发送验证码';
+
+  @override
+  String onboardingResendOtpIn(Object seconds) {
+    return '重新发送（${seconds}s）';
+  }
 
   @override
   String get onboardingOtp => '验证码';
@@ -113,7 +118,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingNicknamePlaceholder => '输入昵称';
 
   @override
-  String get onboardingCompleteRegister => '完成注册';
+  String get onboardingCompleteRegister => '完成';
+
+  @override
+  String get onboardingCompleteEmailRegister => '完成注册';
+
+  @override
+  String get onboardingLoginRegisterHint =>
+      '手机号会自动判断登录已有 Handle 或注册新 Handle；邮箱暂时仅支持注册新 Handle。';
 
   @override
   String get onboardingAuthMethod => '验证方式';
@@ -168,6 +180,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get secureMessagingClient => 'Secure messaging client';
+
+  @override
+  String get shellNavMessages => '消息';
+
+  @override
+  String get shellNavFriends => '朋友';
+
+  @override
+  String get shellNavMe => '我';
 
   @override
   String get conversationsTitle => '信息';
@@ -506,6 +527,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get importSuccessSelectCredential => '导入成功，请选择该凭证登录';
 
   @override
+  String localCredentialsRefreshed(Object count) {
+    return '已重新识别到 $count 个本地凭证';
+  }
+
+  @override
+  String get noLocalCredentialsFound => '未识别到本地凭证';
+
+  @override
   String get newMessageArrived => '你收到了新消息';
 
   @override
@@ -534,6 +563,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get operationFailedRetry => '操作失败，请稍后重试。';
+
+  @override
+  String get otpSent => '验证码已发送，请留意短信。';
+
+  @override
+  String get activationEmailSent => '激活邮件已发送，请查收邮箱。';
+
+  @override
+  String get emailLoginUnsupportedForRegisteredHandle =>
+      '该 handle 已注册。邮箱当前仅支持新注册，请使用手机号验证码登录或导入身份凭证。';
 
   @override
   String get emailNotActivatedClickLink => '邮箱尚未激活，请先点击邮件中的激活链接。';

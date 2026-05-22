@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../awiki_sdk/awiki_anp_session.dart';
 import '../awiki_sdk/awiki_service_client.dart';
+import '../awiki_sdk/awiki_service_error.dart';
 import '../awiki_sdk/awiki_user_client.dart';
 import '../../domain/entities/profile_patch.dart';
 import '../../domain/entities/session_identity.dart';
@@ -296,6 +297,29 @@ class AwikiAccountService implements AwikiAccountGateway {
   @override
   Future<bool> checkEmailVerified({required String email}) {
     return _users.checkEmailVerified(baseUrl: userServiceUrl, email: email);
+  }
+
+  @override
+  Future<HandleRegistrationStatus> lookupHandleRegistration({
+    required String handle,
+  }) async {
+    final normalizedHandle = _normalizeHandle(handle);
+    try {
+      final result = await _users.getPublicProfile(
+        didOrHandle: normalizedHandle,
+      );
+      final did = result['did']?.toString() ?? '';
+      if (did.isEmpty) {
+        throw StateError('Handle lookup response did not include a DID.');
+      }
+      _ensureE1Did(did);
+      return HandleRegistrationStatus.registered;
+    } on AwikiServiceError catch (error) {
+      if (_isHandleNotFoundError(error)) {
+        return HandleRegistrationStatus.notRegistered;
+      }
+      rethrow;
+    }
   }
 
   @override
@@ -656,6 +680,14 @@ class AwikiAccountService implements AwikiAccountGateway {
   }
 
   String _sanitizeOtp(String code) => code.replaceAll(RegExp(r'\s+'), '');
+
+  bool _isHandleNotFoundError(AwikiServiceError error) {
+    final normalized = error.message.toLowerCase();
+    return normalized.contains('handle not found') ||
+        normalized.contains('handle') &&
+            (normalized.contains('not found') ||
+                normalized.contains('does not exist'));
+  }
 
   String _didDomain() {
     final configured = Uri.tryParse(userServiceUrl)?.host ?? '';

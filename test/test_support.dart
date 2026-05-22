@@ -184,7 +184,13 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   bool failNextSend = false;
   Duration sendDelay = Duration.zero;
   SessionIdentity? refreshedSession;
+  HandleRegistrationStatus handleRegistrationStatus =
+      HandleRegistrationStatus.notRegistered;
   String? lastFollowedDidOrHandle;
+  String? lastRegisteredNickName;
+  String? lastRegisteredProfileMarkdown;
+  String? lastEmailRegisteredNickName;
+  String? lastEmailRegisteredProfileMarkdown;
   String? lastCreatedGroupName;
   String? lastCreatedGroupSlug;
   String? lastCreatedGroupDescription;
@@ -208,8 +214,13 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int fetchGroupHistoryCalls = 0;
   int markReadCalls = 0;
   int listConversationsCalls = 0;
+  int sendOtpCalls = 0;
   int sendEmailVerificationCalls = 0;
   int checkEmailVerifiedCalls = 0;
+  int lookupHandleRegistrationCalls = 0;
+  int registerHandleCalls = 0;
+  int registerHandleWithEmailCalls = 0;
+  int recoverHandleCalls = 0;
 
   @override
   Future<BridgeCapabilities> loadCapabilities() async {
@@ -503,7 +514,17 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     String? nickName,
     String? profileMarkdown,
   }) async {
-    throw UnimplementedError();
+    registerHandleCalls += 1;
+    lastRegisteredNickName = nickName;
+    lastRegisteredProfileMarkdown = profileMarkdown;
+    loginResult = SessionIdentity(
+      did: 'did:wba:awiki.ai:$handle:e1_registered',
+      credentialName: handle,
+      displayName: nickName?.isNotEmpty == true ? nickName! : handle,
+      handle: handle,
+      jwtToken: 'registered-token',
+    );
+    return loginResult!;
   }
 
   @override
@@ -514,7 +535,17 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     String? nickName,
     String? profileMarkdown,
   }) async {
-    throw UnimplementedError();
+    registerHandleWithEmailCalls += 1;
+    lastEmailRegisteredNickName = nickName;
+    lastEmailRegisteredProfileMarkdown = profileMarkdown;
+    loginResult = SessionIdentity(
+      did: 'did:wba:awiki.ai:$handle:e1_email_registered',
+      credentialName: handle,
+      displayName: nickName?.isNotEmpty == true ? nickName! : handle,
+      handle: handle,
+      jwtToken: 'email-registered-token',
+    );
+    return loginResult!;
   }
 
   @override
@@ -523,7 +554,23 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     required String otp,
     required String handle,
   }) async {
-    throw UnimplementedError();
+    recoverHandleCalls += 1;
+    loginResult = SessionIdentity(
+      did: 'did:wba:awiki.ai:$handle:e1_recovered',
+      credentialName: handle,
+      displayName: handle,
+      handle: handle,
+      jwtToken: 'recovered-token',
+    );
+    return loginResult!;
+  }
+
+  @override
+  Future<HandleRegistrationStatus> lookupHandleRegistration({
+    required String handle,
+  }) async {
+    lookupHandleRegistrationCalls += 1;
+    return handleRegistrationStatus;
   }
 
   @override
@@ -582,7 +629,9 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   }
 
   @override
-  Future<void> sendOtp({required String phone}) async {}
+  Future<void> sendOtp({required String phone}) async {
+    sendOtpCalls += 1;
+  }
 
   @override
   Future<ChatMessage> sendTextMessage({

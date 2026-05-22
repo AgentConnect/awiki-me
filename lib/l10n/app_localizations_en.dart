@@ -62,10 +62,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Message service is disconnected. Trying to recover.';
 
   @override
-  String get onboardingLogin => 'Log in';
+  String get onboardingLogin => 'Switch identity';
 
   @override
-  String get onboardingRegister => 'Register';
+  String get onboardingRegister => 'Log in or register';
 
   @override
   String get onboardingImportCredential => 'Import identity credential';
@@ -75,6 +75,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingSendOtp => 'Send verification code';
+
+  @override
+  String onboardingResendOtpIn(Object seconds) {
+    return 'Resend (${seconds}s)';
+  }
 
   @override
   String get onboardingOtp => 'Verification code';
@@ -116,7 +121,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingNicknamePlaceholder => 'Enter nickname';
 
   @override
-  String get onboardingCompleteRegister => 'Complete registration';
+  String get onboardingCompleteRegister => 'Continue';
+
+  @override
+  String get onboardingCompleteEmailRegister => 'Complete registration';
+
+  @override
+  String get onboardingLoginRegisterHint =>
+      'Phone automatically logs in to an existing Handle or registers a new one. Email currently only registers new Handles.';
 
   @override
   String get onboardingAuthMethod => 'Verification';
@@ -177,6 +189,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get secureMessagingClient => 'Secure messaging client';
+
+  @override
+  String get shellNavMessages => 'Messages';
+
+  @override
+  String get shellNavFriends => 'Friends';
+
+  @override
+  String get shellNavMe => 'Me';
 
   @override
   String get conversationsTitle => 'Messages';
@@ -527,6 +548,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Import succeeded. Please choose this credential to log in.';
 
   @override
+  String localCredentialsRefreshed(Object count) {
+    return 'Found $count local credential(s)';
+  }
+
+  @override
+  String get noLocalCredentialsFound => 'No local credentials found';
+
+  @override
   String get newMessageArrived => 'You received a new message';
 
   @override
@@ -562,6 +591,17 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get operationFailedRetry =>
       'The operation failed. Please try again later.';
+
+  @override
+  String get otpSent => 'Verification code sent. Please check your messages.';
+
+  @override
+  String get activationEmailSent =>
+      'Activation email sent. Please check your inbox.';
+
+  @override
+  String get emailLoginUnsupportedForRegisteredHandle =>
+      'This handle is already registered. Email currently supports new registration only. Use phone verification or import an identity credential to log in.';
 
   @override
   String get emailNotActivatedClickLink =>

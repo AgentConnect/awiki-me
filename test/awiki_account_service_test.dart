@@ -2,12 +2,107 @@ import 'dart:convert';
 
 import 'package:awiki_me/src/data/services/app_key_value_store.dart';
 import 'package:awiki_me/src/data/services/awiki_account_service.dart';
+import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
 import 'package:awiki_me/src/domain/services/did_registration_facade.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  test(
+    'lookupHandleRegistration returns registered when profile resolves',
+    () async {
+      final client = MockClient((request) async {
+        final payload = jsonDecode(request.body) as Map<String, Object?>;
+        expect(request.url.path, '/user-service/did/profile/rpc');
+        expect(payload['method'], 'get_public_profile');
+        expect(payload['params'], <String, Object?>{'handle': 'alice'});
+        return http.Response(
+          jsonEncode(<String, Object?>{
+            'jsonrpc': '2.0',
+            'id': payload['id'],
+            'result': <String, Object?>{
+              'did': 'did:wba:awiki.ai:alice:e1_test',
+              'handle': 'alice',
+            },
+          }),
+          200,
+        );
+      });
+      final service = AwikiAccountService(
+        userServiceUrl: 'https://awiki.ai',
+        storage: _MemoryStore(),
+        didRegistrationFacade: _FakeDidRegistrationFacade(),
+        httpClient: client,
+      );
+
+      final status = await service.lookupHandleRegistration(handle: 'Alice');
+
+      expect(status, HandleRegistrationStatus.registered);
+    },
+  );
+
+  test(
+    'lookupHandleRegistration returns notRegistered for handle-not-found RPC error',
+    () async {
+      final client = MockClient((request) async {
+        final payload = jsonDecode(request.body) as Map<String, Object?>;
+        return http.Response(
+          jsonEncode(<String, Object?>{
+            'jsonrpc': '2.0',
+            'id': payload['id'],
+            'result': null,
+            'error': <String, Object?>{
+              'code': -32002,
+              'message': '404: Handle not found: alice',
+              'data': null,
+            },
+          }),
+          200,
+        );
+      });
+      final service = AwikiAccountService(
+        userServiceUrl: 'https://awiki.ai',
+        storage: _MemoryStore(),
+        didRegistrationFacade: _FakeDidRegistrationFacade(),
+        httpClient: client,
+      );
+
+      final status = await service.lookupHandleRegistration(handle: 'alice');
+
+      expect(status, HandleRegistrationStatus.notRegistered);
+    },
+  );
+
+  test('lookupHandleRegistration rethrows ambiguous RPC errors', () async {
+    final client = MockClient((request) async {
+      final payload = jsonDecode(request.body) as Map<String, Object?>;
+      return http.Response(
+        jsonEncode(<String, Object?>{
+          'jsonrpc': '2.0',
+          'id': payload['id'],
+          'result': null,
+          'error': <String, Object?>{
+            'code': -32000,
+            'message': 'temporary backend failure',
+          },
+        }),
+        200,
+      );
+    });
+    final service = AwikiAccountService(
+      userServiceUrl: 'https://awiki.ai',
+      storage: _MemoryStore(),
+      didRegistrationFacade: _FakeDidRegistrationFacade(),
+      httpClient: client,
+    );
+
+    expect(
+      () => service.lookupHandleRegistration(handle: 'alice'),
+      throwsA(isA<Exception>()),
+    );
+  });
+
   test('registerHandle stores an e1 session and signing material', () async {
     final storage = _MemoryStore();
     final client = MockClient((request) async {

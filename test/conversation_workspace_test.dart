@@ -144,7 +144,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('我'), findsOneWidget);
 
-    await tester.tap(find.text('配置'));
+    await tester.tap(find.text('设置').first);
     await tester.pumpAndSettle();
     expect(find.text('设置'), findsOneWidget);
 
@@ -386,6 +386,61 @@ void main() {
 
     expect(find.byType(ChatPage), findsOneWidget);
     expect(find.byType(ChatView), findsOneWidget);
+  });
+
+  testWidgets('手机主导航显示文字标签并保持切换功能', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'me.json',
+      displayName: 'Mia',
+      handle: 'mia',
+      jwtToken: 'token',
+    );
+    const profile = UserProfile(
+      did: 'did:test:me',
+      nickName: 'Mia',
+      bio: 'Product lead',
+      tags: <String>['agent'],
+      profileMarkdown: '',
+      handle: 'mia',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation];
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gateway,
+        session: session,
+        profile: profile,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('消息'), findsOneWidget);
+    expect(find.text('朋友'), findsOneWidget);
+    expect(find.text('我'), findsOneWidget);
+
+    await tester.tap(find.text('朋友'));
+    await tester.pumpAndSettle();
+    expect(find.text('朋友'), findsWidgets);
+
+    await tester.tap(find.text('我'));
+    await tester.pumpAndSettle();
+    expect(find.text('Product lead'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Pad 宽度下展示双栏并在右侧更新聊天内容', (tester) async {

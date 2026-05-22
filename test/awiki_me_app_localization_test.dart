@@ -32,7 +32,7 @@ void main() {
       await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
       await tester.pump();
 
-      expect(find.text('Log in'), findsWidgets);
+      expect(find.text('Switch identity'), findsWidgets);
       expect(find.text('Import identity credential'), findsOneWidget);
     });
 
@@ -47,7 +47,7 @@ void main() {
       await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
       await tester.pump();
 
-      expect(find.text('登录'), findsWidgets);
+      expect(find.text('切换身份'), findsWidgets);
       expect(find.text('导入身份凭证'), findsOneWidget);
     });
 
@@ -69,7 +69,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Log in'), findsWidgets);
+      expect(find.text('Switch identity'), findsWidgets);
       expect(find.text('Import identity credential'), findsOneWidget);
     });
 
@@ -86,7 +86,7 @@ void main() {
       );
       await tester.pump();
 
-      await tester.tap(find.text('Register'));
+      await tester.tap(find.text('Log in or register'));
       await tester.pumpAndSettle();
       await tester.tap(find.byType(CupertinoTextField).first);
       await tester.pump();
@@ -96,7 +96,7 @@ void main() {
           .focusNode;
       expect(focusNode.hasFocus, isTrue);
 
-      await tester.tap(find.text('Register'));
+      await tester.tap(find.text('Log in or register'));
       await tester.pump();
 
       expect(focusNode.hasFocus, isFalse);
@@ -115,7 +115,7 @@ void main() {
       );
       await tester.pump();
 
-      await tester.tap(find.text('Register'));
+      await tester.tap(find.text('Log in or register'));
       await tester.pumpAndSettle();
       await tester.tap(find.byType(CupertinoTextField).first);
       await tester.pump();

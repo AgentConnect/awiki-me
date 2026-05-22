@@ -78,5 +78,44 @@ void main() {
         '/tmp/awiki-credential-alice-default.zip',
       );
     });
+
+    test('重新识别本地凭证会刷新列表并写入反馈', () async {
+      gateway.localCredentials = const <SessionIdentity>[
+        SessionIdentity(
+          did: 'did:test:123',
+          credentialName: 'default',
+          displayName: 'Alice',
+          handle: 'alice',
+          jwtToken: 'token-123',
+        ),
+      ];
+      await container.read(appRuntimeProvider.notifier).initialize();
+      expect(gateway.listLocalCredentialsCalls, 1);
+
+      gateway.localCredentials = const <SessionIdentity>[
+        SessionIdentity(
+          did: 'did:test:456',
+          credentialName: 'bob',
+          displayName: 'Bob',
+          handle: 'bob',
+          jwtToken: 'token-456',
+        ),
+      ];
+
+      await container
+          .read(appRuntimeProvider.notifier)
+          .refreshLocalCredentials();
+
+      expect(gateway.listLocalCredentialsCalls, 2);
+      expect(
+        container.read(sessionProvider).localCredentials.single.credentialName,
+        'bob',
+      );
+      expect(
+        container.read(uiFeedbackProvider)?.message.id,
+        'localCredentialsRefreshed',
+      );
+      expect(container.read(uiFeedbackProvider)?.message.value, '1');
+    });
   });
 }
