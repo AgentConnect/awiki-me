@@ -1,4 +1,5 @@
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,13 +15,27 @@ void main() {
     jwtToken: 'token',
   );
 
+  FakeAwikiGateway gatewayWithProfile() {
+    return FakeAwikiGateway()
+      ..myProfile = const UserProfile(
+        did: 'did:test:me',
+        nickName: 'Me',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+        handle: 'me',
+      );
+  }
+
   testWidgets('连接中时显示常驻消息服务 toast', (tester) async {
+    final gateway = gatewayWithProfile();
     final realtimeGateway = FakeRealtimeGateway()
       ..setStatus(RealtimeConnectionStatus.connecting);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const AppShell(),
+        gateway: gateway,
         session: session,
         realtimeGateway: realtimeGateway,
       ),
@@ -35,12 +50,14 @@ void main() {
   });
 
   testWidgets('连接恢复后隐藏常驻消息服务 toast', (tester) async {
+    final gateway = gatewayWithProfile();
     final realtimeGateway = FakeRealtimeGateway()
       ..setStatus(RealtimeConnectionStatus.reconnecting);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const AppShell(),
+        gateway: gateway,
         session: session,
         realtimeGateway: realtimeGateway,
       ),
@@ -56,12 +73,14 @@ void main() {
   });
 
   testWidgets('连接失败时不显示持续重连 toast', (tester) async {
+    final gateway = gatewayWithProfile();
     final realtimeGateway = FakeRealtimeGateway()
       ..setStatus(RealtimeConnectionStatus.failed);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const AppShell(),
+        gateway: gateway,
         session: session,
         realtimeGateway: realtimeGateway,
       ),

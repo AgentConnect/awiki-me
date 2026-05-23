@@ -3,104 +3,134 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('IM Core import boundary', () {
-    test(
-      'lib/src/im_core stays independent from app UI/domain/data services',
-      () {
-        final files = _dartFilesUnder('lib/src/im_core');
-        expect(files, isNotEmpty);
+  group('IM Core migration boundary', () {
+    test('legacy Dart-only lib/src/im_core contract has been removed', () {
+      expect(
+        Directory('lib/src/im_core').existsSync(),
+        isFalse,
+        reason:
+            'Rust SDK adapters under lib/src/data/im_core are now the only IM Core boundary.',
+      );
+    });
 
-        const forbiddenImports = <String>[
-          'package:flutter/',
-          'package:flutter_riverpod/',
-          'lib/src/domain/',
-          '../domain/',
-          'lib/src/presentation/',
-          '../presentation/',
-          'lib/src/app/',
-          '../app/',
-          'notification_facade',
-          'notification_service',
-          'lib/src/data/gateways/',
-          '../data/gateways/',
-          'lib/src/data/services/',
-          '../data/services/',
-          'awiki_anp_gateway',
-          'awiki_message_client',
-          'awiki_wire_mapper',
-          'awiki_local_cache',
-          'awiki_ws_realtime_gateway',
-        ];
-
-        for (final file in files) {
-          final imports = _importsIn(file);
-          for (final import in imports) {
-            for (final forbidden in forbiddenImports) {
-              expect(
-                import,
-                isNot(contains(forbidden)),
-                reason: '${file.path} must not import $forbidden',
-              );
-            }
-          }
-        }
-      },
-    );
-  });
-
-  group('Phase 1 scope guards', () {
-    test('protected production wiring does not import im_core', () {
-      final protectedFiles = <File>[
-        File('lib/src/app/app_services.dart'),
-        File('lib/src/app/bootstrap.dart'),
-        File('lib/src/app/awiki_me_app.dart'),
-        File('lib/src/data/gateways/awiki_anp_gateway.dart'),
-        ..._dartFilesUnder('lib/src/presentation'),
+    test('old hand-written IM/account/realtime production files are removed', () {
+      final removedFiles = <String>[
+        'lib/src/data/gateways/awiki_anp_gateway.dart',
+        'lib/src/data/services/awiki_account_service.dart',
+        'lib/src/data/services/awiki_ws_realtime_gateway.dart',
+        'lib/src/data/services/awiki_ws_channel_connector.dart',
+        'lib/src/data/services/awiki_ws_channel_connector_io.dart',
+        'lib/src/data/services/awiki_local_cache.dart',
+        'lib/src/data/services/awiki_local_store.dart',
+        'lib/src/data/services/dart_did_registration_facade.dart',
+        'lib/src/domain/services/did_registration_facade.dart',
       ];
 
-      for (final file in protectedFiles) {
-        expect(file.existsSync(), isTrue, reason: '${file.path} must exist');
-        for (final import in _importsIn(file)) {
-          expect(
-            import,
-            isNot(
-              anyOf(
-                contains('/im_core'),
-                contains('src/im_core'),
-                contains('../im_core'),
-              ),
-            ),
-            reason: '${file.path} must not import Phase 1 im_core',
-          );
-        }
+      for (final path in removedFiles) {
+        expect(File(path).existsSync(), isFalse, reason: '$path is legacy');
       }
+      expect(
+        Directory('lib/src/data/awiki_sdk').existsSync(),
+        isFalse,
+        reason:
+            'old app-side ANP/IM SDK helpers must not remain as a production fallback',
+      );
     });
 
     test(
-      'protected real Dart IM implementation files still exist and are not cut over',
+      'UI/domain layers do not import legacy im_core or Rust SDK adapters',
       () {
         final protectedFiles = <File>[
-          File('lib/src/data/gateways/awiki_anp_gateway.dart'),
-          File('lib/src/data/awiki_sdk/awiki_message_client.dart'),
-          File('lib/src/data/awiki_sdk/awiki_wire_mapper.dart'),
-          File('lib/src/data/services/awiki_local_cache.dart'),
-          File('lib/src/data/services/awiki_ws_realtime_gateway.dart'),
+          File('lib/src/app/awiki_me_app.dart'),
+          ..._dartFilesUnder('lib/src/domain'),
+          ..._dartFilesUnder('lib/src/presentation'),
         ];
 
         for (final file in protectedFiles) {
           expect(file.existsSync(), isTrue, reason: '${file.path} must exist');
+          for (final import in _importsIn(file)) {
+            expect(
+              import,
+              isNot(
+                anyOf(
+                  startsWith('package:awiki_im_core/'),
+                  startsWith('package:awiki_me/src/data/im_core/'),
+                  contains('/src/data/im_core/'),
+                  contains('../data/im_core/'),
+                  startsWith('package:awiki_me/src/im_core/'),
+                  contains('../im_core/'),
+                ),
+              ),
+              reason:
+                  '${file.path} must depend on application services, not SDK/adapter internals',
+            );
+          }
+        }
+      },
+    );
+
+    test(
+      'only Rust SDK adapter production files import package:awiki_im_core',
+      () {
+        final productionFiles = _dartFilesUnder('lib/src');
+
+        for (final file in productionFiles) {
+          for (final import in _importsIn(file)) {
+            if (!import.startsWith('package:awiki_im_core/')) {
+              continue;
+            }
+
+            expect(
+              file.path,
+              startsWith('lib/src/data/im_core/'),
+              reason:
+                  '${file.path} must not import the Rust SDK outside the adapter layer',
+            );
+            expect(
+              import,
+              'package:awiki_im_core/awiki_im_core.dart',
+              reason: '${file.path} must use the public SDK barrel only',
+            );
+            expect(
+              _importStatementFor(file, import),
+              contains(' as core'),
+              reason: '${file.path} must alias the SDK import as core',
+            );
+          }
+        }
+      },
+    );
+
+    test(
+      'production code does not keep raw IM/ANP/WebSocket fallback imports',
+      () {
+        final productionFiles = _dartFilesUnder('lib/src');
+
+        for (final file in productionFiles) {
           final text = file.readAsStringSync();
           expect(
             text,
-            isNot(contains('src/im_core')),
-            reason: '${file.path} must not be wrapped by im_core in Phase 1',
+            isNot(
+              anyOf(<Matcher>[
+                contains("package:anp/"),
+                contains("package:web_socket_channel/"),
+                contains("package:archive/"),
+                contains('AwikiAnpGateway'),
+                contains('AwikiAccountService'),
+                contains('AwikiWsRealtimeGateway'),
+                contains('AwikiMessageClient'),
+                contains('AwikiAnpProofBuilder'),
+              ]),
+            ),
+            reason:
+                '${file.path} must not keep old IM production fallback code',
           );
         }
       },
     );
 
     test(
-      'Phase 1 does not add Rust, FFI, standalone package, or feature flag cutover',
+      'awiki-me does not add Rust sources, local FFI package, or feature flag cutover',
       () {
         expect(File('Cargo.toml').existsSync(), isFalse);
         expect(Directory('rust').existsSync(), isFalse);
@@ -108,13 +138,8 @@ void main() {
         expect(
           _repoFiles((path) => path.endsWith('.rs')),
           isEmpty,
-          reason: 'Phase 1 must not add Rust sources',
+          reason: 'awiki-me must not add Rust sources',
         );
-
-        final imCoreText = _dartFilesUnder(
-          'lib/src/im_core',
-        ).map((file) => file.readAsStringSync()).join('\n');
-        expect(imCoreText, isNot(contains('dart:ffi')));
 
         final appText = <File>[
           File('lib/src/app/app_services.dart'),
@@ -158,6 +183,13 @@ List<String> _importsIn(File file) {
       .allMatches(file.readAsStringSync())
       .map((match) => match.group(1)!)
       .toList();
+}
+
+String _importStatementFor(File file, String import) {
+  final pattern = RegExp(
+    '''import\\s+['"]${RegExp.escape(import)}['"][^;]*;''',
+  );
+  return pattern.firstMatch(file.readAsStringSync())?.group(0) ?? '';
 }
 
 List<File> _repoFiles(bool Function(String path) include) {

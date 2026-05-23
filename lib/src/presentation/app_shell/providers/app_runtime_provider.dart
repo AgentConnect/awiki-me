@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/app_services.dart';
 import '../../../app/ui_feedback.dart';
+import '../../../application/models/app_session.dart';
+import '../../../domain/entities/bridge_capabilities.dart';
 import '../../../domain/entities/realtime_update.dart';
 import '../../../domain/entities/session_identity.dart';
 import '../../../domain/services/realtime_gateway.dart';
@@ -43,6 +45,10 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
           realtimeConnectionStatusProvider,
           _handleRealtimeStatusChanged,
         );
+    _realtimeUpdateSubscription = ref
+        .read(realtimeApplicationServiceProvider)
+        .updates
+        .listen(_applyRealtimeUpdate);
   }
 
   final Ref ref;
@@ -51,6 +57,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   late final ProviderSubscription<AppLifecycleState> _lifecycleSubscription;
   late final ProviderSubscription<AsyncValue<RealtimeConnectionStatus>>
   _realtimeStatusSubscription;
+  late final StreamSubscription<RealtimeUpdate> _realtimeUpdateSubscription;
 
   Future<void> initialize() async {
     if (state.isInitialized) {
@@ -58,16 +65,15 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     state = state.copyWith(isBusy: true);
     try {
-      final gateway = ref.read(awikiGatewayProvider);
-      final accountGateway = ref.read(awikiAccountGatewayProvider);
-      final capabilities = await gateway.loadCapabilities();
-      final localCredentials = await accountGateway.listLocalCredentials();
-      ref.read(sessionProvider.notifier).setCapabilities(capabilities);
+      final sessions = ref.read(appSessionServiceProvider);
+      final localIdentities = await sessions.listLocalIdentities();
+      final localCredentials = _legacySessionsFromAppSessions(localIdentities);
+      ref.read(sessionProvider.notifier).setCapabilities(_imCoreCapabilities);
       ref.read(sessionProvider.notifier).setLocalCredentials(localCredentials);
 
-      final session = await accountGateway.restoreSession();
+      final session = await sessions.restoreSession();
       if (session != null) {
-        await activateSession(session);
+        await activateSession(_legacySessionFromAppSession(session));
       }
       state = state.copyWith(isInitialized: true, isBusy: false);
     } on TimeoutException {
@@ -90,7 +96,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       await ref.read(e2eeFacadeProvider).initialize(session);
       state = state.copyWith(isBusy: false, isInitialized: true);
       unawaited(_refreshAuthenticatedDataInBackground());
-      _ensureRealtimeConnected(session);
+      _ensureRealtimeConnected();
     } finally {
       state = state.copyWith(isBusy: false, isInitialized: true);
     }
@@ -99,17 +105,15 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   Future<void> loginWithLocalCredential(String credentialName) async {
     await _runBusy(() async {
       final session = await ref
-          .read(awikiAccountGatewayProvider)
-          .loginWithLocalCredential(credentialName);
-      await activateSession(session);
+          .read(appSessionServiceProvider)
+          .loginWithIdentity(credentialName);
+      await activateSession(_legacySessionFromAppSession(session));
     });
   }
 
   Future<void> refreshLocalCredentials() async {
     await _runBusy(() async {
-      final credentials = await ref
-          .read(awikiAccountGatewayProvider)
-          .listLocalCredentials();
+      final credentials = await _localCredentialsFor(ref);
       ref.read(sessionProvider.notifier).setLocalCredentials(credentials);
       final feedback = credentials.isEmpty
           ? AppMessage.noLocalCredentialsFound()
@@ -120,11 +124,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   Future<void> logout() async {
     await _runBusy(() async {
-      await ref.read(realtimeGatewayProvider).disconnect();
-      await ref.read(awikiAccountGatewayProvider).logout();
-      final credentials = await ref
-          .read(awikiAccountGatewayProvider)
-          .listLocalCredentials();
+      await ref.read(realtimeApplicationServiceProvider).stop();
+      await ref.read(appSessionServiceProvider).logout();
+      final credentials = await _localCredentialsFor(ref);
       ref.read(sessionProvider.notifier).setLocalCredentials(credentials);
       ref.read(sessionProvider.notifier).clear();
       ref.read(profileProvider.notifier).clear();
@@ -141,52 +143,28 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       return;
     }
     await _runBusy(() async {
-      await ref.read(realtimeGatewayProvider).disconnect();
-      await ref
-          .read(awikiAccountGatewayProvider)
-          .deleteLocalCredential(current.credentialName);
-      await ref.read(awikiAccountGatewayProvider).logout();
-      final credentials = await ref
-          .read(awikiAccountGatewayProvider)
-          .listLocalCredentials();
-      ref.read(sessionProvider.notifier).setLocalCredentials(credentials);
-      ref.read(sessionProvider.notifier).clear();
-      ref.read(profileProvider.notifier).clear();
-      await ref.read(conversationListProvider.notifier).clear();
-      ref.read(chatThreadsProvider.notifier).clear();
-      ref.read(friendsProvider.notifier).clear();
-      ref.read(groupProvider.notifier).clear();
+      // TODO(im-core): enable after SDK identity delete API is exposed.
+      throw UnsupportedError(
+        'IM Core local credential delete is not available yet',
+      );
     });
   }
 
   Future<void> exportCurrentCredential() async {
     await _runBusy(() async {
-      final exportedPath = await ref
-          .read(awikiAccountGatewayProvider)
-          .exportCurrentCredentialAsZip();
-      if (exportedPath != null && exportedPath.isNotEmpty) {
-        ref
-            .read(uiFeedbackProvider.notifier)
-            .showInfo(AppMessage.exportedTo(exportedPath));
-      }
+      // TODO(im-core): enable after SDK identity export API is exposed.
+      throw UnsupportedError(
+        'IM Core local credential export is not available yet',
+      );
     });
   }
 
   Future<void> importCredentialArchive() async {
     await _runBusy(() async {
-      final imported = await ref
-          .read(awikiAccountGatewayProvider)
-          .importCredentialFromZip();
-      if (imported == null) {
-        return;
-      }
-      final credentials = await ref
-          .read(awikiAccountGatewayProvider)
-          .listLocalCredentials();
-      ref.read(sessionProvider.notifier).setLocalCredentials(credentials);
-      ref
-          .read(uiFeedbackProvider.notifier)
-          .showInfo(AppMessage.importSuccessSelectCredential());
+      // TODO(im-core): enable after SDK identity import API is exposed.
+      throw UnsupportedError(
+        'IM Core local credential import is not available yet',
+      );
     });
   }
 
@@ -231,16 +209,6 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
   }
 
-  Future<void> _handleRealtimeMessage(Map<String, Object?> event) async {
-    final update = await ref
-        .read(awikiGatewayProvider)
-        .consumeRealtimeEvent(event);
-    if (update == null) {
-      return;
-    }
-    _applyRealtimeUpdate(update);
-  }
-
   void _handleLifecycleChanged(
     AppLifecycleState? previous,
     AppLifecycleState next,
@@ -252,7 +220,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (session == null) {
       return;
     }
-    _ensureRealtimeConnected(session);
+    _ensureRealtimeConnected();
     unawaited(_refreshAuthenticatedDataInBackground());
   }
 
@@ -266,7 +234,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         status == RealtimeConnectionStatus.disconnected) {
       final session = ref.read(sessionProvider).session;
       if (session != null) {
-        unawaited(_recoverRealtimeSession(session));
+        unawaited(_recoverRealtimeSession());
       }
       return;
     }
@@ -284,45 +252,38 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     unawaited(_refreshAuthenticatedDataInBackground());
   }
 
-  void _ensureRealtimeConnected(SessionIdentity session) {
-    final gateway = ref.read(realtimeGatewayProvider);
-    final status = gateway.connectionStatus;
-    if (gateway.isConnected ||
-        status == RealtimeConnectionStatus.connecting ||
-        status == RealtimeConnectionStatus.reconnecting) {
+  void _ensureRealtimeConnected() {
+    final realtime = ref.read(realtimeApplicationServiceProvider);
+    if (realtime.isRunning) {
       return;
     }
-    unawaited(
-      gateway
-          .connect(session: session, onMessage: _handleRealtimeMessage)
-          .catchError((_) {}),
-    );
+    unawaited(realtime.start().catchError((_) {}));
   }
 
-  Future<void> _recoverRealtimeSession(SessionIdentity session) async {
+  Future<void> _recoverRealtimeSession() async {
     if (_isRecoveringRealtimeSession) {
       return;
     }
     _isRecoveringRealtimeSession = true;
     try {
       final refreshed = await ref
-          .read(awikiAccountGatewayProvider)
+          .read(appSessionServiceProvider)
           .refreshSession();
       if (!mounted) {
         return;
       }
-      final effectiveSession = refreshed ?? session;
-      if (effectiveSession.jwtToken?.isNotEmpty == true) {
-        ref.read(sessionProvider.notifier).setSession(effectiveSession);
+      if (refreshed != null) {
+        ref
+            .read(sessionProvider.notifier)
+            .setSession(_legacySessionFromAppSession(refreshed));
       }
       await _refreshAuthenticatedDataInBackground();
       if (!mounted) {
         return;
       }
-      if (effectiveSession.jwtToken == session.jwtToken) {
-        return;
+      if (refreshed != null) {
+        _ensureRealtimeConnected();
       }
-      _ensureRealtimeConnected(effectiveSession);
     } catch (_) {
       if (mounted) {
         await _refreshAuthenticatedDataInBackground();
@@ -393,8 +354,44 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   void dispose() {
     _lifecycleSubscription.close();
     _realtimeStatusSubscription.close();
+    _realtimeUpdateSubscription.cancel();
     super.dispose();
   }
+}
+
+Future<List<SessionIdentity>> _localCredentialsFor(Ref ref) async {
+  final identities = await ref
+      .read(appSessionServiceProvider)
+      .listLocalIdentities();
+  return _legacySessionsFromAppSessions(identities);
+}
+
+List<SessionIdentity> _legacySessionsFromAppSessions(
+  List<AppSession> identities,
+) {
+  return identities.map(_legacySessionFromAppSession).toList()
+    ..sort((a, b) => a.credentialName.compareTo(b.credentialName));
+}
+
+const _imCoreCapabilities = BridgeCapabilities(
+  profileMarkdown: true,
+  localDeleteOnly: true,
+  systemPushStub: true,
+  e2ee: E2eeCapability(
+    supported: false,
+    pluginRequired: false,
+    enabledByDefault: false,
+  ),
+);
+
+SessionIdentity _legacySessionFromAppSession(AppSession session) {
+  return SessionIdentity(
+    did: session.did,
+    credentialName: session.localAlias ?? session.identityId,
+    displayName: session.displayName,
+    handle: session.handle,
+    jwtToken: null,
+  );
 }
 
 final appRuntimeProvider =

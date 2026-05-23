@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
+import '../../application/models/app_thread_ref.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../app_shell/providers/session_provider.dart';
@@ -52,8 +53,8 @@ class ChatThreadsController
           .markThreadReadLocal(conversation.threadId);
       unawaited(
         ref
-            .read(awikiGatewayProvider)
-            .markRead(conversation.threadId)
+            .read(conversationServiceProvider)
+            .markThreadRead(AppThreadRef.thread(conversation.threadId))
             .catchError((_) {}),
       );
     }
@@ -65,13 +66,12 @@ class ChatThreadsController
     }
     _setThreadLoading(conversation.threadId, true);
     try {
-      final history = conversation.isGroup
-          ? await ref
-                .read(awikiGatewayProvider)
-                .fetchGroupHistory(conversation.groupId ?? '')
-          : await ref
-                .read(awikiGatewayProvider)
-                .fetchDmHistory(conversation.targetDid ?? '');
+      final history =
+          (await ref
+                  .read(messagingServiceProvider)
+                  .loadHistory(_historyThreadRefFor(conversation)))
+              .map((message) => _withThreadId(message, conversation.threadId))
+              .toList();
       if (!mounted) {
         return;
       }
@@ -115,15 +115,18 @@ class ChatThreadsController
     _setMessages(conversation.threadId, current);
     try {
       final sent = await ref
-          .read(awikiGatewayProvider)
-          .sendTextMessage(
-            threadId: conversation.threadId,
-            peerDid: conversation.targetDid,
-            groupId: conversation.groupId,
+          .read(messagingServiceProvider)
+          .sendText(
+            thread: _sendThreadRefFor(conversation),
             content: content.trim(),
+            clientMessageId: pending.localId,
           )
           .timeout(_sendTimeout);
-      _replaceMessage(conversation.threadId, pending.localId, sent);
+      _replaceMessage(
+        conversation.threadId,
+        pending.localId,
+        _withThreadId(sent, conversation.threadId),
+      );
     } catch (_) {
       final failed = pending.copyWith(sendState: MessageSendState.failed);
       _replaceMessage(conversation.threadId, pending.localId, failed);
@@ -146,10 +149,14 @@ class ChatThreadsController
     );
     try {
       final retried = await ref
-          .read(awikiGatewayProvider)
-          .retryMessage(retrying)
+          .read(messagingServiceProvider)
+          .retryByResendOriginalContent(retrying)
           .timeout(_sendTimeout);
-      _replaceMessage(conversation.threadId, message.localId, retried);
+      _replaceMessage(
+        conversation.threadId,
+        message.localId,
+        _withThreadId(retried, conversation.threadId),
+      );
     } catch (_) {
       final failed = retrying.copyWith(sendState: MessageSendState.failed);
       _replaceMessage(conversation.threadId, message.localId, failed);
@@ -159,7 +166,17 @@ class ChatThreadsController
   }
 
   Future<void> deleteThread(String threadId) async {
-    await ref.read(awikiGatewayProvider).deleteLocalThread(threadId);
+    final session = ref.read(sessionProvider).session;
+    if (session == null) {
+      throw StateError('No active awiki session. Please sign in first.');
+    }
+    await ref
+        .read(conversationServiceProvider)
+        .setThreadHidden(
+          ownerDid: session.did,
+          threadId: threadId,
+          hidden: true,
+        );
     final next = Map<String, ChatThreadState>.from(state)..remove(threadId);
     state = next;
     await ref.read(conversationListProvider.notifier).refresh();
@@ -336,6 +353,52 @@ class ChatThreadsController
     });
     return sorted;
   }
+}
+
+AppThreadRef _historyThreadRefFor(ConversationSummary conversation) {
+  final groupId = conversation.groupId?.trim();
+  if (conversation.isGroup && groupId != null && groupId.isNotEmpty) {
+    return AppThreadRef.group(groupId);
+  }
+  final peerDid = conversation.targetDid?.trim();
+  if (!conversation.isGroup && peerDid != null && peerDid.isNotEmpty) {
+    return AppThreadRef.direct(peerDid);
+  }
+  return AppThreadRef.thread(conversation.threadId);
+}
+
+AppThreadRef _sendThreadRefFor(ConversationSummary conversation) {
+  final groupId = conversation.groupId?.trim();
+  if (conversation.isGroup && groupId != null && groupId.isNotEmpty) {
+    return AppThreadRef.group(groupId);
+  }
+  final peerDid = conversation.targetDid?.trim();
+  if (!conversation.isGroup && peerDid != null && peerDid.isNotEmpty) {
+    return AppThreadRef.direct(peerDid);
+  }
+  throw StateError('Cannot send without a direct peer or group id.');
+}
+
+ChatMessage _withThreadId(ChatMessage message, String threadId) {
+  if (message.threadId == threadId) {
+    return message;
+  }
+  return ChatMessage(
+    localId: message.localId,
+    remoteId: message.remoteId,
+    threadId: threadId,
+    senderDid: message.senderDid,
+    senderName: message.senderName,
+    receiverDid: message.receiverDid,
+    groupId: message.groupId,
+    content: message.content,
+    originalType: message.originalType,
+    createdAt: message.createdAt,
+    isMine: message.isMine,
+    sendState: message.sendState,
+    serverSequence: message.serverSequence,
+    isEncrypted: message.isEncrypted,
+  );
 }
 
 final chatThreadsProvider =

@@ -83,7 +83,9 @@ class ProfileController extends StateNotifier<ProfileState> {
 
   Future<void> refresh() async {
     state = state.copyWith(isLoading: true);
-    final profile = await ref.read(awikiGatewayProvider).loadMyProfile();
+    final profile = await ref
+        .read(profileApplicationServiceProvider)
+        .loadMyProfile();
     state = _profileStateAfterRefresh(profile, isLoading: false);
   }
 
@@ -121,7 +123,9 @@ class ProfileController extends StateNotifier<ProfileState> {
 
   Future<void> updateProfile(ProfilePatch patch) async {
     state = state.copyWith(isSaving: true);
-    final profile = await ref.read(awikiGatewayProvider).updateProfile(patch);
+    final profile = await ref
+        .read(profileApplicationServiceProvider)
+        .updateProfile(patch);
     state = _profileStateAfterRefresh(profile, isSaving: false);
     ref.read(uiFeedbackProvider.notifier).showInfo(AppMessage.profileUpdated());
   }

@@ -1,0 +1,30 @@
+import '../models/app_session.dart';
+
+abstract interface class IdentityCorePort {
+  Future<List<AppSession>> listLocalIdentities();
+
+  Future<AppSession?> defaultIdentity();
+
+  Future<AppSession> resolveIdentity(String identityIdOrAlias);
+
+  Future<AppSession> registerHandleWithPhone({
+    required String phone,
+    required String otp,
+    required String handle,
+    String? inviteCode,
+    String? displayName,
+  });
+
+  Future<AppSession> registerHandleWithEmail({
+    required String email,
+    required String handle,
+    String? inviteCode,
+    String? displayName,
+  });
+
+  Future<AppSession> recoverHandle({
+    required String phone,
+    required String otp,
+    required String handle,
+  });
+}

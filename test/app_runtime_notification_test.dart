@@ -42,6 +42,10 @@ void main() {
         overrides: <Override>[
           awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+          ),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
           e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),

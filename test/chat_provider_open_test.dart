@@ -48,6 +48,7 @@ void main() {
       overrides: <Override>[
         awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
       ],
     );
     addTearDown(container.dispose);
@@ -141,6 +142,7 @@ void main() {
       overrides: <Override>[
         awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
         sessionProvider.overrideWith((ref) {
           final controller = SessionController();
           controller.setSession(
@@ -178,6 +180,7 @@ void main() {
       overrides: <Override>[
         awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
         sessionProvider.overrideWith((ref) {
           final controller = SessionController();
           controller.setSession(

@@ -5,6 +5,7 @@ import '../../core/group_display_name.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_summary.dart';
 import '../../domain/services/notification_facade.dart';
+import '../app_shell/providers/session_provider.dart';
 
 class ConversationListState {
   const ConversationListState({
@@ -38,9 +39,18 @@ class ConversationListController extends StateNotifier<ConversationListState> {
 
   Future<void> refresh() async {
     state = state.copyWith(isLoading: true);
+    final session = ref.read(sessionProvider).session;
+    if (session == null) {
+      state = state.copyWith(
+        conversations: const <ConversationSummary>[],
+        isLoading: false,
+      );
+      await _notification.updateBadgeCount(0);
+      return;
+    }
     final conversations = await ref
-        .read(awikiGatewayProvider)
-        .listConversations();
+        .read(conversationServiceProvider)
+        .listConversations(ownerDid: session.did);
     state = state.copyWith(conversations: conversations, isLoading: false);
     await _notification.updateBadgeCount(state.unreadCount);
   }

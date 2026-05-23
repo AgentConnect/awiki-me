@@ -12,14 +12,30 @@ void main() {
     late AppBootstrap bootstrap;
 
     setUp(() {
+      final gateway = FakeAwikiGateway();
+      final realtimeGateway = FakeRealtimeGateway();
       bootstrap = AppBootstrap(
-        accountGateway: FakeAwikiGateway(),
-        gateway: FakeAwikiGateway(),
-        realtimeGateway: FakeRealtimeGateway(),
+        accountGateway: gateway,
+        gateway: gateway,
+        realtimeGateway: realtimeGateway,
         notificationFacade: FakeNotificationFacade(),
         e2eeFacade: FakeE2eeFacade(),
         localePreferenceService: FakeLocalePreferenceService(),
         updateService: FakeUpdateService(),
+        appSessionService: FakeAppSessionService(gateway),
+        onboardingService: FakeOnboardingService(gateway),
+        onboardingSupportService: FakeOnboardingSupportService(gateway),
+        messagingService: FakeMessagingService(gateway),
+        conversationService: FakeConversationService(gateway),
+        groupApplicationService: FakeGroupApplicationService(gateway),
+        profileApplicationService: FakeProfileApplicationService(gateway),
+        relationshipApplicationService: FakeRelationshipApplicationService(
+          gateway,
+        ),
+        realtimeApplicationService: FakeRealtimeApplicationService(
+          gateway: gateway,
+          realtimeGateway: realtimeGateway,
+        ),
       );
     });
 

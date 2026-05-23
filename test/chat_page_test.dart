@@ -57,7 +57,7 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pumpAndSettle();
 
-    expect(gateway.lastSentThreadId, 'dm:mac');
+    expect(gateway.lastSentThreadId, 'dm:did:test:peer');
     expect(gateway.lastSentContent, 'hello mac');
 
     debugDefaultTargetPlatformOverride = null;
@@ -305,7 +305,7 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pumpAndSettle();
 
-    expect(gateway.lastSentThreadId, 'dm:1');
+    expect(gateway.lastSentThreadId, 'dm:did:test:peer');
     expect(gateway.lastSentContent, 'hello');
     expect(find.text('hello'), findsOneWidget);
   });
@@ -414,7 +414,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('发送失败'), findsNothing);
-    expect(gateway.lastSentThreadId, 'dm:failed');
+    expect(gateway.lastSentThreadId, 'dm:did:test:peer');
     expect(gateway.lastSentContent, 'hello');
   });
 }

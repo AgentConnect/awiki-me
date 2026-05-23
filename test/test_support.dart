@@ -1,6 +1,17 @@
 import 'dart:async';
 
-import 'package:awiki_me/src/data/awiki_sdk/awiki_anp_session.dart';
+import 'package:awiki_me/src/application/app_session_service.dart';
+import 'package:awiki_me/src/application/models/app_session.dart';
+import 'package:awiki_me/src/application/conversation_service.dart';
+import 'package:awiki_me/src/application/group_application_service.dart';
+import 'package:awiki_me/src/application/messaging_service.dart';
+import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/onboarding_service.dart';
+import 'package:awiki_me/src/application/onboarding_support_service.dart';
+import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
+import 'package:awiki_me/src/application/profile_application_service.dart';
+import 'package:awiki_me/src/application/realtime_application_service.dart';
+import 'package:awiki_me/src/application/relationship_application_service.dart';
 import 'package:awiki_me/src/domain/entities/bridge_capabilities.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
@@ -62,6 +73,10 @@ Widget buildLocalizedTestApp({
         resolvedLocalePreference,
       ),
       updateServiceProvider.overrideWithValue(resolvedUpdateService),
+      ...fakeApplicationServiceOverrides(
+        resolvedGateway,
+        realtimeGateway: resolvedRealtime,
+      ),
       appLocaleModeProvider.overrideWith((ref) => localeMode),
       sessionProvider.overrideWith((ref) {
         final controller = SessionController();
@@ -95,6 +110,39 @@ Widget buildLocalizedTestApp({
       home: home,
     ),
   );
+}
+
+List<Override> fakeApplicationServiceOverrides(
+  FakeAwikiGateway gateway, {
+  FakeRealtimeGateway? realtimeGateway,
+}) {
+  final resolvedRealtime = realtimeGateway ?? FakeRealtimeGateway();
+  return <Override>[
+    appSessionServiceProvider.overrideWithValue(FakeAppSessionService(gateway)),
+    profileApplicationServiceProvider.overrideWithValue(
+      FakeProfileApplicationService(gateway),
+    ),
+    conversationServiceProvider.overrideWithValue(
+      FakeConversationService(gateway),
+    ),
+    messagingServiceProvider.overrideWithValue(FakeMessagingService(gateway)),
+    groupApplicationServiceProvider.overrideWithValue(
+      FakeGroupApplicationService(gateway),
+    ),
+    relationshipApplicationServiceProvider.overrideWithValue(
+      FakeRelationshipApplicationService(gateway),
+    ),
+    onboardingServiceProvider.overrideWithValue(FakeOnboardingService(gateway)),
+    onboardingSupportServiceProvider.overrideWithValue(
+      FakeOnboardingSupportService(gateway),
+    ),
+    realtimeApplicationServiceProvider.overrideWithValue(
+      FakeRealtimeApplicationService(
+        gateway: gateway,
+        realtimeGateway: resolvedRealtime,
+      ),
+    ),
+  ];
 }
 
 String normalizeTestIdentity(String rawValue) {
@@ -595,21 +643,9 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   }
 
   @override
-  Future<AwikiAnpSession> currentAnpSession({
-    bool requireSigning = false,
-  }) async {
-    final session = await currentSession();
-    if (session == null) {
-      throw StateError('No active test session.');
-    }
-    return AwikiAnpSession(
-      did: session.did,
-      jwtToken: session.jwtToken ?? '',
-      didDocument: <String, Object?>{
-        'id': session.did,
-        'authentication': <String>['${session.did}#key-1'],
-      },
-      privateKeyPem: 'test-private-key',
+  Future<Object> currentAnpSession({bool requireSigning = false}) {
+    throw UnsupportedError(
+      'ANP session is not available in IM Core migration test support.',
     );
   }
 
@@ -678,6 +714,415 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   }
 }
 
+class FakeProfileApplicationService implements ProfileApplicationService {
+  const FakeProfileApplicationService(this.gateway);
+
+  final FakeAwikiGateway gateway;
+
+  @override
+  Future<UserProfile> loadMyProfile() {
+    return gateway.loadMyProfile();
+  }
+
+  @override
+  Future<UserProfile> loadPublicProfile(String didOrHandle) {
+    return gateway.loadPublicProfile(didOrHandle);
+  }
+
+  @override
+  Future<UserProfile> updateProfile(ProfilePatch patch) {
+    return gateway.updateProfile(patch);
+  }
+}
+
+class FakeAppSessionService implements AppSessionService {
+  FakeAppSessionService(this.gateway);
+
+  final FakeAwikiGateway gateway;
+  AppSession? _current;
+
+  @override
+  Future<AppSession> activateIdentity(AppSession identity) async {
+    _current = identity;
+    return identity;
+  }
+
+  @override
+  Future<AppSession?> currentSession() async => _current;
+
+  @override
+  Future<List<AppSession>> listLocalIdentities() async {
+    final identities = await gateway.listLocalCredentials();
+    return identities.map(_appSessionFromLegacy).toList();
+  }
+
+  @override
+  Future<AppSession> loginWithIdentity(String identityIdOrAlias) async {
+    final session = await gateway.loginWithLocalCredential(identityIdOrAlias);
+    _current = _appSessionFromLegacy(session);
+    return _current!;
+  }
+
+  @override
+  Future<void> logout() async {
+    _current = null;
+    await gateway.logout();
+  }
+
+  @override
+  Future<AppSession?> refreshSession() async {
+    final session = await gateway.refreshSession();
+    if (session == null) {
+      return null;
+    }
+    _current = _appSessionFromLegacy(session);
+    return _current;
+  }
+
+  @override
+  Future<AppSession?> restoreSession() async {
+    final session = await gateway.restoreSession();
+    if (session == null) {
+      return null;
+    }
+    _current = _appSessionFromLegacy(session);
+    return _current;
+  }
+}
+
+class FakeConversationService implements ConversationService {
+  const FakeConversationService(this.gateway);
+
+  final FakeAwikiGateway gateway;
+
+  @override
+  Future<List<ConversationSummary>> listConversations({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) {
+    return gateway.listConversations();
+  }
+
+  @override
+  Future<void> markThreadRead(AppThreadRef thread) {
+    return gateway.markRead(_threadIdForFakeGateway(thread));
+  }
+
+  @override
+  Future<void> setThreadHidden({
+    required String ownerDid,
+    required String threadId,
+    required bool hidden,
+    DateTime? updatedAt,
+  }) {
+    return gateway.deleteLocalThread(threadId);
+  }
+}
+
+class FakeMessagingService implements MessagingService {
+  const FakeMessagingService(this.gateway);
+
+  final FakeAwikiGateway gateway;
+
+  @override
+  Future<List<ChatMessage>> loadHistory(
+    AppThreadRef thread, {
+    int limit = 100,
+    String? cursor,
+  }) {
+    return switch (thread) {
+      AppDirectThreadRef(:final peerDidOrHandle) => gateway.fetchDmHistory(
+        peerDidOrHandle,
+      ),
+      AppGroupThreadRef(:final groupDid) => gateway.fetchGroupHistory(groupDid),
+      AppMessageThreadRef(:final threadId) => _loadThreadHistory(threadId),
+    };
+  }
+
+  @override
+  Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed) {
+    final groupId = failed.groupId?.trim();
+    if (groupId != null && groupId.isNotEmpty) {
+      return sendText(
+        thread: AppThreadRef.group(groupId),
+        content: failed.content,
+      );
+    }
+    final peer = failed.isMine ? failed.receiverDid : failed.senderDid;
+    if (peer == null || peer.trim().isEmpty) {
+      throw StateError('Cannot retry message without peer or group id.');
+    }
+    return sendText(thread: AppThreadRef.direct(peer), content: failed.content);
+  }
+
+  @override
+  Future<ChatMessage> sendText({
+    required AppThreadRef thread,
+    required String content,
+    String? clientMessageId,
+  }) {
+    return switch (thread) {
+      AppDirectThreadRef(:final peerDidOrHandle) => gateway.sendTextMessage(
+        threadId: _directThreadId(peerDidOrHandle),
+        peerDid: peerDidOrHandle,
+        content: content,
+      ),
+      AppGroupThreadRef(:final groupDid) => gateway.sendTextMessage(
+        threadId: _groupThreadId(groupDid),
+        groupId: groupDid,
+        content: content,
+      ),
+      AppMessageThreadRef(:final threadId) => throw StateError(
+        'Cannot send through test IM Core without peerDid or groupId: $threadId',
+      ),
+    };
+  }
+
+  Future<List<ChatMessage>> _loadThreadHistory(String threadId) {
+    if (threadId.startsWith('group:')) {
+      return gateway.fetchGroupHistory(threadId.substring('group:'.length));
+    }
+    if (threadId.startsWith('dm:')) {
+      return gateway.fetchDmHistory(threadId.substring('dm:'.length));
+    }
+    return Future<List<ChatMessage>>.value(const <ChatMessage>[]);
+  }
+}
+
+class FakeGroupApplicationService implements GroupApplicationService {
+  const FakeGroupApplicationService(this.gateway);
+
+  final FakeAwikiGateway gateway;
+
+  @override
+  Future<GroupSummary> addMember({
+    required String groupDid,
+    required String memberDid,
+    String role = 'member',
+  }) {
+    return gateway.addGroupMember(
+      groupId: groupDid,
+      memberDid: memberDid,
+      role: role,
+    );
+  }
+
+  @override
+  Future<GroupSummary> createGroup({
+    required String name,
+    required String slug,
+    required String description,
+    required String goal,
+    required String rules,
+    String? messagePrompt,
+  }) {
+    return gateway.createGroup(
+      name: name,
+      slug: slug,
+      description: description,
+      goal: goal,
+      rules: rules,
+      messagePrompt: messagePrompt,
+    );
+  }
+
+  @override
+  Future<GroupSummary> getGroup(String groupDid) => gateway.getGroup(groupDid);
+
+  @override
+  Future<GroupSummary> joinGroup(String groupDid) {
+    return gateway.joinGroup(groupDid);
+  }
+
+  @override
+  Future<void> leaveGroup(String groupDid) {
+    return Future<void>.value();
+  }
+
+  @override
+  Future<List<GroupSummary>> listGroups({int limit = 100}) {
+    return gateway.listGroups();
+  }
+
+  @override
+  Future<List<GroupMemberSummary>> listMembers(
+    String groupDid, {
+    int limit = 100,
+  }) {
+    return gateway.listGroupMembers(groupDid);
+  }
+
+  @override
+  Future<List<ChatMessage>> listMessages(
+    String groupDid, {
+    int limit = 100,
+    String? cursor,
+  }) {
+    return gateway.fetchGroupHistory(groupDid);
+  }
+
+  @override
+  Future<GroupSummary> removeMember({
+    required String groupDid,
+    required String memberDid,
+  }) {
+    throw UnimplementedError();
+  }
+}
+
+class FakeRelationshipApplicationService
+    implements RelationshipApplicationService {
+  const FakeRelationshipApplicationService(this.gateway);
+
+  final FakeAwikiGateway gateway;
+
+  @override
+  Future<void> follow(String peer) => gateway.follow(peer);
+
+  @override
+  Future<CoreRelationshipPage> listFollowers({
+    int limit = 100,
+    String? cursor,
+  }) async {
+    return CoreRelationshipPage(
+      items: await gateway.listFollowers(),
+      hasMore: false,
+    );
+  }
+
+  @override
+  Future<CoreRelationshipPage> listFollowing({
+    int limit = 100,
+    String? cursor,
+  }) async {
+    return CoreRelationshipPage(
+      items: await gateway.listFollowing(),
+      hasMore: false,
+    );
+  }
+
+  @override
+  Future<RelationshipSummary> status(String peer) {
+    return gateway.getRelationshipStatus(peer);
+  }
+
+  @override
+  Future<void> unfollow(String peer) => gateway.unfollow(peer);
+}
+
+class FakeOnboardingService implements OnboardingService {
+  const FakeOnboardingService(this.gateway);
+
+  final FakeAwikiGateway gateway;
+
+  @override
+  Future<AppSession> recoverHandle({
+    required String phone,
+    required String otp,
+    required String handle,
+  }) async {
+    return _appSessionFromLegacy(
+      await gateway.recoverHandle(phone: phone, otp: otp, handle: handle),
+    );
+  }
+
+  @override
+  Future<AppSession> registerHandleWithEmail({
+    required String email,
+    required String handle,
+    String? inviteCode,
+    String? nickName,
+    String? profileMarkdown,
+  }) async {
+    return _appSessionFromLegacy(
+      await gateway.registerHandleWithEmail(
+        email: email,
+        handle: handle,
+        inviteCode: inviteCode,
+        nickName: nickName,
+        profileMarkdown: profileMarkdown,
+      ),
+    );
+  }
+
+  @override
+  Future<AppSession> registerHandleWithPhone({
+    required String phone,
+    required String otp,
+    required String handle,
+    String? inviteCode,
+    String? nickName,
+    String? profileMarkdown,
+  }) async {
+    return _appSessionFromLegacy(
+      await gateway.registerHandle(
+        phone: phone,
+        otp: otp,
+        handle: handle,
+        inviteCode: inviteCode,
+        nickName: nickName,
+        profileMarkdown: profileMarkdown,
+      ),
+    );
+  }
+}
+
+class FakeOnboardingSupportService implements OnboardingSupportService {
+  const FakeOnboardingSupportService(this.gateway);
+
+  final FakeAwikiGateway gateway;
+
+  @override
+  Future<bool> checkEmailVerified({required String email}) {
+    return gateway.checkEmailVerified(email: email);
+  }
+
+  @override
+  Future<HandleRegistrationStatus> lookupHandleRegistration({
+    required String handle,
+  }) {
+    return gateway.lookupHandleRegistration(handle: handle);
+  }
+
+  @override
+  Future<void> sendEmailVerification({required String email}) {
+    return gateway.sendEmailVerification(email: email);
+  }
+
+  @override
+  Future<void> sendOtp({required String phone}) {
+    return gateway.sendOtp(phone: phone);
+  }
+}
+
+AppSession _appSessionFromLegacy(SessionIdentity session) {
+  return AppSession(
+    did: session.did,
+    identityId: session.credentialName,
+    displayName: session.displayName,
+    handle: session.handle,
+    localAlias: session.credentialName,
+    authenticated: session.jwtToken != null,
+  );
+}
+
+String _threadIdForFakeGateway(AppThreadRef thread) {
+  return switch (thread) {
+    AppDirectThreadRef(:final peerDidOrHandle) => _directThreadId(
+      peerDidOrHandle,
+    ),
+    AppGroupThreadRef(:final groupDid) => _groupThreadId(groupDid),
+    AppMessageThreadRef(:final threadId) => threadId,
+  };
+}
+
+String _directThreadId(String peerDidOrHandle) => 'dm:$peerDidOrHandle';
+
+String _groupThreadId(String groupDid) {
+  return groupDid.startsWith('group:') ? groupDid : 'group:$groupDid';
+}
+
 class FakeLocalePreferenceService extends LocalePreferenceService {
   FakeLocalePreferenceService({
     AppLocaleMode initialMode = AppLocaleMode.system,
@@ -742,6 +1187,52 @@ class FakeRealtimeGateway implements RealtimeGateway {
     _status = status;
     _isConnected = status == RealtimeConnectionStatus.connected;
     _statusController.add(status);
+  }
+}
+
+class FakeRealtimeApplicationService implements RealtimeApplicationService {
+  FakeRealtimeApplicationService({
+    required this.gateway,
+    required this.realtimeGateway,
+  });
+
+  final FakeAwikiGateway gateway;
+  final FakeRealtimeGateway realtimeGateway;
+  final StreamController<RealtimeUpdate> _updatesController =
+      StreamController<RealtimeUpdate>.broadcast(sync: true);
+
+  @override
+  Stream<RealtimeConnectionStatus> get connectionStates async* {
+    yield realtimeGateway.connectionStatus;
+    yield* realtimeGateway.connectionStatusStream;
+  }
+
+  @override
+  bool get isRunning => realtimeGateway.isConnected;
+
+  @override
+  Stream<RealtimeUpdate> get updates => _updatesController.stream;
+
+  @override
+  Future<void> start() {
+    return realtimeGateway.connect(
+      session: const SessionIdentity(
+        did: 'did:test:me',
+        credentialName: 'default',
+        displayName: 'Me',
+      ),
+      onMessage: (event) async {
+        final update = await gateway.consumeRealtimeEvent(event);
+        if (update != null) {
+          _updatesController.add(update);
+        }
+      },
+    );
+  }
+
+  @override
+  Future<void> stop() {
+    return realtimeGateway.disconnect();
   }
 }
 

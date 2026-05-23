@@ -19,6 +19,7 @@ void main() {
         overrides: <Override>[
           awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(gateway),
           realtimeGatewayProvider.overrideWithValue(FakeRealtimeGateway()),
           notificationFacadeProvider.overrideWithValue(
             FakeNotificationFacade(),
@@ -30,7 +31,7 @@ void main() {
       addTearDown(container.dispose);
     });
 
-    test('导入成功后刷新本地凭证列表并写入成功提示', () async {
+    test('导入本地凭证首轮明确标记不支持', () async {
       gateway.importedCredential = const SessionIdentity(
         did: 'did:test:123',
         credentialName: 'default',
@@ -44,16 +45,18 @@ void main() {
           .read(appRuntimeProvider.notifier)
           .importCredentialArchive();
 
-      expect(gateway.importCalls, 1);
-      expect(gateway.listLocalCredentialsCalls, 1);
-      expect(container.read(sessionProvider).localCredentials, hasLength(1));
+      expect(gateway.importCalls, 0);
+      expect(container.read(sessionProvider).localCredentials, isEmpty);
+      final feedback = container.read(uiFeedbackProvider);
+      expect(feedback?.danger, isTrue);
+      expect(feedback?.message.id, 'raw');
       expect(
-        container.read(uiFeedbackProvider)?.message.id,
-        'importSuccessSelectCredential',
+        feedback?.message.detail,
+        'IM Core local credential import is not available yet',
       );
     });
 
-    test('导出成功后写入成功提示', () async {
+    test('导出本地凭证首轮明确标记不支持', () async {
       container
           .read(sessionProvider.notifier)
           .setSession(
@@ -71,11 +74,12 @@ void main() {
           .read(appRuntimeProvider.notifier)
           .exportCurrentCredential();
 
-      expect(gateway.exportCalls, 1);
-      expect(container.read(uiFeedbackProvider)?.message.id, 'exportedTo');
+      expect(gateway.exportCalls, 0);
+      expect(container.read(uiFeedbackProvider)?.danger, isTrue);
+      expect(container.read(uiFeedbackProvider)?.message.id, 'raw');
       expect(
-        container.read(uiFeedbackProvider)?.message.path,
-        '/tmp/awiki-credential-alice-default.zip',
+        container.read(uiFeedbackProvider)?.message.detail,
+        'IM Core local credential export is not available yet',
       );
     });
 

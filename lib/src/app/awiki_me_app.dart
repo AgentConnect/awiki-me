@@ -38,6 +38,50 @@ class AwikiMeApp extends StatelessWidget {
           bootstrap.localePreferenceService,
         ),
         updateServiceProvider.overrideWithValue(bootstrap.updateService),
+        if (bootstrap.appSessionService != null)
+          appSessionServiceProvider.overrideWithValue(
+            bootstrap.appSessionService!,
+          ),
+        if (bootstrap.onboardingService != null)
+          onboardingServiceProvider.overrideWithValue(
+            bootstrap.onboardingService!,
+          ),
+        if (bootstrap.onboardingSupportService != null)
+          onboardingSupportServiceProvider.overrideWithValue(
+            bootstrap.onboardingSupportService!,
+          ),
+        if (bootstrap.messagingService != null)
+          messagingServiceProvider.overrideWithValue(
+            bootstrap.messagingService!,
+          ),
+        if (bootstrap.conversationService != null)
+          conversationServiceProvider.overrideWithValue(
+            bootstrap.conversationService!,
+          ),
+        if (bootstrap.groupApplicationService != null)
+          groupApplicationServiceProvider.overrideWithValue(
+            bootstrap.groupApplicationService!,
+          ),
+        if (bootstrap.profileApplicationService != null)
+          profileApplicationServiceProvider.overrideWithValue(
+            bootstrap.profileApplicationService!,
+          ),
+        if (bootstrap.directoryApplicationService != null)
+          directoryApplicationServiceProvider.overrideWithValue(
+            bootstrap.directoryApplicationService!,
+          ),
+        if (bootstrap.relationshipApplicationService != null)
+          relationshipApplicationServiceProvider.overrideWithValue(
+            bootstrap.relationshipApplicationService!,
+          ),
+        if (bootstrap.realtimeApplicationService != null)
+          realtimeApplicationServiceProvider.overrideWithValue(
+            bootstrap.realtimeApplicationService!,
+          ),
+        if (bootstrap.productLocalStore != null)
+          productLocalStoreProvider.overrideWithValue(
+            bootstrap.productLocalStore!,
+          ),
         ...providerOverrides,
       ],
       child: const _AwikiMeRoot(),

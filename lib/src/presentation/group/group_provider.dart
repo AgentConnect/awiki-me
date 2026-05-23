@@ -37,15 +37,15 @@ class GroupController extends StateNotifier<GroupState> {
 
   Future<void> refresh() async {
     state = state.copyWith(isLoading: true);
-    final groups = await ref.read(awikiGatewayProvider).listGroups();
+    final groups = await ref.read(groupApplicationServiceProvider).listGroups();
     state = state.copyWith(groups: groups, isLoading: false);
     _applyGroupsToConversations(groups);
   }
 
   Future<List<GroupMemberSummary>> loadGroupMembers(String groupId) async {
     final members = await ref
-        .read(awikiGatewayProvider)
-        .listGroupMembers(groupId);
+        .read(groupApplicationServiceProvider)
+        .listMembers(groupId);
     state = state.copyWith(
       membersByGroup: <String, List<GroupMemberSummary>>{
         ...state.membersByGroup,
@@ -56,7 +56,9 @@ class GroupController extends StateNotifier<GroupState> {
   }
 
   Future<GroupSummary> refreshGroup(String groupId) async {
-    final group = await ref.read(awikiGatewayProvider).getGroup(groupId);
+    final group = await ref
+        .read(groupApplicationServiceProvider)
+        .getGroup(groupId);
     upsertGroup(group);
     await loadGroupMembers(groupId);
     return group;
@@ -71,7 +73,7 @@ class GroupController extends StateNotifier<GroupState> {
     String? messagePrompt,
   }) async {
     final created = await ref
-        .read(awikiGatewayProvider)
+        .read(groupApplicationServiceProvider)
         .createGroup(
           name: name,
           slug: slug,
@@ -85,7 +87,9 @@ class GroupController extends StateNotifier<GroupState> {
   }
 
   Future<GroupSummary> joinGroup(String groupDid) async {
-    final joined = await ref.read(awikiGatewayProvider).joinGroup(groupDid);
+    final joined = await ref
+        .read(groupApplicationServiceProvider)
+        .joinGroup(groupDid);
     upsertGroup(joined);
     return joined;
   }
@@ -96,8 +100,8 @@ class GroupController extends StateNotifier<GroupState> {
     String role = 'member',
   }) async {
     final updated = await ref
-        .read(awikiGatewayProvider)
-        .addGroupMember(groupId: groupId, memberDid: memberDid, role: role);
+        .read(groupApplicationServiceProvider)
+        .addMember(groupDid: groupId, memberDid: memberDid, role: role);
     upsertGroup(updated);
     await loadGroupMembers(groupId);
     return updated;

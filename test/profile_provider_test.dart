@@ -23,6 +23,9 @@ void main() {
     final container = ProviderContainer(
       overrides: <Override>[
         awikiGatewayProvider.overrideWithValue(gateway),
+        profileApplicationServiceProvider.overrideWithValue(
+          FakeProfileApplicationService(gateway),
+        ),
         homepageMarkdownLoaderProvider.overrideWithValue(
           (_) async => remoteMarkdown,
         ),
@@ -64,6 +67,9 @@ void main() {
     final container = ProviderContainer(
       overrides: <Override>[
         awikiGatewayProvider.overrideWithValue(gateway),
+        profileApplicationServiceProvider.overrideWithValue(
+          FakeProfileApplicationService(gateway),
+        ),
         homepageMarkdownLoaderProvider.overrideWithValue(
           (_) => homepageCompleter.future,
         ),
@@ -105,6 +111,9 @@ void main() {
     final container = ProviderContainer(
       overrides: <Override>[
         awikiGatewayProvider.overrideWithValue(gateway),
+        profileApplicationServiceProvider.overrideWithValue(
+          FakeProfileApplicationService(gateway),
+        ),
         homepageMarkdownLoaderProvider.overrideWithValue(
           (_) async => '<!doctype html><html><body></body></html>',
         ),

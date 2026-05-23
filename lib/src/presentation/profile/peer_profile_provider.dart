@@ -45,13 +45,17 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
 
   Future<void> load() async {
     state = state.copyWith(isLoading: true);
-    final profile = await ref.read(awikiGatewayProvider).loadPublicProfile(did);
-    final relationship =
-        await ref.read(friendsProvider.notifier).checkRelationship(did);
+    final profile = await ref
+        .read(profileApplicationServiceProvider)
+        .loadPublicProfile(did);
+    final relationship = await ref
+        .read(friendsProvider.notifier)
+        .checkRelationship(did);
     UserProfile resolved = profile;
     final homepageUrl = _homepageUrl(profile);
-    final markdown =
-        await ref.read(homepageMarkdownLoaderProvider)(homepageUrl);
+    final markdown = await ref.read(homepageMarkdownLoaderProvider)(
+      homepageUrl,
+    );
     if (markdown != null && markdown.trim().isNotEmpty) {
       resolved = profile.copyWith(profileMarkdown: markdown);
     }
@@ -65,16 +69,13 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
   Future<void> unfollow() async {
     state = state.copyWith(isActionBusy: true);
     await ref.read(friendsProvider.notifier).unfollow(did);
-    state = state.copyWith(
-      relationship: 'none',
-      isActionBusy: false,
-    );
+    state = state.copyWith(relationship: 'none', isActionBusy: false);
   }
 
   void showLinkOpenError(Object error) {
-    ref.read(uiFeedbackProvider.notifier).showError(
-          AppMessage.linkOpenFailed('$error'),
-        );
+    ref
+        .read(uiFeedbackProvider.notifier)
+        .showError(AppMessage.linkOpenFailed('$error'));
   }
 
   String _homepageUrl(UserProfile profile) {
@@ -86,7 +87,9 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
   }
 }
 
-final peerProfileProvider = StateNotifierProvider.family<PeerProfileController,
-    PeerProfileState, String>(
-  (ref, did) => PeerProfileController(ref, did),
-);
+final peerProfileProvider =
+    StateNotifierProvider.family<
+      PeerProfileController,
+      PeerProfileState,
+      String
+    >((ref, did) => PeerProfileController(ref, did));

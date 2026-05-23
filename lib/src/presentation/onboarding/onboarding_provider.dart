@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
+import '../../application/models/app_session.dart';
+import '../../domain/entities/session_identity.dart';
 import '../../domain/repositories/awiki_account_gateway.dart';
 import '../../l10n/app_message.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
@@ -100,7 +102,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   Future<void> requestOtp(String phone) async {
     var success = false;
     await _runBusy(() async {
-      await ref.read(awikiAccountGatewayProvider).sendOtp(phone: phone);
+      await ref.read(onboardingSupportServiceProvider).sendOtp(phone: phone);
       success = true;
     });
     if (success) {
@@ -113,7 +115,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     var success = false;
     await _runBusy(() async {
       await ref
-          .read(awikiAccountGatewayProvider)
+          .read(onboardingSupportServiceProvider)
           .sendEmailVerification(email: email);
       success = true;
     });
@@ -129,7 +131,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     var verified = false;
     await _runBusy(() async {
       verified = await ref
-          .read(awikiAccountGatewayProvider)
+          .read(onboardingSupportServiceProvider)
           .checkEmailVerified(email: email);
       if (!verified) {
         ref
@@ -150,15 +152,17 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   }) async {
     await _runBusy(() async {
       final session = await ref
-          .read(awikiAccountGatewayProvider)
-          .registerHandle(
+          .read(onboardingServiceProvider)
+          .registerHandleWithPhone(
             phone: phone,
             otp: otp,
             handle: handle,
             nickName: nickName,
             profileMarkdown: profileMarkdown,
           );
-      await ref.read(appRuntimeProvider.notifier).activateSession(session);
+      await ref
+          .read(appRuntimeProvider.notifier)
+          .activateSession(_legacySessionFromAppSession(session));
     });
   }
 
@@ -170,19 +174,17 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String profileMarkdown,
   }) async {
     await _runBusy(() async {
-      final accountGateway = ref.read(awikiAccountGatewayProvider);
-      final status = await accountGateway.lookupHandleRegistration(
-        handle: handle,
-      );
+      final support = ref.read(onboardingSupportServiceProvider);
+      final onboarding = ref.read(onboardingServiceProvider);
+      final status = await support.lookupHandleRegistration(handle: handle);
       final session = switch (status) {
-        HandleRegistrationStatus.registered =>
-          await accountGateway.recoverHandle(
-            phone: phone,
-            otp: otp,
-            handle: handle,
-          ),
+        HandleRegistrationStatus.registered => await onboarding.recoverHandle(
+          phone: phone,
+          otp: otp,
+          handle: handle,
+        ),
         HandleRegistrationStatus.notRegistered =>
-          await accountGateway.registerHandle(
+          await onboarding.registerHandleWithPhone(
             phone: phone,
             otp: otp,
             handle: handle,
@@ -190,7 +192,9 @@ class OnboardingController extends StateNotifier<OnboardingState> {
             profileMarkdown: profileMarkdown,
           ),
       };
-      await ref.read(appRuntimeProvider.notifier).activateSession(session);
+      await ref
+          .read(appRuntimeProvider.notifier)
+          .activateSession(_legacySessionFromAppSession(session));
     });
   }
 
@@ -201,9 +205,11 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   }) async {
     await _runBusy(() async {
       final session = await ref
-          .read(awikiAccountGatewayProvider)
+          .read(onboardingServiceProvider)
           .recoverHandle(phone: phone, otp: otp, handle: handle);
-      await ref.read(appRuntimeProvider.notifier).activateSession(session);
+      await ref
+          .read(appRuntimeProvider.notifier)
+          .activateSession(_legacySessionFromAppSession(session));
     });
   }
 
@@ -214,24 +220,26 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String profileMarkdown,
   }) async {
     await _runBusy(() async {
-      final accountGateway = ref.read(awikiAccountGatewayProvider);
-      final status = await accountGateway.lookupHandleRegistration(
-        handle: handle,
-      );
+      final support = ref.read(onboardingSupportServiceProvider);
+      final status = await support.lookupHandleRegistration(handle: handle);
       if (status == HandleRegistrationStatus.registered) {
         throw StateError('该 handle 已注册。邮箱当前仅支持新注册，请使用手机号验证码登录或导入身份凭证。');
       }
-      final verified = await accountGateway.checkEmailVerified(email: email);
+      final verified = await support.checkEmailVerified(email: email);
       if (!verified) {
         throw StateError('邮箱尚未激活，请先点击邮件中的激活链接。');
       }
-      final session = await accountGateway.registerHandleWithEmail(
-        email: email,
-        handle: handle,
-        nickName: nickName,
-        profileMarkdown: profileMarkdown,
-      );
-      await ref.read(appRuntimeProvider.notifier).activateSession(session);
+      final session = await ref
+          .read(onboardingServiceProvider)
+          .registerHandleWithEmail(
+            email: email,
+            handle: handle,
+            nickName: nickName,
+            profileMarkdown: profileMarkdown,
+          );
+      await ref
+          .read(appRuntimeProvider.notifier)
+          .activateSession(_legacySessionFromAppSession(session));
     });
   }
 
@@ -289,6 +297,16 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     _otpResendTimer?.cancel();
     _otpResendTimer = null;
   }
+}
+
+SessionIdentity _legacySessionFromAppSession(AppSession session) {
+  return SessionIdentity(
+    did: session.did,
+    credentialName: session.localAlias ?? session.identityId,
+    displayName: session.displayName,
+    handle: session.handle,
+    jwtToken: null,
+  );
 }
 
 final onboardingProvider =

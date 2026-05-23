@@ -1,4 +1,3 @@
-import '../../data/awiki_sdk/awiki_anp_session.dart';
 import '../entities/session_identity.dart';
 
 enum HandleRegistrationStatus { registered, notRegistered }
@@ -10,7 +9,7 @@ abstract class AwikiAccountGateway {
 
   Future<SessionIdentity?> refreshSession();
 
-  Future<AwikiAnpSession> currentAnpSession({bool requireSigning = false});
+  Future<Object> currentAnpSession({bool requireSigning = false});
 
   Future<void> logout();
 

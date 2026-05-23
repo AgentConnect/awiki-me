@@ -75,7 +75,7 @@ void main() {
     expect(registerRect.left, lessThan(switchRect.left));
   });
 
-  testWidgets('切换身份 tab 展示导入身份凭证并触发导入动作', (tester) async {
+  testWidgets('切换身份 tab 展示导入身份凭证并提示首轮不支持', (tester) async {
     final gateway = FakeAwikiGateway();
 
     await tester.pumpWidget(
@@ -88,7 +88,16 @@ void main() {
     await tester.tap(find.text('导入身份凭证'));
     await tester.pump();
 
-    expect(gateway.importCalls, 1);
+    expect(gateway.importCalls, 0);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    final feedback = container.read(uiFeedbackProvider);
+    expect(feedback?.danger, isTrue);
+    expect(
+      feedback?.message.detail,
+      'IM Core local credential import is not available yet',
+    );
   });
 
   testWidgets('切换身份 tab 点击已保存凭证卡片空白区域也能登录', (tester) async {

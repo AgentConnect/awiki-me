@@ -170,14 +170,14 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
     });
     try {
       final profile = await ref
-          .read(awikiGatewayProvider)
+          .read(profileApplicationServiceProvider)
           .loadPublicProfile(query);
       RelationshipSummary? relationship;
       if (_isAddContact) {
         try {
           relationship = await ref
-              .read(awikiGatewayProvider)
-              .getRelationshipStatus(profile.did);
+              .read(relationshipApplicationServiceProvider)
+              .status(profile.did);
         } catch (_) {
           relationship = null;
         }

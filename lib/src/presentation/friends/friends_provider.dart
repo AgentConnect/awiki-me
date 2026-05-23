@@ -34,27 +34,37 @@ class FriendsController extends StateNotifier<FriendsState> {
 
   Future<void> refresh() async {
     state = state.copyWith(isLoading: true);
-    final followers = await ref.read(awikiGatewayProvider).listFollowers();
-    final following = await ref.read(awikiGatewayProvider).listFollowing();
-    state = state.copyWith(
-      followers: followers,
-      following: following,
-      isLoading: false,
-    );
+    try {
+      final relationships = ref.read(relationshipApplicationServiceProvider);
+      final followers = await relationships.listFollowers();
+      final following = await relationships.listFollowing();
+      state = state.copyWith(
+        followers: followers.items,
+        following: following.items,
+        isLoading: false,
+      );
+    } on UnsupportedError {
+      // TODO(im-core): show an explicit unavailable state once relationship
+      // list APIs land in the SDK. For now, don't let optional contacts data
+      // block profile/conversation/group refresh on macOS.
+      state = state.copyWith(isLoading: false);
+    }
   }
 
   Future<void> follow(String didOrHandle) async {
-    await ref.read(awikiGatewayProvider).follow(didOrHandle);
+    await ref.read(relationshipApplicationServiceProvider).follow(didOrHandle);
     await refresh();
   }
 
   Future<void> unfollow(String didOrHandle) async {
-    await ref.read(awikiGatewayProvider).unfollow(didOrHandle);
+    await ref
+        .read(relationshipApplicationServiceProvider)
+        .unfollow(didOrHandle);
     await refresh();
   }
 
   Future<RelationshipSummary?> checkRelationship(String didOrHandle) async {
-    return ref.read(awikiGatewayProvider).getRelationshipStatus(didOrHandle);
+    return ref.read(relationshipApplicationServiceProvider).status(didOrHandle);
   }
 
   void clear() {

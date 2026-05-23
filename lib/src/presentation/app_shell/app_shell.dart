@@ -65,7 +65,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         .watch(realtimeConnectionStatusProvider)
         .maybeWhen(
           data: (status) => status,
-          orElse: () => ref.watch(realtimeGatewayProvider).connectionStatus,
+          orElse: () => RealtimeConnectionStatus.idle,
         );
     final responsive = context.awikiResponsive;
     final tabIndex = ref.watch(shellTabProvider);
