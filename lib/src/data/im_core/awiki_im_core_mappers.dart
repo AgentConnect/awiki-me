@@ -3,6 +3,7 @@ import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import '../../application/models/app_session.dart';
 import '../../application/models/app_thread_ref.dart';
 import '../../application/models/product_local_models.dart';
+import '../../application/ports/relationship_core_port.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_member_summary.dart';
@@ -191,6 +192,33 @@ class AwikiImCoreMappers {
       did: status.peer,
       displayName: status.displayName ?? _compactDid(status.peer),
       relationship: status.relationship ?? 'none',
+    );
+  }
+
+  RelationshipSummary relationshipFromCoreListItem(
+    core.RelationshipListItem item,
+  ) {
+    return RelationshipSummary(
+      did: item.did,
+      displayName:
+          _nonEmpty(item.displayName) ??
+          _nonEmpty(item.handle) ??
+          _compactDid(item.did),
+      relationship: item.relationship,
+    );
+  }
+
+  CoreRelationshipPage relationshipPageFromCore(
+    core.RelationshipPage page, {
+    int fallbackCursorOffset = 0,
+  }) {
+    final items = page.items.map(relationshipFromCoreListItem).toList();
+    return CoreRelationshipPage(
+      items: items,
+      nextCursor:
+          page.nextCursor ??
+          (page.hasMore ? '${fallbackCursorOffset + items.length}' : null),
+      hasMore: page.hasMore,
     );
   }
 

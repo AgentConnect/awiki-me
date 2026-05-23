@@ -6,16 +6,17 @@ import 'package:awiki_me/src/application/ports/directory_core_port.dart';
 import 'package:awiki_me/src/application/ports/group_core_port.dart';
 import 'package:awiki_me/src/application/ports/profile_core_port.dart';
 import 'package:awiki_me/src/application/ports/realtime_core_port.dart';
+import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/application/realtime_application_service.dart';
 import 'package:awiki_me/src/application/relationship_application_service.dart';
 import 'package:awiki_me/src/data/im_core/pending_im_core_group_mutation_adapter.dart';
-import 'package:awiki_me/src/data/im_core/pending_im_core_relationship_adapter.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
+import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -72,15 +73,25 @@ void main() {
     },
   );
 
-  test('relationship service uses pending adapter for SDK gaps', () async {
-    const pending = PendingImCoreRelationshipAdapter();
-    const service = ImCoreRelationshipApplicationService(
-      relationships: pending,
+  test('relationship service trims inputs and delegates to port', () async {
+    final relationships = _FakeRelationships();
+    final service = ImCoreRelationshipApplicationService(
+      relationships: relationships,
     );
 
-    expect(() => service.follow('did:bob'), throwsA(isA<UnsupportedError>()));
-    expect(() => service.listFollowers(), throwsA(isA<UnsupportedError>()));
-    expect(() => service.status('did:bob'), throwsA(isA<UnsupportedError>()));
+    await service.follow(' did:bob ');
+    await service.unfollow(' did:carol ');
+    await service.status(' did:dave ');
+    final followers = await service.listFollowers(limit: 2, cursor: '4');
+    final following = await service.listFollowing(limit: 3);
+
+    expect(relationships.followed, ['did:bob']);
+    expect(relationships.unfollowed, ['did:carol']);
+    expect(relationships.statusPeers, ['did:dave']);
+    expect(relationships.followerRequests, ['2/4']);
+    expect(relationships.followingRequests, ['3/null']);
+    expect(followers.items.single.relationship, 'follower');
+    expect(following.items.single.relationship, 'following');
   });
 
   test('realtime service exposes port streams and lifecycle', () async {
@@ -196,6 +207,70 @@ class _FakeGroups implements GroupCorePort {
     required String groupDid,
     required String memberDid,
   }) async => _group();
+}
+
+class _FakeRelationships implements RelationshipCorePort {
+  final List<String> followed = <String>[];
+  final List<String> unfollowed = <String>[];
+  final List<String> statusPeers = <String>[];
+  final List<String> followerRequests = <String>[];
+  final List<String> followingRequests = <String>[];
+
+  @override
+  Future<void> follow(String peer) async {
+    followed.add(peer);
+  }
+
+  @override
+  Future<CoreRelationshipPage> listFollowers({
+    int limit = 100,
+    String? cursor,
+  }) async {
+    followerRequests.add('$limit/$cursor');
+    return const CoreRelationshipPage(
+      items: <RelationshipSummary>[
+        RelationshipSummary(
+          did: 'did:follower',
+          displayName: 'Follower',
+          relationship: 'follower',
+        ),
+      ],
+      hasMore: false,
+    );
+  }
+
+  @override
+  Future<CoreRelationshipPage> listFollowing({
+    int limit = 100,
+    String? cursor,
+  }) async {
+    followingRequests.add('$limit/$cursor');
+    return const CoreRelationshipPage(
+      items: <RelationshipSummary>[
+        RelationshipSummary(
+          did: 'did:following',
+          displayName: 'Following',
+          relationship: 'following',
+        ),
+      ],
+      hasMore: false,
+    );
+  }
+
+  @override
+  Future<RelationshipSummary> status(String peer) async {
+    statusPeers.add(peer);
+    return RelationshipSummary(
+      did: peer,
+      displayName: peer,
+      relationship: 'none',
+    );
+  }
+
+  @override
+  Future<void> unfollow(String peer) async {
+    unfollowed.add(peer);
+  }
 }
 
 class _FakeRealtime implements RealtimeCorePort {

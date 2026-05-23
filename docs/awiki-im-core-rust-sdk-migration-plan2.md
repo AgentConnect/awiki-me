@@ -72,6 +72,7 @@ awiki-me UI / Riverpod providers
 | Auth status/login/ensure/refresh | `client.auth.status/login/ensureSession/refreshSession` | `AppSessionService`，UI 不持有 JWT |
 | Profile | `client.profile.loadMyProfile/updateProfile/loadPublicProfile` | `ProfileApplicationService` |
 | Directory resolve | `client.directory.resolvePeer/lookupHandle/relationStatus` | `DirectoryApplicationService` 与 `RelationshipApplicationService.status` |
+| 关系 follow/unfollow/list | `client.directory.follow/unfollow/listFollowers/listFollowing` | `RelationshipApplicationService` 通过 `AwikiImCoreRelationshipAdapter` 直接调用 SDK |
 | 发文本消息 | `client.messages.sendText` | `MessagingService.sendText` |
 | inbox/history | `client.messages.inbox/history` | `ConversationService` / `MessagingService` |
 | markRead by message IDs | `client.messages.markRead(List<String>)` | 不直接用于首轮 thread read；当前 Message DTO 不暴露 read-state，`awiki-me` 不从 history 猜 unread IDs |
@@ -86,8 +87,6 @@ awiki-me UI / Riverpod providers
 
 | 能力 | 当前状态 | 归属判断 | `awiki-me` 侧当前开发方式 |
 | --- | --- | --- | --- |
-| `follow` / `unfollow` | generated API 存在，但 Rust facade 当前 unsupported；Dart public wrapper 也未暴露 | IM Core relationship protocol 能力 | 先写 `RelationshipCorePort` 与 pending adapter，不走旧 HTTP fallback；SDK 补齐后替换 adapter |
-| `listFollowers` / `listFollowing` | 当前 SDK 未公开 | IM Core relationship query 能力 | 先写 port、service、UI state 对接；SDK 补齐前返回 unsupported 或 empty with unavailable state |
 | group add/remove member Dart facade | Rust `im-core` 有 `add_member/remove_member`，但 Dart facade/public wrapper 未暴露 | IM Core group mutation 能力 | 先写 `GroupCorePort.addMember/removeMember` 边界；SDK 补齐后启用 |
 | `markThreadRead(ThreadRef)` | 当前 SDK 只有 `markRead(messageIds)`，`Message` DTO 不暴露 read-state，无法可靠从 history 判断 unread IDs | IM Core read-state 能力 | 首轮 app 侧标为 unsupported，不做不准确的 history 适配；TODO：SDK 后续补 `markThreadRead(ThreadRef)` 或 unread message query 后再启用 |
 | set default / active identity | 当前 SDK 未公开独立 API；app 多身份恢复策略未完善 | IM Core identity store 能力 + app active identity preference | 首轮只恢复 default identity；TODO：后续保存 `activeIdentityId` 并在 SDK 补 set default/active API 后完善切换 |
@@ -155,7 +154,6 @@ lib/src/data/im_core/
   awiki_im_core_relationship_adapter.dart
   awiki_im_core_realtime_adapter.dart
   awiki_im_core_mappers.dart
-  pending_im_core_relationship_adapter.dart
   pending_im_core_group_mutation_adapter.dart
 
 lib/src/data/local/
@@ -623,27 +621,18 @@ abstract interface class RelationshipCorePort {
 
 当前实现策略：
 
-- 新增 `PendingImCoreRelationshipAdapter implements RelationshipCorePort`。
-- `status` 可以临时调用当前 SDK `client.directory.relationStatus(peer)`，因为 SDK 已有 status。
-- `follow/unfollow/listFollowers/listFollowing` 在 SDK 未补齐前抛 `UnsupportedError`，但错误文案明确：`IM Core relationship protocol is not available yet`。
+- `AwikiImCoreRelationshipAdapter implements RelationshipCorePort`。
+- `status` 调用 SDK `client.directory.relationStatus(peer)`。
+- `follow/unfollow/listFollowers/listFollowing` 调用 SDK `client.directory.follow/unfollow/listFollowers/listFollowing`。
+- `cursor` 在 app service 边界保持 `String?`，首轮用 offset 字符串适配 SDK 的 `offset` 参数；SDK 若后续返回真实 cursor，mapper 优先使用 SDK `nextCursor`。
 - 不使用旧 `AwikiUserClient.relationshipRpc` 作为 fallback。
-- SDK 补齐后，新增 `AwikiImCoreRelationshipAdapter`，只替换 port 实现，不改 UI/service。
 
-SDK 后续预期 API：
-
-```dart
-client.relationships.listFollowers(limit: 100, cursor: null)
-client.relationships.listFollowing(limit: 100, cursor: null)
-client.relationships.status(peer)
-client.relationships.follow(peer)
-client.relationships.unfollow(peer)
-```
-
-或扩展现有 directory API：
+当前使用现有 directory API：
 
 ```dart
 client.directory.listFollowers(...)
 client.directory.listFollowing(...)
+client.directory.relationStatus(peer)
 client.directory.follow(peer)
 client.directory.unfollow(peer)
 ```
@@ -1149,24 +1138,16 @@ Codex 任务：
 ```text
 lib/src/application/relationship_application_service.dart
 lib/src/application/ports/relationship_core_port.dart
-lib/src/data/im_core/pending_im_core_relationship_adapter.dart
-lib/src/data/im_core/awiki_im_core_relationship_adapter.dart   // 可先创建骨架，不调用不存在 SDK API
+lib/src/data/im_core/awiki_im_core_relationship_adapter.dart
 ```
 
 Codex 任务：
 
 - `RelationshipApplicationService` 完整实现 orchestration 与 app model mapping。
-- `status` 可通过现有 SDK `client.directory.relationStatus` 实现。
-- `follow/unfollow/listFollowers/listFollowing` 通过 `RelationshipCorePort`。
-- 当前 `PendingImCoreRelationshipAdapter` 对未补齐方法抛 unsupported。
-- `friends_provider` 可先接入新 service；当 unsupported 时显示明确提示。
+- `status` 通过 SDK `client.directory.relationStatus` 实现。
+- `follow/unfollow/listFollowers/listFollowing` 通过 `RelationshipCorePort` 调用 SDK directory API。
+- `friends_provider` 接入新 service，不保留旧 RPC fallback。
 - 不保留旧 relationship RPC fallback。
-
-SDK 补齐后，替换：
-
-```text
-PendingImCoreRelationshipAdapter -> AwikiImCoreRelationshipAdapter
-```
 
 无需改 UI。
 
@@ -1260,7 +1241,7 @@ sqflite    # 如果 ProductLocalStore 不使用 sqflite，或改用 sqlite3/path
 - 阶段 3：`ProductLocalStore` 与 in-memory/sqflite overlay store 已落地；新路径不写 message/conversation/group 主数据。
 - 阶段 4：`AppSessionService`、`OnboardingService`、identity/auth adapters、`CompatAwikiAccountGateway` 已落地；JWT 不再作为新 session contract，凭证导入/导出/删除/显式本地登录均明确 unsupported/TODO。
 - 阶段 5：`MessagingService`、`ConversationService`、message/conversation adapters 已落地；`markThreadRead` 明确 unsupported，不通过 history 猜 unread IDs。
-- 阶段 6-9：group/profile/directory/relationship/realtime application services 与 SDK adapters/pending adapters 已落地；关系 follow/list 与 group add/remove member 保持 unsupported/TODO。
+- 阶段 6-9：group/profile/directory/relationship/realtime application services 与 SDK adapters 已落地；关系 follow/unfollow/listFollowers/listFollowing/status 已通过 SDK directory API 对接，group add/remove member 仍保持 unsupported/TODO。
 - compat 层：`CompatAwikiGateway`、`CompatAwikiAccountGateway`、`CompatRealtimeGateway` 已创建。
 - 阶段 10：`AppBootstrap.create()` 已切到 IM Core runtime + application services + compat gateways；`AwikiMeApp` 已注入新 application service providers 与旧 gateway compat providers。
 - onboarding utility：SDK 尚未暴露 send OTP / email verification / unauthenticated handle lookup，当前由 `AwikiOnboardingSupportService` 作为临时 app-side onboarding utility 提供；注册/恢复本体仍走 IM Core SDK。
@@ -1270,6 +1251,7 @@ sqflite    # 如果 ProductLocalStore 不使用 sqflite，或改用 sqlite3/path
 - 测试 fixture：`test/test_support.dart` 已补齐 `FakeAppSessionService`、`FakeRealtimeApplicationService`、`FakeProfileApplicationService`、`FakeConversationService`、`FakeMessagingService`、`FakeGroupApplicationService`、`FakeRelationshipApplicationService`、`FakeOnboardingService`、`FakeOnboardingSupportService`，避免迁移后的 provider 继续直接依赖旧 gateway mock。
 - 阶段 12（旧实现清理）：旧 app-side ANP/IM/WS production fallback 已删除，包括 `AwikiAnpGateway`、`AwikiAccountService`、`AwikiWsRealtimeGateway`、旧 `lib/src/data/awiki_sdk/*`、旧 `AwikiLocalCache`、旧 DID registration facade、旧 Dart-only `lib/src/im_core/*` 及其 legacy tests；`test/im_core/im_core_boundary_test.dart` 已改成防回归边界测试。
 - 依赖清理：`anp`、`web_socket_channel`、`archive` 已不再是 direct dependencies；`archive` 仍由其他 Flutter tooling/package transitive 引入。`http` 保留给 onboarding utility、profile markdown loader、update service；`crypto` 保留给 update checksum；`sqflite` 保留给 `ProductLocalStore`。
+- Relationship 增量对接：拉取 `awiki-cli-rs2/main` 后，SDK Rust core 已有 relationship runtime；本轮补齐 Flutter/Dart facade DTO/API（`follow/unfollow/listFollowers/listFollowing`），重跑 codegen 并重建 macOS xcframework，`awiki-me` 删除 `PendingImCoreRelationshipAdapter`，`AwikiImCoreRelationshipAdapter` 直接调用 SDK。
 
 尚未完成：
 
@@ -1282,6 +1264,7 @@ sqflite    # 如果 ProductLocalStore 不使用 sqflite，或改用 sqlite3/path
 
 - `PUB_HOSTED_URL=https://mirrors.tuna.tsinghua.edu.cn/dart-pub flutter pub get`：通过；镜像源无法获取 `archive`/`http` advisories，且有若干非阻断 dependency newer-version 提示；`anp`、`web_socket_channel`、`archive` direct dependency 已移除（`archive` 变为 transitive）。
 - `dart analyze`：通过，输出 `No issues found!`。
+- Relationship 增量验证：SDK `scripts/flutter/codegen-check.sh`、`cargo test -p im-core-dart`、`packages/awiki_im_core dart analyze`、`packages/awiki_im_core flutter test` 通过；`awiki-me dart analyze`、`flutter test test/application/im_core_application_services_test.dart test/data/im_core/awiki_im_core_mappers_test.dart test/data/compat/compat_awiki_gateway_test.dart test/friends_workspace_test.dart`、`flutter test`、macOS native smoke 通过。
 - `flutter test test/im_core/im_core_boundary_test.dart test/data/services/awiki_onboarding_support_service_test.dart test/data/compat/compat_awiki_account_gateway_test.dart test/bootstrap_test.dart`：通过，覆盖阶段 12 删除旧 fallback、onboarding utility 重命名、compat account contract、bootstrap 注入。
 - `flutter test test/awiki_me_app_localization_test.dart test/onboarding_page_test.dart test/app_runtime_notification_test.dart test/app_runtime_archive_actions_test.dart test/settings_page_test.dart test/realtime_connection_status_toast_test.dart`：通过，覆盖 app runtime/realtime 去 compat 化、typed realtime update、credential unsupported 行为、manual bootstrap fake service 注入、onboarding 导入凭证 unsupported 行为。
 - `flutter test test/chat_provider_open_test.dart test/chat_page_test.dart test/group_flow_test.dart test/app_runtime_notification_test.dart`：通过，覆盖 chat/group/provider 去 compat 化。
@@ -1433,8 +1416,7 @@ cargo test -p im-core
 - bootstrap 能构造 IM Core runtime。
 - UI/provider 可以通过 compat 或新 service 访问 application services。
 - session/onboarding/message/conversation/group/profile/realtime 主要路径已接入 IM Core SDK。
-- relationship 已有 `RelationshipApplicationService` 与 `RelationshipCorePort`，不再走旧 User Service fallback。
-- SDK 未补齐的 relationship mutation/list 能以 unsupported 状态清晰失败。
+- relationship 已有 `RelationshipApplicationService` 与 `RelationshipCorePort`，follow/unfollow/list/status 走 IM Core SDK，不再走旧 User Service fallback。
 - SDK 未补齐的 group member mutation 能以 unsupported 状态清晰失败。
 - SDK 未补齐的 `markThreadRead(ThreadRef)` 能以 unsupported 状态清晰失败，不通过 history 猜测 unread IDs。
 - 本地凭证导入/导出/删除/显式登录首轮已 disabled/隐藏或明确 unsupported。
@@ -1472,7 +1454,7 @@ cargo test -p im-core
 2. 不新增旧 /im/rpc、ANP proof、raw WebSocket、JWT refresh 逻辑。
 3. 不把 SDK DTO 暴露到 UI/provider。
 4. IM Core SDK 自己有 DB，awiki-me 不再保存 message/conversation/group 主数据，只保存 UI overlay。
-5. 关系系统最终由 IM Core 提供；awiki-me 先实现 RelationshipApplicationService + RelationshipCorePort，SDK 未补齐的方法用 PendingImCoreRelationshipAdapter 抛明确 unsupported，不走旧 HTTP fallback。
+5. 关系系统由 IM Core 提供；awiki-me 使用 RelationshipApplicationService + RelationshipCorePort + AwikiImCoreRelationshipAdapter，follow/unfollow/list/status 均走 SDK directory API，不走旧 HTTP fallback。
 6. group add/remove member 当前也通过 port 预留，SDK 未补齐前 pending unsupported，不走旧 RPC fallback。
 7. markThreadRead 当前标记 unsupported，并加 TODO；不通过 history 猜 unread IDs。
 8. 本地凭证导入、导出、删除、显式登录首轮标记 unsupported 或隐藏入口。
@@ -1503,7 +1485,6 @@ Phase 10 Bootstrap cutover。
 | SDK native library packaging 失败 | app 启动或 core open 失败 | 阶段 1 后立即跑 macOS native open smoke；失败则停止 Phase 4+ cutover，记录 SDK blocker |
 | SDK FRB handle 被普通 API 消费 | core/client 第一次调用后后续调用崩溃或 panic | SDK 非终止 API 使用 borrow 语义；`close/dispose/stop` 才保留 owned 语义；native smoke 至少覆盖 open + validate + dispose |
 | 旧 `lib/src/im_core` 与新 SDK adapter 混用 | 类型命名冲突、测试边界误判、生产路径不清晰 | 按 §3.3 删除/重命名/隔离旧 internal contract；新 SDK import 统一 `as core` |
-| relationship SDK 未补齐 | follow/follower 页面不可完整使用 | app 侧先完成 service/port，pending unsupported；不使用旧 fallback |
 | group add member SDK Flutter facade 未补齐 | 添加成员不可用 | app 侧 pending unsupported；SDK 补齐后替换 port |
 | mark thread read SDK 未补齐 | 已读按钮不可用 | 首轮明确 unsupported，不伪造成功；TODO 等 SDK `markThreadRead(ThreadRef)` 或 read-state query |
 | 本地凭证导入/导出/删除/显式登录 SDK 未补齐 | 设置/登录页部分入口不可用 | 首轮隐藏/disabled 或明确 unsupported；恢复 default identity 与注册/恢复成功激活先可用 |

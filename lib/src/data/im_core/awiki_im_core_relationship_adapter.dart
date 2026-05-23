@@ -24,29 +24,58 @@ class AwikiImCoreRelationshipAdapter implements RelationshipCorePort {
   Future<CoreRelationshipPage> listFollowers({
     int limit = 100,
     String? cursor,
-  }) {
-    // TODO(im-core): enable when SDK exposes listFollowers.
-    throw UnsupportedError('IM Core listFollowers is not available yet');
+  }) async {
+    final offset = _offsetFromCursor(cursor);
+    final page = await (await _runtime.currentClient()).directory.listFollowers(
+      limit: limit,
+      offset: offset,
+      hydrateProfiles: true,
+    );
+    return _mappers.relationshipPageFromCore(
+      page,
+      fallbackCursorOffset: offset,
+    );
   }
 
   @override
   Future<CoreRelationshipPage> listFollowing({
     int limit = 100,
     String? cursor,
-  }) {
-    // TODO(im-core): enable when SDK exposes listFollowing.
-    throw UnsupportedError('IM Core listFollowing is not available yet');
+  }) async {
+    final offset = _offsetFromCursor(cursor);
+    final page = await (await _runtime.currentClient()).directory.listFollowing(
+      limit: limit,
+      offset: offset,
+      hydrateProfiles: true,
+    );
+    return _mappers.relationshipPageFromCore(
+      page,
+      fallbackCursorOffset: offset,
+    );
   }
 
   @override
-  Future<void> follow(String peer) {
-    // TODO(im-core): enable when SDK follow facade is implemented/public.
-    throw UnsupportedError('IM Core follow is not available yet');
+  Future<void> follow(String peer) async {
+    await (await _runtime.currentClient()).directory.follow(peer);
   }
 
   @override
-  Future<void> unfollow(String peer) {
-    // TODO(im-core): enable when SDK unfollow facade is implemented/public.
-    throw UnsupportedError('IM Core unfollow is not available yet');
+  Future<void> unfollow(String peer) async {
+    await (await _runtime.currentClient()).directory.unfollow(peer);
   }
+}
+
+int _offsetFromCursor(String? cursor) {
+  if (cursor == null || cursor.trim().isEmpty) {
+    return 0;
+  }
+  final offset = int.tryParse(cursor.trim());
+  if (offset == null || offset < 0) {
+    throw ArgumentError.value(
+      cursor,
+      'cursor',
+      'must be a non-negative offset',
+    );
+  }
+  return offset;
 }

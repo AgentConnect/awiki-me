@@ -133,12 +133,28 @@ void main() {
         displayName: 'Bob',
       ),
     );
+    final relationshipPage = mapper.relationshipPageFromCore(
+      const core.RelationshipPage(
+        items: <core.RelationshipListItem>[
+          core.RelationshipListItem(
+            did: 'did:carol',
+            handle: 'carol.awiki',
+            relationship: 'follower',
+          ),
+        ],
+        hasMore: true,
+      ),
+      fallbackCursorOffset: 10,
+    );
 
     expect(profile.nickName, 'Alice');
     expect(profile.profileMarkdown, '# Alice');
     expect(patch.displayName, 'New Alice');
     expect(patch.markdown, 'new md');
     expect(relationship.relationship, 'following');
+    expect(relationshipPage.items.single.displayName, 'carol.awiki');
+    expect(relationshipPage.items.single.relationship, 'follower');
+    expect(relationshipPage.nextCursor, '11');
   });
 
   test('realtime connection states map into existing app enum', () {
