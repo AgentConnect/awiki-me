@@ -339,7 +339,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "PROJECT_PATH=\"${FLUTTER_APPLICATION_PATH:-$SOURCE_ROOT/..}\"\nNATIVE_ASSETS_DIR=\"$PROJECT_PATH/${FLUTTER_BUILD_DIR:-build}/native_assets/macos\"\nif [ -d \"$NATIVE_ASSETS_DIR\" ] && [ -z \"$(find \"$NATIVE_ASSETS_DIR\" -maxdepth 1 -name '*.framework' -print -quit)\" ]; then\n  rm -rf \"$NATIVE_ASSETS_DIR\"\nfi\necho \"$PRODUCT_NAME.app\" > \"$PROJECT_DIR\"/Flutter/ephemeral/.app_filename && \"$FLUTTER_ROOT\"/packages/flutter_tools/bin/macos_assemble.sh embed\n";
+			shellScript = "PROJECT_PATH=\"${FLUTTER_APPLICATION_PATH:-$SOURCE_ROOT/..}\"\nNATIVE_ASSETS_DIR=\"$PROJECT_PATH/${FLUTTER_BUILD_DIR:-build}/native_assets/macos\"\nif [ -d \"$NATIVE_ASSETS_DIR\" ] && [ -z \"$(find \"$NATIVE_ASSETS_DIR\" -maxdepth 1 -name '*.framework' -print -quit)\" ]; then\n  rm -rf \"$NATIVE_ASSETS_DIR\"\nfi\n. \"$PROJECT_DIR/Flutter/sanitize_stale_flutter_target.sh\"\necho \"$PRODUCT_NAME.app\" > \"$PROJECT_DIR\"/Flutter/ephemeral/.app_filename && \"$FLUTTER_ROOT\"/packages/flutter_tools/bin/macos_assemble.sh embed\n";
 		};
 		33CC111E2044C6BF0003C045 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -359,7 +359,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"$FLUTTER_ROOT\"/packages/flutter_tools/bin/macos_assemble.sh && touch Flutter/ephemeral/tripwire";
+			shellScript = ". \"$PROJECT_DIR/Flutter/sanitize_stale_flutter_target.sh\"\n\"$FLUTTER_ROOT\"/packages/flutter_tools/bin/macos_assemble.sh && touch Flutter/ephemeral/tripwire";
 		};
 		783FF5BB7225A6FA351599A9 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
