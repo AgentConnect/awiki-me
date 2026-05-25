@@ -20,11 +20,17 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
     bool unreadOnly = false,
   }) async {
     final client = await _runtime.currentClient();
+    final ownerDid = (await client.identity.current()).did;
     final page = await client.messages.conversations(
       limit: limit,
       unreadOnly: unreadOnly,
     );
-    return page.items.map(_mappers.conversationFromCore).toList();
+    return page.items
+        .map(
+          (conversation) =>
+              _mappers.conversationFromCore(conversation, ownerDid: ownerDid),
+        )
+        .toList();
   }
 
   @override

@@ -31,6 +31,13 @@ the feature under change. Prefer focused unit tests for account/session storage,
 ANP wire mapping, and service clients; use widget tests for onboarding,
 settings, and chat flows.
 
+For development/test OTP flows, use the shared non-production credentials below:
+
+```bash
+DEV_OTP_PHONE=+8610022229999
+DEV_OTP_CODE=987580
+```
+
 ## Multi-Platform Safety
 AWiki Me supports Android, iOS, macOS, and web. When fixing or changing one
 platform, keep the diff scoped to that platform plus shared Dart code that is

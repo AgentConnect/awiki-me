@@ -51,12 +51,20 @@ class ChatThreadsController
       ref
           .read(conversationListProvider.notifier)
           .markThreadReadLocal(conversation.threadId);
-      unawaited(
-        ref
-            .read(conversationServiceProvider)
-            .markThreadRead(AppThreadRef.thread(conversation.threadId))
-            .catchError((_) {}),
-      );
+      _markThreadReadBestEffort(conversation.threadId);
+    }
+  }
+
+  void _markThreadReadBestEffort(String threadId) {
+    try {
+      final operation = ref
+          .read(conversationServiceProvider)
+          .markThreadRead(AppThreadRef.thread(threadId));
+      unawaited(operation.catchError((_) {}));
+    } catch (_) {
+      // IM Core does not expose thread-level read-state yet, and the adapter can
+      // throw UnsupportedError synchronously. Opening a conversation must still
+      // clear unread locally and continue rendering messages.
     }
   }
 
@@ -113,6 +121,11 @@ class ChatThreadsController
       thread(conversation.threadId).messages,
     )..add(pending);
     _setMessages(conversation.threadId, current);
+    final pendingConversation = _withConversationPreview(conversation, pending);
+    ref
+        .read(conversationListProvider.notifier)
+        .upsertConversation(pendingConversation);
+    var latestConversation = pendingConversation;
     try {
       final sent = await ref
           .read(messagingServiceProvider)
@@ -122,17 +135,28 @@ class ChatThreadsController
             clientMessageId: pending.localId,
           )
           .timeout(_sendTimeout);
-      _replaceMessage(
-        conversation.threadId,
-        pending.localId,
-        _withThreadId(sent, conversation.threadId),
-      );
+      final sentInThread = _withThreadId(sent, conversation.threadId);
+      _replaceMessage(conversation.threadId, pending.localId, sentInThread);
+      latestConversation = _withConversationPreview(conversation, sentInThread);
+      ref
+          .read(conversationListProvider.notifier)
+          .upsertConversation(latestConversation);
     } catch (_) {
       final failed = pending.copyWith(sendState: MessageSendState.failed);
       _replaceMessage(conversation.threadId, pending.localId, failed);
+      latestConversation = _withConversationPreview(conversation, failed);
+      ref
+          .read(conversationListProvider.notifier)
+          .upsertConversation(latestConversation);
     }
     await ref.read(conversationListProvider.notifier).refresh();
-    final refreshedConversation = _refreshedConversationFor(conversation);
+    final refreshedConversation = _newerConversation(
+      _refreshedConversationFor(latestConversation),
+      latestConversation,
+    );
+    ref
+        .read(conversationListProvider.notifier)
+        .upsertConversation(refreshedConversation);
     unawaited(_loadHistory(refreshedConversation));
   }
 
@@ -353,6 +377,30 @@ class ChatThreadsController
     });
     return sorted;
   }
+}
+
+ConversationSummary _withConversationPreview(
+  ConversationSummary conversation,
+  ChatMessage message,
+) {
+  return ConversationSummary(
+    threadId: conversation.threadId,
+    displayName: conversation.displayName,
+    lastMessagePreview: message.content,
+    lastMessageAt: message.createdAt,
+    unreadCount: message.isMine ? 0 : conversation.unreadCount,
+    isGroup: conversation.isGroup,
+    targetDid: conversation.targetDid,
+    groupId: conversation.groupId,
+    avatarSeed: conversation.avatarSeed,
+  );
+}
+
+ConversationSummary _newerConversation(
+  ConversationSummary first,
+  ConversationSummary second,
+) {
+  return first.lastMessageAt.isBefore(second.lastMessageAt) ? second : first;
 }
 
 AppThreadRef _historyThreadRefFor(ConversationSummary conversation) {

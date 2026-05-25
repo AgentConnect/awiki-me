@@ -111,6 +111,48 @@ void main() {
     expect(gateway.listConversationsCalls, 0);
   });
 
+  test('打开未读会话时远端 mark-read 不支持也不会抛出', () async {
+    final throwingGateway = _ThrowingMarkReadGateway()
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
+        'did:peer': <ChatMessage>[message],
+      };
+    final markReadContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(throwingGateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(throwingGateway),
+      ],
+    );
+    addTearDown(markReadContainer.dispose);
+    final unreadConversation = ConversationSummary(
+      threadId: conversation.threadId,
+      displayName: conversation.displayName,
+      lastMessagePreview: conversation.lastMessagePreview,
+      lastMessageAt: conversation.lastMessageAt,
+      unreadCount: 2,
+      isGroup: conversation.isGroup,
+      targetDid: conversation.targetDid,
+    );
+    markReadContainer
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadConversation);
+
+    await expectLater(
+      markReadContainer
+          .read(chatThreadsProvider.notifier)
+          .openConversation(unreadConversation),
+      completes,
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    final conversations = markReadContainer
+        .read(conversationListProvider)
+        .conversations;
+    expect(conversations.single.unreadCount, 0);
+    expect(notificationFacade.lastBadgeCount, 0);
+    expect(throwingGateway.markReadCalls, 1);
+  });
+
   test('发送后会同步历史以展示服务端快速返回的对方消息', () async {
     final reply = ChatMessage(
       localId: 'reply-1',
@@ -172,6 +214,47 @@ void main() {
       containsAll(<String>['你好', '你好。欢迎']),
     );
     expect(gateway.fetchDmHistoryCalls, 1);
+  });
+
+  test('发送后刷新未返回当前会话时仍保留最近会话', () async {
+    gateway.conversations = const <ConversationSummary>[];
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+    sendContainer
+        .read(conversationListProvider.notifier)
+        .upsertConversation(conversation);
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendMessage(conversation: conversation, content: '你好');
+    await Future<void>.delayed(Duration.zero);
+
+    final conversations = sendContainer
+        .read(conversationListProvider)
+        .conversations;
+    expect(conversations, hasLength(1));
+    expect(conversations.single.threadId, conversation.threadId);
+    expect(conversations.single.lastMessagePreview, '你好');
+    expect(conversations.single.targetDid, conversation.targetDid);
+    expect(gateway.listConversationsCalls, 1);
   });
 
   test('连续发送不会用旧快照覆盖后续 pending', () async {
@@ -383,4 +466,12 @@ void main() {
       '融资协作群',
     );
   });
+}
+
+class _ThrowingMarkReadGateway extends FakeAwikiGateway {
+  @override
+  Future<void> markRead(String threadId) {
+    markReadCalls += 1;
+    throw UnsupportedError('IM Core markThreadRead is not available yet');
+  }
 }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_router.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
+import '../../application/thread_id_utils.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/relationship_summary.dart';
 import '../../domain/entities/user_profile.dart';
@@ -40,8 +41,7 @@ String normalizeDidOrHandleInput(String rawValue) {
 }
 
 String dmThreadIdForDids(String myDid, String peerDid) {
-  final participants = <String>[myDid, peerDid]..sort();
-  return 'dm:${participants[0]}:${participants[1]}';
+  return canonicalDirectThreadId(myDid, peerDid);
 }
 
 Future<void> openDirectConversationForProfile(

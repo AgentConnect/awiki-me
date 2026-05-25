@@ -54,7 +54,7 @@ void main() {
     const message = core.Message(
       id: 'msg-1',
       threadKind: 'direct',
-      threadId: 'dm:alice:bob',
+      threadId: 'did:bob',
       direction: core.MessageDirection.outgoing,
       sender: 'did:alice',
       receiver: 'did:bob',
@@ -66,6 +66,7 @@ void main() {
     final mapped = mapper.chatMessageFromCore(message, ownerDid: 'did:alice');
 
     expect(mapped.localId, 'msg-1');
+    expect(mapped.threadId, 'dm:did:alice:did:bob');
     expect(mapped.content, 'hello');
     expect(mapped.isMine, isTrue);
     expect(mapped.sendState, MessageSendState.sent);
@@ -77,16 +78,16 @@ void main() {
     () {
       const conversation = core.Conversation(
         threadKind: 'direct',
-        threadId: 'dm:alice:bob',
+        threadId: 'did:bob',
         title: 'Bob',
-        participants: ['did:bob'],
+        participants: ['did:alice', 'did:bob'],
         unreadCount: 2,
         messageCount: 5,
         lastMessageAt: '2026-05-23T09:01:00Z',
         lastMessage: core.Message(
           id: 'msg-2',
           threadKind: 'direct',
-          threadId: 'dm:alice:bob',
+          threadId: 'did:bob',
           direction: core.MessageDirection.incoming,
           sender: 'did:bob',
           body: core.MessageBodyView(text: 'hi'),
@@ -96,6 +97,7 @@ void main() {
 
       final mapped = mapper.conversationFromCore(
         conversation,
+        ownerDid: 'did:alice',
         overlay: ProductConversationOverlay(
           ownerDid: 'did:alice',
           threadId: 'dm:alice:bob',
@@ -106,11 +108,91 @@ void main() {
       );
 
       expect(mapped.displayName, 'Pinned Bob');
+      expect(mapped.threadId, 'dm:did:alice:did:bob');
       expect(mapped.lastMessagePreview, 'hi');
       expect(mapped.avatarSeed, 'seed-1');
       expect(mapped.unreadCount, 2);
     },
   );
+
+  test(
+    'realtime direct message uses canonical chat and conversation thread',
+    () {
+      const event = core.RealtimeEvent(
+        kind: 'message_received',
+        message: core.Message(
+          id: 'msg-cgw',
+          threadKind: 'direct',
+          threadId: 'did:cgw',
+          direction: core.MessageDirection.incoming,
+          sender: 'did:cgw',
+          receiver: 'did:me',
+          body: core.MessageBodyView(text: '你好'),
+          sentAt: '2026-05-23T09:02:00Z',
+          metadata: core.MessageMetadata(),
+        ),
+      );
+
+      final update = mapper.realtimeUpdateFromCore(event, ownerDid: 'did:me');
+
+      expect(update, isNotNull);
+      expect(update!.message.threadId, 'dm:did:cgw:did:me');
+      expect(update.conversation.threadId, 'dm:did:cgw:did:me');
+      expect(update.conversation.targetDid, 'did:cgw');
+    },
+  );
+
+  test('direct conversation keeps an already canonical thread id', () {
+    const conversation = core.Conversation(
+      threadKind: 'direct',
+      threadId: 'dm:did:alice:did:bob',
+      participants: <String>[],
+      unreadCount: 0,
+      messageCount: 0,
+    );
+
+    final mapped = mapper.conversationFromCore(
+      conversation,
+      ownerDid: 'did:alice',
+    );
+
+    expect(mapped.threadId, 'dm:did:alice:did:bob');
+    expect(mapped.targetDid, 'did:bob');
+  });
+
+  test('group messages and conversations keep group-prefixed thread ids', () {
+    const message = core.Message(
+      id: 'group-msg',
+      threadKind: 'group',
+      threadId: 'did:group',
+      direction: core.MessageDirection.incoming,
+      sender: 'did:bob',
+      group: 'did:group',
+      body: core.MessageBodyView(text: 'hello group'),
+      metadata: core.MessageMetadata(),
+    );
+    const conversation = core.Conversation(
+      threadKind: 'group',
+      threadId: 'did:group',
+      participants: <String>[],
+      unreadCount: 1,
+      messageCount: 1,
+      lastMessage: message,
+    );
+
+    final mappedMessage = mapper.chatMessageFromCore(
+      message,
+      ownerDid: 'did:alice',
+    );
+    final mappedConversation = mapper.conversationFromCore(
+      conversation,
+      ownerDid: 'did:alice',
+    );
+
+    expect(mappedMessage.threadId, 'group:did:group');
+    expect(mappedConversation.threadId, 'group:did:group');
+    expect(mappedConversation.groupId, 'did:group');
+  });
 
   test('profile and relationship DTOs map to app models', () {
     final profile = mapper.userProfileFromCore(

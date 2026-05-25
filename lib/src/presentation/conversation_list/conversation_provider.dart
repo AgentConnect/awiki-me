@@ -38,6 +38,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   NotificationFacade get _notification => ref.read(notificationFacadeProvider);
 
   Future<void> refresh() async {
+    final previousConversations = state.conversations;
     state = state.copyWith(isLoading: true);
     final session = ref.read(sessionProvider).session;
     if (session == null) {
@@ -51,7 +52,13 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final conversations = await ref
         .read(conversationServiceProvider)
         .listConversations(ownerDid: session.did);
-    state = state.copyWith(conversations: conversations, isLoading: false);
+    state = state.copyWith(
+      conversations: _mergeWithLocalConversations(
+        refreshed: conversations,
+        local: previousConversations,
+      ),
+      isLoading: false,
+    );
     await _notification.updateBadgeCount(state.unreadCount);
   }
 
@@ -129,6 +136,27 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     state = const ConversationListState();
     await _notification.updateBadgeCount(0);
   }
+}
+
+List<ConversationSummary> _mergeWithLocalConversations({
+  required List<ConversationSummary> refreshed,
+  required List<ConversationSummary> local,
+}) {
+  final refreshedThreadIds = <String>{
+    for (final conversation in refreshed) conversation.threadId,
+  };
+  final localOnly = local
+      .where(
+        (conversation) =>
+            !refreshedThreadIds.contains(conversation.threadId) &&
+            conversation.lastMessagePreview.trim().isNotEmpty,
+      )
+      .toList();
+  if (localOnly.isEmpty) {
+    return refreshed;
+  }
+  return <ConversationSummary>[...refreshed, ...localOnly]
+    ..sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
 }
 
 final conversationListProvider =

@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/app_router.dart';
 import '../../app/ui_feedback.dart';
+import '../../application/thread_id_utils.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
@@ -26,11 +27,6 @@ class PeerProfilePage extends ConsumerWidget {
   const PeerProfilePage({super.key, required this.did});
 
   final String did;
-
-  String _calcThreadId(String myDid, String peerDid) {
-    final list = <String>[myDid, peerDid]..sort();
-    return 'dm:${list[0]}:${list[1]}';
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -184,7 +180,10 @@ class PeerProfilePage extends ConsumerWidget {
                           if (myDid == null) {
                             return;
                           }
-                          final threadId = _calcThreadId(myDid, profile.did);
+                          final threadId = canonicalDirectThreadId(
+                            myDid,
+                            profile.did,
+                          );
                           final conversation = ConversationSummary(
                             threadId: threadId,
                             displayName: DidDisplayFormatter.profileName(
@@ -235,7 +234,10 @@ class PeerProfilePage extends ConsumerWidget {
                           if (myDid == null) {
                             return;
                           }
-                          final threadId = _calcThreadId(myDid, profile.did);
+                          final threadId = canonicalDirectThreadId(
+                            myDid,
+                            profile.did,
+                          );
                           try {
                             await ref
                                 .read(chatThreadsProvider.notifier)

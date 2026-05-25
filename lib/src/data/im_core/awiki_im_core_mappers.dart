@@ -4,6 +4,7 @@ import '../../application/models/app_session.dart';
 import '../../application/models/app_thread_ref.dart';
 import '../../application/models/product_local_models.dart';
 import '../../application/ports/relationship_core_port.dart';
+import '../../application/thread_id_utils.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_member_summary.dart';
@@ -77,16 +78,30 @@ class AwikiImCoreMappers {
     final isMine =
         message.direction == core.MessageDirection.outgoing ||
         message.sender == ownerDid;
+    final isGroup =
+        message.threadKind == 'group' ||
+        message.group?.trim().isNotEmpty == true ||
+        message.threadId.startsWith('group:');
+    final peerDid = isGroup ? null : _directPeerForMessage(ownerDid, message);
+    final groupId =
+        _nonEmpty(message.group) ??
+        (isGroup ? _stripPrefix(message.threadId, 'group:') : null);
     return ChatMessage(
       localId: message.id,
       remoteId: message.id,
-      threadId: message.threadId,
+      threadId: canonicalThreadId(
+        ownerDid: ownerDid,
+        isGroup: isGroup,
+        peerDid: peerDid,
+        groupId: groupId,
+        fallbackThreadId: message.threadId,
+      ),
       senderDid: message.sender,
       senderName:
           _attribute(message.metadata, 'senderName') ??
           _attribute(message.metadata, 'sender_name'),
       receiverDid: _nonEmpty(message.receiver),
-      groupId: _nonEmpty(message.group),
+      groupId: groupId,
       content: message.body.text ?? '',
       originalType: message.body.kind ?? message.metadata.contentType ?? 'text',
       createdAt: _parseDateTime(message.sentAt ?? message.receivedAt),
@@ -99,6 +114,7 @@ class AwikiImCoreMappers {
 
   ConversationSummary conversationFromCore(
     core.Conversation conversation, {
+    required String ownerDid,
     ProductConversationOverlay? overlay,
   }) {
     final isGroup =
@@ -107,12 +123,26 @@ class AwikiImCoreMappers {
     final lastMessage = conversation.lastMessage;
     final targetDid = isGroup
         ? null
-        : _firstNonEmpty(conversation.participants);
+        : _firstNonEmpty(
+                conversation.participants.where(
+                  (participant) => participant.trim() != ownerDid.trim(),
+                ),
+              ) ??
+              (lastMessage == null
+                  ? null
+                  : _directPeerForMessage(ownerDid, lastMessage)) ??
+              _directPeerFromConversationThread(ownerDid, conversation);
     final groupId = isGroup
         ? lastMessage?.group ?? _stripPrefix(conversation.threadId, 'group:')
         : null;
     return ConversationSummary(
-      threadId: conversation.threadId,
+      threadId: canonicalThreadId(
+        ownerDid: ownerDid,
+        isGroup: isGroup,
+        peerDid: targetDid,
+        groupId: groupId,
+        fallbackThreadId: conversation.threadId,
+      ),
       displayName:
           overlay?.customTitle ??
           _nonEmpty(conversation.title) ??
@@ -231,24 +261,27 @@ class AwikiImCoreMappers {
       return null;
     }
     final chatMessage = chatMessageFromCore(message, ownerDid: ownerDid);
+    final isGroup =
+        chatMessage.groupId != null || message.threadKind == 'group';
+    final targetDid = isGroup ? null : _directPeerForMessage(ownerDid, message);
     final conversation = ConversationSummary(
-      threadId: message.threadId,
-      displayName: message.group ?? message.receiver ?? message.sender,
+      threadId: chatMessage.threadId,
+      displayName: chatMessage.groupId ?? targetDid ?? message.sender,
       lastMessagePreview: _messagePreview(message),
       lastMessageAt: chatMessage.createdAt,
       unreadCount: chatMessage.isMine ? 0 : 1,
-      isGroup: message.threadKind == 'group',
-      targetDid: message.threadKind == 'group' ? null : message.sender,
-      groupId: message.group,
+      isGroup: isGroup,
+      targetDid: targetDid,
+      groupId: chatMessage.groupId,
     );
     return RealtimeUpdate(
       message: chatMessage,
       conversation: conversation,
-      group: message.group == null
+      group: chatMessage.groupId == null
           ? null
           : GroupSummary(
-              groupId: message.group!,
-              name: message.group!,
+              groupId: chatMessage.groupId!,
+              name: chatMessage.groupId!,
               description: '',
               memberCount: 0,
               lastMessageAt: chatMessage.createdAt,
@@ -294,6 +327,41 @@ String? _firstNonEmpty(Iterable<String> values) {
 
 String _stripPrefix(String value, String prefix) {
   return value.startsWith(prefix) ? value.substring(prefix.length) : value;
+}
+
+String? _directPeerForMessage(String ownerDid, core.Message message) {
+  if (message.sender.trim() != ownerDid.trim()) {
+    return _nonEmpty(message.sender);
+  }
+  return _nonEmpty(message.receiver) ??
+      _directPeerFromThreadId(ownerDid, message.threadId);
+}
+
+String? _directPeerFromConversationThread(
+  String ownerDid,
+  core.Conversation conversation,
+) {
+  if (conversation.threadKind != 'direct') {
+    return null;
+  }
+  return _directPeerFromThreadId(ownerDid, conversation.threadId) ??
+      _nonEmpty(conversation.threadId);
+}
+
+String? _directPeerFromThreadId(String ownerDid, String threadId) {
+  final raw = threadId.trim();
+  if (!raw.startsWith('dm:')) {
+    return null;
+  }
+  final body = raw.substring('dm:'.length);
+  final owner = ownerDid.trim();
+  if (body.startsWith('$owner:')) {
+    return _nonEmpty(body.substring(owner.length + 1));
+  }
+  if (body.endsWith(':$owner')) {
+    return _nonEmpty(body.substring(0, body.length - owner.length - 1));
+  }
+  return null;
 }
 
 String _compactDid(String did) {
