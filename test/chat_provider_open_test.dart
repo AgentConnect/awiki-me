@@ -357,6 +357,114 @@ void main() {
     expect(messages.single.sendState, MessageSendState.sent);
   });
 
+  test('历史回补不会把同一条已发送消息重复展示', () async {
+    final sentAt = DateTime.now();
+    gateway
+      ..loginResult = const SessionIdentity(
+        did: 'did:me',
+        credentialName: 'me.json',
+        displayName: 'Me',
+        handle: 'me',
+      )
+      ..conversations = <ConversationSummary>[
+        ConversationSummary(
+          threadId: conversation.threadId,
+          displayName: conversation.displayName,
+          lastMessagePreview: '1',
+          lastMessageAt: sentAt,
+          unreadCount: 0,
+          isGroup: false,
+          targetDid: conversation.targetDid,
+        ),
+      ]
+      ..nextSentMessageId = 'server-message-1'
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
+        'did:peer': <ChatMessage>[
+          ChatMessage(
+            localId: 'server-message-1',
+            remoteId: 'server-message-1',
+            threadId: conversation.threadId,
+            senderDid: 'did:me',
+            receiverDid: conversation.targetDid,
+            content: '1',
+            createdAt: sentAt,
+            isMine: true,
+            sendState: MessageSendState.sent,
+          ),
+        ],
+      };
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendMessage(conversation: conversation, content: '1');
+    await Future<void>.delayed(Duration.zero);
+
+    final messages = sendContainer
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    expect(messages.where((item) => item.content == '1'), hasLength(1));
+    expect(messages.single.remoteId, 'server-message-1');
+  });
+
+  test('打开群聊时不会展示空的群系统事件气泡', () async {
+    const groupId = 'did:test:group:empty';
+    final groupConversation = ConversationSummary(
+      threadId: 'group:$groupId',
+      displayName: '空事件群',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 5, 8, 10, 0),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: groupId,
+    );
+    gateway.groupHistoryByGroupId = <String, List<ChatMessage>>{
+      groupId: <ChatMessage>[
+        ChatMessage(
+          localId: 'group-create-event',
+          remoteId: 'group-create-event',
+          threadId: groupConversation.threadId,
+          senderDid: 'did:me',
+          groupId: groupId,
+          content: '',
+          originalType: 'application/json',
+          createdAt: DateTime(2026, 5, 8, 10, 0),
+          isMine: true,
+          sendState: MessageSendState.sent,
+        ),
+      ],
+    };
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(groupConversation);
+    await Future<void>.delayed(Duration.zero);
+
+    final thread = container.read(
+      chatThreadProvider(groupConversation.threadId),
+    );
+    expect(thread.messages, isEmpty);
+  });
+
   test('历史刷新后仍未回补的过期 pending 会转为失败', () async {
     final pending = ChatMessage(
       localId: 'pending-stale',

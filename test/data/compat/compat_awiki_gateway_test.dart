@@ -294,7 +294,6 @@ class _FakeMessages implements MessagingService {
   Future<ChatMessage> sendText({
     required AppThreadRef thread,
     required String content,
-    String? clientMessageId,
   }) async {
     sentThreads.add(thread);
     return _message(content);

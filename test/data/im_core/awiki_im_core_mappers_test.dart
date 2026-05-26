@@ -73,6 +73,25 @@ void main() {
     expect(mapped.serverSequence, 42);
   });
 
+  test('message timestamps from SDK are normalized to local time', () {
+    const message = core.Message(
+      id: 'msg-local-time',
+      threadKind: 'direct',
+      threadId: 'did:bob',
+      direction: core.MessageDirection.incoming,
+      sender: 'did:bob',
+      receiver: 'did:alice',
+      body: core.MessageBodyView(text: 'hello'),
+      sentAt: '2026-05-23T09:00:00Z',
+      metadata: core.MessageMetadata(),
+    );
+
+    final mapped = mapper.chatMessageFromCore(message, ownerDid: 'did:alice');
+
+    expect(mapped.createdAt, DateTime.parse('2026-05-23T09:00:00Z').toLocal());
+    expect(mapped.createdAt.isUtc, isFalse);
+  });
+
   test(
     'conversation overlay customizes display fields without becoming source',
     () {

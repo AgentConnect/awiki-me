@@ -11,10 +11,11 @@ void main() {
     expect(config.userServiceEndpoint, 'https://awiki.ai');
     expect(config.messageServiceEndpoint, 'https://awiki.ai');
     expect(config.didDomain, 'awiki.ai');
-    expect(config.anpServiceDid, isNull);
+    expect(config.anpServiceDid, 'did:wba:awiki.ai');
     expect(coreConfig, isA<core.AwikiImCoreConfig>());
     expect(coreConfig.serviceBaseUrl, config.serviceBaseUrl);
     expect(coreConfig.didDomain, config.didDomain);
+    expect(coreConfig.anpServiceDid, 'did:wba:awiki.ai');
     expect(coreConfig.transportPolicy, core.MessageTransportPolicy.auto);
   });
 

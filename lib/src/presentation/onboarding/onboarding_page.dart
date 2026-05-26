@@ -22,7 +22,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   final phoneController = TextEditingController();
   final otpController = TextEditingController();
   final emailController = TextEditingController();
-  final handleController = TextEditingController(text: 'awikime');
+  final handleController = TextEditingController();
 
   String get _normalizedPhone => phoneController.text.trim();
 
@@ -831,7 +831,7 @@ class _MacAuthCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Padding(
-                padding: const EdgeInsets.fromLTRB(44, 34, 44, 0),
+                padding: const EdgeInsets.fromLTRB(44, 34, 44, 34),
                 child: Column(
                   children: <Widget>[
                     _MacAuthTabs(
@@ -866,37 +866,6 @@ class _MacAuthCard extends StatelessWidget {
                             ),
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(height: 28),
-              Container(height: 1, color: const Color(0xFFE6ECF5)),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 22),
-                child: GestureDetector(
-                  onTap: () => onModeChanged(
-                    onboarding.entryMode == 'login' ? 'register' : 'login',
-                  ),
-                  behavior: HitTestBehavior.opaque,
-                  child: Text.rich(
-                    TextSpan(
-                      text: onboarding.entryMode == 'login'
-                          ? '还没有账号？ '
-                          : '已有账号？ ',
-                      style: const TextStyle(color: Color(0xFF7B879D)),
-                      children: <InlineSpan>[
-                        TextSpan(
-                          text: onboarding.entryMode == 'login'
-                              ? '去登录或注册'
-                              : '去登录',
-                          style: const TextStyle(
-                            color: Color(0xFF0B65F8),
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
-                    ),
-                    style: const TextStyle(fontSize: 14),
-                  ),
                 ),
               ),
             ],

@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 void main() {
-  testWidgets('设置页展示导出身份凭证并提示首轮不支持', (tester) async {
+  testWidgets('设置页导出身份凭证显示暂未实现普通提示', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:123',
@@ -36,11 +36,40 @@ void main() {
       tester.element(find.byType(SettingsPage)),
     );
     final feedback = container.read(uiFeedbackProvider);
-    expect(feedback?.danger, isTrue);
-    expect(
-      feedback?.message.detail,
-      'IM Core local credential export is not available yet',
+    expect(feedback?.danger, isFalse);
+    expect(feedback?.message.id, 'featureNotImplemented');
+  });
+
+  testWidgets('设置页隐藏更新日志下载更新和消息推送入口', (tester) async {
+    await tester.pumpWidget(buildLocalizedTestApp(home: const SettingsPage()));
+
+    expect(find.text('检查更新'), findsOneWidget);
+    expect(find.text('查看更新日志'), findsNothing);
+    expect(find.text('下载更新'), findsNothing);
+    expect(find.text('立即更新'), findsNothing);
+    expect(find.text('消息推送通知'), findsNothing);
+  });
+
+  testWidgets('设置页检查更新显示暂未实现普通提示', (tester) async {
+    final updateService = FakeUpdateService();
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        updateService: updateService,
+      ),
     );
+
+    await tester.tap(find.text('检查更新'));
+    await tester.pump();
+
+    expect(updateService.checkForUpdatesCalls, 0);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(SettingsPage)),
+    );
+    final feedback = container.read(uiFeedbackProvider);
+    expect(feedback?.danger, isFalse);
+    expect(feedback?.message.id, 'featureNotImplemented');
   });
 
   testWidgets('设置页展示语言设置并支持切换选项', (tester) async {

@@ -18,6 +18,7 @@ import '../../group/group_provider.dart';
 import '../../profile/profile_provider.dart';
 import '../../shared/formatters/display_formatters.dart';
 import 'app_lifecycle_provider.dart';
+import 'selected_conversation_provider.dart';
 import 'session_provider.dart';
 
 class AppRuntimeState {
@@ -54,6 +55,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   final Ref ref;
   static const Duration _requestTimeout = Duration(seconds: 20);
   bool _isRecoveringRealtimeSession = false;
+  bool _isLoggingOut = false;
   late final ProviderSubscription<AppLifecycleState> _lifecycleSubscription;
   late final ProviderSubscription<AsyncValue<RealtimeConnectionStatus>>
   _realtimeStatusSubscription;
@@ -92,6 +94,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   Future<void> activateSession(SessionIdentity session) async {
     state = state.copyWith(isBusy: true);
     try {
+      ref.read(selectedConversationProvider.notifier).clearSelection();
       ref.read(sessionProvider.notifier).setSession(session);
       await ref.read(e2eeFacadeProvider).initialize(session);
       state = state.copyWith(isBusy: false, isInitialized: true);
@@ -124,16 +127,21 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   Future<void> logout() async {
     await _runBusy(() async {
-      await ref.read(realtimeApplicationServiceProvider).stop();
-      await ref.read(appSessionServiceProvider).logout();
-      final credentials = await _localCredentialsFor(ref);
-      ref.read(sessionProvider.notifier).setLocalCredentials(credentials);
-      ref.read(sessionProvider.notifier).clear();
-      ref.read(profileProvider.notifier).clear();
-      await ref.read(conversationListProvider.notifier).clear();
-      ref.read(chatThreadsProvider.notifier).clear();
-      ref.read(friendsProvider.notifier).clear();
-      ref.read(groupProvider.notifier).clear();
+      _isLoggingOut = true;
+      try {
+        ref.read(sessionProvider.notifier).clear();
+        ref.read(profileProvider.notifier).clear();
+        ref.read(selectedConversationProvider.notifier).clearSelection();
+        await ref.read(conversationListProvider.notifier).clear();
+        ref.read(chatThreadsProvider.notifier).clear();
+        ref.read(friendsProvider.notifier).clear();
+        ref.read(groupProvider.notifier).clear();
+        await ref.read(appSessionServiceProvider).logout();
+        final credentials = await _localCredentialsFor(ref);
+        ref.read(sessionProvider.notifier).setLocalCredentials(credentials);
+      } finally {
+        _isLoggingOut = false;
+      }
     });
   }
 
@@ -151,37 +159,39 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   Future<void> exportCurrentCredential() async {
-    await _runBusy(() async {
-      // TODO(im-core): enable after SDK identity export API is exposed.
-      throw UnsupportedError(
-        'IM Core local credential export is not available yet',
-      );
-    });
+    ref
+        .read(uiFeedbackProvider.notifier)
+        .showInfo(AppMessage.featureNotImplemented());
   }
 
   Future<void> importCredentialArchive() async {
-    await _runBusy(() async {
-      // TODO(im-core): enable after SDK identity import API is exposed.
-      throw UnsupportedError(
-        'IM Core local credential import is not available yet',
-      );
-    });
+    ref
+        .read(uiFeedbackProvider.notifier)
+        .showInfo(AppMessage.featureNotImplemented());
   }
 
   Future<void> _refreshAuthenticatedData() async {
-    if (!mounted) {
+    if (!mounted ||
+        _isLoggingOut ||
+        ref.read(sessionProvider).session == null) {
       return;
     }
     await ref.read(profileProvider.notifier).refresh();
-    if (!mounted) {
+    if (!mounted ||
+        _isLoggingOut ||
+        ref.read(sessionProvider).session == null) {
       return;
     }
     await ref.read(conversationListProvider.notifier).refresh();
-    if (!mounted) {
+    if (!mounted ||
+        _isLoggingOut ||
+        ref.read(sessionProvider).session == null) {
       return;
     }
     await ref.read(friendsProvider.notifier).refresh();
-    if (!mounted) {
+    if (!mounted ||
+        _isLoggingOut ||
+        ref.read(sessionProvider).session == null) {
       return;
     }
     await ref.read(groupProvider.notifier).refresh();
@@ -191,7 +201,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     try {
       await _refreshAuthenticatedData().timeout(_requestTimeout);
     } on TimeoutException {
-      if (!mounted) {
+      if (!mounted ||
+          _isLoggingOut ||
+          ref.read(sessionProvider).session == null) {
         return;
       }
       ref
@@ -199,6 +211,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
           .showError(AppMessage.requestTimeoutRetry());
     } catch (error) {
       if (!mounted) {
+        return;
+      }
+      if (_isLoggingOut || ref.read(sessionProvider).session == null) {
         return;
       }
       final message = AppMessage.fromError(error);
@@ -232,6 +247,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     final previousStatus = previous?.valueOrNull;
     if (status == RealtimeConnectionStatus.failed ||
         status == RealtimeConnectionStatus.disconnected) {
+      if (_isLoggingOut) {
+        return;
+      }
       final session = ref.read(sessionProvider).session;
       if (session != null) {
         unawaited(_recoverRealtimeSession());
@@ -253,6 +271,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   void _ensureRealtimeConnected() {
+    if (_isLoggingOut || ref.read(sessionProvider).session == null) {
+      return;
+    }
     final realtime = ref.read(realtimeApplicationServiceProvider);
     if (realtime.isRunning) {
       return;
@@ -261,15 +282,20 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   Future<void> _recoverRealtimeSession() async {
-    if (_isRecoveringRealtimeSession) {
+    if (_isLoggingOut || _isRecoveringRealtimeSession) {
       return;
     }
     _isRecoveringRealtimeSession = true;
     try {
+      if (ref.read(sessionProvider).session == null) {
+        return;
+      }
       final refreshed = await ref
           .read(appSessionServiceProvider)
           .refreshSession();
-      if (!mounted) {
+      if (!mounted ||
+          _isLoggingOut ||
+          ref.read(sessionProvider).session == null) {
         return;
       }
       if (refreshed != null) {
@@ -278,14 +304,18 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
             .setSession(_legacySessionFromAppSession(refreshed));
       }
       await _refreshAuthenticatedDataInBackground();
-      if (!mounted) {
+      if (!mounted ||
+          _isLoggingOut ||
+          ref.read(sessionProvider).session == null) {
         return;
       }
       if (refreshed != null) {
         _ensureRealtimeConnected();
       }
     } catch (_) {
-      if (mounted) {
+      if (mounted &&
+          !_isLoggingOut &&
+          ref.read(sessionProvider).session != null) {
         await _refreshAuthenticatedDataInBackground();
       }
     } finally {

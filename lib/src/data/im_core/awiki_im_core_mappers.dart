@@ -304,7 +304,7 @@ DateTime? _tryParseDateTime(String? raw) {
   if (raw == null || raw.trim().isEmpty) {
     return null;
   }
-  return DateTime.tryParse(raw);
+  return DateTime.tryParse(raw)?.toLocal();
 }
 
 String? _nonEmpty(String? value) {

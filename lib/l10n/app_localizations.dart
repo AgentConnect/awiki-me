@@ -1148,6 +1148,12 @@ abstract class AppLocalizations {
   /// **'操作失败，请稍后重试。'**
   String get operationFailedRetry;
 
+  /// No description provided for @featureNotImplemented.
+  ///
+  /// In zh, this message translates to:
+  /// **'功能暂未实现，请等待后续版本。'**
+  String get featureNotImplemented;
+
   /// No description provided for @otpSent.
   ///
   /// In zh, this message translates to:

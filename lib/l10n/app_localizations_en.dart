@@ -593,6 +593,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'The operation failed. Please try again later.';
 
   @override
+  String get featureNotImplemented => 'This feature is not available yet.';
+
+  @override
   String get otpSent => 'Verification code sent. Please check your messages.';
 
   @override

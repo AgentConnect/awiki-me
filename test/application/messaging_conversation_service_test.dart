@@ -57,16 +57,16 @@ void main() {
       expect(core.listCount, 1);
     });
 
-    test('markThreadRead stays unsupported at core boundary', () async {
+    test('markThreadRead delegates to core boundary', () async {
+      final core = _FakeConversations();
       final service = ImCoreConversationService(
-        conversations: _FakeConversations(markReadUnsupported: true),
+        conversations: core,
         localStore: InMemoryAwikiProductLocalStore(),
       );
 
-      await expectLater(
-        service.markThreadRead(const AppThreadRef.direct('did:bob')),
-        throwsA(isA<UnsupportedError>()),
-      );
+      await service.markThreadRead(const AppThreadRef.direct('did:bob'));
+
+      expect(core.markReadCount, 1);
     });
   });
 
@@ -118,14 +118,11 @@ ChatMessage _message(String id) {
 }
 
 class _FakeConversations implements ConversationCorePort {
-  _FakeConversations({
-    this.items = const <ConversationSummary>[],
-    this.markReadUnsupported = false,
-  });
+  _FakeConversations({this.items = const <ConversationSummary>[]});
 
   final List<ConversationSummary> items;
-  final bool markReadUnsupported;
   int listCount = 0;
+  int markReadCount = 0;
 
   @override
   Future<List<ConversationSummary>> listConversations({
@@ -138,9 +135,7 @@ class _FakeConversations implements ConversationCorePort {
 
   @override
   Future<void> markThreadRead(AppThreadRef thread) async {
-    if (markReadUnsupported) {
-      throw UnsupportedError('IM Core markThreadRead is not available yet');
-    }
+    markReadCount += 1;
   }
 }
 
@@ -169,10 +164,9 @@ class _FakeMessages implements MessageCorePort {
   Future<ChatMessage> sendText({
     required AppThreadRef thread,
     required String content,
-    String? clientMessageId,
   }) async {
     sentContents.add(content);
-    return _message(clientMessageId ?? 'sent');
+    return _message('sent');
   }
 }
 

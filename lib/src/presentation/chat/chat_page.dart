@@ -322,19 +322,18 @@ class _ChatViewState extends ConsumerState<ChatView> {
     if (previous == null) {
       return true;
     }
-    return current.createdAt.difference(previous.createdAt).inMinutes >= 30;
+    return current.createdAt
+            .toLocal()
+            .difference(previous.createdAt.toLocal())
+            .inMinutes >=
+        30;
   }
 
   String _timeDividerLabel(DateTime date, {DateTime? previous}) {
+    final localDate = date.toLocal();
     final time =
-        '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-    if (previous != null &&
-        previous.year == date.year &&
-        previous.month == date.month &&
-        previous.day == date.day) {
-      return time;
-    }
-    return '${_dateLabel(date)} $time';
+        '${localDate.hour.toString().padLeft(2, '0')}:${localDate.minute.toString().padLeft(2, '0')}';
+    return '${_dateLabel(localDate)} $time';
   }
 
   String _displayNameForMessage(BuildContext context, ChatMessage message) {

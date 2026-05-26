@@ -12,11 +12,12 @@ class AwikiImCoreEnvironmentConfig {
   });
 
   factory AwikiImCoreEnvironmentConfig.fromEnvironment() {
+    final serviceBaseUrl = _optionalFromEnvironment(
+      'AWIKI_SERVICE_BASE_URL',
+      defaultValue: 'https://awiki.ai',
+    )!;
     return AwikiImCoreEnvironmentConfig(
-      serviceBaseUrl: _optionalFromEnvironment(
-        'AWIKI_SERVICE_BASE_URL',
-        defaultValue: 'https://awiki.ai',
-      )!,
+      serviceBaseUrl: serviceBaseUrl,
       userServiceEndpoint: _optionalFromEnvironment(
         'AWIKI_USER_SERVICE_URL',
         defaultValue: 'https://awiki.ai',
@@ -30,7 +31,9 @@ class AwikiImCoreEnvironmentConfig {
         defaultValue: 'awiki.ai',
       )!,
       anpServiceEndpoint: _optionalFromEnvironment('AWIKI_ANP_SERVICE_URL'),
-      anpServiceDid: _optionalFromEnvironment('AWIKI_ANP_SERVICE_DID'),
+      anpServiceDid:
+          _optionalFromEnvironment('AWIKI_ANP_SERVICE_DID') ??
+          _deriveAnpServiceDid(serviceBaseUrl),
     );
   }
 
@@ -83,4 +86,12 @@ String? _optionalFromEnvironment(String name, {String? defaultValue}) {
   };
   final trimmed = value.trim();
   return trimmed.isEmpty ? null : trimmed;
+}
+
+String? _deriveAnpServiceDid(String serviceBaseUrl) {
+  final host = Uri.tryParse(serviceBaseUrl.trim())?.host.trim().toLowerCase();
+  if (host == null || host.isEmpty) {
+    return null;
+  }
+  return 'did:wba:$host';
 }

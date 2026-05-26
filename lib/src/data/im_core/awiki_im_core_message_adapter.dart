@@ -20,7 +20,6 @@ class AwikiImCoreMessageAdapter implements MessageCorePort {
   Future<ChatMessage> sendText({
     required AppThreadRef thread,
     required String content,
-    String? clientMessageId,
   }) async {
     final client = await _runtime.currentClient();
     final ownerDid = (await client.identity.current()).did;
@@ -28,7 +27,6 @@ class AwikiImCoreMessageAdapter implements MessageCorePort {
       core.SendTextRequest(
         target: _mappers.messageTargetToCore(thread),
         text: content,
-        clientMessageId: clientMessageId,
       ),
     );
     return _mappers.chatMessageFromCore(result.message, ownerDid: ownerDid);
@@ -52,6 +50,7 @@ class AwikiImCoreMessageAdapter implements MessageCorePort {
           (message) =>
               _mappers.chatMessageFromCore(message, ownerDid: ownerDid),
         )
+        .where((message) => message.hasDisplayableText)
         .toList();
   }
 
@@ -60,7 +59,6 @@ class AwikiImCoreMessageAdapter implements MessageCorePort {
     return sendText(
       thread: _threadFromFailedMessage(failed),
       content: failed.content,
-      clientMessageId: failed.localId,
     );
   }
 }

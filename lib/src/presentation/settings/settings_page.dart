@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_locale.dart';
 import '../../app/app_services.dart';
 import '../../app/app_router.dart';
+import '../../app/ui_feedback.dart';
+import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../app_shell/providers/app_update_provider.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
@@ -22,7 +24,6 @@ class SettingsPage extends ConsumerWidget {
     final session = ref.watch(sessionProvider).session;
     final runtime = ref.read(appRuntimeProvider.notifier);
     final updateState = ref.watch(appUpdateProvider);
-    final updateController = ref.read(appUpdateProvider.notifier);
     final localeMode = ref.watch(appLocaleModeProvider);
     final theme = context.awikiTheme;
     return CupertinoPageScaffold(
@@ -66,27 +67,9 @@ class SettingsPage extends ConsumerWidget {
                   AppListTile(
                     title: l10n.settingsCheckForUpdates,
                     subtitle: _updateStatusLabel(context, updateState),
-                    onTap: () => updateController.checkForUpdates(force: true),
-                  ),
-                  const AppSectionDivider(),
-                  AppListTile(
-                    title: l10n.settingsViewReleaseNotes,
-                    subtitle: updateState.latestManifest == null
-                        ? l10n.settingsUpdateOpenGitHubHistory
-                        : l10n.settingsUpdateReleaseNotesVersion(
-                            updateState.latestManifest!.version,
-                          ),
-                    onTap: updateController.openReleaseNotes,
-                  ),
-                  const AppSectionDivider(),
-                  AppListTile(
-                    title: updateState.supportsDirectInstall
-                        ? l10n.settingsInstallUpdate
-                        : l10n.settingsDownloadUpdate,
-                    subtitle: _updateActionSubtitle(context, updateState),
-                    onTap: updateState.hasUpdate
-                        ? updateController.installUpdate
-                        : updateController.openDownloadPage,
+                    onTap: () => ref
+                        .read(uiFeedbackProvider.notifier)
+                        .showInfo(AppMessage.featureNotImplemented()),
                   ),
                 ],
               ),
@@ -100,18 +83,6 @@ class SettingsPage extends ConsumerWidget {
                     title: l10n.settingsLanguage,
                     subtitle: _languageLabel(context, localeMode),
                     onTap: () => _showLanguageSheet(context, ref, localeMode),
-                  ),
-                  const AppSectionDivider(),
-                  AppListTile(
-                    title: l10n.settingsPushNotification,
-                    trailing: Transform.scale(
-                      scale: 0.88,
-                      child: CupertinoSwitch(
-                        value: true,
-                        activeTrackColor: theme.success,
-                        onChanged: null,
-                      ),
-                    ),
                   ),
                 ],
               ),
@@ -197,22 +168,6 @@ class SettingsPage extends ConsumerWidget {
       return l10n.settingsUpdateStatusFailed;
     }
     return l10n.settingsAlreadyLatestVersion;
-  }
-
-  String _updateActionSubtitle(BuildContext context, AppUpdateState state) {
-    final l10n = context.l10n;
-    if (state.status == AppUpdateStatus.downloading) {
-      return l10n.settingsUpdateStatusDownloading;
-    }
-    if (state.status == AppUpdateStatus.installing) {
-      return l10n.settingsUpdateStatusInstalling;
-    }
-    if (state.hasUpdate) {
-      return state.supportsDirectInstall
-          ? l10n.settingsInstallUpdateVersion(state.latestManifest!.version)
-          : l10n.settingsDownloadUpdateVersion(state.latestManifest!.version);
-    }
-    return l10n.settingsUpdateOpenGitHubDownload;
   }
 
   Future<void> _showLanguageSheet(

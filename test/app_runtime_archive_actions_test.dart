@@ -31,7 +31,7 @@ void main() {
       addTearDown(container.dispose);
     });
 
-    test('导入本地凭证首轮明确标记不支持', () async {
+    test('导入本地凭证显示暂未实现普通提示', () async {
       gateway.importedCredential = const SessionIdentity(
         did: 'did:test:123',
         credentialName: 'default',
@@ -48,15 +48,11 @@ void main() {
       expect(gateway.importCalls, 0);
       expect(container.read(sessionProvider).localCredentials, isEmpty);
       final feedback = container.read(uiFeedbackProvider);
-      expect(feedback?.danger, isTrue);
-      expect(feedback?.message.id, 'raw');
-      expect(
-        feedback?.message.detail,
-        'IM Core local credential import is not available yet',
-      );
+      expect(feedback?.danger, isFalse);
+      expect(feedback?.message.id, 'featureNotImplemented');
     });
 
-    test('导出本地凭证首轮明确标记不支持', () async {
+    test('导出本地凭证显示暂未实现普通提示', () async {
       container
           .read(sessionProvider.notifier)
           .setSession(
@@ -75,11 +71,10 @@ void main() {
           .exportCurrentCredential();
 
       expect(gateway.exportCalls, 0);
-      expect(container.read(uiFeedbackProvider)?.danger, isTrue);
-      expect(container.read(uiFeedbackProvider)?.message.id, 'raw');
+      expect(container.read(uiFeedbackProvider)?.danger, isFalse);
       expect(
-        container.read(uiFeedbackProvider)?.message.detail,
-        'IM Core local credential export is not available yet',
+        container.read(uiFeedbackProvider)?.message.id,
+        'featureNotImplemented',
       );
     });
 

@@ -8,6 +8,7 @@ import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
@@ -94,6 +95,49 @@ void main() {
         ),
       );
     }
+
+    ConversationSummary staleSelectedConversation() {
+      return ConversationSummary(
+        threadId: 'group:old-group',
+        displayName: '旧身份群聊',
+        lastMessagePreview: '',
+        lastMessageAt: DateTime(2026, 4, 5, 12),
+        unreadCount: 0,
+        isGroup: true,
+        groupId: 'old-group',
+      );
+    }
+
+    test('激活身份时清理上一身份的选中会话', () async {
+      container
+          .read(selectedConversationProvider.notifier)
+          .selectConversation(staleSelectedConversation());
+
+      await activate();
+
+      expect(container.read(selectedConversationProvider), isNull);
+    });
+
+    test('退出登录时清理当前选中会话', () async {
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:test:me',
+              credentialName: 'default',
+              displayName: 'Me',
+              handle: 'me',
+              jwtToken: 'token',
+            ),
+          );
+      container
+          .read(selectedConversationProvider.notifier)
+          .selectConversation(staleSelectedConversation());
+
+      await container.read(appRuntimeProvider.notifier).logout();
+
+      expect(container.read(selectedConversationProvider), isNull);
+    });
 
     test('前台收到消息时显示应用内提示', () async {
       gateway.nextRealtimeUpdate = buildUpdate();

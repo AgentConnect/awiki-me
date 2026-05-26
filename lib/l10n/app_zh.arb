@@ -254,6 +254,7 @@
   "updateInstallFailed": "更新失败，请前往 GitHub 下载。",
   "requestTimeoutRetry": "请求超时，请检查网络后重试。",
   "operationFailedRetry": "操作失败，请稍后重试。",
+  "featureNotImplemented": "功能暂未实现，请等待后续版本。",
   "otpSent": "验证码已发送，请留意短信。",
   "activationEmailSent": "激活邮件已发送，请查收邮箱。",
   "emailLoginUnsupportedForRegisteredHandle": "该 handle 已注册。邮箱当前仅支持新注册，请使用手机号验证码登录或导入身份凭证。",

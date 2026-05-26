@@ -33,6 +33,17 @@ class ChatMessage {
   final bool isEncrypted;
   final MessageSendState sendState;
 
+  bool get hasDisplayableText => content.trim().isNotEmpty && isTextMessage;
+
+  bool get isTextMessage {
+    final type = originalType.trim().toLowerCase();
+    return type.isEmpty ||
+        type == 'text' ||
+        type == 'markdown' ||
+        type == 'text/plain' ||
+        type == 'text/markdown';
+  }
+
   ChatMessage copyWith({
     String? remoteId,
     String? content,

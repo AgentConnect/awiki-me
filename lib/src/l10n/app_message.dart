@@ -52,6 +52,9 @@ class AppMessage {
   factory AppMessage.operationFailedRetry() =>
       const AppMessage._('operationFailedRetry');
 
+  factory AppMessage.featureNotImplemented() =>
+      const AppMessage._('featureNotImplemented');
+
   factory AppMessage.otpSent() => const AppMessage._('otpSent');
 
   factory AppMessage.activationEmailSent() =>
@@ -262,6 +265,8 @@ class AppMessage {
         return l10n.requestTimeoutRetry;
       case 'operationFailedRetry':
         return l10n.operationFailedRetry;
+      case 'featureNotImplemented':
+        return l10n.featureNotImplemented;
       case 'otpSent':
         return l10n.otpSent;
       case 'activationEmailSent':
@@ -339,6 +344,8 @@ class AppMessage {
         return 'The request timed out. Please check your network and try again.';
       case 'operationFailedRetry':
         return 'The operation failed. Please try again later.';
+      case 'featureNotImplemented':
+        return 'This feature is not available yet.';
       case 'otpSent':
         return 'Verification code sent. Please check your messages.';
       case 'activationEmailSent':

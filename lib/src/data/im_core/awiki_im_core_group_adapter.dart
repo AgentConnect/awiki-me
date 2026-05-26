@@ -96,6 +96,7 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
           (message) =>
               _mappers.chatMessageFromCore(message, ownerDid: ownerDid),
         )
+        .where((message) => message.hasDisplayableText)
         .toList();
   }
 

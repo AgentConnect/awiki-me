@@ -65,13 +65,12 @@ class ImCoreAppSessionService implements AppSessionService {
   }
 
   @override
-  Future<AppSession> loginWithIdentity(String identityIdOrAlias) {
-    // TODO(im-core): enable explicit local identity switching after the SDK
-    // exposes stable active/default identity semantics and awiki-me stores an
-    // activeIdentityId preference. First cut only restores SDK default identity.
-    throw UnsupportedError(
-      'IM Core explicit local identity login is not available yet',
-    );
+  Future<AppSession> loginWithIdentity(String identityIdOrAlias) async {
+    if (!_runtime.isOpen) {
+      await _runtime.open();
+    }
+    final identity = await _localIdentityFor(identityIdOrAlias);
+    return activateIdentity(identity);
   }
 
   @override
@@ -104,8 +103,69 @@ class ImCoreAppSessionService implements AppSessionService {
 
   @override
   Future<void> logout() async {
-    _current = null;
-    await _realtime?.stop();
-    await _runtime.dispose();
+    try {
+      await _realtime?.stop();
+      await _runtime.dispose();
+    } finally {
+      _current = null;
+    }
   }
+
+  Future<AppSession> _localIdentityFor(String identityIdOrAlias) async {
+    final trimmed = identityIdOrAlias.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(
+        identityIdOrAlias,
+        'identityIdOrAlias',
+        'must not be empty',
+      );
+    }
+    final identities = await _identities.listLocalIdentities();
+    for (final identity in identities) {
+      if (_matchesIdentity(identity, trimmed)) {
+        return identity;
+      }
+    }
+    return _identities.resolveIdentity(trimmed);
+  }
+}
+
+bool _matchesIdentity(AppSession identity, String value) {
+  return identity.identityId == value ||
+      identity.did == value ||
+      identity.localAlias == value ||
+      _matchesHandle(identity.handle, value);
+}
+
+bool _matchesHandle(String? handle, String value) {
+  final expected = _normalizeHandleSelector(handle);
+  final actual = _normalizeHandleSelector(value);
+  if (expected == null || actual == null) {
+    return false;
+  }
+  if (expected == actual) {
+    return true;
+  }
+  return _handleLocalPart(expected) == actual;
+}
+
+String? _normalizeHandleSelector(String? value) {
+  final trimmed = _trimLeadingAt(value?.trim())?.toLowerCase();
+  return trimmed == null || trimmed.isEmpty ? null : trimmed;
+}
+
+String _handleLocalPart(String handle) {
+  final dot = handle.indexOf('.');
+  return dot < 0 ? handle : handle.substring(0, dot);
+}
+
+String? _trimLeadingAt(String? value) {
+  if (value == null) {
+    return null;
+  }
+  var start = 0;
+  while (start < value.length && value.codeUnitAt(start) == 0x40) {
+    start += 1;
+  }
+  return value.substring(start);
 }

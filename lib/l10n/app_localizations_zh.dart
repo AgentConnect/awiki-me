@@ -565,6 +565,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get operationFailedRetry => '操作失败，请稍后重试。';
 
   @override
+  String get featureNotImplemented => '功能暂未实现，请等待后续版本。';
+
+  @override
   String get otpSent => '验证码已发送，请留意短信。';
 
   @override

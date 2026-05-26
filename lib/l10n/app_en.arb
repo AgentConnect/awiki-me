@@ -254,6 +254,7 @@
   "updateInstallFailed": "Update failed. Please download it from GitHub.",
   "requestTimeoutRetry": "The request timed out. Please check your network and try again.",
   "operationFailedRetry": "The operation failed. Please try again later.",
+  "featureNotImplemented": "This feature is not available yet.",
   "otpSent": "Verification code sent. Please check your messages.",
   "activationEmailSent": "Activation email sent. Please check your inbox.",
   "emailLoginUnsupportedForRegisteredHandle": "This handle is already registered. Email currently supports new registration only. Use phone verification or import an identity credential to log in.",

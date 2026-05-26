@@ -40,18 +40,66 @@ void main() {
       },
     );
 
-    test('explicit local identity login is deliberately unsupported', () async {
-      final service = ImCoreAppSessionService(
-        runtime: _FakeRuntime(),
-        identities: _FakeIdentities(),
-        auth: _FakeAuth(),
-      );
+    test(
+      'explicit local identity login activates a matching local identity',
+      () async {
+        final runtime = _FakeRuntime();
+        final identity = _session('id-other');
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: _FakeIdentities(defaultIdentity: identity),
+          auth: _FakeAuth(),
+        );
 
-      expect(
-        () => service.loginWithIdentity('id-other'),
-        throwsA(isA<UnsupportedError>()),
-      );
-    });
+        final session = await service.loginWithIdentity('alice-local');
+
+        expect(session.identityId, 'id-other');
+        expect(session.authenticated, isTrue);
+        expect(runtime.openCount, 1);
+        expect(runtime.switchedIdentities, ['id-other']);
+      },
+    );
+
+    test(
+      'explicit local identity login matches bare handle from a local identity',
+      () async {
+        final runtime = _FakeRuntime();
+        final identity = _session(
+          'id-handle',
+        ).copyWith(handle: 'alice.awiki.ai', localAlias: null);
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: _FakeIdentities(defaultIdentity: identity),
+          auth: _FakeAuth(),
+        );
+
+        final session = await service.loginWithIdentity('@Alice');
+
+        expect(session.identityId, 'id-handle');
+        expect(runtime.switchedIdentities, ['id-handle']);
+      },
+    );
+
+    test(
+      'explicit local identity login can resolve a non-listed identity',
+      () async {
+        final runtime = _FakeRuntime();
+        final identities = _FakeIdentities(
+          resolvedIdentity: _session('id-resolved'),
+        );
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: identities,
+          auth: _FakeAuth(),
+        );
+
+        final session = await service.loginWithIdentity('id-resolved');
+
+        expect(session.identityId, 'id-resolved');
+        expect(identities.resolvedSelectors, ['id-resolved']);
+        expect(runtime.switchedIdentities, ['id-resolved']);
+      },
+    );
 
     test(
       'refreshSession updates auth metadata for the active session',
@@ -99,6 +147,27 @@ void main() {
       expect(runtime.disposeCount, 1);
       expect(await service.currentSession(), isNull);
     });
+
+    test('logout keeps the current session while stopping realtime', () async {
+      final runtime = _FakeRuntime();
+      late ImCoreAppSessionService service;
+      final realtime = _FakeRealtime(
+        onStop: () async {
+          expect(await service.currentSession(), isNotNull);
+        },
+      );
+      service = ImCoreAppSessionService(
+        runtime: runtime,
+        identities: _FakeIdentities(defaultIdentity: _session('id-default')),
+        auth: _FakeAuth(),
+        realtime: realtime,
+      );
+
+      await service.restoreSession();
+      await service.logout();
+
+      expect(await service.currentSession(), isNull);
+    });
   });
 }
 
@@ -140,10 +209,13 @@ class _FakeRuntime implements ImCoreRuntimePort {
 }
 
 class _FakeIdentities implements IdentityCorePort {
-  _FakeIdentities({AppSession? defaultIdentity})
-    : _defaultIdentity = defaultIdentity;
+  _FakeIdentities({AppSession? defaultIdentity, AppSession? resolvedIdentity})
+    : _defaultIdentity = defaultIdentity,
+      _resolvedIdentity = resolvedIdentity;
 
   final AppSession? _defaultIdentity;
+  final AppSession? _resolvedIdentity;
+  final List<String> resolvedSelectors = <String>[];
 
   @override
   Future<AppSession?> defaultIdentity() async => _defaultIdentity;
@@ -179,7 +251,8 @@ class _FakeIdentities implements IdentityCorePort {
 
   @override
   Future<AppSession> resolveIdentity(String identityIdOrAlias) async {
-    return _session(identityIdOrAlias);
+    resolvedSelectors.add(identityIdOrAlias);
+    return _resolvedIdentity ?? _session(identityIdOrAlias);
   }
 }
 
@@ -213,6 +286,9 @@ class _FakeAuth implements AuthCorePort {
 }
 
 class _FakeRealtime implements RealtimeCorePort {
+  _FakeRealtime({this.onStop});
+
+  final Future<void> Function()? onStop;
   int stopCount = 0;
 
   @override
@@ -230,5 +306,6 @@ class _FakeRealtime implements RealtimeCorePort {
   @override
   Future<void> stop() async {
     stopCount += 1;
+    await onStop?.call();
   }
 }

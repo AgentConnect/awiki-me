@@ -83,3 +83,4 @@ venv/
 /migrate_working_dir/
 /awiki_me/
 /icons/
+/dist/

@@ -7,7 +7,6 @@ abstract interface class ConversationCorePort {
     bool unreadOnly = false,
   });
 
-  /// TODO: replace this unsupported boundary when IM Core exposes
-  /// markThreadRead(ThreadRef) or unread message query/read-state fields.
+  /// Marks known unread messages in a thread as read through IM Core.
   Future<void> markThreadRead(AppThreadRef thread);
 }

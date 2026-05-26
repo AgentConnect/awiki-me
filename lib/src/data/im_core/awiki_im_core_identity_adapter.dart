@@ -32,9 +32,7 @@ class AwikiImCoreIdentityAdapter implements IdentityCorePort {
   @override
   Future<AppSession> resolveIdentity(String identityIdOrAlias) async {
     final coreInstance = await _runtime.coreInstance();
-    final identity = await coreInstance.resolveIdentity(
-      _selectorFromString(identityIdOrAlias),
-    );
+    final identity = await _resolveIdentity(coreInstance, identityIdOrAlias);
     return _mappers.appSessionFromIdentity(identity);
   }
 
@@ -107,6 +105,23 @@ class AwikiImCoreIdentityAdapter implements IdentityCorePort {
   }
 }
 
+Future<core.IdentitySummary> _resolveIdentity(
+  core.AwikiImCore coreInstance,
+  String value,
+) async {
+  final primary = _selectorFromString(value);
+  try {
+    return await coreInstance.resolveIdentity(primary);
+  } on core.AwikiImCoreException catch (error) {
+    if (!_shouldTryLocalAliasFallback(primary, error)) {
+      rethrow;
+    }
+  }
+  return coreInstance.resolveIdentity(
+    core.IdentitySelector.localAlias(_trimLeadingAt(value.trim())),
+  );
+}
+
 core.IdentitySelector _selectorFromString(String value) {
   final trimmed = value.trim();
   if (trimmed.isEmpty) {
@@ -122,4 +137,20 @@ core.IdentitySelector _selectorFromString(String value) {
     return core.IdentitySelector.handle(trimmed);
   }
   return core.IdentitySelector.id(trimmed);
+}
+
+bool _shouldTryLocalAliasFallback(
+  core.IdentitySelector selector,
+  core.AwikiImCoreException error,
+) {
+  return selector is core.IdIdentitySelector &&
+      error.code == 'identity_not_found';
+}
+
+String _trimLeadingAt(String value) {
+  var start = 0;
+  while (start < value.length && value.codeUnitAt(start) == 0x40) {
+    start += 1;
+  }
+  return value.substring(start);
 }

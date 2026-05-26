@@ -80,7 +80,7 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   auto_updater_macos: 3a42f1a06be6981f1a18be37e6e7bf86aa732118
-  awiki_im_core: 05be8c508c17ed7f244374f3648376c51868eed8
+  awiki_im_core: 09acacce142aec302af2f9b31b02d6dc7610ee82
   flutter_local_notifications: 4bf37a31afde695b56091b4ae3e4d9c7a7e6cda0
   flutter_secure_storage_macos: 7f45e30f838cf2659862a4e4e3ee1c347c2b3b54
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1

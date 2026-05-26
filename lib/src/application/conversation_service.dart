@@ -62,9 +62,6 @@ class ImCoreConversationService implements ConversationService {
 
   @override
   Future<void> markThreadRead(AppThreadRef thread) {
-    // TODO(im-core): replace once SDK exposes markThreadRead(ThreadRef) or
-    // unread message query/read-state fields. Do not infer unread IDs from
-    // history pages because current Message DTOs cannot prove read-state.
     return _conversations.markThreadRead(thread);
   }
 

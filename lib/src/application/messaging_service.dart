@@ -6,7 +6,6 @@ abstract interface class MessagingService {
   Future<ChatMessage> sendText({
     required AppThreadRef thread,
     required String content,
-    String? clientMessageId,
   });
 
   Future<List<ChatMessage>> loadHistory(
@@ -28,13 +27,8 @@ class ImCoreMessagingService implements MessagingService {
   Future<ChatMessage> sendText({
     required AppThreadRef thread,
     required String content,
-    String? clientMessageId,
   }) {
-    return _messages.sendText(
-      thread: thread,
-      content: content,
-      clientMessageId: clientMessageId,
-    );
+    return _messages.sendText(thread: thread, content: content);
   }
 
   @override

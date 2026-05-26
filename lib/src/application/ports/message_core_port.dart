@@ -5,7 +5,6 @@ abstract interface class MessageCorePort {
   Future<ChatMessage> sendText({
     required AppThreadRef thread,
     required String content,
-    String? clientMessageId,
   });
 
   Future<List<ChatMessage>> loadHistory(

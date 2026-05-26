@@ -163,11 +163,13 @@ class FakeUpdateService implements UpdateService {
   bool openDownloadPageCalled = false;
   bool installUpdateCalled = false;
   bool openInstallPermissionSettingsCalled = false;
+  int checkForUpdatesCalls = 0;
   Object? checkError;
   Object? installError;
 
   @override
   Future<AppUpdateCheckResult> checkForUpdates({required bool force}) async {
+    checkForUpdatesCalls += 1;
     if (checkError != null) {
       throw checkError!;
     }
@@ -253,6 +255,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   String? lastSentPeerDid;
   String? lastSentGroupId;
   String? lastSentContent;
+  String? nextSentMessageId;
   int listLocalCredentialsCalls = 0;
   int importCalls = 0;
   int exportCalls = 0;
@@ -687,8 +690,12 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     if (sendDelay > Duration.zero) {
       await Future<void>.delayed(sendDelay);
     }
+    final sentId =
+        nextSentMessageId ?? 'sent-${DateTime.now().microsecondsSinceEpoch}';
+    nextSentMessageId = null;
     return ChatMessage(
-      localId: 'sent-${DateTime.now().microsecondsSinceEpoch}',
+      localId: sentId,
+      remoteId: sentId,
       threadId: threadId,
       senderDid: loginResult?.did ?? 'did:test:sender',
       senderName: loginResult?.displayName ?? loginResult?.handle ?? 'tester',
@@ -860,7 +867,6 @@ class FakeMessagingService implements MessagingService {
   Future<ChatMessage> sendText({
     required AppThreadRef thread,
     required String content,
-    String? clientMessageId,
   }) {
     return switch (thread) {
       AppDirectThreadRef(:final peerDidOrHandle) => gateway.sendTextMessage(

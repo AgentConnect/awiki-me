@@ -75,7 +75,27 @@ void main() {
     expect(registerRect.left, lessThan(switchRect.left));
   });
 
-  testWidgets('切换身份 tab 展示导入身份凭证并提示首轮不支持', (tester) async {
+  testWidgets('登录和切换身份页面不再展示底部快捷跳转', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage()),
+    );
+    await tester.pump();
+
+    expect(find.textContaining('还没有账号'), findsNothing);
+    expect(find.textContaining('已有账号'), findsNothing);
+    expect(find.text('去登录或注册'), findsNothing);
+    expect(find.text('去登录'), findsNothing);
+
+    await tester.tap(find.text('登录或注册'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('还没有账号'), findsNothing);
+    expect(find.textContaining('已有账号'), findsNothing);
+    expect(find.text('去登录或注册'), findsNothing);
+    expect(find.text('去登录'), findsNothing);
+  });
+
+  testWidgets('切换身份 tab 展示导入身份凭证并提示暂未实现', (tester) async {
     final gateway = FakeAwikiGateway();
 
     await tester.pumpWidget(
@@ -93,11 +113,8 @@ void main() {
       tester.element(find.byType(OnboardingPage)),
     );
     final feedback = container.read(uiFeedbackProvider);
-    expect(feedback?.danger, isTrue);
-    expect(
-      feedback?.message.detail,
-      'IM Core local credential import is not available yet',
-    );
+    expect(feedback?.danger, isFalse);
+    expect(feedback?.message.id, 'featureNotImplemented');
   });
 
   testWidgets('切换身份 tab 点击已保存凭证卡片空白区域也能登录', (tester) async {
@@ -232,6 +249,28 @@ void main() {
       tester.element(find.byType(OnboardingPage)),
     );
     expect(container.read(onboardingProvider).registerStep, 2);
+  });
+
+  testWidgets('进入 handle 步骤时用户名输入框没有默认值', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage()),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('登录或注册'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byType(CupertinoTextField).at(0),
+      '13800138000',
+    );
+    await tester.enterText(find.byType(CupertinoTextField).at(1), '123456');
+    await tester.tap(find.text('下一步'));
+    await tester.pumpAndSettle();
+
+    final handleField = tester.widget<CupertinoTextField>(
+      find.byType(CupertinoTextField).first,
+    );
+    expect(handleField.controller?.text, isEmpty);
   });
 
   testWidgets('手机号提交时未注册 handle 走注册路径', (tester) async {

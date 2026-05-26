@@ -79,6 +79,7 @@ class ChatThreadsController
                   .read(messagingServiceProvider)
                   .loadHistory(_historyThreadRefFor(conversation)))
               .map((message) => _withThreadId(message, conversation.threadId))
+              .where((message) => message.hasDisplayableText)
               .toList();
       if (!mounted) {
         return;
@@ -132,7 +133,6 @@ class ChatThreadsController
           .sendText(
             thread: _sendThreadRefFor(conversation),
             content: content.trim(),
-            clientMessageId: pending.localId,
           )
           .timeout(_sendTimeout);
       final sentInThread = _withThreadId(sent, conversation.threadId);
@@ -265,7 +265,9 @@ class ChatThreadsController
     bool resolveStaleSending = false,
   }) {
     final current = List<ChatMessage>.from(thread(threadId).messages);
-    for (final message in incoming) {
+    for (final message in incoming.where(
+      (message) => message.hasDisplayableText,
+    )) {
       final index = _matchingMessageIndex(current, message);
       if (index >= 0) {
         current[index] = message;
@@ -276,12 +278,13 @@ class ChatThreadsController
     final messages = resolveStaleSending
         ? _markStaleSendingFailed(current)
         : current;
+    final previous = thread(threadId);
     state = <String, ChatThreadState>{
       ...state,
       threadId: ChatThreadState(
         threadId: threadId,
         messages: _sortMessages(messages),
-        isLoading: isLoading ?? thread(threadId).isLoading,
+        isLoading: isLoading ?? previous.isLoading,
       ),
     };
   }

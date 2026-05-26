@@ -375,6 +375,83 @@ void main() {
     expect(gateway.fetchDmHistoryCalls, 1);
   });
 
+  testWidgets('聊天窗口居中时间使用消息发送时间的本地时区显示', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final utcSentAt = DateTime.utc(2026, 5, 23, 9);
+    final localSentAt = utcSentAt.toLocal();
+    final conversation = ConversationSummary(
+      threadId: 'dm:local-time',
+      displayName: 'Tester',
+      lastMessagePreview: 'time check',
+      lastMessageAt: localSentAt,
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    final secondUtcSentAt = utcSentAt.add(const Duration(minutes: 31));
+    final secondLocalSentAt = secondUtcSentAt.toLocal();
+    final firstMessage = ChatMessage(
+      localId: 'msg-local-time-1',
+      remoteId: 'msg-local-time-1',
+      threadId: conversation.threadId,
+      senderDid: 'did:test:peer',
+      receiverDid: session.did,
+      content: 'time check',
+      createdAt: utcSentAt,
+      isMine: false,
+      sendState: MessageSendState.sent,
+    );
+    final secondMessage = ChatMessage(
+      localId: 'msg-local-time-2',
+      remoteId: 'msg-local-time-2',
+      threadId: conversation.threadId,
+      senderDid: 'did:test:peer',
+      receiverDid: session.did,
+      content: 'time check again',
+      createdAt: secondUtcSentAt,
+      isMine: false,
+      sendState: MessageSendState.sent,
+    );
+    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:test:peer': <ChatMessage>[firstMessage, secondMessage],
+    };
+    gateway.conversations = <ConversationSummary>[conversation];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await container.read(conversationListProvider.notifier).refresh();
+    await tester.pumpAndSettle();
+
+    final expectedTime =
+        '${localSentAt.hour.toString().padLeft(2, '0')}:${localSentAt.minute.toString().padLeft(2, '0')}';
+    expect(
+      find.text('${_dateLabel(localSentAt)} $expectedTime'),
+      findsOneWidget,
+    );
+    final secondExpectedTime =
+        '${secondLocalSentAt.hour.toString().padLeft(2, '0')}:${secondLocalSentAt.minute.toString().padLeft(2, '0')}';
+    expect(
+      find.text('${_dateLabel(secondLocalSentAt)} $secondExpectedTime'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('消息发送失败时显示失败状态并可重试', (tester) async {
     final gateway = FakeAwikiGateway()..failNextSend = true;
     const session = SessionIdentity(
@@ -417,4 +494,10 @@ void main() {
     expect(gateway.lastSentThreadId, 'dm:did:test:peer');
     expect(gateway.lastSentContent, 'hello');
   });
+}
+
+String _dateLabel(DateTime date) {
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '$month-$day';
 }
