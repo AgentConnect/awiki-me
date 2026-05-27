@@ -78,6 +78,29 @@ void main() {
       );
     });
 
+    test('注销当前凭证会删除本地凭证并清空当前会话', () async {
+      const session = SessionIdentity(
+        did: 'did:test:123',
+        credentialName: 'default',
+        displayName: 'Alice',
+        handle: 'alice',
+        jwtToken: 'token-123',
+      );
+      gateway.localCredentials = const <SessionIdentity>[session];
+      container.read(sessionProvider.notifier).setSession(session);
+      container.read(sessionProvider.notifier).setLocalCredentials([session]);
+
+      await container
+          .read(appRuntimeProvider.notifier)
+          .deleteCurrentCredential();
+
+      expect(gateway.deleteLocalCredentialCalls, 1);
+      expect(gateway.logoutCalls, 0);
+      expect(container.read(sessionProvider).session, isNull);
+      expect(container.read(sessionProvider).localCredentials, isEmpty);
+      expect(container.read(uiFeedbackProvider), isNull);
+    });
+
     test('重新识别本地凭证会刷新列表并写入反馈', () async {
       gateway.localCredentials = const <SessionIdentity>[
         SessionIdentity(

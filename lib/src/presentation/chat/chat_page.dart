@@ -4,12 +4,17 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
+import '../../app/app_services.dart';
 import '../../core/group_display_name.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_summary.dart';
+import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
+import '../../app/ui_feedback.dart';
 import '../conversation_list/conversation_provider.dart';
+import '../friends/friends_page.dart';
+import '../friends/friends_provider.dart';
 import '../group/group_list_page.dart';
 import '../group/group_provider.dart';
 import '../profile/peer_profile_page.dart';
@@ -45,12 +50,16 @@ class ChatView extends ConsumerStatefulWidget {
     required this.conversation,
     required this.embedded,
     this.onBack,
+    this.onMacIdentityPanelTap,
+    this.onMacConversationInfoTap,
     this.macStyle = false,
   });
 
   final ConversationSummary conversation;
   final bool embedded;
   final VoidCallback? onBack;
+  final VoidCallback? onMacIdentityPanelTap;
+  final VoidCallback? onMacConversationInfoTap;
   final bool macStyle;
 
   @override
@@ -61,6 +70,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   final textController = TextEditingController();
   final scrollController = ScrollController();
   bool _isRefreshingCurrentConversation = false;
+  final Set<String> _downloadingAttachmentMessageIds = <String>{};
 
   @override
   void initState() {
@@ -81,6 +91,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final macStyle = widget.macStyle && responsive.isMacDesktop;
     final thread = ref.watch(chatThreadProvider(widget.conversation.threadId));
     final currentConversation = _currentConversationForTitle();
+    final friendsState = ref.watch(friendsProvider);
     ref.listen<ChatThreadState>(
       chatThreadProvider(widget.conversation.threadId),
       (_, __) => WidgetsBinding.instance.addPostFrameCallback(
@@ -112,8 +123,16 @@ class _ChatViewState extends ConsumerState<ChatView> {
             embedded: widget.embedded,
             macStyle: macStyle,
             isRefreshing: _isRefreshingCurrentConversation || thread.isLoading,
+            isFollowing: _isFollowableDirect(currentConversation)
+                ? friendsState.isFollowing(currentConversation.targetDid!)
+                : false,
+            onFollowTap: _isFollowableDirect(currentConversation)
+                ? () => _toggleFollow(currentConversation)
+                : null,
             onBack: widget.onBack,
             onDetails: _openDetails,
+            onMacIdentityPanelTap: widget.onMacIdentityPanelTap,
+            onMacConversationInfoTap: widget.onMacConversationInfoTap,
             onRefresh: () => _refreshCurrentConversation(currentConversation),
           ),
           Expanded(
@@ -156,15 +175,27 @@ class _ChatViewState extends ConsumerState<ChatView> {
                         senderLabel: senderLabel,
                         macStyle: macStyle,
                         onRetry: message.sendState == MessageSendState.failed
-                            ? () async {
-                                await ref
-                                    .read(chatThreadsProvider.notifier)
-                                    .retryMessage(
-                                      conversation: widget.conversation,
-                                      message: message,
-                                    );
-                              }
+                            ? (_canRetryMessage(message)
+                                  ? () async {
+                                      await ref
+                                          .read(chatThreadsProvider.notifier)
+                                          .retryMessage(
+                                            conversation: widget.conversation,
+                                            message: message,
+                                          );
+                                    }
+                                  : null)
                             : null,
+                        onDownload:
+                            message.attachment != null &&
+                                message.sendState == MessageSendState.sent
+                            ? () => _downloadAttachment(
+                                currentConversation,
+                                message,
+                              )
+                            : null,
+                        isDownloading: _downloadingAttachmentMessageIds
+                            .contains(message.localId),
                       ),
                     ],
                   ),
@@ -186,6 +217,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
                     content: value,
                   );
             },
+            onAttach: () async {
+              await _pickAndSendAttachment(currentConversation);
+            },
           ),
         ],
       ),
@@ -197,6 +231,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
       );
     }
     return AwikiMeWidgets.pageBackground(child: page);
+  }
+
+  bool _canRetryMessage(ChatMessage message) {
+    if (!message.isAttachmentMessage) {
+      return true;
+    }
+    final localPath = message.attachment?.localPath?.trim();
+    return localPath != null && localPath.isNotEmpty;
   }
 
   Future<void> _openDetails() async {
@@ -213,6 +255,80 @@ class _ChatViewState extends ConsumerState<ChatView> {
       context,
       (_) => GroupDetailPage(initialGroup: _findCurrentGroup()),
     );
+  }
+
+  Future<void> _pickAndSendAttachment(ConversationSummary conversation) async {
+    try {
+      final draft = await ref
+          .read(attachmentPickerServiceProvider)
+          .pickAttachment();
+      if (draft == null) {
+        return;
+      }
+      if (!mounted) {
+        return;
+      }
+      final caption = textController.text.trim().isEmpty
+          ? null
+          : textController.text.trim();
+      textController.clear();
+      await ref
+          .read(chatThreadsProvider.notifier)
+          .sendAttachment(
+            conversation: conversation,
+            attachment: draft,
+            caption: caption,
+          );
+    } catch (error) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
+    }
+  }
+
+  Future<void> _downloadAttachment(
+    ConversationSummary conversation,
+    ChatMessage message,
+  ) async {
+    if (_downloadingAttachmentMessageIds.contains(message.localId)) {
+      return;
+    }
+    setState(() {
+      _downloadingAttachmentMessageIds.add(message.localId);
+    });
+    try {
+      final result = await ref
+          .read(chatThreadsProvider.notifier)
+          .downloadAttachment(conversation: conversation, message: message);
+      final bytes = result.bytes;
+      if (bytes == null) {
+        throw StateError('附件下载结果为空。');
+      }
+      final filename =
+          result.filename ?? message.attachment?.filename ?? 'attachment';
+      final mimeType =
+          result.mimeType ??
+          message.attachment?.mimeType ??
+          'application/octet-stream';
+      final savedPath = await ref
+          .read(attachmentPickerServiceProvider)
+          .saveAttachment(filename: filename, mimeType: mimeType, bytes: bytes);
+      if (savedPath != null && savedPath.trim().isNotEmpty) {
+        ref
+            .read(uiFeedbackProvider.notifier)
+            .showInfo(AppMessage.exportedTo(savedPath));
+      }
+    } catch (error) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _downloadingAttachmentMessageIds.remove(message.localId);
+        });
+      }
+    }
   }
 
   Future<void> _refreshCurrentConversation(
@@ -240,6 +356,30 @@ class _ChatViewState extends ConsumerState<ChatView> {
           _isRefreshingCurrentConversation = false;
         });
       }
+    }
+  }
+
+  bool _isFollowableDirect(ConversationSummary conversation) {
+    final targetDid = conversation.targetDid?.trim() ?? '';
+    return !conversation.isGroup && targetDid.startsWith('did:');
+  }
+
+  Future<void> _toggleFollow(ConversationSummary conversation) async {
+    final targetDid = conversation.targetDid?.trim();
+    if (targetDid == null || targetDid.isEmpty) {
+      return;
+    }
+    final isFollowing = ref.read(friendsProvider).isFollowing(targetDid);
+    if (isFollowing) {
+      await confirmAndUnfollow(context, ref, targetDid);
+      return;
+    }
+    try {
+      await ref.read(friendsProvider.notifier).follow(targetDid);
+    } catch (error) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
     }
   }
 
@@ -368,8 +508,12 @@ class _ChatHeader extends StatelessWidget {
     required this.embedded,
     required this.macStyle,
     required this.isRefreshing,
+    required this.isFollowing,
     required this.onDetails,
     required this.onRefresh,
+    this.onFollowTap,
+    this.onMacIdentityPanelTap,
+    this.onMacConversationInfoTap,
     this.onBack,
   });
 
@@ -378,7 +522,11 @@ class _ChatHeader extends StatelessWidget {
   final VoidCallback? onBack;
   final bool macStyle;
   final bool isRefreshing;
+  final bool isFollowing;
   final VoidCallback onDetails;
+  final Future<void> Function()? onFollowTap;
+  final VoidCallback? onMacIdentityPanelTap;
+  final VoidCallback? onMacConversationInfoTap;
   final Future<void> Function() onRefresh;
 
   @override
@@ -445,6 +593,14 @@ class _ChatHeader extends StatelessWidget {
                   ),
                 ),
                 SizedBox(width: actionGap),
+                if (onFollowTap != null) ...<Widget>[
+                  _ChatFollowButton(
+                    isFollowing: isFollowing,
+                    compact: width < 560,
+                    onTap: onFollowTap!,
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 _MacChatHeaderButton(
                   key: const Key('chat-refresh-button'),
                   semanticLabel: '刷新当前会话',
@@ -455,8 +611,21 @@ class _ChatHeader extends StatelessWidget {
                 const SizedBox(width: 8),
                 _MacChatIdentityButton(
                   showLabel: showIdentityLabel,
-                  onTap: onDetails,
+                  onTap: conversation.isGroup
+                      ? onDetails
+                      : (onMacIdentityPanelTap ?? onDetails),
                 ),
+                if (onMacConversationInfoTap != null) ...<Widget>[
+                  const SizedBox(width: 8),
+                  _MacChatHeaderButton(
+                    key: const Key('chat-conversation-info-button'),
+                    semanticLabel: '折叠会话信息',
+                    icon: CupertinoIcons.sidebar_right,
+                    onTap: () async {
+                      onMacConversationInfoTap!();
+                    },
+                  ),
+                ],
               ],
             );
           },
@@ -528,6 +697,14 @@ class _ChatHeader extends StatelessWidget {
                         color: theme.primaryDark,
                       ),
                     ),
+                    if (onFollowTap != null) ...<Widget>[
+                      SizedBox(width: responsive.spacing(10)),
+                      _ChatFollowButton(
+                        isFollowing: isFollowing,
+                        compact: responsive.isPhone,
+                        onTap: onFollowTap!,
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -575,6 +752,87 @@ class _MacChatPill extends StatelessWidget {
           color: textColor,
           fontSize: 11.5,
           fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatFollowButton extends StatefulWidget {
+  const _ChatFollowButton({
+    required this.isFollowing,
+    required this.onTap,
+    this.compact = false,
+  });
+
+  final bool isFollowing;
+  final bool compact;
+  final Future<void> Function() onTap;
+
+  @override
+  State<_ChatFollowButton> createState() => _ChatFollowButtonState();
+}
+
+class _ChatFollowButtonState extends State<_ChatFollowButton> {
+  bool _isBusy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final label = widget.isFollowing ? '已关注' : '关注';
+    final foreground = widget.isFollowing
+        ? const Color(0xFF34415C)
+        : theme.primaryForeground;
+    final background = widget.isFollowing
+        ? CupertinoColors.white
+        : theme.primary;
+    return Semantics(
+      button: true,
+      label: label,
+      enabled: !_isBusy,
+      child: GestureDetector(
+        onTap: _isBusy
+            ? null
+            : () async {
+                setState(() => _isBusy = true);
+                try {
+                  await widget.onTap();
+                } finally {
+                  if (mounted) {
+                    setState(() => _isBusy = false);
+                  }
+                }
+              },
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          height: 30,
+          constraints: BoxConstraints(minWidth: widget.compact ? 54 : 66),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: widget.isFollowing
+                  ? const Color(0xFFDDE5F0)
+                  : theme.primary,
+            ),
+          ),
+          child: _isBusy
+              ? CupertinoActivityIndicator(
+                  radius: 7,
+                  color: widget.isFollowing ? const Color(0xFF34415C) : null,
+                )
+              : Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
         ),
       ),
     );
@@ -699,14 +957,33 @@ class _MessageBubble extends StatelessWidget {
     required this.senderLabel,
     this.macStyle = false,
     this.onRetry,
+    this.onDownload,
+    this.isDownloading = false,
   });
 
   final ChatMessage message;
   final String senderLabel;
   final bool macStyle;
   final Future<void> Function()? onRetry;
+  final Future<void> Function()? onDownload;
+  final bool isDownloading;
 
   Widget _buildMacBubble(BuildContext context, bool isMine) {
+    final child = message.attachment == null
+        ? Text(
+            message.content,
+            style: const TextStyle(
+              color: Color(0xFF17213A),
+              fontSize: 14,
+              height: 1.45,
+            ),
+          )
+        : _AttachmentContent(
+            message: message,
+            macStyle: true,
+            onDownload: onDownload,
+            isDownloading: isDownloading,
+          );
     final bubble = Column(
       crossAxisAlignment: isMine
           ? CrossAxisAlignment.end
@@ -722,14 +999,7 @@ class _MessageBubble extends StatelessWidget {
               color: isMine ? const Color(0xFFEAF2FF) : const Color(0xFFDDE5F0),
             ),
           ),
-          child: Text(
-            message.content,
-            style: const TextStyle(
-              color: Color(0xFF17213A),
-              fontSize: 14,
-              height: 1.45,
-            ),
-          ),
+          child: child,
         ),
         if (message.sendState == MessageSendState.failed) ...<Widget>[
           const SizedBox(height: 8),
@@ -744,19 +1014,21 @@ class _MessageBubble extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(width: 10),
-              GestureDetector(
-                onTap: onRetry,
-                behavior: HitTestBehavior.opaque,
-                child: const Text(
-                  '重试',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF0B65F8),
-                    fontWeight: FontWeight.w900,
+              if (onRetry != null) ...<Widget>[
+                const SizedBox(width: 10),
+                GestureDetector(
+                  onTap: onRetry,
+                  behavior: HitTestBehavior.opaque,
+                  child: const Text(
+                    '重试',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF0B65F8),
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ] else if (message.sendState == MessageSendState.sending) ...<Widget>[
@@ -841,14 +1113,21 @@ class _MessageBubble extends StatelessWidget {
                       bottomRight: const Radius.circular(22),
                     ),
                   ),
-                  child: Text(
-                    message.content,
-                    style: TextStyle(
-                      color: theme.title,
-                      fontSize: responsive.bodyMd,
-                      height: responsive.isPhone ? 1.5 : 1.4,
-                    ),
-                  ),
+                  child: message.attachment == null
+                      ? Text(
+                          message.content,
+                          style: TextStyle(
+                            color: theme.title,
+                            fontSize: responsive.bodyMd,
+                            height: responsive.isPhone ? 1.5 : 1.4,
+                          ),
+                        )
+                      : _AttachmentContent(
+                          message: message,
+                          macStyle: false,
+                          onDownload: onDownload,
+                          isDownloading: isDownloading,
+                        ),
                 ),
                 if (message.sendState == MessageSendState.failed) ...<Widget>[
                   SizedBox(height: responsive.spacing(8)),
@@ -863,19 +1142,21 @@ class _MessageBubble extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      SizedBox(width: responsive.spacing(10)),
-                      GestureDetector(
-                        onTap: onRetry,
-                        behavior: HitTestBehavior.opaque,
-                        child: Text(
-                          '重试',
-                          style: TextStyle(
-                            fontSize: responsive.metaSm,
-                            color: theme.primaryDark,
-                            fontWeight: FontWeight.w800,
+                      if (onRetry != null) ...<Widget>[
+                        SizedBox(width: responsive.spacing(10)),
+                        GestureDetector(
+                          onTap: onRetry,
+                          behavior: HitTestBehavior.opaque,
+                          child: Text(
+                            '重试',
+                            style: TextStyle(
+                              fontSize: responsive.metaSm,
+                              color: theme.primaryDark,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ] else if (message.sendState ==
@@ -898,18 +1179,205 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
+class _AttachmentContent extends StatelessWidget {
+  const _AttachmentContent({
+    required this.message,
+    required this.macStyle,
+    required this.onDownload,
+    required this.isDownloading,
+  });
+
+  final ChatMessage message;
+  final bool macStyle;
+  final Future<void> Function()? onDownload;
+  final bool isDownloading;
+
+  @override
+  Widget build(BuildContext context) {
+    final attachment = message.attachment!;
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final caption = attachment.caption?.trim();
+    final titleStyle = TextStyle(
+      color: macStyle ? const Color(0xFF17213A) : theme.title,
+      fontSize: macStyle ? 13.5 : responsive.bodyMd,
+      fontWeight: FontWeight.w800,
+      height: 1.25,
+    );
+    final metaStyle = TextStyle(
+      color: macStyle ? const Color(0xFF66728A) : theme.secondaryText,
+      fontSize: macStyle ? 12 : responsive.metaSm,
+      fontWeight: FontWeight.w600,
+      height: 1.25,
+    );
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        minWidth: macStyle ? 220 : responsive.scaled(210),
+        maxWidth: macStyle ? 360 : responsive.scaled(420),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (caption != null && caption.isNotEmpty) ...<Widget>[
+            Text(
+              caption,
+              style: TextStyle(
+                color: macStyle ? const Color(0xFF17213A) : theme.title,
+                fontSize: macStyle ? 14 : responsive.bodyMd,
+                height: 1.4,
+              ),
+            ),
+            SizedBox(height: macStyle ? 10 : responsive.spacing(10)),
+          ],
+          Row(
+            children: <Widget>[
+              Container(
+                width: macStyle ? 38 : responsive.scaled(40),
+                height: macStyle ? 38 : responsive.scaled(40),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: macStyle
+                      ? const Color(0xFFEAF2FF)
+                      : theme.surface.withValues(alpha: 0.72),
+                  borderRadius: BorderRadius.circular(macStyle ? 8 : 10),
+                  border: Border.all(
+                    color: macStyle ? const Color(0xFFDDE5F0) : theme.border,
+                  ),
+                ),
+                child: Icon(
+                  CupertinoIcons.doc_fill,
+                  color: macStyle ? const Color(0xFF0B65F8) : theme.primary,
+                  size: macStyle ? 20 : responsive.iconSm,
+                ),
+              ),
+              SizedBox(width: macStyle ? 10 : responsive.spacing(10)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      attachment.displayName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: titleStyle,
+                    ),
+                    SizedBox(height: macStyle ? 4 : responsive.spacing(4)),
+                    Text(
+                      _formatAttachmentMeta(
+                        attachment.mimeType,
+                        attachment.sizeBytes,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: metaStyle,
+                    ),
+                  ],
+                ),
+              ),
+              if (onDownload != null) ...<Widget>[
+                SizedBox(width: macStyle ? 10 : responsive.spacing(10)),
+                _AttachmentActionButton(
+                  macStyle: macStyle,
+                  isLoading: isDownloading,
+                  onTap: onDownload!,
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AttachmentActionButton extends StatelessWidget {
+  const _AttachmentActionButton({
+    required this.macStyle,
+    required this.isLoading,
+    required this.onTap,
+  });
+
+  final bool macStyle;
+  final bool isLoading;
+  final Future<void> Function() onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final size = macStyle ? 32.0 : responsive.scaled(34);
+    return Semantics(
+      button: true,
+      label: '下载附件',
+      enabled: !isLoading,
+      child: GestureDetector(
+        onTap: isLoading ? null : onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: size,
+          height: size,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: macStyle ? CupertinoColors.white : theme.surface,
+            borderRadius: BorderRadius.circular(macStyle ? 8 : 10),
+            border: Border.all(
+              color: macStyle ? const Color(0xFFDDE5F0) : theme.border,
+            ),
+          ),
+          child: isLoading
+              ? CupertinoActivityIndicator(radius: macStyle ? 7 : 8)
+              : Icon(
+                  CupertinoIcons.arrow_down_doc_fill,
+                  color: macStyle ? const Color(0xFF0B65F8) : theme.primary,
+                  size: macStyle ? 17 : responsive.iconSm,
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+String _formatAttachmentMeta(String mimeType, int? sizeBytes) {
+  final parts = <String>[];
+  final type = mimeType.trim();
+  if (type.isNotEmpty && type != 'application/octet-stream') {
+    parts.add(type);
+  }
+  if (sizeBytes != null && sizeBytes >= 0) {
+    parts.add(_formatFileSize(sizeBytes));
+  }
+  return parts.isEmpty ? '文件' : parts.join(' · ');
+}
+
+String _formatFileSize(int bytes) {
+  const units = <String>['B', 'KB', 'MB', 'GB'];
+  var value = bytes.toDouble();
+  var unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  if (unitIndex == 0) {
+    return '$bytes ${units[unitIndex]}';
+  }
+  return '${value.toStringAsFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}';
+}
+
 class _Composer extends StatelessWidget {
   const _Composer({
     required this.embedded,
     required this.macStyle,
     required this.controller,
     required this.onSend,
+    required this.onAttach,
   });
 
   final bool embedded;
   final bool macStyle;
   final TextEditingController controller;
   final Future<void> Function() onSend;
+  final Future<void> Function() onAttach;
 
   Future<void> _submitIfNeeded() async {
     if (controller.text.trim().isEmpty) {
@@ -950,10 +1418,19 @@ class _Composer extends StatelessWidget {
                 child: Row(
                   children: <Widget>[
                     if (showAttachment) ...<Widget>[
-                      const Icon(
-                        CupertinoIcons.paperclip,
-                        color: Color(0xFF34415C),
-                        size: 22,
+                      GestureDetector(
+                        key: const Key('chat-attachment-button'),
+                        onTap: onAttach,
+                        behavior: HitTestBehavior.opaque,
+                        child: const SizedBox(
+                          width: 34,
+                          height: 34,
+                          child: Icon(
+                            CupertinoIcons.paperclip,
+                            color: Color(0xFF34415C),
+                            size: 22,
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 10),
                     ],
@@ -1031,7 +1508,8 @@ class _Composer extends StatelessWidget {
           child: Row(
             children: <Widget>[
               TopBarActionButton(
-                onTap: () {},
+                key: const Key('chat-attachment-button'),
+                onTap: onAttach,
                 child: Padding(
                   padding: EdgeInsets.all(responsive.spacing(6)),
                   child: AwikiAssetIcon(

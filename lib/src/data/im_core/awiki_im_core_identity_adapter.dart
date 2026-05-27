@@ -37,6 +37,13 @@ class AwikiImCoreIdentityAdapter implements IdentityCorePort {
   }
 
   @override
+  Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
+    final coreInstance = await _runtime.coreInstance();
+    final result = await _deleteLocalIdentity(coreInstance, identityIdOrAlias);
+    return _mappers.appSessionFromIdentity(result.deleted);
+  }
+
+  @override
   Future<AppSession> registerHandleWithPhone({
     required String phone,
     required String otp,
@@ -118,6 +125,23 @@ Future<core.IdentitySummary> _resolveIdentity(
     }
   }
   return coreInstance.resolveIdentity(
+    core.IdentitySelector.localAlias(_trimLeadingAt(value.trim())),
+  );
+}
+
+Future<core.DeleteLocalIdentityResult> _deleteLocalIdentity(
+  core.AwikiImCore coreInstance,
+  String value,
+) async {
+  final primary = _selectorFromString(value);
+  try {
+    return await coreInstance.deleteLocalIdentity(primary);
+  } on core.AwikiImCoreException catch (error) {
+    if (!_shouldTryLocalAliasFallback(primary, error)) {
+      rethrow;
+    }
+  }
+  return coreInstance.deleteLocalIdentity(
     core.IdentitySelector.localAlias(_trimLeadingAt(value.trim())),
   );
 }

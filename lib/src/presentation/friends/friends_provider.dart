@@ -1,27 +1,43 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
+import '../../application/ports/relationship_core_port.dart';
 import '../../domain/entities/relationship_summary.dart';
+
+enum FriendsRelationshipListType { following, followers }
 
 class FriendsState {
   const FriendsState({
     this.followers = const <RelationshipSummary>[],
     this.following = const <RelationshipSummary>[],
+    this.followingAliases = const <String>{},
     this.isLoading = false,
   });
 
   final List<RelationshipSummary> followers;
   final List<RelationshipSummary> following;
+  final Set<String> followingAliases;
   final bool isLoading;
+
+  bool isFollowing(String did) {
+    final target = _normalizeIdentity(did);
+    return target.isNotEmpty &&
+        (followingAliases.contains(target) ||
+            following.any((item) => _normalizeIdentity(item.did) == target));
+  }
 
   FriendsState copyWith({
     List<RelationshipSummary>? followers,
     List<RelationshipSummary>? following,
+    Set<String>? followingAliases,
     bool? isLoading,
   }) {
     return FriendsState(
       followers: followers ?? this.followers,
       following: following ?? this.following,
+      followingAliases: followingAliases ?? this.followingAliases,
       isLoading: isLoading ?? this.isLoading,
     );
   }
@@ -52,8 +68,16 @@ class FriendsController extends StateNotifier<FriendsState> {
   }
 
   Future<void> follow(String didOrHandle) async {
-    await ref.read(relationshipApplicationServiceProvider).follow(didOrHandle);
+    final relationships = ref.read(relationshipApplicationServiceProvider);
+    await relationships.follow(didOrHandle);
     await refresh();
+    final alias = _normalizeIdentity(didOrHandle);
+    state = state.copyWith(
+      followingAliases: alias.isEmpty
+          ? state.followingAliases
+          : <String>{...state.followingAliases, alias},
+    );
+    _invalidateRelationshipLists();
   }
 
   Future<void> unfollow(String didOrHandle) async {
@@ -61,6 +85,13 @@ class FriendsController extends StateNotifier<FriendsState> {
         .read(relationshipApplicationServiceProvider)
         .unfollow(didOrHandle);
     await refresh();
+    final alias = _normalizeIdentity(didOrHandle);
+    state = state.copyWith(
+      followingAliases: state.followingAliases
+          .where((item) => item != alias)
+          .toSet(),
+    );
+    _invalidateRelationshipLists();
   }
 
   Future<RelationshipSummary?> checkRelationship(String didOrHandle) async {
@@ -69,9 +100,140 @@ class FriendsController extends StateNotifier<FriendsState> {
 
   void clear() {
     state = const FriendsState();
+    _invalidateRelationshipLists();
+  }
+
+  void _invalidateRelationshipLists() {
+    ref.invalidate(
+      relationshipListProvider(FriendsRelationshipListType.following),
+    );
+    ref.invalidate(
+      relationshipListProvider(FriendsRelationshipListType.followers),
+    );
   }
 }
 
 final friendsProvider = StateNotifierProvider<FriendsController, FriendsState>(
   (ref) => FriendsController(ref),
 );
+
+class RelationshipListState {
+  const RelationshipListState({
+    this.items = const <RelationshipSummary>[],
+    this.nextCursor,
+    this.hasMore = false,
+    this.isLoading = false,
+    this.isLoadingMore = false,
+    this.error,
+  });
+
+  final List<RelationshipSummary> items;
+  final String? nextCursor;
+  final bool hasMore;
+  final bool isLoading;
+  final bool isLoadingMore;
+  final Object? error;
+
+  RelationshipListState copyWith({
+    List<RelationshipSummary>? items,
+    String? nextCursor,
+    bool clearNextCursor = false,
+    bool? hasMore,
+    bool? isLoading,
+    bool? isLoadingMore,
+    Object? error,
+    bool clearError = false,
+  }) {
+    return RelationshipListState(
+      items: items ?? this.items,
+      nextCursor: clearNextCursor ? null : (nextCursor ?? this.nextCursor),
+      hasMore: hasMore ?? this.hasMore,
+      isLoading: isLoading ?? this.isLoading,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      error: clearError ? null : (error ?? this.error),
+    );
+  }
+}
+
+class RelationshipListController extends StateNotifier<RelationshipListState> {
+  RelationshipListController(this.ref, this.type)
+    : super(const RelationshipListState()) {
+    unawaited(refresh());
+  }
+
+  static const int pageSize = 30;
+
+  final Ref ref;
+  final FriendsRelationshipListType type;
+
+  Future<void> refresh() async {
+    if (state.isLoading) {
+      return;
+    }
+    state = state.copyWith(
+      isLoading: true,
+      isLoadingMore: false,
+      clearError: true,
+      clearNextCursor: true,
+    );
+    try {
+      final page = await _loadPage(cursor: null);
+      if (!mounted) {
+        return;
+      }
+      state = RelationshipListState(
+        items: page.items,
+        nextCursor: page.nextCursor,
+        hasMore: page.hasMore,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      state = state.copyWith(isLoading: false, error: error);
+    }
+  }
+
+  Future<void> loadMore() async {
+    if (state.isLoading || state.isLoadingMore || !state.hasMore) {
+      return;
+    }
+    state = state.copyWith(isLoadingMore: true, clearError: true);
+    try {
+      final page = await _loadPage(cursor: state.nextCursor);
+      if (!mounted) {
+        return;
+      }
+      state = state.copyWith(
+        items: <RelationshipSummary>[...state.items, ...page.items],
+        nextCursor: page.nextCursor,
+        hasMore: page.hasMore,
+        isLoadingMore: false,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      state = state.copyWith(isLoadingMore: false, error: error);
+    }
+  }
+
+  Future<CoreRelationshipPage> _loadPage({required String? cursor}) {
+    final relationships = ref.read(relationshipApplicationServiceProvider);
+    switch (type) {
+      case FriendsRelationshipListType.following:
+        return relationships.listFollowing(limit: pageSize, cursor: cursor);
+      case FriendsRelationshipListType.followers:
+        return relationships.listFollowers(limit: pageSize, cursor: cursor);
+    }
+  }
+}
+
+final relationshipListProvider =
+    StateNotifierProvider.family<
+      RelationshipListController,
+      RelationshipListState,
+      FriendsRelationshipListType
+    >((ref, type) => RelationshipListController(ref, type));
+
+String _normalizeIdentity(String value) => value.trim();

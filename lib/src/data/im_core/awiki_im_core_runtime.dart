@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
 import '../../application/ports/im_core_runtime_port.dart';
@@ -32,6 +34,9 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
 
   core.AwikiImCore? _core;
   core.AwikiImClient? _currentClient;
+  int _activeClientOperations = 0;
+  Completer<void>? _clientOperationsIdle;
+  Completer<void>? _clientTransition;
 
   AwikiImCoreEnvironmentConfig get config => _config;
 
@@ -83,27 +88,99 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     return client;
   }
 
+  Future<T> withCurrentClient<T>(
+    Future<T> Function(core.AwikiImClient client) action,
+  ) async {
+    while (true) {
+      final transition = _clientTransition;
+      if (transition == null) {
+        break;
+      }
+      await transition.future;
+    }
+
+    final client = _currentClient;
+    if (client == null) {
+      throw StateError('IM Core identity is not selected.');
+    }
+
+    _activeClientOperations += 1;
+    try {
+      return await action(client);
+    } finally {
+      _activeClientOperations -= 1;
+      if (_activeClientOperations == 0) {
+        _clientOperationsIdle?.complete();
+        _clientOperationsIdle = null;
+      }
+    }
+  }
+
   @override
   Future<void> switchIdentity(String identityIdOrAlias) {
     return selectIdentity(_selectorFromString(identityIdOrAlias));
   }
 
   Future<void> selectIdentity(core.IdentitySelector selector) async {
-    final nextClient = await clientFor(selector);
-    final previousClient = _currentClient;
-    _currentClient = nextClient;
-    await previousClient?.dispose();
+    final transition = await _beginClientTransition();
+    try {
+      final nextClient = await clientFor(selector);
+      await _waitForClientOperations();
+      final previousClient = _currentClient;
+      _currentClient = nextClient;
+      await previousClient?.dispose();
+    } finally {
+      _endClientTransition(transition);
+    }
   }
 
   @override
   Future<void> dispose() async {
-    final client = _currentClient;
-    _currentClient = null;
-    await client?.dispose();
+    final transition = await _beginClientTransition();
+    try {
+      await _waitForClientOperations();
+      final client = _currentClient;
+      _currentClient = null;
+      final core = _core;
+      _core = null;
+      try {
+        await client?.dispose();
+      } finally {
+        await core?.dispose();
+      }
+    } finally {
+      _endClientTransition(transition);
+    }
+  }
 
-    final core = _core;
-    _core = null;
-    await core?.dispose();
+  Future<Completer<void>> _beginClientTransition() async {
+    while (true) {
+      final currentTransition = _clientTransition;
+      if (currentTransition == null) {
+        break;
+      }
+      await currentTransition.future;
+    }
+    final transition = Completer<void>();
+    _clientTransition = transition;
+    return transition;
+  }
+
+  void _endClientTransition(Completer<void> transition) {
+    if (identical(_clientTransition, transition)) {
+      _clientTransition = null;
+    }
+    if (!transition.isCompleted) {
+      transition.complete();
+    }
+  }
+
+  Future<void> _waitForClientOperations() async {
+    if (_activeClientOperations == 0) {
+      return;
+    }
+    final idle = _clientOperationsIdle ??= Completer<void>();
+    await idle.future;
   }
 }
 

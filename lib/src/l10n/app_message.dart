@@ -230,6 +230,12 @@ class AppMessage {
     if (raw == '文件选择失败，请稍后重试。') {
       return AppMessage.documentPickerFailed();
     }
+    if (raw == '文件保存失败，请稍后重试。') {
+      return AppMessage._('raw', detail: raw);
+    }
+    if (raw == '附件下载结果为空。') {
+      return AppMessage._('raw', detail: raw);
+    }
     return AppMessage._('raw', detail: raw);
   }
 

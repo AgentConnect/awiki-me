@@ -344,7 +344,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'Clear local sign-in state and return to the sign-in page';
 
   @override
-  String get settingsDeleteCredential => 'Delete current credential';
+  String get settingsDeleteCredential =>
+      'Sign out and delete current credential';
 
   @override
   String settingsDeleteCurrentCredential(Object credentialName) {
@@ -353,7 +354,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsDeleteCredentialFallback =>
-      'Delete current signed-in credential';
+      'Sign out and delete current signed-in credential';
 
   @override
   String get settingsLogoutConfirmTitle => 'Log out';
@@ -364,15 +365,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsDeleteCredentialConfirmTitle =>
-      'Delete current credential';
+      'Sign out and delete current credential';
 
   @override
   String settingsDeleteCredentialConfirmContent(Object credentialName) {
-    return 'This will delete the local credential \"$credentialName\" and log you out. Continue?';
+    return 'This will sign you out and delete the local credential \"$credentialName\". To use it again, you will need to import or recover the identity. Continue?';
   }
 
   @override
-  String get settingsDeleteCredentialConfirmAction => 'Delete credential';
+  String get settingsDeleteCredentialConfirmAction => 'Sign out and delete';
 
   @override
   String get quickActionsTitle => 'More actions';

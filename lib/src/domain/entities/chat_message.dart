@@ -1,3 +1,5 @@
+import 'chat_attachment.dart';
+
 enum MessageSendState { sending, sent, failed }
 
 class ChatMessage {
@@ -16,6 +18,7 @@ class ChatMessage {
     this.serverSequence,
     this.isEncrypted = false,
     this.originalType = 'text',
+    this.attachment,
   });
 
   final String localId;
@@ -32,8 +35,11 @@ class ChatMessage {
   final int? serverSequence;
   final bool isEncrypted;
   final MessageSendState sendState;
+  final ChatAttachment? attachment;
 
   bool get hasDisplayableText => content.trim().isNotEmpty && isTextMessage;
+
+  bool get hasRenderableContent => hasDisplayableText || attachment != null;
 
   bool get isTextMessage {
     final type = originalType.trim().toLowerCase();
@@ -44,6 +50,24 @@ class ChatMessage {
         type == 'text/markdown';
   }
 
+  bool get isAttachmentMessage => attachment != null;
+
+  String get previewText {
+    final text = content.trim();
+    if (text.isNotEmpty && (isTextMessage || attachment == null)) {
+      return text;
+    }
+    final currentAttachment = attachment;
+    if (currentAttachment != null) {
+      final caption = currentAttachment.caption?.trim();
+      if (caption != null && caption.isNotEmpty) {
+        return caption;
+      }
+      return '[附件] ${currentAttachment.displayName}';
+    }
+    return text;
+  }
+
   ChatMessage copyWith({
     String? remoteId,
     String? content,
@@ -51,6 +75,7 @@ class ChatMessage {
     int? serverSequence,
     MessageSendState? sendState,
     String? senderName,
+    ChatAttachment? attachment,
   }) {
     return ChatMessage(
       localId: localId,
@@ -67,6 +92,7 @@ class ChatMessage {
       serverSequence: serverSequence ?? this.serverSequence,
       isEncrypted: isEncrypted,
       originalType: originalType,
+      attachment: attachment ?? this.attachment,
     );
   }
 }

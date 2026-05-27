@@ -40,6 +40,45 @@ void main() {
     expect(feedback?.message.id, 'featureNotImplemented');
   });
 
+  testWidgets('设置页退出并删除当前凭证会删除本地凭证而不显示未实现错误', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:123',
+      credentialName: 'default',
+      displayName: 'Alice',
+      handle: 'alice',
+      jwtToken: 'token-123',
+    );
+    gateway.localCredentials = const <SessionIdentity>[session];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+
+    expect(find.text('退出并删除当前凭证'), findsOneWidget);
+    expect(find.text('删除本地凭证：default'), findsOneWidget);
+
+    await tester.tap(find.text('退出并删除当前凭证'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('将退出当前登录，并删除本地凭证 "default"'), findsOneWidget);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(SettingsPage)),
+    );
+
+    await tester.tap(find.text('退出并删除'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.deleteLocalCredentialCalls, 1);
+    expect(gateway.logoutCalls, 0);
+    expect(container.read(uiFeedbackProvider), isNull);
+  });
+
   testWidgets('设置页隐藏更新日志下载更新和消息推送入口', (tester) async {
     await tester.pumpWidget(buildLocalizedTestApp(home: const SettingsPage()));
 

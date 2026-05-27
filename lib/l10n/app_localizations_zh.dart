@@ -329,7 +329,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsLogoutSubtitle => '清除本地登录状态并返回登录页';
 
   @override
-  String get settingsDeleteCredential => '注销当前凭证';
+  String get settingsDeleteCredential => '退出并删除当前凭证';
 
   @override
   String settingsDeleteCurrentCredential(Object credentialName) {
@@ -337,7 +337,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get settingsDeleteCredentialFallback => '删除当前登录凭证';
+  String get settingsDeleteCredentialFallback => '退出并删除当前登录凭证';
 
   @override
   String get settingsLogoutConfirmTitle => '退出登录';
@@ -346,15 +346,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsLogoutConfirmContent => '确定要退出当前账号吗？';
 
   @override
-  String get settingsDeleteCredentialConfirmTitle => '注销当前凭证';
+  String get settingsDeleteCredentialConfirmTitle => '退出并删除当前凭证';
 
   @override
   String settingsDeleteCredentialConfirmContent(Object credentialName) {
-    return '将删除本地凭证 \"$credentialName\"，并退出登录。确定继续吗？';
+    return '将退出当前登录，并删除本地凭证 \"$credentialName\"。删除后需要重新导入或恢复身份才能再次使用该凭证。确定继续吗？';
   }
 
   @override
-  String get settingsDeleteCredentialConfirmAction => '确认注销';
+  String get settingsDeleteCredentialConfirmAction => '退出并删除';
 
   @override
   String get quickActionsTitle => '更多操作';

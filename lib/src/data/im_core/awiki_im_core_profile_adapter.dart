@@ -18,22 +18,27 @@ class AwikiImCoreProfileAdapter implements ProfileCorePort {
 
   @override
   Future<UserProfile> loadMyProfile() async {
-    final profile = await (await _runtime.currentClient()).profile
-        .loadMyProfile();
+    final profile = await _runtime.withCurrentClient(
+      (client) => client.profile.loadMyProfile(),
+    );
     return _mappers.userProfileFromCore(profile);
   }
 
   @override
   Future<UserProfile> loadPublicProfile(String didOrHandle) async {
-    final profile = await (await _runtime.currentClient()).profile
-        .loadPublicProfile(_identitySubject(didOrHandle));
+    final profile = await _runtime.withCurrentClient(
+      (client) =>
+          client.profile.loadPublicProfile(_identitySubject(didOrHandle)),
+    );
     return _mappers.userProfileFromCore(profile);
   }
 
   @override
   Future<UserProfile> updateProfile(ProfilePatch patch) async {
-    final profile = await (await _runtime.currentClient()).profile
-        .updateProfile(_mappers.profilePatchToCore(patch));
+    final profile = await _runtime.withCurrentClient(
+      (client) =>
+          client.profile.updateProfile(_mappers.profilePatchToCore(patch)),
+    );
     return _mappers.userProfileFromCore(profile);
   }
 }

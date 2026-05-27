@@ -1,13 +1,17 @@
 import Flutter
 import UIKit
+import UniformTypeIdentifiers
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, UIDocumentPickerDelegate {
   private let documentChannelName = "ai.awiki.awikime/document_picker"
+  private let attachmentChannelName = "ai.awiki.awikime/attachment_picker"
   private var documentChannel: FlutterMethodChannel?
+  private var attachmentChannel: FlutterMethodChannel?
   private var pendingSaveData: Data?
   private var pendingSaveResult: FlutterResult?
   private var pendingPickResult: FlutterResult?
+  private var pendingAttachmentPickResult: FlutterResult?
 
   override func application(
     _ application: UIApplication,
@@ -15,6 +19,7 @@ import UIKit
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
     registerDocumentChannel()
+    registerAttachmentChannel()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -57,6 +62,45 @@ import UIKit
     documentChannel = channel
   }
 
+  private func registerAttachmentChannel() {
+    guard attachmentChannel == nil else {
+      return
+    }
+    guard let registrar = registrar(forPlugin: attachmentChannelName) else {
+      return
+    }
+    let channel = FlutterMethodChannel(
+      name: attachmentChannelName,
+      binaryMessenger: registrar.messenger()
+    )
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else { return }
+      switch call.method {
+      case "pickAttachment":
+        self.presentAttachmentPicker(result: result)
+      case "saveAttachment":
+        guard
+          let args = call.arguments as? [String: Any],
+          let fileName = args["filename"] as? String,
+          let bytes = args["bytes"] as? FlutterStandardTypedData
+        else {
+          result(
+            FlutterError(
+              code: "save_failed",
+              message: "filename 和 bytes 为必填参数。",
+              details: nil
+            )
+          )
+          return
+        }
+        self.presentExportPicker(fileName: fileName, data: bytes.data, result: result)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    attachmentChannel = channel
+  }
+
   private func presentExportPicker(fileName: String, data: Data, result: @escaping FlutterResult) {
     guard pendingSaveResult == nil else {
       result(FlutterError(code: "save_in_progress", message: "已有导出任务正在进行。", details: nil))
@@ -91,6 +135,23 @@ import UIKit
     presentFromTopController(picker)
   }
 
+  private func presentAttachmentPicker(result: @escaping FlutterResult) {
+    guard pendingAttachmentPickResult == nil else {
+      result(FlutterError(code: "pick_in_progress", message: "已有文件选择任务正在进行。", details: nil))
+      return
+    }
+    pendingAttachmentPickResult = result
+    let picker: UIDocumentPickerViewController
+    if #available(iOS 14.0, *) {
+      picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.item], asCopy: true)
+    } else {
+      picker = UIDocumentPickerViewController(documentTypes: ["public.item"], in: .import)
+    }
+    picker.delegate = self
+    picker.modalPresentationStyle = .formSheet
+    presentFromTopController(picker)
+  }
+
   func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
     if let result = pendingSaveResult {
       pendingSaveResult = nil
@@ -101,6 +162,11 @@ import UIKit
     if let result = pendingPickResult {
       pendingPickResult = nil
       result(nil)
+      return
+    }
+    if let result = pendingAttachmentPickResult {
+      pendingAttachmentPickResult = nil
+      result(nil)
     }
   }
 
@@ -109,6 +175,15 @@ import UIKit
       pendingSaveResult = nil
       pendingSaveData = nil
       result(urls.first?.absoluteString)
+      return
+    }
+    if let result = pendingAttachmentPickResult {
+      pendingAttachmentPickResult = nil
+      guard let url = urls.first else {
+        result(nil)
+        return
+      }
+      readAttachment(url: url, result: result)
       return
     }
     guard let result = pendingPickResult else {
@@ -133,6 +208,80 @@ import UIKit
     }
   }
 
+  private func readAttachment(url: URL, result: @escaping FlutterResult) {
+    let accessGranted = url.startAccessingSecurityScopedResource()
+    defer {
+      if accessGranted {
+        url.stopAccessingSecurityScopedResource()
+      }
+    }
+    do {
+      let values = try? url.resourceValues(forKeys: [.fileSizeKey])
+      let filename = url.lastPathComponent.isEmpty ? "attachment" : url.lastPathComponent
+      let mimeType: String
+      if #available(iOS 14.0, *) {
+        let typeValues = try? url.resourceValues(forKeys: [.contentTypeKey])
+        mimeType = typeValues?.contentType?.preferredMIMEType ?? "application/octet-stream"
+      } else {
+        mimeType = "application/octet-stream"
+      }
+      let cachedUrl = try copyAttachmentToTemporaryDirectory(sourceUrl: url, filename: filename)
+      result([
+        "filename": filename,
+        "mime_type": mimeType,
+        "size_bytes": values?.fileSize ?? fileSize(at: cachedUrl),
+        "path": cachedUrl.path,
+      ])
+    } catch {
+      result(FlutterError(code: "pick_failed", message: error.localizedDescription, details: nil))
+    }
+  }
+
+  private func copyAttachmentToTemporaryDirectory(sourceUrl: URL, filename: String) throws -> URL {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("awiki-attachments", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    cleanupOldAttachmentTempFiles(in: directory)
+    let safeName = sanitizedFileName(filename.isEmpty ? "attachment" : filename)
+    let destination = directory.appendingPathComponent("\(UUID().uuidString)-\(safeName)")
+    try FileManager.default.copyItem(at: sourceUrl, to: destination)
+    return destination
+  }
+
+  private func sanitizedFileName(_ value: String) -> String {
+    let invalid = CharacterSet(charactersIn: "/\\:*?\"<>|").union(.controlCharacters)
+    let parts = value.components(separatedBy: invalid)
+    let joined = parts.joined(separator: "_").trimmingCharacters(in: .whitespacesAndNewlines)
+    if joined.isEmpty {
+      return "attachment"
+    }
+    return String(joined.prefix(160))
+  }
+
+  private func fileSize(at url: URL) -> Int {
+    let values = try? url.resourceValues(forKeys: [.fileSizeKey])
+    return values?.fileSize ?? 0
+  }
+
+  private func cleanupOldAttachmentTempFiles(in directory: URL) {
+    guard
+      let urls = try? FileManager.default.contentsOfDirectory(
+        at: directory,
+        includingPropertiesForKeys: [.contentModificationDateKey],
+        options: [.skipsHiddenFiles]
+      )
+    else {
+      return
+    }
+    let cutoff = Date().addingTimeInterval(-24 * 60 * 60)
+    for url in urls {
+      let values = try? url.resourceValues(forKeys: [.contentModificationDateKey])
+      if let modifiedAt = values?.contentModificationDate, modifiedAt < cutoff {
+        try? FileManager.default.removeItem(at: url)
+      }
+    }
+  }
+
   private func presentFromTopController(_ controller: UIViewController) {
     guard let root = window?.rootViewController else {
       if let saveResult = pendingSaveResult {
@@ -146,6 +295,12 @@ import UIKit
         pendingPickResult = nil
         pickResult(
           FlutterError(code: "pick_failed", message: "当前无法打开导入面板。", details: nil)
+        )
+      }
+      if let attachmentPickResult = pendingAttachmentPickResult {
+        pendingAttachmentPickResult = nil
+        attachmentPickResult(
+          FlutterError(code: "pick_failed", message: "当前无法打开文件选择面板。", details: nil)
         )
       }
       return

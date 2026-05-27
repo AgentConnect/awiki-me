@@ -15,8 +15,9 @@ class AwikiImCoreRelationshipAdapter implements RelationshipCorePort {
 
   @override
   Future<RelationshipSummary> status(String peer) async {
-    final status = await (await _runtime.currentClient()).directory
-        .relationStatus(peer);
+    final status = await _runtime.withCurrentClient(
+      (client) => client.directory.relationStatus(peer),
+    );
     return _mappers.relationshipFromCore(status);
   }
 
@@ -26,10 +27,12 @@ class AwikiImCoreRelationshipAdapter implements RelationshipCorePort {
     String? cursor,
   }) async {
     final offset = _offsetFromCursor(cursor);
-    final page = await (await _runtime.currentClient()).directory.listFollowers(
-      limit: limit,
-      offset: offset,
-      hydrateProfiles: true,
+    final page = await _runtime.withCurrentClient(
+      (client) => client.directory.listFollowers(
+        limit: limit,
+        offset: offset,
+        hydrateProfiles: true,
+      ),
     );
     return _mappers.relationshipPageFromCore(
       page,
@@ -43,10 +46,12 @@ class AwikiImCoreRelationshipAdapter implements RelationshipCorePort {
     String? cursor,
   }) async {
     final offset = _offsetFromCursor(cursor);
-    final page = await (await _runtime.currentClient()).directory.listFollowing(
-      limit: limit,
-      offset: offset,
-      hydrateProfiles: true,
+    final page = await _runtime.withCurrentClient(
+      (client) => client.directory.listFollowing(
+        limit: limit,
+        offset: offset,
+        hydrateProfiles: true,
+      ),
     );
     return _mappers.relationshipPageFromCore(
       page,
@@ -56,12 +61,14 @@ class AwikiImCoreRelationshipAdapter implements RelationshipCorePort {
 
   @override
   Future<void> follow(String peer) async {
-    await (await _runtime.currentClient()).directory.follow(peer);
+    await _runtime.withCurrentClient((client) => client.directory.follow(peer));
   }
 
   @override
   Future<void> unfollow(String peer) async {
-    await (await _runtime.currentClient()).directory.unfollow(peer);
+    await _runtime.withCurrentClient(
+      (client) => client.directory.unfollow(peer),
+    );
   }
 }
 

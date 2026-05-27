@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/application/app_session_service.dart';
+import 'package:awiki_me/src/application/attachment_picker_service.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/group_application_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
+import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
@@ -13,6 +15,7 @@ import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/application/realtime_application_service.dart';
 import 'package:awiki_me/src/application/relationship_application_service.dart';
 import 'package:awiki_me/src/domain/entities/bridge_capabilities.dart';
+import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
@@ -36,6 +39,7 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/data/services/locale_preference_service.dart';
 import 'package:awiki_me/src/domain/entities/app_update_manifest.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -73,6 +77,9 @@ Widget buildLocalizedTestApp({
         resolvedLocalePreference,
       ),
       updateServiceProvider.overrideWithValue(resolvedUpdateService),
+      attachmentPickerServiceProvider.overrideWithValue(
+        FakeAttachmentPickerService(),
+      ),
       ...fakeApplicationServiceOverrides(
         resolvedGateway,
         realtimeGateway: resolvedRealtime,
@@ -206,6 +213,35 @@ class FakeUpdateService implements UpdateService {
   }
 }
 
+class FakeAttachmentPickerService implements AttachmentPickerService {
+  AttachmentDraft? nextPick;
+  String? nextSavedPath = '/tmp/attachment';
+  int pickCalls = 0;
+  int saveCalls = 0;
+  String? lastSavedFilename;
+  String? lastSavedMimeType;
+  Uint8List? lastSavedBytes;
+
+  @override
+  Future<AttachmentDraft?> pickAttachment() async {
+    pickCalls += 1;
+    return nextPick;
+  }
+
+  @override
+  Future<String?> saveAttachment({
+    required String filename,
+    required String mimeType,
+    required Uint8List bytes,
+  }) async {
+    saveCalls += 1;
+    lastSavedFilename = filename;
+    lastSavedMimeType = mimeType;
+    lastSavedBytes = bytes;
+    return nextSavedPath;
+  }
+}
+
 class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   List<SessionIdentity> localCredentials = const <SessionIdentity>[];
   List<ConversationSummary> conversations = const <ConversationSummary>[];
@@ -232,11 +268,13 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   ProfilePatch? lastProfilePatch;
   RealtimeUpdate? nextRealtimeUpdate;
   bool failNextSend = false;
+  bool failNextFollow = false;
   Duration sendDelay = Duration.zero;
   SessionIdentity? refreshedSession;
   HandleRegistrationStatus handleRegistrationStatus =
       HandleRegistrationStatus.notRegistered;
   String? lastFollowedDidOrHandle;
+  String? lastUnfollowedDidOrHandle;
   String? lastRegisteredNickName;
   String? lastRegisteredProfileMarkdown;
   String? lastEmailRegisteredNickName;
@@ -255,6 +293,9 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   String? lastSentPeerDid;
   String? lastSentGroupId;
   String? lastSentContent;
+  AttachmentDraft? lastSentAttachment;
+  String? lastSentAttachmentCaption;
+  String? lastSentAttachmentIdempotencyKey;
   String? nextSentMessageId;
   int listLocalCredentialsCalls = 0;
   int importCalls = 0;
@@ -272,6 +313,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int registerHandleCalls = 0;
   int registerHandleWithEmailCalls = 0;
   int recoverHandleCalls = 0;
+  int logoutCalls = 0;
+  int deleteLocalCredentialCalls = 0;
+  Completer<void>? logoutCompleter;
+  Completer<void>? deleteLocalCredentialCompleter;
 
   @override
   Future<BridgeCapabilities> loadCapabilities() async {
@@ -288,7 +333,19 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   }
 
   @override
-  Future<void> deleteLocalCredential(String credentialName) async {}
+  Future<void> deleteLocalCredential(String credentialName) async {
+    deleteLocalCredentialCalls += 1;
+    final completer = deleteLocalCredentialCompleter;
+    if (completer != null) {
+      await completer.future;
+    }
+    localCredentials = localCredentials
+        .where((credential) => credential.credentialName != credentialName)
+        .toList();
+    if (loginResult?.credentialName == credentialName) {
+      loginResult = null;
+    }
+  }
 
   @override
   Future<void> deleteLocalThread(String threadId) async {}
@@ -313,6 +370,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
 
   @override
   Future<void> follow(String didOrHandle) async {
+    if (failNextFollow) {
+      failNextFollow = false;
+      throw StateError('follow failed');
+    }
     lastFollowedDidOrHandle = didOrHandle;
     final profile =
         publicProfilesByQuery[didOrHandle] ??
@@ -549,7 +610,13 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   }
 
   @override
-  Future<void> logout() async {}
+  Future<void> logout() async {
+    logoutCalls += 1;
+    final completer = logoutCompleter;
+    if (completer != null) {
+      await completer.future;
+    }
+  }
 
   @override
   Future<void> markRead(String threadId) async {
@@ -708,8 +775,70 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     );
   }
 
+  Future<ChatMessage> sendAttachmentMessage({
+    required String threadId,
+    String? peerDid,
+    String? groupId,
+    required AttachmentDraft attachment,
+    String? caption,
+  }) async {
+    lastSentThreadId = threadId;
+    lastSentPeerDid = peerDid;
+    lastSentGroupId = groupId;
+    lastSentAttachment = attachment;
+    lastSentAttachmentCaption = caption;
+    if (failNextSend) {
+      failNextSend = false;
+      throw StateError('send failed');
+    }
+    if (sendDelay > Duration.zero) {
+      await Future<void>.delayed(sendDelay);
+    }
+    final sentId =
+        nextSentMessageId ?? 'sent-${DateTime.now().microsecondsSinceEpoch}';
+    nextSentMessageId = null;
+    return ChatMessage(
+      localId: sentId,
+      remoteId: sentId,
+      threadId: threadId,
+      senderDid: loginResult?.did ?? 'did:test:sender',
+      senderName: loginResult?.displayName ?? loginResult?.handle ?? 'tester',
+      receiverDid: peerDid,
+      groupId: groupId,
+      content: caption ?? '',
+      originalType: 'application/anp-attachment-manifest+json',
+      createdAt: DateTime.now(),
+      isMine: true,
+      sendState: MessageSendState.sent,
+      attachment: ChatAttachment(
+        attachmentId: sentId,
+        filename: attachment.filename,
+        mimeType: attachment.mimeType,
+        sizeBytes: attachment.sizeBytes,
+        caption: caption,
+        localPath: attachment.localPath,
+      ),
+    );
+  }
+
   @override
-  Future<void> unfollow(String didOrHandle) async {}
+  Future<void> unfollow(String didOrHandle) async {
+    lastUnfollowedDidOrHandle = didOrHandle;
+    final normalized = normalizeTestIdentity(didOrHandle);
+    following = following
+        .where((item) => item.did != didOrHandle && item.did != normalized)
+        .toList();
+    relationshipsByDidOrHandle[didOrHandle] = RelationshipSummary(
+      did: didOrHandle,
+      displayName: didOrHandle,
+      relationship: 'none',
+    );
+    relationshipsByDidOrHandle[normalized] = RelationshipSummary(
+      did: normalized,
+      displayName: normalized,
+      relationship: 'none',
+    );
+  }
 
   @override
   Future<UserProfile> updateProfile(ProfilePatch patch) async {
@@ -777,6 +906,24 @@ class FakeAppSessionService implements AppSessionService {
   }
 
   @override
+  Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
+    final deleted = _current;
+    await gateway.deleteLocalCredential(identityIdOrAlias);
+    if (deleted != null) {
+      _current = null;
+      return deleted;
+    }
+    final fallback = SessionIdentity(
+      did: 'did:test:$identityIdOrAlias',
+      credentialName: identityIdOrAlias,
+      displayName: identityIdOrAlias,
+      handle: identityIdOrAlias,
+      jwtToken: null,
+    );
+    return _appSessionFromLegacy(fallback);
+  }
+
+  @override
   Future<AppSession?> refreshSession() async {
     final session = await gateway.refreshSession();
     if (session == null) {
@@ -833,6 +980,22 @@ class FakeMessagingService implements MessagingService {
   final FakeAwikiGateway gateway;
 
   @override
+  Future<AttachmentDownloadResult> downloadAttachment({
+    required AppThreadRef thread,
+    required String messageId,
+    String? attachmentId,
+    String? localPath,
+  }) async {
+    return AttachmentDownloadResult(
+      attachmentId: attachmentId ?? 'attachment-1',
+      filename: 'download.txt',
+      mimeType: 'text/plain',
+      sizeBytes: 5,
+      bytes: Uint8List.fromList(<int>[104, 101, 108, 108, 111]),
+    );
+  }
+
+  @override
   Future<List<ChatMessage>> loadHistory(
     AppThreadRef thread, {
     int limit = 100,
@@ -861,6 +1024,34 @@ class FakeMessagingService implements MessagingService {
       throw StateError('Cannot retry message without peer or group id.');
     }
     return sendText(thread: AppThreadRef.direct(peer), content: failed.content);
+  }
+
+  @override
+  Future<ChatMessage> sendAttachment({
+    required AppThreadRef thread,
+    required AttachmentDraft attachment,
+    String? caption,
+    String? idempotencyKey,
+  }) {
+    gateway.lastSentAttachmentIdempotencyKey = idempotencyKey;
+    return switch (thread) {
+      AppDirectThreadRef(:final peerDidOrHandle) =>
+        gateway.sendAttachmentMessage(
+          threadId: _directThreadId(peerDidOrHandle),
+          peerDid: peerDidOrHandle,
+          attachment: attachment,
+          caption: caption,
+        ),
+      AppGroupThreadRef(:final groupDid) => gateway.sendAttachmentMessage(
+        threadId: _groupThreadId(groupDid),
+        groupId: groupDid,
+        attachment: attachment,
+        caption: caption,
+      ),
+      AppMessageThreadRef(:final threadId) => throw StateError(
+        'Cannot send through test IM Core without peerDid or groupId: $threadId',
+      ),
+    };
   }
 
   @override

@@ -73,6 +73,44 @@ void main() {
     expect(mapped.serverSequence, 42);
   });
 
+  test('attachment manifest message maps into attachment chat message', () {
+    const manifest =
+        '{"attachments":[{"attachment_id":"att-1","filename":"report.pdf","mime_type":"application/pdf","size":"1024","access_info":{"object_uri":"https://objects.example/att-1"}}],"primary_attachment_id":"att-1","caption":"季度报告"}';
+    const message = core.Message(
+      id: 'msg-attachment',
+      threadKind: 'direct',
+      threadId: 'did:bob',
+      direction: core.MessageDirection.incoming,
+      sender: 'did:bob',
+      receiver: 'did:alice',
+      body: core.MessageBodyView(
+        unsupportedContentType: 'application/anp-attachment-manifest+json',
+      ),
+      sentAt: '2026-05-23T09:00:00Z',
+      metadata: core.MessageMetadata(
+        contentType: 'application/anp-attachment-manifest+json',
+        attributes: <core.MessageMetadataAttribute>[
+          core.MessageMetadataAttribute(
+            key: 'attachment_manifest',
+            value: manifest,
+          ),
+        ],
+      ),
+    );
+
+    final mapped = mapper.chatMessageFromCore(message, ownerDid: 'did:alice');
+
+    expect(mapped.hasRenderableContent, isTrue);
+    expect(mapped.hasDisplayableText, isFalse);
+    expect(mapped.attachment?.attachmentId, 'att-1');
+    expect(mapped.attachment?.filename, 'report.pdf');
+    expect(mapped.attachment?.mimeType, 'application/pdf');
+    expect(mapped.attachment?.sizeBytes, 1024);
+    expect(mapped.attachment?.caption, '季度报告');
+    expect(mapped.attachment?.objectUri, 'https://objects.example/att-1');
+    expect(mapped.previewText, '季度报告');
+  });
+
   test('message timestamps from SDK are normalized to local time', () {
     const message = core.Message(
       id: 'msg-local-time',
@@ -131,6 +169,47 @@ void main() {
       expect(mapped.lastMessagePreview, 'hi');
       expect(mapped.avatarSeed, 'seed-1');
       expect(mapped.unreadCount, 2);
+    },
+  );
+
+  test(
+    'conversation preview uses attachment filename when there is no caption',
+    () {
+      const manifest =
+          '{"attachments":[{"attachment_id":"att-2","filename":"diagram.png","mime_type":"image/png","size":"2048","access_info":{"object_uri":"https://objects.example/att-2"}}],"primary_attachment_id":"att-2"}';
+      const conversation = core.Conversation(
+        threadKind: 'direct',
+        threadId: 'did:bob',
+        participants: <String>['did:alice', 'did:bob'],
+        unreadCount: 1,
+        messageCount: 1,
+        lastMessage: core.Message(
+          id: 'msg-attachment-preview',
+          threadKind: 'direct',
+          threadId: 'did:bob',
+          direction: core.MessageDirection.incoming,
+          sender: 'did:bob',
+          body: core.MessageBodyView(
+            unsupportedContentType: 'application/anp-attachment-manifest+json',
+          ),
+          metadata: core.MessageMetadata(
+            contentType: 'application/anp-attachment-manifest+json',
+            attributes: <core.MessageMetadataAttribute>[
+              core.MessageMetadataAttribute(
+                key: 'attachment_manifest',
+                value: manifest,
+              ),
+            ],
+          ),
+        ),
+      );
+
+      final mapped = mapper.conversationFromCore(
+        conversation,
+        ownerDid: 'did:alice',
+      );
+
+      expect(mapped.lastMessagePreview, '[附件] diagram.png');
     },
   );
 

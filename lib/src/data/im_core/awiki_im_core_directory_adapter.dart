@@ -14,8 +14,9 @@ class AwikiImCoreDirectoryAdapter implements DirectoryCorePort {
 
   @override
   Future<DirectoryPeerResolution> lookupHandle(String handle) async {
-    final resolution = await (await _runtime.currentClient()).directory
-        .lookupHandle(handle);
+    final resolution = await _runtime.withCurrentClient(
+      (client) => client.directory.lookupHandle(handle),
+    );
     return DirectoryPeerResolution(
       input: resolution.input,
       did: resolution.did,
@@ -29,8 +30,9 @@ class AwikiImCoreDirectoryAdapter implements DirectoryCorePort {
 
   @override
   Future<DirectoryPeerResolution> resolvePeer(String peer) async {
-    final resolution = await (await _runtime.currentClient()).directory
-        .resolvePeer(peer);
+    final resolution = await _runtime.withCurrentClient(
+      (client) => client.directory.resolvePeer(peer),
+    );
     return DirectoryPeerResolution(
       input: resolution.input,
       did: resolution.did,

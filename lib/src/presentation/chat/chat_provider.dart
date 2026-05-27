@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
+import '../../application/models/attachment_models.dart';
 import '../../application/models/app_thread_ref.dart';
+import '../../domain/entities/chat_attachment.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../app_shell/providers/session_provider.dart';
@@ -37,6 +39,11 @@ class ChatThreadsController
   static const Duration _pendingMatchWindow = Duration(minutes: 2);
   static const Duration _staleSendingAge = Duration(seconds: 30);
   static const Duration _sendTimeout = Duration(seconds: 20);
+  static const Duration _attachmentSendTimeout = Duration(minutes: 3);
+  static const Duration _attachmentStaleSendingAge = Duration(
+    minutes: 3,
+    seconds: 30,
+  );
 
   ChatThreadState thread(String threadId) {
     return state[threadId] ?? ChatThreadState(threadId: threadId);
@@ -79,7 +86,7 @@ class ChatThreadsController
                   .read(messagingServiceProvider)
                   .loadHistory(_historyThreadRefFor(conversation)))
               .map((message) => _withThreadId(message, conversation.threadId))
-              .where((message) => message.hasDisplayableText)
+              .where((message) => message.hasRenderableContent)
               .toList();
       if (!mounted) {
         return;
@@ -160,10 +167,110 @@ class ChatThreadsController
     unawaited(_loadHistory(refreshedConversation));
   }
 
+  Future<void> sendAttachment({
+    required ConversationSummary conversation,
+    required AttachmentDraft attachment,
+    String? caption,
+  }) async {
+    final session = ref.read(sessionProvider).session;
+    if (session == null) {
+      return;
+    }
+    final normalizedCaption = _normalizedOptionalText(caption);
+    final pendingId = 'pending-${DateTime.now().microsecondsSinceEpoch}';
+    final pendingAttachment = ChatAttachment(
+      attachmentId: pendingId,
+      filename: attachment.displayName,
+      mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes,
+      caption: normalizedCaption,
+      localPath: attachment.localPath,
+      hasLocalSource: true,
+    );
+    final pending = ChatMessage(
+      localId: pendingId,
+      threadId: conversation.threadId,
+      senderDid: session.did,
+      senderName: session.handle ?? session.displayName,
+      receiverDid: conversation.targetDid,
+      groupId: conversation.groupId,
+      content: pendingAttachment.caption ?? '',
+      originalType: 'application/anp-attachment-manifest+json',
+      createdAt: DateTime.now(),
+      isMine: true,
+      sendState: MessageSendState.sending,
+      attachment: pendingAttachment,
+    );
+    final current = List<ChatMessage>.from(
+      thread(conversation.threadId).messages,
+    )..add(pending);
+    _setMessages(conversation.threadId, current);
+    final pendingConversation = _withConversationPreview(conversation, pending);
+    ref
+        .read(conversationListProvider.notifier)
+        .upsertConversation(pendingConversation);
+    var latestConversation = pendingConversation;
+    try {
+      final sent = await ref
+          .read(messagingServiceProvider)
+          .sendAttachment(
+            thread: _sendThreadRefFor(conversation),
+            attachment: attachment,
+            caption: normalizedCaption,
+            idempotencyKey: pending.localId,
+          )
+          .timeout(_attachmentSendTimeout);
+      final sentInThread = _withThreadId(sent, conversation.threadId);
+      _replaceMessage(conversation.threadId, pending.localId, sentInThread);
+      latestConversation = _withConversationPreview(conversation, sentInThread);
+      ref
+          .read(conversationListProvider.notifier)
+          .upsertConversation(latestConversation);
+    } catch (_) {
+      final failed = pending.copyWith(sendState: MessageSendState.failed);
+      _replaceMessage(conversation.threadId, pending.localId, failed);
+      latestConversation = _withConversationPreview(conversation, failed);
+      ref
+          .read(conversationListProvider.notifier)
+          .upsertConversation(latestConversation);
+    }
+    await ref.read(conversationListProvider.notifier).refresh();
+    final refreshedConversation = _newerConversation(
+      _refreshedConversationFor(latestConversation),
+      latestConversation,
+    );
+    ref
+        .read(conversationListProvider.notifier)
+        .upsertConversation(refreshedConversation);
+    unawaited(_loadHistory(refreshedConversation));
+  }
+
+  Future<AttachmentDownloadResult> downloadAttachment({
+    required ConversationSummary conversation,
+    required ChatMessage message,
+  }) {
+    final attachment = message.attachment;
+    final messageId = message.remoteId ?? message.localId;
+    if (attachment == null || messageId.trim().isEmpty) {
+      throw StateError('Cannot download this attachment message.');
+    }
+    return ref
+        .read(messagingServiceProvider)
+        .downloadAttachment(
+          thread: _historyThreadRefFor(conversation),
+          messageId: messageId,
+          attachmentId: attachment.attachmentId,
+        );
+  }
+
   Future<void> retryMessage({
     required ConversationSummary conversation,
     required ChatMessage message,
   }) async {
+    if (message.isAttachmentMessage) {
+      await retryAttachment(conversation: conversation, message: message);
+      return;
+    }
     final retrying = message.copyWith(sendState: MessageSendState.sending);
     _setMessages(
       conversation.threadId,
@@ -176,6 +283,52 @@ class ChatThreadsController
           .read(messagingServiceProvider)
           .retryByResendOriginalContent(retrying)
           .timeout(_sendTimeout);
+      _replaceMessage(
+        conversation.threadId,
+        message.localId,
+        _withThreadId(retried, conversation.threadId),
+      );
+    } catch (_) {
+      final failed = retrying.copyWith(sendState: MessageSendState.failed);
+      _replaceMessage(conversation.threadId, message.localId, failed);
+    }
+    await ref.read(conversationListProvider.notifier).refresh();
+    unawaited(_loadHistory(_refreshedConversationFor(conversation)));
+  }
+
+  Future<void> retryAttachment({
+    required ConversationSummary conversation,
+    required ChatMessage message,
+  }) async {
+    final attachment = message.attachment;
+    final localPath = attachment?.localPath?.trim();
+    if (attachment == null || localPath == null || localPath.isEmpty) {
+      final failed = message.copyWith(sendState: MessageSendState.failed);
+      _replaceMessage(conversation.threadId, message.localId, failed);
+      return;
+    }
+    final retrying = message.copyWith(sendState: MessageSendState.sending);
+    _setMessages(
+      conversation.threadId,
+      thread(conversation.threadId).messages
+          .map((item) => item.localId == message.localId ? retrying : item)
+          .toList(),
+    );
+    try {
+      final retried = await ref
+          .read(messagingServiceProvider)
+          .sendAttachment(
+            thread: _sendThreadRefFor(conversation),
+            attachment: AttachmentDraft(
+              filename: attachment.filename,
+              mimeType: attachment.mimeType,
+              localPath: localPath,
+              sizeBytes: attachment.sizeBytes,
+            ),
+            caption: attachment.caption,
+            idempotencyKey: message.localId,
+          )
+          .timeout(_attachmentSendTimeout);
       _replaceMessage(
         conversation.threadId,
         message.localId,
@@ -266,7 +419,7 @@ class ChatThreadsController
   }) {
     final current = List<ChatMessage>.from(thread(threadId).messages);
     for (final message in incoming.where(
-      (message) => message.hasDisplayableText,
+      (message) => message.hasRenderableContent,
     )) {
       final index = _matchingMessageIndex(current, message);
       if (index >= 0) {
@@ -294,11 +447,17 @@ class ChatThreadsController
     return messages.map((message) {
       if (!message.isMine ||
           message.sendState != MessageSendState.sending ||
-          now.difference(message.createdAt) < _staleSendingAge) {
+          now.difference(message.createdAt) < _staleSendingAgeFor(message)) {
         return message;
       }
       return message.copyWith(sendState: MessageSendState.failed);
     }).toList();
+  }
+
+  Duration _staleSendingAgeFor(ChatMessage message) {
+    return message.isAttachmentMessage
+        ? _attachmentStaleSendingAge
+        : _staleSendingAge;
   }
 
   int _matchingMessageIndex(List<ChatMessage> current, ChatMessage incoming) {
@@ -326,7 +485,7 @@ class ChatThreadsController
   bool _isMatchingPending(ChatMessage pending, ChatMessage sent) {
     if (!pending.isMine ||
         pending.threadId != sent.threadId ||
-        pending.content != sent.content ||
+        pending.previewText != sent.previewText ||
         pending.senderDid != sent.senderDid ||
         pending.sendState == MessageSendState.sent) {
       return false;
@@ -389,7 +548,7 @@ ConversationSummary _withConversationPreview(
   return ConversationSummary(
     threadId: conversation.threadId,
     displayName: conversation.displayName,
-    lastMessagePreview: message.content,
+    lastMessagePreview: message.previewText,
     lastMessageAt: message.createdAt,
     unreadCount: message.isMine ? 0 : conversation.unreadCount,
     isGroup: conversation.isGroup,
@@ -449,7 +608,16 @@ ChatMessage _withThreadId(ChatMessage message, String threadId) {
     sendState: message.sendState,
     serverSequence: message.serverSequence,
     isEncrypted: message.isEncrypted,
+    attachment: message.attachment,
   );
+}
+
+String? _normalizedOptionalText(String? value) {
+  final normalized = value?.trim();
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+  return normalized;
 }
 
 final chatThreadsProvider =

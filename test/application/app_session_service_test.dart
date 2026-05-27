@@ -168,6 +168,31 @@ void main() {
 
       expect(await service.currentSession(), isNull);
     });
+
+    test(
+      'deleteLocalIdentity deletes from identity store and clears current session',
+      () async {
+        final runtime = _FakeRuntime();
+        final realtime = _FakeRealtime();
+        final identity = _session('id-default');
+        final identities = _FakeIdentities(defaultIdentity: identity);
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: identities,
+          auth: _FakeAuth(),
+          realtime: realtime,
+        );
+
+        await service.restoreSession();
+        final deleted = await service.deleteLocalIdentity('alice-local');
+
+        expect(deleted.identityId, identity.identityId);
+        expect(identities.deletedSelectors, ['alice-local']);
+        expect(realtime.stopCount, 1);
+        expect(runtime.disposeCount, 1);
+        expect(await service.currentSession(), isNull);
+      },
+    );
   });
 }
 
@@ -216,6 +241,7 @@ class _FakeIdentities implements IdentityCorePort {
   final AppSession? _defaultIdentity;
   final AppSession? _resolvedIdentity;
   final List<String> resolvedSelectors = <String>[];
+  final List<String> deletedSelectors = <String>[];
 
   @override
   Future<AppSession?> defaultIdentity() async => _defaultIdentity;
@@ -253,6 +279,12 @@ class _FakeIdentities implements IdentityCorePort {
   Future<AppSession> resolveIdentity(String identityIdOrAlias) async {
     resolvedSelectors.add(identityIdOrAlias);
     return _resolvedIdentity ?? _session(identityIdOrAlias);
+  }
+
+  @override
+  Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
+    deletedSelectors.add(identityIdOrAlias);
+    return _defaultIdentity ?? _session(identityIdOrAlias);
   }
 }
 

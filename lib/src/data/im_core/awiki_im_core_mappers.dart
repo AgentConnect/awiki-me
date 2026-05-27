@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
 import '../../application/models/app_session.dart';
@@ -6,6 +8,7 @@ import '../../application/models/product_local_models.dart';
 import '../../application/ports/relationship_core_port.dart';
 import '../../application/thread_id_utils.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/chat_attachment.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_summary.dart';
@@ -75,6 +78,8 @@ class AwikiImCoreMappers {
     core.Message message, {
     required String ownerDid,
   }) {
+    final attachment = _attachmentFromCoreMessage(message);
+    final bodyText = message.body.text ?? '';
     final isMine =
         message.direction == core.MessageDirection.outgoing ||
         message.sender == ownerDid;
@@ -102,13 +107,14 @@ class AwikiImCoreMappers {
           _attribute(message.metadata, 'sender_name'),
       receiverDid: _nonEmpty(message.receiver),
       groupId: groupId,
-      content: message.body.text ?? '',
+      content: attachment?.caption ?? bodyText,
       originalType: message.body.kind ?? message.metadata.contentType ?? 'text',
       createdAt: _parseDateTime(message.sentAt ?? message.receivedAt),
       isMine: isMine,
       sendState: _sendStateFromCore(message.metadata, isMine: isMine),
       serverSequence: message.metadata.serverSequence,
       isEncrypted: _isEncrypted(message.metadata.contentType),
+      attachment: attachment,
     );
   }
 
@@ -372,6 +378,14 @@ String _compactDid(String did) {
 }
 
 String _messagePreview(core.Message message) {
+  final attachment = _attachmentFromCoreMessage(message);
+  if (attachment != null) {
+    final caption = attachment.caption?.trim();
+    if (caption != null && caption.isNotEmpty) {
+      return caption;
+    }
+    return '[附件] ${attachment.displayName}';
+  }
   return message.body.text ??
       message.body.unsupportedContentType ??
       message.metadata.contentType ??
@@ -406,6 +420,175 @@ String? _attribute(core.MessageMetadata metadata, String key) {
     }
   }
   return null;
+}
+
+const String _attachmentManifestContentType =
+    'application/anp-attachment-manifest+json';
+
+ChatAttachment? _attachmentFromCoreMessage(core.Message message) {
+  if (!_isAttachmentManifestMessage(message)) {
+    return null;
+  }
+  final manifest = _attachmentManifestJson(message);
+  final fromManifest = _attachmentFromManifest(manifest);
+  if (fromManifest != null) {
+    return fromManifest;
+  }
+  final attachmentId = _firstNonEmpty(<String>[
+    _attribute(message.metadata, 'attachment_id') ?? '',
+    _stringFromJsonMap(manifest, 'attachment_id') ?? '',
+    _stringFromJsonMap(manifest, 'primary_attachment_id') ?? '',
+  ]);
+  if (attachmentId == null) {
+    return null;
+  }
+  final filename =
+      _attribute(message.metadata, 'attachment_filename') ??
+      _stringFromJsonMap(manifest, 'filename') ??
+      '附件';
+  final mimeType =
+      _attribute(message.metadata, 'attachment_mime_type') ??
+      _attribute(message.metadata, 'attachment_content_type') ??
+      _stringFromJsonMap(manifest, 'mime_type') ??
+      'application/octet-stream';
+  return ChatAttachment(
+    attachmentId: attachmentId,
+    filename: filename,
+    mimeType: mimeType,
+    sizeBytes:
+        _intFromString(_attribute(message.metadata, 'attachment_size_bytes')) ??
+        _intFromJsonMap(manifest, 'size_bytes'),
+    caption:
+        _attribute(message.metadata, 'caption') ??
+        _stringFromJsonMap(manifest, 'caption'),
+    objectUri:
+        _attribute(message.metadata, 'object_uri') ??
+        _stringFromJsonMap(manifest, 'object_uri'),
+  );
+}
+
+bool _isAttachmentManifestMessage(core.Message message) {
+  final values = <String?>[
+    message.metadata.contentType,
+    message.body.unsupportedContentType,
+    message.body.kind,
+  ];
+  return values.any(
+    (value) => value?.trim().toLowerCase() == _attachmentManifestContentType,
+  );
+}
+
+Map<String, Object?>? _attachmentManifestJson(core.Message message) {
+  final candidates = <String?>[
+    _attribute(message.metadata, 'attachment_manifest'),
+    _attribute(message.metadata, 'raw_content'),
+    message.body.text,
+  ];
+  for (final candidate in candidates) {
+    final parsed = _tryDecodeObject(candidate);
+    if (parsed != null) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+ChatAttachment? _attachmentFromManifest(Map<String, Object?>? manifest) {
+  if (manifest == null) {
+    return null;
+  }
+  final attachments = manifest['attachments'];
+  if (attachments is! List || attachments.isEmpty) {
+    return null;
+  }
+  final first = attachments.first;
+  if (first is! Map) {
+    return null;
+  }
+  final attachment = first.cast<String, Object?>();
+  final attachmentId =
+      _stringFromJsonMap(attachment, 'attachment_id') ??
+      _stringFromJsonMap(attachment, 'id') ??
+      _stringFromJsonMap(manifest, 'primary_attachment_id');
+  if (attachmentId == null) {
+    return null;
+  }
+  return ChatAttachment(
+    attachmentId: attachmentId,
+    filename: _stringFromJsonMap(attachment, 'filename') ?? '附件',
+    mimeType:
+        _stringFromJsonMap(attachment, 'mime_type') ??
+        _stringFromJsonMap(attachment, 'content_type') ??
+        'application/octet-stream',
+    sizeBytes:
+        _intFromJsonMap(attachment, 'size_bytes') ??
+        _intFromString(_stringFromJsonMap(attachment, 'size')),
+    caption: _stringFromJsonMap(manifest, 'caption'),
+    objectUri:
+        _stringFromJsonMap(attachment, 'object_uri') ??
+        _stringFromNestedJsonMap(attachment, 'access_info', 'object_uri'),
+  );
+}
+
+Map<String, Object?>? _tryDecodeObject(String? raw) {
+  final value = raw?.trim();
+  if (value == null || value.isEmpty) {
+    return null;
+  }
+  try {
+    final decoded = jsonDecode(value);
+    if (decoded is Map) {
+      return decoded.cast<String, Object?>();
+    }
+  } catch (_) {
+    return null;
+  }
+  return null;
+}
+
+String? _stringFromJsonMap(Map<String, Object?>? value, String key) {
+  final raw = value?[key];
+  if (raw is String) {
+    return _nonEmpty(raw);
+  }
+  if (raw is num) {
+    return raw.toString();
+  }
+  return null;
+}
+
+String? _stringFromNestedJsonMap(
+  Map<String, Object?>? value,
+  String parent,
+  String key,
+) {
+  final raw = value?[parent];
+  if (raw is! Map) {
+    return null;
+  }
+  return _stringFromJsonMap(raw.cast<String, Object?>(), key);
+}
+
+int? _intFromJsonMap(Map<String, Object?>? value, String key) {
+  final raw = value?[key];
+  if (raw is int) {
+    return raw;
+  }
+  if (raw is num) {
+    return raw.toInt();
+  }
+  if (raw is String) {
+    return _intFromString(raw);
+  }
+  return null;
+}
+
+int? _intFromString(String? raw) {
+  final value = raw?.trim();
+  if (value == null || value.isEmpty) {
+    return null;
+  }
+  return int.tryParse(value);
 }
 
 RealtimeConnectionStatus _connectionStatusFromString(String raw) {

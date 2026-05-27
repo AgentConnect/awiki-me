@@ -4,6 +4,7 @@ import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/group_application_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
+import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
@@ -187,6 +188,10 @@ class _FakeSessions implements AppSessionService {
   Future<void> logout() async {}
 
   @override
+  Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async =>
+      session!;
+
+  @override
   Future<AppSession?> refreshSession() async => session;
 
   @override
@@ -279,6 +284,15 @@ class _FakeMessages implements MessagingService {
   final List<AppThreadRef> sentThreads = <AppThreadRef>[];
 
   @override
+  Future<AttachmentDownloadResult> downloadAttachment({
+    required AppThreadRef thread,
+    required String messageId,
+    String? attachmentId,
+    String? localPath,
+  }) async =>
+      AttachmentDownloadResult(attachmentId: attachmentId ?? 'attachment-1');
+
+  @override
   Future<List<ChatMessage>> loadHistory(
     AppThreadRef thread, {
     int limit = 100,
@@ -288,6 +302,17 @@ class _FakeMessages implements MessagingService {
   @override
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed) async {
     return failed;
+  }
+
+  @override
+  Future<ChatMessage> sendAttachment({
+    required AppThreadRef thread,
+    required AttachmentDraft attachment,
+    String? caption,
+    String? idempotencyKey,
+  }) async {
+    sentThreads.add(thread);
+    return _message(caption ?? attachment.filename);
   }
 
   @override

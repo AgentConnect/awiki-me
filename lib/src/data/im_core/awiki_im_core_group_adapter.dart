@@ -29,14 +29,16 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
     if ((_runtime.config.anpServiceDid ?? '').trim().isEmpty) {
       throw StateError('Group creation requires AWIKI_ANP_SERVICE_DID');
     }
-    final result = await (await _runtime.currentClient()).groups.createGroup(
-      core.CreateGroupRequest(
-        name: name,
-        slug: slug,
-        description: description,
-        goal: goal,
-        rules: rules,
-        messagePrompt: messagePrompt,
+    final result = await _runtime.withCurrentClient(
+      (client) => client.groups.createGroup(
+        core.CreateGroupRequest(
+          name: name,
+          slug: slug,
+          description: description,
+          goal: goal,
+          rules: rules,
+          messagePrompt: messagePrompt,
+        ),
       ),
     );
     return _groupFromResult(result);
@@ -44,24 +46,24 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
 
   @override
   Future<GroupSummary> joinGroup(String groupDid) async {
-    final result = await (await _runtime.currentClient()).groups.joinGroup(
-      groupDid,
+    final result = await _runtime.withCurrentClient(
+      (client) => client.groups.joinGroup(groupDid),
     );
     return _groupFromResult(result);
   }
 
   @override
   Future<GroupSummary> getGroup(String groupDid) async {
-    final result = await (await _runtime.currentClient()).groups.getGroup(
-      groupDid,
+    final result = await _runtime.withCurrentClient(
+      (client) => client.groups.getGroup(groupDid),
     );
     return _groupFromResult(result);
   }
 
   @override
   Future<List<GroupSummary>> listGroups({int limit = 100}) async {
-    final result = await (await _runtime.currentClient()).groups.listGroups(
-      limit: limit,
+    final result = await _runtime.withCurrentClient(
+      (client) => client.groups.listGroups(limit: limit),
     );
     return result.groups.map(_mappers.groupFromCoreSummary).toList();
   }
@@ -71,9 +73,8 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
     String groupDid, {
     int limit = 100,
   }) async {
-    final result = await (await _runtime.currentClient()).groups.listMembers(
-      groupDid,
-      limit: limit,
+    final result = await _runtime.withCurrentClient(
+      (client) => client.groups.listMembers(groupDid, limit: limit),
     );
     return result.members.map(_mappers.groupMemberFromCore).toList();
   }
@@ -84,25 +85,28 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
     int limit = 100,
     String? cursor,
   }) async {
-    final client = await _runtime.currentClient();
-    final ownerDid = (await client.identity.current()).did;
-    final result = await client.groups.listMessages(
-      groupDid,
-      limit: limit,
-      cursor: cursor,
-    );
-    return result.messages.items
-        .map(
-          (message) =>
-              _mappers.chatMessageFromCore(message, ownerDid: ownerDid),
-        )
-        .where((message) => message.hasDisplayableText)
-        .toList();
+    return _runtime.withCurrentClient((client) async {
+      final ownerDid = (await client.identity.current()).did;
+      final result = await client.groups.listMessages(
+        groupDid,
+        limit: limit,
+        cursor: cursor,
+      );
+      return result.messages.items
+          .map(
+            (message) =>
+                _mappers.chatMessageFromCore(message, ownerDid: ownerDid),
+          )
+          .where((message) => message.hasRenderableContent)
+          .toList();
+    });
   }
 
   @override
   Future<void> leaveGroup(String groupDid) async {
-    await (await _runtime.currentClient()).groups.leaveGroup(groupDid);
+    await _runtime.withCurrentClient(
+      (client) => client.groups.leaveGroup(groupDid),
+    );
   }
 
   @override

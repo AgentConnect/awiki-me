@@ -18,6 +18,8 @@ abstract interface class AppSessionService {
   Future<AppSession?> refreshSession();
 
   Future<void> logout();
+
+  Future<AppSession> deleteLocalIdentity(String identityIdOrAlias);
 }
 
 class ImCoreAppSessionService implements AppSessionService {
@@ -109,6 +111,36 @@ class ImCoreAppSessionService implements AppSessionService {
     } finally {
       _current = null;
     }
+  }
+
+  @override
+  Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
+    final selector = identityIdOrAlias.trim();
+    if (!_runtime.isOpen) {
+      await _runtime.open();
+    }
+    final current = _current;
+    final deletingCurrent =
+        current != null && _matchesIdentity(current, selector);
+    if (deletingCurrent) {
+      await _realtime?.stop();
+    }
+    final deleted = await _identities.deleteLocalIdentity(identityIdOrAlias);
+    if (current != null &&
+        (_matchesIdentity(current, selector) ||
+            _matchesIdentity(current, deleted.identityId) ||
+            _matchesIdentity(current, deleted.did) ||
+            (deleted.localAlias != null &&
+                _matchesIdentity(current, deleted.localAlias!)) ||
+            (deleted.handle != null &&
+                _matchesIdentity(current, deleted.handle!)))) {
+      try {
+        await _runtime.dispose();
+      } finally {
+        _current = null;
+      }
+    }
+    return deleted;
   }
 
   Future<AppSession> _localIdentityFor(String identityIdOrAlias) async {

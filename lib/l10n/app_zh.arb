@@ -141,24 +141,24 @@
   "settingsNoCredentialToExport": "当前暂无可导出的登录凭证",
   "settingsLogout": "退出登录",
   "settingsLogoutSubtitle": "清除本地登录状态并返回登录页",
-  "settingsDeleteCredential": "注销当前凭证",
+  "settingsDeleteCredential": "退出并删除当前凭证",
   "settingsDeleteCurrentCredential": "删除本地凭证：{credentialName}",
   "@settingsDeleteCurrentCredential": {
     "placeholders": {
       "credentialName": {}
     }
   },
-  "settingsDeleteCredentialFallback": "删除当前登录凭证",
+  "settingsDeleteCredentialFallback": "退出并删除当前登录凭证",
   "settingsLogoutConfirmTitle": "退出登录",
   "settingsLogoutConfirmContent": "确定要退出当前账号吗？",
-  "settingsDeleteCredentialConfirmTitle": "注销当前凭证",
-  "settingsDeleteCredentialConfirmContent": "将删除本地凭证 \"{credentialName}\"，并退出登录。确定继续吗？",
+  "settingsDeleteCredentialConfirmTitle": "退出并删除当前凭证",
+  "settingsDeleteCredentialConfirmContent": "将退出当前登录，并删除本地凭证 \"{credentialName}\"。删除后需要重新导入或恢复身份才能再次使用该凭证。确定继续吗？",
   "@settingsDeleteCredentialConfirmContent": {
     "placeholders": {
       "credentialName": {}
     }
   },
-  "settingsDeleteCredentialConfirmAction": "确认注销",
+  "settingsDeleteCredentialConfirmAction": "退出并删除",
   "quickActionsTitle": "更多操作",
   "quickActionCreateGroup": "发起群聊",
   "quickActionJoinGroup": "加入群聊",

@@ -12,7 +12,9 @@ class AwikiImCoreAuthAdapter implements AuthCorePort {
 
   @override
   Future<AppAuthState> status() async {
-    final status = await (await _runtime.currentClient()).auth.status();
+    final status = await _runtime.withCurrentClient(
+      (client) => client.auth.status(),
+    );
     return AppAuthState(
       authenticated: status.authenticated,
       subject: status.subject,
@@ -24,7 +26,9 @@ class AwikiImCoreAuthAdapter implements AuthCorePort {
 
   @override
   Future<AppAuthState> login() async {
-    final bundle = await (await _runtime.currentClient()).auth.login();
+    final bundle = await _runtime.withCurrentClient(
+      (client) => client.auth.login(),
+    );
     return AppAuthState(
       authenticated: true,
       subject: bundle.subject,
@@ -35,8 +39,8 @@ class AwikiImCoreAuthAdapter implements AuthCorePort {
 
   @override
   Future<AppAuthState> ensureSession() async {
-    final bundle = await (await _runtime.currentClient()).auth.ensureSession(
-      core.AuthScope.messaging,
+    final bundle = await _runtime.withCurrentClient(
+      (client) => client.auth.ensureSession(core.AuthScope.messaging),
     );
     return AppAuthState(
       authenticated: true,
@@ -47,7 +51,9 @@ class AwikiImCoreAuthAdapter implements AuthCorePort {
 
   @override
   Future<AppAuthState> refreshSession() async {
-    final update = await (await _runtime.currentClient()).auth.refreshSession();
+    final update = await _runtime.withCurrentClient(
+      (client) => client.auth.refreshSession(),
+    );
     return AppAuthState(
       authenticated: true,
       subject: update.subject,

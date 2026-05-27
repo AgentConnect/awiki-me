@@ -49,6 +49,22 @@ Future<void> openDirectConversationForProfile(
   WidgetRef ref,
   UserProfile profile,
 ) async {
+  await openDirectConversationForDid(
+    context,
+    ref,
+    peerDid: profile.did,
+    peerName: DidDisplayFormatter.profileName(profile),
+    avatarSeed: profile.handle ?? profile.did,
+  );
+}
+
+Future<void> openDirectConversationForDid(
+  BuildContext context,
+  WidgetRef ref, {
+  required String peerDid,
+  required String peerName,
+  String? avatarSeed,
+}) async {
   final session = ref.read(sessionProvider).session;
   if (session == null) {
     ref
@@ -57,22 +73,35 @@ Future<void> openDirectConversationForProfile(
     return;
   }
 
-  final threadId = dmThreadIdForDids(session.did, profile.did);
+  final peer = peerDid.trim();
+  if (!peer.startsWith('did:')) {
+    ref
+        .read(uiFeedbackProvider.notifier)
+        .showError(AppMessage.fromError(StateError('联系人身份无效，无法打开会话。')));
+    return;
+  }
+
+  final threadId = dmThreadIdForDids(session.did, peer);
   final existing = ref
       .read(conversationListProvider)
       .conversations
       .where((item) => item.threadId == threadId);
   final conversation = existing.isNotEmpty
-      ? existing.first
+      ? _directConversationForPeer(
+          existing.first,
+          peerDid: peer,
+          peerName: peerName,
+          avatarSeed: avatarSeed,
+        )
       : ConversationSummary(
           threadId: threadId,
-          displayName: DidDisplayFormatter.profileName(profile),
+          displayName: _directConversationName(peerName, peer),
           lastMessagePreview: '',
           lastMessageAt: DateTime.now(),
           unreadCount: 0,
           isGroup: false,
-          targetDid: profile.did,
-          avatarSeed: profile.handle ?? profile.did,
+          targetDid: peer,
+          avatarSeed: avatarSeed ?? peer,
         );
 
   ref.read(conversationListProvider.notifier).upsertConversation(conversation);
@@ -89,6 +118,40 @@ Future<void> openDirectConversationForProfile(
     return;
   }
   await AppNavigator.push(context, (_) => ChatPage(conversation: conversation));
+}
+
+ConversationSummary _directConversationForPeer(
+  ConversationSummary existing, {
+  required String peerDid,
+  required String peerName,
+  String? avatarSeed,
+}) {
+  final existingTarget = existing.targetDid?.trim() ?? '';
+  final keepExistingName =
+      !existing.isGroup &&
+      existingTarget == peerDid &&
+      existing.displayName.trim().isNotEmpty;
+  return ConversationSummary(
+    threadId: existing.threadId,
+    displayName: keepExistingName
+        ? existing.displayName
+        : _directConversationName(peerName, peerDid),
+    lastMessagePreview: existing.lastMessagePreview,
+    lastMessageAt: existing.lastMessageAt,
+    unreadCount: existing.unreadCount,
+    isGroup: false,
+    targetDid: peerDid,
+    groupId: null,
+    avatarSeed: avatarSeed ?? existing.avatarSeed ?? peerDid,
+  );
+}
+
+String _directConversationName(String peerName, String peerDid) {
+  final name = peerName.trim();
+  if (name.isNotEmpty) {
+    return name;
+  }
+  return DidDisplayFormatter.compactDid(peerDid);
 }
 
 Future<void> showStartConversationDialog(

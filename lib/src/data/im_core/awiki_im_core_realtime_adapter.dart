@@ -49,20 +49,21 @@ class AwikiImCoreRealtimeAdapter implements RealtimeCorePort {
     if (_session != null) {
       return;
     }
-    final client = await _runtime.currentClient();
-    _client = client;
-    _ownerDid = (await client.identity.current()).did;
-    _eventSubscription = client.events.listen(
-      _handleEvent,
-      onError: _updatesController.addError,
-    );
-    _stateSubscription = client.connectionStates.listen(
-      (state) =>
-          _connectionController.add(_mappers.connectionStatusFromCore(state)),
-      onError: _connectionController.addError,
-    );
-    _connectionController.add(RealtimeConnectionStatus.connecting);
-    _session = await client.realtime.start(options: _options);
+    await _runtime.withCurrentClient((client) async {
+      _client = client;
+      _ownerDid = (await client.identity.current()).did;
+      _eventSubscription = client.events.listen(
+        _handleEvent,
+        onError: _updatesController.addError,
+      );
+      _stateSubscription = client.connectionStates.listen(
+        (state) =>
+            _connectionController.add(_mappers.connectionStatusFromCore(state)),
+        onError: _connectionController.addError,
+      );
+      _connectionController.add(RealtimeConnectionStatus.connecting);
+      _session = await client.realtime.start(options: _options);
+    });
   }
 
   @override

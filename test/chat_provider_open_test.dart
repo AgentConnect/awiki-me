@@ -1,4 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/models/attachment_models.dart';
+import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
@@ -465,6 +469,187 @@ void main() {
     expect(thread.messages, isEmpty);
   });
 
+  test('打开群聊时附件消息不会被文本过滤移除', () async {
+    const groupId = 'did:test:group:attachments';
+    final groupConversation = ConversationSummary(
+      threadId: 'group:$groupId',
+      displayName: '附件群',
+      lastMessagePreview: '[附件] report.pdf',
+      lastMessageAt: DateTime(2026, 5, 8, 10, 0),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: groupId,
+    );
+    gateway.groupHistoryByGroupId = <String, List<ChatMessage>>{
+      groupId: <ChatMessage>[
+        ChatMessage(
+          localId: 'group-attachment',
+          remoteId: 'group-attachment',
+          threadId: groupConversation.threadId,
+          senderDid: 'did:peer',
+          groupId: groupId,
+          content: '',
+          originalType: 'application/anp-attachment-manifest+json',
+          createdAt: DateTime(2026, 5, 8, 10, 0),
+          isMine: false,
+          sendState: MessageSendState.sent,
+          attachment: const ChatAttachment(
+            attachmentId: 'att-1',
+            filename: 'report.pdf',
+            mimeType: 'application/pdf',
+            sizeBytes: 1024,
+          ),
+        ),
+      ],
+    };
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(groupConversation);
+    await Future<void>.delayed(Duration.zero);
+
+    final thread = container.read(
+      chatThreadProvider(groupConversation.threadId),
+    );
+    expect(thread.messages, hasLength(1));
+    expect(thread.messages.single.attachment?.filename, 'report.pdf');
+  });
+
+  test('发送私聊附件会生成 pending 并用服务端附件消息替换', () async {
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendAttachment(
+          conversation: conversation,
+          attachment: AttachmentDraft(
+            filename: 'report.pdf',
+            mimeType: 'application/pdf',
+            bytes: Uint8List.fromList(<int>[1, 2, 3]),
+            sizeBytes: 3,
+          ),
+          caption: '报告',
+        );
+    await Future<void>.delayed(Duration.zero);
+
+    final messages = sendContainer
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    final attachmentMessages = messages
+        .where((message) => message.attachment?.filename == 'report.pdf')
+        .toList();
+    expect(attachmentMessages, hasLength(1));
+    expect(attachmentMessages.single.sendState, MessageSendState.sent);
+    expect(attachmentMessages.single.previewText, '报告');
+    expect(gateway.lastSentPeerDid, 'did:peer');
+    expect(gateway.lastSentAttachment?.filename, 'report.pdf');
+    expect(gateway.lastSentAttachmentCaption, '报告');
+    expect(gateway.lastSentAttachmentIdempotencyKey, startsWith('pending-'));
+  });
+
+  test('发送群聊附件使用群目标并更新会话预览', () async {
+    const groupId = 'did:test:group:send-attachment';
+    final groupConversation = ConversationSummary(
+      threadId: 'group:$groupId',
+      displayName: '附件群',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 5, 8, 10, 0),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: groupId,
+    );
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendAttachment(
+          conversation: groupConversation,
+          attachment: AttachmentDraft(
+            filename: 'diagram.png',
+            mimeType: 'image/png',
+            bytes: Uint8List.fromList(<int>[1, 2, 3, 4]),
+            sizeBytes: 4,
+          ),
+        );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(gateway.lastSentGroupId, groupId);
+    final conversations = sendContainer
+        .read(conversationListProvider)
+        .conversations;
+    expect(conversations.single.lastMessagePreview, '[附件] diagram.png');
+  });
+
+  test('没有本地路径的失败附件不会触发无效重试', () async {
+    final failedAttachment = ChatMessage(
+      localId: 'failed-mobile-attachment',
+      threadId: conversation.threadId,
+      senderDid: 'did:me',
+      receiverDid: conversation.targetDid,
+      content: '',
+      originalType: 'application/anp-attachment-manifest+json',
+      createdAt: DateTime(2026, 5, 8, 10, 2),
+      isMine: true,
+      sendState: MessageSendState.failed,
+      attachment: const ChatAttachment(
+        attachmentId: 'pending-attachment',
+        filename: 'mobile.bin',
+        mimeType: 'application/octet-stream',
+      ),
+    );
+    container
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(failedAttachment);
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .retryMessage(conversation: conversation, message: failedAttachment);
+
+    expect(gateway.lastSentAttachment, isNull);
+    final messages = container
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    expect(messages.single.sendState, MessageSendState.failed);
+  });
+
   test('历史刷新后仍未回补的过期 pending 会转为失败', () async {
     final pending = ChatMessage(
       localId: 'pending-stale',
@@ -490,6 +675,40 @@ void main() {
         .messages;
     expect(messages.single.localId, 'pending-stale');
     expect(messages.single.sendState, MessageSendState.failed);
+  });
+
+  test('附件 pending 不会被 30 秒文本发送超时提前判失败', () async {
+    final pending = ChatMessage(
+      localId: 'pending-attachment-still-sending',
+      threadId: conversation.threadId,
+      senderDid: 'did:me',
+      receiverDid: conversation.targetDid,
+      content: '',
+      originalType: 'application/anp-attachment-manifest+json',
+      createdAt: DateTime.now().subtract(const Duration(minutes: 2)),
+      isMine: true,
+      sendState: MessageSendState.sending,
+      attachment: const ChatAttachment(
+        attachmentId: 'pending-attachment',
+        filename: 'large.mov',
+        mimeType: 'video/quicktime',
+        localPath: '/tmp/large.mov',
+      ),
+    );
+    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:peer': const <ChatMessage>[],
+    };
+    container.read(chatThreadsProvider.notifier).applyRealtimeUpdate(pending);
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .refreshConversation(conversation);
+
+    final messages = container
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    expect(messages.single.localId, 'pending-attachment-still-sending');
+    expect(messages.single.sendState, MessageSendState.sending);
   });
 
   test('会话列表已有新预览时再次打开会补拉历史', () async {

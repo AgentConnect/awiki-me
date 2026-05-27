@@ -1,10 +1,15 @@
+import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
+import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
-import 'package:awiki_me/src/presentation/chat/chat_page.dart';
-import 'package:awiki_me/src/presentation/group/group_provider.dart';
+import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
+import 'package:awiki_me/src/presentation/chat/chat_page.dart';
+import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
+import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -156,6 +161,147 @@ void main() {
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('聊天头部关注按钮会把对方加入我关注的列表', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:follow-button',
+      displayName: 'Peer',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('关注'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastFollowedDidOrHandle, 'did:test:peer');
+    expect(find.text('已关注'), findsOneWidget);
+  });
+
+  testWidgets('聊天头部关注失败时保持未关注并提示错误', (tester) async {
+    final gateway = FakeAwikiGateway()..failNextFollow = true;
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:follow-failed',
+      displayName: 'Peer',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('关注'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('关注'), findsOneWidget);
+    expect(find.text('已关注'), findsNothing);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    expect(container.read(uiFeedbackProvider)?.danger, isTrue);
+    expect(gateway.following, isEmpty);
+  });
+
+  testWidgets('聊天头部已关注按钮取消关注前需要确认', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..following = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: 'did:test:peer',
+          displayName: 'Peer',
+          relationship: 'following',
+        ),
+      ];
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:unfollow-button',
+      displayName: 'Peer',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          friendsProvider.overrideWith((ref) {
+            final controller = FriendsController(ref);
+            controller.state = const FriendsState(
+              following: <RelationshipSummary>[
+                RelationshipSummary(
+                  did: 'did:test:peer',
+                  displayName: 'Peer',
+                  relationship: 'following',
+                ),
+              ],
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('已关注'));
+    await tester.pump();
+
+    expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+    expect(gateway.lastUnfollowedDidOrHandle, isNull);
+
+    await tester.tap(find.text('取消关注').last);
+    await tester.pump();
+
+    expect(gateway.lastUnfollowedDidOrHandle, 'did:test:peer');
   });
 
   testWidgets('macOS 聊天头部刷新按钮会同步当前会话消息', (tester) async {
@@ -493,6 +639,53 @@ void main() {
     expect(find.text('发送失败'), findsNothing);
     expect(gateway.lastSentThreadId, 'dm:did:test:peer');
     expect(gateway.lastSentContent, 'hello');
+  });
+
+  testWidgets('附件按钮会选择文件并发送附件消息', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final picker = FakeAttachmentPickerService()
+      ..nextPick = AttachmentDraft(
+        filename: 'report.pdf',
+        mimeType: 'application/pdf',
+        bytes: Uint8List.fromList(<int>[1, 2, 3]),
+        sizeBytes: 3,
+      );
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:attachment',
+      displayName: 'Tester',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          attachmentPickerServiceProvider.overrideWithValue(picker),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('chat-attachment-button')));
+    await tester.pumpAndSettle();
+
+    expect(picker.pickCalls, 1);
+    expect(gateway.lastSentThreadId, 'dm:did:test:peer');
+    expect(gateway.lastSentAttachment?.filename, 'report.pdf');
+    expect(find.text('report.pdf'), findsOneWidget);
   });
 }
 

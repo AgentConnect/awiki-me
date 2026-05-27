@@ -20,6 +20,18 @@ void main() {
     expect(credentials.single.jwtToken, isNull);
   });
 
+  test('credential delete delegates to app session service', () async {
+    final sessions = _FakeSessions(defaultSession: _session('default-id'));
+    final gateway = CompatAwikiAccountGateway(
+      sessions: sessions,
+      onboarding: _FakeOnboarding(),
+    );
+
+    await gateway.deleteLocalCredential('alice-local');
+
+    expect(sessions.deletedIdentities, ['alice-local']);
+  });
+
   test('unsupported credential operations fail explicitly', () async {
     final gateway = CompatAwikiAccountGateway(
       sessions: _FakeSessions(defaultSession: _session('default-id')),
@@ -28,10 +40,6 @@ void main() {
 
     expect(
       () => gateway.loginWithLocalCredential('alice-local'),
-      throwsA(isA<UnsupportedError>()),
-    );
-    expect(
-      () => gateway.deleteLocalCredential('alice-local'),
       throwsA(isA<UnsupportedError>()),
     );
     expect(
@@ -83,6 +91,7 @@ class _FakeSessions implements AppSessionService {
     : _defaultSession = defaultSession;
 
   final AppSession? _defaultSession;
+  final List<String> deletedIdentities = <String>[];
 
   @override
   Future<AppSession> activateIdentity(AppSession identity) async => identity;
@@ -102,6 +111,12 @@ class _FakeSessions implements AppSessionService {
 
   @override
   Future<void> logout() async {}
+
+  @override
+  Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
+    deletedIdentities.add(identityIdOrAlias);
+    return _defaultSession ?? _session(identityIdOrAlias);
+  }
 
   @override
   Future<AppSession?> refreshSession() async => _defaultSession;

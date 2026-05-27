@@ -151,10 +151,23 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       return;
     }
     await _runBusy(() async {
-      // TODO(im-core): enable after SDK identity delete API is exposed.
-      throw UnsupportedError(
-        'IM Core local credential delete is not available yet',
-      );
+      _isLoggingOut = true;
+      try {
+        ref.read(sessionProvider.notifier).clear();
+        ref.read(profileProvider.notifier).clear();
+        ref.read(selectedConversationProvider.notifier).clearSelection();
+        await ref.read(conversationListProvider.notifier).clear();
+        ref.read(chatThreadsProvider.notifier).clear();
+        ref.read(friendsProvider.notifier).clear();
+        ref.read(groupProvider.notifier).clear();
+        await ref
+            .read(appSessionServiceProvider)
+            .deleteLocalIdentity(current.credentialName);
+        final credentials = await _localCredentialsFor(ref);
+        ref.read(sessionProvider.notifier).setLocalCredentials(credentials);
+      } finally {
+        _isLoggingOut = false;
+      }
     });
   }
 
@@ -333,8 +346,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     if (!update.message.isMine) {
       final title = _notificationTitle(update);
-      final body = update.message.content.isNotEmpty
-          ? update.message.content
+      final preview = update.message.previewText;
+      final body = preview.isNotEmpty
+          ? preview
           : AppMessage.newMessageArrived().resolveForFallback();
       final isForeground =
           ref.read(appLifecycleProvider) == AppLifecycleState.resumed;

@@ -141,24 +141,24 @@
   "settingsNoCredentialToExport": "No signed-in credential available to export",
   "settingsLogout": "Log out",
   "settingsLogoutSubtitle": "Clear local sign-in state and return to the sign-in page",
-  "settingsDeleteCredential": "Delete current credential",
+  "settingsDeleteCredential": "Sign out and delete current credential",
   "settingsDeleteCurrentCredential": "Delete local credential: {credentialName}",
   "@settingsDeleteCurrentCredential": {
     "placeholders": {
       "credentialName": {}
     }
   },
-  "settingsDeleteCredentialFallback": "Delete current signed-in credential",
+  "settingsDeleteCredentialFallback": "Sign out and delete current signed-in credential",
   "settingsLogoutConfirmTitle": "Log out",
   "settingsLogoutConfirmContent": "Are you sure you want to log out of the current account?",
-  "settingsDeleteCredentialConfirmTitle": "Delete current credential",
-  "settingsDeleteCredentialConfirmContent": "This will delete the local credential \"{credentialName}\" and log you out. Continue?",
+  "settingsDeleteCredentialConfirmTitle": "Sign out and delete current credential",
+  "settingsDeleteCredentialConfirmContent": "This will sign you out and delete the local credential \"{credentialName}\". To use it again, you will need to import or recover the identity. Continue?",
   "@settingsDeleteCredentialConfirmContent": {
     "placeholders": {
       "credentialName": {}
     }
   },
-  "settingsDeleteCredentialConfirmAction": "Delete credential",
+  "settingsDeleteCredentialConfirmAction": "Sign out and delete",
   "quickActionsTitle": "More actions",
   "quickActionCreateGroup": "Start group chat",
   "quickActionJoinGroup": "Join group chat",

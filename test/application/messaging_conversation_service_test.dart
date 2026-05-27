@@ -1,5 +1,6 @@
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
+import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/ports/conversation_core_port.dart';
@@ -145,6 +146,15 @@ class _FakeMessages implements MessageCorePort {
   final List<String> retriedIds = <String>[];
 
   @override
+  Future<AttachmentDownloadResult> downloadAttachment({
+    required AppThreadRef thread,
+    required String messageId,
+    String? attachmentId,
+    String? localPath,
+  }) async =>
+      AttachmentDownloadResult(attachmentId: attachmentId ?? 'attachment-1');
+
+  @override
   Future<List<ChatMessage>> loadHistory(
     AppThreadRef thread, {
     int limit = 100,
@@ -158,6 +168,16 @@ class _FakeMessages implements MessageCorePort {
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed) async {
     retriedIds.add(failed.localId);
     return failed.copyWith(sendState: MessageSendState.sending);
+  }
+
+  @override
+  Future<ChatMessage> sendAttachment({
+    required AppThreadRef thread,
+    required AttachmentDraft attachment,
+    String? caption,
+    String? idempotencyKey,
+  }) async {
+    return _message(caption ?? attachment.filename);
   }
 
   @override

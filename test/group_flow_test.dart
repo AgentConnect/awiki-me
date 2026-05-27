@@ -7,6 +7,7 @@ import 'package:awiki_me/src/presentation/group/create_group_page.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
@@ -80,6 +81,22 @@ void main() {
 
   testWidgets('群详情显示 Group DID 且不再显示 join-code 操作', (tester) async {
     const groupDid = 'did:wba:awiki.ai:group:e1_group';
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+    String? clipboardText;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall methodCall,
+        ) async {
+          if (methodCall.method == 'Clipboard.setData') {
+            final data = methodCall.arguments as Map<Object?, Object?>;
+            clipboardText = data['text'] as String?;
+          }
+          return null;
+        });
+
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const GroupDetailPage(
@@ -96,7 +113,24 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Group DID: $groupDid'), findsOneWidget);
+    final didFinder = find.byKey(const Key('group-detail-did-value'));
+    expect(didFinder, findsOneWidget);
+    final didText = tester.widget<Text>(didFinder);
+    expect(didText.data, groupDid);
+    expect(didText.maxLines, isNull);
+    expect(
+      find.byKey(const Key('group-detail-copy-did-button')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('group-detail-copy-did-button')));
+    await tester.pump();
+
+    expect(clipboardText, groupDid);
+    expect(find.text('DID 已复制'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
+
     expect(find.textContaining('Join-code'), findsNothing);
     expect(find.textContaining('join-code'), findsNothing);
   });

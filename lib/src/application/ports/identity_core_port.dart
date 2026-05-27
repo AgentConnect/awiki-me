@@ -7,6 +7,8 @@ abstract interface class IdentityCorePort {
 
   Future<AppSession> resolveIdentity(String identityIdOrAlias);
 
+  Future<AppSession> deleteLocalIdentity(String identityIdOrAlias);
+
   Future<AppSession> registerHandleWithPhone({
     required String phone,
     required String otp,

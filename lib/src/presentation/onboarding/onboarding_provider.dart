@@ -12,7 +12,7 @@ import '../app_shell/providers/app_runtime_provider.dart';
 
 class OnboardingState {
   const OnboardingState({
-    this.entryMode = 'login',
+    this.entryMode = 'register',
     this.authMode = 'phone',
     this.registerStep = 1,
     this.emailVerified = false,
@@ -71,6 +71,18 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   }
 
   void setEntryMode(String value) {
+    _setEntryMode(value);
+  }
+
+  void setEntryModeFromLocalCredentials(List<SessionIdentity> credentials) {
+    final nextMode = credentials.isEmpty ? 'register' : 'login';
+    if (state.entryMode == nextMode) {
+      return;
+    }
+    _setEntryMode(nextMode);
+  }
+
+  void _setEntryMode(String value) {
     state = state.copyWith(
       entryMode: value,
       registerStep: value == 'login' ? 1 : state.registerStep,

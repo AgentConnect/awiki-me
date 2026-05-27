@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.provider.OpenableColumns
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
@@ -11,24 +12,31 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.util.UUID
 
 class MainActivity : FlutterActivity() {
     companion object {
         private const val DOCUMENT_CHANNEL = "ai.awiki.awikime/document_picker"
+        private const val ATTACHMENT_CHANNEL = "ai.awiki.awikime/attachment_picker"
         private const val UPDATE_CHANNEL = "ai.awiki.awikime/app_update"
         private const val REQUEST_SAVE_ZIP = 2001
         private const val REQUEST_PICK_ZIP = 2002
+        private const val REQUEST_PICK_ATTACHMENT = 2003
+        private const val REQUEST_SAVE_ATTACHMENT = 2004
     }
 
     private var pendingSaveBytes: ByteArray? = null
     private var pendingSaveResult: MethodChannel.Result? = null
     private var pendingPickResult: MethodChannel.Result? = null
+    private var pendingSaveMimeType: String = "application/octet-stream"
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         when (requestCode) {
             REQUEST_SAVE_ZIP -> handleSaveResult(resultCode = resultCode, data = data)
             REQUEST_PICK_ZIP -> handlePickResult(resultCode = resultCode, data = data)
+            REQUEST_PICK_ATTACHMENT -> handleAttachmentPickResult(resultCode = resultCode, data = data)
+            REQUEST_SAVE_ATTACHMENT -> handleSaveResult(resultCode = resultCode, data = data)
         }
     }
 
@@ -40,6 +48,15 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "saveZipFile" -> handleSaveZipFile(call = call, result = result)
                     "pickZipFile" -> launchPickDocument(result)
+                    else -> result.notImplemented()
+                }
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ATTACHMENT_CHANNEL)
+            .setMethodCallHandler { call: MethodCall, result: MethodChannel.Result ->
+                when (call.method) {
+                    "pickAttachment" -> launchPickAttachment(result)
+                    "saveAttachment" -> handleSaveAttachment(call = call, result = result)
                     else -> result.notImplemented()
                 }
             }
@@ -73,7 +90,39 @@ class MainActivity : FlutterActivity() {
                 is List<*> -> raw.filterIsInstance<Number>().map { it.toByte() }.toByteArray()
                 else -> throw IllegalArgumentException("bytes is required")
             }
-            launchSaveDocument(fileName = fileName, bytes = bytes, result = result)
+            launchSaveDocument(
+                fileName = fileName,
+                mimeType = "application/zip",
+                bytes = bytes,
+                result = result,
+                requestCode = REQUEST_SAVE_ZIP,
+            )
+        } catch (e: Exception) {
+            result.error("save_failed", formatExceptionMessage(e), null)
+        }
+    }
+
+    private fun handleSaveAttachment(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            val args = call.arguments as? Map<*, *> ?: emptyMap<Any?, Any?>()
+            val fileName = (args["filename"] as? String)
+                ?.takeIf { it.isNotBlank() }
+                ?: throw IllegalArgumentException("filename is required")
+            val mimeType = (args["mime_type"] as? String)
+                ?.takeIf { it.isNotBlank() }
+                ?: "application/octet-stream"
+            val bytes = when (val raw = args["bytes"]) {
+                is ByteArray -> raw
+                is List<*> -> raw.filterIsInstance<Number>().map { it.toByte() }.toByteArray()
+                else -> throw IllegalArgumentException("bytes is required")
+            }
+            launchSaveDocument(
+                fileName = fileName,
+                mimeType = mimeType,
+                bytes = bytes,
+                result = result,
+                requestCode = REQUEST_SAVE_ATTACHMENT,
+            )
         } catch (e: Exception) {
             result.error("save_failed", formatExceptionMessage(e), null)
         }
@@ -97,6 +146,7 @@ class MainActivity : FlutterActivity() {
         val bytes = pendingSaveBytes
         pendingSaveBytes = null
         pendingSaveResult = null
+        pendingSaveMimeType = "application/octet-stream"
         if (callback == null) {
             return
         }
@@ -141,10 +191,39 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun handleAttachmentPickResult(resultCode: Int, data: Intent?) {
+        val callback = pendingPickResult
+        pendingPickResult = null
+        if (callback == null) {
+            return
+        }
+        if (resultCode != Activity.RESULT_OK || data?.data == null) {
+            callback.success(null)
+            return
+        }
+        val uri = data.data ?: return
+        try {
+            val metadata = readDocumentMetadata(uri)
+            val cachedFile = copyAttachmentToCache(uri = uri, fileName = metadata.fileName)
+            callback.success(
+                mapOf(
+                    "filename" to metadata.fileName,
+                    "mime_type" to metadata.mimeType,
+                    "size_bytes" to (metadata.sizeBytes ?: cachedFile.length()),
+                    "path" to cachedFile.absolutePath,
+                ),
+            )
+        } catch (e: Exception) {
+            callback.error("pick_failed", formatExceptionMessage(e), null)
+        }
+    }
+
     private fun launchSaveDocument(
         fileName: String,
+        mimeType: String,
         bytes: ByteArray,
         result: MethodChannel.Result,
+        requestCode: Int,
     ) {
         if (pendingSaveResult != null) {
             result.error("save_in_progress", "已有导出任务正在进行。", null)
@@ -152,12 +231,13 @@ class MainActivity : FlutterActivity() {
         }
         pendingSaveResult = result
         pendingSaveBytes = bytes
+        pendingSaveMimeType = mimeType
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type = "application/zip"
+            type = pendingSaveMimeType
             putExtra(Intent.EXTRA_TITLE, fileName)
         }
-        startActivityForResult(intent, REQUEST_SAVE_ZIP)
+        startActivityForResult(intent, requestCode)
     }
 
     private fun launchPickDocument(result: MethodChannel.Result) {
@@ -172,6 +252,73 @@ class MainActivity : FlutterActivity() {
         }
         startActivityForResult(intent, REQUEST_PICK_ZIP)
     }
+
+    private fun launchPickAttachment(result: MethodChannel.Result) {
+        if (pendingPickResult != null) {
+            result.error("pick_in_progress", "已有文件选择任务正在进行。", null)
+            return
+        }
+        pendingPickResult = result
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+        }
+        startActivityForResult(intent, REQUEST_PICK_ATTACHMENT)
+    }
+
+    private fun readDocumentMetadata(uri: Uri): DocumentMetadata {
+        var fileName: String? = null
+        var sizeBytes: Long? = null
+        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+            if (cursor.moveToFirst()) {
+                if (nameIndex >= 0) {
+                    fileName = cursor.getString(nameIndex)
+                }
+                if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) {
+                    sizeBytes = cursor.getLong(sizeIndex)
+                }
+            }
+        }
+        val fallbackName = uri.lastPathSegment
+            ?.substringAfterLast('/')
+            ?.takeIf { it.isNotBlank() }
+            ?: "attachment"
+        return DocumentMetadata(
+            fileName = fileName?.takeIf { it.isNotBlank() } ?: fallbackName,
+            mimeType = contentResolver.getType(uri) ?: "application/octet-stream",
+            sizeBytes = sizeBytes,
+        )
+    }
+
+    private fun copyAttachmentToCache(uri: Uri, fileName: String): File {
+        val directory = File(cacheDir, "attachments").apply {
+            mkdirs()
+        }
+        val safeName = sanitizeFileName(fileName).ifBlank { "attachment" }
+        val outputFile = File(directory, "${UUID.randomUUID()}-$safeName")
+        contentResolver.openInputStream(uri)?.use { input ->
+            outputFile.outputStream().use { output ->
+                input.copyTo(output)
+                output.flush()
+            }
+        } ?: throw IllegalStateException("无法读取所选文件。")
+        return outputFile
+    }
+
+    private fun sanitizeFileName(fileName: String): String {
+        return fileName
+            .replace(Regex("[\\\\/:*?\"<>|\\u0000-\\u001F]"), "_")
+            .trim()
+            .take(160)
+    }
+
+    private data class DocumentMetadata(
+        val fileName: String,
+        val mimeType: String,
+        val sizeBytes: Long?,
+    )
 
     private fun canRequestPackageInstalls(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {

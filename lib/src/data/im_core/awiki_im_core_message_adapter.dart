@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
+import '../../application/models/attachment_models.dart';
 import '../../application/models/app_thread_ref.dart';
 import '../../application/ports/message_core_port.dart';
 import '../../domain/entities/chat_message.dart';
@@ -21,15 +24,81 @@ class AwikiImCoreMessageAdapter implements MessageCorePort {
     required AppThreadRef thread,
     required String content,
   }) async {
-    final client = await _runtime.currentClient();
-    final ownerDid = (await client.identity.current()).did;
-    final result = await client.messages.sendText(
-      core.SendTextRequest(
-        target: _mappers.messageTargetToCore(thread),
-        text: content,
-      ),
-    );
-    return _mappers.chatMessageFromCore(result.message, ownerDid: ownerDid);
+    return _runtime.withCurrentClient((client) async {
+      final ownerDid = (await client.identity.current()).did;
+      final result = await client.messages.sendText(
+        core.SendTextRequest(
+          target: _mappers.messageTargetToCore(thread),
+          text: content,
+        ),
+      );
+      return _mappers.chatMessageFromCore(result.message, ownerDid: ownerDid);
+    });
+  }
+
+  @override
+  Future<ChatMessage> sendAttachment({
+    required AppThreadRef thread,
+    required AttachmentDraft attachment,
+    String? caption,
+    String? idempotencyKey,
+  }) async {
+    return _runtime.withCurrentClient((client) async {
+      final ownerDid = (await client.identity.current()).did;
+      final result = await client.attachments.send(
+        core.AttachmentSendRequest(
+          target: _mappers.messageTargetToCore(thread),
+          input: _attachmentInputToCore(attachment),
+          caption: caption,
+          filename: attachment.filename,
+          mimeType: attachment.mimeType,
+          idempotencyKey: idempotencyKey,
+        ),
+      );
+      return _mappers.chatMessageFromCore(
+        result.message.message,
+        ownerDid: ownerDid,
+      );
+    });
+  }
+
+  @override
+  Future<AttachmentDownloadResult> downloadAttachment({
+    required AppThreadRef thread,
+    required String messageId,
+    String? attachmentId,
+    String? localPath,
+  }) async {
+    return _runtime.withCurrentClient((client) async {
+      final result = await client.attachments.download(
+        core.DownloadAttachmentRequest(
+          thread: _mappers.threadRefToCore(thread),
+          messageId: messageId,
+          attachmentId: attachmentId,
+          destination: localPath == null
+              ? const core.AttachmentDestination.memory()
+              : core.AttachmentDestination.localFile(localPath),
+          overwrite: true,
+        ),
+      );
+      return AttachmentDownloadResult(
+        attachmentId: result.attachmentId,
+        filename: result.filename,
+        mimeType: result.mimeType,
+        sizeBytes: result.sizeBytes,
+        localPath: switch (result.destination) {
+          core.DownloadedAttachmentLocalFile(:final path) => path,
+          core.DownloadedAttachmentMemory() => null,
+        },
+        bytes: switch (result.destination) {
+          core.DownloadedAttachmentLocalFile() => null,
+          core.DownloadedAttachmentMemory(:final bytes) => Uint8List.fromList(
+            bytes,
+          ),
+        },
+        warnings: result.warnings,
+      );
+    });
   }
 
   @override
@@ -38,20 +107,21 @@ class AwikiImCoreMessageAdapter implements MessageCorePort {
     int limit = 100,
     String? cursor,
   }) async {
-    final client = await _runtime.currentClient();
-    final ownerDid = (await client.identity.current()).did;
-    final page = await client.messages.history(
-      _mappers.threadRefToCore(thread),
-      limit: limit,
-      cursor: cursor,
-    );
-    return page.items
-        .map(
-          (message) =>
-              _mappers.chatMessageFromCore(message, ownerDid: ownerDid),
-        )
-        .where((message) => message.hasDisplayableText)
-        .toList();
+    return _runtime.withCurrentClient((client) async {
+      final ownerDid = (await client.identity.current()).did;
+      final page = await client.messages.history(
+        _mappers.threadRefToCore(thread),
+        limit: limit,
+        cursor: cursor,
+      );
+      return page.items
+          .map(
+            (message) =>
+                _mappers.chatMessageFromCore(message, ownerDid: ownerDid),
+          )
+          .where((message) => message.hasRenderableContent)
+          .toList();
+    });
   }
 
   @override
@@ -61,6 +131,22 @@ class AwikiImCoreMessageAdapter implements MessageCorePort {
       content: failed.content,
     );
   }
+}
+
+core.AttachmentInput _attachmentInputToCore(AttachmentDraft attachment) {
+  final localPath = attachment.localPath?.trim();
+  if (localPath != null && localPath.isNotEmpty) {
+    return core.AttachmentInput.localFile(localPath);
+  }
+  final bytes = attachment.bytes;
+  if (bytes == null) {
+    throw StateError('Attachment draft requires a local path or bytes.');
+  }
+  return core.AttachmentInput.bytes(
+    filename: attachment.filename,
+    mimeType: attachment.mimeType,
+    bytes: bytes,
+  );
 }
 
 AppThreadRef _threadFromFailedMessage(ChatMessage failed) {

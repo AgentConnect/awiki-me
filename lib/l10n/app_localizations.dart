@@ -707,7 +707,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsDeleteCredential.
   ///
   /// In zh, this message translates to:
-  /// **'注销当前凭证'**
+  /// **'退出并删除当前凭证'**
   String get settingsDeleteCredential;
 
   /// No description provided for @settingsDeleteCurrentCredential.
@@ -719,7 +719,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsDeleteCredentialFallback.
   ///
   /// In zh, this message translates to:
-  /// **'删除当前登录凭证'**
+  /// **'退出并删除当前登录凭证'**
   String get settingsDeleteCredentialFallback;
 
   /// No description provided for @settingsLogoutConfirmTitle.
@@ -737,19 +737,19 @@ abstract class AppLocalizations {
   /// No description provided for @settingsDeleteCredentialConfirmTitle.
   ///
   /// In zh, this message translates to:
-  /// **'注销当前凭证'**
+  /// **'退出并删除当前凭证'**
   String get settingsDeleteCredentialConfirmTitle;
 
   /// No description provided for @settingsDeleteCredentialConfirmContent.
   ///
   /// In zh, this message translates to:
-  /// **'将删除本地凭证 \"{credentialName}\"，并退出登录。确定继续吗？'**
+  /// **'将退出当前登录，并删除本地凭证 \"{credentialName}\"。删除后需要重新导入或恢复身份才能再次使用该凭证。确定继续吗？'**
   String settingsDeleteCredentialConfirmContent(Object credentialName);
 
   /// No description provided for @settingsDeleteCredentialConfirmAction.
   ///
   /// In zh, this message translates to:
-  /// **'确认注销'**
+  /// **'退出并删除'**
   String get settingsDeleteCredentialConfirmAction;
 
   /// No description provided for @quickActionsTitle.

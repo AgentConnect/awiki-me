@@ -10,6 +10,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_workspa
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
@@ -80,7 +81,219 @@ void main() {
 
     expect(find.byType(ChatView), findsOneWidget);
     expect(find.text('会话信息'), findsOneWidget);
+    expect(find.text('did:peer'), findsOneWidget);
     expect(find.text('安全协作中'), findsOneWidget);
+    expect(
+      find.byKey(const Key('chat-conversation-info-button')),
+      findsOneWidget,
+    );
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 会话信息完整显示 DID 并支持一键复制', (tester) async {
+    const longDid =
+        'did:awiki:user:marcus-chen-lab:e1_abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789';
+    final longDidConversation = ConversationSummary(
+      threadId: 'dm:did:me:$longDid',
+      displayName: 'Marcus Chen',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 3, 28, 10, 24),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: longDid,
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[longDidConversation]
+      ..dmHistoryByPeerDid = const <String, List<ChatMessage>>{longDid: []};
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    String? clipboardText;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall methodCall,
+        ) async {
+          if (methodCall.method == 'Clipboard.setData') {
+            final data = methodCall.arguments as Map<Object?, Object?>;
+            clipboardText = data['text'] as String?;
+          }
+          return null;
+        });
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Marcus Chen'));
+    await tester.pumpAndSettle();
+
+    final didFinder = find.byKey(const Key('mac-conversation-did-value'));
+    expect(didFinder, findsOneWidget);
+    final didText = tester.widget<Text>(didFinder);
+    expect(didText.data, longDid);
+    expect(didText.maxLines, isNull);
+    expect(
+      find.byKey(const Key('mac-conversation-copy-did-button')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('mac-conversation-copy-did-button')));
+    await tester.pump();
+
+    expect(clipboardText, longDid);
+    expect(find.text('DID 已复制'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 身份卡在右侧栏替换会话信息并支持关闭', (tester) async {
+    const peerProfile = UserProfile(
+      did: 'did:peer',
+      nickName: 'Marcus Chen',
+      bio: '融资协作 Agent',
+      tags: <String>['Agent'],
+      profileMarkdown: '# Marcus\n\n负责融资协作。',
+      handle: 'marcus',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history}
+      ..publicProfilesByQuery = <String, UserProfile>{'did:peer': peerProfile};
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        homepageMarkdownLoader: (_) async => null,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Marcus Chen').first);
+    await tester.pumpAndSettle();
+    expect(find.text('会话信息'), findsOneWidget);
+    final conversationInfoWidth = tester
+        .getSize(find.byKey(const Key('mac-side-panel')))
+        .width;
+
+    await tester.tap(find.text('身份卡'));
+    await tester.pumpAndSettle();
+
+    final identityCardWidth = tester
+        .getSize(find.byKey(const Key('mac-side-panel')))
+        .width;
+    expect(identityCardWidth, greaterThan(conversationInfoWidth));
+    expect(find.text('Marcus Chen 的身份卡'), findsOneWidget);
+    expect(find.text('会话信息'), findsNothing);
+    expect(find.text('负责融资协作。'), findsOneWidget);
+    expect(find.text('@marcus'), findsOneWidget);
+
+    await tester.tap(find.text('身份卡'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('mac-side-panel')), findsNothing);
+    expect(find.text('会话信息'), findsNothing);
+    expect(find.text('Marcus Chen 的身份卡'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('会话信息'), findsOneWidget);
+
+    await tester.tap(find.text('身份卡'));
+    await tester.pumpAndSettle();
+    final beforeResize = tester
+        .getSize(find.byKey(const Key('mac-side-panel')))
+        .width;
+    await tester.drag(
+      find.byKey(const Key('mac-side-panel-resize-divider')),
+      const Offset(-80, 0),
+    );
+    await tester.pumpAndSettle();
+    final afterResize = tester
+        .getSize(find.byKey(const Key('mac-side-panel')))
+        .width;
+
+    expect(afterResize, greaterThan(beforeResize));
+
+    await tester.tap(find.byKey(const Key('mac-side-panel-close-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('会话信息'), findsOneWidget);
+    expect(find.text('Marcus Chen 的身份卡'), findsNothing);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 会话信息按钮支持折叠和重新打开右侧栏', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Marcus Chen'));
+    await tester.pumpAndSettle();
+    expect(find.text('会话信息'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('会话信息'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('会话信息'), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

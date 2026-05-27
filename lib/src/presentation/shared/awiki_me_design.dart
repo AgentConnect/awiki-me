@@ -7,6 +7,12 @@ import 'package:flutter/material.dart'
 class AwikiMePalette {
   static const Color amber = Color(0xFFFFAA00);
   static const Color amberDeep = Color(0xFF825500);
+  static const Color actionBlue = Color(0xFF0B65F8);
+  static const Color actionBlueDeep = Color(0xFF0752F0);
+  static const Color actionBlueSoft = Color(0xFFEAF2FF);
+  static const Color actionBlueBorder = Color(0xFFDDE5F0);
+  static const Color actionInk = Color(0xFF17213A);
+  static const Color actionMuted = Color(0xFF66728A);
   static const Color ivory = Color(0xFFFAF9FE);
   static const Color white = Color(0xFFFFFFFF);
   static const Color mist = Color(0xFFF4F3F8);
@@ -30,8 +36,8 @@ class AwikiMeColors {
   static const Color subtleSurface = AwikiMePalette.mist;
   static const Color mutedSurface = AwikiMePalette.cloud;
   static const Color border = AwikiMePalette.line;
-  static const Color primary = AwikiMePalette.amber;
-  static const Color primaryDark = AwikiMePalette.amberDeep;
+  static const Color primary = AwikiMePalette.actionBlue;
+  static const Color primaryDark = AwikiMePalette.actionBlue;
   static const Color title = AwikiMePalette.ink;
   static const Color body = AwikiMePalette.body;
   static const Color secondaryText = AwikiMePalette.slate;
@@ -158,7 +164,7 @@ class AwikiMeThemeTokens extends ThemeExtension<AwikiMeThemeTokens> {
 class AwikiMeTheme {
   static const ColorScheme colorScheme = ColorScheme(
     brightness: Brightness.light,
-    primary: AwikiMePalette.amber,
+    primary: AwikiMePalette.actionBlue,
     onPrimary: AwikiMePalette.white,
     secondary: AwikiMePalette.infoBlue,
     onSecondary: AwikiMePalette.white,
@@ -170,7 +176,7 @@ class AwikiMeTheme {
     onSurfaceVariant: AwikiMePalette.slate,
     outline: AwikiMePalette.fog,
     outlineVariant: AwikiMePalette.line,
-    primaryContainer: AwikiMePalette.amberDeep,
+    primaryContainer: AwikiMePalette.actionBlue,
     onPrimaryContainer: AwikiMePalette.white,
     secondaryContainer: Color(0xFFDCEBFF),
     onSecondaryContainer: AwikiMePalette.infoBlue,
@@ -184,10 +190,10 @@ class AwikiMeTheme {
     onTertiaryContainer: Color(0xFF059669),
     inverseSurface: AwikiMePalette.ink,
     onInverseSurface: AwikiMePalette.white,
-    inversePrimary: AwikiMePalette.amber,
+    inversePrimary: AwikiMePalette.actionBlue,
     shadow: Color(0x1A000000),
     scrim: Color(0x52000000),
-    surfaceTint: AwikiMePalette.amber,
+    surfaceTint: AwikiMePalette.actionBlue,
   );
 
   static const AwikiMeThemeTokens tokens = AwikiMeThemeTokens(

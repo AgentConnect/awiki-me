@@ -581,7 +581,7 @@ class _BottomNavBar extends StatelessWidget {
     final bottomPadding = embedded
         ? 0.0
         : (bottomInset > 0 ? responsive.spacing(8) : 16.0);
-    final navHeight = showLabels ? 64.0 : responsive.navBarHeight;
+    final navHeight = showLabels ? 62.0 : responsive.navBarHeight;
     return SafeArea(
       top: false,
       child: Padding(
@@ -605,10 +605,10 @@ class _BottomNavBar extends StatelessWidget {
                 height: navHeight,
                 padding: EdgeInsets.symmetric(
                   horizontal: showLabels
-                      ? responsive.spacing(10)
+                      ? responsive.spacing(8)
                       : responsive.spacing(18),
                   vertical: showLabels
-                      ? responsive.spacing(1)
+                      ? responsive.spacing(5)
                       : responsive.spacing(8),
                 ),
                 decoration: BoxDecoration(
@@ -686,15 +686,16 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     final navIconSize = showLabel
-        ? 74.0
-        : (responsive.isPhone ? 42.0 : responsive.iconLg * 2);
+        ? 24.0
+        : (responsive.isPhone ? 30.0 : responsive.iconLg * 2);
     final tapSize = responsive.isPhone
         ? responsive.compactControlHeight + responsive.spacing(6)
         : 44.0;
-    final foreground = active ? theme.primaryDark : theme.secondaryText;
+    final foreground = active
+        ? AwikiMePalette.actionBlue
+        : AwikiMePalette.actionMuted;
     return Semantics(
       button: true,
       selected: active,
@@ -717,43 +718,36 @@ class _NavButton extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               color: active && showLabel
-                  ? theme.primary.withValues(alpha: 0.12)
+                  ? AwikiMePalette.actionBlueSoft
                   : const Color(0x00FFFFFF),
-              borderRadius: BorderRadius.circular(showLabel ? 18 : 0),
+              borderRadius: BorderRadius.circular(showLabel ? 10 : 0),
             ),
             child: showLabel
-                ? Stack(
-                    clipBehavior: Clip.none,
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: <Widget>[
-                      Positioned(
-                        top: -20,
-                        left: 0,
-                        right: 0,
-                        child: Center(
-                          child: SvgPicture.asset(
-                            active ? activeAsset : inactiveAsset,
-                            width: navIconSize,
-                            height: navIconSize,
-                          ),
+                      SvgPicture.asset(
+                        active ? activeAsset : inactiveAsset,
+                        width: navIconSize,
+                        height: navIconSize,
+                        colorFilter: ColorFilter.mode(
+                          foreground,
+                          BlendMode.srcIn,
                         ),
                       ),
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            label,
-                            maxLines: 1,
-                            style: TextStyle(
-                              color: foreground,
-                              fontSize: 15,
-                              fontWeight: active
-                                  ? FontWeight.w800
-                                  : FontWeight.w700,
-                              height: 1,
-                            ),
+                      const SizedBox(height: 4),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: foreground,
+                            fontSize: 11,
+                            fontWeight: active
+                                ? FontWeight.w800
+                                : FontWeight.w700,
+                            height: 1,
                           ),
                         ),
                       ),
@@ -764,6 +758,10 @@ class _NavButton extends StatelessWidget {
                       active ? activeAsset : inactiveAsset,
                       width: navIconSize,
                       height: navIconSize,
+                      colorFilter: ColorFilter.mode(
+                        foreground,
+                        BlendMode.srcIn,
+                      ),
                     ),
                   ),
           ),

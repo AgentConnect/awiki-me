@@ -23,16 +23,61 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   final otpController = TextEditingController();
   final emailController = TextEditingController();
   final handleController = TextEditingController();
+  ProviderSubscription<AppRuntimeState>? _runtimeSubscription;
+  bool _initialEntryModeResolved = false;
 
   String get _normalizedPhone => phoneController.text.trim();
 
   @override
+  void initState() {
+    super.initState();
+    _runtimeSubscription = ref.listenManual<AppRuntimeState>(
+      appRuntimeProvider,
+      (_, next) {
+        if (next.isInitialized && !next.isBusy) {
+          _resolveInitialEntryMode();
+        }
+      },
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final runtime = ref.read(appRuntimeProvider);
+      final credentials = ref.read(sessionProvider).localCredentials;
+      if (!runtime.isBusy &&
+          (runtime.isInitialized || credentials.isNotEmpty)) {
+        _resolveInitialEntryMode();
+      }
+    });
+  }
+
+  @override
   void dispose() {
+    _runtimeSubscription?.close();
     phoneController.dispose();
     otpController.dispose();
     emailController.dispose();
     handleController.dispose();
     super.dispose();
+  }
+
+  void _resolveInitialEntryMode() {
+    if (_initialEntryModeResolved || !mounted) {
+      return;
+    }
+    final runtime = ref.read(appRuntimeProvider);
+    final credentials = ref.read(sessionProvider).localCredentials;
+    if (runtime.isBusy) {
+      return;
+    }
+    if (!runtime.isInitialized && credentials.isEmpty) {
+      return;
+    }
+    _initialEntryModeResolved = true;
+    ref
+        .read(onboardingProvider.notifier)
+        .setEntryModeFromLocalCredentials(credentials);
   }
 
   @override
@@ -95,7 +140,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   style: TextStyle(
                     fontSize: responsive.isPhone ? 72 : responsive.scaled(58),
                     fontWeight: FontWeight.w700,
-                    color: theme.primary,
+                    color: AwikiMePalette.actionBlue,
                     height: 1,
                   ),
                 ),
@@ -1558,11 +1603,10 @@ class _SegmentedPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     return AppSurface(
-      color: theme.mutedSurface,
-      radius: AwikiMeRadii.pill,
+      color: AwikiMePalette.actionBlueBorder.withValues(alpha: 0.48),
+      radius: 12,
       padding: responsive.scaledInsets(const EdgeInsets.all(4)),
       child: Row(
         children: options.entries
@@ -1575,18 +1619,18 @@ class _SegmentedPill extends StatelessWidget {
                       vertical: responsive.spacing(12),
                     ),
                     color: value == entry.key
-                        ? theme.surface
+                        ? CupertinoColors.white
                         : CupertinoColors.transparent,
-                    radius: AwikiMeRadii.pill,
+                    radius: 9,
                     child: Text(
                       entry.value,
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: responsive.bodyMd,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                         color: value == entry.key
-                            ? theme.title
-                            : theme.secondaryText,
+                            ? AwikiMePalette.actionBlue
+                            : AwikiMePalette.actionMuted,
                       ),
                     ),
                   ),
@@ -1607,7 +1651,6 @@ class _AuthModeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -1617,8 +1660,6 @@ class _AuthModeToggle extends StatelessWidget {
           selected: value == 'phone',
           assetName: 'assets/icons/icon_mobile.svg',
           label: context.l10n.onboardingPhone,
-          activeColor: theme.primary,
-          inactiveColor: theme.mutedSurface,
           onTap: () => onChanged('phone'),
         ),
         SizedBox(width: responsive.spacing(14)),
@@ -1627,8 +1668,6 @@ class _AuthModeToggle extends StatelessWidget {
           selected: value == 'email',
           assetName: 'assets/icons/icon_mail.svg',
           label: context.l10n.onboardingEmail,
-          activeColor: theme.primary,
-          inactiveColor: theme.mutedSurface,
           onTap: () => onChanged('email'),
         ),
       ],
@@ -1642,23 +1681,21 @@ class _AuthModeOption extends StatelessWidget {
     required this.selected,
     required this.assetName,
     required this.label,
-    required this.activeColor,
-    required this.inactiveColor,
     required this.onTap,
   });
 
   final bool selected;
   final String assetName;
   final String label;
-  final Color activeColor;
-  final Color inactiveColor;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
-    final buttonSize = responsive.isPhone ? 72.0 : responsive.scaled(36);
+    final buttonSize = responsive.isPhone ? 68.0 : responsive.scaled(42);
+    final foreground = selected
+        ? AwikiMePalette.actionBlue
+        : AwikiMePalette.actionMuted;
     return Semantics(
       label: label,
       button: true,
@@ -1670,14 +1707,21 @@ class _AuthModeOption extends StatelessWidget {
           width: buttonSize,
           height: buttonSize,
           decoration: BoxDecoration(
-            color: selected ? activeColor : inactiveColor,
-            borderRadius: BorderRadius.circular(buttonSize / 2),
+            color: selected
+                ? AwikiMePalette.actionBlueSoft
+                : CupertinoColors.white,
+            borderRadius: BorderRadius.circular(responsive.radius(12)),
+            border: Border.all(
+              color: selected
+                  ? AwikiMePalette.actionBlue
+                  : AwikiMePalette.actionBlueBorder,
+            ),
           ),
           child: Center(
             child: AwikiAssetIcon(
               assetName: assetName,
               size: responsive.isPhone ? 30 : responsive.iconMd,
-              color: theme.title,
+              color: foreground,
             ),
           ),
         ),

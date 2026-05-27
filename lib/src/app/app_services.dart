@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../application/attachment_picker_service.dart';
 import '../application/app_session_service.dart';
 import '../application/conversation_service.dart';
 import '../application/directory_application_service.dart';
@@ -12,6 +13,7 @@ import '../application/profile_application_service.dart';
 import '../application/realtime_application_service.dart';
 import '../application/relationship_application_service.dart';
 import '../data/services/locale_preference_service.dart';
+import '../data/services/method_channel_attachment_picker_service.dart';
 import '../domain/entities/realtime_update.dart';
 import '../domain/repositories/awiki_account_gateway.dart';
 import '../domain/repositories/awiki_gateway.dart';
@@ -127,4 +129,8 @@ final localePreferenceServiceProvider = Provider<LocalePreferenceService>(
 
 final updateServiceProvider = Provider<UpdateService>(
   (ref) => throw UnimplementedError('updateServiceProvider must be overridden'),
+);
+
+final attachmentPickerServiceProvider = Provider<AttachmentPickerService>(
+  (ref) => MethodChannelAttachmentPickerService(),
 );

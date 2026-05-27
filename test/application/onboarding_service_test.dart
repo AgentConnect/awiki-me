@@ -123,6 +123,11 @@ class _FakeIdentities implements IdentityCorePort {
   Future<AppSession> resolveIdentity(String identityIdOrAlias) async {
     return _session(identityIdOrAlias);
   }
+
+  @override
+  Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) {
+    throw UnsupportedError('unsupported');
+  }
 }
 
 class _FakeSessions implements AppSessionService {
@@ -148,6 +153,11 @@ class _FakeSessions implements AppSessionService {
 
   @override
   Future<void> logout() async {}
+
+  @override
+  Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) {
+    throw UnsupportedError('unsupported');
+  }
 
   @override
   Future<AppSession?> refreshSession() async =>

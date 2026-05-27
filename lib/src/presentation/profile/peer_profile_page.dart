@@ -18,6 +18,7 @@ import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/avatar_badge.dart';
+import '../shared/copyable_did_line.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
@@ -99,11 +100,18 @@ class PeerProfilePage extends ConsumerWidget {
                                         ),
                                       ),
                                       const SizedBox(height: 6),
-                                      Text(
-                                        profile.did,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: AwikiMeTextStyles.cardSubtitle,
+                                      CopyableDidLine(
+                                        value: profile.did,
+                                        copySemanticLabel: '复制 DID',
+                                        copiedMessage: 'DID 已复制',
+                                        textKey: const Key(
+                                          'peer-profile-did-value',
+                                        ),
+                                        buttonKey: const Key(
+                                          'peer-profile-copy-did-button',
+                                        ),
+                                        textStyle:
+                                            AwikiMeTextStyles.cardSubtitle,
                                       ),
                                     ],
                                   ),

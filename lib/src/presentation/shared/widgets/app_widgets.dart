@@ -406,12 +406,25 @@ class AppPrimaryButton extends StatelessWidget {
         opacity: onPressed == null ? 0.5 : 1,
         child: Container(
           constraints: BoxConstraints(minHeight: responsive.controlHeight),
-          padding: EdgeInsets.symmetric(vertical: responsive.spacing(10)),
+          padding: EdgeInsets.symmetric(
+            horizontal: responsive.spacing(16),
+            vertical: responsive.spacing(10),
+          ),
           decoration: BoxDecoration(
-            color: theme.primary,
-            borderRadius: BorderRadius.circular(
-              responsive.radius(AwikiMeRadii.sm),
+            gradient: const LinearGradient(
+              colors: <Color>[
+                AwikiMePalette.actionBlue,
+                AwikiMePalette.actionBlueDeep,
+              ],
             ),
+            borderRadius: BorderRadius.circular(responsive.radius(9)),
+            boxShadow: const <BoxShadow>[
+              BoxShadow(
+                color: Color(0x240B65F8),
+                blurRadius: 20,
+                offset: Offset(0, 8),
+              ),
+            ],
           ),
           child: Center(
             child: Text(
@@ -426,7 +439,7 @@ class AppPrimaryButton extends StatelessWidget {
                 color: theme.primaryForeground,
                 fontSize: responsive.bodyMd,
                 height: 1,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
@@ -453,12 +466,14 @@ class AppSecondaryButton extends StatelessWidget {
         opacity: onPressed == null ? 0.5 : 1,
         child: Container(
           constraints: BoxConstraints(minHeight: responsive.controlHeight),
-          padding: EdgeInsets.symmetric(vertical: responsive.spacing(10)),
+          padding: EdgeInsets.symmetric(
+            horizontal: responsive.spacing(16),
+            vertical: responsive.spacing(10),
+          ),
           decoration: BoxDecoration(
-            color: theme.warningContainer,
-            borderRadius: BorderRadius.circular(
-              responsive.radius(AwikiMeRadii.sm),
-            ),
+            color: theme.surface,
+            borderRadius: BorderRadius.circular(responsive.radius(9)),
+            border: Border.all(color: AwikiMePalette.actionBlueBorder),
           ),
           child: Center(
             child: Text(
@@ -470,10 +485,10 @@ class AppSecondaryButton extends StatelessWidget {
                 forceStrutHeight: true,
               ),
               style: TextStyle(
-                color: theme.primaryDark,
+                color: AwikiMePalette.actionInk,
                 fontSize: responsive.bodyMd,
                 height: 1,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),

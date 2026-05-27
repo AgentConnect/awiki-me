@@ -65,10 +65,7 @@ class CompatAwikiAccountGateway implements AwikiAccountGateway {
 
   @override
   Future<void> deleteLocalCredential(String credentialName) {
-    // TODO(im-core): enable after SDK identity delete API is exposed.
-    throw UnsupportedError(
-      'IM Core local credential delete is not available yet',
-    );
+    return _sessions.deleteLocalIdentity(credentialName);
   }
 
   @override

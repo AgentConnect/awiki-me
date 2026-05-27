@@ -24,51 +24,57 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
     int limit = 100,
     bool unreadOnly = false,
   }) async {
-    final client = await _runtime.currentClient();
-    final ownerDid = (await client.identity.current()).did;
-    final page = await client.messages.conversations(
-      limit: limit,
-      unreadOnly: unreadOnly,
-    );
-    return page.items
-        .map(
-          (conversation) =>
-              _mappers.conversationFromCore(conversation, ownerDid: ownerDid),
-        )
-        .toList();
+    return _runtime.withCurrentClient((client) async {
+      final ownerDid = (await client.identity.current()).did;
+      final page = await client.messages.conversations(
+        limit: limit,
+        unreadOnly: unreadOnly,
+      );
+      return page.items
+          .map(
+            (conversation) =>
+                _mappers.conversationFromCore(conversation, ownerDid: ownerDid),
+          )
+          .toList();
+    });
   }
 
   @override
   Future<void> markThreadRead(AppThreadRef thread) async {
-    final client = await _runtime.currentClient();
-    final ownerDid = (await client.identity.current()).did;
-    final coreThread = coreThreadRefForMarkRead(thread, ownerDid);
-    final messageIds = <String>{};
-    String? cursor;
+    await _runtime.withCurrentClient((client) async {
+      final ownerDid = (await client.identity.current()).did;
+      final coreThread = coreThreadRefForMarkRead(thread, ownerDid);
+      final messageIds = <String>{};
+      String? cursor;
 
-    for (var pageIndex = 0; pageIndex < _markThreadReadMaxPages; pageIndex++) {
-      final page = await client.messages.history(
-        coreThread,
-        limit: _markThreadReadPageSize,
-        cursor: cursor,
-      );
-      messageIds.addAll(
-        unreadIncomingMessageIdsForMarkRead(page.items, ownerDid: ownerDid),
-      );
-      final nextCursor = page.nextCursor?.trim();
-      if (!page.hasMore ||
-          nextCursor == null ||
-          nextCursor.isEmpty ||
-          nextCursor == cursor) {
-        break;
+      for (
+        var pageIndex = 0;
+        pageIndex < _markThreadReadMaxPages;
+        pageIndex++
+      ) {
+        final page = await client.messages.history(
+          coreThread,
+          limit: _markThreadReadPageSize,
+          cursor: cursor,
+        );
+        messageIds.addAll(
+          unreadIncomingMessageIdsForMarkRead(page.items, ownerDid: ownerDid),
+        );
+        final nextCursor = page.nextCursor?.trim();
+        if (!page.hasMore ||
+            nextCursor == null ||
+            nextCursor.isEmpty ||
+            nextCursor == cursor) {
+          break;
+        }
+        cursor = nextCursor;
       }
-      cursor = nextCursor;
-    }
 
-    if (messageIds.isEmpty) {
-      return;
-    }
-    await client.messages.markRead(messageIds.toList(growable: false));
+      if (messageIds.isEmpty) {
+        return;
+      }
+      await client.messages.markRead(messageIds.toList(growable: false));
+    });
   }
 }
 

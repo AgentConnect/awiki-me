@@ -11,6 +11,7 @@ import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/avatar_badge.dart';
+import '../shared/copyable_did_line.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'create_group_page.dart';
@@ -18,113 +19,124 @@ import 'group_chat_navigation.dart';
 import 'group_provider.dart';
 
 class GroupListPage extends ConsumerWidget {
-  const GroupListPage({super.key});
+  const GroupListPage({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(groupProvider);
     final theme = context.awikiTheme;
-    return Stack(
+    final content = Stack(
       children: <Widget>[
-        CupertinoPageScaffold(
-          backgroundColor: theme.background,
-          child: AwikiAdaptiveScaffold(
-            maxWidth: 900,
-            includeBottomSafeArea: true,
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(0, 14, 0, 24),
-              children: <Widget>[
-                AwikiMeTopBar(
-                  title: context.l10n.groupListTitle,
-                  padding: EdgeInsets.zero,
-                  trailingWidth: 108,
-                  leading: TopBarActionButton(
-                    onTap: () => Navigator.of(context).pop(),
-                    child: AwikiAssetIcon(
-                      assetName: 'assets/icons/icon_left.svg',
-                      color: theme.primaryDark,
-                      size: 22,
+        ListView(
+          padding: EdgeInsets.fromLTRB(0, embedded ? 22 : 14, 0, 24),
+          children: <Widget>[
+            AwikiMeTopBar(
+              title: context.l10n.groupListTitle,
+              padding: EdgeInsets.zero,
+              trailingWidth: 108,
+              leading: embedded
+                  ? const SizedBox.shrink()
+                  : TopBarActionButton(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: AwikiAssetIcon(
+                        assetName: 'assets/icons/icon_left.svg',
+                        color: theme.primaryDark,
+                        size: 22,
+                      ),
+                    ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  TopBarActionButton(
+                    onTap: () => ref.read(groupProvider.notifier).refresh(),
+                    child: Icon(
+                      CupertinoIcons.refresh,
+                      color: theme.title,
+                      size: 20,
                     ),
                   ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      TopBarActionButton(
-                        onTap: () => ref.read(groupProvider.notifier).refresh(),
-                        child: Icon(
-                          CupertinoIcons.refresh,
-                          color: theme.title,
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      TopBarActionButton(
-                        onTap: () => AppNavigator.push(
-                          context,
-                          (_) => const CreateGroupPage(),
-                        ),
-                        child: Icon(
-                          CupertinoIcons.person_3_fill,
-                          color: theme.primary,
-                          size: 21,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      TopBarActionButton(
-                        onTap: () => _showJoinDialog(context, ref),
-                        child: Icon(
-                          CupertinoIcons.link,
-                          color: theme.primary,
-                          size: 21,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(width: 12),
+                  TopBarActionButton(
+                    onTap: () => AppNavigator.push(
+                      context,
+                      (_) => const CreateGroupPage(),
+                    ),
+                    child: Icon(
+                      CupertinoIcons.person_3_fill,
+                      color: theme.primary,
+                      size: 21,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  TopBarActionButton(
+                    onTap: () => _showJoinDialog(context, ref),
+                    child: Icon(
+                      CupertinoIcons.link,
+                      color: theme.primary,
+                      size: 21,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (state.groups.isEmpty)
+              AppCardSection(
+                color: theme.subtleSurface,
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  context.l10n.groupListEmpty,
+                  style: AwikiMeTextStyles.cardSubtitle,
+                ),
+              )
+            else
+              ...state.groups.map(
+                (group) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _GroupCard(
+                    group: group,
+                    onTap: () => openGroupChat(
+                      context,
+                      ref,
+                      group,
+                      closeCurrentRouteOnDesktop: !embedded,
+                    ),
+                    onOpenDetail: () async {
+                      await ref
+                          .read(groupProvider.notifier)
+                          .loadGroupMembers(group.groupId);
+                      if (!context.mounted) {
+                        return;
+                      }
+                      await AppNavigator.push(
+                        context,
+                        (_) => GroupDetailPage(initialGroup: group),
+                      );
+                    },
                   ),
                 ),
-                const SizedBox(height: 16),
-                if (state.groups.isEmpty)
-                  AppCardSection(
-                    color: theme.subtleSurface,
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      context.l10n.groupListEmpty,
-                      style: AwikiMeTextStyles.cardSubtitle,
-                    ),
-                  )
-                else
-                  ...state.groups.map(
-                    (group) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _GroupCard(
-                        group: group,
-                        onTap: () => openGroupChat(
-                          context,
-                          ref,
-                          group,
-                          closeCurrentRouteOnDesktop: true,
-                        ),
-                        onOpenDetail: () async {
-                          await ref
-                              .read(groupProvider.notifier)
-                              .loadGroupMembers(group.groupId);
-                          if (!context.mounted) {
-                            return;
-                          }
-                          await AppNavigator.push(
-                            context,
-                            (_) => GroupDetailPage(initialGroup: group),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+              ),
+          ],
         ),
         if (state.isLoading)
           AwikiMeLoadingMask(label: context.l10n.groupListLoading),
       ],
+    );
+    if (embedded) {
+      return DecoratedBox(
+        decoration: BoxDecoration(color: theme.background),
+        child: SafeArea(bottom: false, child: content),
+      );
+    }
+    return CupertinoPageScaffold(
+      backgroundColor: theme.background,
+      child: AwikiAdaptiveScaffold(
+        maxWidth: 900,
+        includeBottomSafeArea: true,
+        child: content,
+      ),
     );
   }
 
@@ -282,10 +294,16 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                             ),
                           ),
                           AppPill(label: _group.myRole ?? 'member'),
-                          AppPill(
-                            label: context.l10n.groupIdLabel(_group.groupId),
-                          ),
                         ],
+                      ),
+                      const SizedBox(height: 14),
+                      CopyableDidLine(
+                        value: _group.groupId,
+                        copySemanticLabel: '复制 Group DID',
+                        copiedMessage: 'DID 已复制',
+                        textKey: const Key('group-detail-did-value'),
+                        buttonKey: const Key('group-detail-copy-did-button'),
+                        textStyle: AwikiMeTextStyles.cardSubtitle,
                       ),
                     ],
                   ),

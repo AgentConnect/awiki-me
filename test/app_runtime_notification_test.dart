@@ -1,4 +1,5 @@
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
@@ -200,6 +201,47 @@ void main() {
 
       expect(notificationFacade.lastSystemTitle, 'alice');
       expect(notificationFacade.lastSystemBody, 'hello');
+    });
+
+    test('实时附件消息通知使用附件预览', () async {
+      gateway.nextRealtimeUpdate = RealtimeUpdate(
+        message: ChatMessage(
+          localId: 'remote-attachment',
+          remoteId: 'remote-attachment',
+          threadId: 'dm:attachment',
+          senderDid: 'did:test:peer',
+          senderName: 'Peer',
+          receiverDid: 'did:test:me',
+          content: '',
+          originalType: 'application/anp-attachment-manifest+json',
+          createdAt: DateTime(2026, 4, 5, 12, 0),
+          isMine: false,
+          sendState: MessageSendState.sent,
+          attachment: const ChatAttachment(
+            attachmentId: 'att-1',
+            filename: 'report.pdf',
+            mimeType: 'application/pdf',
+          ),
+        ),
+        conversation: ConversationSummary(
+          threadId: 'dm:attachment',
+          displayName: 'Peer',
+          lastMessagePreview: '[附件] report.pdf',
+          lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+          unreadCount: 1,
+          isGroup: false,
+          targetDid: 'did:test:peer',
+        ),
+      );
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+
+      await activate();
+      await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+
+      expect(notificationFacade.lastSystemTitle, 'Peer');
+      expect(notificationFacade.lastSystemBody, '[附件] report.pdf');
     });
 
     test('实时 direct 与 group 消息会更新消息流和会话状态', () async {
