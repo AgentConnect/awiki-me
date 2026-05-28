@@ -128,9 +128,8 @@ class AppPill extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(
+        style: AwikiMeTextStyles.pillLabel.copyWith(
           fontSize: responsive.metaSm,
-          fontWeight: FontWeight.w700,
           color: foregroundColor == AwikiMeColors.primaryDark
               ? theme.primaryDark
               : foregroundColor,
@@ -216,7 +215,7 @@ class AppDropMenu extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: responsive.metaSm,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         letterSpacing: 1.2,
                         color: theme.secondaryText,
                       ),
@@ -270,8 +269,8 @@ class _AppDropMenuButton extends StatelessWidget {
                   style: TextStyle(
                     fontSize: responsive.titleLg,
                     fontWeight: item.highlighted || item.destructive
-                        ? FontWeight.w600
-                        : FontWeight.w500,
+                        ? FontWeight.w500
+                        : FontWeight.w400,
                     color: foregroundColor,
                   ),
                 )
@@ -290,8 +289,8 @@ class _AppDropMenuButton extends StatelessWidget {
                       style: TextStyle(
                         fontSize: responsive.titleLg,
                         fontWeight: item.highlighted || item.destructive
-                            ? FontWeight.w600
-                            : FontWeight.w500,
+                            ? FontWeight.w500
+                            : FontWeight.w400,
                         color: foregroundColor,
                       ),
                     ),
@@ -314,6 +313,7 @@ class AppTextField extends StatelessWidget {
     this.keyboardType,
     this.showLabel = true,
     this.prefix,
+    this.suffix,
     this.backgroundColor,
   });
 
@@ -325,6 +325,7 @@ class AppTextField extends StatelessWidget {
   final TextInputType? keyboardType;
   final bool showLabel;
   final Widget? prefix;
+  final Widget? suffix;
   final Color? backgroundColor;
 
   @override
@@ -343,8 +344,11 @@ class AppTextField extends StatelessWidget {
           ? EdgeInsets.symmetric(vertical: responsive.spacing(10))
           : EdgeInsets.zero,
       enabled: enabled,
-      style: TextStyle(fontSize: responsive.bodyMd, color: theme.title),
-      placeholderStyle: TextStyle(
+      style: AwikiMeTextStyles.inputText.copyWith(
+        fontSize: responsive.bodyMd,
+        color: theme.title,
+      ),
+      placeholderStyle: AwikiMeTextStyles.inputText.copyWith(
         fontSize: responsive.bodyMd,
         color: theme.secondaryText,
       ),
@@ -360,9 +364,8 @@ class AppTextField extends StatelessWidget {
           if (showLabel) ...<Widget>[
             Text(
               label,
-              style: TextStyle(
+              style: AwikiMeTextStyles.fieldLabel.copyWith(
                 fontSize: responsive.metaSm,
-                fontWeight: FontWeight.w600,
                 color: theme.secondaryText,
               ),
             ),
@@ -380,6 +383,10 @@ class AppTextField extends StatelessWidget {
                     SizedBox(width: responsive.spacing(10)),
                   ],
                   Expanded(child: Center(child: textField)),
+                  if (suffix != null) ...<Widget>[
+                    SizedBox(width: responsive.spacing(8)),
+                    suffix!,
+                  ],
                 ],
               ),
             ),
@@ -435,11 +442,10 @@ class AppPrimaryButton extends StatelessWidget {
                 height: 1,
                 forceStrutHeight: true,
               ),
-              style: TextStyle(
+              style: AwikiMeTextStyles.buttonLabel.copyWith(
                 color: theme.primaryForeground,
                 fontSize: responsive.bodyMd,
                 height: 1,
-                fontWeight: FontWeight.w800,
               ),
             ),
           ),
@@ -484,11 +490,10 @@ class AppSecondaryButton extends StatelessWidget {
                 height: 1,
                 forceStrutHeight: true,
               ),
-              style: TextStyle(
+              style: AwikiMeTextStyles.buttonLabel.copyWith(
                 color: AwikiMePalette.actionInk,
                 fontSize: responsive.bodyMd,
                 height: 1,
-                fontWeight: FontWeight.w800,
               ),
             ),
           ),
@@ -527,11 +532,10 @@ class AppDangerButton extends StatelessWidget {
                 height: 1,
                 forceStrutHeight: true,
               ),
-              style: TextStyle(
+              style: AwikiMeTextStyles.buttonLabel.copyWith(
                 color: theme.danger,
                 fontSize: responsive.bodyMd,
                 height: 1,
-                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -582,7 +586,7 @@ class AppInlineLinkRow extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: TextStyle(
+                style: AwikiMeTextStyles.listSubtitle.copyWith(
                   fontSize: responsive.bodySm,
                   color: theme.primaryDark,
                 ),
@@ -637,7 +641,14 @@ class EmptyStateCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(title, style: AwikiMeTextStyles.sectionTitle),
+          Text(
+            title,
+            style: AwikiMeTextStyles.sectionTitle.copyWith(
+              color: context.awikiTheme.secondaryText,
+              fontSize: context.awikiResponsive.displayScaled(18),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
           SizedBox(height: context.awikiResponsive.spacing(8)),
           Text(
             subtitle,
@@ -691,9 +702,8 @@ class AppListTile extends StatelessWidget {
               children: <Widget>[
                 Text(
                   title,
-                  style: TextStyle(
+                  style: AwikiMeTextStyles.listTitle.copyWith(
                     fontSize: responsive.bodyMd,
-                    fontWeight: FontWeight.w700,
                     color: destructive ? theme.danger : theme.title,
                   ),
                 ),

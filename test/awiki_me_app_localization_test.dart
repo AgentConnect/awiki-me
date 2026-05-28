@@ -1,7 +1,10 @@
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/app_locale.dart';
+import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
+import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -49,7 +52,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('Switch identity'), findsWidgets);
-      expect(find.text('Import identity credential'), findsOneWidget);
+      expect(find.text('Log in or register'), findsWidgets);
     });
 
     testWidgets('falls back to Chinese for unsupported locales', (
@@ -64,7 +67,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('切换身份'), findsWidgets);
-      expect(find.text('导入身份凭证'), findsOneWidget);
+      expect(find.text('登录或注册'), findsWidgets);
     });
 
     testWidgets('uses explicit locale override from settings provider', (
@@ -86,7 +89,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('Switch identity'), findsWidgets);
-      expect(find.text('Import identity credential'), findsOneWidget);
+      expect(find.text('Log in or register'), findsWidgets);
     });
 
     testWidgets('tapping outside an input dismisses keyboard focus', (
@@ -146,5 +149,50 @@ void main() {
 
       expect(focusNode.hasFocus, isTrue);
     });
+
+    testWidgets(
+      'keyboard shortcuts adjust display scale while input is focused',
+      (tester) async {
+        await tester.pumpWidget(
+          AwikiMeApp(
+            bootstrap: bootstrap,
+            providerOverrides: <Override>[
+              appLocaleModeProvider.overrideWith(
+                (ref) => AppLocaleMode.english,
+              ),
+            ],
+          ),
+        );
+        await tester.pump();
+
+        BuildContext appContext() => tester.element(find.byType(AppShell));
+        expect(
+          AwikiDisplayScaleScope.of(appContext()),
+          AwikiDisplayScale.normal,
+        );
+
+        await tester.tap(find.byType(CupertinoTextField).first);
+        await tester.pump();
+        final focusNode = tester
+            .widget<EditableText>(find.byType(EditableText).first)
+            .focusNode;
+        expect(focusNode.hasFocus, isTrue);
+
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.equal);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+        await tester.pump();
+        expect(AwikiDisplayScaleScope.of(appContext()), greaterThan(1));
+
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.digit0);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+        await tester.pump();
+        expect(
+          AwikiDisplayScaleScope.of(appContext()),
+          AwikiDisplayScale.normal,
+        );
+      },
+    );
   });
 }

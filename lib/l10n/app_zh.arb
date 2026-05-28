@@ -260,6 +260,7 @@
   "emailLoginUnsupportedForRegisteredHandle": "该 handle 已注册。邮箱当前仅支持新注册，请使用手机号验证码登录或导入身份凭证。",
   "emailNotActivatedClickLink": "邮箱尚未激活，请先点击邮件中的激活链接。",
   "sessionExpiredRelogin": "登录状态已失效，请重新登录。",
+  "didNotFoundOrRevoked": "未找到这个身份，或它已经被撤销。请检查 DID 是否正确，或切换到可用身份后重试。",
   "localCredentialNotFound": "本地未找到凭证：{credentialName}",
   "@localCredentialNotFound": {
     "placeholders": {

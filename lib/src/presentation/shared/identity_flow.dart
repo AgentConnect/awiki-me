@@ -339,7 +339,7 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                                 style: const TextStyle(
                                   color: Color(0xFF101B32),
                                   fontSize: 20,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                               const SizedBox(height: 6),
@@ -539,7 +539,7 @@ class _IdentityPreviewCard extends StatelessWidget {
                       style: const TextStyle(
                         color: Color(0xFF101B32),
                         fontSize: 17,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 5),
@@ -633,7 +633,7 @@ class _IdentityStatusPill extends StatelessWidget {
             style: const TextStyle(
               color: Color(0xFF10A85A),
               fontSize: 12,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -662,7 +662,7 @@ class _IdentityMetaLine extends StatelessWidget {
               style: const TextStyle(
                 color: Color(0xFF34415C),
                 fontSize: 12,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),

@@ -69,6 +69,9 @@ class AppMessage {
   factory AppMessage.sessionExpiredRelogin() =>
       const AppMessage._('sessionExpiredRelogin');
 
+  factory AppMessage.didNotFoundOrRevoked() =>
+      const AppMessage._('didNotFoundOrRevoked');
+
   factory AppMessage.localCredentialNotFound(String credentialName) =>
       AppMessage._('localCredentialNotFound', value: credentialName);
 
@@ -151,6 +154,9 @@ class AppMessage {
     }
     if (raw.contains('TimeoutException') || raw.contains('timed out')) {
       return AppMessage.requestTimeoutRetry();
+    }
+    if (_isDidNotFoundOrRevoked(raw)) {
+      return AppMessage.didNotFoundOrRevoked();
     }
 
     if (raw == '邮箱尚未激活，请先点击邮件中的激活链接。') {
@@ -283,6 +289,8 @@ class AppMessage {
         return l10n.emailNotActivatedClickLink;
       case 'sessionExpiredRelogin':
         return l10n.sessionExpiredRelogin;
+      case 'didNotFoundOrRevoked':
+        return l10n.didNotFoundOrRevoked;
       case 'localCredentialNotFound':
         return l10n.localCredentialNotFound(value ?? '');
       case 'setupIdentityScriptMissing':
@@ -358,6 +366,8 @@ class AppMessage {
         return 'Activation email sent. Please check your inbox.';
       case 'emailLoginUnsupportedForRegisteredHandle':
         return 'This handle is already registered. Email currently supports new registration only.';
+      case 'didNotFoundOrRevoked':
+        return 'This DID does not exist or has been revoked. Check the DID and try again, or switch to a valid identity.';
       case 'raw':
         return detail ?? 'The operation failed. Please try again later.';
       default:
@@ -386,6 +396,16 @@ class AppMessage {
       return raw.substring('Bad state: '.length);
     }
     return raw;
+  }
+
+  static bool _isDidNotFoundOrRevoked(String raw) {
+    final normalized = raw.toLowerCase();
+    final compact = normalized.replaceAll(RegExp(r'\s+'), '');
+    return compact.contains('didnotfoundorrevoked') ||
+        (normalized.contains('did not found') &&
+            normalized.contains('revoked')) ||
+        (normalized.contains('did not exist') &&
+            normalized.contains('revoked'));
   }
 
   @override

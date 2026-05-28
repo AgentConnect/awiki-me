@@ -139,7 +139,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   '@_',
                   style: TextStyle(
                     fontSize: responsive.isPhone ? 72 : responsive.scaled(58),
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AwikiMePalette.actionBlue,
                     height: 1,
                   ),
@@ -196,22 +196,21 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     prefix: responsive.isPhone
                         ? const _PhoneFieldPrefix(code: '+86')
                         : null,
+                    suffix: _VerificationInlineButton(
+                      label: onboarding.isOtpResendCoolingDown
+                          ? context.l10n.onboardingResendOtpIn(
+                              onboarding.otpResendCountdown,
+                            )
+                          : context.l10n.onboardingSendOtp,
+                      onPressed:
+                          onboarding.isBusy || onboarding.isOtpResendCoolingDown
+                          ? null
+                          : () => ref
+                                .read(onboardingProvider.notifier)
+                                .requestOtp(_normalizedPhone),
+                    ),
                   ),
-                  SizedBox(height: responsive.spacing(12)),
-                  AppPrimaryButton(
-                    label: onboarding.isOtpResendCoolingDown
-                        ? context.l10n.onboardingResendOtpIn(
-                            onboarding.otpResendCountdown,
-                          )
-                        : context.l10n.onboardingSendOtp,
-                    onPressed:
-                        onboarding.isBusy || onboarding.isOtpResendCoolingDown
-                        ? null
-                        : () => ref
-                              .read(onboardingProvider.notifier)
-                              .requestOtp(_normalizedPhone),
-                  ),
-                  SizedBox(height: responsive.spacing(12)),
+                  SizedBox(height: responsive.spacing(14)),
                   AppTextField(
                     controller: otpController,
                     label: context.l10n.onboardingOtp,
@@ -226,24 +225,24 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     placeholder: context.l10n.onboardingEmailPlaceholder,
                     keyboardType: TextInputType.emailAddress,
                     showLabel: !responsive.isPhone,
+                    suffix: _VerificationInlineButton(
+                      label: onboarding.isEmailResendCoolingDown
+                          ? context.l10n.onboardingResendActivationEmailIn(
+                              onboarding.emailResendCountdown,
+                            )
+                          : context.l10n.onboardingSendActivationEmail,
+                      onPressed:
+                          onboarding.isBusy ||
+                              onboarding.isEmailResendCoolingDown
+                          ? null
+                          : () => ref
+                                .read(onboardingProvider.notifier)
+                                .requestEmailActivation(
+                                  emailController.text.trim(),
+                                ),
+                    ),
                   ),
-                  SizedBox(height: responsive.spacing(12)),
-                  AppPrimaryButton(
-                    label: onboarding.isEmailResendCoolingDown
-                        ? context.l10n.onboardingResendActivationEmailIn(
-                            onboarding.emailResendCountdown,
-                          )
-                        : context.l10n.onboardingSendActivationEmail,
-                    onPressed:
-                        onboarding.isBusy || onboarding.isEmailResendCoolingDown
-                        ? null
-                        : () => ref
-                              .read(onboardingProvider.notifier)
-                              .requestEmailActivation(
-                                emailController.text.trim(),
-                              ),
-                  ),
-                  SizedBox(height: responsive.spacing(12)),
+                  SizedBox(height: responsive.spacing(14)),
                   (onboarding.emailVerified
                       ? AppPrimaryButton(
                           label: context.l10n.commonNext,
@@ -475,7 +474,7 @@ class _MacOnboardingHero extends StatelessWidget {
                     style: TextStyle(
                       color: blue,
                       fontSize: 22,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -487,8 +486,8 @@ class _MacOnboardingHero extends StatelessWidget {
               style: TextStyle(
                 color: ink,
                 fontSize: 38,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -1.2,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0,
               ),
             ),
           ],
@@ -509,8 +508,8 @@ class _MacOnboardingHero extends StatelessWidget {
             color: ink,
             fontSize: 34,
             height: 1.18,
-            fontWeight: FontWeight.w900,
-            letterSpacing: -0.6,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0,
           ),
         ),
         const SizedBox(height: 14),
@@ -593,8 +592,8 @@ class _MacAgentOrbit extends StatelessWidget {
                   style: TextStyle(
                     color: Color(0xFF0B65F8),
                     fontSize: 38,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -3,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0,
                   ),
                 ),
               ),
@@ -714,7 +713,7 @@ class _MacAgentChip extends StatelessWidget {
                   style: const TextStyle(
                     color: Color(0xFF17213A),
                     fontSize: 13,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -801,7 +800,7 @@ class _MacFeatureItem extends StatelessWidget {
               style: const TextStyle(
                 color: Color(0xFF17213A),
                 fontSize: 14,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w500,
               ),
             ),
             const SizedBox(height: 3),
@@ -983,7 +982,7 @@ class _MacAuthTab extends StatelessWidget {
                   ? const Color(0xFF0B65F8)
                   : const Color(0xFF66728A),
               fontSize: 20,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 16),
@@ -1132,7 +1131,7 @@ class _MacCredentialTile extends StatelessWidget {
                     style: const TextStyle(
                       color: Color(0xFF17213A),
                       fontSize: 15,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -1241,19 +1240,18 @@ class _MacRegisterForm extends StatelessWidget {
             placeholder: context.l10n.onboardingPhonePlaceholder,
             icon: CupertinoIcons.phone,
             keyboardType: TextInputType.phone,
+            suffix: _MacInlineAction(
+              label: onboarding.isOtpResendCoolingDown
+                  ? context.l10n.onboardingResendOtpIn(
+                      onboarding.otpResendCountdown,
+                    )
+                  : context.l10n.onboardingSendOtp,
+              onPressed: onboarding.isBusy || onboarding.isOtpResendCoolingDown
+                  ? null
+                  : onRequestOtp,
+            ),
           ),
-          const SizedBox(height: 14),
-          _MacPrimaryAction(
-            label: onboarding.isOtpResendCoolingDown
-                ? context.l10n.onboardingResendOtpIn(
-                    onboarding.otpResendCountdown,
-                  )
-                : context.l10n.onboardingSendOtp,
-            onPressed: onboarding.isBusy || onboarding.isOtpResendCoolingDown
-                ? null
-                : onRequestOtp,
-          ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           _MacOutlinedField(
             controller: otpController,
             label: context.l10n.onboardingOtp,
@@ -1275,19 +1273,19 @@ class _MacRegisterForm extends StatelessWidget {
             placeholder: context.l10n.onboardingEmailPlaceholder,
             icon: CupertinoIcons.mail,
             keyboardType: TextInputType.emailAddress,
+            suffix: _MacInlineAction(
+              label: onboarding.isEmailResendCoolingDown
+                  ? context.l10n.onboardingResendActivationEmailIn(
+                      onboarding.emailResendCountdown,
+                    )
+                  : context.l10n.onboardingSendActivationEmail,
+              onPressed:
+                  onboarding.isBusy || onboarding.isEmailResendCoolingDown
+                  ? null
+                  : onRequestEmailActivation,
+            ),
           ),
-          const SizedBox(height: 14),
-          _MacPrimaryAction(
-            label: onboarding.isEmailResendCoolingDown
-                ? context.l10n.onboardingResendActivationEmailIn(
-                    onboarding.emailResendCountdown,
-                  )
-                : context.l10n.onboardingSendActivationEmail,
-            onPressed: onboarding.isBusy || onboarding.isEmailResendCoolingDown
-                ? null
-                : onRequestEmailActivation,
-          ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           onboarding.emailVerified
               ? _MacPrimaryAction(
                   label: context.l10n.commonNext,
@@ -1384,7 +1382,7 @@ class _MacAuthModeButton extends StatelessWidget {
                 color: selected
                     ? const Color(0xFF0B65F8)
                     : const Color(0xFF66728A),
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -1420,6 +1418,7 @@ class _MacOutlinedField extends StatelessWidget {
     required this.placeholder,
     required this.icon,
     this.keyboardType,
+    this.suffix,
   });
 
   final TextEditingController controller;
@@ -1427,6 +1426,7 @@ class _MacOutlinedField extends StatelessWidget {
   final String placeholder;
   final IconData icon;
   final TextInputType? keyboardType;
+  final Widget? suffix;
 
   @override
   Widget build(BuildContext context) {
@@ -1460,6 +1460,10 @@ class _MacOutlinedField extends StatelessWidget {
                   ),
                 ),
               ),
+              if (suffix != null) ...<Widget>[
+                const SizedBox(width: 10),
+                suffix!,
+              ],
             ],
           ),
         ),
@@ -1480,7 +1484,54 @@ class _MacFieldLabel extends StatelessWidget {
       style: const TextStyle(
         color: Color(0xFF39445D),
         fontSize: 13,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+}
+
+class _MacInlineAction extends StatelessWidget {
+  const _MacInlineAction({required this.label, this.onPressed});
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onPressed,
+      behavior: HitTestBehavior.opaque,
+      child: Opacity(
+        opacity: onPressed == null ? 0.55 : 1,
+        child: Container(
+          height: 34,
+          constraints: const BoxConstraints(minWidth: 88, maxWidth: 132),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEAF2FF),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFC9DAFF)),
+          ),
+          alignment: Alignment.center,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              maxLines: 1,
+              strutStyle: const StrutStyle(
+                fontSize: 13,
+                height: 1,
+                forceStrutHeight: true,
+              ),
+              style: const TextStyle(
+                color: Color(0xFF0B65F8),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                height: 1,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1527,7 +1578,7 @@ class _MacPrimaryAction extends StatelessWidget {
                 style: const TextStyle(
                   color: CupertinoColors.white,
                   fontSize: 16,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -1571,7 +1622,7 @@ class _MacSecondaryAction extends StatelessWidget {
                 style: const TextStyle(
                   color: Color(0xFF17213A),
                   fontSize: 15,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
@@ -1627,7 +1678,7 @@ class _SegmentedPill extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: responsive.bodyMd,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w500,
                         color: value == entry.key
                             ? AwikiMePalette.actionBlue
                             : AwikiMePalette.actionMuted,
@@ -1655,20 +1706,24 @@ class _AuthModeToggle extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
-        _AuthModeOption(
-          key: const Key('auth-mode-phone'),
-          selected: value == 'phone',
-          assetName: 'assets/icons/icon_mobile.svg',
-          label: context.l10n.onboardingPhone,
-          onTap: () => onChanged('phone'),
+        Expanded(
+          child: _AuthModeOption(
+            key: const Key('auth-mode-phone'),
+            selected: value == 'phone',
+            assetName: 'assets/icons/icon_mobile.svg',
+            label: context.l10n.onboardingPhone,
+            onTap: () => onChanged('phone'),
+          ),
         ),
-        SizedBox(width: responsive.spacing(14)),
-        _AuthModeOption(
-          key: const Key('auth-mode-email'),
-          selected: value == 'email',
-          assetName: 'assets/icons/icon_mail.svg',
-          label: context.l10n.onboardingEmail,
-          onTap: () => onChanged('email'),
+        SizedBox(width: responsive.spacing(12)),
+        Expanded(
+          child: _AuthModeOption(
+            key: const Key('auth-mode-email'),
+            selected: value == 'email',
+            assetName: 'assets/icons/icon_mail.svg',
+            label: context.l10n.onboardingEmail,
+            onTap: () => onChanged('email'),
+          ),
         ),
       ],
     );
@@ -1692,7 +1747,9 @@ class _AuthModeOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final buttonSize = responsive.isPhone ? 68.0 : responsive.scaled(42);
+    final buttonHeight = responsive.isPhone
+        ? responsive.controlHeight
+        : responsive.scaled(46);
     final foreground = selected
         ? AwikiMePalette.actionBlue
         : AwikiMePalette.actionMuted;
@@ -1704,8 +1761,8 @@ class _AuthModeOption extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
-          width: buttonSize,
-          height: buttonSize,
+          height: buttonHeight,
+          padding: EdgeInsets.symmetric(horizontal: responsive.spacing(12)),
           decoration: BoxDecoration(
             color: selected
                 ? AwikiMePalette.actionBlueSoft
@@ -1717,12 +1774,29 @@ class _AuthModeOption extends StatelessWidget {
                   : AwikiMePalette.actionBlueBorder,
             ),
           ),
-          child: Center(
-            child: AwikiAssetIcon(
-              assetName: assetName,
-              size: responsive.isPhone ? 30 : responsive.iconMd,
-              color: foreground,
-            ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              AwikiAssetIcon(
+                assetName: assetName,
+                size: responsive.iconMd,
+                color: foreground,
+              ),
+              SizedBox(width: responsive.spacing(8)),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: AwikiMeTextStyles.buttonLabel.copyWith(
+                      color: foreground,
+                      fontSize: responsive.bodySm,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1746,13 +1820,64 @@ class _PhoneFieldPrefix extends StatelessWidget {
           code,
           style: TextStyle(
             fontSize: responsive.bodyMd,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
             color: theme.title,
           ),
         ),
         SizedBox(width: responsive.spacing(10)),
         Container(width: 1, height: responsive.scaled(26), color: theme.border),
       ],
+    );
+  }
+}
+
+class _VerificationInlineButton extends StatelessWidget {
+  const _VerificationInlineButton({required this.label, this.onPressed});
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return GestureDetector(
+      onTap: onPressed,
+      behavior: HitTestBehavior.opaque,
+      child: Opacity(
+        opacity: onPressed == null ? 0.55 : 1,
+        child: Container(
+          constraints: BoxConstraints(
+            minWidth: responsive.scaled(92),
+            maxWidth: responsive.scaled(132),
+            minHeight: responsive.compactControlHeight,
+          ),
+          padding: EdgeInsets.symmetric(horizontal: responsive.spacing(12)),
+          decoration: BoxDecoration(
+            color: AwikiMePalette.actionBlueSoft,
+            borderRadius: BorderRadius.circular(responsive.radius(8)),
+            border: Border.all(color: AwikiMePalette.actionBlueBorder),
+          ),
+          alignment: Alignment.center,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              maxLines: 1,
+              textAlign: TextAlign.center,
+              strutStyle: StrutStyle(
+                fontSize: responsive.bodySm,
+                height: 1,
+                forceStrutHeight: true,
+              ),
+              style: AwikiMeTextStyles.buttonLabel.copyWith(
+                color: AwikiMePalette.actionBlue,
+                fontSize: responsive.bodySm,
+                height: 1,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1871,7 +1996,7 @@ class _CredentialCardTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: responsive.titleLg,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       color: theme.title,
                     ),
                   ),
@@ -1987,7 +2112,7 @@ class _LoginToolButton extends StatelessWidget {
                   style: TextStyle(
                     color: theme.title,
                     fontSize: responsive.titleLg,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),

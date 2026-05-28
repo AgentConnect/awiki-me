@@ -7,11 +7,15 @@ class AwikiMeToast {
     BuildContext context,
     String message, {
     bool danger = false,
+    Duration? duration,
   }) {
     final overlay = Overlay.maybeOf(context);
     if (overlay == null) {
       return;
     }
+    final displayDuration =
+        duration ??
+        (danger ? const Duration(seconds: 5) : const Duration(seconds: 2));
     final entry = OverlayEntry(
       builder: (context) {
         final theme = context.awikiTheme;
@@ -40,7 +44,7 @@ class AwikiMeToast {
                     style: TextStyle(
                       color: theme.surface,
                       fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
@@ -51,7 +55,7 @@ class AwikiMeToast {
       },
     );
     overlay.insert(entry);
-    Future<void>.delayed(const Duration(seconds: 2), () {
+    Future<void>.delayed(displayDuration, () {
       if (entry.mounted) {
         entry.remove();
       }
@@ -106,7 +110,7 @@ class AwikiMePersistentToast extends StatelessWidget {
                       style: TextStyle(
                         color: theme.surface,
                         fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
@@ -151,7 +155,7 @@ class AwikiMeLoadingMask extends StatelessWidget {
                     style: TextStyle(
                       color: theme.title,
                       fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],

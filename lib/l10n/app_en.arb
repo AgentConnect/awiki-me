@@ -260,6 +260,7 @@
   "emailLoginUnsupportedForRegisteredHandle": "This handle is already registered. Email currently supports new registration only. Use phone verification or import an identity credential to log in.",
   "emailNotActivatedClickLink": "The email is not activated yet. Please click the activation link in the email first.",
   "sessionExpiredRelogin": "Your sign-in session has expired. Please log in again.",
+  "didNotFoundOrRevoked": "This DID does not exist or has been revoked. Check the DID and try again, or switch to a valid identity.",
   "localCredentialNotFound": "Local credential not found: {credentialName}",
   "@localCredentialNotFound": {
     "placeholders": {

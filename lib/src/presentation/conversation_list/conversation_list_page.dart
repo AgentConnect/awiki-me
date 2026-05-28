@@ -56,10 +56,12 @@ class ConversationListPage extends ConsumerWidget {
     }
     return AwikiMeShellTabPage(
       title: context.l10n.conversationsTitle,
-      onSettingsTap: () => AppNavigator.pushWithoutAnimation(
-        context,
-        (_) => const SettingsPage(),
-      ),
+      onSettingsTap: responsive.isMacDesktop
+          ? null
+          : () => AppNavigator.pushWithoutAnimation(
+              context,
+              (_) => const SettingsPage(),
+            ),
       onQuickActionsTap: () => showCommonQuickActionsMenu(context, ref),
       child: _ConversationRefreshView(
         conversations: state.conversations,
@@ -110,22 +112,28 @@ class _MacConversationList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
     return DecoratedBox(
       decoration: const BoxDecoration(color: Color(0xFFF8FAFD)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 22, 20, 12),
+            padding: EdgeInsets.fromLTRB(
+              responsive.displayScaled(20),
+              responsive.displayScaled(22),
+              responsive.displayScaled(20),
+              responsive.displayScaled(12),
+            ),
             child: Row(
               children: <Widget>[
-                const Expanded(
+                Expanded(
                   child: Text(
                     '最近会话',
                     style: TextStyle(
-                      color: Color(0xFF101B32),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF101B32),
+                      fontSize: responsive.displayScaled(16),
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -135,7 +143,7 @@ class _MacConversationList extends StatelessWidget {
                   icon: CupertinoIcons.ellipsis,
                   onTap: onShowActions,
                 ),
-                const SizedBox(width: 10),
+                SizedBox(width: responsive.displayScaled(10)),
                 _MacListIconButton(
                   key: const Key('start-conversation-button'),
                   semanticLabel: '发起新消息',
@@ -146,33 +154,43 @@ class _MacConversationList extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: EdgeInsets.symmetric(
+              horizontal: responsive.displayScaled(20),
+            ),
             child: CupertinoSearchTextField(
               placeholder: '搜索会话或 Agent',
-              style: const TextStyle(fontSize: 13, color: Color(0xFF17213A)),
-              placeholderStyle: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF8A96AA),
+              style: TextStyle(
+                fontSize: responsive.displayScaled(13),
+                color: const Color(0xFF17213A),
               ),
-              prefixIcon: const Icon(
+              placeholderStyle: TextStyle(
+                fontSize: responsive.displayScaled(13),
+                color: const Color(0xFF8A96AA),
+              ),
+              prefixIcon: Icon(
                 CupertinoIcons.search,
-                color: Color(0xFF34415C),
-                size: 18,
+                color: const Color(0xFF34415C),
+                size: responsive.displayScaled(18),
               ),
-              suffixIcon: const Icon(
+              suffixIcon: Icon(
                 CupertinoIcons.xmark_circle_fill,
-                color: Color(0xFFB3BDCD),
-                size: 16,
+                color: const Color(0xFFB3BDCD),
+                size: responsive.displayScaled(16),
               ),
               decoration: BoxDecoration(
                 color: CupertinoColors.white,
-                borderRadius: BorderRadius.circular(9),
+                borderRadius: BorderRadius.circular(
+                  responsive.displayScaled(9),
+                ),
                 border: Border.all(color: const Color(0xFFDDE5F0)),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              padding: EdgeInsets.symmetric(
+                horizontal: responsive.displayScaled(10),
+                vertical: responsive.displayScaled(9),
+              ),
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: responsive.displayScaled(12)),
           Expanded(
             child: CustomScrollView(
               slivers: <Widget>[
@@ -184,7 +202,12 @@ class _MacConversationList extends StatelessWidget {
                   )
                 else
                   SliverPadding(
-                    padding: EdgeInsets.fromLTRB(12, 0, 12, bottomInset),
+                    padding: EdgeInsets.fromLTRB(
+                      responsive.displayScaled(12),
+                      0,
+                      responsive.displayScaled(12),
+                      responsive.displayScaled(bottomInset),
+                    ),
                     sliver: SliverList.builder(
                       itemCount: conversations.length,
                       itemBuilder: (context, index) {
@@ -292,6 +315,7 @@ class _MacListIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
     return Semantics(
       button: true,
       label: semanticLabel,
@@ -299,15 +323,19 @@ class _MacListIconButton extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
-          width: 32,
-          height: 32,
+          width: responsive.displayScaled(32),
+          height: responsive.displayScaled(32),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: CupertinoColors.white,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
             border: Border.all(color: const Color(0xFFE5EAF2)),
           ),
-          child: Icon(icon, color: const Color(0xFF34415C), size: 19),
+          child: Icon(
+            icon,
+            color: const Color(0xFF34415C),
+            size: responsive.displayScaled(19),
+          ),
         ),
       ),
     );
@@ -335,17 +363,18 @@ class _MacConversationRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: EdgeInsets.only(bottom: responsive.displayScaled(6)),
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
-          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+          padding: EdgeInsets.all(responsive.displayScaled(10)),
           decoration: BoxDecoration(
             color: isSelected ? const Color(0xFFE8F0FF) : CupertinoColors.white,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
             border: Border.all(
               color: isSelected
                   ? const Color(0xFFCFE0FF)
@@ -357,20 +386,22 @@ class _MacConversationRow extends StatelessWidget {
               Stack(
                 clipBehavior: Clip.none,
                 children: <Widget>[
-                  AvatarBadge(seed: title, size: 42),
+                  AvatarBadge(seed: title, size: responsive.displayScaled(42)),
                   Positioned(
-                    right: -2,
-                    bottom: -2,
+                    right: responsive.displayScaled(-2),
+                    bottom: responsive.displayScaled(-2),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 5,
-                        vertical: 2,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: responsive.displayScaled(5),
+                        vertical: responsive.displayScaled(2),
                       ),
                       decoration: BoxDecoration(
                         color: isGroup
                             ? const Color(0xFFEFE4FF)
                             : const Color(0xFFEAF2FF),
-                        borderRadius: BorderRadius.circular(5),
+                        borderRadius: BorderRadius.circular(
+                          responsive.displayScaled(5),
+                        ),
                         border: Border.all(color: CupertinoColors.white),
                       ),
                       child: Text(
@@ -379,15 +410,15 @@ class _MacConversationRow extends StatelessWidget {
                           color: isGroup
                               ? const Color(0xFF8B5CF6)
                               : const Color(0xFF0B65F8),
-                          fontSize: 9,
-                          fontWeight: FontWeight.w900,
+                          fontSize: responsive.displayScaled(9),
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: responsive.displayScaled(10)),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -399,24 +430,24 @@ class _MacConversationRow extends StatelessWidget {
                             title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF17213A),
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w800,
+                            style: TextStyle(
+                              color: const Color(0xFF17213A),
+                              fontSize: responsive.displayScaled(13.5),
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        SizedBox(width: responsive.displayScaled(8)),
                         Text(
                           timeLabel,
-                          style: const TextStyle(
-                            color: Color(0xFF66728A),
-                            fontSize: 10.5,
+                          style: TextStyle(
+                            color: const Color(0xFF66728A),
+                            fontSize: responsive.displayScaled(10.5),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 5),
+                    SizedBox(height: responsive.displayScaled(5)),
                     Row(
                       children: <Widget>[
                         Expanded(
@@ -426,18 +457,18 @@ class _MacConversationRow extends StatelessWidget {
                                 : preview,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF66728A),
-                              fontSize: 11.5,
+                            style: TextStyle(
+                              color: const Color(0xFF66728A),
+                              fontSize: responsive.displayScaled(11.5),
                               height: 1.25,
                             ),
                           ),
                         ),
                         if (unreadCount > 0) ...<Widget>[
-                          const SizedBox(width: 8),
+                          SizedBox(width: responsive.displayScaled(8)),
                           Container(
-                            width: 8,
-                            height: 8,
+                            width: responsive.displayScaled(8),
+                            height: responsive.displayScaled(8),
                             decoration: BoxDecoration(
                               color: const Color(0xFF0B65F8),
                               borderRadius: BorderRadius.circular(99),
@@ -526,7 +557,7 @@ class _ConversationRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: responsive.bodyMd,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         color: theme.title,
                       ),
                     ),
@@ -579,7 +610,7 @@ class _ConversationRow extends StatelessWidget {
                           style: TextStyle(
                             fontSize: responsive.metaSm,
                             color: theme.primaryForeground,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),

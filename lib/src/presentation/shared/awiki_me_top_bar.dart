@@ -13,6 +13,9 @@ class AwikiMeTopBar extends StatelessWidget {
     this.leadingWidth = 30,
     this.trailingWidth = 30,
     this.padding = const EdgeInsets.only(bottom: 18),
+    this.titleColor,
+    this.titleFontSize,
+    this.titleFontWeight,
   });
 
   final String title;
@@ -21,6 +24,9 @@ class AwikiMeTopBar extends StatelessWidget {
   final double leadingWidth;
   final double trailingWidth;
   final EdgeInsets padding;
+  final Color? titleColor;
+  final double? titleFontSize;
+  final FontWeight? titleFontWeight;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +45,9 @@ class AwikiMeTopBar extends StatelessWidget {
               title,
               textAlign: TextAlign.center,
               style: AwikiMeTextStyles.navTitle.copyWith(
-                fontSize: responsive.titleXl,
+                color: titleColor,
+                fontSize: titleFontSize ?? responsive.titleXl,
+                fontWeight: titleFontWeight,
               ),
             ),
           ),
@@ -68,11 +76,15 @@ class AwikiMeShellTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    const titleColor = Color(0xFF2B3340);
+    const actionColor = Color(0xFF5F6875);
     return AwikiMeTopBar(
       title: title,
       padding: EdgeInsets.zero,
+      titleColor: titleColor,
+      titleFontSize: responsive.titleXl - responsive.displayScaled(1),
+      titleFontWeight: FontWeight.w500,
       leading: onSettingsTap == null
           ? const SizedBox.shrink()
           : TopBarActionButton(
@@ -80,7 +92,7 @@ class AwikiMeShellTopBar extends StatelessWidget {
               child: AwikiAssetIcon(
                 assetName: 'assets/icons/icon_settings.svg',
                 size: responsive.iconLg,
-                color: theme.title,
+                color: actionColor,
               ),
             ),
       trailing: onQuickActionsTap == null
@@ -90,7 +102,7 @@ class AwikiMeShellTopBar extends StatelessWidget {
               child: AwikiAssetIcon(
                 assetName: 'assets/icons/icon_add.svg',
                 size: responsive.iconLg,
-                color: theme.title,
+                color: actionColor,
               ),
             ),
     );

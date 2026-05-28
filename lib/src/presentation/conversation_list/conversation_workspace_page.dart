@@ -85,6 +85,7 @@ class _MacConversationWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
     return DecoratedBox(
       decoration: const BoxDecoration(color: CupertinoColors.white),
       child: LayoutBuilder(
@@ -94,9 +95,15 @@ class _MacConversationWorkspace extends StatelessWidget {
               : 1200.0;
 
           return AwikiPaneLayout(
-            listPaneWidth: _listPaneWidth(availableWidth),
-            minListPaneWidth: _minListPaneWidth(availableWidth),
-            minDetailPaneWidth: _minDetailPaneWidth(availableWidth),
+            listPaneWidth: responsive.displayScaled(
+              _listPaneWidth(availableWidth),
+            ),
+            minListPaneWidth: responsive.displayScaled(
+              _minListPaneWidth(availableWidth),
+            ),
+            minDetailPaneWidth: responsive.displayScaled(
+              _minDetailPaneWidth(availableWidth),
+            ),
             listPane: SizedBox(
               key: const Key('mac-conversation-list-pane'),
               child: ConversationListPage(
@@ -185,6 +192,7 @@ class _MacConversationDetailAreaState
     if (selectedConversation == null) {
       return const AwikiWorkspaceEmptyDetail();
     }
+    final responsive = context.awikiResponsive;
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth.isFinite
@@ -193,9 +201,9 @@ class _MacConversationDetailAreaState
         final detailWidth = _sidePanelWidth(availableWidth);
         final canShowSidePanel =
             availableWidth >=
-            _minSidePanelWidth() +
-                _minChatPaneWidth +
-                _sidePanelDividerHitWidth;
+            _minSidePanelWidth(context) +
+                responsive.displayScaled(_minChatPaneWidth) +
+                responsive.displayScaled(_sidePanelDividerHitWidth);
 
         return Row(
           children: <Widget>[
@@ -269,47 +277,64 @@ class _MacConversationDetailAreaState
         (_sidePanel == _MacDetailSidePanel.identityCard
             ? _identityCardWidth
             : _conversationInfoWidth) ??
-        _defaultSidePanelWidth(availableWidth);
-    return _clampSidePanelWidth(preferred, availableWidth);
+        _defaultSidePanelWidth(context, availableWidth);
+    return _clampSidePanelWidth(context, preferred, availableWidth);
   }
 
-  double _defaultSidePanelWidth(double availableWidth) {
+  double _defaultSidePanelWidth(BuildContext context, double availableWidth) {
+    final responsive = context.awikiResponsive;
     if (_sidePanel == _MacDetailSidePanel.identityCard) {
       if (availableWidth < 920) {
-        return 320;
+        return responsive.displayScaled(320);
       }
       if (availableWidth < 1180) {
-        return 360;
+        return responsive.displayScaled(360);
       }
-      return 400;
+      return responsive.displayScaled(400);
     }
     if (availableWidth < 820) {
-      return 244;
+      return responsive.displayScaled(244);
     }
-    return 270;
+    return responsive.displayScaled(270);
   }
 
-  double _minSidePanelWidth() {
-    return _sidePanel == _MacDetailSidePanel.identityCard ? 300 : 244;
+  double _minSidePanelWidth(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return responsive.displayScaled(
+      _sidePanel == _MacDetailSidePanel.identityCard ? 300 : 244,
+    );
   }
 
-  double _maxSidePanelWidth(double availableWidth) {
+  double _maxSidePanelWidth(BuildContext context, double availableWidth) {
+    final responsive = context.awikiResponsive;
     final panelMax = _sidePanel == _MacDetailSidePanel.identityCard
-        ? _maxIdentityCardWidth
-        : _maxConversationInfoWidth;
+        ? responsive.displayScaled(_maxIdentityCardWidth)
+        : responsive.displayScaled(_maxConversationInfoWidth);
     final availableMax =
-        availableWidth - _minChatPaneWidth - _sidePanelDividerHitWidth;
-    return math.max(_minSidePanelWidth(), math.min(panelMax, availableMax));
+        availableWidth -
+        responsive.displayScaled(_minChatPaneWidth) -
+        responsive.displayScaled(_sidePanelDividerHitWidth);
+    return math.max(
+      _minSidePanelWidth(context),
+      math.min(panelMax, availableMax),
+    );
   }
 
-  double _clampSidePanelWidth(double width, double availableWidth) {
+  double _clampSidePanelWidth(
+    BuildContext context,
+    double width,
+    double availableWidth,
+  ) {
     return width
-        .clamp(_minSidePanelWidth(), _maxSidePanelWidth(availableWidth))
+        .clamp(
+          _minSidePanelWidth(context),
+          _maxSidePanelWidth(context, availableWidth),
+        )
         .toDouble();
   }
 
   void _setSidePanelWidth(double width, double availableWidth) {
-    final next = _clampSidePanelWidth(width, availableWidth);
+    final next = _clampSidePanelWidth(context, width, availableWidth);
     if (_sidePanel == _MacDetailSidePanel.identityCard) {
       _identityCardWidth = next;
     } else {
@@ -325,15 +350,18 @@ class _MacSidePanelDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
     return MouseRegion(
       cursor: SystemMouseCursors.resizeLeftRight,
       child: GestureDetector(
         key: const Key('mac-side-panel-resize-divider'),
         behavior: HitTestBehavior.translucent,
         onHorizontalDragUpdate: onDragUpdate,
-        child: const SizedBox(
-          width: _MacConversationDetailAreaState._sidePanelDividerHitWidth,
-          child: Center(
+        child: SizedBox(
+          width: responsive.displayScaled(
+            _MacConversationDetailAreaState._sidePanelDividerHitWidth,
+          ),
+          child: const Center(
             child: SizedBox(
               width: 1,
               child: DecoratedBox(
@@ -399,7 +427,7 @@ class _MacPeerProfilePanel extends ConsumerWidget {
               style: const TextStyle(
                 color: Color(0xFFFF3B30),
                 fontSize: 13,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -438,8 +466,8 @@ class _MacPeerProfilePanel extends ConsumerWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: Color(0xFF101B32),
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
                               height: 1.2,
                             ),
                           ),
@@ -514,7 +542,7 @@ class _MacPeerProfilePanel extends ConsumerWidget {
                         style: const TextStyle(
                           color: Color(0xFF0B65F8),
                           fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                           height: 1.3,
                         ),
                       ),
@@ -555,12 +583,12 @@ class _MacPeerProfilePanel extends ConsumerWidget {
                           h1: const TextStyle(
                             color: Color(0xFF101B32),
                             fontSize: 17,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                           ),
                           h2: const TextStyle(
                             color: Color(0xFF101B32),
                             fontSize: 15,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                   ),
@@ -628,7 +656,7 @@ class _MacProfileCard extends StatelessWidget {
             style: const TextStyle(
               color: Color(0xFF17213A),
               fontSize: 13,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 10),
@@ -674,7 +702,7 @@ class _MacPanelShell extends StatelessWidget {
                       style: const TextStyle(
                         color: Color(0xFF101B32),
                         fontSize: 16,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -749,7 +777,7 @@ class _MacProfilePill extends StatelessWidget {
         style: const TextStyle(
           color: Color(0xFF0B65F8),
           fontSize: 11.5,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
@@ -782,7 +810,7 @@ class _MacAgentDetailPanel extends StatelessWidget {
               style: TextStyle(
                 color: Color(0xFF101B32),
                 fontSize: 16,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 22),
@@ -801,7 +829,7 @@ class _MacAgentDetailPanel extends StatelessWidget {
                     style: TextStyle(
                       color: Color(0xFF17BF63),
                       fontSize: 12,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -895,7 +923,7 @@ class _MacDetailRow extends StatelessWidget {
               style: const TextStyle(
                 color: Color(0xFF34415C),
                 fontSize: 12,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -942,7 +970,7 @@ class _MacDetailCard extends StatelessWidget {
             style: const TextStyle(
               color: Color(0xFF17213A),
               fontSize: 13,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 10),
@@ -981,7 +1009,7 @@ class _MacAbilityGridItem extends StatelessWidget {
               style: const TextStyle(
                 color: Color(0xFF34415C),
                 fontSize: 10.5,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -1025,7 +1053,7 @@ class _MacStatusLine extends StatelessWidget {
               style: const TextStyle(
                 color: Color(0xFF17213A),
                 fontSize: 12,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),

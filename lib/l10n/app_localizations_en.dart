@@ -616,6 +616,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Your sign-in session has expired. Please log in again.';
 
   @override
+  String get didNotFoundOrRevoked =>
+      'This DID does not exist or has been revoked. Check the DID and try again, or switch to a valid identity.';
+
+  @override
   String localCredentialNotFound(Object credentialName) {
     return 'Local credential not found: $credentialName';
   }

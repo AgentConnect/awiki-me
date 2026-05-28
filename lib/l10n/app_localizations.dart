@@ -1184,6 +1184,12 @@ abstract class AppLocalizations {
   /// **'登录状态已失效，请重新登录。'**
   String get sessionExpiredRelogin;
 
+  /// No description provided for @didNotFoundOrRevoked.
+  ///
+  /// In zh, this message translates to:
+  /// **'未找到这个身份，或它已经被撤销。请检查 DID 是否正确，或切换到可用身份后重试。'**
+  String get didNotFoundOrRevoked;
+
   /// No description provided for @localCredentialNotFound.
   ///
   /// In zh, this message translates to:

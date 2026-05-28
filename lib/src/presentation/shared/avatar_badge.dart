@@ -3,11 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'awiki_me_design.dart';
 
 class AvatarBadge extends StatelessWidget {
-  const AvatarBadge({
-    super.key,
-    required this.seed,
-    this.size = 48,
-  });
+  const AvatarBadge({super.key, required this.seed, this.size = 48});
 
   final String seed;
   final double size;
@@ -15,8 +11,9 @@ class AvatarBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final normalized = seed.trim();
-    final initial =
-        normalized.isEmpty ? '?' : normalized.substring(0, 1).toUpperCase();
+    final initial = normalized.isEmpty
+        ? '?'
+        : normalized.substring(0, 1).toUpperCase();
     final palette = _paletteForSeed(context, normalized);
     return Container(
       width: size,
@@ -31,7 +28,7 @@ class AvatarBadge extends StatelessWidget {
         style: TextStyle(
           fontSize: size / 2.4,
           color: palette.$2,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -42,19 +39,20 @@ class AvatarBadge extends StatelessWidget {
     final palettes = <(Color, Color)>[
       (
         theme.colorScheme.secondaryContainer,
-        theme.colorScheme.onSecondaryContainer
+        theme.colorScheme.onSecondaryContainer,
       ),
       (
         theme.colorScheme.tertiaryContainer,
-        theme.colorScheme.onTertiaryContainer
+        theme.colorScheme.onTertiaryContainer,
       ),
       (theme.warningContainer, theme.primaryDark),
       (theme.subtleSurface, theme.infoAccent),
       (theme.dangerContainer, theme.danger),
       (theme.mutedSurface, theme.title),
     ];
-    final hash =
-        value.isEmpty ? 0 : value.codeUnits.fold<int>(0, (a, b) => a + b);
+    final hash = value.isEmpty
+        ? 0
+        : value.codeUnits.fold<int>(0, (a, b) => a + b);
     return palettes[hash % palettes.length];
   }
 }

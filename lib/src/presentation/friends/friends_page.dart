@@ -125,10 +125,12 @@ class FriendsPage extends ConsumerWidget {
     if (!responsive.supportsTwoPane) {
       final mobileContent = AwikiMeShellTabPage(
         title: context.l10n.friendsTitle,
-        onSettingsTap: () => AppNavigator.pushWithoutAnimation(
-          context,
-          (_) => const SettingsPage(),
-        ),
+        onSettingsTap: responsive.isMacDesktop
+            ? null
+            : () => AppNavigator.pushWithoutAnimation(
+                context,
+                (_) => const SettingsPage(),
+              ),
         onQuickActionsTap: () => showCommonQuickActionsMenu(context, ref),
         child: ListView(
           padding: EdgeInsets.only(bottom: embedded ? bottomInset : 120),
@@ -143,10 +145,12 @@ class FriendsPage extends ConsumerWidget {
 
     final content = AwikiMeShellTabPage(
       title: context.l10n.friendsTitle,
-      onSettingsTap: () => AppNavigator.pushWithoutAnimation(
-        context,
-        (_) => const SettingsPage(),
-      ),
+      onSettingsTap: responsive.isMacDesktop
+          ? null
+          : () => AppNavigator.pushWithoutAnimation(
+              context,
+              (_) => const SettingsPage(),
+            ),
       onQuickActionsTap: () => showCommonQuickActionsMenu(context, ref),
       child: Padding(
         padding: EdgeInsets.only(bottom: embedded ? bottomInset : 120),
@@ -240,7 +244,7 @@ class _FriendsSection extends StatelessWidget {
                     style: TextStyle(
                       color: theme.secondaryText,
                       fontSize: responsive.metaSm,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
@@ -258,7 +262,7 @@ class _FriendsSection extends StatelessWidget {
                         style: TextStyle(
                           color: theme.primary,
                           fontSize: responsive.metaSm,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
@@ -419,7 +423,7 @@ class _RelationshipActionButtonInnerState
                   style: TextStyle(
                     color: foreground,
                     fontSize: 12,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
         ),
@@ -468,7 +472,7 @@ class _IndexRail extends StatelessWidget {
                         style: TextStyle(
                           fontSize: fontSize,
                           fontWeight: letter == 'E'
-                              ? FontWeight.w700
+                              ? FontWeight.w600
                               : FontWeight.w500,
                           color: letter == 'E'
                               ? theme.primaryDark

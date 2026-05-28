@@ -98,7 +98,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: responsive.isPhone ? 20 : 18,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w600,
                                 color: theme.title,
                               ),
                             ),
@@ -356,7 +356,7 @@ class _ProfileStat extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: responsive.bodyMd + 2,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
             color: theme.title,
           ),
         ),
@@ -436,11 +436,11 @@ class _ProfileContentSection extends StatelessWidget {
     final bodyStyle = TextStyle(
       fontSize: responsive.isPhone ? 16 : 13,
       height: 1.55,
-      color: theme.primaryDark,
+      color: theme.body,
     );
     return MarkdownStyleSheet(
       p: bodyStyle,
-      strong: bodyStyle.copyWith(fontWeight: FontWeight.w800),
+      strong: bodyStyle.copyWith(fontWeight: FontWeight.w600),
     );
   }
 }

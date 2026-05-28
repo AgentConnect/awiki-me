@@ -4,21 +4,31 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 
 import 'awiki_me_design.dart';
+import 'display_scale.dart';
 
 enum AwikiBreakpoint { phone, large }
 
 class AwikiResponsiveInfo {
-  const AwikiResponsiveInfo({required this.width, required this.breakpoint});
+  const AwikiResponsiveInfo({
+    required this.width,
+    required this.breakpoint,
+    this.displayScale = AwikiDisplayScale.normal,
+  });
 
-  factory AwikiResponsiveInfo.fromWidth(double width) {
+  factory AwikiResponsiveInfo.fromWidth(
+    double width, {
+    double displayScale = AwikiDisplayScale.normal,
+  }) {
     return AwikiResponsiveInfo(
       width: width,
       breakpoint: AwikiBreakpoints.fromWidth(width),
+      displayScale: AwikiDisplayScale.normalize(displayScale),
     );
   }
 
   final double width;
   final AwikiBreakpoint breakpoint;
+  final double displayScale;
 
   bool get isPhone => breakpoint == AwikiBreakpoint.phone;
 
@@ -34,141 +44,142 @@ class AwikiResponsiveInfo {
       supportsTwoPane && defaultTargetPlatform == TargetPlatform.macOS;
 
   double get uiScale {
-    switch (breakpoint) {
-      case AwikiBreakpoint.phone:
-        return 1.0;
-      case AwikiBreakpoint.large:
-        return 0.72;
-    }
+    final baseScale = switch (breakpoint) {
+      AwikiBreakpoint.phone => 1.0,
+      AwikiBreakpoint.large => 0.72,
+    };
+    return baseScale * displayScale;
   }
 
   double get spacingScale {
-    switch (breakpoint) {
-      case AwikiBreakpoint.phone:
-        return 1.0;
-      case AwikiBreakpoint.large:
-        return 0.74;
-    }
+    final baseScale = switch (breakpoint) {
+      AwikiBreakpoint.phone => 1.0,
+      AwikiBreakpoint.large => 0.74,
+    };
+    return baseScale * displayScale;
   }
 
   double get radiusScale {
-    switch (breakpoint) {
-      case AwikiBreakpoint.phone:
-        return 1.0;
-      case AwikiBreakpoint.large:
-        return 0.78;
-    }
+    final baseScale = switch (breakpoint) {
+      AwikiBreakpoint.phone => 1.0,
+      AwikiBreakpoint.large => 0.78,
+    };
+    return baseScale * displayScale;
   }
+
+  double get _fontScale => displayScale;
 
   double get controlHeight {
     switch (breakpoint) {
       case AwikiBreakpoint.phone:
-        return 52;
+        return 50 * displayScale;
       case AwikiBreakpoint.large:
-        return 34;
+        return 36 * displayScale;
     }
   }
 
   double get compactControlHeight {
     switch (breakpoint) {
       case AwikiBreakpoint.phone:
-        return 44;
+        return 42 * displayScale;
       case AwikiBreakpoint.large:
-        return 30;
+        return 32 * displayScale;
     }
   }
 
   double get navBarHeight {
     switch (breakpoint) {
       case AwikiBreakpoint.phone:
-        return 64;
+        return 60 * displayScale;
       case AwikiBreakpoint.large:
-        return 46;
+        return 44 * displayScale;
     }
   }
 
   double get avatarSizeMd {
     switch (breakpoint) {
       case AwikiBreakpoint.phone:
-        return 48;
+        return 44 * displayScale;
       case AwikiBreakpoint.large:
-        return 34;
+        return 36 * displayScale;
     }
   }
 
   double get titleLg {
     switch (breakpoint) {
       case AwikiBreakpoint.phone:
-        return 20;
+        return 19 * _fontScale;
       case AwikiBreakpoint.large:
-        return 15;
+        return 16 * _fontScale;
     }
   }
 
   double get titleXl {
     switch (breakpoint) {
       case AwikiBreakpoint.phone:
-        return 20;
+        return 20 * _fontScale;
       case AwikiBreakpoint.large:
-        return 16;
+        return 17 * _fontScale;
     }
   }
 
   double get bodyMd {
     switch (breakpoint) {
       case AwikiBreakpoint.phone:
-        return 16;
+        return 16 * _fontScale;
       case AwikiBreakpoint.large:
-        return 12.5;
+        return 14 * _fontScale;
     }
   }
 
   double get bodySm {
     switch (breakpoint) {
       case AwikiBreakpoint.phone:
-        return 14;
+        return 14 * _fontScale;
       case AwikiBreakpoint.large:
-        return 11;
+        return 12.5 * _fontScale;
     }
   }
 
   double get metaSm {
     switch (breakpoint) {
       case AwikiBreakpoint.phone:
-        return 11;
+        return 12 * _fontScale;
       case AwikiBreakpoint.large:
-        return 9.5;
+        return 11.5 * _fontScale;
     }
   }
 
   double get iconSm {
     switch (breakpoint) {
       case AwikiBreakpoint.phone:
-        return 18;
+        return 18 * displayScale;
       case AwikiBreakpoint.large:
-        return 14;
+        return 15 * displayScale;
     }
   }
 
   double get iconMd {
     switch (breakpoint) {
       case AwikiBreakpoint.phone:
-        return 24;
+        return 23 * displayScale;
       case AwikiBreakpoint.large:
-        return 18;
+        return 19 * displayScale;
     }
   }
 
   double get iconLg {
     switch (breakpoint) {
       case AwikiBreakpoint.phone:
-        return 28;
+        return 26 * displayScale;
       case AwikiBreakpoint.large:
-        return 20;
+        return 21 * displayScale;
     }
   }
 
   double scaled(double base) => base * uiScale;
+
+  double displayScaled(double base) => base * displayScale;
 
   double spacing(double base) => base * spacingScale;
 
@@ -243,7 +254,10 @@ class AwikiBreakpoints {
 
 extension AwikiResponsiveContextX on BuildContext {
   AwikiResponsiveInfo get awikiResponsive {
-    return AwikiResponsiveInfo.fromWidth(MediaQuery.sizeOf(this).width);
+    return AwikiResponsiveInfo.fromWidth(
+      MediaQuery.sizeOf(this).width,
+      displayScale: AwikiDisplayScaleScope.of(this),
+    );
   }
 }
 

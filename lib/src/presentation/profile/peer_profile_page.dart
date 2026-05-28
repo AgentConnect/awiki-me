@@ -94,8 +94,11 @@ class PeerProfilePage extends ConsumerWidget {
                                           profile,
                                         ),
                                         style: TextStyle(
-                                          fontSize: 28,
-                                          fontWeight: FontWeight.w700,
+                                          fontSize:
+                                              context.awikiResponsive.isPhone
+                                              ? 22
+                                              : 20,
+                                          fontWeight: FontWeight.w600,
                                           color: theme.title,
                                         ),
                                       ),
@@ -166,7 +169,10 @@ class PeerProfilePage extends ConsumerWidget {
                                 style: AwikiMeTextStyles.cardSubtitle,
                               )
                             else
-                              MarkdownBody(data: profileContent),
+                              MarkdownBody(
+                                data: profileContent,
+                                styleSheet: _peerMarkdownStyleSheet(context),
+                              ),
                             if (profile.tags.isNotEmpty) ...<Widget>[
                               const SizedBox(height: 16),
                               Wrap(
@@ -271,4 +277,19 @@ class PeerProfilePage extends ConsumerWidget {
       ],
     );
   }
+}
+
+MarkdownStyleSheet _peerMarkdownStyleSheet(BuildContext context) {
+  final theme = context.awikiTheme;
+  final responsive = context.awikiResponsive;
+  final bodyStyle = AwikiMeTextStyles.markdownBody.copyWith(
+    fontSize: responsive.isPhone ? 16 : 13,
+    color: theme.body,
+  );
+  return MarkdownStyleSheet(
+    p: bodyStyle,
+    strong: bodyStyle.copyWith(fontWeight: FontWeight.w600),
+    h1: bodyStyle.copyWith(fontSize: responsive.isPhone ? 20 : 17),
+    h2: bodyStyle.copyWith(fontSize: responsive.isPhone ? 18 : 15),
+  );
 }

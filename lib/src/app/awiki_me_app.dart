@@ -8,6 +8,7 @@ import 'package:flutter/material.dart' as material;
 import '../presentation/app_shell/app_shell.dart';
 import '../presentation/app_shell/providers/app_lifecycle_provider.dart';
 import '../presentation/shared/awiki_me_design.dart';
+import '../presentation/shared/display_scale.dart';
 import 'app_orientation.dart';
 import 'app_locale.dart';
 import 'app_services.dart';
@@ -118,6 +119,7 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
   @override
   Widget build(BuildContext context) {
     final localeMode = ref.watch(appLocaleModeProvider);
+    final displayScale = ref.watch(displayScaleProvider);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: AwikiMePalette.ivory,
@@ -151,11 +153,21 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
         },
         theme: AwikiMeTheme.cupertinoTheme,
         builder: (context, child) {
-          return _KeyboardDismissScope(
-            child: material.Theme(
-              data: AwikiMeTheme.materialTheme,
-              child: AppOrientationScope(
-                child: child ?? const SizedBox.shrink(),
+          return AwikiDisplayScaleScope(
+            scale: displayScale,
+            child: _DisplayScaleShortcuts(
+              onDecrease: () =>
+                  ref.read(displayScaleProvider.notifier).decrease(),
+              onIncrease: () =>
+                  ref.read(displayScaleProvider.notifier).increase(),
+              onReset: () => ref.read(displayScaleProvider.notifier).reset(),
+              child: _KeyboardDismissScope(
+                child: material.Theme(
+                  data: AwikiMeTheme.materialTheme,
+                  child: AppOrientationScope(
+                    child: child ?? const SizedBox.shrink(),
+                  ),
+                ),
               ),
             ),
           );
@@ -163,6 +175,74 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
         home: const AppShell(),
       ),
     );
+  }
+}
+
+class _DisplayScaleShortcuts extends StatefulWidget {
+  const _DisplayScaleShortcuts({
+    required this.child,
+    required this.onDecrease,
+    required this.onIncrease,
+    required this.onReset,
+  });
+
+  final Widget child;
+  final VoidCallback onDecrease;
+  final VoidCallback onIncrease;
+  final VoidCallback onReset;
+
+  @override
+  State<_DisplayScaleShortcuts> createState() => _DisplayScaleShortcutsState();
+}
+
+class _DisplayScaleShortcutsState extends State<_DisplayScaleShortcuts> {
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
+    super.dispose();
+  }
+
+  bool _handleKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) {
+      return false;
+    }
+    final keys = HardwareKeyboard.instance.logicalKeysPressed;
+    final hasModifier =
+        keys.contains(LogicalKeyboardKey.metaLeft) ||
+        keys.contains(LogicalKeyboardKey.metaRight) ||
+        keys.contains(LogicalKeyboardKey.controlLeft) ||
+        keys.contains(LogicalKeyboardKey.controlRight);
+    if (!hasModifier) {
+      return false;
+    }
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.minus ||
+        key == LogicalKeyboardKey.numpadSubtract) {
+      widget.onDecrease();
+      return true;
+    }
+    if (key == LogicalKeyboardKey.equal ||
+        key == LogicalKeyboardKey.add ||
+        key == LogicalKeyboardKey.numpadAdd) {
+      widget.onIncrease();
+      return true;
+    }
+    if (key == LogicalKeyboardKey.digit0 || key == LogicalKeyboardKey.numpad0) {
+      widget.onReset();
+      return true;
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.child;
   }
 }
 

@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../app/app_router.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../domain/services/realtime_gateway.dart';
@@ -16,10 +15,13 @@ import '../settings/settings_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/responsive_layout.dart';
+import '../shared/sidebar_workspace.dart';
 import 'providers/app_update_provider.dart';
 import 'providers/app_runtime_provider.dart';
 import 'providers/navigation_provider.dart';
 import 'providers/session_provider.dart';
+
+const int _macSettingsTabIndex = 6;
 
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
@@ -105,10 +107,9 @@ class _AppShellState extends ConsumerState<AppShell> {
             onTap: (index) {
               ref.read(shellTabProvider.notifier).setTab(index);
             },
-            onOpenSettings: () => AppNavigator.pushWithoutAnimation(
-              context,
-              (_) => const SettingsPage(),
-            ),
+            onOpenSettings: () {
+              ref.read(shellTabProvider.notifier).setTab(_macSettingsTabIndex);
+            },
             child: page,
           )
         : Column(
@@ -197,6 +198,8 @@ class _AppShellState extends ConsumerState<AppShell> {
           );
         case 5:
           return const ProfileWorkspacePage();
+        case _macSettingsTabIndex:
+          return const _MacEmbeddedSettingsPage();
       }
       return const ConversationWorkspacePage();
     }
@@ -229,10 +232,12 @@ class _MacDesktopShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
     return Row(
       children: <Widget>[
         SizedBox(
-          width: 72,
+          key: const Key('mac-desktop-rail-slot'),
+          width: responsive.displayScaled(72),
           child: _MacDesktopRail(
             currentIndex: currentIndex,
             unreadCount: unreadCount,
@@ -262,22 +267,23 @@ class _MacDesktopRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
     return DecoratedBox(
       decoration: const BoxDecoration(color: Color(0xFFF8FBFF)),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxHeight < 760;
-          final gap = compact ? 7.0 : 10.0;
+          final gap = responsive.displayScaled(compact ? 7.0 : 10.0);
           return Column(
             children: <Widget>[
-              SizedBox(height: compact ? 22 : 30),
+              SizedBox(height: responsive.displayScaled(compact ? 22 : 30)),
               _MacRailAvatar(
                 key: const Key('mac-me-rail-avatar'),
                 label: 'Me',
                 selected: currentIndex == 5,
                 onTap: () => onTap(5),
               ),
-              SizedBox(height: compact ? 22 : 28),
+              SizedBox(height: responsive.displayScaled(compact ? 22 : 28)),
               Expanded(
                 child: SingleChildScrollView(
                   padding: EdgeInsets.zero,
@@ -327,7 +333,7 @@ class _MacDesktopRail extends StatelessWidget {
                       _MacDesktopRailItem(
                         icon: CupertinoIcons.gear_alt,
                         label: '设置',
-                        selected: false,
+                        selected: currentIndex == _macSettingsTabIndex,
                         compact: compact,
                         onTap: onOpenSettings,
                       ),
@@ -335,7 +341,7 @@ class _MacDesktopRail extends StatelessWidget {
                   ),
                 ),
               ),
-              SizedBox(height: compact ? 12 : 18),
+              SizedBox(height: responsive.displayScaled(compact ? 12 : 18)),
             ],
           );
         },
@@ -348,6 +354,31 @@ class _MacDesktopRail extends StatelessWidget {
       return null;
     }
     return count > 99 ? '99+' : '$count';
+  }
+}
+
+class _MacEmbeddedSettingsPage extends StatelessWidget {
+  const _MacEmbeddedSettingsPage();
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final settingsPaneWidth = responsive.displayScaled(420);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        SizedBox(
+          key: const Key('mac-settings-list-pane'),
+          width: settingsPaneWidth,
+          child: const DecoratedBox(
+            decoration: BoxDecoration(color: Color(0xFFF8FAFD)),
+            child: SettingsPage(embedded: true),
+          ),
+        ),
+        Container(width: 1, color: const Color(0xFFE5EAF2)),
+        const Expanded(child: AwikiWorkspaceEmptyDetail()),
+      ],
+    );
   }
 }
 
@@ -370,10 +401,12 @@ class _MacDesktopRailItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
     final foreground = selected
         ? const Color(0xFF0B65F8)
         : const Color(0xFF34415C);
-    final height = compact ? 50.0 : 56.0;
+    final height = responsive.displayScaled(compact ? 50.0 : 56.0);
+    final width = responsive.displayScaled(58);
     return Semantics(
       button: true,
       selected: selected,
@@ -382,40 +415,48 @@ class _MacDesktopRailItem extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: SizedBox(
-          width: 58,
+          width: width,
           height: height,
           child: Stack(
             clipBehavior: Clip.none,
             children: <Widget>[
               AnimatedContainer(
                 duration: const Duration(milliseconds: 140),
-                width: 58,
+                width: width,
                 height: height,
-                padding: EdgeInsets.symmetric(vertical: compact ? 6 : 8),
+                padding: EdgeInsets.symmetric(
+                  vertical: responsive.displayScaled(compact ? 6 : 8),
+                ),
                 decoration: BoxDecoration(
                   color: selected
                       ? const Color(0xFFEAF2FF)
                       : const Color(0x00FFFFFF),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(
+                    responsive.displayScaled(10),
+                  ),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: <Widget>[
                     SizedBox(
-                      width: 30,
-                      height: 24,
+                      width: responsive.displayScaled(30),
+                      height: responsive.displayScaled(24),
                       child: Center(
-                        child: Icon(icon, color: foreground, size: 20),
+                        child: Icon(
+                          icon,
+                          color: foreground,
+                          size: responsive.displayScaled(20),
+                        ),
                       ),
                     ),
-                    SizedBox(height: compact ? 2 : 4),
+                    SizedBox(height: responsive.displayScaled(compact ? 2 : 4)),
                     Text(
                       label,
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: foreground,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
+                        fontSize: responsive.displayScaled(10.5),
+                        fontWeight: FontWeight.w600,
                         height: 1,
                       ),
                     ),
@@ -424,12 +465,12 @@ class _MacDesktopRailItem extends StatelessWidget {
               ),
               if (badge != null)
                 Positioned(
-                  right: 5,
-                  top: 4,
+                  right: responsive.displayScaled(5),
+                  top: responsive.displayScaled(4),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 5,
-                      vertical: 2,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: responsive.displayScaled(5),
+                      vertical: responsive.displayScaled(2),
                     ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFF3B30),
@@ -438,10 +479,10 @@ class _MacDesktopRailItem extends StatelessWidget {
                     ),
                     child: Text(
                       badge!,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: CupertinoColors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w900,
+                        fontSize: responsive.displayScaled(9),
+                        fontWeight: FontWeight.w600,
                         height: 1,
                       ),
                     ),
@@ -469,6 +510,7 @@ class _MacRailAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
     return Semantics(
       button: true,
       selected: selected,
@@ -477,11 +519,11 @@ class _MacRailAvatar extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
-          width: 38,
-          height: 38,
+          width: responsive.displayScaled(38),
+          height: responsive.displayScaled(38),
           decoration: BoxDecoration(
             color: selected ? const Color(0xFFDDEBFF) : const Color(0xFFEAF2FF),
-            borderRadius: BorderRadius.circular(19),
+            borderRadius: BorderRadius.circular(responsive.displayScaled(19)),
             border: Border.all(
               color: selected
                   ? const Color(0xFF0B65F8)
@@ -491,10 +533,10 @@ class _MacRailAvatar extends StatelessWidget {
           child: Center(
             child: Text(
               label,
-              style: const TextStyle(
-                color: Color(0xFF0B65F8),
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
+              style: TextStyle(
+                color: const Color(0xFF0B65F8),
+                fontSize: responsive.displayScaled(16),
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -517,37 +559,43 @@ class _MacDesktopPlaceholderPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
     return DecoratedBox(
       decoration: const BoxDecoration(color: Color(0xFFFBFDFF)),
       child: Center(
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 420),
-          padding: const EdgeInsets.all(28),
+          key: const Key('mac-desktop-placeholder-card'),
+          constraints: BoxConstraints(maxWidth: responsive.displayScaled(420)),
+          padding: EdgeInsets.all(responsive.displayScaled(28)),
           decoration: BoxDecoration(
             color: CupertinoColors.white,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(responsive.displayScaled(18)),
             border: Border.all(color: const Color(0xFFE5EAF2)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Icon(icon, color: const Color(0xFF0B65F8), size: 44),
-              const SizedBox(height: 18),
+              Icon(
+                icon,
+                color: const Color(0xFF0B65F8),
+                size: responsive.displayScaled(44),
+              ),
+              SizedBox(height: responsive.displayScaled(18)),
               Text(
                 title,
-                style: const TextStyle(
-                  color: Color(0xFF101B32),
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
+                style: TextStyle(
+                  color: const Color(0xFF101B32),
+                  fontSize: responsive.displayScaled(22),
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: responsive.displayScaled(10)),
               Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Color(0xFF66728A),
-                  fontSize: 14,
+                style: TextStyle(
+                  color: const Color(0xFF66728A),
+                  fontSize: responsive.displayScaled(14),
                   height: 1.45,
                 ),
               ),
@@ -581,7 +629,9 @@ class _BottomNavBar extends StatelessWidget {
     final bottomPadding = embedded
         ? 0.0
         : (bottomInset > 0 ? responsive.spacing(8) : 16.0);
-    final navHeight = showLabels ? 62.0 : responsive.navBarHeight;
+    final navHeight = showLabels
+        ? responsive.scaled(68)
+        : responsive.navBarHeight;
     return SafeArea(
       top: false,
       child: Padding(
@@ -605,16 +655,16 @@ class _BottomNavBar extends StatelessWidget {
                 height: navHeight,
                 padding: EdgeInsets.symmetric(
                   horizontal: showLabels
-                      ? responsive.spacing(8)
+                      ? responsive.spacing(9)
                       : responsive.spacing(18),
                   vertical: showLabels
-                      ? responsive.spacing(5)
+                      ? responsive.spacing(6)
                       : responsive.spacing(8),
                 ),
                 decoration: BoxDecoration(
                   color: theme.surface,
                   borderRadius: BorderRadius.circular(
-                    embedded ? 24 : responsive.radius(24),
+                    embedded ? responsive.radius(14) : responsive.radius(14),
                   ),
                   boxShadow: const <BoxShadow>[
                     BoxShadow(
@@ -688,14 +738,26 @@ class _NavButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final navIconSize = showLabel
-        ? 24.0
+        ? responsive.scaled(31)
         : (responsive.isPhone ? 30.0 : responsive.iconLg * 2);
     final tapSize = responsive.isPhone
         ? responsive.compactControlHeight + responsive.spacing(6)
         : 44.0;
+    final labelFontSize = responsive.scaled(13.25);
+    final navIconVisualScale = showLabel ? 1.5 : 1.0;
     final foreground = active
         ? AwikiMePalette.actionBlue
         : AwikiMePalette.actionMuted;
+    Widget buildNavIcon() {
+      final icon = SvgPicture.asset(
+        active ? activeAsset : inactiveAsset,
+        width: navIconSize,
+        height: navIconSize,
+        colorFilter: ColorFilter.mode(foreground, BlendMode.srcIn),
+      );
+      return Transform.scale(scale: navIconVisualScale, child: icon);
+    }
+
     return Semantics(
       button: true,
       selected: active,
@@ -710,32 +772,27 @@ class _NavButton extends StatelessWidget {
             curve: Curves.easeOut,
             width: showLabel ? double.infinity : tapSize,
             height: showLabel ? double.infinity : tapSize,
-            padding: EdgeInsets.fromLTRB(
-              showLabel ? 4 : 0,
-              showLabel ? 4 : 0,
-              showLabel ? 4 : 0,
-              showLabel ? 4 : 0,
-            ),
+            padding: showLabel
+                ? EdgeInsets.symmetric(
+                    horizontal: responsive.spacing(4),
+                    vertical: responsive.spacing(3),
+                  )
+                : EdgeInsets.zero,
             decoration: BoxDecoration(
               color: active && showLabel
                   ? AwikiMePalette.actionBlueSoft
                   : const Color(0x00FFFFFF),
-              borderRadius: BorderRadius.circular(showLabel ? 10 : 0),
+              borderRadius: BorderRadius.circular(
+                showLabel ? responsive.radius(8) : 0,
+              ),
             ),
             child: showLabel
                 ? Column(
                     mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: <Widget>[
-                      SvgPicture.asset(
-                        active ? activeAsset : inactiveAsset,
-                        width: navIconSize,
-                        height: navIconSize,
-                        colorFilter: ColorFilter.mode(
-                          foreground,
-                          BlendMode.srcIn,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
+                      buildNavIcon(),
+                      const SizedBox(height: 2),
                       FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(
@@ -743,27 +800,15 @@ class _NavButton extends StatelessWidget {
                           maxLines: 1,
                           style: TextStyle(
                             color: foreground,
-                            fontSize: 11,
-                            fontWeight: active
-                                ? FontWeight.w800
-                                : FontWeight.w700,
+                            fontSize: labelFontSize,
+                            fontWeight: FontWeight.w600,
                             height: 1,
                           ),
                         ),
                       ),
                     ],
                   )
-                : Center(
-                    child: SvgPicture.asset(
-                      active ? activeAsset : inactiveAsset,
-                      width: navIconSize,
-                      height: navIconSize,
-                      colorFilter: ColorFilter.mode(
-                        foreground,
-                        BlendMode.srcIn,
-                      ),
-                    ),
-                  ),
+                : Center(child: buildNavIcon()),
           ),
         ),
       ),

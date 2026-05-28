@@ -140,17 +140,21 @@ class _ChatViewState extends ConsumerState<ChatView> {
               controller: scrollController,
               padding: EdgeInsets.fromLTRB(
                 macStyle
-                    ? 28
+                    ? responsive.displayScaled(28)
                     : (widget.embedded
                           ? responsive.spacing(32)
                           : responsive.tabContentHorizontalPadding),
-                macStyle ? 20 : responsive.spacing(24),
                 macStyle
-                    ? 28
+                    ? responsive.displayScaled(20)
+                    : responsive.spacing(24),
+                macStyle
+                    ? responsive.displayScaled(28)
                     : (widget.embedded
                           ? responsive.spacing(32)
                           : responsive.tabContentHorizontalPadding),
-                macStyle ? 92 : responsive.spacing(widget.embedded ? 124 : 140),
+                macStyle
+                    ? responsive.displayScaled(92)
+                    : responsive.spacing(widget.embedded ? 124 : 140),
               ),
               itemCount: messages.length,
               itemBuilder: (_, index) {
@@ -159,7 +163,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
                 final senderLabel = _displayNameForMessage(context, message);
                 return Padding(
                   padding: EdgeInsets.only(
-                    bottom: macStyle ? 16 : responsive.spacing(24),
+                    bottom: macStyle
+                        ? responsive.displayScaled(16)
+                        : responsive.spacing(24),
                   ),
                   child: Column(
                     children: <Widget>[
@@ -539,8 +545,13 @@ class _ChatHeader extends StatelessWidget {
     final responsive = context.awikiResponsive;
     if (macStyle) {
       return Container(
-        height: 64,
-        padding: const EdgeInsets.fromLTRB(22, 0, 18, 0),
+        height: responsive.displayScaled(64),
+        padding: EdgeInsets.fromLTRB(
+          responsive.displayScaled(22),
+          0,
+          responsive.displayScaled(18),
+          0,
+        ),
         decoration: const BoxDecoration(
           color: CupertinoColors.white,
           border: Border(bottom: BorderSide(color: Color(0xFFE5EAF2))),
@@ -551,13 +562,15 @@ class _ChatHeader extends StatelessWidget {
             final showPills = width >= 500;
             final showSecurityPill = width >= 620;
             final showIdentityLabel = width >= 470;
-            final avatarSize = width >= 360 ? 40.0 : 36.0;
-            final actionGap = width >= 520 ? 12.0 : 8.0;
+            final avatarSize = responsive.displayScaled(
+              width >= 360 ? 40.0 : 36.0,
+            );
+            final actionGap = responsive.displayScaled(width >= 520 ? 12 : 8);
 
             return Row(
               children: <Widget>[
                 AvatarBadge(seed: compactName, size: avatarSize),
-                const SizedBox(width: 10),
+                SizedBox(width: responsive.displayScaled(10)),
                 Expanded(
                   child: Row(
                     children: <Widget>[
@@ -566,15 +579,15 @@ class _ChatHeader extends StatelessWidget {
                           compactName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFF101B32),
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
+                          style: TextStyle(
+                            color: const Color(0xFF101B32),
+                            fontSize: responsive.displayScaled(17),
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
                       if (showPills && !conversation.isGroup) ...<Widget>[
-                        const SizedBox(width: 8),
+                        SizedBox(width: responsive.displayScaled(8)),
                         const _MacChatPill(
                           label: '我的智能体',
                           color: Color(0xFFEAF2FF),
@@ -582,7 +595,7 @@ class _ChatHeader extends StatelessWidget {
                         ),
                       ],
                       if (showSecurityPill) ...<Widget>[
-                        const SizedBox(width: 6),
+                        SizedBox(width: responsive.displayScaled(6)),
                         const _MacChatPill(
                           label: '安全协作中',
                           color: Color(0xFFE6F8EE),
@@ -599,7 +612,7 @@ class _ChatHeader extends StatelessWidget {
                     compact: width < 560,
                     onTap: onFollowTap!,
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: responsive.displayScaled(8)),
                 ],
                 _MacChatHeaderButton(
                   key: const Key('chat-refresh-button'),
@@ -608,7 +621,7 @@ class _ChatHeader extends StatelessWidget {
                   isLoading: isRefreshing,
                   onTap: onRefresh,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: responsive.displayScaled(8)),
                 _MacChatIdentityButton(
                   showLabel: showIdentityLabel,
                   onTap: conversation.isGroup
@@ -616,7 +629,7 @@ class _ChatHeader extends StatelessWidget {
                       : (onMacIdentityPanelTap ?? onDetails),
                 ),
                 if (onMacConversationInfoTap != null) ...<Widget>[
-                  const SizedBox(width: 8),
+                  SizedBox(width: responsive.displayScaled(8)),
                   _MacChatHeaderButton(
                     key: const Key('chat-conversation-info-button'),
                     semanticLabel: '折叠会话信息',
@@ -672,7 +685,7 @@ class _ChatHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: responsive.titleLg,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w500,
                     color: theme.title,
                   ),
                 ),
@@ -692,7 +705,7 @@ class _ChatHeader extends StatelessWidget {
                       'ONLINE',
                       style: TextStyle(
                         fontSize: responsive.metaSm,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                         letterSpacing: 1,
                         color: theme.primaryDark,
                       ),
@@ -740,8 +753,12 @@ class _MacChatPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.displayScaled(8),
+        vertical: responsive.displayScaled(4),
+      ),
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(999),
@@ -750,8 +767,8 @@ class _MacChatPill extends StatelessWidget {
         label,
         style: TextStyle(
           color: textColor,
-          fontSize: 11.5,
-          fontWeight: FontWeight.w800,
+          fontSize: responsive.displayScaled(11.5),
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
@@ -779,6 +796,7 @@ class _ChatFollowButtonState extends State<_ChatFollowButton> {
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     final label = widget.isFollowing ? '已关注' : '关注';
     final foreground = widget.isFollowing
         ? const Color(0xFF34415C)
@@ -805,13 +823,17 @@ class _ChatFollowButtonState extends State<_ChatFollowButton> {
               },
         behavior: HitTestBehavior.opaque,
         child: Container(
-          height: 30,
-          constraints: BoxConstraints(minWidth: widget.compact ? 54 : 66),
+          height: responsive.displayScaled(30),
+          constraints: BoxConstraints(
+            minWidth: responsive.displayScaled(widget.compact ? 54 : 66),
+          ),
           alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          padding: EdgeInsets.symmetric(
+            horizontal: responsive.displayScaled(10),
+          ),
           decoration: BoxDecoration(
             color: background,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
             border: Border.all(
               color: widget.isFollowing
                   ? const Color(0xFFDDE5F0)
@@ -820,7 +842,7 @@ class _ChatFollowButtonState extends State<_ChatFollowButton> {
           ),
           child: _isBusy
               ? CupertinoActivityIndicator(
-                  radius: 7,
+                  radius: responsive.displayScaled(7),
                   color: widget.isFollowing ? const Color(0xFF34415C) : null,
                 )
               : Text(
@@ -829,8 +851,8 @@ class _ChatFollowButtonState extends State<_ChatFollowButton> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: foreground,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
+                    fontSize: responsive.displayScaled(12),
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
         ),
@@ -847,37 +869,38 @@ class _MacChatIdentityButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        height: 34,
-        width: showLabel ? null : 34,
+        height: responsive.displayScaled(34),
+        width: showLabel ? null : responsive.displayScaled(34),
         padding: showLabel
-            ? const EdgeInsets.symmetric(horizontal: 12)
+            ? EdgeInsets.symmetric(horizontal: responsive.displayScaled(12))
             : EdgeInsets.zero,
         decoration: BoxDecoration(
           color: CupertinoColors.white,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
           border: Border.all(color: const Color(0xFFDDE5F0)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            const Icon(
+            Icon(
               CupertinoIcons.person_crop_square,
-              color: Color(0xFF34415C),
-              size: 17,
+              color: const Color(0xFF34415C),
+              size: responsive.displayScaled(17),
             ),
             if (showLabel) ...<Widget>[
-              const SizedBox(width: 7),
-              const Text(
+              SizedBox(width: responsive.displayScaled(7)),
+              Text(
                 '身份卡',
                 style: TextStyle(
-                  color: Color(0xFF17213A),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF17213A),
+                  fontSize: responsive.displayScaled(12.5),
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
@@ -904,6 +927,7 @@ class _MacChatHeaderButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
     return Semantics(
       button: true,
       label: semanticLabel,
@@ -912,17 +936,21 @@ class _MacChatHeaderButton extends StatelessWidget {
         onTap: isLoading ? null : onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
-          height: 34,
-          width: 34,
+          height: responsive.displayScaled(34),
+          width: responsive.displayScaled(34),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: CupertinoColors.white,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
             border: Border.all(color: const Color(0xFFDDE5F0)),
           ),
           child: isLoading
-              ? const CupertinoActivityIndicator(radius: 8)
-              : Icon(icon, color: const Color(0xFF34415C), size: 17),
+              ? CupertinoActivityIndicator(radius: responsive.displayScaled(8))
+              : Icon(
+                  icon,
+                  color: const Color(0xFF34415C),
+                  size: responsive.displayScaled(17),
+                ),
         ),
       ),
     );
@@ -969,12 +997,13 @@ class _MessageBubble extends StatelessWidget {
   final bool isDownloading;
 
   Widget _buildMacBubble(BuildContext context, bool isMine) {
+    final responsive = context.awikiResponsive;
     final child = message.attachment == null
         ? Text(
             message.content,
-            style: const TextStyle(
-              color: Color(0xFF17213A),
-              fontSize: 14,
+            style: TextStyle(
+              color: const Color(0xFF17213A),
+              fontSize: responsive.displayScaled(14),
               height: 1.45,
             ),
           )
@@ -990,11 +1019,14 @@ class _MessageBubble extends StatelessWidget {
           : CrossAxisAlignment.start,
       children: <Widget>[
         Container(
-          constraints: const BoxConstraints(maxWidth: 420),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          constraints: BoxConstraints(maxWidth: responsive.displayScaled(420)),
+          padding: EdgeInsets.symmetric(
+            horizontal: responsive.displayScaled(14),
+            vertical: responsive.displayScaled(10),
+          ),
           decoration: BoxDecoration(
             color: isMine ? const Color(0xFFEAF2FF) : CupertinoColors.white,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
             border: Border.all(
               color: isMine ? const Color(0xFFEAF2FF) : const Color(0xFFDDE5F0),
             ),
@@ -1002,29 +1034,29 @@ class _MessageBubble extends StatelessWidget {
           child: child,
         ),
         if (message.sendState == MessageSendState.failed) ...<Widget>[
-          const SizedBox(height: 8),
+          SizedBox(height: responsive.displayScaled(8)),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              const Text(
+              Text(
                 '发送失败',
                 style: TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFFFF3B30),
-                  fontWeight: FontWeight.w700,
+                  fontSize: responsive.displayScaled(12),
+                  color: const Color(0xFFFF3B30),
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               if (onRetry != null) ...<Widget>[
-                const SizedBox(width: 10),
+                SizedBox(width: responsive.displayScaled(10)),
                 GestureDetector(
                   onTap: onRetry,
                   behavior: HitTestBehavior.opaque,
-                  child: const Text(
+                  child: Text(
                     '重试',
                     style: TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF0B65F8),
-                      fontWeight: FontWeight.w900,
+                      fontSize: responsive.displayScaled(12),
+                      color: const Color(0xFF0B65F8),
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
@@ -1032,10 +1064,13 @@ class _MessageBubble extends StatelessWidget {
             ],
           ),
         ] else if (message.sendState == MessageSendState.sending) ...<Widget>[
-          const SizedBox(height: 8),
-          const Text(
+          SizedBox(height: responsive.displayScaled(8)),
+          Text(
             '发送中...',
-            style: TextStyle(fontSize: 12, color: Color(0xFF8A96AA)),
+            style: TextStyle(
+              fontSize: responsive.displayScaled(12),
+              color: const Color(0xFF8A96AA),
+            ),
           ),
         ],
       ],
@@ -1047,8 +1082,8 @@ class _MessageBubble extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         if (!isMine) ...<Widget>[
-          AvatarBadge(seed: senderLabel, size: 34),
-          const SizedBox(width: 10),
+          AvatarBadge(seed: senderLabel, size: responsive.displayScaled(34)),
+          SizedBox(width: responsive.displayScaled(10)),
         ],
         Flexible(child: bubble),
       ],
@@ -1093,7 +1128,7 @@ class _MessageBubble extends StatelessWidget {
                       senderLabel,
                       style: TextStyle(
                         fontSize: responsive.metaSm,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         color: theme.primaryDark,
                       ),
                     ),
@@ -1104,7 +1139,7 @@ class _MessageBubble extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: isMine
-                        ? theme.warningContainer
+                        ? AwikiMePalette.actionBlueSoft
                         : theme.subtleSurface,
                     borderRadius: BorderRadius.only(
                       topLeft: Radius.circular(isMine ? 22 : 6),
@@ -1139,7 +1174,7 @@ class _MessageBubble extends StatelessWidget {
                         style: TextStyle(
                           fontSize: responsive.metaSm,
                           color: theme.danger,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       if (onRetry != null) ...<Widget>[
@@ -1152,7 +1187,7 @@ class _MessageBubble extends StatelessWidget {
                             style: TextStyle(
                               fontSize: responsive.metaSm,
                               color: theme.primaryDark,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
@@ -1200,20 +1235,24 @@ class _AttachmentContent extends StatelessWidget {
     final caption = attachment.caption?.trim();
     final titleStyle = TextStyle(
       color: macStyle ? const Color(0xFF17213A) : theme.title,
-      fontSize: macStyle ? 13.5 : responsive.bodyMd,
-      fontWeight: FontWeight.w800,
+      fontSize: macStyle ? responsive.displayScaled(13.5) : responsive.bodyMd,
+      fontWeight: FontWeight.w500,
       height: 1.25,
     );
     final metaStyle = TextStyle(
       color: macStyle ? const Color(0xFF66728A) : theme.secondaryText,
-      fontSize: macStyle ? 12 : responsive.metaSm,
-      fontWeight: FontWeight.w600,
+      fontSize: macStyle ? responsive.displayScaled(12) : responsive.metaSm,
+      fontWeight: FontWeight.w500,
       height: 1.25,
     );
     return ConstrainedBox(
       constraints: BoxConstraints(
-        minWidth: macStyle ? 220 : responsive.scaled(210),
-        maxWidth: macStyle ? 360 : responsive.scaled(420),
+        minWidth: macStyle
+            ? responsive.displayScaled(220)
+            : responsive.scaled(210),
+        maxWidth: macStyle
+            ? responsive.displayScaled(360)
+            : responsive.scaled(420),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1224,23 +1263,35 @@ class _AttachmentContent extends StatelessWidget {
               caption,
               style: TextStyle(
                 color: macStyle ? const Color(0xFF17213A) : theme.title,
-                fontSize: macStyle ? 14 : responsive.bodyMd,
+                fontSize: macStyle
+                    ? responsive.displayScaled(14)
+                    : responsive.bodyMd,
                 height: 1.4,
               ),
             ),
-            SizedBox(height: macStyle ? 10 : responsive.spacing(10)),
+            SizedBox(
+              height: macStyle
+                  ? responsive.displayScaled(10)
+                  : responsive.spacing(10),
+            ),
           ],
           Row(
             children: <Widget>[
               Container(
-                width: macStyle ? 38 : responsive.scaled(40),
-                height: macStyle ? 38 : responsive.scaled(40),
+                width: macStyle
+                    ? responsive.displayScaled(38)
+                    : responsive.scaled(40),
+                height: macStyle
+                    ? responsive.displayScaled(38)
+                    : responsive.scaled(40),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: macStyle
                       ? const Color(0xFFEAF2FF)
                       : theme.surface.withValues(alpha: 0.72),
-                  borderRadius: BorderRadius.circular(macStyle ? 8 : 10),
+                  borderRadius: BorderRadius.circular(
+                    macStyle ? responsive.displayScaled(8) : 10,
+                  ),
                   border: Border.all(
                     color: macStyle ? const Color(0xFFDDE5F0) : theme.border,
                   ),
@@ -1248,10 +1299,16 @@ class _AttachmentContent extends StatelessWidget {
                 child: Icon(
                   CupertinoIcons.doc_fill,
                   color: macStyle ? const Color(0xFF0B65F8) : theme.primary,
-                  size: macStyle ? 20 : responsive.iconSm,
+                  size: macStyle
+                      ? responsive.displayScaled(20)
+                      : responsive.iconSm,
                 ),
               ),
-              SizedBox(width: macStyle ? 10 : responsive.spacing(10)),
+              SizedBox(
+                width: macStyle
+                    ? responsive.displayScaled(10)
+                    : responsive.spacing(10),
+              ),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1262,7 +1319,11 @@ class _AttachmentContent extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: titleStyle,
                     ),
-                    SizedBox(height: macStyle ? 4 : responsive.spacing(4)),
+                    SizedBox(
+                      height: macStyle
+                          ? responsive.displayScaled(4)
+                          : responsive.spacing(4),
+                    ),
                     Text(
                       _formatAttachmentMeta(
                         attachment.mimeType,
@@ -1276,7 +1337,11 @@ class _AttachmentContent extends StatelessWidget {
                 ),
               ),
               if (onDownload != null) ...<Widget>[
-                SizedBox(width: macStyle ? 10 : responsive.spacing(10)),
+                SizedBox(
+                  width: macStyle
+                      ? responsive.displayScaled(10)
+                      : responsive.spacing(10),
+                ),
                 _AttachmentActionButton(
                   macStyle: macStyle,
                   isLoading: isDownloading,
@@ -1306,7 +1371,9 @@ class _AttachmentActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    final size = macStyle ? 32.0 : responsive.scaled(34);
+    final size = macStyle
+        ? responsive.displayScaled(32)
+        : responsive.scaled(34);
     return Semantics(
       button: true,
       label: '下载附件',
@@ -1320,17 +1387,23 @@ class _AttachmentActionButton extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: macStyle ? CupertinoColors.white : theme.surface,
-            borderRadius: BorderRadius.circular(macStyle ? 8 : 10),
+            borderRadius: BorderRadius.circular(
+              macStyle ? responsive.displayScaled(8) : 10,
+            ),
             border: Border.all(
               color: macStyle ? const Color(0xFFDDE5F0) : theme.border,
             ),
           ),
           child: isLoading
-              ? CupertinoActivityIndicator(radius: macStyle ? 7 : 8)
+              ? CupertinoActivityIndicator(
+                  radius: macStyle ? responsive.displayScaled(7) : 8,
+                )
               : Icon(
                   CupertinoIcons.arrow_down_doc_fill,
                   color: macStyle ? const Color(0xFF0B65F8) : theme.primary,
-                  size: macStyle ? 17 : responsive.iconSm,
+                  size: macStyle
+                      ? responsive.displayScaled(17)
+                      : responsive.iconSm,
                 ),
         ),
       ),
@@ -1397,15 +1470,27 @@ class _Composer extends StatelessWidget {
           builder: (context, constraints) {
             final compact = constraints.maxWidth < 360;
             final showAttachment = constraints.maxWidth >= 280;
-            final horizontal = compact ? 14.0 : 22.0;
+            final horizontal = responsive.displayScaled(compact ? 14 : 22);
             return Padding(
-              padding: EdgeInsets.fromLTRB(horizontal, 8, horizontal, 16),
+              padding: EdgeInsets.fromLTRB(
+                horizontal,
+                responsive.displayScaled(8),
+                horizontal,
+                responsive.displayScaled(16),
+              ),
               child: Container(
-                height: 52,
-                padding: const EdgeInsets.fromLTRB(12, 0, 8, 0),
+                height: responsive.displayScaled(52),
+                padding: EdgeInsets.fromLTRB(
+                  responsive.displayScaled(12),
+                  0,
+                  responsive.displayScaled(8),
+                  0,
+                ),
                 decoration: BoxDecoration(
                   color: CupertinoColors.white,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(
+                    responsive.displayScaled(10),
+                  ),
                   border: Border.all(color: const Color(0xFFDDE5F0)),
                   boxShadow: const <BoxShadow>[
                     BoxShadow(
@@ -1422,17 +1507,17 @@ class _Composer extends StatelessWidget {
                         key: const Key('chat-attachment-button'),
                         onTap: onAttach,
                         behavior: HitTestBehavior.opaque,
-                        child: const SizedBox(
-                          width: 34,
-                          height: 34,
+                        child: SizedBox(
+                          width: responsive.displayScaled(34),
+                          height: responsive.displayScaled(34),
                           child: Icon(
                             CupertinoIcons.paperclip,
-                            color: Color(0xFF34415C),
-                            size: 22,
+                            color: const Color(0xFF34415C),
+                            size: responsive.displayScaled(22),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: responsive.displayScaled(10)),
                     ],
                     Expanded(
                       child: CupertinoTextField(
@@ -1442,31 +1527,33 @@ class _Composer extends StatelessWidget {
                         onSubmitted: (_) async => _submitIfNeeded(),
                         decoration: null,
                         padding: EdgeInsets.zero,
-                        style: const TextStyle(
-                          color: Color(0xFF17213A),
-                          fontSize: 13.5,
+                        style: TextStyle(
+                          color: const Color(0xFF17213A),
+                          fontSize: responsive.displayScaled(13.5),
                         ),
-                        placeholderStyle: const TextStyle(
-                          color: Color(0xFF8A96AA),
-                          fontSize: 13.5,
+                        placeholderStyle: TextStyle(
+                          color: const Color(0xFF8A96AA),
+                          fontSize: responsive.displayScaled(13.5),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    SizedBox(width: responsive.displayScaled(10)),
                     GestureDetector(
                       onTap: _submitIfNeeded,
                       behavior: HitTestBehavior.opaque,
                       child: Container(
-                        width: 36,
-                        height: 36,
+                        width: responsive.displayScaled(36),
+                        height: responsive.displayScaled(36),
                         decoration: BoxDecoration(
                           color: const Color(0xFF0B65F8),
-                          borderRadius: BorderRadius.circular(9),
+                          borderRadius: BorderRadius.circular(
+                            responsive.displayScaled(9),
+                          ),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           CupertinoIcons.paperplane_fill,
                           color: CupertinoColors.white,
-                          size: 18,
+                          size: responsive.displayScaled(18),
                         ),
                       ),
                     ),

@@ -117,7 +117,7 @@ class _CreateGroupPageState extends ConsumerState<CreateGroupPage> {
                             style: TextStyle(
                               color: theme.primary,
                               fontSize: 16,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),

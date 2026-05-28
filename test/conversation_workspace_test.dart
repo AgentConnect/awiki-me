@@ -7,6 +7,8 @@ import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_list_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
+import 'package:awiki_me/src/presentation/settings/settings_page.dart';
+import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -359,7 +361,65 @@ void main() {
 
     await tester.tap(find.text('设置').first);
     await tester.pumpAndSettle();
-    expect(find.text('设置'), findsOneWidget);
+    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(find.text('设置'), findsWidgets);
+    expect(find.text('检查更新'), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.back), findsNothing);
+    expect(find.byKey(const Key('mac-desktop-rail-slot')), findsOneWidget);
+    final settingsPaneSize = tester.getSize(
+      find.byKey(const Key('mac-settings-list-pane')),
+    );
+    expect(settingsPaneSize.width, closeTo(420, 0.1));
+    expect(settingsPaneSize.width, lessThan(1280 - 72));
+
+    await tester.tap(find.text('消息'));
+    await tester.pumpAndSettle();
+    expect(find.text('最近会话'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 主导航和消息工作区跟随显示缩放', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'me.json',
+      displayName: 'Mia',
+      handle: 'mia',
+      jwtToken: 'token',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation];
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1280, 720));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AwikiDisplayScaleScope(scale: 1.12, child: AppShell()),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSize(find.byKey(const Key('mac-desktop-rail-slot'))).width,
+      greaterThan(72),
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('mac-conversation-list-pane'))).width,
+      greaterThan(340),
+    );
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

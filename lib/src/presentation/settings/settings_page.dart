@@ -16,7 +16,9 @@ import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 
 class SettingsPage extends ConsumerWidget {
-  const SettingsPage({super.key});
+  const SettingsPage({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -37,14 +39,17 @@ class SettingsPage extends ConsumerWidget {
             AwikiMeTopBar(
               title: l10n.settingsTitle,
               padding: EdgeInsets.zero,
-              leading: TopBarActionButton(
-                onTap: () => Navigator.of(context).pop(),
-                child: const AwikiAssetIcon(
-                  assetName: 'assets/icons/icon_left.svg',
-                  color: AwikiMeColors.primaryDark,
-                  size: 22,
-                ),
-              ),
+              leading: embedded
+                  ? const SizedBox.shrink()
+                  : TopBarActionButton(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: const AwikiAssetIcon(
+                        assetName: 'assets/icons/icon_left.svg',
+                        color: AwikiMeColors.primaryDark,
+                        size: 22,
+                      ),
+                    ),
+              trailing: embedded ? const SizedBox(width: 40, height: 40) : null,
             ),
             const SizedBox(height: 16),
             AppCardSection(
@@ -59,7 +64,7 @@ class SettingsPage extends ConsumerWidget {
                       style: TextStyle(
                         color: theme.secondaryText,
                         fontSize: context.awikiResponsive.bodySm,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),

@@ -584,6 +584,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sessionExpiredRelogin => '登录状态已失效，请重新登录。';
 
   @override
+  String get didNotFoundOrRevoked =>
+      '未找到这个身份，或它已经被撤销。请检查 DID 是否正确，或切换到可用身份后重试。';
+
+  @override
   String localCredentialNotFound(Object credentialName) {
     return '本地未找到凭证：$credentialName';
   }
