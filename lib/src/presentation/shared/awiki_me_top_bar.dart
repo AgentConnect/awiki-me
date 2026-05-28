@@ -89,6 +89,8 @@ class AwikiMeShellTopBar extends StatelessWidget {
           ? const SizedBox.shrink()
           : TopBarActionButton(
               onTap: onSettingsTap,
+              semanticsIdentifier: 'e2e-settings-button',
+              semanticsLabel: '设置',
               child: AwikiAssetIcon(
                 assetName: 'assets/icons/icon_settings.svg',
                 size: responsive.iconLg,
@@ -99,6 +101,8 @@ class AwikiMeShellTopBar extends StatelessWidget {
           ? const SizedBox.shrink()
           : TopBarActionButton(
               onTap: onQuickActionsTap,
+              semanticsIdentifier: 'e2e-quick-actions-button',
+              semanticsLabel: '更多操作',
               child: AwikiAssetIcon(
                 assetName: 'assets/icons/icon_add.svg',
                 size: responsive.iconLg,

@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
+import '../../app/e2e_semantics.dart';
 import '../../app/app_services.dart';
 import '../../core/group_display_name.dart';
 import '../../domain/entities/chat_message.dart';
@@ -662,6 +663,8 @@ class _ChatHeader extends StatelessWidget {
             width: responsive.scaled(40),
             child: TopBarActionButton(
               onTap: onBack,
+              semanticsIdentifier: 'e2e-chat-back-button',
+              semanticsLabel: '返回',
               child: Padding(
                 padding: EdgeInsets.all(responsive.spacing(8)),
                 child: AwikiAssetIcon(
@@ -996,6 +999,14 @@ class _MessageBubble extends StatelessWidget {
   final Future<void> Function()? onDownload;
   final bool isDownloading;
 
+  Widget _withE2eMessageSemantics({required Widget child}) {
+    return e2eSemantics(
+      identifier: e2eMessageIdentifier(message.content),
+      label: message.content,
+      child: child,
+    );
+  }
+
   Widget _buildMacBubble(BuildContext context, bool isMine) {
     final responsive = context.awikiResponsive;
     final child = message.attachment == null
@@ -1075,18 +1086,20 @@ class _MessageBubble extends StatelessWidget {
         ],
       ],
     );
-    return Row(
-      mainAxisAlignment: isMine
-          ? MainAxisAlignment.end
-          : MainAxisAlignment.start,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        if (!isMine) ...<Widget>[
-          AvatarBadge(seed: senderLabel, size: responsive.displayScaled(34)),
-          SizedBox(width: responsive.displayScaled(10)),
+    return _withE2eMessageSemantics(
+      child: Row(
+        mainAxisAlignment: isMine
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          if (!isMine) ...<Widget>[
+            AvatarBadge(seed: senderLabel, size: responsive.displayScaled(34)),
+            SizedBox(width: responsive.displayScaled(10)),
+          ],
+          Flexible(child: bubble),
         ],
-        Flexible(child: bubble),
-      ],
+      ),
     );
   }
 
@@ -1098,118 +1111,120 @@ class _MessageBubble extends StatelessWidget {
     if (macStyle) {
       return _buildMacBubble(context, isMine);
     }
-    return Row(
-      mainAxisAlignment: isMine
-          ? MainAxisAlignment.end
-          : MainAxisAlignment.start,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        if (!isMine) ...<Widget>[
-          AvatarBadge(seed: senderLabel, size: responsive.scaled(28)),
-          SizedBox(width: responsive.spacing(12)),
-        ],
-        Flexible(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: responsive.isLarge ? 500 : 640,
-            ),
-            child: Column(
-              crossAxisAlignment: isMine
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
-              children: <Widget>[
-                if (!isMine)
-                  Padding(
-                    padding: EdgeInsets.only(
-                      bottom: responsive.spacing(6),
-                      left: responsive.spacing(4),
-                    ),
-                    child: Text(
-                      senderLabel,
-                      style: TextStyle(
-                        fontSize: responsive.metaSm,
-                        fontWeight: FontWeight.w500,
-                        color: theme.primaryDark,
+    return _withE2eMessageSemantics(
+      child: Row(
+        mainAxisAlignment: isMine
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          if (!isMine) ...<Widget>[
+            AvatarBadge(seed: senderLabel, size: responsive.scaled(28)),
+            SizedBox(width: responsive.spacing(12)),
+          ],
+          Flexible(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: responsive.isLarge ? 500 : 640,
+              ),
+              child: Column(
+                crossAxisAlignment: isMine
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
+                children: <Widget>[
+                  if (!isMine)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom: responsive.spacing(6),
+                        left: responsive.spacing(4),
                       ),
-                    ),
-                  ),
-                Container(
-                  padding: responsive.scaledInsets(
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-                  ),
-                  decoration: BoxDecoration(
-                    color: isMine
-                        ? AwikiMePalette.actionBlueSoft
-                        : theme.subtleSurface,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(isMine ? 22 : 6),
-                      topRight: Radius.circular(isMine ? 6 : 22),
-                      bottomLeft: const Radius.circular(22),
-                      bottomRight: const Radius.circular(22),
-                    ),
-                  ),
-                  child: message.attachment == null
-                      ? Text(
-                          message.content,
-                          style: TextStyle(
-                            color: theme.title,
-                            fontSize: responsive.bodyMd,
-                            height: responsive.isPhone ? 1.5 : 1.4,
-                          ),
-                        )
-                      : _AttachmentContent(
-                          message: message,
-                          macStyle: false,
-                          onDownload: onDownload,
-                          isDownloading: isDownloading,
-                        ),
-                ),
-                if (message.sendState == MessageSendState.failed) ...<Widget>[
-                  SizedBox(height: responsive.spacing(8)),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Text(
-                        '发送失败',
+                      child: Text(
+                        senderLabel,
                         style: TextStyle(
                           fontSize: responsive.metaSm,
-                          color: theme.danger,
                           fontWeight: FontWeight.w500,
+                          color: theme.primaryDark,
                         ),
                       ),
-                      if (onRetry != null) ...<Widget>[
-                        SizedBox(width: responsive.spacing(10)),
-                        GestureDetector(
-                          onTap: onRetry,
-                          behavior: HitTestBehavior.opaque,
-                          child: Text(
-                            '重试',
+                    ),
+                  Container(
+                    padding: responsive.scaledInsets(
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                    ),
+                    decoration: BoxDecoration(
+                      color: isMine
+                          ? AwikiMePalette.actionBlueSoft
+                          : theme.subtleSurface,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(isMine ? 22 : 6),
+                        topRight: Radius.circular(isMine ? 6 : 22),
+                        bottomLeft: const Radius.circular(22),
+                        bottomRight: const Radius.circular(22),
+                      ),
+                    ),
+                    child: message.attachment == null
+                        ? Text(
+                            message.content,
                             style: TextStyle(
-                              fontSize: responsive.metaSm,
-                              color: theme.primaryDark,
-                              fontWeight: FontWeight.w500,
+                              color: theme.title,
+                              fontSize: responsive.bodyMd,
+                              height: responsive.isPhone ? 1.5 : 1.4,
                             ),
+                          )
+                        : _AttachmentContent(
+                            message: message,
+                            macStyle: false,
+                            onDownload: onDownload,
+                            isDownloading: isDownloading,
+                          ),
+                  ),
+                  if (message.sendState == MessageSendState.failed) ...<Widget>[
+                    SizedBox(height: responsive.spacing(8)),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          '发送失败',
+                          style: TextStyle(
+                            fontSize: responsive.metaSm,
+                            color: theme.danger,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
+                        if (onRetry != null) ...<Widget>[
+                          SizedBox(width: responsive.spacing(10)),
+                          GestureDetector(
+                            onTap: onRetry,
+                            behavior: HitTestBehavior.opaque,
+                            child: Text(
+                              '重试',
+                              style: TextStyle(
+                                fontSize: responsive.metaSm,
+                                color: theme.primaryDark,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
-                  ),
-                ] else if (message.sendState ==
-                    MessageSendState.sending) ...<Widget>[
-                  SizedBox(height: responsive.spacing(8)),
-                  Text(
-                    '发送中...',
-                    style: TextStyle(
-                      fontSize: responsive.metaSm,
-                      color: theme.tertiaryText,
                     ),
-                  ),
+                  ] else if (message.sendState ==
+                      MessageSendState.sending) ...<Widget>[
+                    SizedBox(height: responsive.spacing(8)),
+                    Text(
+                      '发送中...',
+                      style: TextStyle(
+                        fontSize: responsive.metaSm,
+                        color: theme.tertiaryText,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -1520,40 +1535,50 @@ class _Composer extends StatelessWidget {
                       SizedBox(width: responsive.displayScaled(10)),
                     ],
                     Expanded(
-                      child: CupertinoTextField(
-                        controller: controller,
-                        placeholder: context.l10n.chatInputPlaceholder,
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: (_) async => _submitIfNeeded(),
-                        decoration: null,
-                        padding: EdgeInsets.zero,
-                        style: TextStyle(
-                          color: const Color(0xFF17213A),
-                          fontSize: responsive.displayScaled(13.5),
-                        ),
-                        placeholderStyle: TextStyle(
-                          color: const Color(0xFF8A96AA),
-                          fontSize: responsive.displayScaled(13.5),
+                      child: e2eSemantics(
+                        identifier: 'e2e-chat-input',
+                        label: context.l10n.chatInputPlaceholder,
+                        textField: true,
+                        child: CupertinoTextField(
+                          controller: controller,
+                          placeholder: context.l10n.chatInputPlaceholder,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) async => _submitIfNeeded(),
+                          decoration: null,
+                          padding: EdgeInsets.zero,
+                          style: TextStyle(
+                            color: const Color(0xFF17213A),
+                            fontSize: responsive.displayScaled(13.5),
+                          ),
+                          placeholderStyle: TextStyle(
+                            color: const Color(0xFF8A96AA),
+                            fontSize: responsive.displayScaled(13.5),
+                          ),
                         ),
                       ),
                     ),
                     SizedBox(width: responsive.displayScaled(10)),
-                    GestureDetector(
-                      onTap: _submitIfNeeded,
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        width: responsive.displayScaled(36),
-                        height: responsive.displayScaled(36),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0B65F8),
-                          borderRadius: BorderRadius.circular(
-                            responsive.displayScaled(9),
+                    e2eSemantics(
+                      identifier: 'e2e-chat-send-button',
+                      label: '发送',
+                      button: true,
+                      child: GestureDetector(
+                        onTap: _submitIfNeeded,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          width: responsive.displayScaled(36),
+                          height: responsive.displayScaled(36),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0B65F8),
+                            borderRadius: BorderRadius.circular(
+                              responsive.displayScaled(9),
+                            ),
                           ),
-                        ),
-                        child: Icon(
-                          CupertinoIcons.paperplane_fill,
-                          color: CupertinoColors.white,
-                          size: responsive.displayScaled(18),
+                          child: Icon(
+                            CupertinoIcons.paperplane_fill,
+                            color: CupertinoColors.white,
+                            size: responsive.displayScaled(18),
+                          ),
                         ),
                       ),
                     ),
@@ -1607,34 +1632,44 @@ class _Composer extends StatelessWidget {
               ),
               SizedBox(width: responsive.spacing(8)),
               Expanded(
-                child: CupertinoTextField(
-                  controller: controller,
-                  placeholder: context.l10n.chatInputPlaceholder,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) async => _submitIfNeeded(),
-                  decoration: null,
-                  padding: EdgeInsets.symmetric(
-                    vertical: responsive.spacing(10),
-                  ),
-                  style: TextStyle(
-                    fontSize: responsive.bodyMd,
-                    color: theme.title,
-                  ),
-                  placeholderStyle: TextStyle(
-                    fontSize: responsive.bodyMd,
-                    color: theme.secondaryText,
+                child: e2eSemantics(
+                  identifier: 'e2e-chat-input',
+                  label: context.l10n.chatInputPlaceholder,
+                  textField: true,
+                  child: CupertinoTextField(
+                    controller: controller,
+                    placeholder: context.l10n.chatInputPlaceholder,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) async => _submitIfNeeded(),
+                    decoration: null,
+                    padding: EdgeInsets.symmetric(
+                      vertical: responsive.spacing(10),
+                    ),
+                    style: TextStyle(
+                      fontSize: responsive.bodyMd,
+                      color: theme.title,
+                    ),
+                    placeholderStyle: TextStyle(
+                      fontSize: responsive.bodyMd,
+                      color: theme.secondaryText,
+                    ),
                   ),
                 ),
               ),
               SizedBox(width: responsive.spacing(8)),
-              TopBarActionButton(
-                onTap: _submitIfNeeded,
-                child: Padding(
-                  padding: EdgeInsets.all(responsive.spacing(6)),
-                  child: AwikiAssetIcon(
-                    assetName: 'assets/icons/icon_send.svg',
-                    color: theme.primary,
-                    size: responsive.iconMd,
+              e2eSemantics(
+                identifier: 'e2e-chat-send-button',
+                label: '发送',
+                button: true,
+                child: TopBarActionButton(
+                  onTap: _submitIfNeeded,
+                  child: Padding(
+                    padding: EdgeInsets.all(responsive.spacing(6)),
+                    child: AwikiAssetIcon(
+                      assetName: 'assets/icons/icon_send.svg',
+                      color: theme.primary,
+                      size: responsive.iconMd,
+                    ),
                   ),
                 ),
               ),

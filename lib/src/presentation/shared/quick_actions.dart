@@ -23,6 +23,7 @@ Future<void> showCommonQuickActionsMenu(
         AppDropMenuItem(
           label: '发起新消息',
           icon: CupertinoIcons.square_pencil,
+          semanticsIdentifier: 'e2e-start-conversation-menu-item',
           onTap: () {
             showStartConversationDialog(rootContext, ref);
           },

@@ -3,21 +3,36 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../../app/e2e_semantics.dart';
 import '../awiki_me_design.dart';
 import '../responsive_layout.dart';
 
 class TopBarActionButton extends StatelessWidget {
-  const TopBarActionButton({super.key, required this.child, this.onTap});
+  const TopBarActionButton({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.semanticsIdentifier,
+    this.semanticsLabel,
+  });
 
   final Widget child;
   final VoidCallback? onTap;
+  final String? semanticsIdentifier;
+  final String? semanticsLabel;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: child,
+    return e2eSemantics(
+      identifier: onTap == null ? null : semanticsIdentifier,
+      label: semanticsLabel,
+      button: true,
+      enabled: onTap != null,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: child,
+      ),
     );
   }
 }
@@ -166,6 +181,7 @@ class AppDropMenuItem {
     this.icon,
     this.destructive = false,
     this.highlighted = false,
+    this.semanticsIdentifier,
   });
 
   final String label;
@@ -173,6 +189,7 @@ class AppDropMenuItem {
   final IconData? icon;
   final bool destructive;
   final bool highlighted;
+  final String? semanticsIdentifier;
 }
 
 class AppDropMenu extends StatelessWidget {
@@ -253,49 +270,55 @@ class _AppDropMenuButton extends StatelessWidget {
       foregroundColor = theme.primary;
     }
 
-    return GestureDetector(
-      onTap: () async {
-        Navigator.of(context).pop();
-        await item.onTap?.call();
-      },
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        height: responsive.isPhone ? 68 : responsive.scaled(56),
-        child: Center(
-          child: item.icon == null
-              ? Text(
-                  item.label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: responsive.titleLg,
-                    fontWeight: item.highlighted || item.destructive
-                        ? FontWeight.w500
-                        : FontWeight.w400,
-                    color: foregroundColor,
-                  ),
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    Icon(
-                      item.icon,
-                      size: responsive.iconMd,
+    return e2eSemantics(
+      identifier: item.semanticsIdentifier,
+      button: true,
+      enabled: item.onTap != null,
+      label: item.label,
+      child: GestureDetector(
+        onTap: () async {
+          Navigator.of(context).pop();
+          await item.onTap?.call();
+        },
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          height: responsive.isPhone ? 68 : responsive.scaled(56),
+          child: Center(
+            child: item.icon == null
+                ? Text(
+                    item.label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: responsive.titleLg,
+                      fontWeight: item.highlighted || item.destructive
+                          ? FontWeight.w500
+                          : FontWeight.w400,
                       color: foregroundColor,
                     ),
-                    SizedBox(width: responsive.spacing(12)),
-                    Text(
-                      item.label,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: responsive.titleLg,
-                        fontWeight: item.highlighted || item.destructive
-                            ? FontWeight.w500
-                            : FontWeight.w400,
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      Icon(
+                        item.icon,
+                        size: responsive.iconMd,
                         color: foregroundColor,
                       ),
-                    ),
-                  ],
-                ),
+                      SizedBox(width: responsive.spacing(12)),
+                      Text(
+                        item.label,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: responsive.titleLg,
+                          fontWeight: item.highlighted || item.destructive
+                              ? FontWeight.w500
+                              : FontWeight.w400,
+                          color: foregroundColor,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
         ),
       ),
     );
@@ -315,6 +338,8 @@ class AppTextField extends StatelessWidget {
     this.prefix,
     this.suffix,
     this.backgroundColor,
+    this.semanticsIdentifier,
+    this.semanticsLabel,
   });
 
   final TextEditingController controller;
@@ -327,12 +352,14 @@ class AppTextField extends StatelessWidget {
   final Widget? prefix;
   final Widget? suffix;
   final Color? backgroundColor;
+  final String? semanticsIdentifier;
+  final String? semanticsLabel;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
-    final textField = CupertinoTextField(
+    final rawTextField = CupertinoTextField(
       controller: controller,
       placeholder: placeholder,
       decoration: null,
@@ -353,6 +380,15 @@ class AppTextField extends StatelessWidget {
         color: theme.secondaryText,
       ),
     );
+    final identifier = e2eIdentifier(semanticsIdentifier);
+    final textField = identifier == null
+        ? rawTextField
+        : Semantics(
+            identifier: identifier,
+            label: semanticsLabel ?? label,
+            textField: true,
+            child: rawTextField,
+          );
     return AppSurface(
       color: backgroundColor ?? theme.subtleSurface,
       padding: responsive.scaledInsets(
@@ -397,55 +433,67 @@ class AppTextField extends StatelessWidget {
 }
 
 class AppPrimaryButton extends StatelessWidget {
-  const AppPrimaryButton({super.key, required this.label, this.onPressed});
+  const AppPrimaryButton({
+    super.key,
+    required this.label,
+    this.onPressed,
+    this.semanticsIdentifier,
+  });
 
   final String label;
   final VoidCallback? onPressed;
+  final String? semanticsIdentifier;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
-    return GestureDetector(
-      onTap: onPressed,
-      behavior: HitTestBehavior.opaque,
-      child: Opacity(
-        opacity: onPressed == null ? 0.5 : 1,
-        child: Container(
-          constraints: BoxConstraints(minHeight: responsive.controlHeight),
-          padding: EdgeInsets.symmetric(
-            horizontal: responsive.spacing(16),
-            vertical: responsive.spacing(10),
-          ),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: <Color>[
-                AwikiMePalette.actionBlue,
-                AwikiMePalette.actionBlueDeep,
+    return e2eSemantics(
+      identifier: onPressed == null ? null : semanticsIdentifier,
+      button: true,
+      enabled: onPressed != null,
+      label: label,
+      child: GestureDetector(
+        onTap: onPressed,
+        behavior: HitTestBehavior.opaque,
+        child: Opacity(
+          opacity: onPressed == null ? 0.5 : 1,
+          child: Container(
+            constraints: BoxConstraints(minHeight: responsive.controlHeight),
+            padding: EdgeInsets.symmetric(
+              horizontal: responsive.spacing(16),
+              vertical: responsive.spacing(10),
+            ),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: <Color>[
+                  AwikiMePalette.actionBlue,
+                  AwikiMePalette.actionBlueDeep,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(responsive.radius(9)),
+              boxShadow: const <BoxShadow>[
+                BoxShadow(
+                  color: Color(0x240B65F8),
+                  blurRadius: 20,
+                  offset: Offset(0, 8),
+                ),
               ],
             ),
-            borderRadius: BorderRadius.circular(responsive.radius(9)),
-            boxShadow: const <BoxShadow>[
-              BoxShadow(
-                color: Color(0x240B65F8),
-                blurRadius: 20,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Center(
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              strutStyle: StrutStyle(
-                fontSize: responsive.bodyMd,
-                height: 1,
-                forceStrutHeight: true,
-              ),
-              style: AwikiMeTextStyles.buttonLabel.copyWith(
-                color: theme.primaryForeground,
-                fontSize: responsive.bodyMd,
-                height: 1,
+            child: Center(
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                strutStyle: StrutStyle(
+                  fontSize: responsive.bodyMd,
+                  height: 1,
+                  forceStrutHeight: true,
+                ),
+                style: AwikiMeTextStyles.buttonLabel.copyWith(
+                  color: theme.primaryForeground,
+                  fontSize: responsive.bodyMd,
+                  height: 1,
+                ),
               ),
             ),
           ),
@@ -456,44 +504,56 @@ class AppPrimaryButton extends StatelessWidget {
 }
 
 class AppSecondaryButton extends StatelessWidget {
-  const AppSecondaryButton({super.key, required this.label, this.onPressed});
+  const AppSecondaryButton({
+    super.key,
+    required this.label,
+    this.onPressed,
+    this.semanticsIdentifier,
+  });
 
   final String label;
   final VoidCallback? onPressed;
+  final String? semanticsIdentifier;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
-    return GestureDetector(
-      onTap: onPressed,
-      behavior: HitTestBehavior.opaque,
-      child: Opacity(
-        opacity: onPressed == null ? 0.5 : 1,
-        child: Container(
-          constraints: BoxConstraints(minHeight: responsive.controlHeight),
-          padding: EdgeInsets.symmetric(
-            horizontal: responsive.spacing(16),
-            vertical: responsive.spacing(10),
-          ),
-          decoration: BoxDecoration(
-            color: theme.surface,
-            borderRadius: BorderRadius.circular(responsive.radius(9)),
-            border: Border.all(color: AwikiMePalette.actionBlueBorder),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              strutStyle: StrutStyle(
-                fontSize: responsive.bodyMd,
-                height: 1,
-                forceStrutHeight: true,
-              ),
-              style: AwikiMeTextStyles.buttonLabel.copyWith(
-                color: AwikiMePalette.actionInk,
-                fontSize: responsive.bodyMd,
-                height: 1,
+    return e2eSemantics(
+      identifier: onPressed == null ? null : semanticsIdentifier,
+      button: true,
+      enabled: onPressed != null,
+      label: label,
+      child: GestureDetector(
+        onTap: onPressed,
+        behavior: HitTestBehavior.opaque,
+        child: Opacity(
+          opacity: onPressed == null ? 0.5 : 1,
+          child: Container(
+            constraints: BoxConstraints(minHeight: responsive.controlHeight),
+            padding: EdgeInsets.symmetric(
+              horizontal: responsive.spacing(16),
+              vertical: responsive.spacing(10),
+            ),
+            decoration: BoxDecoration(
+              color: theme.surface,
+              borderRadius: BorderRadius.circular(responsive.radius(9)),
+              border: Border.all(color: AwikiMePalette.actionBlueBorder),
+            ),
+            child: Center(
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                strutStyle: StrutStyle(
+                  fontSize: responsive.bodyMd,
+                  height: 1,
+                  forceStrutHeight: true,
+                ),
+                style: AwikiMeTextStyles.buttonLabel.copyWith(
+                  color: AwikiMePalette.actionInk,
+                  fontSize: responsive.bodyMd,
+                  height: 1,
+                ),
               ),
             ),
           ),

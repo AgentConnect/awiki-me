@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/e2e_semantics.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../domain/services/realtime_gateway.dart';
@@ -121,8 +122,11 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     return Stack(
       children: <Widget>[
-        AwikiMeWidgets.pageBackground(
-          child: SafeArea(bottom: false, child: content),
+        e2eSemantics(
+          identifier: 'e2e-authenticated',
+          child: AwikiMeWidgets.pageBackground(
+            child: SafeArea(bottom: false, child: content),
+          ),
         ),
         if (runtime.isBusy)
           AwikiMeLoadingMask(label: context.l10n.commonPleaseWait),
@@ -679,6 +683,7 @@ class _BottomNavBar extends StatelessWidget {
                     Expanded(
                       child: _NavButton(
                         label: l10n.shellNavMessages,
+                        semanticsIdentifier: 'e2e-messages-tab',
                         activeAsset: 'assets/icons/message_Active.svg',
                         inactiveAsset: 'assets/icons/message_Inactive.svg',
                         active: currentIndex == 0,
@@ -689,6 +694,7 @@ class _BottomNavBar extends StatelessWidget {
                     Expanded(
                       child: _NavButton(
                         label: l10n.shellNavFriends,
+                        semanticsIdentifier: 'e2e-friends-tab',
                         activeAsset: 'assets/icons/friend_Active.svg',
                         inactiveAsset: 'assets/icons/friend_Inactive.svg',
                         active: currentIndex == 1,
@@ -699,6 +705,7 @@ class _BottomNavBar extends StatelessWidget {
                     Expanded(
                       child: _NavButton(
                         label: l10n.shellNavMe,
+                        semanticsIdentifier: 'e2e-profile-tab',
                         activeAsset: 'assets/icons/me_Active.svg',
                         inactiveAsset: 'assets/icons/me_Inactive.svg',
                         active: currentIndex == 2,
@@ -720,6 +727,7 @@ class _BottomNavBar extends StatelessWidget {
 class _NavButton extends StatelessWidget {
   const _NavButton({
     required this.label,
+    required this.semanticsIdentifier,
     required this.activeAsset,
     required this.inactiveAsset,
     required this.active,
@@ -728,6 +736,7 @@ class _NavButton extends StatelessWidget {
   });
 
   final String label;
+  final String semanticsIdentifier;
   final String activeAsset;
   final String inactiveAsset;
   final bool active;
@@ -759,6 +768,7 @@ class _NavButton extends StatelessWidget {
     }
 
     return Semantics(
+      identifier: e2eIdentifier(semanticsIdentifier),
       button: true,
       selected: active,
       label: label,

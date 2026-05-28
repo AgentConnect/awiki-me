@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/e2e_semantics.dart';
 import '../../app/app_router.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
@@ -380,6 +381,8 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                       child: AppPrimaryButton(
                         key: const Key('identity-lookup-search-button'),
                         label: _isResolving ? '匹配中...' : '匹配身份',
+                        semanticsIdentifier:
+                            'e2e-identity-lookup-search-button',
                         onPressed: _isResolving ? null : _resolve,
                       ),
                     ),
@@ -438,6 +441,9 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                                   : 'identity-start-chat-button',
                             ),
                             label: actionLabel,
+                            semanticsIdentifier: _isAddContact
+                                ? 'e2e-identity-add-contact-button'
+                                : 'e2e-identity-start-chat-button',
                             onPressed: _profile == null ? null : _submit,
                           ),
                         ),
@@ -480,19 +486,24 @@ class _IdentitySearchInput extends StatelessWidget {
           const Icon(CupertinoIcons.search, color: Color(0xFF34415C), size: 20),
           const SizedBox(width: 10),
           Expanded(
-            child: CupertinoTextField(
-              key: const Key('identity-lookup-input'),
-              controller: controller,
-              enabled: !isResolving,
-              placeholder: '输入 @handle / DID / Agent 地址',
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) async => onSubmitted(),
-              decoration: null,
-              padding: EdgeInsets.zero,
-              style: const TextStyle(color: Color(0xFF17213A), fontSize: 14),
-              placeholderStyle: const TextStyle(
-                color: Color(0xFF8A96AA),
-                fontSize: 14,
+            child: e2eSemantics(
+              identifier: 'e2e-identity-lookup-input',
+              label: '输入 handle 或 DID',
+              textField: true,
+              child: CupertinoTextField(
+                key: const Key('identity-lookup-input'),
+                controller: controller,
+                enabled: !isResolving,
+                placeholder: '输入 @handle / DID / Agent 地址',
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) async => onSubmitted(),
+                decoration: null,
+                padding: EdgeInsets.zero,
+                style: const TextStyle(color: Color(0xFF17213A), fontSize: 14),
+                placeholderStyle: const TextStyle(
+                  color: Color(0xFF8A96AA),
+                  fontSize: 14,
+                ),
               ),
             ),
           ),

@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/e2e_semantics.dart';
 import '../../l10n/l10n.dart';
 import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
@@ -19,11 +22,17 @@ class OnboardingPage extends ConsumerStatefulWidget {
 }
 
 class _OnboardingPageState extends ConsumerState<OnboardingPage> {
+  static const int _e2eOtpMaxAttempts = 15;
+  static const Duration _e2eOtpRetryInterval = Duration(seconds: 5);
+
   final phoneController = TextEditingController();
   final otpController = TextEditingController();
   final emailController = TextEditingController();
   final handleController = TextEditingController();
+  final _mobileScrollController = ScrollController();
   ProviderSubscription<AppRuntimeState>? _runtimeSubscription;
+  Timer? _e2eOtpRetryTimer;
+  int _e2eOtpAttempts = 0;
   bool _initialEntryModeResolved = false;
 
   String get _normalizedPhone => phoneController.text.trim();
@@ -54,11 +63,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
 
   @override
   void dispose() {
+    _stopE2eOtpRequestLoop();
     _runtimeSubscription?.close();
     phoneController.dispose();
     otpController.dispose();
     emailController.dispose();
     handleController.dispose();
+    _mobileScrollController.dispose();
     super.dispose();
   }
 
@@ -100,8 +111,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         onRefresh: runtime.refreshLocalCredentials,
         onModeChanged: ref.read(onboardingProvider.notifier).setEntryMode,
         onAuthModeChanged: ref.read(onboardingProvider.notifier).setAuthMode,
-        onRequestOtp: () =>
-            ref.read(onboardingProvider.notifier).requestOtp(_normalizedPhone),
+        onRequestOtp: _requestOtp,
         onRequestEmailActivation: () => ref
             .read(onboardingProvider.notifier)
             .requestEmailActivation(emailController.text.trim()),
@@ -127,6 +137,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           24,
         ),
         child: ListView(
+          controller: _mobileScrollController,
           children: <Widget>[
             SizedBox(height: responsive.spacing(responsive.isPhone ? 20 : 8)),
             Center(
@@ -193,10 +204,12 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     placeholder: context.l10n.onboardingPhonePlaceholder,
                     keyboardType: TextInputType.phone,
                     showLabel: !responsive.isPhone,
+                    semanticsIdentifier: 'e2e-phone-input',
                     prefix: responsive.isPhone
                         ? const _PhoneFieldPrefix(code: '+86')
                         : null,
                     suffix: _VerificationInlineButton(
+                      semanticsIdentifier: 'e2e-send-otp-button',
                       label: onboarding.isOtpResendCoolingDown
                           ? context.l10n.onboardingResendOtpIn(
                               onboarding.otpResendCountdown,
@@ -205,9 +218,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                       onPressed:
                           onboarding.isBusy || onboarding.isOtpResendCoolingDown
                           ? null
-                          : () => ref
-                                .read(onboardingProvider.notifier)
-                                .requestOtp(_normalizedPhone),
+                          : _requestOtp,
                     ),
                   ),
                   SizedBox(height: responsive.spacing(14)),
@@ -217,7 +228,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     placeholder: context.l10n.onboardingOtpPlaceholder,
                     keyboardType: TextInputType.number,
                     showLabel: !responsive.isPhone,
+                    semanticsIdentifier: 'e2e-otp-input',
                   ),
+                  if (onboarding.isOtpResendCoolingDown)
+                    const E2eMarker('e2e-otp-sent'),
+                  _OtpCompleteMarker(controller: otpController),
                 ] else ...<Widget>[
                   AppTextField(
                     controller: emailController,
@@ -269,17 +284,17 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 if (onboarding.authMode == 'phone')
                   AppPrimaryButton(
                     label: context.l10n.commonNext,
+                    semanticsIdentifier: 'e2e-login-next-button',
                     onPressed: onboarding.isBusy
                         ? null
-                        : () => ref
-                              .read(onboardingProvider.notifier)
-                              .setRegisterStep(2),
+                        : () => _setRegisterStep(2),
                   ),
               ] else ...<Widget>[
                 AppTextField(
                   controller: handleController,
                   label: context.l10n.onboardingHandle,
                   placeholder: context.l10n.onboardingHandlePlaceholder,
+                  semanticsIdentifier: 'e2e-handle-input',
                 ),
                 SizedBox(height: responsive.spacing(20)),
                 Row(
@@ -287,9 +302,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     Expanded(
                       child: AppSecondaryButton(
                         label: context.l10n.commonPrevious,
-                        onPressed: () => ref
-                            .read(onboardingProvider.notifier)
-                            .setRegisterStep(1),
+                        onPressed: () => _setRegisterStep(1),
                       ),
                     ),
                     SizedBox(width: responsive.spacing(12)),
@@ -298,6 +311,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                         label: onboarding.authMode == 'phone'
                             ? context.l10n.onboardingCompleteRegister
                             : context.l10n.onboardingCompleteEmailRegister,
+                        semanticsIdentifier: 'e2e-complete-login-button',
                         onPressed: onboarding.isBusy
                             ? null
                             : () => _submitRegister(context),
@@ -345,6 +359,75 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       nickName: handle,
       profileMarkdown: profileMarkdown,
     );
+  }
+
+  void _requestOtp() {
+    if (!awikiE2eEnabled) {
+      unawaited(
+        ref.read(onboardingProvider.notifier).requestOtp(_normalizedPhone),
+      );
+      return;
+    }
+    _startE2eOtpRequestLoop();
+  }
+
+  void _startE2eOtpRequestLoop() {
+    _stopE2eOtpRequestLoop();
+    _e2eOtpAttempts = 0;
+    _tryRequestOtpForE2e();
+    _e2eOtpRetryTimer = Timer.periodic(
+      _e2eOtpRetryInterval,
+      (_) => _tryRequestOtpForE2e(),
+    );
+  }
+
+  void _tryRequestOtpForE2e() {
+    if (!mounted) {
+      _stopE2eOtpRequestLoop();
+      return;
+    }
+    final onboarding = ref.read(onboardingProvider);
+    if (onboarding.isOtpResendCoolingDown ||
+        onboarding.registerStep != 1 ||
+        onboarding.authMode != 'phone') {
+      _stopE2eOtpRequestLoop();
+      return;
+    }
+    if (onboarding.isBusy) {
+      return;
+    }
+    if (_e2eOtpAttempts >= _e2eOtpMaxAttempts) {
+      _stopE2eOtpRequestLoop();
+      return;
+    }
+    _e2eOtpAttempts += 1;
+    unawaited(
+      ref.read(onboardingProvider.notifier).requestOtp(_normalizedPhone),
+    );
+  }
+
+  void _stopE2eOtpRequestLoop() {
+    _e2eOtpRetryTimer?.cancel();
+    _e2eOtpRetryTimer = null;
+  }
+
+  void _setRegisterStep(int step) {
+    ref.read(onboardingProvider.notifier).setRegisterStep(step);
+    if (step != 2) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_mobileScrollController.hasClients) {
+        return;
+      }
+      unawaited(
+        _mobileScrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+        ),
+      );
+    });
   }
 }
 
@@ -1831,48 +1914,78 @@ class _PhoneFieldPrefix extends StatelessWidget {
   }
 }
 
+class _OtpCompleteMarker extends StatelessWidget {
+  const _OtpCompleteMarker({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, _) {
+        if (value.text.replaceAll(RegExp(r'\s+'), '').length != 6) {
+          return const SizedBox.shrink();
+        }
+        return const E2eMarker('e2e-otp-complete');
+      },
+    );
+  }
+}
+
 class _VerificationInlineButton extends StatelessWidget {
-  const _VerificationInlineButton({required this.label, this.onPressed});
+  const _VerificationInlineButton({
+    required this.label,
+    this.onPressed,
+    this.semanticsIdentifier,
+  });
 
   final String label;
   final VoidCallback? onPressed;
+  final String? semanticsIdentifier;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return GestureDetector(
-      onTap: onPressed,
-      behavior: HitTestBehavior.opaque,
-      child: Opacity(
-        opacity: onPressed == null ? 0.55 : 1,
-        child: Container(
-          constraints: BoxConstraints(
-            minWidth: responsive.scaled(92),
-            maxWidth: responsive.scaled(132),
-            minHeight: responsive.compactControlHeight,
-          ),
-          padding: EdgeInsets.symmetric(horizontal: responsive.spacing(12)),
-          decoration: BoxDecoration(
-            color: AwikiMePalette.actionBlueSoft,
-            borderRadius: BorderRadius.circular(responsive.radius(8)),
-            border: Border.all(color: AwikiMePalette.actionBlueBorder),
-          ),
-          alignment: Alignment.center,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              label,
-              maxLines: 1,
-              textAlign: TextAlign.center,
-              strutStyle: StrutStyle(
-                fontSize: responsive.bodySm,
-                height: 1,
-                forceStrutHeight: true,
-              ),
-              style: AwikiMeTextStyles.buttonLabel.copyWith(
-                color: AwikiMePalette.actionBlue,
-                fontSize: responsive.bodySm,
-                height: 1,
+    return e2eSemantics(
+      identifier: onPressed == null ? null : semanticsIdentifier,
+      button: true,
+      enabled: onPressed != null,
+      label: label,
+      child: GestureDetector(
+        onTap: onPressed,
+        behavior: HitTestBehavior.opaque,
+        child: Opacity(
+          opacity: onPressed == null ? 0.55 : 1,
+          child: Container(
+            constraints: BoxConstraints(
+              minWidth: responsive.scaled(92),
+              maxWidth: responsive.scaled(132),
+              minHeight: responsive.compactControlHeight,
+            ),
+            padding: EdgeInsets.symmetric(horizontal: responsive.spacing(12)),
+            decoration: BoxDecoration(
+              color: AwikiMePalette.actionBlueSoft,
+              borderRadius: BorderRadius.circular(responsive.radius(8)),
+              border: Border.all(color: AwikiMePalette.actionBlueBorder),
+            ),
+            alignment: Alignment.center,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                maxLines: 1,
+                textAlign: TextAlign.center,
+                strutStyle: StrutStyle(
+                  fontSize: responsive.bodySm,
+                  height: 1,
+                  forceStrutHeight: true,
+                ),
+                style: AwikiMeTextStyles.buttonLabel.copyWith(
+                  color: AwikiMePalette.actionBlue,
+                  fontSize: responsive.bodySm,
+                  height: 1,
+                ),
               ),
             ),
           ),
