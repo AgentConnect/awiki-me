@@ -633,6 +633,76 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
+  testWidgets('macOS 最近会话搜索支持标题和最近消息预览', (tester) async {
+    final conversations = <ConversationSummary>[
+      conversation,
+      ConversationSummary(
+        threadId: 'group:funding',
+        displayName: '融资协作群',
+        lastMessagePreview: '明早同步 deck',
+        lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+        unreadCount: 0,
+        isGroup: true,
+        groupId: 'did:test:group:funding',
+      ),
+      ConversationSummary(
+        threadId: 'dm:did:me:did:ops',
+        displayName: 'Ops Bot',
+        lastMessagePreview: 'server alert recovered',
+        lastMessageAt: DateTime(2026, 3, 28, 10, 26),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:ops',
+      ),
+    ];
+    final gateway = FakeAwikiGateway()..conversations = conversations;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1280, 720));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) => _StaticConversationListController(ref, conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('搜索会话'), findsOneWidget);
+    expect(find.text('搜索会话或 Agent'), findsNothing);
+    expect(find.text('Marcus Chen'), findsOneWidget);
+    expect(find.text('融资协作群'), findsOneWidget);
+    expect(find.text('Ops Bot'), findsOneWidget);
+
+    await tester.enterText(find.byType(CupertinoSearchTextField), '融资');
+    await tester.pumpAndSettle();
+    expect(find.text('Marcus Chen'), findsNothing);
+    expect(find.text('融资协作群'), findsOneWidget);
+    expect(find.text('Ops Bot'), findsNothing);
+
+    await tester.enterText(find.byType(CupertinoSearchTextField), 'recovered');
+    await tester.pumpAndSettle();
+    expect(find.text('Marcus Chen'), findsNothing);
+    expect(find.text('融资协作群'), findsNothing);
+    expect(find.text('Ops Bot'), findsOneWidget);
+
+    await tester.enterText(find.byType(CupertinoSearchTextField), 'not-found');
+    await tester.pumpAndSettle();
+    expect(find.text('没有找到相关会话'), findsOneWidget);
+    expect(find.text('换个关键词试试'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
   testWidgets('手机宽度下点击会话进入独立聊天页', (tester) async {
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[conversation]

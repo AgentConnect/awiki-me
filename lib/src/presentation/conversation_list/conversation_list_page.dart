@@ -91,7 +91,7 @@ class ConversationListPage extends ConsumerWidget {
   }
 }
 
-class _MacConversationList extends StatelessWidget {
+class _MacConversationList extends StatefulWidget {
   const _MacConversationList({
     required this.conversations,
     required this.selectedThreadId,
@@ -111,8 +111,27 @@ class _MacConversationList extends StatelessWidget {
   final VoidCallback onStartConversation;
 
   @override
+  State<_MacConversationList> createState() => _MacConversationListState();
+}
+
+class _MacConversationListState extends State<_MacConversationList> {
+  String _query = '';
+
+  @override
+  void didUpdateWidget(covariant _MacConversationList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_query.isNotEmpty &&
+        widget.conversations.isEmpty &&
+        oldWidget.conversations.isNotEmpty) {
+      _query = '';
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final visibleConversations = _filterConversations(context);
+    final hasQuery = _query.trim().isNotEmpty;
     return DecoratedBox(
       decoration: const BoxDecoration(color: Color(0xFFF8FAFD)),
       child: Column(
@@ -141,14 +160,14 @@ class _MacConversationList extends StatelessWidget {
                   key: const Key('conversation-quick-actions-button'),
                   semanticLabel: '更多操作',
                   icon: CupertinoIcons.ellipsis,
-                  onTap: onShowActions,
+                  onTap: widget.onShowActions,
                 ),
                 SizedBox(width: responsive.displayScaled(10)),
                 _MacListIconButton(
                   key: const Key('start-conversation-button'),
                   semanticLabel: '发起新消息',
                   icon: CupertinoIcons.plus,
-                  onTap: onStartConversation,
+                  onTap: widget.onStartConversation,
                 ),
               ],
             ),
@@ -158,7 +177,12 @@ class _MacConversationList extends StatelessWidget {
               horizontal: responsive.displayScaled(20),
             ),
             child: CupertinoSearchTextField(
-              placeholder: '搜索会话或 Agent',
+              placeholder: '搜索会话',
+              onChanged: (value) {
+                setState(() {
+                  _query = value;
+                });
+              },
               style: TextStyle(
                 fontSize: responsive.displayScaled(13),
                 color: const Color(0xFF17213A),
@@ -194,11 +218,19 @@ class _MacConversationList extends StatelessWidget {
           Expanded(
             child: CustomScrollView(
               slivers: <Widget>[
-                CupertinoSliverRefreshControl(onRefresh: onRefresh),
-                if (conversations.isEmpty)
+                CupertinoSliverRefreshControl(onRefresh: widget.onRefresh),
+                if (widget.conversations.isEmpty)
                   const SliverFillRemaining(
                     hasScrollBody: false,
                     child: _MacConversationEmptyState(),
+                  )
+                else if (visibleConversations.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _MacConversationEmptyState(
+                      title: '没有找到相关会话',
+                      subtitle: hasQuery ? '换个关键词试试' : null,
+                    ),
                   )
                 else
                   SliverPadding(
@@ -206,12 +238,12 @@ class _MacConversationList extends StatelessWidget {
                       responsive.displayScaled(12),
                       0,
                       responsive.displayScaled(12),
-                      responsive.displayScaled(bottomInset),
+                      responsive.displayScaled(widget.bottomInset),
                     ),
                     sliver: SliverList.builder(
-                      itemCount: conversations.length,
+                      itemCount: visibleConversations.length,
                       itemBuilder: (context, index) {
-                        final item = conversations[index];
+                        final item = visibleConversations[index];
                         return _MacConversationRow(
                           title: DidDisplayFormatter.conversationTitle(
                             item,
@@ -223,8 +255,8 @@ class _MacConversationList extends StatelessWidget {
                           ),
                           unreadCount: item.unreadCount,
                           isGroup: item.isGroup,
-                          isSelected: selectedThreadId == item.threadId,
-                          onTap: () => onOpen(item),
+                          isSelected: widget.selectedThreadId == item.threadId,
+                          onTap: () => widget.onOpen(item),
                         );
                       },
                     ),
@@ -235,6 +267,38 @@ class _MacConversationList extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  List<ConversationSummary> _filterConversations(BuildContext context) {
+    final query = _normalizedSearchText(_query);
+    if (query.isEmpty) {
+      return widget.conversations;
+    }
+    return widget.conversations
+        .where((conversation) {
+          return _conversationSearchText(context, conversation).contains(query);
+        })
+        .toList(growable: false);
+  }
+
+  String _conversationSearchText(
+    BuildContext context,
+    ConversationSummary conversation,
+  ) {
+    return _normalizedSearchText(
+      <String>[
+        DidDisplayFormatter.conversationTitle(conversation, context.l10n),
+        conversation.displayName,
+        conversation.lastMessagePreview,
+        conversation.targetDid ?? '',
+        conversation.groupId ?? '',
+        conversation.threadId,
+      ].join(' '),
+    );
+  }
+
+  String _normalizedSearchText(String text) {
+    return text.trim().toLowerCase();
   }
 }
 
@@ -489,16 +553,40 @@ class _MacConversationRow extends StatelessWidget {
 }
 
 class _MacConversationEmptyState extends StatelessWidget {
-  const _MacConversationEmptyState();
+  const _MacConversationEmptyState({this.title = '还没有会话', this.subtitle});
+
+  final String title;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    final responsive = context.awikiResponsive;
+    return Center(
       child: Padding(
-        padding: EdgeInsets.all(24),
-        child: Text(
-          '还没有会话',
-          style: TextStyle(color: Color(0xFF7B879D), fontSize: 14),
+        padding: EdgeInsets.all(responsive.displayScaled(24)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: const Color(0xFF7B879D),
+                fontSize: responsive.displayScaled(14),
+              ),
+            ),
+            if (subtitle != null) ...<Widget>[
+              SizedBox(height: responsive.displayScaled(6)),
+              Text(
+                subtitle!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: const Color(0xFF9AA5B8),
+                  fontSize: responsive.displayScaled(12),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
