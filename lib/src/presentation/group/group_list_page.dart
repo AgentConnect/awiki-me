@@ -12,6 +12,7 @@ import '../shared/awiki_me_feedback.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/copyable_did_line.dart';
+import '../shared/formatters/display_formatters.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'create_group_page.dart';
@@ -209,6 +210,8 @@ class GroupDetailPage extends ConsumerStatefulWidget {
 
 class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
   late GroupSummary _group;
+  bool _didRequestMembers = false;
+  bool _isRefreshingMembers = false;
 
   @override
   void initState() {
@@ -218,6 +221,7 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    _requestMembers(_group.groupId);
     final members = ref.watch(groupMembersProvider(_group.groupId));
     final theme = context.awikiTheme;
     return Stack(
@@ -310,34 +314,46 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                 ),
                 const SizedBox(height: 16),
                 AppCardSection(
-                  child: Column(
-                    children: <Widget>[
-                      _ActionRow(title: '添加成员', onTap: _showAddMemberDialog),
-                      const AppSectionDivider(),
-                      _ActionRow(
-                        title: context.l10n.groupRefreshSnapshot,
-                        onTap: () async {
-                          final refreshed = await ref
-                              .read(groupProvider.notifier)
-                              .refreshGroup(_group.groupId);
-                          if (!mounted) {
-                            return;
-                          }
-                          setState(() => _group = refreshed);
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                AppCardSection(
                   color: members.isEmpty ? theme.subtleSurface : theme.surface,
-                  child: members.isEmpty
-                      ? Text(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              '成员',
+                              style: AwikiMeTextStyles.sectionTitle,
+                            ),
+                          ),
+                          _GroupDetailIconButton(
+                            key: const Key('group-detail-add-member-button'),
+                            semanticLabel: '添加成员',
+                            icon: CupertinoIcons.person_add,
+                            onTap: _showAddMemberDialog,
+                          ),
+                          const SizedBox(width: 8),
+                          _GroupDetailIconButton(
+                            key: const Key(
+                              'group-detail-refresh-members-button',
+                            ),
+                            semanticLabel: '刷新成员',
+                            icon: CupertinoIcons.refresh,
+                            isLoading: _isRefreshingMembers,
+                            onTap: _isRefreshingMembers
+                                ? null
+                                : _refreshMembers,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      if (members.isEmpty)
+                        Text(
                           context.l10n.groupMembersEmpty,
                           style: AwikiMeTextStyles.cardSubtitle,
                         )
-                      : Column(
+                      else
+                        Column(
                           children: members
                               .map(
                                 (item) => Padding(
@@ -347,6 +363,8 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                               )
                               .toList(),
                         ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -356,54 +374,178 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
     );
   }
 
+  void _requestMembers(String groupId) {
+    if (_didRequestMembers) {
+      return;
+    }
+    _didRequestMembers = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        return;
+      }
+      try {
+        await ref.read(groupProvider.notifier).loadGroupMembers(groupId);
+      } catch (_) {
+        // Keep the page usable when the initial background member snapshot
+        // cannot be loaded.
+      }
+    });
+  }
+
+  Future<void> _refreshMembers() async {
+    if (_isRefreshingMembers) {
+      return;
+    }
+    setState(() {
+      _isRefreshingMembers = true;
+    });
+    try {
+      await ref.read(groupProvider.notifier).loadGroupMembers(_group.groupId);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRefreshingMembers = false;
+        });
+      }
+    }
+  }
+
   void _showAddMemberDialog() {
-    final memberController = TextEditingController();
     AppNavigator.showDialog<void>(
       context,
-      (ctx) => CupertinoAlertDialog(
-        title: const Text('添加成员'),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 12),
-          child: AppTextField(
-            controller: memberController,
-            label: '成员 DID',
-            placeholder: '请输入成员 DID',
-            keyboardType: TextInputType.text,
-          ),
+      (ctx) => AddGroupMemberDialog(
+        groupId: _group.groupId,
+        onGroupUpdated: (updated) {
+          if (!mounted) {
+            return;
+          }
+          setState(() => _group = updated);
+        },
+      ),
+    );
+  }
+}
+
+class AddGroupMemberDialog extends ConsumerStatefulWidget {
+  const AddGroupMemberDialog({
+    super.key,
+    required this.groupId,
+    required this.onGroupUpdated,
+  });
+
+  final String groupId;
+  final ValueChanged<GroupSummary> onGroupUpdated;
+
+  @override
+  ConsumerState<AddGroupMemberDialog> createState() =>
+      _AddGroupMemberDialogState();
+}
+
+class _AddGroupMemberDialogState extends ConsumerState<AddGroupMemberDialog> {
+  final TextEditingController _memberController = TextEditingController();
+
+  @override
+  void dispose() {
+    _memberController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoAlertDialog(
+      title: const Text('添加成员'),
+      content: Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: AppTextField(
+          controller: _memberController,
+          label: '成员 DID',
+          placeholder: '请输入成员 DID',
+          keyboardType: TextInputType.text,
         ),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(context.l10n.commonCancel),
+      ),
+      actions: <Widget>[
+        CupertinoDialogAction(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(context.l10n.commonCancel),
+        ),
+        CupertinoDialogAction(
+          isDefaultAction: true,
+          onPressed: _addMember,
+          child: const Text('添加'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _addMember() async {
+    final memberDid = _memberController.text.trim();
+    if (memberDid.isEmpty) {
+      return;
+    }
+    final groupNotifier = ref.read(groupProvider.notifier);
+    final feedback = ref.read(uiFeedbackProvider.notifier);
+    Navigator.of(context).pop();
+    try {
+      final updated = await groupNotifier.addGroupMember(
+        groupId: widget.groupId,
+        memberDid: memberDid,
+      );
+      widget.onGroupUpdated(updated);
+    } catch (error) {
+      feedback.showError(AppMessage.fromError(error));
+    }
+  }
+}
+
+class _GroupDetailIconButton extends StatelessWidget {
+  const _GroupDetailIconButton({
+    super.key,
+    required this.semanticLabel,
+    required this.icon,
+    required this.onTap,
+    this.isLoading = false,
+  });
+
+  final String semanticLabel;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    return Semantics(
+      button: true,
+      enabled: !isLoading && onTap != null,
+      label: semanticLabel,
+      child: GestureDetector(
+        onTap: isLoading ? null : onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          height: responsive.scaled(34),
+          width: responsive.scaled(34),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: theme.surface,
+            borderRadius: BorderRadius.circular(responsive.radius(8)),
+            border: Border.all(color: const Color(0xFFDDE5F0)),
           ),
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () async {
-              final memberDid = memberController.text.trim();
-              if (memberDid.isEmpty) {
-                return;
-              }
-              Navigator.of(ctx).pop();
-              try {
-                final updated = await ref
-                    .read(groupProvider.notifier)
-                    .addGroupMember(
-                      groupId: _group.groupId,
-                      memberDid: memberDid,
-                    );
-                if (!mounted) {
-                  return;
-                }
-                setState(() => _group = updated);
-              } catch (error) {
-                ref
-                    .read(uiFeedbackProvider.notifier)
-                    .showError(AppMessage.fromError(error));
-              }
-            },
-            child: const Text('添加'),
-          ),
-        ],
+          child: isLoading
+              ? CupertinoActivityIndicator(radius: responsive.scaled(7))
+              : Icon(
+                  icon,
+                  color: const Color(0xFF34415C),
+                  size: responsive.iconSm,
+                ),
+        ),
       ),
     );
   }
@@ -468,21 +610,6 @@ class _GroupCard extends StatelessWidget {
   }
 }
 
-class _ActionRow extends StatelessWidget {
-  const _ActionRow({required this.title, required this.onTap});
-
-  final String title;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: AppActionRow(title: title, onTap: onTap),
-    );
-  }
-}
-
 class _MemberRow extends StatelessWidget {
   const _MemberRow({required this.item});
 
@@ -490,14 +617,29 @@ class _MemberRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = item.handle.trim().isEmpty ? item.did : item.handle.trim();
+    final title = _handleLabel(item);
     return Row(
       children: <Widget>[
         AvatarBadge(seed: title, size: 36),
         const SizedBox(width: 12),
-        Expanded(child: Text(title, style: AwikiMeTextStyles.cardTitle)),
-        AppPill(label: item.role),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AwikiMeTextStyles.cardTitle,
+          ),
+        ),
       ],
     );
+  }
+
+  String _handleLabel(GroupMemberSummary item) {
+    final handle = item.handle.trim();
+    final did = item.did.trim();
+    if (handle.isNotEmpty && handle != did) {
+      return handle;
+    }
+    return DidDisplayFormatter.compactDid(did);
   }
 }

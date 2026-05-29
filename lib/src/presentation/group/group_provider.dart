@@ -56,11 +56,20 @@ class GroupController extends StateNotifier<GroupState> {
   }
 
   Future<GroupSummary> refreshGroup(String groupId) async {
-    final group = await ref
-        .read(groupApplicationServiceProvider)
-        .getGroup(groupId);
-    upsertGroup(group);
+    late GroupSummary group;
+    Object? groupError;
+    StackTrace? groupStackTrace;
+    try {
+      group = await ref.read(groupApplicationServiceProvider).getGroup(groupId);
+    } catch (error, stackTrace) {
+      groupError = error;
+      groupStackTrace = stackTrace;
+    }
     await loadGroupMembers(groupId);
+    if (groupError != null) {
+      Error.throwWithStackTrace(groupError, groupStackTrace!);
+    }
+    upsertGroup(group);
     return group;
   }
 

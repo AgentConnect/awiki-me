@@ -245,19 +245,19 @@ class AwikiMeTheme {
     colorScheme: colorScheme,
     sectionTitle: TextStyle(
       fontSize: 20,
-      fontWeight: FontWeight.w600,
+      fontWeight: FontWeight.w500,
       color: AwikiMePalette.ink,
       letterSpacing: 0,
     ),
     navTitle: TextStyle(
       fontSize: 20,
-      fontWeight: FontWeight.w600,
+      fontWeight: FontWeight.w500,
       color: AwikiMePalette.ink,
       letterSpacing: 0,
     ),
     cardTitle: TextStyle(
       fontSize: 16,
-      fontWeight: FontWeight.w500,
+      fontWeight: FontWeight.w400,
       color: AwikiMePalette.body,
       letterSpacing: 0,
     ),
@@ -270,7 +270,7 @@ class AwikiMeTheme {
     meta: TextStyle(fontSize: 12, color: AwikiMePalette.fog, letterSpacing: 0),
     listTitle: TextStyle(
       fontSize: 16,
-      fontWeight: FontWeight.w500,
+      fontWeight: FontWeight.w400,
       color: AwikiMePalette.ink,
       height: 1.25,
       letterSpacing: 0,

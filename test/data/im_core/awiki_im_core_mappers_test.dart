@@ -292,6 +292,23 @@ void main() {
     expect(mappedConversation.groupId, 'did:group');
   });
 
+  test('group members derive handle from e1 DID when SDK handle is absent', () {
+    final member = mapper.groupMemberFromCore(
+      const core.GroupMember(
+        did: 'did:wba:awiki.ai:user:bob:e1_member',
+        role: 'member',
+      ),
+    );
+    final compactMember = mapper.groupMemberFromCore(
+      const core.GroupMember(did: 'did:wba:awiki.ai:alice:e1_member'),
+    );
+
+    expect(member.handle, 'bob');
+    expect(member.did, 'did:wba:awiki.ai:user:bob:e1_member');
+    expect(member.role, 'member');
+    expect(compactMember.handle, 'alice');
+  });
+
   test('profile and relationship DTOs map to app models', () {
     final profile = mapper.userProfileFromCore(
       const core.UserProfile(

@@ -1,11 +1,13 @@
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
+import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
+import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
@@ -157,7 +159,8 @@ void main() {
     expect(find.text('融资协作群'), findsOneWidget);
     expect(find.text('我的智能体'), findsNothing);
     expect(find.text('安全协作中'), findsOneWidget);
-    expect(find.text('身份卡'), findsOneWidget);
+    expect(find.text('群聊信息'), findsOneWidget);
+    expect(find.text('身份卡'), findsNothing);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -686,6 +689,293 @@ void main() {
     expect(gateway.lastSentThreadId, 'dm:did:test:peer');
     expect(gateway.lastSentAttachment?.filename, 'report.pdf');
     expect(find.text('report.pdf'), findsOneWidget);
+  });
+
+  testWidgets('群聊左侧消息只在连续发送开头显示发送人 handle', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'group:sender-label',
+      displayName: '项目群',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:test:group:sender-label',
+    );
+    gateway.groupHistoryByGroupId = <String, List<ChatMessage>>{
+      conversation.groupId!: <ChatMessage>[
+        ChatMessage(
+          localId: 'alice-1',
+          remoteId: 'alice-1',
+          threadId: conversation.threadId,
+          senderDid: 'did:wba:awiki.ai:user:alice:e1_key',
+          groupId: conversation.groupId,
+          content: '第一条',
+          createdAt: DateTime(2026, 4, 5, 12, 0),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+        ChatMessage(
+          localId: 'alice-2',
+          remoteId: 'alice-2',
+          threadId: conversation.threadId,
+          senderDid: 'did:wba:awiki.ai:user:alice:e1_key',
+          groupId: conversation.groupId,
+          content: '第二条',
+          createdAt: DateTime(2026, 4, 5, 12, 1),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+        ChatMessage(
+          localId: 'bob-1',
+          remoteId: 'bob-1',
+          threadId: conversation.threadId,
+          senderDid: 'did:wba:awiki.ai:user:bob:e1_key',
+          senderName: 'did:wba:awiki.ai:user:bob:e1_key',
+          groupId: conversation.groupId,
+          content: '第三条',
+          createdAt: DateTime(2026, 4, 5, 12, 2),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+        ChatMessage(
+          localId: 'mine-1',
+          remoteId: 'mine-1',
+          threadId: conversation.threadId,
+          senderDid: session.did,
+          senderName: session.handle,
+          groupId: conversation.groupId,
+          content: '自己发一条',
+          createdAt: DateTime(2026, 4, 5, 12, 3),
+          isMine: true,
+          sendState: MessageSendState.sent,
+        ),
+        ChatMessage(
+          localId: 'alice-3',
+          remoteId: 'alice-3',
+          threadId: conversation.threadId,
+          senderDid: 'did:wba:awiki.ai:user:alice:e1_key',
+          groupId: conversation.groupId,
+          content: '第四条',
+          createdAt: DateTime(2026, 4, 5, 12, 4),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+      ],
+    };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await tester.pumpAndSettle();
+
+    expect(find.text('第一条'), findsOneWidget);
+    expect(find.text('第二条'), findsOneWidget);
+    expect(find.text('第三条'), findsOneWidget);
+    expect(find.text('自己发一条'), findsOneWidget);
+    expect(find.text('第四条'), findsOneWidget);
+    expect(find.text('alice'), findsNWidgets(2));
+    expect(find.text('bob'), findsOneWidget);
+  });
+
+  testWidgets('私聊和群聊附件消息有文本时显示柔和分隔线', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final dmConversation = ConversationSummary(
+      threadId: 'dm:caption-attachment',
+      displayName: 'Tester',
+      lastMessagePreview: '请看这个文件',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    final groupConversation = ConversationSummary(
+      threadId: 'group:caption-attachment',
+      displayName: '附件群',
+      lastMessagePreview: '群里也发一个',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 1),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:test:group:caption-attachment',
+    );
+    final dmMessage = ChatMessage(
+      localId: 'dm-caption-attachment',
+      remoteId: 'dm-caption-attachment',
+      threadId: dmConversation.threadId,
+      senderDid: 'did:test:peer',
+      content: '请看这个文件',
+      originalType: 'application/anp-attachment-manifest+json',
+      createdAt: DateTime(2026, 4, 5, 12, 0),
+      isMine: false,
+      sendState: MessageSendState.sent,
+      attachment: const ChatAttachment(
+        attachmentId: 'att-dm',
+        filename: 'brief.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: 2048,
+        caption: '请看这个文件',
+      ),
+    );
+    final groupMessage = ChatMessage(
+      localId: 'group-caption-attachment',
+      remoteId: 'group-caption-attachment',
+      threadId: groupConversation.threadId,
+      senderDid: 'did:test:peer',
+      groupId: groupConversation.groupId,
+      content: '群里也发一个',
+      originalType: 'application/anp-attachment-manifest+json',
+      createdAt: DateTime(2026, 4, 5, 12, 1),
+      isMine: false,
+      sendState: MessageSendState.sent,
+      attachment: const ChatAttachment(
+        attachmentId: 'att-group',
+        filename: 'group-brief.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: 4096,
+        caption: '群里也发一个',
+      ),
+    );
+    gateway
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
+        'did:test:peer': <ChatMessage>[dmMessage],
+      }
+      ..groupHistoryByGroupId = <String, List<ChatMessage>>{
+        groupConversation.groupId!: <ChatMessage>[groupMessage],
+      };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: dmConversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(dmConversation);
+    await tester.pumpAndSettle();
+
+    expect(find.text('请看这个文件'), findsOneWidget);
+    expect(find.text('brief.pdf'), findsOneWidget);
+    expect(
+      find.byKey(const Key('chat-attachment-caption-divider')),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: groupConversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    final groupContainer = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await groupContainer
+        .read(chatThreadsProvider.notifier)
+        .openConversation(groupConversation);
+    await tester.pumpAndSettle();
+
+    expect(find.text('群里也发一个'), findsOneWidget);
+    expect(find.text('group-brief.pdf'), findsOneWidget);
+    expect(
+      find.byKey(const Key('chat-attachment-caption-divider')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('纯附件消息不显示文本附件分隔线', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:attachment-only',
+      displayName: 'Tester',
+      lastMessagePreview: '[附件] raw.pdf',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    final message = ChatMessage(
+      localId: 'attachment-only',
+      remoteId: 'attachment-only',
+      threadId: conversation.threadId,
+      senderDid: 'did:test:peer',
+      content: '',
+      originalType: 'application/anp-attachment-manifest+json',
+      createdAt: DateTime(2026, 4, 5, 12, 0),
+      isMine: false,
+      sendState: MessageSendState.sent,
+      attachment: const ChatAttachment(
+        attachmentId: 'att-only',
+        filename: 'raw.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: 1024,
+      ),
+    );
+    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:test:peer': <ChatMessage>[message],
+    };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await tester.pumpAndSettle();
+
+    expect(find.text('raw.pdf'), findsOneWidget);
+    expect(
+      find.byKey(const Key('chat-attachment-caption-divider')),
+      findsNothing,
+    );
   });
 }
 

@@ -152,7 +152,7 @@ class _MacConversationListState extends State<_MacConversationList> {
                     style: TextStyle(
                       color: const Color(0xFF101B32),
                       fontSize: responsive.displayScaled(16),
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
@@ -497,7 +497,7 @@ class _MacConversationRow extends StatelessWidget {
                             style: TextStyle(
                               color: const Color(0xFF17213A),
                               fontSize: responsive.displayScaled(13.5),
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w400,
                             ),
                           ),
                         ),
@@ -645,7 +645,7 @@ class _ConversationRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: responsive.bodyMd,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w400,
                         color: theme.title,
                       ),
                     ),

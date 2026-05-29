@@ -98,7 +98,7 @@ class PeerProfilePage extends ConsumerWidget {
                                               context.awikiResponsive.isPhone
                                               ? 22
                                               : 20,
-                                          fontWeight: FontWeight.w600,
+                                          fontWeight: FontWeight.w500,
                                           color: theme.title,
                                         ),
                                       ),

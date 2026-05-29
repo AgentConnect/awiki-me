@@ -252,6 +252,9 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   List<RelationshipSummary> followers = const <RelationshipSummary>[];
   List<RelationshipSummary> following = const <RelationshipSummary>[];
   List<GroupSummary> groups = const <GroupSummary>[];
+  Object? getGroupError;
+  Object? listGroupMembersError;
+  Completer<void>? listGroupMembersCompleter;
   Map<String, List<GroupMemberSummary>> groupMembersByGroupId =
       <String, List<GroupMemberSummary>>{};
   Map<String, UserProfile> publicProfilesByQuery = <String, UserProfile>{};
@@ -446,6 +449,9 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
 
   @override
   Future<GroupSummary> getGroup(String groupId) async {
+    if (getGroupError != null) {
+      throw getGroupError!;
+    }
     return groups.firstWhere(
       (item) => item.groupId == groupId,
       orElse: () => GroupSummary(
@@ -552,6 +558,14 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
 
   @override
   Future<List<GroupMemberSummary>> listGroupMembers(String groupId) async {
+    if (listGroupMembersError != null) {
+      throw listGroupMembersError!;
+    }
+    final completer = listGroupMembersCompleter;
+    if (completer != null) {
+      await completer.future;
+      listGroupMembersCompleter = null;
+    }
     return groupMembersByGroupId[groupId] ?? const <GroupMemberSummary>[];
   }
 

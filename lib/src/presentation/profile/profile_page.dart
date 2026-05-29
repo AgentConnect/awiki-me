@@ -98,7 +98,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: responsive.isPhone ? 20 : 18,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w500,
                                 color: theme.title,
                               ),
                             ),

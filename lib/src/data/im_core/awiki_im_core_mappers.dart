@@ -195,10 +195,11 @@ class AwikiImCoreMappers {
 
   GroupMemberSummary groupMemberFromCore(core.GroupMember member) {
     final did = member.did ?? '';
+    final handle = _nonEmpty(member.handle) ?? _handleFromDid(did) ?? did;
     return GroupMemberSummary(
       userId: did,
       did: did,
-      handle: member.handle ?? did,
+      handle: handle,
       role: member.role ?? 'member',
     );
   }
@@ -375,6 +376,11 @@ String _compactDid(String did) {
     return did;
   }
   return '${did.substring(0, 10)}…${did.substring(did.length - 6)}';
+}
+
+String? _handleFromDid(String did) {
+  final match = RegExp(r'^did:wba:[^:]+:(?:user:)?([^:]+):e1_').firstMatch(did);
+  return match == null ? null : _nonEmpty(match.group(1));
 }
 
 String _messagePreview(core.Message message) {

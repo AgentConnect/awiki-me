@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
@@ -156,7 +158,7 @@ void main() {
             userId: session.did,
             did: session.did,
             handle: session.handle ?? session.did,
-            role: 'owner',
+            role: 'owner-role-hidden',
             profileUrl: null,
           ),
         ],
@@ -171,7 +173,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('添加成员'));
+    expect(find.text('成员'), findsOneWidget);
+    expect(
+      find.byKey(const Key('group-detail-add-member-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('group-detail-refresh-members-button')),
+      findsOneWidget,
+    );
+    expect(find.text('me'), findsOneWidget);
+    expect(find.text('owner-role-hidden'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('group-detail-add-member-button')));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(CupertinoTextField).last, memberDid);
@@ -180,8 +194,98 @@ void main() {
 
     expect(gateway.lastAddedGroupId, groupDid);
     expect(gateway.lastAddedMemberDid, memberDid);
-    expect(find.text(memberDid), findsOneWidget);
+    expect(find.text('bob'), findsOneWidget);
+    expect(find.text(memberDid), findsNothing);
     expect(find.text('2 人'), findsOneWidget);
+  });
+
+  testWidgets('群详情成员刷新按钮显示 loading 并只刷新成员列表', (tester) async {
+    const groupDid = 'did:wba:awiki.ai:group:e1_group';
+    final memberRefresh = Completer<void>();
+    final gateway = FakeAwikiGateway()
+      ..loginResult = session
+      ..groups = <GroupSummary>[
+        GroupSummary(
+          groupId: groupDid,
+          name: '融资协作群',
+          description: '',
+          memberCount: 1,
+          lastMessageAt: DateTime(2026, 5, 17, 10),
+          myRole: 'owner',
+        ),
+      ]
+      ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+        groupDid: const <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: 'did:wba:awiki.ai:user:alice:e1_member',
+            did: 'did:wba:awiki.ai:user:alice:e1_member',
+            handle: 'did:wba:awiki.ai:user:alice:e1_member',
+            role: 'owner-role-hidden',
+            profileUrl: null,
+          ),
+        ],
+      };
+    addTearDown(() {
+      if (!memberRefresh.isCompleted) {
+        memberRefresh.complete();
+      }
+    });
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: GroupDetailPage(initialGroup: gateway.groups.first),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('alice'), findsOneWidget);
+    expect(find.text('owner'), findsOneWidget);
+    expect(find.text('owner-role-hidden'), findsNothing);
+    expect(find.text('did:wba:awiki.ai:user:alice:e1_member'), findsNothing);
+
+    gateway
+      ..listGroupMembersCompleter = memberRefresh
+      ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+        groupDid: const <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: 'did:wba:awiki.ai:user:carol:e1_member',
+            did: 'did:wba:awiki.ai:user:carol:e1_member',
+            handle: '',
+            role: 'member-role-hidden',
+            profileUrl: null,
+          ),
+        ],
+      };
+
+    await tester.tap(
+      find.byKey(const Key('group-detail-refresh-members-button')),
+    );
+    await tester.pump();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('group-detail-refresh-members-button')),
+        matching: find.byType(CupertinoActivityIndicator),
+      ),
+      findsOneWidget,
+    );
+
+    memberRefresh.complete();
+    await tester.pumpAndSettle();
+
+    expect(gateway.listConversationsCalls, 0);
+    expect(find.text('carol'), findsOneWidget);
+    expect(find.text('did:wba:awiki.ai:user:carol:e1_member'), findsNothing);
+    expect(find.text('member-role-hidden'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('group-detail-refresh-members-button')),
+        matching: find.byType(CupertinoActivityIndicator),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('群聊输入框发送 group 文本消息', (tester) async {
