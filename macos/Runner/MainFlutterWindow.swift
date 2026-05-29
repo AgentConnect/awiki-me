@@ -6,6 +6,7 @@ class MainFlutterWindow: NSWindow {
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
     let windowFrame = self.frame
+    configureChrome()
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
 
@@ -13,6 +14,13 @@ class MainFlutterWindow: NSWindow {
     registerAttachmentChannel(flutterViewController: flutterViewController)
 
     super.awakeFromNib()
+  }
+
+  private func configureChrome() {
+    titleVisibility = .hidden
+    titlebarAppearsTransparent = true
+    styleMask.insert(.fullSizeContentView)
+    isMovableByWindowBackground = true
   }
 
   private func registerAttachmentChannel(flutterViewController: FlutterViewController) {

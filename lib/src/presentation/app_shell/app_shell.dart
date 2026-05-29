@@ -280,7 +280,7 @@ class _MacDesktopRail extends StatelessWidget {
           final gap = responsive.displayScaled(compact ? 7.0 : 10.0);
           return Column(
             children: <Widget>[
-              SizedBox(height: responsive.displayScaled(compact ? 22 : 30)),
+              SizedBox(height: responsive.displayScaled(compact ? 40 : 50)),
               _MacRailAvatar(
                 key: const Key('mac-me-rail-avatar'),
                 label: 'Me',
