@@ -53,7 +53,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         .read(conversationServiceProvider)
         .listConversations(ownerDid: session.did);
     state = state.copyWith(
-      conversations: _mergeWithLocalConversations(
+      conversations: _mergeConversationRefresh(
         refreshed: conversations,
         local: previousConversations,
       ),
@@ -66,7 +66,10 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final byThread = <String, ConversationSummary>{
       for (final item in state.conversations) item.threadId: item,
     };
-    byThread[conversation.threadId] = conversation;
+    byThread[conversation.threadId] = _mergeConversationTitle(
+      refreshed: conversation,
+      local: byThread[conversation.threadId],
+    );
     final merged = byThread.values.toList()
       ..sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
     state = state.copyWith(conversations: merged);
@@ -138,10 +141,21 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   }
 }
 
-List<ConversationSummary> _mergeWithLocalConversations({
+List<ConversationSummary> _mergeConversationRefresh({
   required List<ConversationSummary> refreshed,
   required List<ConversationSummary> local,
 }) {
+  final localByThread = <String, ConversationSummary>{
+    for (final conversation in local) conversation.threadId: conversation,
+  };
+  final mergedRefreshed = refreshed
+      .map(
+        (conversation) => _mergeConversationTitle(
+          refreshed: conversation,
+          local: localByThread[conversation.threadId],
+        ),
+      )
+      .toList();
   final refreshedThreadIds = <String>{
     for (final conversation in refreshed) conversation.threadId,
   };
@@ -153,10 +167,40 @@ List<ConversationSummary> _mergeWithLocalConversations({
       )
       .toList();
   if (localOnly.isEmpty) {
+    return mergedRefreshed;
+  }
+  return <ConversationSummary>[...mergedRefreshed, ...localOnly]
+    ..sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
+}
+
+ConversationSummary _mergeConversationTitle({
+  required ConversationSummary refreshed,
+  required ConversationSummary? local,
+}) {
+  if (local == null ||
+      !refreshed.isGroup ||
+      local.groupId?.trim() != refreshed.groupId?.trim()) {
     return refreshed;
   }
-  return <ConversationSummary>[...refreshed, ...localOnly]
-    ..sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
+  final groupId = refreshed.groupId?.trim() ?? '';
+  final localName = local.displayName.trim();
+  final refreshedName = refreshed.displayName.trim();
+  if (localName.isEmpty ||
+      !GroupDisplayName.isIdLike(refreshedName, groupId) ||
+      GroupDisplayName.isIdLike(localName, groupId)) {
+    return refreshed;
+  }
+  return ConversationSummary(
+    threadId: refreshed.threadId,
+    displayName: local.displayName,
+    lastMessagePreview: refreshed.lastMessagePreview,
+    lastMessageAt: refreshed.lastMessageAt,
+    unreadCount: refreshed.unreadCount,
+    isGroup: refreshed.isGroup,
+    targetDid: refreshed.targetDid,
+    groupId: refreshed.groupId,
+    avatarSeed: refreshed.avatarSeed ?? local.avatarSeed,
+  );
 }
 
 final conversationListProvider =

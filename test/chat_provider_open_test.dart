@@ -793,6 +793,92 @@ void main() {
       '融资协作群',
     );
   });
+
+  test('刷新最近会话时不会把已知群名称降级成群 DID', () async {
+    const groupId = 'did:test:group:funding';
+    final knownGroupConversation = ConversationSummary(
+      threadId: 'group:$groupId',
+      displayName: '融资协作群',
+      lastMessagePreview: '旧消息',
+      lastMessageAt: DateTime(2026, 5, 8, 10),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: groupId,
+    );
+    gateway.conversations = <ConversationSummary>[
+      ConversationSummary(
+        threadId: 'group:$groupId',
+        displayName: groupId,
+        lastMessagePreview: '新消息',
+        lastMessageAt: DateTime(2026, 5, 8, 10, 5),
+        unreadCount: 3,
+        isGroup: true,
+        groupId: groupId,
+      ),
+    ];
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(knownGroupConversation);
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:me',
+            credentialName: 'me.json',
+            displayName: 'Me',
+            handle: 'me',
+          ),
+        );
+
+    await container.read(conversationListProvider.notifier).refresh();
+
+    final refreshed = container
+        .read(conversationListProvider)
+        .conversations
+        .single;
+    expect(refreshed.displayName, '融资协作群');
+    expect(refreshed.lastMessagePreview, '新消息');
+    expect(refreshed.unreadCount, 3);
+  });
+
+  test('实时群消息不会把已知群名称降级成群 DID', () {
+    const groupId = 'did:test:group:funding';
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(
+          ConversationSummary(
+            threadId: 'group:$groupId',
+            displayName: '融资协作群',
+            lastMessagePreview: '旧消息',
+            lastMessageAt: DateTime(2026, 5, 8, 10),
+            unreadCount: 0,
+            isGroup: true,
+            groupId: groupId,
+          ),
+        );
+
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(
+          ConversationSummary(
+            threadId: 'group:$groupId',
+            displayName: groupId,
+            lastMessagePreview: '实时新消息',
+            lastMessageAt: DateTime(2026, 5, 8, 10, 6),
+            unreadCount: 1,
+            isGroup: true,
+            groupId: groupId,
+          ),
+        );
+
+    final refreshed = container
+        .read(conversationListProvider)
+        .conversations
+        .single;
+    expect(refreshed.displayName, '融资协作群');
+    expect(refreshed.lastMessagePreview, '实时新消息');
+    expect(refreshed.unreadCount, 1);
+  });
 }
 
 class _ThrowingMarkReadGateway extends FakeAwikiGateway {
