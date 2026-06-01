@@ -218,6 +218,15 @@ class _MacConversationDetailAreaState
         if (!canShowSidePanel && _isInlineSidePanelOpen) {
           return _buildSidePanel(selectedConversation, inline: true);
         }
+        final visiblePanelIsOpen = canShowSidePanel
+            ? _isSidePanelOpen
+            : _isInlineSidePanelOpen;
+        final identityPanelActive =
+            _sidePanel == _MacDetailSidePanel.identityCard &&
+            visiblePanelIsOpen;
+        final conversationInfoPanelActive =
+            _sidePanel == _MacDetailSidePanel.conversationInfo &&
+            visiblePanelIsOpen;
 
         return Row(
           children: <Widget>[
@@ -233,6 +242,8 @@ class _MacConversationDetailAreaState
                 onMacConversationInfoTap: () {
                   _toggleConversationInfo(canShowSidePanel: canShowSidePanel);
                 },
+                macIdentityPanelActive: identityPanelActive,
+                macConversationInfoPanelActive: conversationInfoPanelActive,
               ),
             ),
             if (canShowSidePanel && _isSidePanelOpen) ...<Widget>[
@@ -1264,7 +1275,7 @@ class _MacAgentDetailPanel extends StatelessWidget {
           style: TextStyle(
             color: Color(0xFF101B32),
             fontSize: 16,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w400,
           ),
         ),
         const SizedBox(height: 22),
@@ -1339,6 +1350,8 @@ class _MacAgentDetailPanel extends StatelessWidget {
                 ? context.l10n.conversationsNoMessagePreview
                 : conversation.lastMessagePreview.trim(),
             color: const Color(0xFF66728A),
+            indicatorKey: const Key('mac-conversation-preview-status-dot'),
+            valueKey: const Key('mac-conversation-preview-status-value'),
           ),
           const _MacStatusLine(
             label: '连接状态:',
@@ -1497,35 +1510,57 @@ class _MacStatusLine extends StatelessWidget {
     required this.label,
     required this.value,
     required this.color,
+    this.indicatorKey,
+    this.valueKey,
   });
 
   final String label;
   final String value;
   final Color color;
+  final Key? indicatorKey;
+  final Key? valueKey;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Expanded(
+          SizedBox(
+            width: 70,
             child: Text(
               label,
-              style: const TextStyle(color: Color(0xFF66728A), fontSize: 12),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF66728A),
+                fontSize: 12,
+                height: 1.35,
+              ),
             ),
           ),
-          Icon(CupertinoIcons.circle_fill, color: color, size: 7),
+          Padding(
+            padding: const EdgeInsets.only(top: 4.6),
+            child: Icon(
+              CupertinoIcons.circle_fill,
+              key: indicatorKey,
+              color: color,
+              size: 7,
+            ),
+          ),
           const SizedBox(width: 6),
-          Flexible(
+          Expanded(
             child: Text(
               value,
+              key: valueKey,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
+              textAlign: TextAlign.left,
               style: const TextStyle(
                 color: Color(0xFF17213A),
                 fontSize: 12,
+                height: 1.35,
                 fontWeight: FontWeight.w500,
               ),
             ),

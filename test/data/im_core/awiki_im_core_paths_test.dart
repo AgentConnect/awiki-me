@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/data/im_core/awiki_im_core_paths.dart';
@@ -63,4 +64,69 @@ void main() {
       expect(await Directory(layout.tempDir).exists(), isTrue);
     },
   );
+
+  test('archives pre-owner-identity local state before SDK open', () async {
+    final root = await Directory.systemTemp.createTemp('awiki_me_paths_test_');
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+
+    final layout = AwikiImCorePathLayout.fromRoots(
+      appSupportRoot: '${root.path}/support',
+      cacheRoot: '${root.path}/cache',
+      tempRoot: '${root.path}/tmp',
+    );
+    await layout.ensureDirectories();
+    await _writeSqliteHeaderWithUserVersion(layout.sqlitePath, 15);
+    await File('${layout.sqlitePath}-wal').writeAsString('wal');
+
+    final archived = await layout.archiveIncompatibleLocalStateIfNeeded(
+      clock: () => DateTime.utc(2026, 6, 1, 3, 4, 5),
+    );
+
+    expect(archived, isNotNull);
+    expect(archived!.schemaVersion, 15);
+    expect(await File(layout.sqlitePath).exists(), isFalse);
+    expect(await File('${layout.sqlitePath}-wal').exists(), isFalse);
+    expect(archived.archivedPaths, hasLength(2));
+    expect(
+      archived.archivedPaths.first,
+      endsWith('legacy-state/im_core.sqlite.schema15.20260601T030405Z'),
+    );
+    expect(await File(archived.archivedPaths.first).exists(), isTrue);
+  });
+
+  test('keeps identity-owned local state untouched', () async {
+    final root = await Directory.systemTemp.createTemp('awiki_me_paths_test_');
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+
+    final layout = AwikiImCorePathLayout.fromRoots(
+      appSupportRoot: '${root.path}/support',
+      cacheRoot: '${root.path}/cache',
+      tempRoot: '${root.path}/tmp',
+    );
+    await layout.ensureDirectories();
+    await _writeSqliteHeaderWithUserVersion(
+      layout.sqlitePath,
+      identityOwnedLocalStateSchemaVersion,
+    );
+
+    final archived = await layout.archiveIncompatibleLocalStateIfNeeded();
+
+    expect(archived, isNull);
+    expect(await File(layout.sqlitePath).exists(), isTrue);
+  });
+}
+
+Future<void> _writeSqliteHeaderWithUserVersion(String path, int version) async {
+  final bytes = Uint8List(100);
+  bytes.setAll(0, 'SQLite format 3\u0000'.codeUnits);
+  ByteData.sublistView(bytes, 60, 64).setInt32(0, version);
+  await File(path).writeAsBytes(bytes);
 }

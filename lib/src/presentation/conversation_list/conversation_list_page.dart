@@ -152,7 +152,7 @@ class _MacConversationListState extends State<_MacConversationList> {
                     style: TextStyle(
                       color: const Color(0xFF101B32),
                       fontSize: responsive.displayScaled(16),
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),

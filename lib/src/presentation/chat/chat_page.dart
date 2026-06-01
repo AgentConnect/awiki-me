@@ -26,6 +26,13 @@ import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'chat_provider.dart';
 
+const _macChatHeaderActionColor = Color(0xFF44506A);
+const _macChatHeaderActionActiveColor = Color(0xFF101B32);
+const _macChatHeaderActionActiveBackground = Color(0xFFE4ECF7);
+const _macChatHeaderActionIconSize = 16.0;
+const _macChatHeaderActionFontWeight = FontWeight.w400;
+const _macChatHeaderActionActiveFontWeight = FontWeight.w600;
+
 class ChatPage extends StatelessWidget {
   const ChatPage({super.key, required this.conversation});
 
@@ -53,6 +60,8 @@ class ChatView extends ConsumerStatefulWidget {
     this.onBack,
     this.onMacIdentityPanelTap,
     this.onMacConversationInfoTap,
+    this.macIdentityPanelActive = false,
+    this.macConversationInfoPanelActive = false,
     this.macStyle = false,
   });
 
@@ -61,6 +70,8 @@ class ChatView extends ConsumerStatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onMacIdentityPanelTap;
   final VoidCallback? onMacConversationInfoTap;
+  final bool macIdentityPanelActive;
+  final bool macConversationInfoPanelActive;
   final bool macStyle;
 
   @override
@@ -134,6 +145,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
             onDetails: _openDetails,
             onMacIdentityPanelTap: widget.onMacIdentityPanelTap,
             onMacConversationInfoTap: widget.onMacConversationInfoTap,
+            macIdentityPanelActive: widget.macIdentityPanelActive,
+            macConversationInfoPanelActive:
+                widget.macConversationInfoPanelActive,
             onRefresh: () => _refreshCurrentConversation(currentConversation),
           ),
           Expanded(
@@ -573,6 +587,8 @@ class _ChatHeader extends StatelessWidget {
     this.onFollowTap,
     this.onMacIdentityPanelTap,
     this.onMacConversationInfoTap,
+    this.macIdentityPanelActive = false,
+    this.macConversationInfoPanelActive = false,
     this.onBack,
   });
 
@@ -586,6 +602,8 @@ class _ChatHeader extends StatelessWidget {
   final Future<void> Function()? onFollowTap;
   final VoidCallback? onMacIdentityPanelTap;
   final VoidCallback? onMacConversationInfoTap;
+  final bool macIdentityPanelActive;
+  final bool macConversationInfoPanelActive;
   final Future<void> Function() onRefresh;
 
   @override
@@ -676,8 +694,10 @@ class _ChatHeader extends StatelessWidget {
                 ),
                 SizedBox(width: responsive.displayScaled(8)),
                 _MacChatIdentityButton(
+                  key: const Key('chat-identity-card-button'),
                   label: conversation.isGroup ? '群聊信息' : '身份卡',
                   showLabel: showIdentityLabel,
+                  isActive: macIdentityPanelActive,
                   onTap: onMacIdentityPanelTap ?? onDetails,
                 ),
                 if (onMacConversationInfoTap != null) ...<Widget>[
@@ -686,6 +706,7 @@ class _ChatHeader extends StatelessWidget {
                     key: const Key('chat-conversation-info-button'),
                     semanticLabel: '折叠会话信息',
                     icon: CupertinoIcons.sidebar_right,
+                    isActive: macConversationInfoPanelActive,
                     onTap: () async {
                       onMacConversationInfoTap!();
                     },
@@ -917,18 +938,24 @@ class _ChatFollowButtonState extends State<_ChatFollowButton> {
 
 class _MacChatIdentityButton extends StatelessWidget {
   const _MacChatIdentityButton({
+    super.key,
     required this.label,
     required this.showLabel,
     required this.onTap,
+    this.isActive = false,
   });
 
   final String label;
   final bool showLabel;
   final VoidCallback onTap;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final foreground = isActive
+        ? _macChatHeaderActionActiveColor
+        : _macChatHeaderActionColor;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -939,7 +966,9 @@ class _MacChatIdentityButton extends StatelessWidget {
             ? EdgeInsets.symmetric(horizontal: responsive.displayScaled(12))
             : EdgeInsets.zero,
         decoration: BoxDecoration(
-          color: CupertinoColors.white,
+          color: isActive
+              ? _macChatHeaderActionActiveBackground
+              : CupertinoColors.white,
           borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
           border: Border.all(color: const Color(0xFFDDE5F0)),
         ),
@@ -949,17 +978,20 @@ class _MacChatIdentityButton extends StatelessWidget {
           children: <Widget>[
             Icon(
               CupertinoIcons.person_crop_square,
-              color: const Color(0xFF34415C),
-              size: responsive.displayScaled(17),
+              color: foreground,
+              size: responsive.displayScaled(_macChatHeaderActionIconSize),
+              weight: isActive ? 700 : 500,
             ),
             if (showLabel) ...<Widget>[
               SizedBox(width: responsive.displayScaled(7)),
               Text(
                 label,
                 style: TextStyle(
-                  color: const Color(0xFF17213A),
-                  fontSize: responsive.displayScaled(12.5),
-                  fontWeight: FontWeight.w500,
+                  color: foreground,
+                  fontSize: responsive.displayScaled(12),
+                  fontWeight: isActive
+                      ? _macChatHeaderActionActiveFontWeight
+                      : _macChatHeaderActionFontWeight,
                 ),
               ),
             ],
@@ -977,16 +1009,21 @@ class _MacChatHeaderButton extends StatelessWidget {
     required this.icon,
     required this.onTap,
     this.isLoading = false,
+    this.isActive = false,
   });
 
   final String semanticLabel;
   final IconData icon;
   final Future<void> Function() onTap;
   final bool isLoading;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final foreground = isActive
+        ? _macChatHeaderActionActiveColor
+        : _macChatHeaderActionColor;
     return Semantics(
       button: true,
       label: semanticLabel,
@@ -999,7 +1036,9 @@ class _MacChatHeaderButton extends StatelessWidget {
           width: responsive.displayScaled(34),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: CupertinoColors.white,
+            color: isActive
+                ? _macChatHeaderActionActiveBackground
+                : CupertinoColors.white,
             borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
             border: Border.all(color: const Color(0xFFDDE5F0)),
           ),
@@ -1007,8 +1046,9 @@ class _MacChatHeaderButton extends StatelessWidget {
               ? CupertinoActivityIndicator(radius: responsive.displayScaled(8))
               : Icon(
                   icon,
-                  color: const Color(0xFF34415C),
-                  size: responsive.displayScaled(17),
+                  color: foreground,
+                  size: responsive.displayScaled(_macChatHeaderActionIconSize),
+                  weight: isActive ? 900 : 500,
                 ),
         ),
       ),

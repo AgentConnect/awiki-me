@@ -258,36 +258,44 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     ),
                   ),
                   SizedBox(height: responsive.spacing(14)),
-                  (onboarding.emailVerified
-                      ? AppPrimaryButton(
-                          label: context.l10n.commonNext,
-                          onPressed: onboarding.isBusy
-                              ? null
-                              : () => ref
-                                    .read(onboardingProvider.notifier)
-                                    .setRegisterStep(2),
-                        )
-                      : AppSecondaryButton(
-                          label: onboarding.emailVerified
-                              ? context.l10n.onboardingEmailActivated
-                              : context.l10n.onboardingCheckActivationStatus,
-                          onPressed: onboarding.isBusy
-                              ? null
-                              : () => ref
-                                    .read(onboardingProvider.notifier)
-                                    .checkEmailActivation(
-                                      emailController.text.trim(),
-                                    ),
-                        )),
+                  _OnboardingAlignedAction(
+                    key: const Key('onboarding-email-action'),
+                    width: onboarding.emailVerified
+                        ? responsive.displayScaled(122)
+                        : responsive.displayScaled(174),
+                    child: onboarding.emailVerified
+                        ? AppPrimaryButton(
+                            label: context.l10n.commonNext,
+                            onPressed: onboarding.isBusy
+                                ? null
+                                : () => ref
+                                      .read(onboardingProvider.notifier)
+                                      .setRegisterStep(2),
+                          )
+                        : AppSecondaryButton(
+                            label: context.l10n.onboardingCheckActivationStatus,
+                            onPressed: onboarding.isBusy
+                                ? null
+                                : () => ref
+                                      .read(onboardingProvider.notifier)
+                                      .checkEmailActivation(
+                                        emailController.text.trim(),
+                                      ),
+                          ),
+                  ),
                 ],
                 SizedBox(height: responsive.spacing(16)),
                 if (onboarding.authMode == 'phone')
-                  AppPrimaryButton(
-                    label: context.l10n.commonNext,
-                    semanticsIdentifier: 'e2e-login-next-button',
-                    onPressed: onboarding.isBusy
-                        ? null
-                        : () => _setRegisterStep(2),
+                  _OnboardingAlignedAction(
+                    key: const Key('onboarding-phone-next-action'),
+                    width: responsive.displayScaled(122),
+                    child: AppPrimaryButton(
+                      label: context.l10n.commonNext,
+                      semanticsIdentifier: 'e2e-login-next-button',
+                      onPressed: onboarding.isBusy
+                          ? null
+                          : () => _setRegisterStep(2),
+                    ),
                   ),
               ] else ...<Widget>[
                 AppTextField(
@@ -480,40 +488,50 @@ class _MacOnboardingScaffold extends StatelessWidget {
             colors: <Color>[Color(0xFFF7FAFF), Color(0xFFFFFFFF)],
           ),
         ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(54, 42, 72, 54),
-            child: Row(
-              children: <Widget>[
-                const Expanded(flex: 11, child: _MacOnboardingHero()),
-                const SizedBox(width: 76),
-                Expanded(
-                  flex: 9,
-                  child: Align(
-                    alignment: Alignment.center,
-                    child: _MacAuthCard(
-                      onboarding: onboarding,
-                      credentials: credentials,
-                      phoneController: phoneController,
-                      otpController: otpController,
-                      emailController: emailController,
-                      handleController: handleController,
-                      onLogin: onLogin,
-                      onImport: onImport,
-                      onRefresh: onRefresh,
-                      onModeChanged: onModeChanged,
-                      onAuthModeChanged: onAuthModeChanged,
-                      onRequestOtp: onRequestOtp,
-                      onRequestEmailActivation: onRequestEmailActivation,
-                      onCheckEmailActivation: onCheckEmailActivation,
-                      onRegisterStepChanged: onRegisterStepChanged,
-                      onSubmitRegister: onSubmitRegister,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final useCompactMacLayout = constraints.maxWidth < 1040;
+            final authCard = _MacAuthCard(
+              onboarding: onboarding,
+              credentials: credentials,
+              phoneController: phoneController,
+              otpController: otpController,
+              emailController: emailController,
+              handleController: handleController,
+              onLogin: onLogin,
+              onImport: onImport,
+              onRefresh: onRefresh,
+              onModeChanged: onModeChanged,
+              onAuthModeChanged: onAuthModeChanged,
+              onRequestOtp: onRequestOtp,
+              onRequestEmailActivation: onRequestEmailActivation,
+              onCheckEmailActivation: onCheckEmailActivation,
+              onRegisterStepChanged: onRegisterStepChanged,
+              onSubmitRegister: onSubmitRegister,
+            );
+            return SafeArea(
+              child: Padding(
+                padding: useCompactMacLayout
+                    ? const EdgeInsets.fromLTRB(28, 32, 28, 36)
+                    : const EdgeInsets.fromLTRB(54, 42, 72, 54),
+                child: useCompactMacLayout
+                    ? Center(child: authCard)
+                    : Row(
+                        children: <Widget>[
+                          const Expanded(flex: 11, child: _MacOnboardingHero()),
+                          const SizedBox(width: 76),
+                          Expanded(
+                            flex: 9,
+                            child: Align(
+                              alignment: Alignment.center,
+                              child: authCard,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -958,7 +976,7 @@ class _MacAuthCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Padding(
-                padding: const EdgeInsets.fromLTRB(44, 34, 44, 34),
+                padding: const EdgeInsets.fromLTRB(38, 32, 38, 34),
                 child: Column(
                   children: <Widget>[
                     _MacAuthTabs(
@@ -1011,21 +1029,27 @@ class _MacAuthTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final gap = constraints.maxWidth < 220 ? 24.0 : 58.0;
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+    return Center(
+      child: Container(
+        key: const Key('onboarding-mac-entry-tabs'),
+        constraints: const BoxConstraints(maxWidth: 306),
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F5FE),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFDDE7F7)),
+        ),
+        child: Row(
           children: <Widget>[
-            Flexible(
+            Expanded(
               child: _MacAuthTab(
                 label: context.l10n.onboardingRegister,
                 selected: value == 'register',
                 onTap: () => onChanged('register'),
               ),
             ),
-            SizedBox(width: gap),
-            Flexible(
+            const SizedBox(width: 4),
+            Expanded(
               child: _MacAuthTab(
                 label: context.l10n.onboardingLogin,
                 selected: value == 'login',
@@ -1033,8 +1057,8 @@ class _MacAuthTabs extends StatelessWidget {
               ),
             ),
           ],
-        );
-      },
+        ),
+      ),
     );
   }
 }
@@ -1055,27 +1079,40 @@ class _MacAuthTab extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Text(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: selected ? CupertinoColors.white : CupertinoColors.transparent,
+          borderRadius: BorderRadius.circular(9),
+          boxShadow: selected
+              ? const <BoxShadow>[
+                  BoxShadow(
+                    color: Color(0x120B65F8),
+                    blurRadius: 12,
+                    offset: Offset(0, 5),
+                  ),
+                ]
+              : null,
+        ),
+        alignment: Alignment.center,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: selected
                   ? const Color(0xFF0B65F8)
                   : const Color(0xFF66728A),
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
+              fontSize: 16,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              height: 1,
             ),
           ),
-          const SizedBox(height: 16),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            width: selected ? 94 : 0,
-            height: 2,
-            color: const Color(0xFF0B65F8),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1313,7 +1350,7 @@ class _MacRegisterForm extends StatelessWidget {
           value: onboarding.authMode,
           onChanged: onAuthModeChanged,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         _MacAuthHint(text: context.l10n.onboardingLoginRegisterHint),
         const SizedBox(height: 20),
         if (onboarding.authMode == 'phone') ...<Widget>[
@@ -1335,19 +1372,30 @@ class _MacRegisterForm extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          _MacOutlinedField(
-            controller: otpController,
-            label: context.l10n.onboardingOtp,
-            placeholder: context.l10n.onboardingOtpPlaceholder,
-            icon: CupertinoIcons.number,
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: 18),
-          _MacPrimaryAction(
-            label: context.l10n.commonNext,
-            onPressed: onboarding.isBusy
-                ? null
-                : () => onRegisterStepChanged(2),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: <Widget>[
+              Expanded(
+                child: _MacOutlinedField(
+                  controller: otpController,
+                  label: context.l10n.onboardingOtp,
+                  placeholder: context.l10n.onboardingOtpPlaceholder,
+                  icon: CupertinoIcons.number,
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                key: const Key('onboarding-mac-phone-next-action'),
+                width: 118,
+                child: _MacPrimaryAction(
+                  label: context.l10n.commonNext,
+                  onPressed: onboarding.isBusy
+                      ? null
+                      : () => onRegisterStepChanged(2),
+                ),
+              ),
+            ],
           ),
         ] else ...<Widget>[
           _MacOutlinedField(
@@ -1369,17 +1417,26 @@ class _MacRegisterForm extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          onboarding.emailVerified
-              ? _MacPrimaryAction(
-                  label: context.l10n.commonNext,
-                  onPressed: onboarding.isBusy
-                      ? null
-                      : () => onRegisterStepChanged(2),
-                )
-              : _MacSecondaryAction(
-                  label: context.l10n.onboardingCheckActivationStatus,
-                  onPressed: onboarding.isBusy ? null : onCheckEmailActivation,
-                ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: SizedBox(
+              key: const Key('onboarding-mac-email-action'),
+              width: onboarding.emailVerified ? 118 : 168,
+              child: onboarding.emailVerified
+                  ? _MacPrimaryAction(
+                      label: context.l10n.commonNext,
+                      onPressed: onboarding.isBusy
+                          ? null
+                          : () => onRegisterStepChanged(2),
+                    )
+                  : _MacSecondaryAction(
+                      label: context.l10n.onboardingCheckActivationStatus,
+                      onPressed: onboarding.isBusy
+                          ? null
+                          : onCheckEmailActivation,
+                    ),
+            ),
+          ),
         ],
       ],
     );
@@ -1394,28 +1451,37 @@ class _MacAuthModeRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: _MacAuthModeButton(
-            key: const Key('auth-mode-phone'),
-            label: context.l10n.onboardingPhone,
-            icon: CupertinoIcons.phone,
-            selected: value == 'phone',
-            onTap: () => onChanged('phone'),
-          ),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        key: const Key('onboarding-mac-auth-mode-tabs'),
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF4F7FC),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFDDE5F0)),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _MacAuthModeButton(
-            key: const Key('auth-mode-email'),
-            label: context.l10n.onboardingEmail,
-            icon: CupertinoIcons.mail,
-            selected: value == 'email',
-            onTap: () => onChanged('email'),
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            _MacAuthModeButton(
+              key: const Key('auth-mode-phone'),
+              label: context.l10n.onboardingPhone,
+              icon: CupertinoIcons.phone,
+              selected: value == 'phone',
+              onTap: () => onChanged('phone'),
+            ),
+            const SizedBox(width: 4),
+            _MacAuthModeButton(
+              key: const Key('auth-mode-email'),
+              label: context.l10n.onboardingEmail,
+              icon: CupertinoIcons.mail,
+              selected: value == 'email',
+              onTap: () => onChanged('email'),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -1440,15 +1506,20 @@ class _MacAuthModeButton extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        height: 46,
+        height: 36,
+        constraints: const BoxConstraints(minWidth: 86),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEAF2FF) : CupertinoColors.white,
-          borderRadius: BorderRadius.circular(12),
+          color: selected ? CupertinoColors.white : CupertinoColors.transparent,
+          borderRadius: BorderRadius.circular(9),
           border: Border.all(
-            color: selected ? const Color(0xFF0B65F8) : const Color(0xFFDDE5F0),
+            color: selected
+                ? const Color(0xFFC9DAFF)
+                : CupertinoColors.transparent,
           ),
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             Icon(
@@ -1459,13 +1530,18 @@ class _MacAuthModeButton extends StatelessWidget {
                   : const Color(0xFF66728A),
             ),
             const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: selected
-                    ? const Color(0xFF0B65F8)
-                    : const Color(0xFF66728A),
-                fontWeight: FontWeight.w600,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                maxLines: 1,
+                style: TextStyle(
+                  color: selected
+                      ? const Color(0xFF0B65F8)
+                      : const Color(0xFF66728A),
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  height: 1,
+                ),
               ),
             ),
           ],
@@ -1738,40 +1814,40 @@ class _SegmentedPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return AppSurface(
-      color: AwikiMePalette.actionBlueBorder.withValues(alpha: 0.48),
-      radius: 12,
-      padding: responsive.scaledInsets(const EdgeInsets.all(4)),
-      child: Row(
-        children: options.entries
-            .map(
-              (entry) => Expanded(
-                child: GestureDetector(
-                  onTap: () => onChanged(entry.key),
-                  child: AppSurface(
-                    padding: EdgeInsets.symmetric(
-                      vertical: responsive.spacing(12),
-                    ),
-                    color: value == entry.key
-                        ? CupertinoColors.white
-                        : CupertinoColors.transparent,
-                    radius: 9,
-                    child: Text(
-                      entry.value,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: responsive.bodyMd,
-                        fontWeight: FontWeight.w500,
-                        color: value == entry.key
-                            ? AwikiMePalette.actionBlue
-                            : AwikiMePalette.actionMuted,
-                      ),
-                    ),
+    return Align(
+      alignment: Alignment.center,
+      child: Container(
+        key: const Key('onboarding-entry-tabs'),
+        constraints: BoxConstraints(
+          maxWidth: responsive.isPhone ? 286 : responsive.displayScaled(310),
+        ),
+        padding: responsive.scaledInsets(const EdgeInsets.all(4)),
+        decoration: BoxDecoration(
+          color: AwikiMePalette.actionBlueBorder.withValues(alpha: 0.48),
+          borderRadius: BorderRadius.circular(responsive.radius(12)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: options.entries
+              .map(
+                (entry) => Flexible(
+                  fit: FlexFit.loose,
+                  child: _CompactSegmentOption(
+                    label: entry.value,
+                    selected: value == entry.key,
+                    minWidth: responsive.isPhone
+                        ? responsive.displayScaled(124)
+                        : responsive.displayScaled(128),
+                    verticalPadding: responsive.spacing(11),
+                    fontSize: responsive.bodyMd,
+                    selectedColor: AwikiMePalette.actionBlue,
+                    unselectedColor: AwikiMePalette.actionMuted,
+                    onTap: () => onChanged(entry.key),
                   ),
                 ),
-              ),
-            )
-            .toList(),
+              )
+              .toList(),
+        ),
       ),
     );
   }
@@ -1786,29 +1862,36 @@ class _AuthModeToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: <Widget>[
-        Expanded(
-          child: _AuthModeOption(
-            key: const Key('auth-mode-phone'),
-            selected: value == 'phone',
-            assetName: 'assets/icons/icon_mobile.svg',
-            label: context.l10n.onboardingPhone,
-            onTap: () => onChanged('phone'),
-          ),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        key: const Key('onboarding-auth-mode-tabs'),
+        padding: responsive.scaledInsets(const EdgeInsets.all(4)),
+        decoration: BoxDecoration(
+          color: AwikiMePalette.actionBlueBorder.withValues(alpha: 0.34),
+          borderRadius: BorderRadius.circular(responsive.radius(12)),
         ),
-        SizedBox(width: responsive.spacing(12)),
-        Expanded(
-          child: _AuthModeOption(
-            key: const Key('auth-mode-email'),
-            selected: value == 'email',
-            assetName: 'assets/icons/icon_mail.svg',
-            label: context.l10n.onboardingEmail,
-            onTap: () => onChanged('email'),
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            _AuthModeOption(
+              key: const Key('auth-mode-phone'),
+              selected: value == 'phone',
+              assetName: 'assets/icons/icon_mobile.svg',
+              label: context.l10n.onboardingPhone,
+              onTap: () => onChanged('phone'),
+            ),
+            SizedBox(width: responsive.spacing(4)),
+            _AuthModeOption(
+              key: const Key('auth-mode-email'),
+              selected: value == 'email',
+              assetName: 'assets/icons/icon_mail.svg',
+              label: context.l10n.onboardingEmail,
+              onTap: () => onChanged('email'),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -1831,8 +1914,8 @@ class _AuthModeOption extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final buttonHeight = responsive.isPhone
-        ? responsive.controlHeight
-        : responsive.scaled(46);
+        ? responsive.compactControlHeight
+        : responsive.scaled(40);
     final foreground = selected
         ? AwikiMePalette.actionBlue
         : AwikiMePalette.actionMuted;
@@ -1845,19 +1928,25 @@ class _AuthModeOption extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         child: Container(
           height: buttonHeight,
+          constraints: BoxConstraints(
+            minWidth: responsive.isPhone
+                ? responsive.displayScaled(96)
+                : responsive.displayScaled(96),
+          ),
           padding: EdgeInsets.symmetric(horizontal: responsive.spacing(12)),
           decoration: BoxDecoration(
             color: selected
-                ? AwikiMePalette.actionBlueSoft
-                : CupertinoColors.white,
-            borderRadius: BorderRadius.circular(responsive.radius(12)),
+                ? CupertinoColors.white
+                : CupertinoColors.transparent,
+            borderRadius: BorderRadius.circular(responsive.radius(9)),
             border: Border.all(
               color: selected
-                  ? AwikiMePalette.actionBlue
-                  : AwikiMePalette.actionBlueBorder,
+                  ? AwikiMePalette.actionBlueBorder
+                  : CupertinoColors.transparent,
             ),
           ),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
               AwikiAssetIcon(
@@ -1866,22 +1955,117 @@ class _AuthModeOption extends StatelessWidget {
                 color: foreground,
               ),
               SizedBox(width: responsive.spacing(8)),
-              Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    style: AwikiMeTextStyles.buttonLabel.copyWith(
-                      color: foreground,
-                      fontSize: responsive.bodySm,
-                    ),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  style: AwikiMeTextStyles.buttonLabel.copyWith(
+                    color: foreground,
+                    fontSize: responsive.bodySm,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    height: 1,
                   ),
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CompactSegmentOption extends StatelessWidget {
+  const _CompactSegmentOption({
+    required this.label,
+    required this.selected,
+    required this.minWidth,
+    required this.verticalPadding,
+    required this.fontSize,
+    required this.selectedColor,
+    required this.unselectedColor,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final double minWidth;
+  final double verticalPadding;
+  final double fontSize;
+  final Color selectedColor;
+  final Color unselectedColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        constraints: BoxConstraints(minWidth: minWidth),
+        padding: EdgeInsets.symmetric(
+          horizontal: responsive.spacing(14),
+          vertical: verticalPadding,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? CupertinoColors.white : CupertinoColors.transparent,
+          borderRadius: BorderRadius.circular(responsive.radius(9)),
+          boxShadow: selected
+              ? const <BoxShadow>[
+                  BoxShadow(
+                    color: Color(0x100B65F8),
+                    blurRadius: 10,
+                    offset: Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        alignment: Alignment.center,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            strutStyle: StrutStyle(
+              fontSize: fontSize,
+              height: 1,
+              forceStrutHeight: true,
+            ),
+            style: TextStyle(
+              fontSize: fontSize,
+              height: 1,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              color: selected ? selectedColor : unselectedColor,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OnboardingAlignedAction extends StatelessWidget {
+  const _OnboardingAlignedAction({
+    super.key,
+    required this.child,
+    required this.width,
+  });
+
+  final Widget child;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: width),
+        child: SizedBox(width: double.infinity, child: child),
       ),
     );
   }

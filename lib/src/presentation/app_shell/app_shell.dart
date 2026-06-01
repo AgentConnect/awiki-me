@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/e2e_semantics.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
+import '../../domain/entities/session_identity.dart';
 import '../../domain/services/realtime_gateway.dart';
 import '../../l10n/l10n.dart';
 import '../conversation_list/conversation_workspace_page.dart';
@@ -15,6 +16,7 @@ import '../profile/profile_workspace_page.dart';
 import '../settings/settings_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
+import '../shared/avatar_badge.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import 'providers/app_update_provider.dart';
@@ -23,6 +25,9 @@ import 'providers/navigation_provider.dart';
 import 'providers/session_provider.dart';
 
 const int _macSettingsTabIndex = 6;
+const _macRailActiveColor = Color(0xFF0B65F8);
+const _macRailInactiveColor = Color(0xFF7A879C);
+const _macRailActiveBackground = Color(0xFFEAF2FF);
 
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
@@ -105,6 +110,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         ? _MacDesktopShell(
             currentIndex: tabIndex,
             unreadCount: unreadCount,
+            session: session.session,
             onTap: (index) {
               ref.read(shellTabProvider.notifier).setTab(index);
             },
@@ -223,6 +229,7 @@ class _MacDesktopShell extends StatelessWidget {
   const _MacDesktopShell({
     required this.currentIndex,
     required this.unreadCount,
+    required this.session,
     required this.onTap,
     required this.onOpenSettings,
     required this.child,
@@ -230,6 +237,7 @@ class _MacDesktopShell extends StatelessWidget {
 
   final int currentIndex;
   final int unreadCount;
+  final SessionIdentity? session;
   final ValueChanged<int> onTap;
   final VoidCallback onOpenSettings;
   final Widget child;
@@ -245,6 +253,7 @@ class _MacDesktopShell extends StatelessWidget {
           child: _MacDesktopRail(
             currentIndex: currentIndex,
             unreadCount: unreadCount,
+            session: session,
             onTap: onTap,
             onOpenSettings: onOpenSettings,
           ),
@@ -260,12 +269,14 @@ class _MacDesktopRail extends StatelessWidget {
   const _MacDesktopRail({
     required this.currentIndex,
     required this.unreadCount,
+    required this.session,
     required this.onTap,
     required this.onOpenSettings,
   });
 
   final int currentIndex;
   final int unreadCount;
+  final SessionIdentity? session;
   final ValueChanged<int> onTap;
   final VoidCallback onOpenSettings;
 
@@ -278,12 +289,14 @@ class _MacDesktopRail extends StatelessWidget {
         builder: (context, constraints) {
           final compact = constraints.maxHeight < 760;
           final gap = responsive.displayScaled(compact ? 7.0 : 10.0);
+          final avatar = _avatarSeedForSession(session);
           return Column(
             children: <Widget>[
               SizedBox(height: responsive.displayScaled(compact ? 40 : 50)),
               _MacRailAvatar(
                 key: const Key('mac-me-rail-avatar'),
-                label: 'Me',
+                seed: avatar.seed,
+                labelOverride: avatar.labelOverride,
                 selected: currentIndex == 5,
                 onTap: () => onTap(5),
               ),
@@ -294,7 +307,8 @@ class _MacDesktopRail extends StatelessWidget {
                   child: Column(
                     children: <Widget>[
                       _MacDesktopRailItem(
-                        icon: CupertinoIcons.chat_bubble_2_fill,
+                        activeIcon: CupertinoIcons.chat_bubble_2_fill,
+                        inactiveIcon: CupertinoIcons.chat_bubble_2,
                         label: '消息',
                         selected: currentIndex == 0,
                         badge: _formatUnreadBadge(unreadCount),
@@ -303,7 +317,8 @@ class _MacDesktopRail extends StatelessWidget {
                       ),
                       SizedBox(height: gap),
                       _MacDesktopRailItem(
-                        icon: CupertinoIcons.person_2_fill,
+                        activeIcon: CupertinoIcons.person_2_fill,
+                        inactiveIcon: CupertinoIcons.person_2,
                         label: '智能体',
                         selected: currentIndex == 1,
                         compact: compact,
@@ -311,7 +326,8 @@ class _MacDesktopRail extends StatelessWidget {
                       ),
                       SizedBox(height: gap),
                       _MacDesktopRailItem(
-                        icon: CupertinoIcons.person,
+                        activeIcon: CupertinoIcons.person_fill,
+                        inactiveIcon: CupertinoIcons.person,
                         label: '联系人',
                         selected: currentIndex == 2,
                         compact: compact,
@@ -319,7 +335,8 @@ class _MacDesktopRail extends StatelessWidget {
                       ),
                       SizedBox(height: gap),
                       _MacDesktopRailItem(
-                        icon: CupertinoIcons.checkmark_square,
+                        activeIcon: CupertinoIcons.checkmark_square_fill,
+                        inactiveIcon: CupertinoIcons.checkmark_square,
                         label: '任务',
                         selected: currentIndex == 3,
                         compact: compact,
@@ -327,7 +344,8 @@ class _MacDesktopRail extends StatelessWidget {
                       ),
                       SizedBox(height: gap),
                       _MacDesktopRailItem(
-                        icon: CupertinoIcons.square_grid_2x2,
+                        activeIcon: CupertinoIcons.square_grid_2x2_fill,
+                        inactiveIcon: CupertinoIcons.square_grid_2x2,
                         label: '工作台',
                         selected: currentIndex == 4,
                         compact: compact,
@@ -335,7 +353,8 @@ class _MacDesktopRail extends StatelessWidget {
                       ),
                       SizedBox(height: gap),
                       _MacDesktopRailItem(
-                        icon: CupertinoIcons.gear_alt,
+                        activeIcon: CupertinoIcons.gear_alt_fill,
+                        inactiveIcon: CupertinoIcons.gear_alt,
                         label: '设置',
                         selected: currentIndex == _macSettingsTabIndex,
                         compact: compact,
@@ -358,6 +377,24 @@ class _MacDesktopRail extends StatelessWidget {
       return null;
     }
     return count > 99 ? '99+' : '$count';
+  }
+
+  ({String seed, String? labelOverride}) _avatarSeedForSession(
+    SessionIdentity? session,
+  ) {
+    final handle = session?.handle?.trim();
+    if (handle != null && handle.isNotEmpty) {
+      return (seed: handle, labelOverride: null);
+    }
+    final displayName = session?.displayName.trim();
+    if (displayName != null && displayName.isNotEmpty) {
+      return (seed: displayName, labelOverride: null);
+    }
+    final did = session?.did.trim();
+    if (did != null && did.isNotEmpty) {
+      return (seed: did, labelOverride: null);
+    }
+    return (seed: 'Me', labelOverride: 'Me');
   }
 }
 
@@ -388,7 +425,8 @@ class _MacEmbeddedSettingsPage extends StatelessWidget {
 
 class _MacDesktopRailItem extends StatelessWidget {
   const _MacDesktopRailItem({
-    required this.icon,
+    required this.activeIcon,
+    required this.inactiveIcon,
     required this.label,
     required this.selected,
     required this.compact,
@@ -396,7 +434,8 @@ class _MacDesktopRailItem extends StatelessWidget {
     this.badge,
   });
 
-  final IconData icon;
+  final IconData activeIcon;
+  final IconData inactiveIcon;
   final String label;
   final bool selected;
   final bool compact;
@@ -406,9 +445,8 @@ class _MacDesktopRailItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final foreground = selected
-        ? const Color(0xFF0B65F8)
-        : const Color(0xFF34415C);
+    final foreground = selected ? _macRailActiveColor : _macRailInactiveColor;
+    final icon = selected ? activeIcon : inactiveIcon;
     final height = responsive.displayScaled(compact ? 50.0 : 56.0);
     final width = responsive.displayScaled(58);
     return Semantics(
@@ -433,7 +471,7 @@ class _MacDesktopRailItem extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: selected
-                      ? const Color(0xFFEAF2FF)
+                      ? _macRailActiveBackground
                       : const Color(0x00FFFFFF),
                   borderRadius: BorderRadius.circular(
                     responsive.displayScaled(10),
@@ -450,6 +488,7 @@ class _MacDesktopRailItem extends StatelessWidget {
                           icon,
                           color: foreground,
                           size: responsive.displayScaled(20),
+                          weight: selected ? 700 : 400,
                         ),
                       ),
                     ),
@@ -460,7 +499,9 @@ class _MacDesktopRailItem extends StatelessWidget {
                       style: TextStyle(
                         color: foreground,
                         fontSize: responsive.displayScaled(10.5),
-                        fontWeight: FontWeight.w600,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.w500,
                         height: 1,
                       ),
                     ),
@@ -503,12 +544,14 @@ class _MacDesktopRailItem extends StatelessWidget {
 class _MacRailAvatar extends StatelessWidget {
   const _MacRailAvatar({
     super.key,
-    required this.label,
+    required this.seed,
+    this.labelOverride,
     required this.selected,
     required this.onTap,
   });
 
-  final String label;
+  final String seed;
+  final String? labelOverride;
   final bool selected;
   final VoidCallback onTap;
 
@@ -535,13 +578,10 @@ class _MacRailAvatar extends StatelessWidget {
             ),
           ),
           child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: const Color(0xFF0B65F8),
-                fontSize: responsive.displayScaled(16),
-                fontWeight: FontWeight.w600,
-              ),
+            child: AvatarBadge(
+              seed: seed,
+              size: responsive.displayScaled(34),
+              labelOverride: labelOverride,
             ),
           ),
         ),
@@ -634,7 +674,7 @@ class _BottomNavBar extends StatelessWidget {
         ? 0.0
         : (bottomInset > 0 ? responsive.spacing(8) : 16.0);
     final navHeight = showLabels
-        ? responsive.scaled(68)
+        ? responsive.scaled(58)
         : responsive.navBarHeight;
     return SafeArea(
       top: false,
@@ -662,7 +702,7 @@ class _BottomNavBar extends StatelessWidget {
                       ? responsive.spacing(9)
                       : responsive.spacing(18),
                   vertical: showLabels
-                      ? responsive.spacing(6)
+                      ? responsive.spacing(3)
                       : responsive.spacing(8),
                 ),
                 decoration: BoxDecoration(
@@ -783,9 +823,11 @@ class _NavButton extends StatelessWidget {
             width: showLabel ? double.infinity : tapSize,
             height: showLabel ? double.infinity : tapSize,
             padding: showLabel
-                ? EdgeInsets.symmetric(
-                    horizontal: responsive.spacing(4),
-                    vertical: responsive.spacing(3),
+                ? EdgeInsets.fromLTRB(
+                    responsive.spacing(4),
+                    responsive.spacing(1),
+                    responsive.spacing(4),
+                    responsive.spacing(5),
                   )
                 : EdgeInsets.zero,
             decoration: BoxDecoration(

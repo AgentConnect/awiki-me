@@ -6,6 +6,7 @@ class AwikiImCoreEnvironmentConfig {
     required this.didDomain,
     this.userServiceEndpoint,
     this.messageServiceEndpoint,
+    this.mailServiceEndpoint,
     this.anpServiceEndpoint,
     this.anpServiceDid,
     this.transportPolicy = core.MessageTransportPolicy.auto,
@@ -26,6 +27,10 @@ class AwikiImCoreEnvironmentConfig {
         'AWIKI_MESSAGE_SERVICE_URL',
         defaultValue: 'https://awiki.ai',
       ),
+      mailServiceEndpoint: _optionalFromEnvironment(
+        'AWIKI_MAIL_SERVICE_URL',
+        defaultValue: 'https://awiki.ai',
+      ),
       didDomain: _optionalFromEnvironment(
         'AWIKI_DID_DOMAIN',
         defaultValue: 'awiki.ai',
@@ -41,6 +46,7 @@ class AwikiImCoreEnvironmentConfig {
   final String didDomain;
   final String? userServiceEndpoint;
   final String? messageServiceEndpoint;
+  final String? mailServiceEndpoint;
   final String? anpServiceEndpoint;
   final String? anpServiceDid;
   final core.MessageTransportPolicy transportPolicy;
@@ -51,6 +57,7 @@ class AwikiImCoreEnvironmentConfig {
       didDomain: didDomain,
       userServiceEndpoint: userServiceEndpoint,
       messageServiceEndpoint: messageServiceEndpoint,
+      mailServiceEndpoint: mailServiceEndpoint,
       anpServiceEndpoint: anpServiceEndpoint,
       anpServiceDid: anpServiceDid,
       transportPolicy: transportPolicy,
@@ -70,6 +77,10 @@ String? _optionalFromEnvironment(String name, {String? defaultValue}) {
     ),
     'AWIKI_MESSAGE_SERVICE_URL' => const String.fromEnvironment(
       'AWIKI_MESSAGE_SERVICE_URL',
+      defaultValue: 'https://awiki.ai',
+    ),
+    'AWIKI_MAIL_SERVICE_URL' => const String.fromEnvironment(
+      'AWIKI_MAIL_SERVICE_URL',
       defaultValue: 'https://awiki.ai',
     ),
     'AWIKI_DID_DOMAIN' => const String.fromEnvironment(

@@ -117,6 +117,80 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
+  testWidgets('macOS 聊天头部操作按钮使用一致的轻量样式', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:header-actions',
+      displayName: 'Mac Agent',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1100, 760));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(
+            conversation: conversation,
+            embedded: true,
+            macStyle: true,
+            onMacConversationInfoTap: () {},
+            macIdentityPanelActive: true,
+          ),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final refreshIcon = tester.widget<Icon>(
+      find.descendant(
+        of: find.byKey(const Key('chat-refresh-button')),
+        matching: find.byIcon(CupertinoIcons.refresh),
+      ),
+    );
+    final identityIcon = tester.widget<Icon>(
+      find.descendant(
+        of: find.byKey(const Key('chat-identity-card-button')),
+        matching: find.byIcon(CupertinoIcons.person_crop_square),
+      ),
+    );
+    final infoIcon = tester.widget<Icon>(
+      find.descendant(
+        of: find.byKey(const Key('chat-conversation-info-button')),
+        matching: find.byIcon(CupertinoIcons.sidebar_right),
+      ),
+    );
+    final identityLabel = tester.widget<Text>(find.text('身份卡'));
+
+    expect(infoIcon.color, refreshIcon.color);
+    expect(identityIcon.size, refreshIcon.size);
+    expect(infoIcon.size, refreshIcon.size);
+    expect(infoIcon.weight, refreshIcon.weight);
+    expect(refreshIcon.weight, 500);
+    expect(identityIcon.color, isNot(refreshIcon.color));
+    expect(identityIcon.weight, greaterThan(refreshIcon.weight!));
+    expect(identityLabel.style?.fontWeight, FontWeight.w600);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
   testWidgets('macOS 群聊头部不显示我的智能体标签', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(

@@ -14,6 +14,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_list_pa
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
+import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -175,6 +176,59 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
+  testWidgets('macOS 会话状态最近预览多行时圆点对齐首行', (tester) async {
+    final previewConversation = ConversationSummary(
+      threadId: 'dm:did:me:did:peer',
+      displayName: 'Marcus Chen',
+      lastMessagePreview: '这是一段比较长的最近消息预览，用来触发右侧会话状态区域里的两行文本布局',
+      lastMessageAt: DateTime(2026, 3, 28, 10, 24),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:peer',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[previewConversation]
+      ..dmHistoryByPeerDid = const <String, List<ChatMessage>>{
+        'did:peer': <ChatMessage>[],
+      };
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Marcus Chen'));
+    await tester.pumpAndSettle();
+
+    final dotRect = tester.getRect(
+      find.byKey(const Key('mac-conversation-preview-status-dot')),
+    );
+    final valueRect = tester.getRect(
+      find.byKey(const Key('mac-conversation-preview-status-value')),
+    );
+
+    expect(valueRect.height, greaterThan(20));
+    expect((dotRect.center.dy - (valueRect.top + 8.1)).abs(), lessThan(1.0));
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
   testWidgets('macOS 身份卡在右侧栏替换会话信息并支持关闭', (tester) async {
     const peerProfile = UserProfile(
       did: 'did:peer',
@@ -213,6 +267,30 @@ void main() {
     await tester.tap(find.text('Marcus Chen').first);
     await tester.pumpAndSettle();
     expect(find.text('会话信息'), findsOneWidget);
+    var conversationInfoIcon = tester.widget<Icon>(
+      find.descendant(
+        of: find.byKey(const Key('chat-conversation-info-button')),
+        matching: find.byIcon(CupertinoIcons.sidebar_right),
+      ),
+    );
+    var identityLabel = tester.widget<Text>(find.text('身份卡'));
+    var conversationInfoDecoration =
+        tester
+                .widget<Container>(
+                  find
+                      .descendant(
+                        of: find.byKey(
+                          const Key('chat-conversation-info-button'),
+                        ),
+                        matching: find.byType(Container),
+                      )
+                      .first,
+                )
+                .decoration
+            as BoxDecoration;
+    expect(conversationInfoDecoration.color, const Color(0xFFE4ECF7));
+    expect(conversationInfoIcon.weight, 900);
+    expect(identityLabel.style?.fontWeight, FontWeight.w400);
     final conversationInfoWidth = tester
         .getSize(find.byKey(const Key('mac-side-panel')))
         .width;
@@ -228,6 +306,28 @@ void main() {
     expect(find.text('会话信息'), findsNothing);
     expect(find.text('负责融资协作。'), findsOneWidget);
     expect(find.text('@marcus'), findsOneWidget);
+    identityLabel = tester.widget<Text>(find.text('身份卡'));
+    conversationInfoIcon = tester.widget<Icon>(
+      find.descendant(
+        of: find.byKey(const Key('chat-conversation-info-button')),
+        matching: find.byIcon(CupertinoIcons.sidebar_right),
+      ),
+    );
+    final identityButtonDecoration =
+        tester
+                .widget<Container>(
+                  find
+                      .descendant(
+                        of: find.byKey(const Key('chat-identity-card-button')),
+                        matching: find.byType(Container),
+                      )
+                      .first,
+                )
+                .decoration
+            as BoxDecoration;
+    expect(identityButtonDecoration.color, const Color(0xFFE4ECF7));
+    expect(identityLabel.style?.fontWeight, FontWeight.w600);
+    expect(conversationInfoIcon.weight, 500);
 
     await tester.tap(find.text('身份卡'));
     await tester.pumpAndSettle();
@@ -239,6 +339,30 @@ void main() {
     await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
     await tester.pumpAndSettle();
     expect(find.text('会话信息'), findsOneWidget);
+    conversationInfoIcon = tester.widget<Icon>(
+      find.descendant(
+        of: find.byKey(const Key('chat-conversation-info-button')),
+        matching: find.byIcon(CupertinoIcons.sidebar_right),
+      ),
+    );
+    identityLabel = tester.widget<Text>(find.text('身份卡'));
+    conversationInfoDecoration =
+        tester
+                .widget<Container>(
+                  find
+                      .descendant(
+                        of: find.byKey(
+                          const Key('chat-conversation-info-button'),
+                        ),
+                        matching: find.byType(Container),
+                      )
+                      .first,
+                )
+                .decoration
+            as BoxDecoration;
+    expect(conversationInfoDecoration.color, const Color(0xFFE4ECF7));
+    expect(conversationInfoIcon.weight, 900);
+    expect(identityLabel.style?.fontWeight, FontWeight.w400);
 
     await tester.tap(find.text('身份卡'));
     await tester.pumpAndSettle();
@@ -787,7 +911,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('AW'), findsNothing);
-    expect(find.text('Me'), findsOneWidget);
+    expect(find.text('Me'), findsNothing);
+    final railAvatar = find.byKey(const Key('mac-me-rail-avatar'));
+    expect(
+      find.descendant(of: railAvatar, matching: find.byType(AvatarBadge)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: railAvatar, matching: find.text('M')),
+      findsOneWidget,
+    );
     expect(find.text('最近会话'), findsOneWidget);
 
     await tester.tap(find.text('任务'));
@@ -818,6 +951,118 @@ void main() {
     await tester.tap(find.text('消息'));
     await tester.pumpAndSettle();
     expect(find.text('最近会话'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 主导航未选中项统一为空心轻量样式', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'me.json',
+      displayName: 'Mia',
+      handle: 'mia',
+      jwtToken: 'token',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1280, 720));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final inactiveIcons = <IconData>[
+      CupertinoIcons.person_2,
+      CupertinoIcons.person,
+      CupertinoIcons.checkmark_square,
+      CupertinoIcons.square_grid_2x2,
+      CupertinoIcons.gear_alt,
+    ];
+    for (final iconData in inactiveIcons) {
+      final icon = tester.widget<Icon>(find.byIcon(iconData));
+      expect(icon.color, const Color(0xFF7A879C));
+      expect(icon.weight, 400);
+    }
+    expect(find.byIcon(CupertinoIcons.person_2_fill), findsNothing);
+    expect(find.byIcon(CupertinoIcons.person_fill), findsNothing);
+    expect(find.byIcon(CupertinoIcons.checkmark_square_fill), findsNothing);
+    expect(find.byIcon(CupertinoIcons.square_grid_2x2_fill), findsNothing);
+    expect(find.byIcon(CupertinoIcons.gear_alt_fill), findsNothing);
+
+    final activeMessageIcon = tester.widget<Icon>(
+      find.byIcon(CupertinoIcons.chat_bubble_2_fill),
+    );
+    expect(activeMessageIcon.color, const Color(0xFF0B65F8));
+    expect(activeMessageIcon.weight, 700);
+
+    await tester.tap(find.text('联系人'));
+    await tester.pumpAndSettle();
+
+    final inactiveMessageIcon = tester.widget<Icon>(
+      find.byIcon(CupertinoIcons.chat_bubble_2),
+    );
+    final activeContactsIcon = tester.widget<Icon>(
+      find.byIcon(CupertinoIcons.person_fill),
+    );
+    expect(inactiveMessageIcon.color, const Color(0xFF7A879C));
+    expect(inactiveMessageIcon.weight, 400);
+    expect(activeContactsIcon.color, const Color(0xFF0B65F8));
+    expect(activeContactsIcon.weight, 700);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 主导航头像缺少身份文本时回退到 Me', (tester) async {
+    const session = SessionIdentity(
+      did: '',
+      credentialName: 'empty.json',
+      displayName: '',
+      jwtToken: 'token',
+    );
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1280, 720));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const AppShell(), session: session),
+    );
+    await tester.pumpAndSettle();
+
+    final railAvatar = find.byKey(const Key('mac-me-rail-avatar'));
+    expect(
+      find.descendant(of: railAvatar, matching: find.text('Me')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: railAvatar, matching: find.text('M')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: railAvatar, matching: find.text('?')),
+      findsNothing,
+    );
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -1218,6 +1463,25 @@ void main() {
     expect(find.text('消息'), findsOneWidget);
     expect(find.text('朋友'), findsOneWidget);
     expect(find.text('我'), findsOneWidget);
+    final messageTabSize = tester.getSize(find.text('消息'));
+    final friendsTabSize = tester.getSize(find.text('朋友'));
+    final meTabSize = tester.getSize(find.text('我'));
+    expect(messageTabSize.height, greaterThan(0));
+    expect(friendsTabSize.height, greaterThan(0));
+    expect(meTabSize.height, greaterThan(0));
+    final bottomNavHeight = tester
+        .getSize(
+          find.ancestor(of: find.text('消息'), matching: find.byType(Row)).first,
+        )
+        .height;
+    expect(bottomNavHeight, closeTo(52, 0.1));
+    final navRowCenterY = tester
+        .getCenter(
+          find.ancestor(of: find.text('消息'), matching: find.byType(Row)).first,
+        )
+        .dy;
+    final messageLabelCenterY = tester.getCenter(find.text('消息')).dy;
+    expect(messageLabelCenterY, lessThan(navRowCenterY + 22));
 
     await tester.tap(find.text('朋友'));
     await tester.pumpAndSettle();

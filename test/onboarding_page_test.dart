@@ -327,6 +327,69 @@ void main() {
     expect(listRect.width, lessThanOrEqualTo(420));
   });
 
+  testWidgets('macOS 窄窗口下入口 tab 保持单行并切到紧凑卡片布局', (tester) async {
+    final gateway = FakeAwikiGateway();
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(820, 780));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('AWiki'), findsNothing);
+
+    final registerRect = tester.getRect(find.text('登录或注册'));
+    final switchRect = tester.getRect(find.text('切换身份'));
+    final tabsRect = tester.getRect(
+      find.byKey(const Key('onboarding-mac-entry-tabs')),
+    );
+
+    expect(registerRect.height, lessThan(24));
+    expect(switchRect.height, lessThan(24));
+    expect(registerRect.left, greaterThanOrEqualTo(tabsRect.left));
+    expect(switchRect.right, lessThanOrEqualTo(tabsRect.right));
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('登录或注册表单使用紧凑 tab 和右对齐动作按钮', (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage()),
+    );
+    await tester.pump();
+
+    final listRect = tester.getRect(find.byType(ListView).first);
+    final entryTabsRect = tester.getRect(
+      find.byKey(const Key('onboarding-entry-tabs')),
+    );
+    final authTabsRect = tester.getRect(
+      find.byKey(const Key('onboarding-auth-mode-tabs')),
+    );
+    final nextRect = tester.getRect(
+      find.ancestor(
+        of: find.text('下一步'),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is SizedBox && widget.width == double.infinity,
+        ),
+      ),
+    );
+
+    expect(entryTabsRect.width, lessThan(listRect.width));
+    expect(authTabsRect.width, lessThan(listRect.width));
+    expect(nextRect.width, lessThan(listRect.width * 0.5));
+    expect(nextRect.right, moreOrLessEquals(listRect.right, epsilon: 1));
+  });
+
   testWidgets('邮箱注册发送激活邮件后进入重新发送倒计时', (tester) async {
     final gateway = FakeAwikiGateway();
 

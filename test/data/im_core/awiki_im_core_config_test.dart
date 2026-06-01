@@ -10,6 +10,7 @@ void main() {
     expect(config.serviceBaseUrl, 'https://awiki.ai');
     expect(config.userServiceEndpoint, 'https://awiki.ai');
     expect(config.messageServiceEndpoint, 'https://awiki.ai');
+    expect(config.mailServiceEndpoint, 'https://awiki.ai');
     expect(config.didDomain, 'awiki.ai');
     expect(config.anpServiceDid, 'did:wba:awiki.ai');
     expect(coreConfig, isA<core.AwikiImCoreConfig>());
@@ -25,11 +26,13 @@ void main() {
       didDomain: 'example.test',
       anpServiceEndpoint: 'https://example.test/anp-im/rpc',
       anpServiceDid: 'did:wba:example.test',
+      mailServiceEndpoint: 'https://mail.example.test',
       transportPolicy: core.MessageTransportPolicy.realtimePreferred,
     );
 
     final coreConfig = config.toCoreConfig();
 
+    expect(coreConfig.mailServiceEndpoint, 'https://mail.example.test');
     expect(coreConfig.anpServiceEndpoint, 'https://example.test/anp-im/rpc');
     expect(coreConfig.anpServiceDid, 'did:wba:example.test');
     expect(

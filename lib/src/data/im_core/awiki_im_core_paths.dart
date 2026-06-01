@@ -1,7 +1,16 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:path_provider/path_provider.dart';
+
+const int identityOwnedLocalStateSchemaVersion = 17;
+const String _sqliteHeader = 'SQLite format 3\u0000';
+const List<String> _sqliteSidecarSuffixes = <String>[
+  '-wal',
+  '-shm',
+  '-journal',
+];
 
 class AwikiImCorePathLayout {
   const AwikiImCorePathLayout({
@@ -65,6 +74,63 @@ class AwikiImCorePathLayout {
     ]);
   }
 
+  Future<ArchivedLocalState?> archiveIncompatibleLocalStateIfNeeded({
+    int minimumSchemaVersion = identityOwnedLocalStateSchemaVersion,
+    DateTime Function()? clock,
+  }) async {
+    final sqliteFile = File(sqlitePath);
+    if (!await sqliteFile.exists()) {
+      return null;
+    }
+
+    final schemaVersion = await _readSqliteUserVersion(sqliteFile);
+    if (schemaVersion == null ||
+        schemaVersion == 0 ||
+        schemaVersion >= minimumSchemaVersion) {
+      return null;
+    }
+
+    final archiveDir = Directory(
+      _joinAll(<String>[_dirname(sqlitePath), 'legacy-state']),
+    );
+    await archiveDir.create(recursive: true);
+    final timestamp = _archiveTimestamp((clock ?? DateTime.now).call());
+    final baseName = _basename(sqlitePath);
+    final archivedPaths = <String>[];
+
+    archivedPaths.add(
+      await _archiveFile(
+        sqliteFile,
+        _joinAll(<String>[
+          archiveDir.path,
+          '$baseName.schema$schemaVersion.$timestamp',
+        ]),
+      ),
+    );
+
+    for (final suffix in _sqliteSidecarSuffixes) {
+      final sidecar = File('$sqlitePath$suffix');
+      if (!await sidecar.exists()) {
+        continue;
+      }
+      archivedPaths.add(
+        await _archiveFile(
+          sidecar,
+          _joinAll(<String>[
+            archiveDir.path,
+            '$baseName$suffix.schema$schemaVersion.$timestamp',
+          ]),
+        ),
+      );
+    }
+
+    return ArchivedLocalState(
+      schemaVersion: schemaVersion,
+      minimumSchemaVersion: minimumSchemaVersion,
+      archivedPaths: archivedPaths,
+    );
+  }
+
   core.AwikiImCorePaths toCorePaths() {
     return core.AwikiImCorePaths(
       identityRootDir: identityRootDir,
@@ -75,6 +141,18 @@ class AwikiImCorePathLayout {
       tempDir: tempDir,
     );
   }
+}
+
+class ArchivedLocalState {
+  const ArchivedLocalState({
+    required this.schemaVersion,
+    required this.minimumSchemaVersion,
+    required this.archivedPaths,
+  });
+
+  final int schemaVersion;
+  final int minimumSchemaVersion;
+  final List<String> archivedPaths;
 }
 
 String _joinAll(List<String> parts) {
@@ -99,4 +177,60 @@ String _dirname(String path) {
     return '.';
   }
   return path.substring(0, index);
+}
+
+String _basename(String path) {
+  final index = path.lastIndexOf('/');
+  if (index < 0) {
+    return path;
+  }
+  return path.substring(index + 1);
+}
+
+Future<int?> _readSqliteUserVersion(File file) async {
+  final length = await file.length();
+  if (length < 64) {
+    return null;
+  }
+
+  final handle = await file.open();
+  try {
+    final header = await handle.read(64);
+    if (header.length < 64) {
+      return null;
+    }
+    final marker = String.fromCharCodes(header.sublist(0, 16));
+    if (marker != _sqliteHeader) {
+      return null;
+    }
+    return ByteData.sublistView(Uint8List.fromList(header), 60, 64).getInt32(0);
+  } finally {
+    await handle.close();
+  }
+}
+
+Future<String> _archiveFile(File source, String desiredPath) async {
+  final target = await _availableArchivePath(desiredPath);
+  final archived = await source.rename(target);
+  return archived.path;
+}
+
+Future<String> _availableArchivePath(String desiredPath) async {
+  if (!await File(desiredPath).exists()) {
+    return desiredPath;
+  }
+  for (var index = 1; index < 1000; index++) {
+    final candidate = '$desiredPath.$index';
+    if (!await File(candidate).exists()) {
+      return candidate;
+    }
+  }
+  throw FileSystemException('No available archive path', desiredPath);
+}
+
+String _archiveTimestamp(DateTime value) {
+  final utc = value.toUtc();
+  String two(int input) => input.toString().padLeft(2, '0');
+  return '${utc.year}${two(utc.month)}${two(utc.day)}T'
+      '${two(utc.hour)}${two(utc.minute)}${two(utc.second)}Z';
 }

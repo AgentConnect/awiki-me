@@ -3,15 +3,23 @@ import 'package:flutter/cupertino.dart';
 import 'awiki_me_design.dart';
 
 class AvatarBadge extends StatelessWidget {
-  const AvatarBadge({super.key, required this.seed, this.size = 48});
+  const AvatarBadge({
+    super.key,
+    required this.seed,
+    this.size = 48,
+    this.labelOverride,
+  });
 
   final String seed;
   final double size;
+  final String? labelOverride;
 
   @override
   Widget build(BuildContext context) {
     final normalized = seed.trim();
-    final initial = normalized.isEmpty
+    final label = labelOverride?.trim().isNotEmpty == true
+        ? labelOverride!.trim()
+        : normalized.isEmpty
         ? '?'
         : normalized.substring(0, 1).toUpperCase();
     final palette = _paletteForSeed(context, normalized);
@@ -24,9 +32,9 @@ class AvatarBadge extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: Text(
-        initial,
+        label,
         style: TextStyle(
-          fontSize: size / 2.4,
+          fontSize: label.length > 1 ? size / 3.1 : size / 2.4,
           color: palette.$2,
           fontWeight: FontWeight.w600,
         ),

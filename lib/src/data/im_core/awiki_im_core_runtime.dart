@@ -51,6 +51,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
       return;
     }
     await _paths.ensureDirectories();
+    await _paths.archiveIncompatibleLocalStateIfNeeded();
     _core = await _openCore(
       config: _config.toCoreConfig(),
       paths: _paths.toCorePaths(),
