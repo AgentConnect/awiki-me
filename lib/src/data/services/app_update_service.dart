@@ -33,13 +33,13 @@ class AppUpdateService implements UpdateService {
     Future<bool> Function(Uri uri)? urlLauncher,
     String manifestUrl = kDefaultUpdateManifestUrl,
     String releasesUrl = kDefaultReleasesUrl,
-  })  : _storage = storage,
-        _httpClient = httpClient ?? http.Client(),
-        _platformBridge = platformBridge ?? MethodChannelPlatformUpdateBridge(),
-        _packageInfoLoader = packageInfoLoader ?? PackageInfo.fromPlatform,
-        _urlLauncher = urlLauncher ?? launchUrl,
-        _manifestUrl = manifestUrl,
-        _releasesUrl = releasesUrl;
+  }) : _storage = storage,
+       _httpClient = httpClient ?? http.Client(),
+       _platformBridge = platformBridge ?? MethodChannelPlatformUpdateBridge(),
+       _packageInfoLoader = packageInfoLoader ?? PackageInfo.fromPlatform,
+       _urlLauncher = urlLauncher ?? launchUrl,
+       _manifestUrl = manifestUrl,
+       _releasesUrl = releasesUrl;
 
   static const String _lastCheckAtKey = 'awiki_me_update_last_checked_at';
   static const String _lastManifestKey = 'awiki_me_update_last_manifest';
@@ -189,9 +189,7 @@ class AppUpdateService implements UpdateService {
     if (uri == null) {
       throw UpdateInstallFailed('Invalid URL: $rawUrl');
     }
-    final launched = await _urlLauncher(
-      uri,
-    );
+    final launched = await _urlLauncher(uri);
     if (!launched) {
       throw UpdateInstallFailed('Unable to open URL: $rawUrl');
     }
@@ -270,8 +268,8 @@ class AppUpdateService implements UpdateService {
         fileSink.add(chunk);
       }
       await fileSink.close();
-      final digest =
-          (await sha256.bind(outputFile.openRead()).first).toString();
+      final digest = (await sha256.bind(outputFile.openRead()).first)
+          .toString();
       if (expectedSha256 != null &&
           expectedSha256.trim().isNotEmpty &&
           digest.toLowerCase() != expectedSha256.toLowerCase()) {

@@ -42,12 +42,18 @@ class AwikiOnboardingUtilityHttpClient {
     required String path,
     required String method,
     required Map<String, Object?> params,
+    String? bearerToken,
     String requestId = 'req-1',
   }) async {
+    final headers = <String, String>{'Content-Type': 'application/json'};
+    final token = bearerToken?.trim();
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
     final response = await _httpClient
         .post(
           Uri.parse(baseUrl).resolve(path),
-          headers: const <String, String>{'Content-Type': 'application/json'},
+          headers: headers,
           body: jsonEncode(<String, Object?>{
             'jsonrpc': '2.0',
             'method': method,

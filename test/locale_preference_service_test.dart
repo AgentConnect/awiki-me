@@ -43,10 +43,7 @@ class _InMemoryKeyValueStore implements AppKeyValueStore {
   }
 
   @override
-  Future<void> write({
-    required String key,
-    required String value,
-  }) async {
+  Future<void> write({required String key, required String value}) async {
     _values[key] = value;
   }
 

@@ -2,6 +2,7 @@ import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
 import '../../application/models/app_thread_ref.dart';
 import '../../application/ports/conversation_core_port.dart';
+import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../../domain/entities/conversation_summary.dart';
 import 'awiki_im_core_mappers.dart';
 import 'awiki_im_core_runtime.dart';
@@ -31,6 +32,7 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
         unreadOnly: unreadOnly,
       );
       return page.items
+          .where((conversation) => !_hasControlLastMessage(conversation))
           .map(
             (conversation) =>
                 _mappers.conversationFromCore(conversation, ownerDid: ownerDid),
@@ -76,6 +78,12 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
       await client.messages.markRead(messageIds.toList(growable: false));
     });
   }
+}
+
+bool _hasControlLastMessage(core.Conversation conversation) {
+  return AgentControlPayloads.isControl(
+    conversation.lastMessage?.body.payloadJson,
+  );
 }
 
 core.ThreadRef coreThreadRefForMarkRead(AppThreadRef thread, String ownerDid) {

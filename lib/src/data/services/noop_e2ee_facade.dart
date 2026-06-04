@@ -35,7 +35,8 @@ class NoopE2eeFacade implements E2eeFacade {
 
   @override
   Future<E2eeProcessResult> processIncomingProtocolMessage(
-      ChatMessage message) async {
+    ChatMessage message,
+  ) async {
     return const E2eeProcessResult();
   }
 

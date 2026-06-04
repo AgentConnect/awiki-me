@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/app/ui_feedback.dart';
+import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
@@ -8,6 +11,7 @@ import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
+import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_list_page.dart';
@@ -96,6 +100,80 @@ void main() {
       find.byKey(const Key('chat-conversation-info-button')),
       findsOneWidget,
     );
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('Runtime Agent 会话在非 Mac 聊天页显示收件箱入口并打开全屏页', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:human:me',
+      credentialName: 'me.json',
+      handle: 'me',
+      displayName: 'Me',
+      jwtToken: 'token',
+    );
+    final runtimeConversation = ConversationSummary(
+      threadId: 'dm:did:me:did:agent:runtime',
+      displayName: 'Hermes',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 6, 4, 10),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:agent:runtime',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[runtimeConversation]
+      ..dmHistoryByPeerDid = const <String, List<ChatMessage>>{
+        'did:agent:runtime': <ChatMessage>[],
+      };
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:runtime',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'hermes',
+          displayName: 'Hermes',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: ChatPage(conversation: runtimeConversation),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.bySemanticsLabel('Agent 收件箱'), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel('Agent 收件箱'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Agent 收件箱'), findsOneWidget);
+    expect(find.text('Hermes'), findsWidgets);
+    expect(control.lastInboxDaemonDid, 'did:agent:daemon');
+    expect(control.lastInboxRuntimeDid, 'did:agent:runtime');
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -1461,12 +1539,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('消息'), findsOneWidget);
+    expect(find.text('智能体'), findsOneWidget);
     expect(find.text('朋友'), findsOneWidget);
     expect(find.text('我'), findsOneWidget);
     final messageTabSize = tester.getSize(find.text('消息'));
+    final agentsTabSize = tester.getSize(find.text('智能体'));
     final friendsTabSize = tester.getSize(find.text('朋友'));
     final meTabSize = tester.getSize(find.text('我'));
     expect(messageTabSize.height, greaterThan(0));
+    expect(agentsTabSize.height, greaterThan(0));
     expect(friendsTabSize.height, greaterThan(0));
     expect(meTabSize.height, greaterThan(0));
     final bottomNavHeight = tester
@@ -1482,6 +1563,24 @@ void main() {
         .dy;
     final messageLabelCenterY = tester.getCenter(find.text('消息')).dy;
     expect(messageLabelCenterY, lessThan(navRowCenterY + 22));
+
+    final navLabels = find
+        .descendant(
+          of: find
+              .ancestor(of: find.text('消息'), matching: find.byType(Row))
+              .first,
+          matching: find.byType(Text),
+        )
+        .evaluate()
+        .map((element) => (element.widget as Text).data)
+        .whereType<String>()
+        .toList();
+    expect(navLabels, ['消息', '智能体', '朋友', '我']);
+
+    await tester.tap(find.text('智能体'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AgentsWorkspacePage), findsOneWidget);
+    expect(find.text('智能体'), findsWidgets);
 
     await tester.tap(find.text('朋友'));
     await tester.pumpAndSettle();

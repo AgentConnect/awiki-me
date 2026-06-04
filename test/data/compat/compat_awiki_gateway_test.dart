@@ -316,6 +316,17 @@ class _FakeMessages implements MessagingService {
   }
 
   @override
+  Future<ChatMessage> sendPayload({
+    required AppThreadRef thread,
+    required Map<String, Object?> payload,
+    bool secure = true,
+    String? idempotencyKey,
+  }) async {
+    sentThreads.add(thread);
+    return _message('');
+  }
+
+  @override
   Future<ChatMessage> sendText({
     required AppThreadRef thread,
     required String content,

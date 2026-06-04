@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
@@ -59,6 +60,29 @@ class AwikiImCoreMessageAdapter implements MessageCorePort {
         result.message.message,
         ownerDid: ownerDid,
       );
+    });
+  }
+
+  @override
+  Future<ChatMessage> sendPayload({
+    required AppThreadRef thread,
+    required Map<String, Object?> payload,
+    bool secure = true,
+    String? idempotencyKey,
+  }) async {
+    return _runtime.withCurrentClient((client) async {
+      final ownerDid = (await client.identity.current()).did;
+      final result = await client.messages.sendPayload(
+        core.SendPayloadRequest(
+          target: _mappers.messageTargetToCore(thread),
+          payloadJson: jsonEncode(payload),
+          security: secure
+              ? core.MessageSecurityMode.secureDirect
+              : core.MessageSecurityMode.defaultPlain,
+          idempotencyKey: idempotencyKey,
+        ),
+      );
+      return _mappers.chatMessageFromCore(result.message, ownerDid: ownerDid);
     });
   }
 

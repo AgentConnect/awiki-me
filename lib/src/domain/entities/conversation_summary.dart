@@ -9,6 +9,7 @@ class ConversationSummary {
     this.targetDid,
     this.groupId,
     this.avatarSeed,
+    this.lastMessagePayloadJson,
   });
 
   final String threadId;
@@ -20,4 +21,5 @@ class ConversationSummary {
   final String? targetDid;
   final String? groupId;
   final String? avatarSeed;
+  final String? lastMessagePayloadJson;
 }

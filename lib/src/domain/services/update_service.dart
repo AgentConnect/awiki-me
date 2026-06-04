@@ -19,9 +19,7 @@ class AppUpdateCheckResult {
 abstract class UpdateService {
   Future<AppVersion> getCurrentVersion();
 
-  Future<AppUpdateCheckResult> checkForUpdates({
-    required bool force,
-  });
+  Future<AppUpdateCheckResult> checkForUpdates({required bool force});
 
   Future<void> openReleaseNotes(AppUpdateManifest? manifest);
 

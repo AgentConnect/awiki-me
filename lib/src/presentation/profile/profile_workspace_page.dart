@@ -5,10 +5,7 @@ import '../shared/sidebar_workspace.dart';
 import 'profile_page.dart';
 
 class ProfileWorkspacePage extends StatelessWidget {
-  const ProfileWorkspacePage({
-    super.key,
-    this.listFooter,
-  });
+  const ProfileWorkspacePage({super.key, this.listFooter});
 
   final Widget? listFooter;
 

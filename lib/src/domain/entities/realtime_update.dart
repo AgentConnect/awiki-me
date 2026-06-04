@@ -4,12 +4,16 @@ import 'group_summary.dart';
 
 class RealtimeUpdate {
   const RealtimeUpdate({
-    required this.message,
-    required this.conversation,
+    this.message,
+    this.conversation,
     this.group,
+    this.agentControlPayload,
   });
 
-  final ChatMessage message;
-  final ConversationSummary conversation;
+  final ChatMessage? message;
+  final ConversationSummary? conversation;
   final GroupSummary? group;
+  final Map<String, Object?>? agentControlPayload;
+
+  bool get isAgentControl => agentControlPayload != null;
 }

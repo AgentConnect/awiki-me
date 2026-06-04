@@ -21,9 +21,7 @@ class AwikiSidebarWorkspace extends StatelessWidget {
     return AwikiPaneLayout(
       listPaneWidth: 340,
       listPane: DecoratedBox(
-        decoration: BoxDecoration(
-          color: context.awikiTheme.background,
-        ),
+        decoration: BoxDecoration(color: context.awikiTheme.background),
         child: Column(
           children: <Widget>[
             Expanded(child: sidebar),
@@ -55,10 +53,7 @@ class AwikiWorkspaceEmptyDetail extends StatelessWidget {
             'assets/branding/awiki-me-mark.svg',
             width: 248,
             height: 248,
-            colorFilter: ColorFilter.mode(
-              theme.tertiaryText,
-              BlendMode.srcIn,
-            ),
+            colorFilter: ColorFilter.mode(theme.tertiaryText, BlendMode.srcIn),
           ),
         ),
       ),

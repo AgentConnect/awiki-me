@@ -1,3 +1,4 @@
+import '../../application/config/awiki_environment_config.dart';
 import '../../application/onboarding_support_service.dart';
 import '../../domain/repositories/awiki_account_gateway.dart';
 import 'awiki_onboarding_utility_client.dart';
@@ -9,10 +10,8 @@ class AwikiOnboardingSupportService implements OnboardingSupportService {
   }) : _userClient = userClient;
 
   factory AwikiOnboardingSupportService.fromEnvironment() {
-    const userServiceUrl = String.fromEnvironment(
-      'AWIKI_USER_SERVICE_URL',
-      defaultValue: 'https://awiki.ai',
-    );
+    final userServiceUrl =
+        AwikiEnvironmentConfig.fromEnvironment().userServiceUrl;
     return AwikiOnboardingSupportService(userServiceUrl: userServiceUrl);
   }
 

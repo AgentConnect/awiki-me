@@ -52,9 +52,7 @@ void main() {
     );
 
     final tileRect = tester.getRect(find.byType(AppListTile));
-    await tester.tapAt(
-      Offset(tileRect.right - 48, tileRect.center.dy),
-    );
+    await tester.tapAt(Offset(tileRect.right - 48, tileRect.center.dy));
     await tester.pump();
 
     expect(tapped, isTrue);

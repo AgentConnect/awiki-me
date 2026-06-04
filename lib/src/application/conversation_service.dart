@@ -1,6 +1,8 @@
 import '../domain/entities/conversation_summary.dart';
+import 'agent/agent_control_projection.dart';
 import 'models/app_thread_ref.dart';
 import 'models/product_local_models.dart';
+import 'ports/agent_inventory_port.dart';
 import 'ports/conversation_core_port.dart';
 import 'product_local_store.dart';
 
@@ -25,11 +27,22 @@ class ImCoreConversationService implements ConversationService {
   const ImCoreConversationService({
     required ConversationCorePort conversations,
     required ProductLocalStore localStore,
+    AgentInventoryPort? agentInventory,
   }) : _conversations = conversations,
+       _agentInventory = agentInventory,
        _localStore = localStore;
 
   final ConversationCorePort _conversations;
+  final AgentInventoryPort? _agentInventory;
   final ProductLocalStore _localStore;
+
+  ImCoreConversationService withAgentInventory(AgentInventoryPort inventory) {
+    return ImCoreConversationService(
+      conversations: _conversations,
+      localStore: _localStore,
+      agentInventory: inventory,
+    );
+  }
 
   @override
   Future<List<ConversationSummary>> listConversations({
@@ -45,7 +58,14 @@ class ImCoreConversationService implements ConversationService {
       ownerDid: ownerDid,
       threadIds: items.map((item) => item.threadId),
     );
+    final daemonAgentDids = await _loadDaemonAgentDids();
     final visible = items
+        .where(
+          (item) => shouldShowConversationForChatList(
+            item,
+            daemonAgentDids: daemonAgentDids,
+          ),
+        )
         .where((item) => overlays[item.threadId]?.hidden != true)
         .map((item) => _applyOverlay(item, overlays[item.threadId]))
         .toList();
@@ -79,6 +99,23 @@ class ImCoreConversationService implements ConversationService {
       updatedAt: updatedAt ?? DateTime.now().toUtc(),
     );
   }
+
+  Future<Set<String>> _loadDaemonAgentDids() async {
+    final inventory = _agentInventory;
+    if (inventory == null) {
+      return const <String>{};
+    }
+    try {
+      final agents = await inventory.listAgents();
+      return agents
+          .where((agent) => agent.isDaemon)
+          .map((agent) => agent.agentDid.trim())
+          .where((agentDid) => agentDid.isNotEmpty)
+          .toSet();
+    } on Object {
+      return const <String>{};
+    }
+  }
 }
 
 ConversationSummary _applyOverlay(
@@ -98,5 +135,6 @@ ConversationSummary _applyOverlay(
     targetDid: item.targetDid,
     groupId: item.groupId,
     avatarSeed: overlay.avatarSeed ?? item.avatarSeed,
+    lastMessagePayloadJson: item.lastMessagePayloadJson,
   );
 }

@@ -2,6 +2,7 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
@@ -9,6 +10,7 @@ import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
+import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
@@ -306,6 +308,181 @@ void main() {
       expect(container.read(groupProvider).groups.single.groupId, 'group-1');
       directThread = container.read(chatThreadProvider('dm:1'));
       expect(directThread.messages.single.content, 'hello');
+    });
+
+    test('Daemon Agent 普通实时消息不进入聊天、未读或通知', () async {
+      container.read(agentsProvider.notifier).applyControlPayload(
+        const <String, Object?>{
+          'schema': 'awiki.agent.status.v1',
+          'status_scope': 'snapshot',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'status': 'ready',
+          },
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': 'did:agent:runtime',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'hermes',
+              'status': 'ready',
+            },
+          ],
+        },
+      );
+      gateway.nextRealtimeUpdate = RealtimeUpdate(
+        message: ChatMessage(
+          localId: 'daemon-normal',
+          remoteId: 'daemon-normal',
+          threadId: 'dm:daemon',
+          senderDid: 'did:agent:daemon',
+          senderName: '代理 1',
+          receiverDid: 'did:test:me',
+          content: 'control-plane text should be hidden',
+          createdAt: DateTime(2026, 4, 5, 12, 0),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+        conversation: ConversationSummary(
+          threadId: 'dm:daemon',
+          displayName: '代理 1',
+          lastMessagePreview: 'control-plane text should be hidden',
+          lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+          unreadCount: 1,
+          isGroup: false,
+          targetDid: 'did:agent:daemon',
+        ),
+      );
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+
+      await activate();
+      await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+
+      expect(container.read(chatThreadProvider('dm:daemon')).messages, isEmpty);
+      expect(container.read(conversationListProvider).conversations, isEmpty);
+      expect(container.read(conversationListProvider).unreadCount, 0);
+      expect(notificationFacade.lastBadgeCount, 0);
+      expect(notificationFacade.lastInAppTitle, isNull);
+      expect(notificationFacade.lastSystemTitle, isNull);
+    });
+
+    test('Runtime Agent 普通实时消息仍进入聊天、未读和通知', () async {
+      container.read(agentsProvider.notifier).applyControlPayload(
+        const <String, Object?>{
+          'schema': 'awiki.agent.status.v1',
+          'status_scope': 'snapshot',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'status': 'ready',
+          },
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': 'did:agent:runtime',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'hermes',
+              'status': 'ready',
+            },
+          ],
+        },
+      );
+      gateway.nextRealtimeUpdate = RealtimeUpdate(
+        message: ChatMessage(
+          localId: 'runtime-normal',
+          remoteId: 'runtime-normal',
+          threadId: 'dm:runtime',
+          senderDid: 'did:agent:runtime',
+          senderName: 'Hermes',
+          receiverDid: 'did:test:me',
+          content: 'Hermes reply',
+          createdAt: DateTime(2026, 4, 5, 12, 0),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+        conversation: ConversationSummary(
+          threadId: 'dm:runtime',
+          displayName: 'Hermes',
+          lastMessagePreview: 'Hermes reply',
+          lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+          unreadCount: 1,
+          isGroup: false,
+          targetDid: 'did:agent:runtime',
+        ),
+      );
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+
+      await activate();
+      await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+
+      expect(
+        container
+            .read(chatThreadProvider('dm:runtime'))
+            .messages
+            .single
+            .content,
+        'Hermes reply',
+      );
+      expect(
+        container.read(conversationListProvider).conversations.single.targetDid,
+        'did:agent:runtime',
+      );
+      expect(container.read(conversationListProvider).unreadCount, 1);
+      expect(notificationFacade.lastBadgeCount, 1);
+      expect(notificationFacade.lastInAppTitle, 'Hermes');
+      expect(notificationFacade.lastInAppBody, 'Hermes reply');
+    });
+
+    test('实时控制状态只更新智能体状态', () async {
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await activate();
+      await Future<void>.delayed(Duration.zero);
+
+      gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        agentControlPayload: <String, Object?>{
+          'schema': 'awiki.agent.status.v1',
+          'status_scope': 'daemon',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'status': 'ready',
+            'version': '0.2.0',
+            'platform': 'darwin-arm64',
+          },
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': 'did:agent:runtime',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'hermes',
+              'status': 'needs_config',
+            },
+          ],
+        },
+      );
+      await realtimeGateway.emit(const <String, Object?>{'type': 'status'});
+
+      final agents = container.read(agentsProvider).agents;
+      final daemon = agents.singleWhere((agent) => agent.isDaemon);
+      final runtime = agents.singleWhere((agent) => agent.isRuntime);
+      expect(daemon.agentDid, 'did:agent:daemon');
+      expect(daemon.latest.status, 'ready');
+      expect(daemon.latest.version, '0.2.0');
+      expect(runtime.agentDid, 'did:agent:runtime');
+      expect(runtime.kind, AgentKind.runtime);
+      expect(runtime.daemonAgentDid, 'did:agent:daemon');
+      expect(runtime.latest.status, 'needs_config');
+      expect(container.read(conversationListProvider).conversations, isEmpty);
+      expect(
+        container.read(chatThreadProvider('did:agent:daemon')).messages,
+        isEmpty,
+      );
+      expect(notificationFacade.lastInAppTitle, isNull);
+      expect(notificationFacade.lastSystemTitle, isNull);
     });
 
     test('实时连接失败时刷新会话数据但不使用相同 token 循环重连', () async {

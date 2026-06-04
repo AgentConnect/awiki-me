@@ -5,9 +5,8 @@ import '../domain/entities/session_identity.dart';
 import '../domain/services/e2ee_facade.dart';
 
 class MethodChannelE2eeFacade implements E2eeFacade {
-  MethodChannelE2eeFacade({
-    MethodChannel? channel,
-  }) : _channel = channel ?? const MethodChannel('ai.awiki.awikime/e2ee');
+  MethodChannelE2eeFacade({MethodChannel? channel})
+    : _channel = channel ?? const MethodChannel('ai.awiki.awikime/e2ee');
 
   final MethodChannel _channel;
 
@@ -32,7 +31,8 @@ class MethodChannelE2eeFacade implements E2eeFacade {
       );
     }
     return message.copyWith(
-        content: result['content']?.toString() ?? message.content);
+      content: result['content']?.toString() ?? message.content,
+    );
   }
 
   @override
@@ -64,8 +64,9 @@ class MethodChannelE2eeFacade implements E2eeFacade {
 
   @override
   Future<Map<String, Object?>> exportSessionState() async {
-    final result =
-        await _channel.invokeMapMethod<String, Object?>('exportSessionState');
+    final result = await _channel.invokeMapMethod<String, Object?>(
+      'exportSessionState',
+    );
     return result ?? const <String, Object?>{};
   }
 
@@ -76,15 +77,12 @@ class MethodChannelE2eeFacade implements E2eeFacade {
 
   @override
   Future<void> initialize(SessionIdentity identity) async {
-    await _channel.invokeMethod<void>(
-      'initialize',
-      <String, Object?>{
-        'did': identity.did,
-        'credentialName': identity.credentialName,
-        'displayName': identity.displayName,
-        'handle': identity.handle,
-      },
-    );
+    await _channel.invokeMethod<void>('initialize', <String, Object?>{
+      'did': identity.did,
+      'credentialName': identity.credentialName,
+      'displayName': identity.displayName,
+      'handle': identity.handle,
+    });
   }
 
   @override
@@ -95,7 +93,8 @@ class MethodChannelE2eeFacade implements E2eeFacade {
 
   @override
   Future<E2eeProcessResult> processIncomingProtocolMessage(
-      ChatMessage message) async {
+    ChatMessage message,
+  ) async {
     final result = await _channel.invokeMapMethod<String, Object?>(
       'processIncomingProtocolMessage',
       <String, Object?>{
@@ -120,9 +119,8 @@ class MethodChannelE2eeFacade implements E2eeFacade {
 
   @override
   Future<void> ensureSession(String peerDid) async {
-    await _channel.invokeMethod<void>(
-      'ensureSession',
-      <String, Object?>{'peerDid': peerDid},
-    );
+    await _channel.invokeMethod<void>('ensureSession', <String, Object?>{
+      'peerDid': peerDid,
+    });
   }
 }

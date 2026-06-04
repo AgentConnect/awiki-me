@@ -7,7 +7,7 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
   AwikiProductLocalStoreSqlite({Database? database}) : _database = database;
 
   static const String databaseName = 'awiki_me_product_store.db';
-  static const int databaseVersion = 1;
+  static const int databaseVersion = 2;
 
   Database? _database;
 
@@ -21,6 +21,11 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
       '$base/$databaseName',
       version: databaseVersion,
       onCreate: (db, _) => _createSchema(db),
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await _createAgentStatesTable(db);
+        }
+      },
     );
     return _database!;
   }
@@ -55,6 +60,19 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
         value_json TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         PRIMARY KEY (owner_did, key)
+      )
+    ''');
+    await _createAgentStatesTable(db);
+  }
+
+  static Future<void> _createAgentStatesTable(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS local_agent_states (
+        owner_did TEXT NOT NULL,
+        agent_did TEXT NOT NULL,
+        value_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (owner_did, agent_did)
       )
     ''');
   }
@@ -213,6 +231,40 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
       whereArgs: <Object?>[ownerDid, key],
     );
   }
+
+  @override
+  Future<List<LocalAgentState>> loadAgentStates({
+    required String ownerDid,
+  }) async {
+    final rows = await (await _db).query(
+      'local_agent_states',
+      where: 'owner_did = ?',
+      whereArgs: <Object?>[ownerDid],
+      orderBy: 'updated_at DESC',
+    );
+    return rows.map(_agentStateFromRow).toList();
+  }
+
+  @override
+  Future<void> saveAgentState(LocalAgentState state) async {
+    await (await _db).insert(
+      'local_agent_states',
+      _agentStateToRow(state),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  @override
+  Future<void> deleteAgentState({
+    required String ownerDid,
+    required String agentDid,
+  }) async {
+    await (await _db).delete(
+      'local_agent_states',
+      where: 'owner_did = ? AND agent_did = ?',
+      whereArgs: <Object?>[ownerDid, agentDid],
+    );
+  }
 }
 
 ProductConversationOverlay _overlayFromRow(Map<String, Object?> row) {
@@ -274,6 +326,24 @@ Map<String, Object?> _preferenceToRow(LocalUiPreference preference) {
     'key': preference.key,
     'value_json': preference.valueJson,
     'updated_at': preference.updatedAt.toUtc().toIso8601String(),
+  };
+}
+
+LocalAgentState _agentStateFromRow(Map<String, Object?> row) {
+  return LocalAgentState(
+    ownerDid: row['owner_did']?.toString() ?? '',
+    agentDid: row['agent_did']?.toString() ?? '',
+    valueJson: row['value_json']?.toString() ?? '',
+    updatedAt: _readDate(row['updated_at']),
+  );
+}
+
+Map<String, Object?> _agentStateToRow(LocalAgentState state) {
+  return <String, Object?>{
+    'owner_did': state.ownerDid,
+    'agent_did': state.agentDid,
+    'value_json': state.valueJson,
+    'updated_at': state.updatedAt.toUtc().toIso8601String(),
   };
 }
 

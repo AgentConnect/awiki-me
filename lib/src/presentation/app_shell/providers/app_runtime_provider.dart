@@ -6,11 +6,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/app_services.dart';
 import '../../../app/ui_feedback.dart';
 import '../../../application/models/app_session.dart';
+import '../../../application/agent/agent_control_projection.dart';
 import '../../../domain/entities/bridge_capabilities.dart';
+import '../../../domain/entities/conversation_summary.dart';
 import '../../../domain/entities/realtime_update.dart';
 import '../../../domain/entities/session_identity.dart';
 import '../../../domain/services/realtime_gateway.dart';
 import '../../../l10n/app_message.dart';
+import '../../agents/agent_inbox_provider.dart';
+import '../../agents/agents_provider.dart';
 import '../../chat/chat_provider.dart';
 import '../../conversation_list/conversation_provider.dart';
 import '../../friends/friends_provider.dart';
@@ -337,16 +341,31 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   void _applyRealtimeUpdate(RealtimeUpdate update) {
-    ref.read(chatThreadsProvider.notifier).applyRealtimeUpdate(update.message);
+    final controlPayload = update.agentControlPayload;
+    if (controlPayload != null) {
+      ref.read(agentsProvider.notifier).applyControlPayload(controlPayload);
+      ref.read(agentInboxProvider.notifier).applyControlPayload(controlPayload);
+      return;
+    }
+    final message = update.message;
+    final conversation = update.conversation;
+    if (message == null || conversation == null) {
+      return;
+    }
+    final shouldShow = _shouldShowRealtimeConversation(conversation);
+    if (!shouldShow) {
+      return;
+    }
+    ref.read(chatThreadsProvider.notifier).applyRealtimeUpdate(message);
     ref
         .read(conversationListProvider.notifier)
-        .upsertConversation(update.conversation);
+        .upsertConversation(conversation);
     if (update.group != null) {
       ref.read(groupProvider.notifier).upsertGroup(update.group!);
     }
-    if (!update.message.isMine) {
+    if (!message.isMine) {
       final title = _notificationTitle(update);
-      final preview = update.message.previewText;
+      final preview = message.previewText;
       final body = preview.isNotEmpty
           ? preview
           : AppMessage.newMessageArrived().resolveForFallback();
@@ -364,15 +383,30 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
   }
 
+  bool _shouldShowRealtimeConversation(ConversationSummary conversation) {
+    return shouldShowConversationForChatList(
+      conversation,
+      daemonAgentDids: ref
+          .read(agentsProvider)
+          .daemonAgents
+          .map((agent) => agent.agentDid),
+    );
+  }
+
   String _notificationTitle(RealtimeUpdate update) {
+    final message = update.message;
+    final conversation = update.conversation;
+    if (message == null || conversation == null) {
+      return AppMessage.newMessageArrived().resolveForFallback();
+    }
     final title = DidDisplayFormatter.compactDisplayName(
-      displayName: update.message.senderName ?? '',
-      fallbackDid: update.message.senderDid,
+      displayName: message.senderName ?? '',
+      fallbackDid: message.senderDid,
     ).trim();
     if (title.isNotEmpty) {
       return title;
     }
-    return update.conversation.displayName;
+    return conversation.displayName;
   }
 
   Future<void> _runBusy(Future<void> Function() action) async {
@@ -434,7 +468,7 @@ SessionIdentity _legacySessionFromAppSession(AppSession session) {
     credentialName: session.localAlias ?? session.identityId,
     displayName: session.displayName,
     handle: session.handle,
-    jwtToken: null,
+    jwtToken: session.jwtToken,
   );
 }
 

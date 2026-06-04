@@ -27,7 +27,11 @@ Widget e2eSemantics({
   bool? textField,
 }) {
   final effectiveIdentifier = e2eIdentifier(identifier);
-  if (effectiveIdentifier == null) {
+  if (effectiveIdentifier == null &&
+      label == null &&
+      button == null &&
+      enabled == null &&
+      textField == null) {
     return child;
   }
   return Semantics(

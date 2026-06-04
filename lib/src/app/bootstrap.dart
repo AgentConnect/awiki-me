@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../application/agent/agent_control_service.dart';
 import '../application/app_session_service.dart';
 import '../application/conversation_service.dart';
 import '../application/directory_application_service.dart';
@@ -9,6 +10,7 @@ import '../application/group_application_service.dart';
 import '../application/messaging_service.dart';
 import '../application/onboarding_service.dart';
 import '../application/onboarding_support_service.dart';
+import '../application/ports/agent_inventory_port.dart';
 import '../application/product_local_store.dart';
 import '../application/profile_application_service.dart';
 import '../application/realtime_application_service.dart';
@@ -16,6 +18,7 @@ import '../application/relationship_application_service.dart';
 import '../data/compat/compat_awiki_account_gateway.dart';
 import '../data/compat/compat_awiki_gateway.dart';
 import '../data/compat/compat_realtime_gateway.dart';
+import '../data/agent/user_service_agent_inventory_adapter.dart';
 import '../data/im_core/awiki_im_core_auth_adapter.dart';
 import '../data/im_core/awiki_im_core_config.dart';
 import '../data/im_core/awiki_im_core_conversation_adapter.dart';
@@ -56,6 +59,8 @@ class AppBootstrap {
     this.onboardingSupportService,
     this.messagingService,
     this.conversationService,
+    this.agentInventoryPort,
+    this.agentControlService,
     this.groupApplicationService,
     this.profileApplicationService,
     this.directoryApplicationService,
@@ -76,6 +81,8 @@ class AppBootstrap {
   final OnboardingSupportService? onboardingSupportService;
   final MessagingService? messagingService;
   final ConversationService? conversationService;
+  final AgentInventoryPort? agentInventoryPort;
+  final AgentControlService? agentControlService;
   final GroupApplicationService? groupApplicationService;
   final ProfileApplicationService? profileApplicationService;
   final DirectoryApplicationService? directoryApplicationService;
@@ -105,11 +112,17 @@ class AppBootstrap {
       runtime: runtime,
     );
     final realtimeAdapter = AwikiImCoreRealtimeAdapter(runtime: runtime);
-
     final messagingService = ImCoreMessagingService(messages: messageAdapter);
+    final agentInventoryPort =
+        UserServiceAgentInventoryAdapter.fromEnvironment();
     final conversationService = ImCoreConversationService(
       conversations: conversationAdapter,
       localStore: productLocalStore,
+      agentInventory: agentInventoryPort,
+    );
+    final agentControlService = DefaultAgentControlService(
+      inventory: agentInventoryPort,
+      messages: messagingService,
     );
     final groupApplicationService = ImCoreGroupApplicationService(
       groups: groupAdapter,
@@ -176,6 +189,8 @@ class AppBootstrap {
       onboardingSupportService: onboardingSupportService,
       messagingService: messagingService,
       conversationService: conversationService,
+      agentInventoryPort: agentInventoryPort,
+      agentControlService: agentControlService,
       groupApplicationService: groupApplicationService,
       profileApplicationService: profileApplicationService,
       directoryApplicationService: directoryApplicationService,

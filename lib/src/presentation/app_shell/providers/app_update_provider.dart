@@ -60,10 +60,12 @@ class AppUpdateState {
     return AppUpdateState(
       status: status ?? this.status,
       currentVersion: currentVersion ?? this.currentVersion,
-      latestManifest:
-          clearLatestManifest ? null : (latestManifest ?? this.latestManifest),
-      errorMessage:
-          clearErrorMessage ? null : (errorMessage ?? this.errorMessage),
+      latestManifest: clearLatestManifest
+          ? null
+          : (latestManifest ?? this.latestManifest),
+      errorMessage: clearErrorMessage
+          ? null
+          : (errorMessage ?? this.errorMessage),
     );
   }
 }
@@ -80,8 +82,9 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
     }
     _initialized = true;
     try {
-      final currentVersion =
-          await ref.read(updateServiceProvider).getCurrentVersion();
+      final currentVersion = await ref
+          .read(updateServiceProvider)
+          .getCurrentVersion();
       state = state.copyWith(currentVersion: currentVersion);
     } catch (error) {
       state = state.copyWith(
@@ -104,9 +107,9 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
       );
     }
     try {
-      final result = await ref.read(updateServiceProvider).checkForUpdates(
-            force: force,
-          );
+      final result = await ref
+          .read(updateServiceProvider)
+          .checkForUpdates(force: force);
       state = state.copyWith(
         currentVersion: result.currentVersion,
         latestManifest: result.latestManifest,
@@ -139,9 +142,9 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
           .read(updateServiceProvider)
           .openReleaseNotes(state.latestManifest);
     } catch (_) {
-      ref.read(uiFeedbackProvider.notifier).showError(
-            AppMessage.updateOpenReleaseNotesFailed(),
-          );
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.updateOpenReleaseNotesFailed());
     }
   }
 
@@ -151,9 +154,9 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
           .read(updateServiceProvider)
           .openDownloadPage(state.latestManifest);
     } catch (_) {
-      ref.read(uiFeedbackProvider.notifier).showError(
-            AppMessage.updateOpenDownloadFailed(),
-          );
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.updateOpenDownloadFailed());
     }
   }
 
@@ -196,5 +199,5 @@ class AppUpdateController extends StateNotifier<AppUpdateState> {
 
 final appUpdateProvider =
     StateNotifierProvider<AppUpdateController, AppUpdateState>(
-  (ref) => AppUpdateController(ref),
-);
+      (ref) => AppUpdateController(ref),
+    );

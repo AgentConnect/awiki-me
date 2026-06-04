@@ -67,3 +67,17 @@ class LocalUiPreference {
   final String valueJson;
   final DateTime updatedAt;
 }
+
+class LocalAgentState {
+  const LocalAgentState({
+    required this.ownerDid,
+    required this.agentDid,
+    required this.valueJson,
+    required this.updatedAt,
+  });
+
+  final String ownerDid;
+  final String agentDid;
+  final String valueJson;
+  final DateTime updatedAt;
+}

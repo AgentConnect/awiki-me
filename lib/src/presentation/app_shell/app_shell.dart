@@ -10,6 +10,7 @@ import '../../domain/services/realtime_gateway.dart';
 import '../../l10n/l10n.dart';
 import '../conversation_list/conversation_workspace_page.dart';
 import '../conversation_list/conversation_provider.dart';
+import '../agents/agents_page.dart';
 import '../friends/friends_workspace_page.dart';
 import '../onboarding/onboarding_page.dart';
 import '../profile/profile_workspace_page.dart';
@@ -187,11 +188,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         case 0:
           return const ConversationWorkspacePage();
         case 1:
-          return const _MacDesktopPlaceholderPage(
-            title: '智能体',
-            subtitle: '智能体工作台即将接入。当前可先在消息中与 Agent 协作。',
-            icon: CupertinoIcons.person_2_fill,
-          );
+          return const AgentsWorkspacePage();
         case 2:
           return const FriendsWorkspacePage();
         case 3:
@@ -217,8 +214,10 @@ class _AppShellState extends ConsumerState<AppShell> {
       case 0:
         return ConversationWorkspacePage(listFooter: desktopFooter);
       case 1:
-        return FriendsWorkspacePage(listFooter: desktopFooter);
+        return AgentsWorkspacePage(listFooter: desktopFooter);
       case 2:
+        return FriendsWorkspacePage(listFooter: desktopFooter);
+      case 3:
         return ProfileWorkspacePage(listFooter: desktopFooter);
     }
     return ConversationWorkspacePage(listFooter: desktopFooter);
@@ -691,9 +690,9 @@ class _BottomNavBar extends StatelessWidget {
               final navWidth = constraints.maxWidth.isFinite
                   ? constraints.maxWidth.clamp(
                       0.0,
-                      responsive.isPhone ? responsive.scaled(312.0) : 220.0,
+                      responsive.isPhone ? responsive.scaled(356.0) : 260.0,
                     )
-                  : (responsive.isPhone ? responsive.scaled(312.0) : 220.0);
+                  : (responsive.isPhone ? responsive.scaled(356.0) : 260.0);
               return Container(
                 width: navWidth,
                 height: navHeight,
@@ -732,14 +731,24 @@ class _BottomNavBar extends StatelessWidget {
                       ),
                     ),
                     Expanded(
+                      child: _NavIconButton(
+                        label: '智能体',
+                        semanticsIdentifier: 'e2e-agents-tab',
+                        icon: CupertinoIcons.sparkles,
+                        active: currentIndex == 1,
+                        showLabel: showLabels,
+                        onTap: () => onTap(1),
+                      ),
+                    ),
+                    Expanded(
                       child: _NavButton(
                         label: l10n.shellNavFriends,
                         semanticsIdentifier: 'e2e-friends-tab',
                         activeAsset: 'assets/icons/friend_Active.svg',
                         inactiveAsset: 'assets/icons/friend_Inactive.svg',
-                        active: currentIndex == 1,
+                        active: currentIndex == 2,
                         showLabel: showLabels,
-                        onTap: () => onTap(1),
+                        onTap: () => onTap(2),
                       ),
                     ),
                     Expanded(
@@ -748,15 +757,105 @@ class _BottomNavBar extends StatelessWidget {
                         semanticsIdentifier: 'e2e-profile-tab',
                         activeAsset: 'assets/icons/me_Active.svg',
                         inactiveAsset: 'assets/icons/me_Inactive.svg',
-                        active: currentIndex == 2,
+                        active: currentIndex == 3,
                         showLabel: showLabels,
-                        onTap: () => onTap(2),
+                        onTap: () => onTap(3),
                       ),
                     ),
                   ],
                 ),
               );
             },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavIconButton extends StatelessWidget {
+  const _NavIconButton({
+    required this.label,
+    required this.semanticsIdentifier,
+    required this.icon,
+    required this.active,
+    required this.showLabel,
+    required this.onTap,
+  });
+
+  final String label;
+  final String semanticsIdentifier;
+  final IconData icon;
+  final bool active;
+  final bool showLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final foreground = active
+        ? AwikiMePalette.actionBlue
+        : AwikiMePalette.actionMuted;
+    return Semantics(
+      identifier: e2eIdentifier(semanticsIdentifier),
+      button: true,
+      selected: active,
+      label: label,
+      onTap: onTap,
+      child: ExcludeSemantics(
+        child: GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            padding: showLabel
+                ? EdgeInsets.fromLTRB(
+                    responsive.spacing(4),
+                    responsive.spacing(1),
+                    responsive.spacing(4),
+                    responsive.spacing(5),
+                  )
+                : EdgeInsets.zero,
+            decoration: BoxDecoration(
+              color: active && showLabel
+                  ? AwikiMePalette.actionBlueSoft
+                  : const Color(0x00FFFFFF),
+              borderRadius: BorderRadius.circular(
+                showLabel ? responsive.radius(8) : 0,
+              ),
+            ),
+            child: showLabel
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      Icon(
+                        icon,
+                        color: foreground,
+                        size: responsive.scaled(24),
+                      ),
+                      const SizedBox(height: 2),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: foreground,
+                            fontSize: responsive.scaled(13.25),
+                            fontWeight: FontWeight.w600,
+                            height: 1,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : Center(
+                    child: Icon(
+                      icon,
+                      color: foreground,
+                      size: responsive.iconLg,
+                    ),
+                  ),
           ),
         ),
       ),

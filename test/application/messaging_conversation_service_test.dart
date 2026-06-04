@@ -3,9 +3,13 @@ import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
+import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/conversation_core_port.dart';
 import 'package:awiki_me/src/application/ports/message_core_port.dart';
 import 'package:awiki_me/src/data/local/awiki_product_local_store.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
+import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -69,6 +73,58 @@ void main() {
 
       expect(core.markReadCount, 1);
     });
+
+    test('filters known daemon agent control conversations', () async {
+      final core = _FakeConversations(
+        items: <ConversationSummary>[
+          _conversation(
+            'dm:alice:daemon',
+            targetDid: 'did:agent:daemon',
+            minutesAgo: 1,
+          ),
+          _conversation(
+            'dm:alice:runtime',
+            targetDid: 'did:agent:runtime',
+            minutesAgo: 2,
+          ),
+          _conversation('dm:alice:bob', targetDid: 'did:bob', minutesAgo: 3),
+        ],
+      );
+      final service = ImCoreConversationService(
+        conversations: core,
+        localStore: InMemoryAwikiProductLocalStore(),
+        agentInventory: const _FakeAgentInventory(
+          agents: <AgentSummary>[
+            AgentSummary(
+              agentDid: 'did:agent:daemon',
+              kind: AgentKind.daemon,
+              displayName: '代理 1',
+              activeState: 'active',
+              latest: AgentLatestStatus(status: 'ready'),
+            ),
+            AgentSummary(
+              agentDid: 'did:agent:runtime',
+              kind: AgentKind.runtime,
+              daemonAgentDid: 'did:agent:daemon',
+              runtime: 'hermes',
+              displayName: 'Hermes',
+              activeState: 'active',
+              latest: AgentLatestStatus(status: 'ready'),
+            ),
+          ],
+        ),
+      );
+
+      final conversations = await service.listConversations(
+        ownerDid: 'did:alice',
+      );
+
+      expect(conversations.map((item) => item.targetDid), [
+        'did:agent:runtime',
+        'did:bob',
+      ]);
+      expect(core.listCount, 1);
+    });
   });
 
   group('ImCoreMessagingService', () {
@@ -88,7 +144,11 @@ void main() {
   });
 }
 
-ConversationSummary _conversation(String threadId, {required int minutesAgo}) {
+ConversationSummary _conversation(
+  String threadId, {
+  required int minutesAgo,
+  String targetDid = 'did:bob',
+}) {
   return ConversationSummary(
     threadId: threadId,
     displayName: threadId,
@@ -101,7 +161,7 @@ ConversationSummary _conversation(String threadId, {required int minutesAgo}) {
     ).subtract(Duration(minutes: minutesAgo)),
     unreadCount: 0,
     isGroup: false,
-    targetDid: 'did:bob',
+    targetDid: targetDid,
   );
 }
 
@@ -181,12 +241,63 @@ class _FakeMessages implements MessageCorePort {
   }
 
   @override
+  Future<ChatMessage> sendPayload({
+    required AppThreadRef thread,
+    required Map<String, Object?> payload,
+    bool secure = true,
+    String? idempotencyKey,
+  }) async {
+    return _message('');
+  }
+
+  @override
   Future<ChatMessage> sendText({
     required AppThreadRef thread,
     required String content,
   }) async {
     sentContents.add(content);
     return _message('sent');
+  }
+}
+
+class _FakeAgentInventory implements AgentInventoryPort {
+  const _FakeAgentInventory({required this.agents});
+
+  final List<AgentSummary> agents;
+
+  @override
+  Future<AgentRegistrationToken> issueDaemonToken({
+    required String controllerDid,
+    required String clientPlatform,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<AgentRegistrationToken> issueRuntimeToken({
+    required String controllerDid,
+    required String daemonAgentDid,
+    required String runtime,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
+    return agents;
+  }
+
+  @override
+  Future<void> unbindAgent({required String agentDid}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<AgentSummary> updateDisplayName({
+    required String agentDid,
+    required String displayName,
+  }) {
+    throw UnimplementedError();
   }
 }
 

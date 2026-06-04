@@ -17,6 +17,36 @@ flutter test
 flutter run
 ```
 
+## Backend Environment
+
+The app reads a single backend root from `AWIKI_BASE_URL` and derives the
+default user-service, message-service, mail-service, DID domain, ANP endpoint,
+and daemon download root from it.
+
+```bash
+flutter run --dart-define=AWIKI_BASE_URL=https://awiki.ai
+```
+
+Production defaults to `https://awiki.ai`. Future online test builds can switch
+to:
+
+```bash
+flutter run --dart-define=AWIKI_BASE_URL=https://anpclaw.com
+```
+
+Advanced overrides are available when a service needs to be split from the main
+domain:
+
+```text
+AWIKI_USER_SERVICE_URL
+AWIKI_MESSAGE_SERVICE_URL
+AWIKI_MAIL_SERVICE_URL
+AWIKI_DID_DOMAIN
+AWIKI_ANP_SERVICE_URL
+AWIKI_ANP_SERVICE_DID
+AWIKI_DAEMON_DOWNLOAD_BASE_URL
+```
+
 ## Building on macOS with Xcode
 
 Before opening the project in Xcode, generate the CocoaPods support files:

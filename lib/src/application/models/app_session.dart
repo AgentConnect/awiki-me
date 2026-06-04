@@ -7,6 +7,7 @@ class AppSession {
     this.localAlias,
     this.authenticated = false,
     this.expiresAt,
+    this.jwtToken,
   });
 
   final String did;
@@ -16,6 +17,7 @@ class AppSession {
   final String? localAlias;
   final bool authenticated;
   final DateTime? expiresAt;
+  final String? jwtToken;
 
   AppSession copyWith({
     String? did,
@@ -25,6 +27,7 @@ class AppSession {
     String? localAlias,
     bool? authenticated,
     DateTime? expiresAt,
+    String? jwtToken,
   }) {
     return AppSession(
       did: did ?? this.did,
@@ -34,6 +37,7 @@ class AppSession {
       localAlias: localAlias ?? this.localAlias,
       authenticated: authenticated ?? this.authenticated,
       expiresAt: expiresAt ?? this.expiresAt,
+      jwtToken: jwtToken ?? this.jwtToken,
     );
   }
 }

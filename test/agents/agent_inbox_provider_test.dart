@@ -1,0 +1,283 @@
+import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
+import 'package:awiki_me/src/presentation/agents/agent_inbox_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import '../test_support.dart';
+
+void main() {
+  test(
+    'queryInbox sends command and accepts matching status payload only',
+    () async {
+      final control = FakeAgentControlService()
+        ..nextInboxRequestId = 'cmd_inbox_current';
+      final container = _container(control);
+      addTearDown(container.dispose);
+
+      await container
+          .read(agentInboxProvider.notifier)
+          .queryInbox(
+            daemonAgentDid: 'did:agent:daemon',
+            runtimeAgentDid: 'did:agent:runtime',
+            scope: AgentInboxScope.group,
+          );
+
+      expect(control.lastInboxDaemonDid, 'did:agent:daemon');
+      expect(control.lastInboxRuntimeDid, 'did:agent:runtime');
+      expect(control.lastInboxScope, 'group');
+      container.read(agentInboxProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'runtime_inbox',
+          'request_id': 'old_request',
+          'state': 'succeeded',
+          'result': <String, Object?>{
+            'items': <Object?>[
+              <String, Object?>{'thread_id': 'direct:old', 'kind': 'direct'},
+            ],
+          },
+        },
+      );
+      expect(container.read(agentInboxProvider).items, isEmpty);
+
+      container.read(agentInboxProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'runtime_inbox',
+          'request_id': 'cmd_inbox_current',
+          'state': 'succeeded',
+          'result': <String, Object?>{
+            'items': <Object?>[
+              <String, Object?>{
+                'thread_id': 'group:did:group:team',
+                'kind': 'group',
+                'title': '项目群',
+                'group_did': 'did:group:team',
+                'last_message_preview': 'report',
+                'has_attachments': true,
+              },
+            ],
+          },
+        },
+      );
+
+      final state = container.read(agentInboxProvider);
+      expect(state.items, hasLength(1));
+      expect(state.items.first.kind, 'group');
+      expect(state.items.first.hasAttachments, isTrue);
+      expect(state.error, isNull);
+    },
+  );
+
+  test('thread status payload parses attachment metadata', () async {
+    final control = FakeAgentControlService()
+      ..nextInboxThreadRequestId = 'cmd_thread_current';
+    final container = _container(control);
+    addTearDown(container.dispose);
+    const item = AgentInboxItem(
+      threadId: 'direct:did:human:bob',
+      kind: 'direct',
+      title: 'Bob',
+      peerDid: 'did:human:bob',
+      lastMessagePreview: '',
+      unreadCount: 0,
+      hasAttachments: false,
+      lastContentType: 'text',
+    );
+
+    await container
+        .read(agentInboxProvider.notifier)
+        .queryThread(
+          daemonAgentDid: 'did:agent:daemon',
+          runtimeAgentDid: 'did:agent:runtime',
+          item: item,
+        );
+    container.read(agentInboxProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'status_scope': 'runtime_inbox_thread',
+        'request_id': 'cmd_thread_current',
+        'state': 'succeeded',
+        'result': <String, Object?>{
+          'thread_id': 'direct:did:human:bob',
+          'kind': 'direct',
+          'title': 'Bob',
+          'messages': <Object?>[
+            <String, Object?>{
+              'message_id': 'msg-1',
+              'sender_did': 'did:human:bob',
+              'direction': 'incoming',
+              'content_type': 'attachment',
+              'text': 'caption',
+              'attachments': <Object?>[
+                <String, Object?>{
+                  'attachment_id': 'att-1',
+                  'filename': 'report.pdf',
+                  'mime_type': 'application/pdf',
+                  'size_bytes': 1024,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    );
+
+    final thread = container.read(agentInboxProvider).thread;
+    expect(thread.messages, hasLength(1));
+    expect(thread.messages.first.attachments.first.filename, 'report.pdf');
+    expect(thread.messages.first.attachments.first.sizeBytes, 1024);
+  });
+
+  test('list pagination appends unique items', () async {
+    final control = FakeAgentControlService()
+      ..nextInboxRequestId = 'cmd_inbox_first';
+    final container = _container(control);
+    addTearDown(container.dispose);
+
+    await container
+        .read(agentInboxProvider.notifier)
+        .queryInbox(
+          daemonAgentDid: 'did:agent:daemon',
+          runtimeAgentDid: 'did:agent:runtime',
+        );
+    container.read(agentInboxProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'status_scope': 'runtime_inbox',
+        'request_id': 'cmd_inbox_first',
+        'state': 'succeeded',
+        'result': <String, Object?>{
+          'items': <Object?>[
+            <String, Object?>{
+              'thread_id': 'direct:did:human:bob',
+              'kind': 'direct',
+              'title': 'Bob',
+            },
+          ],
+          'next_cursor': '1',
+        },
+      },
+    );
+
+    control.nextInboxRequestId = 'cmd_inbox_page_2';
+    await container.read(agentInboxProvider.notifier).loadMoreInbox();
+    expect(control.lastInboxScope, 'all');
+    container.read(agentInboxProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'status_scope': 'runtime_inbox',
+        'request_id': 'cmd_inbox_page_2',
+        'state': 'succeeded',
+        'result': <String, Object?>{
+          'items': <Object?>[
+            <String, Object?>{
+              'thread_id': 'direct:did:human:bob',
+              'kind': 'direct',
+              'title': 'Bob duplicate',
+            },
+            <String, Object?>{
+              'thread_id': 'group:did:group:team',
+              'kind': 'group',
+              'title': 'Team',
+            },
+          ],
+          'next_cursor': null,
+        },
+      },
+    );
+
+    final items = container.read(agentInboxProvider).items;
+    expect(items.map((item) => item.threadId), <String>[
+      'direct:did:human:bob',
+      'group:did:group:team',
+    ]);
+    expect(container.read(agentInboxProvider).nextCursor, isNull);
+  });
+
+  test('thread pagination prepends older unique messages', () async {
+    final control = FakeAgentControlService()
+      ..nextInboxThreadRequestId = 'cmd_thread_first';
+    final container = _container(control);
+    addTearDown(container.dispose);
+    const item = AgentInboxItem(
+      threadId: 'direct:did:human:bob',
+      kind: 'direct',
+      title: 'Bob',
+      peerDid: 'did:human:bob',
+      lastMessagePreview: '',
+      unreadCount: 0,
+      hasAttachments: false,
+      lastContentType: 'text',
+    );
+
+    await container
+        .read(agentInboxProvider.notifier)
+        .queryThread(
+          daemonAgentDid: 'did:agent:daemon',
+          runtimeAgentDid: 'did:agent:runtime',
+          item: item,
+        );
+    container.read(agentInboxProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'status_scope': 'runtime_inbox_thread',
+        'request_id': 'cmd_thread_first',
+        'state': 'succeeded',
+        'result': <String, Object?>{
+          'messages': <Object?>[
+            <String, Object?>{
+              'message_id': 'msg-new',
+              'sender_did': 'did:human:bob',
+              'text': 'new',
+            },
+          ],
+          'next_cursor': '1',
+        },
+      },
+    );
+
+    control.nextInboxThreadRequestId = 'cmd_thread_page_2';
+    await container.read(agentInboxProvider.notifier).loadMoreThread();
+    container.read(agentInboxProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'status_scope': 'runtime_inbox_thread',
+        'request_id': 'cmd_thread_page_2',
+        'state': 'succeeded',
+        'result': <String, Object?>{
+          'messages': <Object?>[
+            <String, Object?>{
+              'message_id': 'msg-old',
+              'sender_did': 'did:human:bob',
+              'text': 'old',
+            },
+            <String, Object?>{
+              'message_id': 'msg-new',
+              'sender_did': 'did:human:bob',
+              'text': 'duplicate',
+            },
+          ],
+        },
+      },
+    );
+
+    expect(
+      container
+          .read(agentInboxProvider)
+          .thread
+          .messages
+          .map((message) => message.messageId),
+      <String>['msg-old', 'msg-new'],
+    );
+  });
+}
+
+ProviderContainer _container(FakeAgentControlService control) {
+  return ProviderContainer(
+    overrides: <Override>[
+      agentControlServiceProvider.overrideWithValue(control),
+    ],
+  );
+}

@@ -9,6 +9,7 @@ import '../../application/ports/relationship_core_port.dart';
 import '../../application/thread_id_utils.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/chat_attachment.dart';
+import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_summary.dart';
@@ -26,6 +27,7 @@ class AwikiImCoreMappers {
     core.IdentitySummary identity, {
     bool authenticated = false,
     DateTime? expiresAt,
+    String? jwtToken,
   }) {
     return AppSession(
       did: identity.did,
@@ -39,6 +41,7 @@ class AwikiImCoreMappers {
       localAlias: _nonEmpty(identity.localAlias),
       authenticated: authenticated,
       expiresAt: expiresAt,
+      jwtToken: jwtToken,
     );
   }
 
@@ -48,7 +51,7 @@ class AwikiImCoreMappers {
       credentialName: session.localAlias ?? session.identityId,
       displayName: session.displayName,
       handle: session.handle,
-      jwtToken: null,
+      jwtToken: session.jwtToken,
     );
   }
 
@@ -115,6 +118,7 @@ class AwikiImCoreMappers {
       serverSequence: message.metadata.serverSequence,
       isEncrypted: _isEncrypted(message.metadata.contentType),
       attachment: attachment,
+      payloadJson: message.body.payloadJson,
     );
   }
 
@@ -168,6 +172,7 @@ class AwikiImCoreMappers {
       targetDid: targetDid,
       groupId: groupId,
       avatarSeed: overlay?.avatarSeed,
+      lastMessagePayloadJson: lastMessage?.body.payloadJson,
     );
   }
 
@@ -268,6 +273,13 @@ class AwikiImCoreMappers {
       return null;
     }
     final chatMessage = chatMessageFromCore(message, ownerDid: ownerDid);
+    if (chatMessage.isAgentControlPayload) {
+      return RealtimeUpdate(
+        agentControlPayload:
+            AgentControlPayloads.decode(chatMessage.payloadJson) ??
+            const <String, Object?>{},
+      );
+    }
     final isGroup =
         chatMessage.groupId != null || message.threadKind == 'group';
     final targetDid = isGroup ? null : _directPeerForMessage(ownerDid, message);
@@ -280,6 +292,7 @@ class AwikiImCoreMappers {
       isGroup: isGroup,
       targetDid: targetDid,
       groupId: chatMessage.groupId,
+      lastMessagePayloadJson: message.body.payloadJson,
     );
     return RealtimeUpdate(
       message: chatMessage,
@@ -384,6 +397,9 @@ String? _handleFromDid(String did) {
 }
 
 String _messagePreview(core.Message message) {
+  if (AgentControlPayloads.isControl(message.body.payloadJson)) {
+    return '';
+  }
   final attachment = _attachmentFromCoreMessage(message);
   if (attachment != null) {
     final caption = attachment.caption?.trim();

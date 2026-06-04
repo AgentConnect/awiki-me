@@ -190,7 +190,7 @@ extension AppSessionLegacyMapping on AppSession {
       credentialName: localAlias ?? identityId,
       displayName: displayName,
       handle: handle,
-      jwtToken: null,
+      jwtToken: jwtToken,
     );
   }
 }

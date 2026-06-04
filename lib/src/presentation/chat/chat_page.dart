@@ -7,12 +7,15 @@ import '../../app/app_router.dart';
 import '../../app/e2e_semantics.dart';
 import '../../app/app_services.dart';
 import '../../core/group_display_name.dart';
+import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_summary.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../../app/ui_feedback.dart';
+import '../agents/agent_inbox_panel.dart';
+import '../agents/agents_provider.dart';
 import '../conversation_list/conversation_provider.dart';
 import '../friends/friends_page.dart';
 import '../friends/friends_provider.dart';
@@ -59,8 +62,10 @@ class ChatView extends ConsumerStatefulWidget {
     required this.embedded,
     this.onBack,
     this.onMacIdentityPanelTap,
+    this.onMacAgentInboxTap,
     this.onMacConversationInfoTap,
     this.macIdentityPanelActive = false,
+    this.macAgentInboxPanelActive = false,
     this.macConversationInfoPanelActive = false,
     this.macStyle = false,
   });
@@ -69,8 +74,10 @@ class ChatView extends ConsumerStatefulWidget {
   final bool embedded;
   final VoidCallback? onBack;
   final VoidCallback? onMacIdentityPanelTap;
+  final VoidCallback? onMacAgentInboxTap;
   final VoidCallback? onMacConversationInfoTap;
   final bool macIdentityPanelActive;
+  final bool macAgentInboxPanelActive;
   final bool macConversationInfoPanelActive;
   final bool macStyle;
 
@@ -82,6 +89,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   final textController = TextEditingController();
   final scrollController = ScrollController();
   bool _isRefreshingCurrentConversation = false;
+  bool _didRequestAgents = false;
   final Set<String> _downloadingAttachmentMessageIds = <String>{};
 
   @override
@@ -103,6 +111,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final macStyle = widget.macStyle && responsive.isMacDesktop;
     final thread = ref.watch(chatThreadProvider(widget.conversation.threadId));
     final currentConversation = _currentConversationForTitle();
+    _requestAgentsIfNeeded(currentConversation);
+    final runtimeAgent = _runtimeAgentForConversation(currentConversation);
     final friendsState = ref.watch(friendsProvider);
     ref.listen<ChatThreadState>(
       chatThreadProvider(widget.conversation.threadId),
@@ -144,10 +154,15 @@ class _ChatViewState extends ConsumerState<ChatView> {
             onBack: widget.onBack,
             onDetails: _openDetails,
             onMacIdentityPanelTap: widget.onMacIdentityPanelTap,
+            onAgentInboxTap: runtimeAgent == null
+                ? null
+                : widget.onMacAgentInboxTap ?? _openAgentInbox,
             onMacConversationInfoTap: widget.onMacConversationInfoTap,
             macIdentityPanelActive: widget.macIdentityPanelActive,
+            macAgentInboxPanelActive: widget.macAgentInboxPanelActive,
             macConversationInfoPanelActive:
                 widget.macConversationInfoPanelActive,
+            showAgentInbox: runtimeAgent != null,
             onRefresh: () => _refreshCurrentConversation(currentConversation),
           ),
           Expanded(
@@ -289,6 +304,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
     );
   }
 
+  Future<void> _openAgentInbox() async {
+    await AppNavigator.push(
+      context,
+      (_) => AgentInboxPage(conversation: _currentConversationForTitle()),
+    );
+  }
+
   Future<void> _pickAndSendAttachment(ConversationSummary conversation) async {
     try {
       final draft = await ref
@@ -394,6 +416,22 @@ class _ChatViewState extends ConsumerState<ChatView> {
   bool _isFollowableDirect(ConversationSummary conversation) {
     final targetDid = conversation.targetDid?.trim() ?? '';
     return !conversation.isGroup && targetDid.startsWith('did:');
+  }
+
+  void _requestAgentsIfNeeded(ConversationSummary conversation) {
+    if (_didRequestAgents ||
+        conversation.isGroup ||
+        (conversation.targetDid?.trim().isEmpty ?? true) ||
+        ref.read(agentsProvider).agents.isNotEmpty) {
+      return;
+    }
+    _didRequestAgents = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(ref.read(agentsProvider.notifier).load());
+    });
   }
 
   Future<void> _toggleFollow(ConversationSummary conversation) async {
@@ -573,6 +611,22 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
     throw StateError('Group not found');
   }
+
+  AgentSummary? _runtimeAgentForConversation(ConversationSummary conversation) {
+    if (conversation.isGroup) {
+      return null;
+    }
+    final targetDid = conversation.targetDid?.trim();
+    if (targetDid == null || targetDid.isEmpty) {
+      return null;
+    }
+    for (final agent in ref.watch(agentsProvider).agents) {
+      if (agent.isRuntime && agent.agentDid == targetDid) {
+        return agent;
+      }
+    }
+    return null;
+  }
 }
 
 class _ChatHeader extends StatelessWidget {
@@ -584,10 +638,13 @@ class _ChatHeader extends StatelessWidget {
     required this.isFollowing,
     required this.onDetails,
     required this.onRefresh,
+    required this.showAgentInbox,
     this.onFollowTap,
     this.onMacIdentityPanelTap,
+    this.onAgentInboxTap,
     this.onMacConversationInfoTap,
     this.macIdentityPanelActive = false,
+    this.macAgentInboxPanelActive = false,
     this.macConversationInfoPanelActive = false,
     this.onBack,
   });
@@ -598,11 +655,14 @@ class _ChatHeader extends StatelessWidget {
   final bool macStyle;
   final bool isRefreshing;
   final bool isFollowing;
+  final bool showAgentInbox;
   final VoidCallback onDetails;
   final Future<void> Function()? onFollowTap;
   final VoidCallback? onMacIdentityPanelTap;
+  final VoidCallback? onAgentInboxTap;
   final VoidCallback? onMacConversationInfoTap;
   final bool macIdentityPanelActive;
+  final bool macAgentInboxPanelActive;
   final bool macConversationInfoPanelActive;
   final Future<void> Function() onRefresh;
 
@@ -692,6 +752,18 @@ class _ChatHeader extends StatelessWidget {
                   isLoading: isRefreshing,
                   onTap: onRefresh,
                 ),
+                if (showAgentInbox && onAgentInboxTap != null) ...<Widget>[
+                  SizedBox(width: responsive.displayScaled(8)),
+                  _MacChatHeaderButton(
+                    key: const Key('chat-agent-inbox-button'),
+                    semanticLabel: 'Agent 收件箱',
+                    icon: CupertinoIcons.tray,
+                    isActive: macAgentInboxPanelActive,
+                    onTap: () async {
+                      onAgentInboxTap!();
+                    },
+                  ),
+                ],
                 SizedBox(width: responsive.displayScaled(8)),
                 _MacChatIdentityButton(
                   key: const Key('chat-identity-card-button'),
@@ -798,6 +870,21 @@ class _ChatHeader extends StatelessWidget {
               ],
             ),
           ),
+          if (showAgentInbox && onAgentInboxTap != null) ...<Widget>[
+            TopBarActionButton(
+              onTap: onAgentInboxTap,
+              semanticsLabel: 'Agent 收件箱',
+              child: Padding(
+                padding: EdgeInsets.all(responsive.spacing(8)),
+                child: Icon(
+                  CupertinoIcons.tray,
+                  color: theme.title,
+                  size: responsive.iconMd,
+                ),
+              ),
+            ),
+            SizedBox(width: responsive.spacing(4)),
+          ],
           TopBarActionButton(
             onTap: onDetails,
             child: Padding(

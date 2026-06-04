@@ -7,6 +7,7 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
   final Map<String, MessageDraft> _drafts = <String, MessageDraft>{};
   final Map<String, LocalUiPreference> _preferences =
       <String, LocalUiPreference>{};
+  final Map<String, LocalAgentState> _agentStates = <String, LocalAgentState>{};
 
   @override
   Future<ProductConversationOverlay?> loadConversationOverlay({
@@ -107,6 +108,28 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
     required String key,
   }) async {
     _preferences.remove(_compoundKey(ownerDid, key));
+  }
+
+  @override
+  Future<List<LocalAgentState>> loadAgentStates({
+    required String ownerDid,
+  }) async {
+    return _agentStates.values
+        .where((state) => state.ownerDid == ownerDid)
+        .toList();
+  }
+
+  @override
+  Future<void> saveAgentState(LocalAgentState state) async {
+    _agentStates[_compoundKey(state.ownerDid, state.agentDid)] = state;
+  }
+
+  @override
+  Future<void> deleteAgentState({
+    required String ownerDid,
+    required String agentDid,
+  }) async {
+    _agentStates.remove(_compoundKey(ownerDid, agentDid));
   }
 }
 

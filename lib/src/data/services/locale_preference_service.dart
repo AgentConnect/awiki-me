@@ -2,9 +2,8 @@ import '../../app/app_locale.dart';
 import 'app_key_value_store.dart';
 
 class LocalePreferenceService {
-  LocalePreferenceService({
-    AppKeyValueStore? storage,
-  }) : _storage = storage ?? SecureAppKeyValueStore();
+  LocalePreferenceService({AppKeyValueStore? storage})
+    : _storage = storage ?? SecureAppKeyValueStore();
 
   static const String _localeModeKey = 'awiki_me_locale_mode';
 

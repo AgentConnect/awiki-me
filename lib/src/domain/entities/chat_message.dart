@@ -1,4 +1,5 @@
 import 'chat_attachment.dart';
+import 'agent/agent_control_payloads.dart';
 
 enum MessageSendState { sending, sent, failed }
 
@@ -19,6 +20,7 @@ class ChatMessage {
     this.isEncrypted = false,
     this.originalType = 'text',
     this.attachment,
+    this.payloadJson,
   });
 
   final String localId;
@@ -36,10 +38,14 @@ class ChatMessage {
   final bool isEncrypted;
   final MessageSendState sendState;
   final ChatAttachment? attachment;
+  final String? payloadJson;
 
   bool get hasDisplayableText => content.trim().isNotEmpty && isTextMessage;
 
-  bool get hasRenderableContent => hasDisplayableText || attachment != null;
+  bool get isAgentControlPayload => AgentControlPayloads.isControl(payloadJson);
+
+  bool get hasRenderableContent =>
+      !isAgentControlPayload && (hasDisplayableText || attachment != null);
 
   bool get isTextMessage {
     final type = originalType.trim().toLowerCase();
@@ -76,6 +82,7 @@ class ChatMessage {
     MessageSendState? sendState,
     String? senderName,
     ChatAttachment? attachment,
+    String? payloadJson,
   }) {
     return ChatMessage(
       localId: localId,
@@ -93,6 +100,7 @@ class ChatMessage {
       isEncrypted: isEncrypted,
       originalType: originalType,
       attachment: attachment ?? this.attachment,
+      payloadJson: payloadJson ?? this.payloadJson,
     );
   }
 }

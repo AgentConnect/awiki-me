@@ -10,7 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   const mapper = AwikiImCoreMappers();
 
-  test('identity maps to app session and legacy session without JWT', () {
+  test('identity maps to app session and preserves JWT for legacy session', () {
     const identity = core.IdentitySummary(
       id: 'id-1',
       did: 'did:wba:awiki.ai:alice:e1_1234567890',
@@ -25,14 +25,16 @@ void main() {
     final session = mapper.appSessionFromIdentity(
       identity,
       authenticated: true,
+      jwtToken: 'jwt-123',
     );
     final legacy = mapper.legacySessionFromAppSession(session);
 
     expect(session.identityId, 'id-1');
     expect(session.displayName, 'Alice');
     expect(session.authenticated, isTrue);
+    expect(session.jwtToken, 'jwt-123');
     expect(legacy.credentialName, 'alice-local');
-    expect(legacy.jwtToken, isNull);
+    expect(legacy.jwtToken, 'jwt-123');
   });
 
   test('thread refs map to SDK thread refs and message targets', () {
@@ -71,6 +73,28 @@ void main() {
     expect(mapped.isMine, isTrue);
     expect(mapped.sendState, MessageSendState.sent);
     expect(mapped.serverSequence, 42);
+  });
+
+  test('control payload maps into non-renderable chat message', () {
+    const payload =
+        '{"schema":"awiki.agent.status.v1","status_scope":"daemon","daemon":{"status":"ready"}}';
+    const message = core.Message(
+      id: 'msg-control',
+      threadKind: 'direct',
+      threadId: 'did:daemon',
+      direction: core.MessageDirection.incoming,
+      sender: 'did:daemon',
+      receiver: 'did:alice',
+      body: core.MessageBodyView(payloadJson: payload, kind: 'payload'),
+      sentAt: '2026-05-23T09:00:00Z',
+      metadata: core.MessageMetadata(),
+    );
+
+    final mapped = mapper.chatMessageFromCore(message, ownerDid: 'did:alice');
+
+    expect(mapped.payloadJson, payload);
+    expect(mapped.isAgentControlPayload, isTrue);
+    expect(mapped.hasRenderableContent, isFalse);
   });
 
   test('attachment manifest message maps into attachment chat message', () {
@@ -213,6 +237,36 @@ void main() {
     },
   );
 
+  test('conversation preview suppresses agent control payload', () {
+    const conversation = core.Conversation(
+      threadKind: 'direct',
+      threadId: 'did:daemon',
+      participants: <String>['did:alice', 'did:daemon'],
+      unreadCount: 1,
+      messageCount: 1,
+      lastMessage: core.Message(
+        id: 'msg-control-preview',
+        threadKind: 'direct',
+        threadId: 'did:daemon',
+        direction: core.MessageDirection.incoming,
+        sender: 'did:daemon',
+        body: core.MessageBodyView(
+          text: 'hidden status',
+          payloadJson:
+              '{"schema":"awiki.agent.command.v1","command":"agent.status.query"}',
+        ),
+        metadata: core.MessageMetadata(),
+      ),
+    );
+
+    final mapped = mapper.conversationFromCore(
+      conversation,
+      ownerDid: 'did:alice',
+    );
+
+    expect(mapped.lastMessagePreview, '');
+  });
+
   test(
     'realtime direct message uses canonical chat and conversation thread',
     () {
@@ -234,11 +288,37 @@ void main() {
       final update = mapper.realtimeUpdateFromCore(event, ownerDid: 'did:me');
 
       expect(update, isNotNull);
-      expect(update!.message.threadId, 'dm:did:cgw:did:me');
-      expect(update.conversation.threadId, 'dm:did:cgw:did:me');
-      expect(update.conversation.targetDid, 'did:cgw');
+      expect(update!.message!.threadId, 'dm:did:cgw:did:me');
+      expect(update.conversation!.threadId, 'dm:did:cgw:did:me');
+      expect(update.conversation!.targetDid, 'did:cgw');
     },
   );
+
+  test('realtime control payload is split away from normal updates', () {
+    const event = core.RealtimeEvent(
+      kind: 'message_received',
+      message: core.Message(
+        id: 'msg-control-realtime',
+        threadKind: 'direct',
+        threadId: 'did:daemon',
+        direction: core.MessageDirection.incoming,
+        sender: 'did:daemon',
+        receiver: 'did:me',
+        body: core.MessageBodyView(
+          payloadJson:
+              '{"schema":"awiki.agent.status.v1","status_scope":"daemon"}',
+        ),
+        metadata: core.MessageMetadata(),
+      ),
+    );
+
+    final update = mapper.realtimeUpdateFromCore(event, ownerDid: 'did:me');
+
+    expect(update, isNotNull);
+    expect(update!.message, isNull);
+    expect(update.agentControlPayload?['schema'], 'awiki.agent.status.v1');
+    expect(update.agentControlPayload?['status_scope'], 'daemon');
+  });
 
   test('direct conversation keeps an already canonical thread id', () {
     const conversation = core.Conversation(

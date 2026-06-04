@@ -2,12 +2,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/attachment_picker_service.dart';
 import '../application/app_session_service.dart';
+import '../application/agent/agent_control_service.dart';
 import '../application/conversation_service.dart';
 import '../application/directory_application_service.dart';
 import '../application/group_application_service.dart';
 import '../application/messaging_service.dart';
 import '../application/onboarding_service.dart';
 import '../application/onboarding_support_service.dart';
+import '../application/ports/agent_inventory_port.dart';
 import '../application/product_local_store.dart';
 import '../application/profile_application_service.dart';
 import '../application/realtime_application_service.dart';
@@ -72,6 +74,17 @@ final messagingServiceProvider = Provider<MessagingService>(
 final conversationServiceProvider = Provider<ConversationService>(
   (ref) => throw UnimplementedError(
     'conversationServiceProvider must be overridden',
+  ),
+);
+
+final agentInventoryPortProvider = Provider<AgentInventoryPort>(
+  (ref) =>
+      throw UnimplementedError('agentInventoryPortProvider must be overridden'),
+);
+
+final agentControlServiceProvider = Provider<AgentControlService>(
+  (ref) => throw UnimplementedError(
+    'agentControlServiceProvider must be overridden',
   ),
 );
 

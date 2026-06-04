@@ -4,15 +4,14 @@ import 'package:flutter/widgets.dart';
 
 import '../presentation/shared/responsive_layout.dart';
 
-typedef PreferredOrientationsSetter = Future<void> Function(
-  List<DeviceOrientation> orientations,
-);
+typedef PreferredOrientationsSetter =
+    Future<void> Function(List<DeviceOrientation> orientations);
 
 class AppOrientationController {
   AppOrientationController({
     PreferredOrientationsSetter? setPreferredOrientations,
   }) : _setPreferredOrientations =
-            setPreferredOrientations ?? SystemChrome.setPreferredOrientations;
+           setPreferredOrientations ?? SystemChrome.setPreferredOrientations;
 
   final PreferredOrientationsSetter _setPreferredOrientations;
 
@@ -40,11 +39,9 @@ class AppOrientationController {
     required TargetPlatform platform,
   }) async {
     if (shouldLockPortrait(width: width, platform: platform)) {
-      await _setPreferredOrientations(
-        const <DeviceOrientation>[
-          DeviceOrientation.portraitUp,
-        ],
-      );
+      await _setPreferredOrientations(const <DeviceOrientation>[
+        DeviceOrientation.portraitUp,
+      ]);
       return;
     }
     await _setPreferredOrientations(const <DeviceOrientation>[]);
@@ -52,11 +49,7 @@ class AppOrientationController {
 }
 
 class AppOrientationScope extends StatefulWidget {
-  const AppOrientationScope({
-    super.key,
-    required this.child,
-    this.controller,
-  });
+  const AppOrientationScope({super.key, required this.child, this.controller});
 
   final Widget child;
   final AppOrientationController? controller;

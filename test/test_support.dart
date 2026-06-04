@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/application/app_session_service.dart';
+import 'package:awiki_me/src/application/agent/agent_control_service.dart';
 import 'package:awiki_me/src/application/attachment_picker_service.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
+import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/group_application_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
@@ -10,7 +12,9 @@ import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
+import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
+import 'package:awiki_me/src/application/product_local_store.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/application/realtime_application_service.dart';
 import 'package:awiki_me/src/application/relationship_application_service.dart';
@@ -18,6 +22,9 @@ import 'package:awiki_me/src/domain/entities/bridge_capabilities.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
+import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
@@ -133,6 +140,9 @@ List<Override> fakeApplicationServiceOverrides(
       FakeConversationService(gateway),
     ),
     messagingServiceProvider.overrideWithValue(FakeMessagingService(gateway)),
+    productLocalStoreProvider.overrideWithValue(FakeProductLocalStore()),
+    agentInventoryPortProvider.overrideWithValue(FakeAgentInventoryPort()),
+    agentControlServiceProvider.overrideWithValue(FakeAgentControlService()),
     groupApplicationServiceProvider.overrideWithValue(
       FakeGroupApplicationService(gateway),
     ),
@@ -296,6 +306,9 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   String? lastSentPeerDid;
   String? lastSentGroupId;
   String? lastSentContent;
+  Map<String, Object?>? lastSentPayload;
+  String? lastSentPayloadPeerDid;
+  String? lastSentPayloadIdempotencyKey;
   AttachmentDraft? lastSentAttachment;
   String? lastSentAttachmentCaption;
   String? lastSentAttachmentIdempotencyKey;
@@ -1069,6 +1082,21 @@ class FakeMessagingService implements MessagingService {
   }
 
   @override
+  Future<ChatMessage> sendPayload({
+    required AppThreadRef thread,
+    required Map<String, Object?> payload,
+    bool secure = true,
+    String? idempotencyKey,
+  }) {
+    gateway.lastSentPayload = payload;
+    gateway.lastSentPayloadIdempotencyKey = idempotencyKey;
+    if (thread case AppDirectThreadRef(:final peerDidOrHandle)) {
+      gateway.lastSentPayloadPeerDid = peerDidOrHandle;
+    }
+    return sendText(thread: thread, content: '');
+  }
+
+  @override
   Future<ChatMessage> sendText({
     required AppThreadRef thread,
     required String content,
@@ -1098,6 +1126,345 @@ class FakeMessagingService implements MessagingService {
       return gateway.fetchDmHistory(threadId.substring('dm:'.length));
     }
     return Future<List<ChatMessage>>.value(const <ChatMessage>[]);
+  }
+}
+
+class FakeAgentInventoryPort implements AgentInventoryPort {
+  List<AgentSummary> agents = const <AgentSummary>[];
+  AgentRegistrationToken nextDaemonToken = const AgentRegistrationToken(
+    token: 'daemon-token',
+  );
+  AgentRegistrationToken nextRuntimeToken = const AgentRegistrationToken(
+    token: 'runtime-token',
+  );
+
+  @override
+  Future<AgentRegistrationToken> issueDaemonToken({
+    required String controllerDid,
+    required String clientPlatform,
+  }) async {
+    return nextDaemonToken;
+  }
+
+  @override
+  Future<AgentRegistrationToken> issueRuntimeToken({
+    required String controllerDid,
+    required String daemonAgentDid,
+    required String runtime,
+  }) async {
+    return nextRuntimeToken;
+  }
+
+  @override
+  Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
+    return agents;
+  }
+
+  @override
+  Future<void> unbindAgent({required String agentDid}) async {
+    agents = agents.where((agent) => agent.agentDid != agentDid).toList();
+  }
+
+  @override
+  Future<AgentSummary> updateDisplayName({
+    required String agentDid,
+    required String displayName,
+  }) async {
+    final updated = AgentSummary(
+      agentDid: agentDid,
+      kind: AgentKind.daemon,
+      displayName: displayName,
+      activeState: 'active',
+      latest: const AgentLatestStatus(status: 'ready'),
+    );
+    agents = <AgentSummary>[
+      for (final agent in agents)
+        if (agent.agentDid == agentDid) updated else agent,
+    ];
+    return updated;
+  }
+}
+
+class FakeAgentControlService implements AgentControlService {
+  List<AgentSummary> agents = <AgentSummary>[
+    const AgentSummary(
+      agentDid: 'did:agent:daemon',
+      kind: AgentKind.daemon,
+      handle: 'awiki-daemon-test',
+      displayName: '代理 1',
+      activeState: 'active',
+      latest: AgentLatestStatus(status: 'ready', platform: 'darwin-arm64'),
+    ),
+  ];
+  InstallCommand? lastInstallCommand;
+  InstallCommand nextInstallCommand = const InstallCommand(
+    token: AgentRegistrationToken(token: 'daemon-token'),
+    command:
+        'curl -fsSL https://awiki.ai/daemon/install.sh | sh -s -- --token daemon-token',
+    fallbackCommand:
+        'awiki-deamon install --token daemon-token --base-url https://awiki.ai',
+    installerUrl: 'https://awiki.ai/daemon/install.sh',
+    packageUrlTemplate:
+        'https://awiki.ai/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
+  );
+  String? lastRefreshedDaemonDid;
+  String? lastRuntimeCreateDaemonDid;
+  String? lastResetDaemonDid;
+  String? lastResetRuntimeDid;
+  String? lastRetryDaemonDid;
+  String? lastRetryRuntimeDid;
+  String? lastRetryRunId;
+  String? lastInboxDaemonDid;
+  String? lastInboxRuntimeDid;
+  String? lastInboxScope;
+  String nextInboxRequestId = 'cmd_runtime_inbox_test';
+  String? lastInboxThreadDaemonDid;
+  String? lastInboxThreadRuntimeDid;
+  String? lastInboxThreadId;
+  String? lastInboxThreadKind;
+  String nextInboxThreadRequestId = 'cmd_runtime_inbox_thread_test';
+  String? lastUnboundAgentDid;
+  String? lastRenamedAgentDid;
+  String? lastDisplayName;
+  String? lastUpgradeDaemonDid;
+
+  @override
+  Future<InstallCommand> createDaemonInstallCommand({
+    required String controllerDid,
+    required String clientPlatform,
+  }) async {
+    return lastInstallCommand = nextInstallCommand;
+  }
+
+  @override
+  Future<void> createHermesRuntime({
+    required String daemonAgentDid,
+    required String controllerDid,
+  }) async {
+    lastRuntimeCreateDaemonDid = daemonAgentDid;
+  }
+
+  @override
+  Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
+    return agents;
+  }
+
+  @override
+  Future<void> refreshDaemonStatus(String daemonAgentDid) async {
+    lastRefreshedDaemonDid = daemonAgentDid;
+  }
+
+  @override
+  Future<void> resetRuntimeSession({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    String? conversationId,
+  }) async {
+    lastResetDaemonDid = daemonAgentDid;
+    lastResetRuntimeDid = runtimeAgentDid;
+  }
+
+  @override
+  Future<void> retryRun({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    required String runId,
+  }) async {
+    lastRetryDaemonDid = daemonAgentDid;
+    lastRetryRuntimeDid = runtimeAgentDid;
+    lastRetryRunId = runId;
+  }
+
+  @override
+  Future<String> queryRuntimeInbox({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    String scope = 'all',
+    int limit = 30,
+    String? cursor,
+  }) async {
+    lastInboxDaemonDid = daemonAgentDid;
+    lastInboxRuntimeDid = runtimeAgentDid;
+    lastInboxScope = scope;
+    return nextInboxRequestId;
+  }
+
+  @override
+  Future<String> queryRuntimeInboxThread({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    required String threadId,
+    required String kind,
+    String? peerDid,
+    String? groupDid,
+    int limit = 50,
+    String? cursor,
+  }) async {
+    lastInboxThreadDaemonDid = daemonAgentDid;
+    lastInboxThreadRuntimeDid = runtimeAgentDid;
+    lastInboxThreadId = threadId;
+    lastInboxThreadKind = kind;
+    return nextInboxThreadRequestId;
+  }
+
+  @override
+  Future<void> unbindAgent(String agentDid) async {
+    lastUnboundAgentDid = agentDid;
+    agents = agents.where((agent) => agent.agentDid != agentDid).toList();
+  }
+
+  @override
+  Future<AgentSummary> updateDisplayName({
+    required String agentDid,
+    required String displayName,
+  }) async {
+    lastRenamedAgentDid = agentDid;
+    lastDisplayName = displayName;
+    final index = agents.indexWhere((agent) => agent.agentDid == agentDid);
+    if (index < 0) {
+      return agents.first;
+    }
+    final current = agents[index];
+    final updated = AgentSummary(
+      agentDid: current.agentDid,
+      kind: current.kind,
+      daemonAgentDid: current.daemonAgentDid,
+      runtime: current.runtime,
+      handle: current.handle,
+      displayName: displayName,
+      activeState: current.activeState,
+      latest: current.latest,
+    );
+    agents = <AgentSummary>[
+      for (final agent in agents)
+        if (agent.agentDid == agentDid) updated else agent,
+    ];
+    return updated;
+  }
+
+  @override
+  Future<void> upgradeDaemon(String daemonAgentDid) async {
+    lastUpgradeDaemonDid = daemonAgentDid;
+  }
+}
+
+class FakeProductLocalStore implements ProductLocalStore {
+  final Map<String, ProductConversationOverlay> overlays =
+      <String, ProductConversationOverlay>{};
+  final Map<String, MessageDraft> drafts = <String, MessageDraft>{};
+  final Map<String, LocalUiPreference> preferences =
+      <String, LocalUiPreference>{};
+  final Map<String, LocalAgentState> agentStates = <String, LocalAgentState>{};
+
+  String _key(String ownerDid, String id) => '$ownerDid::$id';
+
+  @override
+  Future<void> deleteAgentState({
+    required String ownerDid,
+    required String agentDid,
+  }) async {
+    agentStates.remove(_key(ownerDid, agentDid));
+  }
+
+  @override
+  Future<void> deleteConversationOverlay({
+    required String ownerDid,
+    required String threadId,
+  }) async {
+    overlays.remove(_key(ownerDid, threadId));
+  }
+
+  @override
+  Future<void> deleteDraft({
+    required String ownerDid,
+    required String threadId,
+  }) async {
+    drafts.remove(_key(ownerDid, threadId));
+  }
+
+  @override
+  Future<void> deleteUiPreference({
+    required String ownerDid,
+    required String key,
+  }) async {
+    preferences.remove(_key(ownerDid, key));
+  }
+
+  @override
+  Future<List<LocalAgentState>> loadAgentStates({
+    required String ownerDid,
+  }) async {
+    return agentStates.values
+        .where((state) => state.ownerDid == ownerDid)
+        .toList();
+  }
+
+  @override
+  Future<ProductConversationOverlay?> loadConversationOverlay({
+    required String ownerDid,
+    required String threadId,
+  }) async {
+    return overlays[_key(ownerDid, threadId)];
+  }
+
+  @override
+  Future<Map<String, ProductConversationOverlay>> loadConversationOverlays({
+    required String ownerDid,
+    Iterable<String>? threadIds,
+  }) async {
+    final ids = threadIds?.toSet();
+    return <String, ProductConversationOverlay>{
+      for (final overlay in overlays.values)
+        if (overlay.ownerDid == ownerDid &&
+            (ids == null || ids.contains(overlay.threadId)))
+          overlay.threadId: overlay,
+    };
+  }
+
+  @override
+  Future<MessageDraft?> loadDraft({
+    required String ownerDid,
+    required String threadId,
+  }) async {
+    return drafts[_key(ownerDid, threadId)];
+  }
+
+  @override
+  Future<LocalUiPreference?> loadUiPreference({
+    required String ownerDid,
+    required String key,
+  }) async {
+    return preferences[_key(ownerDid, key)];
+  }
+
+  @override
+  Future<void> saveAgentState(LocalAgentState state) async {
+    agentStates[_key(state.ownerDid, state.agentDid)] = state;
+  }
+
+  @override
+  Future<void> saveDraft(MessageDraft draft) async {
+    drafts[_key(draft.ownerDid, draft.threadId)] = draft;
+  }
+
+  @override
+  Future<void> saveUiPreference(LocalUiPreference preference) async {
+    preferences[_key(preference.ownerDid, preference.key)] = preference;
+  }
+
+  @override
+  Future<void> setThreadHidden({
+    required String ownerDid,
+    required String threadId,
+    required bool hidden,
+    required DateTime updatedAt,
+  }) async {}
+
+  @override
+  Future<void> upsertConversationOverlay(
+    ProductConversationOverlay overlay,
+  ) async {
+    overlays[_key(overlay.ownerDid, overlay.threadId)] = overlay;
   }
 }
 
@@ -1315,6 +1682,7 @@ AppSession _appSessionFromLegacy(SessionIdentity session) {
     handle: session.handle,
     localAlias: session.credentialName,
     authenticated: session.jwtToken != null,
+    jwtToken: session.jwtToken,
   );
 }
 

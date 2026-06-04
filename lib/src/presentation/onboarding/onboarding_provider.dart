@@ -317,7 +317,7 @@ SessionIdentity _legacySessionFromAppSession(AppSession session) {
     credentialName: session.localAlias ?? session.identityId,
     displayName: session.displayName,
     handle: session.handle,
-    jwtToken: null,
+    jwtToken: session.jwtToken,
   );
 }
 

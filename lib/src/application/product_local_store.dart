@@ -48,4 +48,13 @@ abstract interface class ProductLocalStore {
     required String ownerDid,
     required String key,
   });
+
+  Future<List<LocalAgentState>> loadAgentStates({required String ownerDid});
+
+  Future<void> saveAgentState(LocalAgentState state);
+
+  Future<void> deleteAgentState({
+    required String ownerDid,
+    required String agentDid,
+  });
 }

@@ -8,10 +8,7 @@ void main() {
       final controller = AppOrientationController();
 
       expect(
-        controller.shouldLockPortrait(
-          width: 390,
-          platform: TargetPlatform.iOS,
-        ),
+        controller.shouldLockPortrait(width: 390, platform: TargetPlatform.iOS),
         isTrue,
       );
       expect(
@@ -27,10 +24,7 @@ void main() {
       final controller = AppOrientationController();
 
       expect(
-        controller.shouldLockPortrait(
-          width: 820,
-          platform: TargetPlatform.iOS,
-        ),
+        controller.shouldLockPortrait(width: 820, platform: TargetPlatform.iOS),
         isFalse,
       );
       expect(
@@ -50,15 +44,9 @@ void main() {
         },
       );
 
-      await controller.apply(
-        width: 400,
-        platform: TargetPlatform.android,
-      );
+      await controller.apply(width: 400, platform: TargetPlatform.android);
 
-      expect(
-        applied,
-        const <DeviceOrientation>[DeviceOrientation.portraitUp],
-      );
+      expect(applied, const <DeviceOrientation>[DeviceOrientation.portraitUp]);
     });
 
     test('apply 在宽屏或桌面下清除方向限制', () async {
@@ -69,16 +57,10 @@ void main() {
         },
       );
 
-      await controller.apply(
-        width: 900,
-        platform: TargetPlatform.iOS,
-      );
+      await controller.apply(width: 900, platform: TargetPlatform.iOS);
       expect(applied, isEmpty);
 
-      await controller.apply(
-        width: 1280,
-        platform: TargetPlatform.macOS,
-      );
+      await controller.apply(width: 1280, platform: TargetPlatform.macOS);
       expect(applied, isEmpty);
     });
   });

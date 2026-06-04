@@ -20,23 +20,15 @@ class UiFeedbackController extends StateNotifier<UiFeedbackEvent?> {
   int _seed = 0;
 
   void showInfo(AppMessage message) {
-    state = UiFeedbackEvent(
-      id: ++_seed,
-      message: message,
-      danger: false,
-    );
+    state = UiFeedbackEvent(id: ++_seed, message: message, danger: false);
   }
 
   void showError(AppMessage message) {
-    state = UiFeedbackEvent(
-      id: ++_seed,
-      message: message,
-      danger: true,
-    );
+    state = UiFeedbackEvent(id: ++_seed, message: message, danger: true);
   }
 }
 
 final uiFeedbackProvider =
     StateNotifierProvider<UiFeedbackController, UiFeedbackEvent?>(
-  (ref) => UiFeedbackController(),
-);
+      (ref) => UiFeedbackController(),
+    );

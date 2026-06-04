@@ -16,6 +16,13 @@ abstract interface class MessagingService {
     String? idempotencyKey,
   });
 
+  Future<ChatMessage> sendPayload({
+    required AppThreadRef thread,
+    required Map<String, Object?> payload,
+    bool secure = true,
+    String? idempotencyKey,
+  });
+
   Future<AttachmentDownloadResult> downloadAttachment({
     required AppThreadRef thread,
     required String messageId,
@@ -57,6 +64,21 @@ class ImCoreMessagingService implements MessagingService {
       thread: thread,
       attachment: attachment,
       caption: caption,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  @override
+  Future<ChatMessage> sendPayload({
+    required AppThreadRef thread,
+    required Map<String, Object?> payload,
+    bool secure = true,
+    String? idempotencyKey,
+  }) {
+    return _messages.sendPayload(
+      thread: thread,
+      payload: payload,
+      secure: secure,
       idempotencyKey: idempotencyKey,
     );
   }

@@ -62,9 +62,13 @@ void main() {
           .checkForUpdates(force: true);
 
       expect(
-          container.read(appUpdateProvider).status, AppUpdateStatus.upToDate);
-      expect(container.read(uiFeedbackProvider)?.message.id,
-          'updateAlreadyLatest');
+        container.read(appUpdateProvider).status,
+        AppUpdateStatus.upToDate,
+      );
+      expect(
+        container.read(uiFeedbackProvider)?.message.id,
+        'updateAlreadyLatest',
+      );
     });
 
     test('Android 安装权限不足时引导打开设置', () async {

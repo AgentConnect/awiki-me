@@ -5,8 +5,12 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart' as material;
 
+import '../application/agent/agent_control_service.dart';
+import '../application/conversation_service.dart';
+import '../data/agent/user_service_agent_inventory_adapter.dart';
 import '../presentation/app_shell/app_shell.dart';
 import '../presentation/app_shell/providers/app_lifecycle_provider.dart';
+import '../presentation/app_shell/providers/session_provider.dart';
 import '../presentation/shared/awiki_me_design.dart';
 import '../presentation/shared/display_scale.dart';
 import 'app_orientation.dart';
@@ -55,10 +59,39 @@ class AwikiMeApp extends StatelessWidget {
           messagingServiceProvider.overrideWithValue(
             bootstrap.messagingService!,
           ),
+        if (bootstrap.agentInventoryPort != null)
+          agentInventoryPortProvider.overrideWith((ref) {
+            final inventory = bootstrap.agentInventoryPort!;
+            if (inventory is UserServiceAgentInventoryAdapter) {
+              return inventory.withBearerTokenProvider(
+                () => ref.read(sessionProvider).session?.jwtToken,
+              );
+            }
+            return inventory;
+          }),
         if (bootstrap.conversationService != null)
-          conversationServiceProvider.overrideWithValue(
-            bootstrap.conversationService!,
-          ),
+          conversationServiceProvider.overrideWith((ref) {
+            final conversations = bootstrap.conversationService!;
+            if (conversations is ImCoreConversationService) {
+              return conversations.withAgentInventory(
+                ref.watch(agentInventoryPortProvider),
+              );
+            }
+            return conversations;
+          }),
+        if (bootstrap.agentControlService != null)
+          agentControlServiceProvider.overrideWith((ref) {
+            final control = bootstrap.agentControlService!;
+            if (control is DefaultAgentControlService &&
+                bootstrap.messagingService != null) {
+              return DefaultAgentControlService(
+                inventory: ref.watch(agentInventoryPortProvider),
+                messages: bootstrap.messagingService!,
+                downloadBaseUrl: control.downloadBaseUrl,
+              );
+            }
+            return control;
+          }),
         if (bootstrap.groupApplicationService != null)
           groupApplicationServiceProvider.overrideWithValue(
             bootstrap.groupApplicationService!,

@@ -7,18 +7,14 @@ import 'package:path_provider/path_provider.dart';
 abstract class AppKeyValueStore {
   Future<String?> read({required String key});
 
-  Future<void> write({
-    required String key,
-    required String value,
-  });
+  Future<void> write({required String key, required String value});
 
   Future<void> delete({required String key});
 }
 
 class SecureAppKeyValueStore implements AppKeyValueStore {
-  SecureAppKeyValueStore({
-    FlutterSecureStorage? secureStorage,
-  }) : _secureStorage = secureStorage ?? const FlutterSecureStorage();
+  SecureAppKeyValueStore({FlutterSecureStorage? secureStorage})
+    : _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
   final FlutterSecureStorage _secureStorage;
 
@@ -28,10 +24,7 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
   }
 
   @override
-  Future<void> write({
-    required String key,
-    required String value,
-  }) {
+  Future<void> write({required String key, required String value}) {
     return _secureStorage.write(key: key, value: value);
   }
 
@@ -66,10 +59,7 @@ class FileAppKeyValueStore implements AppKeyValueStore {
   }
 
   @override
-  Future<void> write({
-    required String key,
-    required String value,
-  }) async {
+  Future<void> write({required String key, required String value}) async {
     final values = await _loadValues();
     values[key] = value;
     await _persist(values);

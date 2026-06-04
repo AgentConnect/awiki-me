@@ -5,9 +5,11 @@ import 'package:awiki_me/src/data/compat/compat_awiki_account_gateway.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('maps AppSession to legacy SessionIdentity without JWT', () async {
+  test('maps AppSession to legacy SessionIdentity with JWT', () async {
     final gateway = CompatAwikiAccountGateway(
-      sessions: _FakeSessions(defaultSession: _session('default-id')),
+      sessions: _FakeSessions(
+        defaultSession: _session('default-id', jwtToken: 'jwt-default'),
+      ),
       onboarding: _FakeOnboarding(),
     );
 
@@ -16,8 +18,20 @@ void main() {
 
     expect(restored?.did, contains('default-id'));
     expect(restored?.credentialName, 'alice-local');
+    expect(restored?.jwtToken, 'jwt-default');
+    expect(credentials.single.jwtToken, 'jwt-default');
+  });
+
+  test('maps AppSession to legacy SessionIdentity without JWT', () async {
+    final gateway = CompatAwikiAccountGateway(
+      sessions: _FakeSessions(defaultSession: _session('default-id')),
+      onboarding: _FakeOnboarding(),
+    );
+
+    final restored = await gateway.restoreSession();
+
+    expect(restored?.did, contains('default-id'));
     expect(restored?.jwtToken, isNull);
-    expect(credentials.single.jwtToken, isNull);
   });
 
   test('credential delete delegates to app session service', () async {
@@ -53,29 +67,26 @@ void main() {
     expect(() => gateway.currentAnpSession(), throwsA(isA<UnsupportedError>()));
   });
 
-  test(
-    'registration delegates to onboarding and still returns no JWT',
-    () async {
-      final gateway = CompatAwikiAccountGateway(
-        sessions: _FakeSessions(),
-        onboarding: _FakeOnboarding(),
-      );
+  test('registration delegates to onboarding and preserves JWT', () async {
+    final gateway = CompatAwikiAccountGateway(
+      sessions: _FakeSessions(),
+      onboarding: _FakeOnboarding(),
+    );
 
-      final session = await gateway.registerHandle(
-        phone: '+8613800138000',
-        otp: '123456',
-        handle: 'alice',
-        nickName: 'Alice',
-        profileMarkdown: '# Alice',
-      );
+    final session = await gateway.registerHandle(
+      phone: '+8613800138000',
+      otp: '123456',
+      handle: 'alice',
+      nickName: 'Alice',
+      profileMarkdown: '# Alice',
+    );
 
-      expect(session.credentialName, 'alice-local');
-      expect(session.jwtToken, isNull);
-    },
-  );
+    expect(session.credentialName, 'alice-local');
+    expect(session.jwtToken, 'jwt-phone-id');
+  });
 }
 
-AppSession _session(String id) {
+AppSession _session(String id, {String? jwtToken}) {
   return AppSession(
     did: 'did:wba:awiki.ai:alice:e1_$id',
     identityId: id,
@@ -83,6 +94,7 @@ AppSession _session(String id) {
     handle: 'alice.awiki',
     localAlias: 'alice-local',
     authenticated: true,
+    jwtToken: jwtToken,
   );
 }
 
@@ -131,7 +143,7 @@ class _FakeOnboarding implements OnboardingService {
     required String phone,
     required String otp,
     required String handle,
-  }) async => _session('recovered-id');
+  }) async => _session('recovered-id', jwtToken: 'jwt-recovered-id');
 
   @override
   Future<AppSession> registerHandleWithEmail({
@@ -140,7 +152,7 @@ class _FakeOnboarding implements OnboardingService {
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
-  }) async => _session('email-id');
+  }) async => _session('email-id', jwtToken: 'jwt-email-id');
 
   @override
   Future<AppSession> registerHandleWithPhone({
@@ -150,5 +162,5 @@ class _FakeOnboarding implements OnboardingService {
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
-  }) async => _session('phone-id');
+  }) async => _session('phone-id', jwtToken: 'jwt-phone-id');
 }

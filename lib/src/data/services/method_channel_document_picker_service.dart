@@ -3,10 +3,9 @@ import 'package:flutter/services.dart';
 import 'document_picker_service.dart';
 
 class MethodChannelDocumentPickerService implements DocumentPickerService {
-  MethodChannelDocumentPickerService({
-    MethodChannel? channel,
-  }) : _channel =
-            channel ?? const MethodChannel('ai.awiki.awikime/document_picker');
+  MethodChannelDocumentPickerService({MethodChannel? channel})
+    : _channel =
+          channel ?? const MethodChannel('ai.awiki.awikime/document_picker');
 
   final MethodChannel _channel;
 
@@ -28,10 +27,7 @@ class MethodChannelDocumentPickerService implements DocumentPickerService {
     try {
       final result = await _channel.invokeMethod<String>(
         'saveZipFile',
-        <String, Object?>{
-          'file_name': fileName,
-          'bytes': bytes,
-        },
+        <String, Object?>{'file_name': fileName, 'bytes': bytes},
       );
       return result;
     } on PlatformException catch (error) {

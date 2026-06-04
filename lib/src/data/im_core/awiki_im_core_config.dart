@@ -1,5 +1,7 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
+import '../../application/config/awiki_environment_config.dart';
+
 class AwikiImCoreEnvironmentConfig {
   const AwikiImCoreEnvironmentConfig({
     required this.serviceBaseUrl,
@@ -13,32 +15,29 @@ class AwikiImCoreEnvironmentConfig {
   });
 
   factory AwikiImCoreEnvironmentConfig.fromEnvironment() {
-    final serviceBaseUrl = _optionalFromEnvironment(
-      'AWIKI_SERVICE_BASE_URL',
-      defaultValue: 'https://awiki.ai',
-    )!;
+    final environment = AwikiEnvironmentConfig.fromEnvironment();
+    final serviceBaseUrl =
+        _optionalFromEnvironment('AWIKI_SERVICE_BASE_URL') ??
+        environment.baseUrl;
     return AwikiImCoreEnvironmentConfig(
       serviceBaseUrl: serviceBaseUrl,
-      userServiceEndpoint: _optionalFromEnvironment(
-        'AWIKI_USER_SERVICE_URL',
-        defaultValue: 'https://awiki.ai',
-      ),
-      messageServiceEndpoint: _optionalFromEnvironment(
-        'AWIKI_MESSAGE_SERVICE_URL',
-        defaultValue: 'https://awiki.ai',
-      ),
-      mailServiceEndpoint: _optionalFromEnvironment(
-        'AWIKI_MAIL_SERVICE_URL',
-        defaultValue: 'https://awiki.ai',
-      ),
-      didDomain: _optionalFromEnvironment(
-        'AWIKI_DID_DOMAIN',
-        defaultValue: 'awiki.ai',
-      )!,
-      anpServiceEndpoint: _optionalFromEnvironment('AWIKI_ANP_SERVICE_URL'),
+      userServiceEndpoint:
+          _optionalFromEnvironment('AWIKI_USER_SERVICE_URL') ??
+          environment.userServiceUrl,
+      messageServiceEndpoint:
+          _optionalFromEnvironment('AWIKI_MESSAGE_SERVICE_URL') ??
+          environment.messageServiceUrl,
+      mailServiceEndpoint:
+          _optionalFromEnvironment('AWIKI_MAIL_SERVICE_URL') ??
+          environment.mailServiceUrl,
+      didDomain:
+          _optionalFromEnvironment('AWIKI_DID_DOMAIN') ?? environment.didDomain,
+      anpServiceEndpoint:
+          _optionalFromEnvironment('AWIKI_ANP_SERVICE_URL') ??
+          environment.anpServiceUrl,
       anpServiceDid:
           _optionalFromEnvironment('AWIKI_ANP_SERVICE_DID') ??
-          _deriveAnpServiceDid(serviceBaseUrl),
+          environment.anpServiceDid,
     );
   }
 
@@ -67,26 +66,20 @@ class AwikiImCoreEnvironmentConfig {
 
 String? _optionalFromEnvironment(String name, {String? defaultValue}) {
   final value = switch (name) {
+    'AWIKI_BASE_URL' => const String.fromEnvironment('AWIKI_BASE_URL'),
     'AWIKI_SERVICE_BASE_URL' => const String.fromEnvironment(
       'AWIKI_SERVICE_BASE_URL',
-      defaultValue: 'https://awiki.ai',
     ),
     'AWIKI_USER_SERVICE_URL' => const String.fromEnvironment(
       'AWIKI_USER_SERVICE_URL',
-      defaultValue: 'https://awiki.ai',
     ),
     'AWIKI_MESSAGE_SERVICE_URL' => const String.fromEnvironment(
       'AWIKI_MESSAGE_SERVICE_URL',
-      defaultValue: 'https://awiki.ai',
     ),
     'AWIKI_MAIL_SERVICE_URL' => const String.fromEnvironment(
       'AWIKI_MAIL_SERVICE_URL',
-      defaultValue: 'https://awiki.ai',
     ),
-    'AWIKI_DID_DOMAIN' => const String.fromEnvironment(
-      'AWIKI_DID_DOMAIN',
-      defaultValue: 'awiki.ai',
-    ),
+    'AWIKI_DID_DOMAIN' => const String.fromEnvironment('AWIKI_DID_DOMAIN'),
     'AWIKI_ANP_SERVICE_URL' => const String.fromEnvironment(
       'AWIKI_ANP_SERVICE_URL',
     ),
@@ -97,12 +90,4 @@ String? _optionalFromEnvironment(String name, {String? defaultValue}) {
   };
   final trimmed = value.trim();
   return trimmed.isEmpty ? null : trimmed;
-}
-
-String? _deriveAnpServiceDid(String serviceBaseUrl) {
-  final host = Uri.tryParse(serviceBaseUrl.trim())?.host.trim().toLowerCase();
-  if (host == null || host.isEmpty) {
-    return null;
-  }
-  return 'did:wba:$host';
 }

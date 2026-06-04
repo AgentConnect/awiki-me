@@ -14,5 +14,5 @@ class AppLifecycleController extends StateNotifier<AppLifecycleState> {
 
 final appLifecycleProvider =
     StateNotifierProvider<AppLifecycleController, AppLifecycleState>(
-  (ref) => AppLifecycleController(),
-);
+      (ref) => AppLifecycleController(),
+    );

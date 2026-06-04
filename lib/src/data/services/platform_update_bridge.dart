@@ -37,9 +37,8 @@ class MethodChannelPlatformUpdateBridge implements PlatformUpdateBridge {
     if (!Platform.isAndroid) {
       throw UnsupportedError('APK install is only supported on Android.');
     }
-    await _channel.invokeMethod<void>(
-      'installApk',
-      <String, Object?>{'filePath': filePath},
-    );
+    await _channel.invokeMethod<void>('installApk', <String, Object?>{
+      'filePath': filePath,
+    });
   }
 }
