@@ -557,12 +557,10 @@ class _DiagnosticsPanel extends StatelessWidget {
           ),
           if (agent.latest.lastErrorSummary != null) ...<Widget>[
             SizedBox(height: responsive.spacing(8)),
-            Text(
-              _redactDiagnosticValue(agent.latest.lastErrorSummary),
-              style: TextStyle(
-                color: const Color(0xFF7A4A00),
-                fontSize: responsive.bodySm,
-              ),
+            _CopyableDiagnosticText(
+              text: _redactDiagnosticValue(agent.latest.lastErrorSummary),
+              color: const Color(0xFF7A4A00),
+              fontSize: responsive.bodySm,
             ),
           ],
           if (diagnostics.isNotEmpty) ...<Widget>[
@@ -586,14 +584,13 @@ class _DiagnosticsPanel extends StatelessWidget {
                       ),
                     ),
                     Expanded(
-                      child: Text(
-                        _redactDiagnosticValue(entry.value, key: entry.key),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: const Color(0xFF101B32),
-                          fontSize: responsive.metaSm,
+                      child: _CopyableDiagnosticText(
+                        text: _redactDiagnosticValue(
+                          entry.value,
+                          key: entry.key,
                         ),
+                        color: const Color(0xFF101B32),
+                        fontSize: responsive.metaSm,
                       ),
                     ),
                   ],
@@ -751,6 +748,8 @@ class _AgentErrorBanner extends StatelessWidget {
               ),
             ),
           ),
+          SizedBox(width: responsive.spacing(8)),
+          _InlineCopyButton(text: message),
           if (onRetry != null) ...<Widget>[
             SizedBox(width: responsive.spacing(8)),
             CupertinoButton(
@@ -773,6 +772,68 @@ class _AgentErrorBanner extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _CopyableDiagnosticText extends StatelessWidget {
+  const _CopyableDiagnosticText({
+    required this.text,
+    required this.color,
+    required this.fontSize,
+  });
+
+  final String text;
+  final Color color;
+  final double fontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Expanded(
+          child: SelectableText(
+            text,
+            maxLines: 3,
+            style: TextStyle(color: color, fontSize: fontSize),
+          ),
+        ),
+        SizedBox(width: responsive.spacing(6)),
+        _InlineCopyButton(text: text),
+      ],
+    );
+  }
+}
+
+class _InlineCopyButton extends StatelessWidget {
+  const _InlineCopyButton({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return CupertinoButton(
+      padding: EdgeInsets.all(responsive.spacing(5)),
+      minimumSize: Size(
+        responsive.displayScaled(28),
+        responsive.displayScaled(28),
+      ),
+      borderRadius: BorderRadius.circular(responsive.radius(7)),
+      color: CupertinoColors.white,
+      onPressed: () async {
+        await Clipboard.setData(ClipboardData(text: text));
+        if (context.mounted) {
+          AwikiMeToast.show(context, '已复制');
+        }
+      },
+      child: Icon(
+        CupertinoIcons.doc_on_doc,
+        color: const Color(0xFF44506A),
+        size: responsive.iconSm,
       ),
     );
   }

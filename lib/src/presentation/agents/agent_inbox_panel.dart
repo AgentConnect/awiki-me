@@ -1,8 +1,11 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show SelectableText;
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/conversation_summary.dart';
+import '../shared/awiki_me_feedback.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/responsive_layout.dart';
 import 'agent_inbox_provider.dart';
@@ -725,22 +728,65 @@ class _AgentInboxError extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Text(
+            SelectableText(
               message,
               textAlign: TextAlign.center,
               style: const TextStyle(color: Color(0xFFFF3B30), fontSize: 13),
             ),
             const SizedBox(height: 12),
-            CupertinoButton(
-              minimumSize: const Size(0, 34),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              color: const Color(0xFF0B65F8),
-              borderRadius: BorderRadius.circular(8),
-              onPressed: onRetry,
-              child: const Text(
-                '重试',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                CupertinoButton(
+                  minimumSize: const Size(0, 34),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  color: CupertinoColors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: message));
+                    if (context.mounted) {
+                      AwikiMeToast.show(context, '已复制');
+                    }
+                  },
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Icon(
+                        CupertinoIcons.doc_on_doc,
+                        size: 14,
+                        color: Color(0xFF44506A),
+                      ),
+                      SizedBox(width: 5),
+                      Text(
+                        '复制',
+                        style: TextStyle(
+                          color: Color(0xFF44506A),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                CupertinoButton(
+                  minimumSize: const Size(0, 34),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
+                  color: const Color(0xFF0B65F8),
+                  borderRadius: BorderRadius.circular(8),
+                  onPressed: onRetry,
+                  child: const Text(
+                    '重试',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
