@@ -191,12 +191,13 @@ class AgentsController extends StateNotifier<AgentsState> {
       );
     } catch (error) {
       _statusQueryTimeouts.remove(daemonDid)?.cancel();
+      final nextPending = fromAutoLoad
+          ? state.pendingStatusQueryAtByDaemon
+          : _withoutKey(state.pendingStatusQueryAtByDaemon, daemonDid);
       state = state.copyWith(
         isActing: false,
-        pendingStatusQueryAtByDaemon: fromAutoLoad
-            ? state.pendingStatusQueryAtByDaemon
-            : _withoutKey(state.pendingStatusQueryAtByDaemon, daemonDid),
-        error: _agentErrorMessage(error),
+        pendingStatusQueryAtByDaemon: nextPending,
+        error: fromAutoLoad ? state.error : _agentErrorMessage(error),
       );
     }
   }

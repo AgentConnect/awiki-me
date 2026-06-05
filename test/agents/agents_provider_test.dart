@@ -78,6 +78,35 @@ void main() {
   });
 
   test(
+    'load keeps inventory visible when automatic daemon refresh fails',
+    () async {
+      final control =
+          _FailingRefreshAgentControlService(
+              Exception('direct E2EE prekey bundle is not available'),
+            )
+            ..agents = const <AgentSummary>[
+              AgentSummary(
+                agentDid: 'did:agent:daemon',
+                kind: AgentKind.daemon,
+                displayName: '代理 1',
+                activeState: 'active',
+                latest: AgentLatestStatus(status: 'ready'),
+              ),
+            ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+
+      await container.read(agentsProvider.notifier).load();
+      final state = container.read(agentsProvider);
+
+      expect(state.agents.map((agent) => agent.agentDid), ['did:agent:daemon']);
+      expect(state.selectedAgentDid, 'did:agent:daemon');
+      expect(state.error, isNull);
+      expect(control.lastRefreshedDaemonDid, 'did:agent:daemon');
+    },
+  );
+
+  test(
     'status payload creates runtime and preserves daemon/runtime split',
     () async {
       final control = FakeAgentControlService()
@@ -588,6 +617,18 @@ class _FailingAgentControlService extends FakeAgentControlService {
 
   @override
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
+    throw error;
+  }
+}
+
+class _FailingRefreshAgentControlService extends FakeAgentControlService {
+  _FailingRefreshAgentControlService(this.error);
+
+  final Object error;
+
+  @override
+  Future<void> refreshDaemonStatus(String daemonAgentDid) async {
+    lastRefreshedDaemonDid = daemonAgentDid;
     throw error;
   }
 }
