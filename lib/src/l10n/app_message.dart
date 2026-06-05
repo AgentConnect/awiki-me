@@ -155,6 +155,9 @@ class AppMessage {
     if (raw.contains('TimeoutException') || raw.contains('timed out')) {
       return AppMessage.requestTimeoutRetry();
     }
+    if (_isMissingOrInvalidAuthorization(raw)) {
+      return AppMessage.sessionExpiredRelogin();
+    }
     if (_isDidNotFoundOrRevoked(raw)) {
       return AppMessage.didNotFoundOrRevoked();
     }
@@ -406,6 +409,15 @@ class AppMessage {
             normalized.contains('revoked')) ||
         (normalized.contains('did not exist') &&
             normalized.contains('revoked'));
+  }
+
+  static bool _isMissingOrInvalidAuthorization(String raw) {
+    final normalized = raw.toLowerCase();
+    final compact = normalized.replaceAll(RegExp(r'\s+'), '');
+    return normalized.contains('missing or invalid authorization header') ||
+        compact.contains('http401') ||
+        normalized.contains('invalid token') ||
+        normalized.contains('empty token');
   }
 
   @override

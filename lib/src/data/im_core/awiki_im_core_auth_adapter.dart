@@ -33,6 +33,7 @@ class AwikiImCoreAuthAdapter implements AuthCorePort {
       authenticated: true,
       subject: bundle.subject,
       expiresAt: _tryParseDateTime(bundle.expiresAt),
+      bearerToken: bundle.bearerToken,
       warnings: bundle.refreshed ? const <String>[] : const <String>[],
     );
   }
@@ -46,6 +47,7 @@ class AwikiImCoreAuthAdapter implements AuthCorePort {
       authenticated: true,
       subject: bundle.subject,
       expiresAt: _tryParseDateTime(bundle.expiresAt),
+      bearerToken: bundle.bearerToken,
     );
   }
 
@@ -58,6 +60,7 @@ class AwikiImCoreAuthAdapter implements AuthCorePort {
       authenticated: true,
       subject: update.subject,
       expiresAt: _tryParseDateTime(update.newExpiresAt),
+      bearerToken: update.bearerToken,
       needsRefresh: !update.refreshed,
     );
   }

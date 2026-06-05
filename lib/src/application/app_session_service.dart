@@ -85,6 +85,7 @@ class ImCoreAppSessionService implements AppSessionService {
     _current = identity.copyWith(
       authenticated: auth.authenticated,
       expiresAt: auth.expiresAt,
+      jwtToken: auth.bearerToken,
     );
     return _current!;
   }
@@ -99,6 +100,7 @@ class ImCoreAppSessionService implements AppSessionService {
     _current = session.copyWith(
       authenticated: auth.authenticated,
       expiresAt: auth.expiresAt,
+      jwtToken: auth.bearerToken ?? session.jwtToken,
     );
     return _current;
   }

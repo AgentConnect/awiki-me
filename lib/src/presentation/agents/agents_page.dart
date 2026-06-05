@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show SelectableText;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -48,6 +49,7 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
           ref.read(agentsProvider.notifier).createDaemonInstallCommand(),
       onSelect: (agentDid) =>
           ref.read(agentsProvider.notifier).select(agentDid),
+      onRetry: () => ref.read(agentsProvider.notifier).load(),
     );
     final detail = _AgentDetailPane(
       state: state,
@@ -107,12 +109,14 @@ class _AgentListPane extends StatelessWidget {
     required this.footer,
     required this.onCreateDaemon,
     required this.onSelect,
+    required this.onRetry,
   });
 
   final AgentsState state;
   final Widget? footer;
   final VoidCallback onCreateDaemon;
   final ValueChanged<String> onSelect;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -159,6 +163,10 @@ class _AgentListPane extends StatelessWidget {
                 responsive.spacing(16),
               ),
               children: <Widget>[
+                if (state.error != null) ...<Widget>[
+                  _AgentErrorBanner(message: state.error!, onRetry: onRetry),
+                  SizedBox(height: responsive.spacing(10)),
+                ],
                 if (state.agents.isEmpty)
                   Padding(
                     padding: EdgeInsets.all(responsive.spacing(12)),
@@ -179,17 +187,6 @@ class _AgentListPane extends StatelessWidget {
               ],
             ),
           ),
-          if (state.error != null)
-            Padding(
-              padding: EdgeInsets.all(responsive.spacing(12)),
-              child: Text(
-                state.error!,
-                style: TextStyle(
-                  color: AwikiMeColors.danger,
-                  fontSize: responsive.metaSm,
-                ),
-              ),
-            ),
           if (footer != null) footer!,
         ],
       ),
@@ -402,13 +399,7 @@ class _AgentDetailPane extends StatelessWidget {
           ],
           if (state.error != null) ...<Widget>[
             SizedBox(height: responsive.spacing(10)),
-            Text(
-              state.error!,
-              style: TextStyle(
-                color: AwikiMeColors.danger,
-                fontSize: responsive.metaSm,
-              ),
-            ),
+            _AgentErrorBanner(message: state.error!),
           ],
           SizedBox(height: responsive.spacing(18)),
           if (runtimes.isNotEmpty) ...<Widget>[
@@ -717,6 +708,70 @@ class _ActionButton extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgentErrorBanner extends StatelessWidget {
+  const _AgentErrorBanner({required this.message, this.onRetry});
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Container(
+      padding: EdgeInsets.all(responsive.spacing(12)),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3F3),
+        borderRadius: BorderRadius.circular(responsive.radius(8)),
+        border: Border.all(color: const Color(0xFFFFD2D2)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(
+            CupertinoIcons.exclamationmark_circle_fill,
+            color: AwikiMeColors.danger,
+            size: responsive.iconSm,
+          ),
+          SizedBox(width: responsive.spacing(8)),
+          Expanded(
+            child: Text(
+              message,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: const Color(0xFF8A1F1F),
+                fontSize: responsive.metaSm,
+                height: 1.35,
+              ),
+            ),
+          ),
+          if (onRetry != null) ...<Widget>[
+            SizedBox(width: responsive.spacing(8)),
+            CupertinoButton(
+              padding: EdgeInsets.symmetric(
+                horizontal: responsive.spacing(10),
+                vertical: responsive.spacing(5),
+              ),
+              minimumSize: Size.zero,
+              borderRadius: BorderRadius.circular(responsive.radius(8)),
+              color: CupertinoColors.white,
+              onPressed: onRetry,
+              child: Text(
+                '重试',
+                style: TextStyle(
+                  color: AwikiMeColors.danger,
+                  fontSize: responsive.metaSm,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1059,15 +1114,10 @@ void _showInstallCommand(
   WidgetRef ref,
   InstallCommand command,
 ) {
-  showCupertinoModalPopup<void>(
+  showCupertinoDialog<void>(
     context: context,
-    builder: (context) => _InstallCommandSheet(
+    builder: (context) => _InstallCommandDialog(
       command: command,
-      onRegenerate: () {
-        Navigator.of(context).pop();
-        ref.read(agentsProvider.notifier).clearInstallCommand();
-        ref.read(agentsProvider.notifier).createDaemonInstallCommand();
-      },
       onClose: () {
         Navigator.of(context).pop();
         ref.read(agentsProvider.notifier).clearInstallCommand();
@@ -1076,156 +1126,265 @@ void _showInstallCommand(
   );
 }
 
-class _InstallCommandSheet extends StatefulWidget {
-  const _InstallCommandSheet({
-    required this.command,
-    required this.onRegenerate,
-    required this.onClose,
-  });
+class _InstallCommandDialog extends StatelessWidget {
+  const _InstallCommandDialog({required this.command, required this.onClose});
 
   final InstallCommand command;
-  final VoidCallback onRegenerate;
   final VoidCallback onClose;
 
   @override
-  State<_InstallCommandSheet> createState() => _InstallCommandSheetState();
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final expiresAt = command.token.expiresAt?.toLocal();
+    final isExpired =
+        command.token.expiresAt != null &&
+        !command.token.expiresAt!.isAfter(DateTime.now().toUtc());
+    final media = MediaQuery.of(context);
+    final availableWidth = media.size.width - 32;
+    final maxDialogWidth = availableWidth < 520 ? availableWidth : 520.0;
+    final maxDialogHeight = media.size.height * 0.82;
+    return SafeArea(
+      minimum: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      child: Center(
+        child: CupertinoPopupSurface(
+          isSurfacePainted: true,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: maxDialogWidth,
+              maxHeight: maxDialogHeight,
+            ),
+            child: Padding(
+              padding: EdgeInsets.all(responsive.spacing(20)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Container(
+                        width: responsive.displayScaled(34),
+                        height: responsive.displayScaled(34),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEAF2FF),
+                          borderRadius: BorderRadius.circular(
+                            responsive.radius(8),
+                          ),
+                        ),
+                        child: Icon(
+                          CupertinoIcons.desktopcomputer,
+                          color: const Color(0xFF0B65F8),
+                          size: responsive.iconMd,
+                        ),
+                      ),
+                      SizedBox(width: responsive.spacing(10)),
+                      Expanded(
+                        child: Text(
+                          '到宿主机安装代理',
+                          style: TextStyle(
+                            color: const Color(0xFF101B32),
+                            fontSize: responsive.titleXl,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: responsive.spacing(8)),
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size(
+                          responsive.displayScaled(30),
+                          responsive.displayScaled(30),
+                        ),
+                        borderRadius: BorderRadius.circular(
+                          responsive.radius(8),
+                        ),
+                        color: const Color(0xFFF4F6FA),
+                        onPressed: onClose,
+                        child: Icon(
+                          CupertinoIcons.xmark,
+                          color: const Color(0xFF66728A),
+                          size: responsive.iconSm,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: responsive.spacing(16)),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          _CommandText(
+                            command.command,
+                            onCopy: () async {
+                              await Clipboard.setData(
+                                ClipboardData(text: command.command),
+                              );
+                              if (context.mounted) {
+                                AwikiMeToast.show(context, '已复制');
+                              }
+                            },
+                          ),
+                          SizedBox(height: responsive.spacing(12)),
+                          _TokenExpiryRow(
+                            isExpired: isExpired,
+                            expiresAt: expiresAt,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _InstallCommandSheetState extends State<_InstallCommandSheet> {
-  bool _manualExpanded = false;
+class _TokenExpiryRow extends StatelessWidget {
+  const _TokenExpiryRow({required this.isExpired, required this.expiresAt});
+
+  final bool isExpired;
+  final DateTime? expiresAt;
 
   @override
   Widget build(BuildContext context) {
-    final expiresAt = widget.command.token.expiresAt?.toLocal();
-    final isExpired =
-        widget.command.token.expiresAt != null &&
-        !widget.command.token.expiresAt!.isAfter(DateTime.now().toUtc());
-    return CupertinoActionSheet(
-      title: const Text('安装代理'),
-      message: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    final responsive = context.awikiResponsive;
+    return Container(
+      padding: EdgeInsets.all(responsive.spacing(10)),
+      decoration: BoxDecoration(
+        color: isExpired ? const Color(0xFFFFF3F3) : const Color(0xFFF7FAFF),
+        borderRadius: BorderRadius.circular(responsive.radius(8)),
+        border: Border.all(
+          color: isExpired ? const Color(0xFFFFD2D2) : const Color(0xFFE2EAF6),
+        ),
+      ),
+      child: Row(
         children: <Widget>[
-          _CommandText(widget.command.command),
-          const SizedBox(height: 10),
-          Text(
+          Icon(
             isExpired
-                ? 'token 过期'
-                : expiresAt == null
-                ? 'token 已生成'
-                : 'token 有效期至 ${expiresAt.toString()}',
-            style: TextStyle(
-              color: isExpired ? AwikiMeColors.danger : const Color(0xFF66728A),
-              fontSize: 12,
+                ? CupertinoIcons.exclamationmark_circle_fill
+                : CupertinoIcons.clock_fill,
+            color: isExpired ? AwikiMeColors.danger : const Color(0xFF66728A),
+            size: responsive.iconSm,
+          ),
+          SizedBox(width: responsive.spacing(8)),
+          Expanded(
+            child: Text(
+              '有效期至: ${_formatTokenExpiry(expiresAt)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: isExpired
+                    ? AwikiMeColors.danger
+                    : const Color(0xFF4B5870),
+                fontSize: responsive.metaSm,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-          const SizedBox(height: 8),
-          CupertinoButton(
-            onPressed: () async {
-              await Clipboard.setData(
-                ClipboardData(text: widget.command.command),
-              );
-              if (context.mounted) {
-                AwikiMeToast.show(context, '已复制');
-              }
-            },
-            child: const Text('复制命令'),
-          ),
-          if (isExpired)
-            CupertinoButton(
-              onPressed: widget.onRegenerate,
-              child: const Text('重新生成命令'),
-            ),
-          CupertinoButton(
-            key: const Key('agent-install-manual-toggle'),
-            padding: EdgeInsets.zero,
-            onPressed: () {
-              setState(() {
-                _manualExpanded = !_manualExpanded;
-              });
-            },
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                const Text('手动下载'),
-                const SizedBox(width: 4),
-                Icon(
-                  _manualExpanded
-                      ? CupertinoIcons.chevron_up
-                      : CupertinoIcons.chevron_down,
-                  size: 16,
-                ),
-              ],
-            ),
-          ),
-          if (_manualExpanded) ...<Widget>[
-            const SizedBox(height: 8),
-            _ManualDownloadRow(
-              label: 'installer',
-              value: widget.command.installerUrl,
-            ),
-            const SizedBox(height: 8),
-            _ManualDownloadRow(
-              label: 'package',
-              value: widget.command.packageUrlTemplate,
-            ),
-            const SizedBox(height: 8),
-            const Text('手动命令', style: TextStyle(fontSize: 12)),
-            const SizedBox(height: 4),
-            _CommandText(widget.command.fallbackCommand),
-          ],
         ],
       ),
-      actions: <Widget>[
-        CupertinoActionSheetAction(
-          onPressed: widget.onClose,
-          child: const Text('关闭'),
-        ),
-      ],
     );
   }
 }
 
-class _ManualDownloadRow extends StatelessWidget {
-  const _ManualDownloadRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(label, style: const TextStyle(fontSize: 12)),
-        const SizedBox(height: 4),
-        _CommandText(value),
-      ],
-    );
+String _formatTokenExpiry(DateTime? expiresAt) {
+  if (expiresAt == null) {
+    return '--:--';
   }
+  final hour = expiresAt.hour.toString().padLeft(2, '0');
+  final minute = expiresAt.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
 }
 
 class _CommandText extends StatelessWidget {
-  const _CommandText(this.value);
+  const _CommandText(this.value, {required this.onCopy});
 
   final String value;
+  final VoidCallback onCopy;
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(10),
+      padding: EdgeInsets.all(responsive.spacing(12)),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F6FA),
-        borderRadius: BorderRadius.circular(8),
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(responsive.radius(8)),
+        border: Border.all(color: const Color(0xFF1E293B)),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Text(
-          value,
-          softWrap: false,
-          style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-        ),
+      child: Stack(
+        children: <Widget>[
+          Padding(
+            padding: EdgeInsets.only(right: responsive.displayScaled(46)),
+            child: SelectableText(
+              key: const Key('agent-install-command-text'),
+              _wrapCommand(value),
+              style: TextStyle(
+                color: const Color(0xFFE5E7EB),
+                fontSize: responsive.metaSm,
+                fontFamily: 'monospace',
+                height: 1.45,
+              ),
+            ),
+          ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: CupertinoButton(
+              key: const Key('agent-install-copy-button'),
+              padding: EdgeInsets.zero,
+              minimumSize: Size(
+                responsive.displayScaled(34),
+                responsive.displayScaled(30),
+              ),
+              borderRadius: BorderRadius.circular(responsive.radius(8)),
+              color: const Color(0xFF1E293B),
+              onPressed: onCopy,
+              child: Icon(
+                CupertinoIcons.doc_on_doc,
+                color: const Color(0xFFCBD5E1),
+                size: responsive.iconSm,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+String _wrapCommand(String command) {
+  final normalized = command.trim().replaceAll(RegExp(r'\s+'), ' ');
+  if (normalized.isEmpty) {
+    return normalized;
+  }
+  final parts = normalized.split(' ');
+  final lines = <String>[];
+  final buffer = StringBuffer();
+  for (final part in parts) {
+    final nextLength = buffer.isEmpty
+        ? part.length
+        : buffer.length + 1 + part.length;
+    if (buffer.isNotEmpty && nextLength > 52) {
+      lines.add(buffer.toString());
+      buffer
+        ..clear()
+        ..write('  ')
+        ..write(part);
+    } else {
+      if (buffer.isNotEmpty) {
+        buffer.write(' ');
+      }
+      buffer.write(part);
+    }
+  }
+  if (buffer.isNotEmpty) {
+    lines.add(buffer.toString());
+  }
+  return lines.join('\n');
 }

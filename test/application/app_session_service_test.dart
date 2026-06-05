@@ -21,6 +21,7 @@ void main() {
             authenticated: true,
             subject: identity.did,
             expiresAt: DateTime.utc(2026, 5, 23, 9),
+            bearerToken: 'jwt-restored',
           ),
         );
         final service = ImCoreAppSessionService(
@@ -34,6 +35,7 @@ void main() {
         expect(restored?.identityId, 'id-default');
         expect(restored?.authenticated, isTrue);
         expect(restored?.expiresAt, DateTime.utc(2026, 5, 23, 9));
+        expect(restored?.jwtToken, 'jwt-restored');
         expect(runtime.openCount, 1);
         expect(runtime.switchedIdentities, ['id-default']);
         expect(auth.ensureCount, 1);
@@ -114,6 +116,7 @@ void main() {
             authenticated: true,
             subject: identity.did,
             expiresAt: DateTime.utc(2026, 5, 24),
+            bearerToken: 'jwt-refreshed',
           ),
         );
         final service = ImCoreAppSessionService(
@@ -126,6 +129,7 @@ void main() {
         final refreshed = await service.refreshSession();
 
         expect(refreshed?.expiresAt, DateTime.utc(2026, 5, 24));
+        expect(refreshed?.jwtToken, 'jwt-refreshed');
         expect(auth.refreshCount, 1);
       },
     );

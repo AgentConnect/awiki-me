@@ -47,6 +47,36 @@ void main() {
     },
   );
 
+  test('load maps authorization failures to a friendly agent error', () async {
+    final control = _FailingAgentControlService(
+      Exception(
+        'AwikiOnboardingUtilityError http 401: '
+        '{"jsonrpc":"2.0","error":{"message":"Missing or invalid Authorization header"}}',
+      ),
+    );
+    final container = _container(control);
+    addTearDown(container.dispose);
+
+    await container.read(agentsProvider.notifier).load();
+    final state = container.read(agentsProvider);
+
+    expect(state.error, '登录状态已失效，请重新登录后再查看智能体。');
+    expect(state.error, isNot(contains('Authorization header')));
+    expect(state.error, isNot(contains('jsonrpc')));
+  });
+
+  test('load maps network failures to a friendly agent error', () async {
+    final control = _FailingAgentControlService(
+      Exception('SocketException: Connection refused'),
+    );
+    final container = _container(control);
+    addTearDown(container.dispose);
+
+    await container.read(agentsProvider.notifier).load();
+
+    expect(container.read(agentsProvider).error, '暂时无法连接后端服务，请检查网络或服务地址后重试。');
+  });
+
   test(
     'status payload creates runtime and preserves daemon/runtime split',
     () async {
@@ -549,4 +579,15 @@ ProviderContainer _container(
       }),
     ],
   );
+}
+
+class _FailingAgentControlService extends FakeAgentControlService {
+  _FailingAgentControlService(this.error);
+
+  final Object error;
+
+  @override
+  Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
+    throw error;
+  }
 }

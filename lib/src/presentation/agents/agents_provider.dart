@@ -122,7 +122,10 @@ class AgentsController extends StateNotifier<AgentsState> {
         }
       }
     } catch (error) {
-      state = state.copyWith(isLoading: false, error: error.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: _agentErrorMessage(error),
+      );
     }
   }
 
@@ -193,7 +196,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         pendingStatusQueryAtByDaemon: fromAutoLoad
             ? state.pendingStatusQueryAtByDaemon
             : _withoutKey(state.pendingStatusQueryAtByDaemon, daemonDid),
-        error: error.toString(),
+        error: _agentErrorMessage(error),
       );
     }
   }
@@ -325,7 +328,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       await action();
       state = state.copyWith(isActing: false, clearError: true);
     } catch (error) {
-      state = state.copyWith(isActing: false, error: error.toString());
+      state = state.copyWith(isActing: false, error: _agentErrorMessage(error));
     }
   }
 
@@ -734,6 +737,28 @@ String? _string(Object? value) {
 
 DateTime? _dateTime(Object? value) {
   return DateTime.tryParse(value?.toString() ?? '')?.toUtc();
+}
+
+String _agentErrorMessage(Object error) {
+  final raw = error.toString();
+  final normalized = raw.toLowerCase();
+  final compact = normalized.replaceAll(RegExp(r'\s+'), '');
+  if (normalized.contains('missing or invalid authorization header') ||
+      compact.contains('http401') ||
+      normalized.contains('invalid token') ||
+      normalized.contains('empty token')) {
+    return '登录状态已失效，请重新登录后再查看智能体。';
+  }
+  if (normalized.contains('timeoutexception') ||
+      normalized.contains('timed out')) {
+    return '请求超时，请检查网络后重试。';
+  }
+  if (normalized.contains('connection refused') ||
+      normalized.contains('failed host lookup') ||
+      normalized.contains('network is unreachable')) {
+    return '暂时无法连接后端服务，请检查网络或服务地址后重试。';
+  }
+  return '智能体信息暂时无法加载，请稍后重试。';
 }
 
 final agentsProvider = StateNotifierProvider<AgentsController, AgentsState>(

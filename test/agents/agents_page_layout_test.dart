@@ -10,6 +10,7 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show SelectableText;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../test_support.dart';
@@ -204,21 +205,20 @@ void main() {
     expect(control.lastUnboundAgentDid, 'did:agent:daemon');
   });
 
-  testWidgets('install sheet keeps fallback collapsed and can regenerate expired token', (
+  testWidgets('install command opens a compact host-install dialog', (
     tester,
   ) async {
+    final expiresAt = DateTime.now().toUtc().add(const Duration(hours: 2));
     final control = FakeAgentControlService()
       ..nextInstallCommand = InstallCommand(
         token: AgentRegistrationToken(
-          token: 'expired-token',
-          expiresAt: DateTime.now().toUtc().subtract(
-            const Duration(minutes: 1),
-          ),
+          token: 'fresh-token',
+          expiresAt: expiresAt,
         ),
         command:
-            'curl -fsSL https://awiki.ai/daemon/install.sh | sh -s -- --token expired-token',
+            'curl -fsSL https://awiki.ai/daemon/install.sh | sh -s -- --token fresh-token --base-url https://awiki.ai',
         fallbackCommand:
-            'awiki-deamon install --token expired-token --base-url https://awiki.ai',
+            'awiki-deamon install --token fresh-token --base-url https://awiki.ai',
         installerUrl: 'https://awiki.ai/daemon/install.sh',
         packageUrlTemplate:
             'https://awiki.ai/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
@@ -242,47 +242,31 @@ void main() {
     await tester.tap(find.text('安装命令'));
     await tester.pumpAndSettle();
 
-    expect(find.text('token 过期'), findsOneWidget);
-    expect(find.text('重新生成命令'), findsOneWidget);
-    expect(find.text('手动下载'), findsOneWidget);
+    expect(find.text('到宿主机安装代理'), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.xmark), findsOneWidget);
+    expect(find.byKey(const Key('agent-install-copy-button')), findsOneWidget);
+    expect(find.text('重新生成命令'), findsNothing);
+    expect(find.text('手动下载'), findsNothing);
     expect(find.text('installer'), findsNothing);
+    expect(find.text('package'), findsNothing);
+    expect(find.text('手动命令'), findsNothing);
     expect(
       find.text(
-        'awiki-deamon install --token expired-token --base-url https://awiki.ai',
-      ),
-      findsNothing,
-    );
-
-    await tester.tap(find.byKey(const Key('agent-install-manual-toggle')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('installer'), findsOneWidget);
-    expect(find.text('package'), findsOneWidget);
-    expect(find.text('手动命令'), findsOneWidget);
-    expect(
-      find.text(
-        'awiki-deamon install --token expired-token --base-url https://awiki.ai',
+        '有效期至: ${expiresAt.toLocal().hour.toString().padLeft(2, '0')}:${expiresAt.toLocal().minute.toString().padLeft(2, '0')}',
       ),
       findsOneWidget,
     );
 
-    final firstCommand = control.lastInstallCommand;
-    control.nextInstallCommand = const InstallCommand(
-      token: AgentRegistrationToken(token: 'fresh-token'),
-      command:
-          'curl -fsSL https://awiki.ai/daemon/install.sh | sh -s -- --token fresh-token',
-      fallbackCommand:
-          'awiki-deamon install --token fresh-token --base-url https://awiki.ai',
-      installerUrl: 'https://awiki.ai/daemon/install.sh',
-      packageUrlTemplate:
-          'https://awiki.ai/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
+    final commandText = tester.widget<SelectableText>(
+      find.byKey(const Key('agent-install-command-text')),
     );
+    expect(commandText.data, contains('\n'));
+    expect(commandText.data, contains('--token'));
+    expect(commandText.data, contains('fresh-token'));
 
-    await tester.tap(find.text('重新生成命令'));
+    await tester.tap(find.byIcon(CupertinoIcons.xmark));
     await tester.pumpAndSettle();
-
-    expect(control.lastInstallCommand, isNot(same(firstCommand)));
-    expect(control.lastInstallCommand?.command, contains('fresh-token'));
+    expect(find.text('到宿主机安装代理'), findsNothing);
   });
 
   testWidgets(
