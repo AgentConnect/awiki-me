@@ -26,6 +26,7 @@ void main() {
 
       expect(inventory.runtimeTokenDaemonDid, 'did:agent:daemon');
       expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
+      expect(messages.lastSecure, isFalse);
       expect(messages.lastPayload?['schema'], 'awiki.agent.command.v1');
       expect(messages.lastPayload?['command'], 'runtime.agent.create');
       final args = messages.lastPayload?['args'] as Map<String, Object?>;
@@ -45,6 +46,7 @@ void main() {
     await service.refreshDaemonStatus('did:agent:daemon');
 
     expect(messages.lastPayload?['command'], 'agent.status.query');
+    expect(messages.lastSecure, isFalse);
     expect(messages.lastIdempotencyKey, 'agent-status:did:agent:daemon');
   });
 
@@ -65,6 +67,7 @@ void main() {
 
       expect(requestId, startsWith('cmd_runtime_inbox_'));
       expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
+      expect(messages.lastSecure, isFalse);
       expect(messages.lastPayload?['command'], 'runtime.inbox.query');
       final args = messages.lastPayload?['args'] as Map<String, Object?>;
       expect(args['runtime_agent_did'], 'did:agent:runtime');
@@ -92,6 +95,7 @@ void main() {
     );
 
     expect(requestId, startsWith('cmd_runtime_inbox_thread_'));
+    expect(messages.lastSecure, isFalse);
     expect(messages.lastPayload?['command'], 'runtime.inbox.thread.query');
     final args = messages.lastPayload?['args'] as Map<String, Object?>;
     expect(args['thread_id'], 'direct:did:human:bob');
@@ -167,6 +171,7 @@ class _MessagesStub implements MessagingService {
   AppThreadRef? lastThread;
   Map<String, Object?>? lastPayload;
   String? lastIdempotencyKey;
+  bool? lastSecure;
 
   @override
   Future<ChatMessage> sendPayload({
@@ -178,6 +183,7 @@ class _MessagesStub implements MessagingService {
     lastThread = thread;
     lastPayload = payload;
     lastIdempotencyKey = idempotencyKey;
+    lastSecure = secure;
     return ChatMessage(
       localId: 'msg',
       threadId: thread.stableId,

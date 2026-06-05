@@ -251,7 +251,7 @@ class DefaultAgentControlService implements AgentControlService {
     await _messages.sendPayload(
       thread: AppThreadRef.direct(daemonAgentDid),
       payload: payload,
-      secure: true,
+      secure: false,
       idempotencyKey: idempotencyKey,
     );
   }
