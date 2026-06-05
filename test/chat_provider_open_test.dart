@@ -566,6 +566,59 @@ void main() {
     expect(gateway.lastSentAttachmentIdempotencyKey, startsWith('pending-'));
   });
 
+  test('附件发送成功后会话刷新失败不会覆盖发送结果', () async {
+    final flakyGateway = FakeAwikiGateway()
+      ..loginResult = const SessionIdentity(
+        did: 'did:me',
+        credentialName: 'me.json',
+        displayName: 'Me',
+        handle: 'me',
+      )
+      ..failNextListConversations = true;
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(flakyGateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(flakyGateway),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendAttachment(
+          conversation: conversation,
+          attachment: AttachmentDraft(
+            filename: 'report.md',
+            mimeType: 'text/markdown',
+            bytes: Uint8List.fromList(<int>[35, 32, 65]),
+            sizeBytes: 3,
+          ),
+          caption: '报告',
+        );
+    await Future<void>.delayed(Duration.zero);
+
+    final messages = sendContainer
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    expect(messages, hasLength(1));
+    expect(messages.single.attachment?.filename, 'report.md');
+    expect(messages.single.sendState, MessageSendState.sent);
+    expect(flakyGateway.listConversationsCalls, 1);
+  });
+
   test('发送群聊附件使用群目标并更新会话预览', () async {
     const groupId = 'did:test:group:send-attachment';
     final groupConversation = ConversationSummary(

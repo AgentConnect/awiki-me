@@ -156,7 +156,7 @@ class ChatThreadsController
           .read(conversationListProvider.notifier)
           .upsertConversation(latestConversation);
     }
-    await ref.read(conversationListProvider.notifier).refresh();
+    await _refreshConversationsBestEffort();
     final refreshedConversation = _newerConversation(
       _refreshedConversationFor(latestConversation),
       latestConversation,
@@ -234,7 +234,7 @@ class ChatThreadsController
           .read(conversationListProvider.notifier)
           .upsertConversation(latestConversation);
     }
-    await ref.read(conversationListProvider.notifier).refresh();
+    await _refreshConversationsBestEffort();
     final refreshedConversation = _newerConversation(
       _refreshedConversationFor(latestConversation),
       latestConversation,
@@ -292,7 +292,7 @@ class ChatThreadsController
       final failed = retrying.copyWith(sendState: MessageSendState.failed);
       _replaceMessage(conversation.threadId, message.localId, failed);
     }
-    await ref.read(conversationListProvider.notifier).refresh();
+    await _refreshConversationsBestEffort();
     unawaited(_loadHistory(_refreshedConversationFor(conversation)));
   }
 
@@ -338,7 +338,7 @@ class ChatThreadsController
       final failed = retrying.copyWith(sendState: MessageSendState.failed);
       _replaceMessage(conversation.threadId, message.localId, failed);
     }
-    await ref.read(conversationListProvider.notifier).refresh();
+    await _refreshConversationsBestEffort();
     unawaited(_loadHistory(_refreshedConversationFor(conversation)));
   }
 
@@ -366,6 +366,16 @@ class ChatThreadsController
   Future<void> refreshConversation(ConversationSummary conversation) async {
     await ref.read(conversationListProvider.notifier).refresh();
     await _loadHistory(_refreshedConversationFor(conversation));
+  }
+
+  Future<void> _refreshConversationsBestEffort() async {
+    try {
+      await ref.read(conversationListProvider.notifier).refresh();
+    } catch (_) {
+      // The local thread has already been updated with the send result. A
+      // follow-up conversation-list refresh should not turn a completed send
+      // into a visible low-level SDK error.
+    }
   }
 
   void clear() {

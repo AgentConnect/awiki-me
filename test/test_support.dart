@@ -282,6 +282,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   RealtimeUpdate? nextRealtimeUpdate;
   bool failNextSend = false;
   bool failNextFollow = false;
+  bool failNextListConversations = false;
   Duration sendDelay = Duration.zero;
   SessionIdentity? refreshedSession;
   HandleRegistrationStatus handleRegistrationStatus =
@@ -561,6 +562,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   @override
   Future<List<ConversationSummary>> listConversations() async {
     listConversationsCalls += 1;
+    if (failNextListConversations) {
+      failNextListConversations = false;
+      throw StateError('conversation refresh failed');
+    }
     return conversations;
   }
 
