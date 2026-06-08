@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -72,86 +73,92 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
     final content = AwikiMeShellTabPage(
       title: context.l10n.profileMeTitle,
-      child: ListView(
-        padding: EdgeInsets.fromLTRB(
-          responsive.tabContentHorizontalPadding,
-          responsive.spacing(26),
-          responsive.tabContentHorizontalPadding,
-          widget.embedded ? widget.bottomInset : 120,
-        ),
-        children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              AvatarBadge(seed: title, size: responsive.isPhone ? 54 : 44),
-              SizedBox(width: responsive.spacing(16)),
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(top: responsive.spacing(8)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          Flexible(
-                            child: Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: responsive.isPhone ? 20 : 18,
-                                fontWeight: FontWeight.w500,
-                                color: theme.title,
+      child: SelectionArea(
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            responsive.tabContentHorizontalPadding,
+            responsive.spacing(26),
+            responsive.tabContentHorizontalPadding,
+            widget.embedded ? widget.bottomInset : 120,
+          ),
+          children: <Widget>[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                AvatarBadge(seed: title, size: responsive.isPhone ? 54 : 44),
+                SizedBox(width: responsive.spacing(16)),
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(top: responsive.spacing(8)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Flexible(
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: responsive.isPhone ? 20 : 18,
+                                  fontWeight: FontWeight.w500,
+                                  color: theme.title,
+                                ),
                               ),
                             ),
-                          ),
-                          SizedBox(width: responsive.spacing(8)),
-                          TopBarActionButton(
-                            onTap: state.isSaving
-                                ? null
-                                : () =>
-                                      _showEditProfileDialog(context, profile),
-                            child: Icon(
-                              CupertinoIcons.pencil,
-                              size: responsive.iconMd,
-                              color: theme.primaryDark,
+                            SizedBox(width: responsive.spacing(8)),
+                            SelectionContainer.disabled(
+                              child: TopBarActionButton(
+                                onTap: state.isSaving
+                                    ? null
+                                    : () => _showEditProfileDialog(
+                                        context,
+                                        profile,
+                                      ),
+                                child: Icon(
+                                  CupertinoIcons.pencil,
+                                  size: responsive.iconMd,
+                                  color: theme.primaryDark,
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: responsive.spacing(4)),
-                      Text(
-                        DidDisplayFormatter.compactDid(profile.did),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: responsive.bodyMd,
-                          color: theme.tertiaryText,
+                          ],
                         ),
-                      ),
-                    ],
+                        SizedBox(height: responsive.spacing(4)),
+                        Text(
+                          profile.did,
+                          softWrap: true,
+                          style: TextStyle(
+                            fontSize: responsive.bodyMd,
+                            height: 1.35,
+                            color: theme.tertiaryText,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          SizedBox(height: responsive.spacing(28)),
-          _ProfileRelationshipBar(
-            homepageUrl: homepageUrl,
-            followersCount: friendsState.followers.length,
-            followingCount: friendsState.following.length,
-            onHomepageTap: () async {
-              await _openHomepage(homepageUrl);
-            },
-          ),
-          SizedBox(height: responsive.spacing(48)),
-          _ProfileContentSection(
-            content: profileContent,
-            emptyText: context.l10n.profileEmpty,
-            tags: profile.tags,
-          ),
-        ],
+              ],
+            ),
+            SizedBox(height: responsive.spacing(28)),
+            _ProfileRelationshipBar(
+              homepageUrl: homepageUrl,
+              followersCount: friendsState.followers.length,
+              followingCount: friendsState.following.length,
+              onHomepageTap: () async {
+                await _openHomepage(homepageUrl);
+              },
+            ),
+            SizedBox(height: responsive.spacing(48)),
+            _ProfileContentSection(
+              content: profileContent,
+              emptyText: context.l10n.profileEmpty,
+              tags: profile.tags,
+            ),
+          ],
+        ),
       ),
     );
     if (widget.embedded) {
@@ -286,7 +293,10 @@ class _ProfileRelationshipBar extends StatelessWidget {
         final stackVertically = constraints.maxWidth < 360;
         final link = ConstrainedBox(
           constraints: BoxConstraints(maxWidth: responsive.isPhone ? 320 : 260),
-          child: AppInlineLinkRow(label: homepageUrl, onTap: onHomepageTap),
+          child: _ProfileHomepageLink(
+            homepageUrl: homepageUrl,
+            onTap: onHomepageTap,
+          ),
         );
         final stats = Row(
           mainAxisSize: MainAxisSize.min,
@@ -339,6 +349,67 @@ class _ProfileRelationshipBar extends StatelessWidget {
   String _trimDecimal(double value) {
     final fixed = value.toStringAsFixed(1);
     return fixed.endsWith('.0') ? fixed.substring(0, fixed.length - 2) : fixed;
+  }
+}
+
+class _ProfileHomepageLink extends StatelessWidget {
+  const _ProfileHomepageLink({required this.homepageUrl, required this.onTap});
+
+  final String homepageUrl;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
+    return Container(
+      padding: responsive.scaledInsets(
+        const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      ),
+      decoration: BoxDecoration(
+        color: theme.subtleSurface,
+        borderRadius: BorderRadius.circular(responsive.radius(12)),
+      ),
+      child: Row(
+        children: <Widget>[
+          SelectionContainer.disabled(
+            child: Icon(
+              CupertinoIcons.link,
+              color: theme.primaryDark,
+              size: responsive.iconSm,
+            ),
+          ),
+          SizedBox(width: responsive.spacing(8)),
+          Expanded(
+            child: Text(
+              homepageUrl,
+              softWrap: true,
+              style: AwikiMeTextStyles.listSubtitle.copyWith(
+                fontSize: responsive.bodySm,
+                color: theme.primaryDark,
+              ),
+            ),
+          ),
+          SizedBox(width: responsive.spacing(8)),
+          SelectionContainer.disabled(
+            child: AppIconButton(
+              onPressed: onTap,
+              semanticLabel: '打开主页',
+              tooltip: '打开主页',
+              size: responsive.compactControlHeight,
+              backgroundColor: theme.surface.withValues(alpha: 0.72),
+              borderColor: theme.border,
+              borderRadius: BorderRadius.circular(responsive.radius(8)),
+              child: Icon(
+                CupertinoIcons.arrow_up_right_square,
+                color: theme.primaryDark,
+                size: responsive.iconSm,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

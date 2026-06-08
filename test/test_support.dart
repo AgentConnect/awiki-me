@@ -12,6 +12,7 @@ import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
+import 'package:awiki_me/src/application/peer_identity_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
 import 'package:awiki_me/src/application/product_local_store.dart';
@@ -32,6 +33,7 @@ import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
+import 'package:awiki_me/src/domain/entities/peer_agent_identity.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
@@ -143,6 +145,7 @@ List<Override> fakeApplicationServiceOverrides(
     profileApplicationServiceProvider.overrideWithValue(
       FakeProfileApplicationService(gateway),
     ),
+    peerIdentityServiceProvider.overrideWithValue(FakePeerIdentityService()),
     conversationServiceProvider.overrideWithValue(
       FakeConversationService(gateway),
     ),
@@ -886,6 +889,22 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       return updatedProfile!;
     }
     throw UnimplementedError();
+  }
+}
+
+class FakePeerIdentityService implements PeerIdentityService {
+  FakePeerIdentityService({
+    this.identities = const <String, PeerAgentIdentity>{},
+  });
+
+  final Map<String, PeerAgentIdentity> identities;
+
+  @override
+  Future<PeerAgentIdentity> resolveAgentIdentity(String didOrHandle) async {
+    final normalized = normalizeTestIdentity(didOrHandle);
+    return identities[didOrHandle] ??
+        identities[normalized] ??
+        const PeerAgentIdentity.human();
   }
 }
 

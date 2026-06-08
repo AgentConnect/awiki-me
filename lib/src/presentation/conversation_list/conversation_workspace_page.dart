@@ -29,6 +29,7 @@ import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'conversation_list_page.dart';
+import 'conversation_peer_classifier.dart';
 
 class ConversationWorkspacePage extends ConsumerWidget {
   const ConversationWorkspacePage({super.key, this.listFooter});
@@ -1301,18 +1302,26 @@ class _MacProfilePill extends StatelessWidget {
   }
 }
 
-class _MacAgentDetailPanel extends StatelessWidget {
+class _MacAgentDetailPanel extends ConsumerWidget {
   const _MacAgentDetailPanel({required this.conversation, this.onBack});
 
   final ConversationSummary conversation;
   final VoidCallback? onBack;
 
   @override
-  Widget build(BuildContext context) {
-    final title = DidDisplayFormatter.conversationTitle(
-      conversation,
-      context.l10n,
-    );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final classification = ref
+        .watch(
+          conversationPeerClassificationProvider(
+            ConversationPeerTarget.fromConversation(conversation),
+          ),
+        )
+        .maybeWhen(
+          data: (value) => value,
+          orElse: () => conversation.isGroup
+              ? const ConversationPeerClassification.group()
+              : const ConversationPeerClassification.unknown(),
+        );
     final address = conversation.targetDid?.trim().isNotEmpty == true
         ? conversation.targetDid!.trim()
         : conversation.groupId ?? conversation.threadId;
@@ -1349,10 +1358,7 @@ class _MacAgentDetailPanel extends StatelessWidget {
           ],
         ),
       ),
-      _MacDetailRow(
-        label: '所属:',
-        text: conversation.isGroup ? 'AWiki 群组' : '$title 团队',
-      ),
+      _MacDetailRow(label: '所属:', text: classification.detailOwnerLabel),
       _MacDetailRow(
         label: 'DID:',
         child: CopyableDidLine(
@@ -1363,10 +1369,7 @@ class _MacAgentDetailPanel extends StatelessWidget {
           buttonKey: const Key('mac-conversation-copy-did-button'),
         ),
       ),
-      _MacDetailRow(
-        label: '类型:',
-        text: conversation.isGroup ? 'Group Agent' : 'Personal Agent',
-      ),
+      _MacDetailRow(label: '类型:', text: classification.detailTypeLabel),
       const SizedBox(height: 16),
       const _MacDetailCard(
         title: '会话能力',

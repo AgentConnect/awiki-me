@@ -16,6 +16,7 @@ import '../shared/quick_actions.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../settings/settings_page.dart';
+import 'conversation_peer_classifier.dart';
 import 'conversation_provider.dart';
 
 typedef ConversationSelectionHandler =
@@ -91,7 +92,7 @@ class ConversationListPage extends ConsumerWidget {
   }
 }
 
-class _MacConversationList extends StatefulWidget {
+class _MacConversationList extends ConsumerStatefulWidget {
   const _MacConversationList({
     required this.conversations,
     required this.selectedThreadId,
@@ -111,10 +112,11 @@ class _MacConversationList extends StatefulWidget {
   final VoidCallback onStartConversation;
 
   @override
-  State<_MacConversationList> createState() => _MacConversationListState();
+  ConsumerState<_MacConversationList> createState() =>
+      _MacConversationListState();
 }
 
-class _MacConversationListState extends State<_MacConversationList> {
+class _MacConversationListState extends ConsumerState<_MacConversationList> {
   String _query = '';
 
   @override
@@ -244,6 +246,18 @@ class _MacConversationListState extends State<_MacConversationList> {
                       itemCount: visibleConversations.length,
                       itemBuilder: (context, index) {
                         final item = visibleConversations[index];
+                        final classification = ref
+                            .watch(
+                              conversationPeerClassificationProvider(
+                                ConversationPeerTarget.fromConversation(item),
+                              ),
+                            )
+                            .maybeWhen(
+                              data: (value) => value,
+                              orElse: () => item.isGroup
+                                  ? const ConversationPeerClassification.group()
+                                  : const ConversationPeerClassification.unknown(),
+                            );
                         return _MacConversationRow(
                           title: DidDisplayFormatter.conversationTitle(
                             item,
@@ -254,7 +268,7 @@ class _MacConversationListState extends State<_MacConversationList> {
                             item.lastMessageAt,
                           ),
                           unreadCount: item.unreadCount,
-                          isGroup: item.isGroup,
+                          classification: classification,
                           isSelected: widget.selectedThreadId == item.threadId,
                           onTap: () => widget.onOpen(item),
                         );
@@ -302,7 +316,7 @@ class _MacConversationListState extends State<_MacConversationList> {
   }
 }
 
-class _ConversationRefreshView extends StatelessWidget {
+class _ConversationRefreshView extends ConsumerWidget {
   const _ConversationRefreshView({
     required this.conversations,
     required this.selectedThreadId,
@@ -320,7 +334,7 @@ class _ConversationRefreshView extends StatelessWidget {
   final ValueChanged<ConversationSummary> onOpen;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final responsive = context.awikiResponsive;
     return CustomScrollView(
       slivers: <Widget>[
@@ -344,6 +358,18 @@ class _ConversationRefreshView extends StatelessWidget {
               itemCount: conversations.length,
               itemBuilder: (_, index) {
                 final item = conversations[index];
+                final classification = ref
+                    .watch(
+                      conversationPeerClassificationProvider(
+                        ConversationPeerTarget.fromConversation(item),
+                      ),
+                    )
+                    .maybeWhen(
+                      data: (value) => value,
+                      orElse: () => item.isGroup
+                          ? const ConversationPeerClassification.group()
+                          : const ConversationPeerClassification.unknown(),
+                    );
                 return _ConversationRow(
                   title: DidDisplayFormatter.conversationTitle(
                     item,
@@ -354,6 +380,7 @@ class _ConversationRefreshView extends StatelessWidget {
                     item.lastMessageAt,
                   ),
                   unreadCount: item.unreadCount,
+                  classification: classification,
                   isSelected: selectedThreadId == item.threadId,
                   onTap: () => onOpen(item),
                 );
@@ -403,7 +430,7 @@ class _MacConversationRow extends StatelessWidget {
     required this.preview,
     required this.timeLabel,
     required this.unreadCount,
-    required this.isGroup,
+    required this.classification,
     required this.isSelected,
     required this.onTap,
   });
@@ -412,13 +439,14 @@ class _MacConversationRow extends StatelessWidget {
   final String preview;
   final String timeLabel;
   final int unreadCount;
-  final bool isGroup;
+  final ConversationPeerClassification classification;
   final bool isSelected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final badgeLabel = classification.compactBadgeLabel;
     return Padding(
       padding: EdgeInsets.only(bottom: responsive.displayScaled(6)),
       child: AppPressableTile(
@@ -440,35 +468,17 @@ class _MacConversationRow extends StatelessWidget {
                 clipBehavior: Clip.none,
                 children: <Widget>[
                   AvatarBadge(seed: title, size: responsive.displayScaled(42)),
-                  Positioned(
-                    right: responsive.displayScaled(-2),
-                    bottom: responsive.displayScaled(-2),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: responsive.displayScaled(5),
-                        vertical: responsive.displayScaled(2),
-                      ),
-                      decoration: BoxDecoration(
-                        color: isGroup
-                            ? const Color(0xFFEFE4FF)
-                            : const Color(0xFFEAF2FF),
-                        borderRadius: BorderRadius.circular(
-                          responsive.displayScaled(5),
-                        ),
-                        border: Border.all(color: CupertinoColors.white),
-                      ),
-                      child: Text(
-                        isGroup ? '群' : 'AI',
-                        style: TextStyle(
-                          color: isGroup
-                              ? const Color(0xFF8B5CF6)
-                              : const Color(0xFF0B65F8),
-                          fontSize: responsive.displayScaled(9),
-                          fontWeight: FontWeight.w600,
-                        ),
+                  if (badgeLabel != null)
+                    Positioned(
+                      right: responsive.displayScaled(-2),
+                      bottom: responsive.displayScaled(-2),
+                      child: _ConversationPeerBadge(
+                        label: badgeLabel,
+                        isGroup: classification.isGroup,
+                        compact: true,
+                        borderColor: CupertinoColors.white,
                       ),
                     ),
-                  ),
                 ],
               ),
               SizedBox(width: responsive.displayScaled(10)),
@@ -588,6 +598,7 @@ class _ConversationRow extends StatelessWidget {
     required this.preview,
     required this.timeLabel,
     required this.unreadCount,
+    required this.classification,
     required this.onTap,
     required this.isSelected,
   });
@@ -596,6 +607,7 @@ class _ConversationRow extends StatelessWidget {
   final String preview;
   final String timeLabel;
   final int unreadCount;
+  final ConversationPeerClassification classification;
   final VoidCallback onTap;
   final bool isSelected;
 
@@ -603,6 +615,7 @@ class _ConversationRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    final badgeLabel = classification.compactBadgeLabel;
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: responsive.tabContentHorizontalPadding,
@@ -626,15 +639,28 @@ class _ConversationRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: responsive.bodyMd,
-                      fontWeight: FontWeight.w400,
-                      color: theme.title,
-                    ),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: responsive.bodyMd,
+                            fontWeight: FontWeight.w400,
+                            color: theme.title,
+                          ),
+                        ),
+                      ),
+                      if (badgeLabel != null) ...<Widget>[
+                        SizedBox(width: responsive.spacing(8)),
+                        _ConversationPeerBadge(
+                          label: badgeLabel,
+                          isGroup: classification.isGroup,
+                        ),
+                      ],
+                    ],
                   ),
                   SizedBox(height: responsive.spacing(4)),
                   Text(
@@ -689,6 +715,55 @@ class _ConversationRow extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ConversationPeerBadge extends StatelessWidget {
+  const _ConversationPeerBadge({
+    required this.label,
+    required this.isGroup,
+    this.compact = false,
+    this.borderColor,
+  });
+
+  final String label;
+  final bool isGroup;
+  final bool compact;
+  final Color? borderColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final background = isGroup
+        ? const Color(0xFFEFE4FF)
+        : const Color(0xFFEAF2FF);
+    final foreground = isGroup
+        ? const Color(0xFF7C3AED)
+        : const Color(0xFF0B65F8);
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.displayScaled(compact ? 5 : 7),
+        vertical: responsive.displayScaled(compact ? 2 : 3),
+      ),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(
+          responsive.displayScaled(compact ? 5 : 999),
+        ),
+        border: borderColor == null ? null : Border.all(color: borderColor!),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.clip,
+        style: TextStyle(
+          color: foreground,
+          fontSize: responsive.displayScaled(compact ? 9 : 10.5),
+          fontWeight: FontWeight.w600,
+          height: 1,
         ),
       ),
     );

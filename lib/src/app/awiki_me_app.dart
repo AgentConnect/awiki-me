@@ -120,6 +120,10 @@ class AwikiMeApp extends StatelessWidget {
           profileApplicationServiceProvider.overrideWithValue(
             bootstrap.profileApplicationService!,
           ),
+        if (bootstrap.peerIdentityService != null)
+          peerIdentityServiceProvider.overrideWithValue(
+            bootstrap.peerIdentityService!,
+          ),
         if (bootstrap.directoryApplicationService != null)
           directoryApplicationServiceProvider.overrideWithValue(
             bootstrap.directoryApplicationService!,

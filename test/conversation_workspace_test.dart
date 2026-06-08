@@ -8,6 +8,7 @@ import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
+import 'package:awiki_me/src/domain/entities/peer_agent_identity.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
@@ -302,6 +303,82 @@ void main() {
 
     expect(valueRect.height, greaterThan(20));
     expect((dotRect.center.dy - (valueRect.top + 8.1)).abs(), lessThan(1.0));
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 最近会话和信息面板只给真实智能体显示 AI 标记', (tester) async {
+    final humanConversation = ConversationSummary(
+      threadId: 'dm:human',
+      displayName: '普通用户',
+      lastMessagePreview: 'hello',
+      lastMessageAt: DateTime(2026, 3, 28, 10, 24),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:human',
+    );
+    final agentConversation = ConversationSummary(
+      threadId: 'dm:agent',
+      displayName: '远端智能体',
+      lastMessagePreview: 'ready',
+      lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:agent',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[
+        humanConversation,
+        agentConversation,
+      ]
+      ..dmHistoryByPeerDid = const <String, List<ChatMessage>>{
+        'did:test:human': <ChatMessage>[],
+        'did:test:agent': <ChatMessage>[],
+      };
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+          peerIdentityServiceProvider.overrideWithValue(
+            FakePeerIdentityService(
+              identities: const <String, PeerAgentIdentity>{
+                'did:test:agent': PeerAgentIdentity.agent(
+                  agentKind: PeerAgentKind.runtime,
+                ),
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('AI'), findsOneWidget);
+
+    await tester.tap(find.text('普通用户'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('类型:'), findsOneWidget);
+    expect(find.text('用户'), findsOneWidget);
+    expect(find.text('Personal Agent'), findsNothing);
+
+    await tester.tap(find.text('远端智能体'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('智能体'), findsWidgets);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

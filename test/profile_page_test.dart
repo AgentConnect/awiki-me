@@ -2,6 +2,7 @@ import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/presentation/profile/profile_page.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
@@ -177,5 +178,32 @@ void main() {
     expect(find.text('粉丝'), findsOneWidget);
     expect(find.text('1'), findsOneWidget);
     expect(find.text('关注'), findsOneWidget);
+  });
+
+  testWidgets('个人资料页主体支持选中复制完整身份信息', (tester) async {
+    const profile = UserProfile(
+      did: 'did:wba:anpclaw.com:user:elena:e1_full_identity_key',
+      nickName: 'Elena',
+      bio: 'Bio',
+      tags: <String>['copyable'],
+      handle: 'elena',
+      profileMarkdown: '# Elena\n\nCopyable body',
+    );
+    final gateway = FakeAwikiGateway()..myProfile = profile;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: ProfilePage(homepageMarkdownLoader: (_) async => null),
+        gateway: gateway,
+        profile: profile,
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.byType(SelectionArea), findsOneWidget);
+    expect(find.text(profile.did), findsOneWidget);
+    expect(find.text('Copyable body'), findsOneWidget);
+    expect(find.text('copyable'), findsOneWidget);
   });
 }

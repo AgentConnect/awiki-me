@@ -20,6 +20,7 @@ import '../../l10n/l10n.dart';
 import '../../app/ui_feedback.dart';
 import '../agents/agent_inbox_panel.dart';
 import '../agents/agents_provider.dart';
+import '../conversation_list/conversation_peer_classifier.dart';
 import '../conversation_list/conversation_provider.dart';
 import '../friends/friends_page.dart';
 import '../friends/friends_provider.dart';
@@ -131,6 +132,22 @@ class _ChatViewState extends ConsumerState<ChatView> {
       currentConversation,
       agents,
     );
+    final peerClassification = ref
+        .watch(
+          conversationPeerClassificationProvider(
+            ConversationPeerTarget.fromConversation(currentConversation),
+          ),
+        )
+        .maybeWhen(
+          data: (value) => value,
+          orElse: () => currentConversation.isGroup
+              ? const ConversationPeerClassification.group()
+              : runtimeAgent == null
+              ? const ConversationPeerClassification.unknown()
+              : ConversationPeerClassification.agent(
+                  localRuntimeAgent: runtimeAgent,
+                ),
+        );
     final friendsState = ref.watch(friendsProvider);
     ref.listen<ChatThreadState>(
       chatThreadProvider(widget.conversation.threadId),
@@ -177,6 +194,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
             embedded: widget.embedded,
             macStyle: macStyle,
             isRefreshing: _isRefreshingCurrentConversation || thread.isLoading,
+            classification: peerClassification,
             isFollowing: _isFollowableDirect(currentConversation)
                 ? friendsState.isFollowing(currentConversation.targetDid!)
                 : false,
@@ -767,6 +785,7 @@ class _ChatHeader extends StatelessWidget {
     required this.embedded,
     required this.macStyle,
     required this.isRefreshing,
+    required this.classification,
     required this.isFollowing,
     required this.onDetails,
     required this.onRefresh,
@@ -786,6 +805,7 @@ class _ChatHeader extends StatelessWidget {
   final VoidCallback? onBack;
   final bool macStyle;
   final bool isRefreshing;
+  final ConversationPeerClassification classification;
   final bool isFollowing;
   final bool showAgentInbox;
   final VoidCallback onDetails;
@@ -806,6 +826,7 @@ class _ChatHeader extends StatelessWidget {
     );
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    final agentBadgeLabel = classification.chatBadgeLabel;
     if (macStyle) {
       return Container(
         height: responsive.displayScaled(64),
@@ -822,7 +843,6 @@ class _ChatHeader extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
-            final showPills = width >= 500;
             final showSecurityPill = width >= 620;
             final showIdentityLabel = width >= 470;
             final avatarSize = responsive.displayScaled(
@@ -849,12 +869,12 @@ class _ChatHeader extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (showPills && !conversation.isGroup) ...<Widget>[
+                      if (agentBadgeLabel != null && width >= 500) ...<Widget>[
                         SizedBox(width: responsive.displayScaled(8)),
-                        const _MacChatPill(
-                          label: '我的智能体',
-                          color: Color(0xFFEAF2FF),
-                          textColor: Color(0xFF0B65F8),
+                        _MacChatPill(
+                          label: agentBadgeLabel,
+                          color: const Color(0xFFEAF2FF),
+                          textColor: const Color(0xFF0B65F8),
                         ),
                       ],
                       if (showSecurityPill) ...<Widget>[
@@ -951,22 +971,30 @@ class _ChatHeader extends StatelessWidget {
               ),
             ),
           ),
-          SizedBox(width: responsive.spacing(4)),
-          AvatarBadge(seed: compactName, size: responsive.avatarSizeMd),
-          SizedBox(width: responsive.spacing(12)),
+          SizedBox(width: responsive.spacing(8)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
-                  compactName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: responsive.titleLg,
-                    fontWeight: FontWeight.w500,
-                    color: theme.title,
-                  ),
+                Row(
+                  children: <Widget>[
+                    Flexible(
+                      child: Text(
+                        compactName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: responsive.titleLg,
+                          fontWeight: FontWeight.w500,
+                          color: theme.title,
+                        ),
+                      ),
+                    ),
+                    if (agentBadgeLabel != null) ...<Widget>[
+                      SizedBox(width: responsive.spacing(8)),
+                      _ChatAgentPill(label: agentBadgeLabel),
+                    ],
+                  ],
                 ),
                 SizedBox(height: responsive.spacing(2)),
                 Row(
@@ -989,19 +1017,20 @@ class _ChatHeader extends StatelessWidget {
                         color: theme.primaryDark,
                       ),
                     ),
-                    if (onFollowTap != null) ...<Widget>[
-                      SizedBox(width: responsive.spacing(10)),
-                      _ChatFollowButton(
-                        isFollowing: isFollowing,
-                        compact: responsive.isPhone,
-                        onTap: onFollowTap!,
-                      ),
-                    ],
                   ],
                 ),
               ],
             ),
           ),
+          if (onFollowTap != null) ...<Widget>[
+            SizedBox(width: responsive.spacing(8)),
+            _ChatFollowButton(
+              isFollowing: isFollowing,
+              compact: true,
+              onTap: onFollowTap!,
+            ),
+            SizedBox(width: responsive.spacing(4)),
+          ],
           if (showAgentInbox && onAgentInboxTap != null) ...<Widget>[
             TopBarActionButton(
               onTap: onAgentInboxTap,
@@ -1063,6 +1092,38 @@ class _MacChatPill extends StatelessWidget {
           color: textColor,
           fontSize: responsive.displayScaled(11.5),
           fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatAgentPill extends StatelessWidget {
+  const _ChatAgentPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.displayScaled(7),
+        vertical: responsive.displayScaled(3),
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF2FF),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: const Color(0xFF0B65F8),
+          fontSize: responsive.displayScaled(10.5),
+          fontWeight: FontWeight.w600,
+          height: 1,
         ),
       ),
     );

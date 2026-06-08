@@ -10,6 +10,7 @@ import '../application/group_application_service.dart';
 import '../application/messaging_service.dart';
 import '../application/onboarding_service.dart';
 import '../application/onboarding_support_service.dart';
+import '../application/peer_identity_service.dart';
 import '../application/ports/agent_inventory_port.dart';
 import '../application/product_local_store.dart';
 import '../application/profile_application_service.dart';
@@ -37,6 +38,7 @@ import '../data/services/app_notification_facade.dart';
 import '../data/services/app_update_service.dart';
 import '../data/services/awiki_onboarding_support_service.dart';
 import '../data/services/locale_preference_service.dart';
+import '../data/services/user_service_peer_identity_service.dart';
 import '../domain/repositories/awiki_account_gateway.dart';
 import '../data/services/noop_e2ee_facade.dart';
 import '../domain/repositories/awiki_gateway.dart';
@@ -67,6 +69,7 @@ class AppBootstrap {
     this.relationshipApplicationService,
     this.realtimeApplicationService,
     this.productLocalStore,
+    this.peerIdentityService,
   });
 
   final AwikiAccountGateway accountGateway;
@@ -89,6 +92,7 @@ class AppBootstrap {
   final RelationshipApplicationService? relationshipApplicationService;
   final RealtimeApplicationService? realtimeApplicationService;
   final ProductLocalStore? productLocalStore;
+  final PeerIdentityService? peerIdentityService;
 
   static Future<AppBootstrap> create() async {
     final preferenceStorage = await _buildPreferenceStore();
@@ -152,6 +156,8 @@ class AppBootstrap {
     );
     final onboardingSupportService =
         AwikiOnboardingSupportService.fromEnvironment();
+    final peerIdentityService =
+        UserServicePeerIdentityService.fromEnvironment();
 
     final accountGateway = CompatAwikiAccountGateway(
       sessions: appSessionService,
@@ -197,6 +203,7 @@ class AppBootstrap {
       relationshipApplicationService: relationshipApplicationService,
       realtimeApplicationService: realtimeApplicationService,
       productLocalStore: productLocalStore,
+      peerIdentityService: peerIdentityService,
     );
   }
 
