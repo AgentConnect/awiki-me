@@ -6,6 +6,7 @@ class UserProfile {
     required this.tags,
     required this.profileMarkdown,
     this.handle,
+    this.fullHandle,
     this.region,
   });
 
@@ -15,6 +16,7 @@ class UserProfile {
   final List<String> tags;
   final String profileMarkdown;
   final String? handle;
+  final String? fullHandle;
   final String? region;
 
   UserProfile copyWith({
@@ -22,6 +24,7 @@ class UserProfile {
     String? bio,
     List<String>? tags,
     String? profileMarkdown,
+    String? fullHandle,
     String? region,
   }) {
     return UserProfile(
@@ -31,6 +34,7 @@ class UserProfile {
       tags: tags ?? this.tags,
       profileMarkdown: profileMarkdown ?? this.profileMarkdown,
       handle: handle,
+      fullHandle: fullHandle ?? this.fullHandle,
       region: region ?? this.region,
     );
   }

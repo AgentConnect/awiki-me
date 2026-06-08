@@ -3,6 +3,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../app/app_services.dart';
 import '../../app/app_router.dart';
 import '../../app/ui_feedback.dart';
 import '../../domain/entities/profile_patch.dart';
@@ -60,7 +61,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     _syncRelationshipCounts();
 
     final title = DidDisplayFormatter.profileName(profile);
-    final homepageUrl = DidDisplayFormatter.homepageUrl(profile);
+    final homepageUrl = ref
+        .watch(profileHomepageResolverProvider)
+        .homepageUrl(profile);
     final profileContent = ref
         .read(profileProvider.notifier)
         .visibleProfileContent();
@@ -161,7 +164,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   }
 
   void _syncHomepage(UserProfile profile) {
-    final homepageUrl = DidDisplayFormatter.homepageUrl(profile);
+    final homepageUrl = ref
+        .read(profileHomepageResolverProvider)
+        .homepageUrl(profile);
     if (homepageUrl.isEmpty || _loadedHomepageUrl == homepageUrl) {
       return;
     }

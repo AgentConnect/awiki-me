@@ -217,6 +217,7 @@ class AwikiImCoreMappers {
       tags: profile.tags,
       profileMarkdown: profile.markdown ?? '',
       handle: profile.handle,
+      fullHandle: profile.fullHandle,
     );
   }
 

@@ -16,8 +16,10 @@ import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
 import 'package:awiki_me/src/application/product_local_store.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
+import 'package:awiki_me/src/application/profile_homepage_resolver.dart';
 import 'package:awiki_me/src/application/realtime_application_service.dart';
 import 'package:awiki_me/src/application/relationship_application_service.dart';
+import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/domain/entities/bridge_capabilities.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -84,6 +86,11 @@ Widget buildLocalizedTestApp({
         resolvedLocalePreference,
       ),
       updateServiceProvider.overrideWithValue(resolvedUpdateService),
+      profileHomepageResolverProvider.overrideWithValue(
+        ProfileHomepageResolver(
+          environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
+        ),
+      ),
       attachmentPickerServiceProvider.overrideWithValue(
         FakeAttachmentPickerService(),
       ),

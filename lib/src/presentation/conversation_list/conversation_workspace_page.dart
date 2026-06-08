@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/app_router.dart';
+import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_member_summary.dart';
@@ -598,7 +599,9 @@ class _MacPeerProfilePanel extends ConsumerWidget {
     final profileContent = profile.profileMarkdown.trim().isNotEmpty
         ? profile.profileMarkdown.trim()
         : profile.bio.trim();
-    final homepageUrl = DidDisplayFormatter.homepageUrl(profile);
+    final homepageUrl = ref
+        .watch(profileHomepageResolverProvider)
+        .homepageUrl(profile);
 
     return _MacPanelShell(
       title: _identityCardTitleForProfile(profile),

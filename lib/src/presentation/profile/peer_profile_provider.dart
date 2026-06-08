@@ -52,12 +52,16 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
         .read(friendsProvider.notifier)
         .checkRelationship(did);
     UserProfile resolved = profile;
-    final homepageUrl = _homepageUrl(profile);
-    final markdown = await ref.read(homepageMarkdownLoaderProvider)(
-      homepageUrl,
-    );
-    if (markdown != null && markdown.trim().isNotEmpty) {
-      resolved = profile.copyWith(profileMarkdown: markdown);
+    final homepageUrl = ref
+        .read(profileHomepageResolverProvider)
+        .homepageUrl(profile);
+    if (homepageUrl.isNotEmpty) {
+      final markdown = await ref.read(homepageMarkdownLoaderProvider)(
+        homepageUrl,
+      );
+      if (markdown != null && markdown.trim().isNotEmpty) {
+        resolved = profile.copyWith(profileMarkdown: markdown);
+      }
     }
     state = state.copyWith(
       profile: resolved,
@@ -76,14 +80,6 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
     ref
         .read(uiFeedbackProvider.notifier)
         .showError(AppMessage.linkOpenFailed('$error'));
-  }
-
-  String _homepageUrl(UserProfile profile) {
-    final handle = profile.handle?.trim();
-    final username = handle != null && handle.isNotEmpty
-        ? handle
-        : (profile.nickName.trim().isNotEmpty ? profile.nickName.trim() : did);
-    return 'https://$username.awiki.ai';
   }
 }
 

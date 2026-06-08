@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/app_router.dart';
+import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../application/thread_id_utils.dart';
 import '../../domain/entities/conversation_summary.dart';
@@ -39,6 +40,9 @@ class PeerProfilePage extends ConsumerWidget {
         : (profile.profileMarkdown.trim().isNotEmpty
               ? profile.profileMarkdown.trim()
               : profile.bio.trim());
+    final homepageUrl = profile == null
+        ? ''
+        : ref.watch(profileHomepageResolverProvider).homepageUrl(profile);
     return Stack(
       children: <Widget>[
         CupertinoPageScaffold(
@@ -138,11 +142,9 @@ class PeerProfilePage extends ConsumerWidget {
                             ),
                             const SizedBox(height: 16),
                             AppInlineLinkRow(
-                              label: DidDisplayFormatter.homepageUrl(profile),
+                              label: homepageUrl,
                               onTap: () async {
-                                final url = Uri.parse(
-                                  DidDisplayFormatter.homepageUrl(profile),
-                                );
+                                final url = Uri.parse(homepageUrl);
                                 try {
                                   await launchUrl(
                                     url,

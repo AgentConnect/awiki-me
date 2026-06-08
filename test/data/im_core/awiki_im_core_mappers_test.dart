@@ -394,6 +394,7 @@ void main() {
       const core.UserProfile(
         subject: 'did:alice',
         handle: 'alice.awiki',
+        fullHandle: 'alice.awiki',
         displayName: 'Alice',
         bio: 'bio',
         tags: ['ai'],
@@ -425,6 +426,8 @@ void main() {
     );
 
     expect(profile.nickName, 'Alice');
+    expect(profile.handle, 'alice.awiki');
+    expect(profile.fullHandle, 'alice.awiki');
     expect(profile.profileMarkdown, '# Alice');
     expect(patch.displayName, 'New Alice');
     expect(patch.markdown, 'new md');

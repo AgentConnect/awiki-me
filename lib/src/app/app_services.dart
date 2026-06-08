@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../application/attachment_picker_service.dart';
 import '../application/app_session_service.dart';
 import '../application/agent/agent_control_service.dart';
+import '../application/config/awiki_environment_config.dart';
 import '../application/conversation_service.dart';
 import '../application/directory_application_service.dart';
 import '../application/group_application_service.dart';
@@ -11,6 +12,7 @@ import '../application/onboarding_service.dart';
 import '../application/onboarding_support_service.dart';
 import '../application/ports/agent_inventory_port.dart';
 import '../application/product_local_store.dart';
+import '../application/profile_homepage_resolver.dart';
 import '../application/profile_application_service.dart';
 import '../application/realtime_application_service.dart';
 import '../application/relationship_application_service.dart';
@@ -97,6 +99,12 @@ final groupApplicationServiceProvider = Provider<GroupApplicationService>(
 final profileApplicationServiceProvider = Provider<ProfileApplicationService>(
   (ref) => throw UnimplementedError(
     'profileApplicationServiceProvider must be overridden',
+  ),
+);
+
+final profileHomepageResolverProvider = Provider<ProfileHomepageResolver>(
+  (ref) => ProfileHomepageResolver(
+    environment: AwikiEnvironmentConfig.fromEnvironment(),
   ),
 );
 

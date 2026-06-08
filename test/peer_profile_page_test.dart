@@ -64,4 +64,35 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     await tester.pump();
   });
+
+  testWidgets('私聊资料页主页链接优先使用 fullHandle', (tester) async {
+    const did = 'did:wba:anpclaw.com:zhuocheng:e1_key';
+    const profile = UserProfile(
+      did: did,
+      nickName: 'zhuocheng',
+      bio: '',
+      tags: <String>[],
+      profileMarkdown: '',
+      handle: 'zhuocheng',
+      fullHandle: 'zhuocheng.anpclaw.com',
+    );
+    final gateway = FakeAwikiGateway()
+      ..publicProfilesByQuery = const <String, UserProfile>{did: profile};
+    String? requestedHomepageUrl;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const PeerProfilePage(did: did),
+        gateway: gateway,
+        homepageMarkdownLoader: (url) async {
+          requestedHomepageUrl = url;
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(requestedHomepageUrl, 'https://zhuocheng.anpclaw.com');
+    expect(find.text('https://zhuocheng.anpclaw.com'), findsOneWidget);
+  });
 }

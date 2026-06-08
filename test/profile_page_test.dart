@@ -49,7 +49,7 @@ void main() {
 
   testWidgets('个人资料页优先渲染拉取到的 markdown 和 tags', (tester) async {
     const profile = UserProfile(
-      did: 'did:test:456',
+      did: 'did:wba:anpclaw.com:bob:e1_456',
       nickName: 'Bob',
       bio: 'Bio',
       tags: <String>['ai', 'agent'],
@@ -57,18 +57,23 @@ void main() {
       handle: 'bob',
     );
     final gateway = FakeAwikiGateway()..myProfile = profile;
+    String? requestedHomepageUrl;
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const ProfilePage(),
         gateway: gateway,
         profile: profile,
-        homepageMarkdownLoader: (_) async => '# Remote title\n\nRemote body',
+        homepageMarkdownLoader: (url) async {
+          requestedHomepageUrl = url;
+          return '# Remote title\n\nRemote body';
+        },
       ),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
+    expect(requestedHomepageUrl, 'https://bob.anpclaw.com');
     expect(find.text('Remote title'), findsNothing);
     expect(find.text('Remote body'), findsOneWidget);
     expect(find.text('ai'), findsOneWidget);

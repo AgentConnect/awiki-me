@@ -55,12 +55,4 @@ class DidDisplayFormatter {
     }
     return compactDid(profile.did);
   }
-
-  static String homepageUrl(UserProfile profile) {
-    final handle = profile.handle?.trim();
-    final username = handle != null && handle.isNotEmpty
-        ? handle
-        : profileName(profile);
-    return 'https://$username.awiki.ai';
-  }
 }
