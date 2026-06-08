@@ -356,9 +356,10 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                             ],
                           ),
                         ),
-                        GestureDetector(
+                        TopBarActionButton(
                           onTap: () => Navigator.of(context).pop(),
-                          behavior: HitTestBehavior.opaque,
+                          semanticsLabel: '关闭',
+                          tooltip: '关闭',
                           child: const Padding(
                             padding: EdgeInsets.all(6),
                             child: Icon(

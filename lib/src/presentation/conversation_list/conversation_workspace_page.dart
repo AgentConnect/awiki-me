@@ -669,14 +669,15 @@ class _MacPeerProfilePanel extends ConsumerWidget {
           const SizedBox(height: 14),
           _MacProfileCard(
             title: '主页',
-            child: GestureDetector(
+            child: AppPressableTile(
               onTap: () async {
                 await launchUrl(
                   Uri.parse(homepageUrl),
                   mode: LaunchMode.externalApplication,
                 );
               },
-              behavior: HitTestBehavior.opaque,
+              semanticLabel: '打开主页',
+              borderRadius: BorderRadius.circular(8),
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
@@ -1257,30 +1258,19 @@ class _MacPanelIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return Semantics(
-      button: true,
-      enabled: !isLoading && onTap != null,
-      label: semanticLabel,
-      child: GestureDetector(
-        onTap: isLoading ? null : onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          height: responsive.displayScaled(32),
-          width: responsive.displayScaled(32),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: CupertinoColors.white,
-            borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
-            border: Border.all(color: const Color(0xFFDDE5F0)),
-          ),
-          child: isLoading
-              ? CupertinoActivityIndicator(radius: responsive.displayScaled(7))
-              : Icon(
-                  icon,
-                  color: const Color(0xFF34415C),
-                  size: responsive.displayScaled(16),
-                ),
-        ),
+    return AppIconButton(
+      onPressed: isLoading ? null : onTap,
+      semanticLabel: semanticLabel,
+      tooltip: semanticLabel,
+      isLoading: isLoading,
+      size: responsive.displayScaled(32),
+      backgroundColor: CupertinoColors.white,
+      borderColor: const Color(0xFFDDE5F0),
+      borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
+      child: Icon(
+        icon,
+        color: const Color(0xFF34415C),
+        size: responsive.displayScaled(16),
       ),
     );
   }

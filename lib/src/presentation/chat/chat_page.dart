@@ -1098,58 +1098,66 @@ class _ChatFollowButtonState extends State<_ChatFollowButton> {
     final background = widget.isFollowing
         ? CupertinoColors.white
         : theme.primary;
-    return Semantics(
-      button: true,
-      label: label,
-      enabled: !_isBusy,
-      child: GestureDetector(
-        onTap: _isBusy
-            ? null
-            : () async {
-                setState(() => _isBusy = true);
-                try {
-                  await widget.onTap();
-                } finally {
-                  if (mounted) {
-                    setState(() => _isBusy = false);
-                  }
+    return AppPressable(
+      onTap: _isBusy
+          ? null
+          : () async {
+              setState(() => _isBusy = true);
+              try {
+                await widget.onTap();
+              } finally {
+                if (mounted) {
+                  setState(() => _isBusy = false);
                 }
-              },
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          height: responsive.displayScaled(30),
-          constraints: BoxConstraints(
-            minWidth: responsive.displayScaled(widget.compact ? 54 : 66),
-          ),
-          alignment: Alignment.center,
-          padding: EdgeInsets.symmetric(
-            horizontal: responsive.displayScaled(10),
-          ),
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
-            border: Border.all(
-              color: widget.isFollowing
-                  ? const Color(0xFFDDE5F0)
-                  : theme.primary,
-            ),
-          ),
-          child: _isBusy
-              ? CupertinoActivityIndicator(
-                  radius: responsive.displayScaled(7),
-                  color: widget.isFollowing ? const Color(0xFF34415C) : null,
-                )
-              : Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: responsive.displayScaled(12),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+              }
+            },
+      semanticLabel: label,
+      tooltip: label,
+      enabled: !_isBusy,
+      scaleOnPress: true,
+      pressedScale: 0.97,
+      borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
+      builder: (context, state, child) {
+        return AnimatedOpacity(
+          opacity: state.pressed
+              ? 0.82
+              : state.hovered || state.focused
+              ? 0.92
+              : 1,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          child: child,
+        );
+      },
+      child: Container(
+        height: responsive.displayScaled(30),
+        constraints: BoxConstraints(
+          minWidth: responsive.displayScaled(widget.compact ? 54 : 66),
         ),
+        alignment: Alignment.center,
+        padding: EdgeInsets.symmetric(horizontal: responsive.displayScaled(10)),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
+          border: Border.all(
+            color: widget.isFollowing ? const Color(0xFFDDE5F0) : theme.primary,
+          ),
+        ),
+        child: _isBusy
+            ? CupertinoActivityIndicator(
+                radius: responsive.displayScaled(7),
+                color: widget.isFollowing ? const Color(0xFF34415C) : null,
+              )
+            : Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: foreground,
+                  fontSize: responsive.displayScaled(12),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
       ),
     );
   }
@@ -1175,9 +1183,14 @@ class _MacChatIdentityButton extends StatelessWidget {
     final foreground = isActive
         ? _macChatHeaderActionActiveColor
         : _macChatHeaderActionColor;
-    return GestureDetector(
+    return AppPressable(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      semanticLabel: label,
+      tooltip: label,
+      selected: isActive,
+      scaleOnPress: true,
+      pressedScale: 0.97,
+      borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
       child: Container(
         height: responsive.displayScaled(34),
         width: showLabel ? null : responsive.displayScaled(34),
@@ -1243,33 +1256,22 @@ class _MacChatHeaderButton extends StatelessWidget {
     final foreground = isActive
         ? _macChatHeaderActionActiveColor
         : _macChatHeaderActionColor;
-    return Semantics(
-      button: true,
-      label: semanticLabel,
-      enabled: !isLoading,
-      child: GestureDetector(
-        onTap: isLoading ? null : onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          height: responsive.displayScaled(34),
-          width: responsive.displayScaled(34),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isActive
-                ? _macChatHeaderActionActiveBackground
-                : CupertinoColors.white,
-            borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
-            border: Border.all(color: const Color(0xFFDDE5F0)),
-          ),
-          child: isLoading
-              ? CupertinoActivityIndicator(radius: responsive.displayScaled(8))
-              : Icon(
-                  icon,
-                  color: foreground,
-                  size: responsive.displayScaled(_macChatHeaderActionIconSize),
-                  weight: isActive ? 900 : 500,
-                ),
-        ),
+    return AppIconButton(
+      onPressed: isLoading ? null : () async => onTap(),
+      semanticLabel: semanticLabel,
+      tooltip: semanticLabel,
+      isActive: isActive,
+      isLoading: isLoading,
+      size: responsive.displayScaled(34),
+      backgroundColor: CupertinoColors.white,
+      activeBackgroundColor: _macChatHeaderActionActiveBackground,
+      borderColor: const Color(0xFFDDE5F0),
+      borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
+      child: Icon(
+        icon,
+        color: foreground,
+        size: responsive.displayScaled(_macChatHeaderActionIconSize),
+        weight: isActive ? 900 : 500,
       ),
     );
   }
@@ -1641,9 +1643,9 @@ class _MessageBubble extends StatelessWidget {
               ),
               if (onRetry != null) ...<Widget>[
                 SizedBox(width: responsive.displayScaled(10)),
-                GestureDetector(
+                AppPressableText(
                   onTap: onRetry,
-                  behavior: HitTestBehavior.opaque,
+                  semanticLabel: '重试发送',
                   child: Text(
                     '重试',
                     style: TextStyle(
@@ -1805,9 +1807,9 @@ class _MessageBubble extends StatelessWidget {
                           ),
                           if (onRetry != null) ...<Widget>[
                             SizedBox(width: responsive.spacing(10)),
-                            GestureDetector(
+                            AppPressableText(
                               onTap: onRetry,
-                              behavior: HitTestBehavior.opaque,
+                              semanticLabel: '重试发送',
                               child: Text(
                                 '重试',
                                 style: TextStyle(
@@ -2154,38 +2156,21 @@ class _AttachmentActionButton extends StatelessWidget {
     final size = macStyle
         ? responsive.displayScaled(32)
         : responsive.scaled(34);
-    return Semantics(
-      button: true,
-      label: '下载附件',
-      enabled: !isLoading,
-      child: GestureDetector(
-        onTap: isLoading ? null : onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: size,
-          height: size,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: macStyle ? CupertinoColors.white : theme.surface,
-            borderRadius: BorderRadius.circular(
-              macStyle ? responsive.displayScaled(8) : 10,
-            ),
-            border: Border.all(
-              color: macStyle ? const Color(0xFFDDE5F0) : theme.border,
-            ),
-          ),
-          child: isLoading
-              ? CupertinoActivityIndicator(
-                  radius: macStyle ? responsive.displayScaled(7) : 8,
-                )
-              : Icon(
-                  CupertinoIcons.arrow_down_doc_fill,
-                  color: macStyle ? const Color(0xFF0B65F8) : theme.primary,
-                  size: macStyle
-                      ? responsive.displayScaled(17)
-                      : responsive.iconSm,
-                ),
-        ),
+    return AppIconButton(
+      onPressed: isLoading ? null : () async => onTap(),
+      semanticLabel: '下载附件',
+      tooltip: '下载附件',
+      isLoading: isLoading,
+      size: size,
+      backgroundColor: macStyle ? CupertinoColors.white : theme.surface,
+      borderColor: macStyle ? const Color(0xFFDDE5F0) : theme.border,
+      borderRadius: BorderRadius.circular(
+        macStyle ? responsive.displayScaled(8) : 10,
+      ),
+      child: Icon(
+        CupertinoIcons.arrow_down_doc_fill,
+        color: macStyle ? const Color(0xFF0B65F8) : theme.primary,
+        size: macStyle ? responsive.displayScaled(17) : responsive.iconSm,
       ),
     );
   }
@@ -2389,18 +2374,19 @@ class _ComposerState extends State<_Composer> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: <Widget>[
                         if (showAttachment) ...<Widget>[
-                          GestureDetector(
+                          AppIconButton(
                             key: const Key('chat-attachment-button'),
-                            onTap: widget.onAttach,
-                            behavior: HitTestBehavior.opaque,
-                            child: SizedBox(
-                              width: responsive.displayScaled(34),
-                              height: responsive.displayScaled(34),
-                              child: Icon(
-                                CupertinoIcons.paperclip,
-                                color: const Color(0xFF34415C),
-                                size: responsive.displayScaled(22),
-                              ),
+                            onPressed: widget.onAttach,
+                            semanticLabel: '添加附件',
+                            tooltip: '添加附件',
+                            size: responsive.displayScaled(34),
+                            borderRadius: BorderRadius.circular(
+                              responsive.displayScaled(9),
+                            ),
+                            child: Icon(
+                              CupertinoIcons.paperclip,
+                              color: const Color(0xFF34415C),
+                              size: responsive.displayScaled(22),
                             ),
                           ),
                           SizedBox(width: responsive.displayScaled(10)),
@@ -2428,38 +2414,52 @@ class _ComposerState extends State<_Composer> {
                           ),
                         ),
                         SizedBox(width: responsive.displayScaled(10)),
-                        e2eSemantics(
-                          identifier: 'e2e-chat-send-button',
-                          label: '发送',
-                          button: true,
-                          child: GestureDetector(
-                            key: const Key('chat-send-button'),
-                            onTap: _submitIfNeeded,
-                            behavior: HitTestBehavior.opaque,
-                            child: Container(
-                              width: responsive.displayScaled(36),
-                              height: responsive.displayScaled(36),
-                              decoration: BoxDecoration(
-                                color: canSubmit
-                                    ? const Color(0xFF0B65F8)
-                                    : const Color(0xFFE5EAF2),
-                                borderRadius: BorderRadius.circular(
-                                  responsive.displayScaled(9),
-                                ),
+                        AppPressable(
+                          key: const Key('chat-send-button'),
+                          onTap: _submitIfNeeded,
+                          semanticLabel: '发送',
+                          semanticsIdentifier: 'e2e-chat-send-button',
+                          tooltip: '发送',
+                          enabled: true,
+                          scaleOnPress: true,
+                          pressedScale: 0.94,
+                          borderRadius: BorderRadius.circular(
+                            responsive.displayScaled(9),
+                          ),
+                          builder: (context, state, child) {
+                            return AnimatedOpacity(
+                              opacity: state.pressed
+                                  ? 0.82
+                                  : state.hovered || state.focused
+                                  ? 0.92
+                                  : 1,
+                              duration: const Duration(milliseconds: 120),
+                              child: child,
+                            );
+                          },
+                          child: Container(
+                            width: responsive.displayScaled(36),
+                            height: responsive.displayScaled(36),
+                            decoration: BoxDecoration(
+                              color: canSubmit
+                                  ? const Color(0xFF0B65F8)
+                                  : const Color(0xFFE5EAF2),
+                              borderRadius: BorderRadius.circular(
+                                responsive.displayScaled(9),
                               ),
-                              child: _isSending
-                                  ? const CupertinoActivityIndicator(
-                                      radius: 8,
-                                      color: CupertinoColors.white,
-                                    )
-                                  : Icon(
-                                      CupertinoIcons.paperplane_fill,
-                                      color: canSubmit
-                                          ? CupertinoColors.white
-                                          : const Color(0xFF8A96AA),
-                                      size: responsive.displayScaled(18),
-                                    ),
                             ),
+                            child: _isSending
+                                ? const CupertinoActivityIndicator(
+                                    radius: 8,
+                                    color: CupertinoColors.white,
+                                  )
+                                : Icon(
+                                    CupertinoIcons.paperplane_fill,
+                                    color: canSubmit
+                                        ? CupertinoColors.white
+                                        : const Color(0xFF8A96AA),
+                                    size: responsive.displayScaled(18),
+                                  ),
                           ),
                         ),
                       ],
@@ -2523,6 +2523,8 @@ class _ComposerState extends State<_Composer> {
                   TopBarActionButton(
                     key: const Key('chat-attachment-button'),
                     onTap: widget.onAttach,
+                    semanticsLabel: '添加附件',
+                    tooltip: '添加附件',
                     child: Padding(
                       padding: EdgeInsets.all(responsive.spacing(6)),
                       child: AwikiAssetIcon(
@@ -2562,6 +2564,8 @@ class _ComposerState extends State<_Composer> {
                     child: TopBarActionButton(
                       key: const Key('chat-send-button'),
                       onTap: _submitIfNeeded,
+                      semanticsLabel: '发送',
+                      tooltip: '发送',
                       child: Padding(
                         padding: EdgeInsets.all(responsive.spacing(6)),
                         child: _isSending
@@ -2714,14 +2718,14 @@ class _PendingAttachmentPreview extends StatelessWidget {
               ],
             ),
           ),
-          CupertinoButton(
+          AppIconButton(
             key: const Key('chat-pending-attachment-remove-button'),
-            padding: EdgeInsets.all(responsive.spacing(4)),
-            minimumSize: Size(
-              responsive.displayScaled(28),
-              responsive.displayScaled(28),
-            ),
             onPressed: onRemove,
+            semanticLabel: '移除附件',
+            tooltip: '移除附件',
+            size: responsive.displayScaled(28),
+            padding: EdgeInsets.all(responsive.spacing(4)),
+            borderRadius: BorderRadius.circular(responsive.displayScaled(14)),
             child: Icon(
               CupertinoIcons.xmark_circle_fill,
               color: const Color(0xFF8A96AA),

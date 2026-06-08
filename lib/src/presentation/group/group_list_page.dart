@@ -522,30 +522,19 @@ class _GroupDetailIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    return Semantics(
-      button: true,
-      enabled: !isLoading && onTap != null,
-      label: semanticLabel,
-      child: GestureDetector(
-        onTap: isLoading ? null : onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          height: responsive.scaled(34),
-          width: responsive.scaled(34),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: theme.surface,
-            borderRadius: BorderRadius.circular(responsive.radius(8)),
-            border: Border.all(color: const Color(0xFFDDE5F0)),
-          ),
-          child: isLoading
-              ? CupertinoActivityIndicator(radius: responsive.scaled(7))
-              : Icon(
-                  icon,
-                  color: const Color(0xFF34415C),
-                  size: responsive.iconSm,
-                ),
-        ),
+    return AppIconButton(
+      onPressed: isLoading ? null : onTap,
+      semanticLabel: semanticLabel,
+      tooltip: semanticLabel,
+      isLoading: isLoading,
+      size: responsive.scaled(34),
+      backgroundColor: theme.surface,
+      borderColor: const Color(0xFFDDE5F0),
+      borderRadius: BorderRadius.circular(responsive.radius(8)),
+      child: Icon(
+        icon,
+        color: const Color(0xFF34415C),
+        size: responsive.iconSm,
       ),
     );
   }
@@ -564,8 +553,10 @@ class _GroupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return AppPressableTile(
       onTap: onTap,
+      semanticLabel: group.name,
+      borderRadius: BorderRadius.circular(AwikiMeRadii.md),
       child: AppCardSection(
         child: Row(
           children: <Widget>[
@@ -595,8 +586,11 @@ class _GroupCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            GestureDetector(
-              onTap: onOpenDetail,
+            AppIconButton(
+              onPressed: onOpenDetail,
+              semanticLabel: '查看群详情',
+              tooltip: '查看群详情',
+              size: context.awikiResponsive.compactControlHeight,
               child: AwikiAssetIcon(
                 assetName: 'assets/icons/icon_right.svg',
                 size: context.awikiResponsive.iconSm,

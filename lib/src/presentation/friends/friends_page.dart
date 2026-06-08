@@ -249,9 +249,9 @@ class _FriendsSection extends StatelessWidget {
                   ),
                 ),
                 if (trailingLabel != null && onTrailingTap != null)
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
+                  AppPressableText(
                     onTap: onTrailingTap,
+                    semanticLabel: trailingLabel,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 4,
@@ -386,47 +386,59 @@ class _RelationshipActionButtonInnerState
     final foreground = widget.destructive
         ? theme.danger
         : theme.primaryForeground;
-    return Semantics(
-      button: true,
-      label: widget.label,
-      enabled: !_isBusy,
-      child: GestureDetector(
-        onTap: _isBusy
-            ? null
-            : () async {
-                setState(() => _isBusy = true);
-                try {
-                  await widget.onTap();
-                } finally {
-                  if (mounted) {
-                    setState(() => _isBusy = false);
-                  }
+    return AppPressable(
+      onTap: _isBusy
+          ? null
+          : () async {
+              setState(() => _isBusy = true);
+              try {
+                await widget.onTap();
+              } finally {
+                if (mounted) {
+                  setState(() => _isBusy = false);
                 }
-              },
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          height: 30,
-          constraints: const BoxConstraints(minWidth: 58),
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: _isBusy
-              ? CupertinoActivityIndicator(
-                  radius: 7,
-                  color: widget.destructive ? theme.danger : null,
-                )
-              : Text(
-                  widget.label,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+              }
+            },
+      semanticLabel: widget.label,
+      tooltip: widget.label,
+      enabled: !_isBusy,
+      scaleOnPress: true,
+      pressedScale: 0.97,
+      borderRadius: BorderRadius.circular(8),
+      builder: (context, state, child) {
+        return AnimatedOpacity(
+          opacity: state.pressed
+              ? 0.80
+              : state.hovered || state.focused
+              ? 0.92
+              : 1,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          child: child,
+        );
+      },
+      child: Container(
+        height: 30,
+        constraints: const BoxConstraints(minWidth: 58),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(8),
         ),
+        child: _isBusy
+            ? CupertinoActivityIndicator(
+                radius: 7,
+                color: widget.destructive ? theme.danger : null,
+              )
+            : Text(
+                widget.label,
+                style: TextStyle(
+                  color: foreground,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
       ),
     );
   }

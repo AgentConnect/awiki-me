@@ -11,6 +11,7 @@ import '../shared/identity_flow.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/responsive_layout.dart';
+import '../shared/widgets/app_widgets.dart';
 import 'agents_provider.dart';
 
 class AgentsWorkspacePage extends ConsumerStatefulWidget {
@@ -91,10 +92,11 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
               children: <Widget>[
                 CupertinoNavigationBar(
                   middle: const Text('智能体'),
-                  leading: CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    onPressed: () =>
+                  leading: TopBarActionButton(
+                    onTap: () =>
                         ref.read(agentsProvider.notifier).clearSelection(),
+                    semanticsLabel: '返回',
+                    tooltip: '返回',
                     child: const Icon(CupertinoIcons.chevron_left),
                   ),
                 ),
@@ -146,10 +148,11 @@ class _AgentListPane extends StatelessWidget {
                     ),
                   ),
                 ),
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(34, 34),
+                AppIconButton(
                   onPressed: state.isActing ? null : onCreateDaemon,
+                  semanticLabel: '创建 Daemon',
+                  tooltip: '创建 Daemon',
+                  size: responsive.displayScaled(34),
                   child: const Icon(CupertinoIcons.plus_circle_fill),
                 ),
               ],
@@ -412,9 +415,13 @@ class _AgentListTile extends StatelessWidget {
         left: isChild ? responsive.spacing(30) : 0,
         bottom: responsive.spacing(6),
       ),
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: onTap,
+      child: AppPressableTile(
+        onTap: onTap,
+        selected: selected,
+        semanticLabel: agent.displayName,
+        borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
+        backgroundColor: CupertinoColors.transparent,
+        selectedBackgroundColor: const Color(0xFFE8F0FF),
         child: Row(
           children: <Widget>[
             if (isChild) ...<Widget>[
@@ -958,33 +965,56 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoButton(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      color: danger ? const Color(0xFFFFEBEB) : const Color(0xFFEAF2FF),
-      disabledColor: const Color(0xFFE5EAF2),
+    return AppPressable(
+      onTap: isLoading ? null : onPressed,
+      semanticLabel: label,
+      tooltip: label,
+      enabled: onPressed != null && !isLoading,
+      scaleOnPress: true,
+      pressedScale: 0.98,
       borderRadius: BorderRadius.circular(8),
-      onPressed: onPressed,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          if (isLoading)
-            const CupertinoActivityIndicator(radius: 8)
-          else
-            Icon(
-              icon,
-              size: 17,
-              color: danger ? AwikiMeColors.danger : const Color(0xFF0B65F8),
+      builder: (context, state, child) {
+        return AnimatedOpacity(
+          opacity: state.enabled
+              ? state.pressed
+                    ? 0.78
+                    : state.hovered || state.focused
+                    ? 0.90
+                    : 1
+              : 0.55,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          child: child,
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: danger ? const Color(0xFFFFEBEB) : const Color(0xFFEAF2FF),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (isLoading)
+              const CupertinoActivityIndicator(radius: 8)
+            else
+              Icon(
+                icon,
+                size: 17,
+                color: danger ? AwikiMeColors.danger : const Color(0xFF0B65F8),
+              ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: danger ? AwikiMeColors.danger : const Color(0xFF0B65F8),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: danger ? AwikiMeColors.danger : const Color(0xFF0B65F8),
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1001,21 +1031,27 @@ class _AgentErrorBanner extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final retryButton = onRetry == null
         ? null
-        : CupertinoButton(
-            padding: EdgeInsets.symmetric(
-              horizontal: responsive.spacing(10),
-              vertical: responsive.spacing(5),
-            ),
-            minimumSize: Size.zero,
+        : AppPressable(
+            onTap: onRetry,
+            semanticLabel: '重试',
+            tooltip: '重试',
             borderRadius: BorderRadius.circular(responsive.radius(8)),
-            color: CupertinoColors.white,
-            onPressed: onRetry,
-            child: Text(
-              '重试',
-              style: TextStyle(
-                color: AwikiMeColors.danger,
-                fontSize: responsive.metaSm,
-                fontWeight: FontWeight.w700,
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: responsive.spacing(10),
+                vertical: responsive.spacing(5),
+              ),
+              decoration: BoxDecoration(
+                color: CupertinoColors.white,
+                borderRadius: BorderRadius.circular(responsive.radius(8)),
+              ),
+              child: Text(
+                '重试',
+                style: TextStyle(
+                  color: AwikiMeColors.danger,
+                  fontSize: responsive.metaSm,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           );
@@ -1067,20 +1103,19 @@ class _InlineCopyButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     return SelectionContainer.disabled(
-      child: CupertinoButton(
-        padding: EdgeInsets.all(responsive.spacing(5)),
-        minimumSize: Size(
-          responsive.displayScaled(28),
-          responsive.displayScaled(28),
-        ),
-        borderRadius: BorderRadius.circular(responsive.radius(7)),
-        color: CupertinoColors.white,
+      child: AppIconButton(
         onPressed: () async {
           await Clipboard.setData(ClipboardData(text: text));
           if (context.mounted) {
             AwikiMeToast.show(context, '已复制');
           }
         },
+        semanticLabel: '复制',
+        tooltip: '复制',
+        size: responsive.displayScaled(28),
+        padding: EdgeInsets.all(responsive.spacing(5)),
+        backgroundColor: CupertinoColors.white,
+        borderRadius: BorderRadius.circular(responsive.radius(7)),
         child: Icon(
           CupertinoIcons.doc_on_doc,
           color: const Color(0xFF44506A),
@@ -1479,17 +1514,15 @@ class _InstallCommandDialog extends StatelessWidget {
                         ),
                       ),
                       SizedBox(width: responsive.spacing(8)),
-                      CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size(
-                          responsive.displayScaled(30),
-                          responsive.displayScaled(30),
-                        ),
+                      AppIconButton(
+                        onPressed: onClose,
+                        semanticLabel: '关闭',
+                        tooltip: '关闭',
+                        size: responsive.displayScaled(30),
+                        backgroundColor: const Color(0xFFF4F6FA),
                         borderRadius: BorderRadius.circular(
                           responsive.radius(8),
                         ),
-                        color: const Color(0xFFF4F6FA),
-                        onPressed: onClose,
                         child: Icon(
                           CupertinoIcons.xmark,
                           color: const Color(0xFF66728A),
@@ -1626,16 +1659,14 @@ class _CommandText extends StatelessWidget {
           Positioned(
             top: 0,
             right: 0,
-            child: CupertinoButton(
+            child: AppIconButton(
               key: const Key('agent-install-copy-button'),
-              padding: EdgeInsets.zero,
-              minimumSize: Size(
-                responsive.displayScaled(34),
-                responsive.displayScaled(30),
-              ),
-              borderRadius: BorderRadius.circular(responsive.radius(8)),
-              color: const Color(0xFF1E293B),
               onPressed: onCopy,
+              semanticLabel: '复制安装命令',
+              tooltip: '复制安装命令',
+              size: responsive.displayScaled(34),
+              backgroundColor: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(responsive.radius(8)),
               child: Icon(
                 CupertinoIcons.doc_on_doc,
                 color: const Color(0xFFCBD5E1),

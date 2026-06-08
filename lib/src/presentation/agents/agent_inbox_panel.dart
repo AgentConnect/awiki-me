@@ -6,6 +6,7 @@ import '../../domain/entities/conversation_summary.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/responsive_layout.dart';
+import '../shared/widgets/app_widgets.dart';
 import 'agent_inbox_provider.dart';
 import 'agents_provider.dart';
 
@@ -346,9 +347,14 @@ class _ScopeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return AppPressable(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      semanticLabel: label,
+      tooltip: label,
+      selected: selected,
+      scaleOnPress: true,
+      pressedScale: 0.98,
+      borderRadius: BorderRadius.circular(7),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: selected ? const Color(0xFFE4ECF7) : CupertinoColors.white,
@@ -384,16 +390,14 @@ class _AgentInboxRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isGroup = item.kind == 'group';
-    return GestureDetector(
+    return AppPressableTile(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
+      semanticLabel: item.title,
+      borderRadius: BorderRadius.circular(8),
+      backgroundColor: CupertinoColors.white,
+      border: Border.all(color: const Color(0xFFE5EAF2)),
+      child: Padding(
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: CupertinoColors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFFE5EAF2)),
-        ),
         child: Row(
           children: <Widget>[
             Container(
@@ -693,21 +697,25 @@ class _LoadMoreButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoButton(
-      minimumSize: const Size(0, 34),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+    return AppPressable(
+      onTap: isLoading ? null : onTap,
+      semanticLabel: label,
+      tooltip: label,
+      enabled: !isLoading && onTap != null,
       borderRadius: BorderRadius.circular(8),
-      onPressed: isLoading ? null : onTap,
-      child: isLoading
-          ? const CupertinoActivityIndicator()
-          : Text(
-              label,
-              style: const TextStyle(
-                color: Color(0xFF0B65F8),
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        child: isLoading
+            ? const CupertinoActivityIndicator()
+            : Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFF0B65F8),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
+      ),
     );
   }
 }
@@ -727,15 +735,21 @@ class _AgentInboxError extends StatelessWidget {
           message: message,
           center: true,
           compact: true,
-          trailing: CupertinoButton(
-            minimumSize: const Size(0, 34),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            color: const Color(0xFF0B65F8),
+          trailing: AppPressable(
+            onTap: onRetry,
+            semanticLabel: '重试',
+            tooltip: '重试',
             borderRadius: BorderRadius.circular(8),
-            onPressed: onRetry,
-            child: const Text(
-              '重试',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0B65F8),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                '重试',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
             ),
           ),
         ),
@@ -839,30 +853,19 @@ class _AgentInboxIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return Semantics(
-      button: true,
-      enabled: !isLoading && onTap != null,
-      label: semanticLabel,
-      child: GestureDetector(
-        onTap: isLoading ? null : onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          height: responsive.displayScaled(32),
-          width: responsive.displayScaled(32),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: CupertinoColors.white,
-            borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
-            border: Border.all(color: const Color(0xFFDDE5F0)),
-          ),
-          child: isLoading
-              ? CupertinoActivityIndicator(radius: responsive.displayScaled(7))
-              : Icon(
-                  icon,
-                  color: const Color(0xFF34415C),
-                  size: responsive.displayScaled(16),
-                ),
-        ),
+    return AppIconButton(
+      onPressed: isLoading ? null : onTap,
+      semanticLabel: semanticLabel,
+      tooltip: semanticLabel,
+      isLoading: isLoading,
+      size: responsive.displayScaled(32),
+      backgroundColor: CupertinoColors.white,
+      borderColor: const Color(0xFFDDE5F0),
+      borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
+      child: Icon(
+        icon,
+        color: const Color(0xFF34415C),
+        size: responsive.displayScaled(16),
       ),
     );
   }

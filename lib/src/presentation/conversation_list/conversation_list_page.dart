@@ -380,27 +380,18 @@ class _MacListIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return Semantics(
-      button: true,
-      label: semanticLabel,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: responsive.displayScaled(32),
-          height: responsive.displayScaled(32),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: CupertinoColors.white,
-            borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
-            border: Border.all(color: const Color(0xFFE5EAF2)),
-          ),
-          child: Icon(
-            icon,
-            color: const Color(0xFF34415C),
-            size: responsive.displayScaled(19),
-          ),
-        ),
+    return AppIconButton(
+      onPressed: onTap,
+      semanticLabel: semanticLabel,
+      tooltip: semanticLabel,
+      size: responsive.displayScaled(32),
+      backgroundColor: CupertinoColors.white,
+      borderColor: const Color(0xFFE5EAF2),
+      borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
+      child: Icon(
+        icon,
+        color: const Color(0xFF34415C),
+        size: responsive.displayScaled(19),
       ),
     );
   }
@@ -430,21 +421,19 @@ class _MacConversationRow extends StatelessWidget {
     final responsive = context.awikiResponsive;
     return Padding(
       padding: EdgeInsets.only(bottom: responsive.displayScaled(6)),
-      child: GestureDetector(
+      child: AppPressableTile(
         onTap: onTap,
-        behavior: HitTestBehavior.opaque,
+        selected: isSelected,
+        semanticLabel: title,
+        borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
+        backgroundColor: CupertinoColors.white,
+        selectedBackgroundColor: const Color(0xFFE8F0FF),
+        border: Border.all(
+          color: isSelected ? const Color(0xFFCFE0FF) : const Color(0x00FFFFFF),
+        ),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
           padding: EdgeInsets.all(responsive.displayScaled(10)),
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFFE8F0FF) : CupertinoColors.white,
-            borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
-            border: Border.all(
-              color: isSelected
-                  ? const Color(0xFFCFE0FF)
-                  : const Color(0x00FFFFFF),
-            ),
-          ),
           child: Row(
             children: <Widget>[
               Stack(
@@ -618,96 +607,88 @@ class _ConversationRow extends StatelessWidget {
       padding: EdgeInsets.symmetric(
         horizontal: responsive.tabContentHorizontalPadding,
       ),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
+      child: AppPressableTile(
+        onTap: onTap,
+        selected: isSelected,
+        semanticLabel: title,
+        borderRadius: BorderRadius.circular(responsive.radius(18)),
+        backgroundColor: CupertinoColors.transparent,
+        selectedBackgroundColor: theme.subtleSurface,
+        border: Border(bottom: BorderSide(color: theme.border)),
         padding: responsive.scaledInsets(
           const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
         ),
-        decoration: BoxDecoration(
-          color: isSelected ? theme.subtleSurface : CupertinoColors.transparent,
-          borderRadius: BorderRadius.circular(responsive.radius(18)),
-          border: Border(bottom: BorderSide(color: theme.border)),
-        ),
-        child: GestureDetector(
-          onTap: onTap,
-          behavior: HitTestBehavior.opaque,
-          child: Row(
-            children: <Widget>[
-              AvatarBadge(seed: title, size: responsive.avatarSizeMd),
-              SizedBox(width: responsive.spacing(14)),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: responsive.bodyMd,
-                        fontWeight: FontWeight.w400,
-                        color: theme.title,
-                      ),
+        child: Row(
+          children: <Widget>[
+            AvatarBadge(seed: title, size: responsive.avatarSizeMd),
+            SizedBox(width: responsive.spacing(14)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: responsive.bodyMd,
+                      fontWeight: FontWeight.w400,
+                      color: theme.title,
                     ),
-                    SizedBox(height: responsive.spacing(4)),
-                    Text(
-                      preview.isEmpty
-                          ? context.l10n.conversationsNoMessagePreview
-                          : preview,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: responsive.bodySm,
-                        height: 1.2,
-                        color: theme.secondaryText,
+                  ),
+                  SizedBox(height: responsive.spacing(4)),
+                  Text(
+                    preview.isEmpty
+                        ? context.l10n.conversationsNoMessagePreview
+                        : preview,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: responsive.bodySm,
+                      height: 1.2,
+                      color: theme.secondaryText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: responsive.spacing(10)),
+            SizedBox(
+              width: responsive.scaled(58),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  Text(
+                    timeLabel,
+                    style: AwikiMeTextStyles.meta.copyWith(
+                      fontSize: responsive.metaSm,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  if (unreadCount > 0) ...<Widget>[
+                    SizedBox(height: responsive.spacing(8)),
+                    Container(
+                      padding: responsive.scaledInsets(
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.primary,
+                        borderRadius: BorderRadius.circular(AwikiMeRadii.pill),
+                      ),
+                      child: Text(
+                        unreadCount > 999 ? '999+' : '$unreadCount',
+                        style: TextStyle(
+                          fontSize: responsive.metaSm,
+                          color: theme.primaryForeground,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ],
-                ),
+                ],
               ),
-              SizedBox(width: responsive.spacing(10)),
-              SizedBox(
-                width: responsive.scaled(58),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: <Widget>[
-                    Text(
-                      timeLabel,
-                      style: AwikiMeTextStyles.meta.copyWith(
-                        fontSize: responsive.metaSm,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                    if (unreadCount > 0) ...<Widget>[
-                      SizedBox(height: responsive.spacing(8)),
-                      Container(
-                        padding: responsive.scaledInsets(
-                          const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 3,
-                          ),
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.primary,
-                          borderRadius: BorderRadius.circular(
-                            AwikiMeRadii.pill,
-                          ),
-                        ),
-                        child: Text(
-                          unreadCount > 999 ? '999+' : '$unreadCount',
-                          style: TextStyle(
-                            fontSize: responsive.metaSm,
-                            color: theme.primaryForeground,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
