@@ -112,7 +112,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final thread = ref.watch(chatThreadProvider(widget.conversation.threadId));
     final currentConversation = _currentConversationForTitle();
     _requestAgentsIfNeeded(currentConversation);
-    final runtimeAgent = _runtimeAgentForConversation(currentConversation);
+    final agents = ref.watch(agentsProvider).agents;
+    final runtimeAgent = _runtimeAgentForConversation(
+      currentConversation,
+      agents,
+    );
     final friendsState = ref.watch(friendsProvider);
     ref.listen<ChatThreadState>(
       chatThreadProvider(widget.conversation.threadId),
@@ -136,6 +140,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
       );
     });
     final messages = thread.messages;
+    final showAgentProcessing =
+        runtimeAgent != null && thread.isAgentProcessing;
     final page = SafeArea(
       bottom: false,
       child: Column(
@@ -186,8 +192,27 @@ class _ChatViewState extends ConsumerState<ChatView> {
                     ? responsive.displayScaled(92)
                     : responsive.spacing(widget.embedded ? 124 : 140),
               ),
-              itemCount: messages.length,
+              itemCount: messages.length + (showAgentProcessing ? 1 : 0),
               itemBuilder: (_, index) {
+                if (index >= messages.length) {
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      bottom: macStyle
+                          ? responsive.displayScaled(16)
+                          : responsive.spacing(24),
+                    ),
+                    child: _AgentProcessingIndicator(
+                      label: thread.isAgentProcessingOverdue
+                          ? '智能体仍在处理，稍后可刷新查看'
+                          : '智能体正在处理...',
+                      avatarSeed: _agentProcessingAvatarSeed(
+                        runtimeAgent,
+                        currentConversation,
+                      ),
+                      macStyle: macStyle,
+                    ),
+                  );
+                }
                 final message = messages[index];
                 final previous = index == 0 ? null : messages[index - 1];
                 final next = index + 1 < messages.length
@@ -262,6 +287,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                   .sendMessage(
                     conversation: widget.conversation,
                     content: value,
+                    expectedAgentReplyDid: runtimeAgent?.agentDid,
                   );
             },
             onAttach: () async {
@@ -332,6 +358,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
             conversation: conversation,
             attachment: draft,
             caption: caption,
+            expectedAgentReplyDid: _runtimeAgentForConversation(
+              conversation,
+              ref.read(agentsProvider).agents,
+            )?.agentDid,
           );
     } catch (error) {
       ref
@@ -612,7 +642,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
     throw StateError('Group not found');
   }
 
-  AgentSummary? _runtimeAgentForConversation(ConversationSummary conversation) {
+  AgentSummary? _runtimeAgentForConversation(
+    ConversationSummary conversation,
+    List<AgentSummary> agents,
+  ) {
     if (conversation.isGroup) {
       return null;
     }
@@ -620,12 +653,27 @@ class _ChatViewState extends ConsumerState<ChatView> {
     if (targetDid == null || targetDid.isEmpty) {
       return null;
     }
-    for (final agent in ref.watch(agentsProvider).agents) {
+    for (final agent in agents) {
       if (agent.isRuntime && agent.agentDid == targetDid) {
         return agent;
       }
     }
     return null;
+  }
+
+  String _agentProcessingAvatarSeed(
+    AgentSummary? runtimeAgent,
+    ConversationSummary conversation,
+  ) {
+    final displayName = runtimeAgent?.displayName.trim();
+    if (displayName != null && displayName.isNotEmpty) {
+      return displayName;
+    }
+    final agentDid = runtimeAgent?.agentDid.trim();
+    if (agentDid != null && agentDid.isNotEmpty) {
+      return agentDid;
+    }
+    return conversation.displayName;
   }
 }
 
@@ -1160,6 +1208,128 @@ class _DateDivider extends StatelessWidget {
         color: context.awikiTheme.subtleSurface,
         radius: AwikiMeRadii.pill,
         child: Text(label, style: AwikiMeTextStyles.meta),
+      ),
+    );
+  }
+}
+
+class _AgentProcessingIndicator extends StatelessWidget {
+  const _AgentProcessingIndicator({
+    required this.label,
+    required this.avatarSeed,
+    required this.macStyle,
+  });
+
+  final String label;
+  final String avatarSeed;
+  final bool macStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final bubbleColor = macStyle
+        ? const Color(0xFFF8FAFD)
+        : theme.subtleSurface;
+    final borderColor = macStyle
+        ? const Color(0xFFDDE5F0)
+        : theme.border.withValues(alpha: 0.72);
+    final textColor = macStyle ? const Color(0xFF66728A) : theme.secondaryText;
+    return Semantics(
+      liveRegion: true,
+      label: label,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          AvatarBadge(
+            seed: avatarSeed,
+            size: macStyle
+                ? responsive.displayScaled(34)
+                : responsive.scaled(28),
+          ),
+          SizedBox(
+            width: macStyle
+                ? responsive.displayScaled(10)
+                : responsive.spacing(12),
+          ),
+          Flexible(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: macStyle
+                    ? responsive.displayScaled(420)
+                    : (responsive.isLarge ? 500 : 640),
+              ),
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: macStyle
+                      ? responsive.displayScaled(13)
+                      : responsive.spacing(15),
+                  vertical: macStyle
+                      ? responsive.displayScaled(9)
+                      : responsive.spacing(12),
+                ),
+                decoration: BoxDecoration(
+                  color: bubbleColor,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(
+                      macStyle
+                          ? responsive.displayScaled(8)
+                          : responsive.scaled(6),
+                    ),
+                    topRight: Radius.circular(
+                      macStyle
+                          ? responsive.displayScaled(10)
+                          : responsive.scaled(20),
+                    ),
+                    bottomLeft: Radius.circular(
+                      macStyle
+                          ? responsive.displayScaled(10)
+                          : responsive.scaled(20),
+                    ),
+                    bottomRight: Radius.circular(
+                      macStyle
+                          ? responsive.displayScaled(10)
+                          : responsive.scaled(20),
+                    ),
+                  ),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    CupertinoActivityIndicator(
+                      radius: macStyle
+                          ? responsive.displayScaled(6.5)
+                          : responsive.scaled(7),
+                      color: textColor,
+                    ),
+                    SizedBox(
+                      width: macStyle
+                          ? responsive.displayScaled(8)
+                          : responsive.spacing(9),
+                    ),
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: macStyle
+                              ? responsive.displayScaled(13)
+                              : responsive.metaSm,
+                          fontWeight: FontWeight.w500,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

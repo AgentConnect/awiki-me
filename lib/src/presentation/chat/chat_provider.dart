@@ -16,20 +16,83 @@ class ChatThreadState {
     required this.threadId,
     this.messages = const <ChatMessage>[],
     this.isLoading = false,
+    this.agentProcessing,
   });
 
   final String threadId;
   final List<ChatMessage> messages;
   final bool isLoading;
+  final AgentProcessingState? agentProcessing;
 
-  ChatThreadState copyWith({List<ChatMessage>? messages, bool? isLoading}) {
+  bool get isAgentProcessing => agentProcessing?.isActive ?? false;
+
+  bool get isAgentProcessingOverdue => agentProcessing?.isOverdue ?? false;
+
+  ChatThreadState copyWith({
+    List<ChatMessage>? messages,
+    bool? isLoading,
+    Object? agentProcessing = _unchanged,
+  }) {
     return ChatThreadState(
       threadId: threadId,
       messages: messages ?? this.messages,
       isLoading: isLoading ?? this.isLoading,
+      agentProcessing: identical(agentProcessing, _unchanged)
+          ? this.agentProcessing
+          : agentProcessing as AgentProcessingState?,
     );
   }
 }
+
+class AgentProcessingState {
+  const AgentProcessingState({
+    required this.agentDid,
+    required this.startedAt,
+    this.pendingReplyCount = 1,
+    this.isOverdue = false,
+  });
+
+  final String agentDid;
+  final DateTime startedAt;
+  final int pendingReplyCount;
+  final bool isOverdue;
+
+  bool get isActive => agentDid.trim().isNotEmpty && pendingReplyCount > 0;
+
+  AgentProcessingState markOverdue() {
+    if (isOverdue) {
+      return this;
+    }
+    return AgentProcessingState(
+      agentDid: agentDid,
+      startedAt: startedAt,
+      pendingReplyCount: pendingReplyCount,
+      isOverdue: true,
+    );
+  }
+
+  AgentProcessingState addPendingReply() {
+    return AgentProcessingState(
+      agentDid: agentDid,
+      startedAt: startedAt,
+      pendingReplyCount: pendingReplyCount + 1,
+    );
+  }
+
+  AgentProcessingState? consumeReply() {
+    if (pendingReplyCount <= 1) {
+      return null;
+    }
+    return AgentProcessingState(
+      agentDid: agentDid,
+      startedAt: startedAt,
+      pendingReplyCount: pendingReplyCount - 1,
+      isOverdue: isOverdue,
+    );
+  }
+}
+
+const Object _unchanged = Object();
 
 class ChatThreadsController
     extends StateNotifier<Map<String, ChatThreadState>> {
@@ -44,6 +107,10 @@ class ChatThreadsController
     minutes: 3,
     seconds: 30,
   );
+  static const Duration agentProcessingOverdueAfter = Duration(seconds: 75);
+  static const Duration _agentProcessingReplyClockSkew = Duration(seconds: 2);
+
+  final Map<String, Timer> _agentProcessingTimers = <String, Timer>{};
 
   ChatThreadState thread(String threadId) {
     return state[threadId] ?? ChatThreadState(threadId: threadId);
@@ -108,6 +175,7 @@ class ChatThreadsController
   Future<void> sendMessage({
     required ConversationSummary conversation,
     required String content,
+    String? expectedAgentReplyDid,
   }) async {
     final session = ref.read(sessionProvider).session;
     if (session == null || content.trim().isEmpty) {
@@ -148,6 +216,10 @@ class ChatThreadsController
       ref
           .read(conversationListProvider.notifier)
           .upsertConversation(latestConversation);
+      _startAgentProcessingIfNeeded(
+        conversation: latestConversation,
+        expectedAgentReplyDid: expectedAgentReplyDid,
+      );
     } catch (_) {
       final failed = pending.copyWith(sendState: MessageSendState.failed);
       _replaceMessage(conversation.threadId, pending.localId, failed);
@@ -171,6 +243,7 @@ class ChatThreadsController
     required ConversationSummary conversation,
     required AttachmentDraft attachment,
     String? caption,
+    String? expectedAgentReplyDid,
   }) async {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
@@ -226,6 +299,10 @@ class ChatThreadsController
       ref
           .read(conversationListProvider.notifier)
           .upsertConversation(latestConversation);
+      _startAgentProcessingIfNeeded(
+        conversation: latestConversation,
+        expectedAgentReplyDid: expectedAgentReplyDid,
+      );
     } catch (_) {
       final failed = pending.copyWith(sendState: MessageSendState.failed);
       _replaceMessage(conversation.threadId, pending.localId, failed);
@@ -360,7 +437,9 @@ class ChatThreadsController
   }
 
   void applyRealtimeUpdate(ChatMessage message) {
-    _mergeMessages(message.threadId, <ChatMessage>[message]);
+    _mergeMessages(message.threadId, <ChatMessage>[
+      message,
+    ], trustIncomingAgentReply: true);
   }
 
   Future<void> refreshConversation(ConversationSummary conversation) async {
@@ -379,6 +458,7 @@ class ChatThreadsController
   }
 
   void clear() {
+    _cancelAgentProcessingTimers();
     state = const <String, ChatThreadState>{};
   }
 
@@ -391,12 +471,10 @@ class ChatThreadsController
   }
 
   void _setMessages(String threadId, List<ChatMessage> messages) {
+    final current = thread(threadId);
     state = <String, ChatThreadState>{
       ...state,
-      threadId: ChatThreadState(
-        threadId: threadId,
-        messages: _sortMessages(messages),
-      ),
+      threadId: current.copyWith(messages: _sortMessages(messages)),
     };
   }
 
@@ -426,6 +504,7 @@ class ChatThreadsController
     List<ChatMessage> incoming, {
     bool? isLoading,
     bool resolveStaleSending = false,
+    bool trustIncomingAgentReply = false,
   }) {
     final current = List<ChatMessage>.from(thread(threadId).messages);
     for (final message in incoming.where(
@@ -442,14 +521,118 @@ class ChatThreadsController
         ? _markStaleSendingFailed(current)
         : current;
     final previous = thread(threadId);
+    final nextAgentProcessing = _nextAgentProcessingAfterMerge(
+      previous.agentProcessing,
+      incoming,
+      trustIncomingAgentReply: trustIncomingAgentReply,
+    );
     state = <String, ChatThreadState>{
       ...state,
       threadId: ChatThreadState(
         threadId: threadId,
         messages: _sortMessages(messages),
         isLoading: isLoading ?? previous.isLoading,
+        agentProcessing: nextAgentProcessing,
       ),
     };
+    if (nextAgentProcessing == null) {
+      _cancelAgentProcessingTimer(threadId);
+    }
+  }
+
+  void _startAgentProcessingIfNeeded({
+    required ConversationSummary conversation,
+    required String? expectedAgentReplyDid,
+  }) {
+    final agentDid = expectedAgentReplyDid?.trim();
+    if (conversation.isGroup || agentDid == null || agentDid.isEmpty) {
+      return;
+    }
+    final threadId = conversation.threadId;
+    final current = thread(threadId);
+    final previousProcessing = current.agentProcessing;
+    final processing =
+        previousProcessing != null && previousProcessing.agentDid == agentDid
+        ? previousProcessing.addPendingReply()
+        : AgentProcessingState(agentDid: agentDid, startedAt: DateTime.now());
+    state = <String, ChatThreadState>{
+      ...state,
+      threadId: current.copyWith(agentProcessing: processing),
+    };
+    _scheduleAgentProcessingOverdue(threadId);
+  }
+
+  AgentProcessingState? _nextAgentProcessingAfterMerge(
+    AgentProcessingState? current,
+    List<ChatMessage> incoming, {
+    required bool trustIncomingAgentReply,
+  }) {
+    var next = current;
+    if (next == null) {
+      return null;
+    }
+    final agentDid = next.agentDid.trim();
+    if (agentDid.isEmpty) {
+      return null;
+    }
+    for (final message in incoming) {
+      final active = next;
+      if (active == null) {
+        return null;
+      }
+      if (message.isMine ||
+          message.senderDid.trim() != agentDid ||
+          !message.hasRenderableContent) {
+        continue;
+      }
+      if (!trustIncomingAgentReply &&
+          message.createdAt.isBefore(
+            active.startedAt.subtract(_agentProcessingReplyClockSkew),
+          )) {
+        continue;
+      }
+      next = active.consumeReply();
+      if (next == null) {
+        return null;
+      }
+    }
+    return next;
+  }
+
+  void _scheduleAgentProcessingOverdue(String threadId) {
+    _cancelAgentProcessingTimer(threadId);
+    _agentProcessingTimers[threadId] = Timer(agentProcessingOverdueAfter, () {
+      _agentProcessingTimers.remove(threadId);
+      if (!mounted) {
+        return;
+      }
+      final current = state[threadId];
+      final processing = current?.agentProcessing;
+      if (current == null || processing == null || processing.isOverdue) {
+        return;
+      }
+      state = <String, ChatThreadState>{
+        ...state,
+        threadId: current.copyWith(agentProcessing: processing.markOverdue()),
+      };
+    });
+  }
+
+  void _cancelAgentProcessingTimer(String threadId) {
+    _agentProcessingTimers.remove(threadId)?.cancel();
+  }
+
+  void _cancelAgentProcessingTimers() {
+    for (final timer in _agentProcessingTimers.values) {
+      timer.cancel();
+    }
+    _agentProcessingTimers.clear();
+  }
+
+  @override
+  void dispose() {
+    _cancelAgentProcessingTimers();
+    super.dispose();
   }
 
   List<ChatMessage> _markStaleSendingFailed(List<ChatMessage> messages) {

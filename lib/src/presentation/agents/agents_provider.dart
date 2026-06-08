@@ -12,6 +12,9 @@ import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/install_command.dart';
 import '../app_shell/providers/session_provider.dart';
 
+const agentStatusQueryTimeout = Duration(seconds: 10);
+const agentStatusRefreshMinimumIndicatorDuration = Duration(milliseconds: 1500);
+
 class AgentsState {
   const AgentsState({
     this.agents = const <AgentSummary>[],
@@ -20,7 +23,6 @@ class AgentsState {
     this.isActing = false,
     this.installCommand,
     this.error,
-    this.lastRefreshAtByDaemon = const <String, DateTime>{},
     this.pendingStatusQueryAtByDaemon = const <String, DateTime>{},
     this.seenControlEventIds = const <String>{},
   });
@@ -31,7 +33,6 @@ class AgentsState {
   final bool isActing;
   final InstallCommand? installCommand;
   final String? error;
-  final Map<String, DateTime> lastRefreshAtByDaemon;
   final Map<String, DateTime> pendingStatusQueryAtByDaemon;
   final Set<String> seenControlEventIds;
 
@@ -69,7 +70,6 @@ class AgentsState {
     bool clearInstallCommand = false,
     String? error,
     bool clearError = false,
-    Map<String, DateTime>? lastRefreshAtByDaemon,
     Map<String, DateTime>? pendingStatusQueryAtByDaemon,
     Set<String>? seenControlEventIds,
   }) {
@@ -84,8 +84,6 @@ class AgentsState {
           ? null
           : (installCommand ?? this.installCommand),
       error: clearError ? null : (error ?? this.error),
-      lastRefreshAtByDaemon:
-          lastRefreshAtByDaemon ?? this.lastRefreshAtByDaemon,
       pendingStatusQueryAtByDaemon:
           pendingStatusQueryAtByDaemon ?? this.pendingStatusQueryAtByDaemon,
       seenControlEventIds: seenControlEventIds ?? this.seenControlEventIds,
@@ -98,6 +96,7 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   final Ref ref;
   final Map<String, Timer> _statusQueryTimeouts = <String, Timer>{};
+  final Map<String, Timer> _statusQueryClearTimers = <String, Timer>{};
 
   Future<void> load() async {
     final session = ref.read(sessionProvider).session;
@@ -158,15 +157,12 @@ class AgentsController extends StateNotifier<AgentsState> {
     String daemonDid, {
     bool fromAutoLoad = false,
   }) async {
-    final last = state.lastRefreshAtByDaemon[daemonDid];
     final now = DateTime.now().toUtc();
-    if (last != null && now.difference(last) < const Duration(seconds: 10)) {
-      if (!fromAutoLoad) {
-        state = state.copyWith(error: '10 秒内只能刷新一次。');
-      }
+    if (state.isStatusQueryPending(daemonDid)) {
       return;
     }
     if (!fromAutoLoad) {
+      _statusQueryClearTimers.remove(daemonDid)?.cancel();
       state = state.copyWith(
         pendingStatusQueryAtByDaemon: <String, DateTime>{
           ...state.pendingStatusQueryAtByDaemon,
@@ -181,16 +177,10 @@ class AgentsController extends StateNotifier<AgentsState> {
       await ref
           .read(agentControlServiceProvider)
           .refreshDaemonStatus(daemonDid);
-      state = state.copyWith(
-        isActing: false,
-        lastRefreshAtByDaemon: <String, DateTime>{
-          ...state.lastRefreshAtByDaemon,
-          daemonDid: now,
-        },
-        clearError: true,
-      );
+      state = state.copyWith(isActing: false, clearError: true);
     } catch (error) {
       _statusQueryTimeouts.remove(daemonDid)?.cancel();
+      _statusQueryClearTimers.remove(daemonDid)?.cancel();
       final nextPending = fromAutoLoad
           ? state.pendingStatusQueryAtByDaemon
           : _withoutKey(state.pendingStatusQueryAtByDaemon, daemonDid);
@@ -302,9 +292,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     final daemonDid =
         _string(payload['daemon_agent_did']) ??
         _string(_readMap(payload['daemon'])['agent_did']);
-    final nextPending = daemonDid == null
-        ? state.pendingStatusQueryAtByDaemon
-        : _withoutKey(state.pendingStatusQueryAtByDaemon, daemonDid);
+    final nextPending = _pendingAfterStatusPayload(daemonDid);
     if (daemonDid != null) {
       _statusQueryTimeouts.remove(daemonDid)?.cancel();
     }
@@ -335,7 +323,7 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   void _scheduleStatusQueryTimeout(String daemonDid) {
     _statusQueryTimeouts.remove(daemonDid)?.cancel();
-    _statusQueryTimeouts[daemonDid] = Timer(const Duration(seconds: 10), () {
+    _statusQueryTimeouts[daemonDid] = Timer(agentStatusQueryTimeout, () {
       _statusQueryTimeouts.remove(daemonDid);
       if (!mounted ||
           !state.pendingStatusQueryAtByDaemon.containsKey(daemonDid)) {
@@ -351,12 +339,56 @@ class AgentsController extends StateNotifier<AgentsState> {
     });
   }
 
+  Map<String, DateTime> _pendingAfterStatusPayload(String? daemonDid) {
+    if (daemonDid == null) {
+      return state.pendingStatusQueryAtByDaemon;
+    }
+    final pendingAt = state.pendingStatusQueryAtByDaemon[daemonDid];
+    if (pendingAt == null) {
+      _statusQueryClearTimers.remove(daemonDid)?.cancel();
+      return state.pendingStatusQueryAtByDaemon;
+    }
+    final elapsed = DateTime.now().toUtc().difference(pendingAt);
+    final remaining = agentStatusRefreshMinimumIndicatorDuration - elapsed;
+    if (remaining > Duration.zero) {
+      _scheduleStatusQueryClear(daemonDid, pendingAt, remaining);
+      return state.pendingStatusQueryAtByDaemon;
+    }
+    _statusQueryClearTimers.remove(daemonDid)?.cancel();
+    return _withoutKey(state.pendingStatusQueryAtByDaemon, daemonDid);
+  }
+
+  void _scheduleStatusQueryClear(
+    String daemonDid,
+    DateTime pendingAt,
+    Duration delay,
+  ) {
+    _statusQueryClearTimers.remove(daemonDid)?.cancel();
+    _statusQueryClearTimers[daemonDid] = Timer(delay, () {
+      _statusQueryClearTimers.remove(daemonDid);
+      if (!mounted ||
+          state.pendingStatusQueryAtByDaemon[daemonDid] != pendingAt) {
+        return;
+      }
+      state = state.copyWith(
+        pendingStatusQueryAtByDaemon: _withoutKey(
+          state.pendingStatusQueryAtByDaemon,
+          daemonDid,
+        ),
+      );
+    });
+  }
+
   @override
   void dispose() {
     for (final timer in _statusQueryTimeouts.values) {
       timer.cancel();
     }
     _statusQueryTimeouts.clear();
+    for (final timer in _statusQueryClearTimers.values) {
+      timer.cancel();
+    }
+    _statusQueryClearTimers.clear();
     super.dispose();
   }
 

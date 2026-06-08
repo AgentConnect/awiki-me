@@ -54,8 +54,9 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
     final detail = _AgentDetailPane(
       state: state,
       selected: state.selectedAgent,
-      onRefresh: (agent) =>
-          ref.read(agentsProvider.notifier).refreshDaemonStatus(agent.agentDid),
+      onRefresh: (agent) {
+        ref.read(agentsProvider.notifier).refreshDaemonStatus(agent.agentDid);
+      },
       onCreateRuntime: (agent) =>
           ref.read(agentsProvider.notifier).createHermesRuntime(agent.agentDid),
       onOpenChat: (agent) => _openRuntimeChat(context, ref, agent),
@@ -178,16 +179,208 @@ class _AgentListPane extends StatelessWidget {
                       ),
                     ),
                   ),
-                for (final agent in state.agents)
-                  _AgentListTile(
-                    agent: agent,
-                    selected: state.selectedAgent?.agentDid == agent.agentDid,
-                    onTap: () => onSelect(agent.agentDid),
-                  ),
+                _AgentHierarchyList(state: state, onSelect: onSelect),
               ],
             ),
           ),
           if (footer != null) footer!,
+        ],
+      ),
+    );
+  }
+}
+
+class _AgentHierarchyList extends StatelessWidget {
+  const _AgentHierarchyList({required this.state, required this.onSelect});
+
+  final AgentsState state;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedDid = state.selectedAgent?.agentDid;
+    final groups = _AgentTreeGroup.fromAgents(state.agents);
+    return Column(
+      children: <Widget>[
+        for (final group in groups) ...<Widget>[
+          _AgentDaemonGroup(
+            group: group,
+            selectedAgentDid: selectedDid,
+            onSelect: onSelect,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _AgentTreeGroup {
+  const _AgentTreeGroup({required this.daemon, required this.runtimes});
+
+  final AgentSummary? daemon;
+  final List<AgentSummary> runtimes;
+
+  static List<_AgentTreeGroup> fromAgents(List<AgentSummary> agents) {
+    final daemons = agents.where((agent) => agent.isDaemon).toList();
+    final groupedRuntimes = <String, List<AgentSummary>>{};
+    final orphanRuntimes = <AgentSummary>[];
+    final daemonDids = daemons.map((agent) => agent.agentDid).toSet();
+    for (final runtime in agents.where((agent) => agent.isRuntime)) {
+      final daemonDid = runtime.daemonAgentDid;
+      if (daemonDid != null && daemonDids.contains(daemonDid)) {
+        groupedRuntimes
+            .putIfAbsent(daemonDid, () => <AgentSummary>[])
+            .add(runtime);
+      } else {
+        orphanRuntimes.add(runtime);
+      }
+    }
+    return <_AgentTreeGroup>[
+      for (final daemon in daemons)
+        _AgentTreeGroup(
+          daemon: daemon,
+          runtimes: groupedRuntimes[daemon.agentDid] ?? const <AgentSummary>[],
+        ),
+      if (orphanRuntimes.isNotEmpty)
+        _AgentTreeGroup(daemon: null, runtimes: orphanRuntimes),
+    ];
+  }
+}
+
+class _AgentDaemonGroup extends StatelessWidget {
+  const _AgentDaemonGroup({
+    required this.group,
+    required this.selectedAgentDid,
+    required this.onSelect,
+  });
+
+  final _AgentTreeGroup group;
+  final String? selectedAgentDid;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final daemon = group.daemon;
+    final runtimes = group.runtimes;
+    if (daemon == null) {
+      return Padding(
+        padding: EdgeInsets.only(bottom: responsive.spacing(10)),
+        child: _OrphanRuntimeGroup(
+          runtimes: runtimes,
+          selectedAgentDid: selectedAgentDid,
+          onSelect: onSelect,
+        ),
+      );
+    }
+    return Padding(
+      padding: EdgeInsets.only(bottom: responsive.spacing(10)),
+      child: Column(
+        children: <Widget>[
+          _AgentListTile(
+            agent: daemon,
+            selected: selectedAgentDid == daemon.agentDid,
+            onTap: () => onSelect(daemon.agentDid),
+            runtimeCount: runtimes.length,
+          ),
+          if (runtimes.isEmpty)
+            _EmptyRuntimeHint()
+          else
+            for (final runtime in runtimes)
+              _AgentListTile(
+                agent: runtime,
+                selected: selectedAgentDid == runtime.agentDid,
+                onTap: () => onSelect(runtime.agentDid),
+                depth: 1,
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrphanRuntimeGroup extends StatelessWidget {
+  const _OrphanRuntimeGroup({
+    required this.runtimes,
+    required this.selectedAgentDid,
+    required this.onSelect,
+  });
+
+  final List<AgentSummary> runtimes;
+  final String? selectedAgentDid;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            responsive.spacing(12),
+            responsive.spacing(2),
+            responsive.spacing(12),
+            responsive.spacing(7),
+          ),
+          child: Text(
+            '未关联代理',
+            style: TextStyle(
+              color: const Color(0xFF66728A),
+              fontSize: responsive.metaSm,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        for (final runtime in runtimes)
+          _AgentListTile(
+            agent: runtime,
+            selected: selectedAgentDid == runtime.agentDid,
+            onTap: () => onSelect(runtime.agentDid),
+          ),
+      ],
+    );
+  }
+}
+
+class _EmptyRuntimeHint extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Padding(
+      padding: EdgeInsets.only(
+        left: responsive.spacing(30),
+        right: responsive.spacing(4),
+        bottom: responsive.spacing(6),
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 1,
+            height: responsive.displayScaled(28),
+            color: const Color(0xFFDDE5F0),
+          ),
+          SizedBox(width: responsive.spacing(12)),
+          Expanded(
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: responsive.spacing(10),
+                vertical: responsive.spacing(8),
+              ),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F9FD),
+                borderRadius: BorderRadius.circular(responsive.radius(8)),
+                border: Border.all(color: const Color(0xFFE8EDF5)),
+              ),
+              child: Text(
+                '尚未创建 Runtime Agent',
+                style: TextStyle(
+                  color: const Color(0xFF66728A),
+                  fontSize: responsive.metaSm,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -199,75 +392,144 @@ class _AgentListTile extends StatelessWidget {
     required this.agent,
     required this.selected,
     required this.onTap,
+    this.depth = 0,
+    this.runtimeCount,
   });
 
   final AgentSummary agent;
   final bool selected;
   final VoidCallback onTap;
+  final int depth;
+  final int? runtimeCount;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final isChild = depth > 0;
     return Padding(
-      padding: EdgeInsets.only(bottom: responsive.spacing(6)),
+      padding: EdgeInsets.only(
+        left: isChild ? responsive.spacing(30) : 0,
+        bottom: responsive.spacing(6),
+      ),
       child: CupertinoButton(
         padding: EdgeInsets.zero,
         onPressed: onTap,
-        child: Container(
-          padding: EdgeInsets.all(responsive.spacing(12)),
-          decoration: BoxDecoration(
-            color: selected ? const Color(0xFFEAF2FF) : CupertinoColors.white,
-            borderRadius: BorderRadius.circular(responsive.radius(8)),
-            border: Border.all(
-              color: selected
-                  ? const Color(0xFFBBD2FF)
-                  : const Color(0xFFE5EAF2),
-            ),
-          ),
-          child: Row(
-            children: <Widget>[
-              Icon(
-                agent.isDaemon
-                    ? CupertinoIcons.desktopcomputer
-                    : CupertinoIcons.sparkles,
-                color: const Color(0xFF0B65F8),
-                size: responsive.iconMd,
+        child: Row(
+          children: <Widget>[
+            if (isChild) ...<Widget>[
+              SizedBox(
+                width: responsive.spacing(12),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    width: 1,
+                    height: responsive.displayScaled(50),
+                    color: const Color(0xFFDDE5F0),
+                  ),
+                ),
               ),
-              SizedBox(width: responsive.spacing(10)),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              SizedBox(width: responsive.spacing(8)),
+            ],
+            Expanded(
+              child: Container(
+                padding: EdgeInsets.all(
+                  isChild ? responsive.spacing(10) : responsive.spacing(12),
+                ),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? const Color(0xFFEAF2FF)
+                      : isChild
+                      ? const Color(0xFFFAFBFE)
+                      : CupertinoColors.white,
+                  borderRadius: BorderRadius.circular(responsive.radius(8)),
+                  border: Border.all(
+                    color: selected
+                        ? const Color(0xFFBBD2FF)
+                        : isChild
+                        ? const Color(0xFFE8EDF5)
+                        : const Color(0xFFE5EAF2),
+                  ),
+                ),
+                child: Row(
                   children: <Widget>[
-                    Text(
-                      agent.displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: const Color(0xFF101B32),
-                        fontSize: responsive.bodySm,
-                        fontWeight: FontWeight.w700,
+                    _AgentKindIcon(agent: agent, isChild: isChild),
+                    SizedBox(width: responsive.spacing(10)),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            agent.displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: const Color(0xFF101B32),
+                              fontSize: responsive.bodySm,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          SizedBox(height: responsive.spacing(3)),
+                          Text(
+                            _agentListSubtitle(agent, runtimeCount),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: const Color(0xFF66728A),
+                              fontSize: responsive.metaSm,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    SizedBox(height: responsive.spacing(3)),
-                    Text(
-                      '${agent.isDaemon ? 'Daemon' : agent.runtime ?? 'Runtime'} · ${agent.latest.status}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: const Color(0xFF66728A),
-                        fontSize: responsive.metaSm,
-                      ),
-                    ),
+                    _StatusDot(status: agent.latest.status),
                   ],
                 ),
               ),
-              _StatusDot(status: agent.latest.status),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
+
+class _AgentKindIcon extends StatelessWidget {
+  const _AgentKindIcon({required this.agent, required this.isChild});
+
+  final AgentSummary agent;
+  final bool isChild;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final color = agent.isDaemon
+        ? const Color(0xFF0B65F8)
+        : const Color(0xFF7C4DFF);
+    return Container(
+      width: responsive.displayScaled(isChild ? 28 : 32),
+      height: responsive.displayScaled(isChild ? 28 : 32),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: isChild ? 0.1 : 0.12),
+        borderRadius: BorderRadius.circular(responsive.radius(8)),
+      ),
+      child: Icon(
+        agent.isDaemon
+            ? CupertinoIcons.desktopcomputer
+            : CupertinoIcons.sparkles,
+        color: color,
+        size: isChild ? responsive.iconSm : responsive.iconMd,
+      ),
+    );
+  }
+}
+
+String _agentListSubtitle(AgentSummary agent, int? runtimeCount) {
+  if (agent.isDaemon) {
+    final count = runtimeCount ?? 0;
+    return 'Daemon · $count 个 Agent · ${agent.latest.status}';
+  }
+  final runtime = agent.runtime ?? 'Runtime';
+  return '$runtime · ${agent.latest.status}';
 }
 
 class _AgentDetailPane extends StatelessWidget {
@@ -337,8 +599,11 @@ class _AgentDetailPane extends StatelessWidget {
               if (agent.isDaemon)
                 _ActionButton(
                   icon: CupertinoIcons.refresh,
-                  label: '刷新状态',
-                  onPressed: state.isActing ? null : () => onRefresh(agent),
+                  label: isRefreshing ? '刷新中' : '刷新状态',
+                  isLoading: isRefreshing,
+                  onPressed: state.isActing || isRefreshing
+                      ? null
+                      : () => onRefresh(agent),
                 ),
               if (agent.isDaemon)
                 _ActionButton(
@@ -393,10 +658,6 @@ class _AgentDetailPane extends StatelessWidget {
               ),
             ],
           ),
-          if (isRefreshing) ...<Widget>[
-            SizedBox(height: responsive.spacing(10)),
-            const _RefreshPendingNotice(),
-          ],
           if (state.error != null) ...<Widget>[
             SizedBox(height: responsive.spacing(10)),
             _AgentErrorBanner(message: state.error!),
@@ -673,12 +934,14 @@ class _ActionButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.danger = false,
+    this.isLoading = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback? onPressed;
   final bool danger;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -691,11 +954,14 @@ class _ActionButton extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(
-            icon,
-            size: 17,
-            color: danger ? AwikiMeColors.danger : const Color(0xFF0B65F8),
-          ),
+          if (isLoading)
+            const CupertinoActivityIndicator(radius: 8)
+          else
+            Icon(
+              icon,
+              size: 17,
+              color: danger ? AwikiMeColors.danger : const Color(0xFF0B65F8),
+            ),
           const SizedBox(width: 6),
           Text(
             label,
@@ -908,28 +1174,6 @@ class _DisabledAdvancedAction extends StatelessWidget {
         label: '重建 Runtime',
         onPressed: null,
       ),
-    );
-  }
-}
-
-class _RefreshPendingNotice extends StatelessWidget {
-  const _RefreshPendingNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    return Row(
-      children: <Widget>[
-        const CupertinoActivityIndicator(radius: 8),
-        SizedBox(width: responsive.spacing(8)),
-        Text(
-          '正在刷新状态',
-          style: TextStyle(
-            color: const Color(0xFF66728A),
-            fontSize: responsive.metaSm,
-          ),
-        ),
-      ],
     );
   }
 }

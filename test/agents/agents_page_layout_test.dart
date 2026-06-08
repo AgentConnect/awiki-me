@@ -113,6 +113,105 @@ void main() {
     expect(control.lastRetryRunId, 'run_123');
   });
 
+  testWidgets('agent list groups runtime agents under their daemon', (
+    tester,
+  ) async {
+    final control = FakeAgentControlService()
+      ..agents = <AgentSummary>[
+        const AgentSummary(
+          agentDid: 'did:agent:runtime:b',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon:b',
+          runtime: 'hermes',
+          handle: 'awiki-agent-b',
+          displayName: 'Hermes B',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        const AgentSummary(
+          agentDid: 'did:agent:daemon:a',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-a',
+          displayName: 'MacBook Daemon',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready', platform: 'darwin-arm64'),
+        ),
+        const AgentSummary(
+          agentDid: 'did:agent:runtime:a',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon:a',
+          runtime: 'hermes',
+          handle: 'awiki-agent-a',
+          displayName: 'Hermes A',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        const AgentSummary(
+          agentDid: 'did:agent:daemon:b',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-b',
+          displayName: 'Server Daemon',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready', platform: 'linux-arm64'),
+        ),
+      ];
+
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Daemon · 1 个 Agent · ready'), findsNWidgets(2));
+    expect(find.text('hermes · ready'), findsNWidgets(2));
+
+    final listPane = find.byType(ListView).first;
+    final daemonATop = tester
+        .getTopLeft(
+          find.descendant(of: listPane, matching: find.text('MacBook Daemon')),
+        )
+        .dy;
+    final runtimeATop = tester
+        .getTopLeft(
+          find.descendant(of: listPane, matching: find.text('Hermes A')),
+        )
+        .dy;
+    final daemonBTop = tester
+        .getTopLeft(
+          find.descendant(of: listPane, matching: find.text('Server Daemon')),
+        )
+        .dy;
+    final runtimeBTop = tester
+        .getTopLeft(
+          find.descendant(of: listPane, matching: find.text('Hermes B')),
+        )
+        .dy;
+    expect(daemonATop, lessThan(runtimeATop));
+    expect(runtimeATop, lessThan(daemonBTop));
+    expect(daemonBTop, lessThan(runtimeBTop));
+
+    await tester.tap(
+      find.descendant(of: listPane, matching: find.text('Hermes B')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('打开聊天'), findsOneWidget);
+    expect(find.text('did:agent:daemon:b'), findsWidgets);
+  });
+
   testWidgets('runtime detail shows latest run status with redacted error', (
     tester,
   ) async {
@@ -306,15 +405,117 @@ void main() {
       await tester.pump();
 
       expect(control.lastRefreshedDaemonDid, 'did:agent:daemon');
-      expect(find.text('正在刷新状态'), findsOneWidget);
+      expect(find.text('刷新中'), findsOneWidget);
 
       await tester.pump(const Duration(seconds: 10));
       await tester.pump();
 
       expect(find.text('未收到代理响应'), findsWidgets);
-      expect(find.text('正在刷新状态'), findsNothing);
+      expect(find.text('刷新中'), findsNothing);
     },
   );
+
+  testWidgets('repeated refresh while loading does not send duplicate query', (
+    tester,
+  ) async {
+    final control = _CountingRefreshAgentControlService()
+      ..agents = <AgentSummary>[
+        const AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'registering',
+            platform: 'darwin-arm64',
+          ),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('刷新状态'));
+    await tester.pump();
+    await tester.tap(find.text('刷新中'));
+    await tester.pump();
+
+    expect(control.refreshCount, 1);
+    expect(find.text('10 秒内只能刷新一次。'), findsNothing);
+    expect(find.text('刷新中'), findsOneWidget);
+  });
+
+  testWidgets('refresh can be triggered again after loading clears', (
+    tester,
+  ) async {
+    final control = _CountingRefreshAgentControlService()
+      ..agents = <AgentSummary>[
+        const AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'registering',
+            platform: 'darwin-arm64',
+          ),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final context = tester.element(find.byType(AgentsWorkspacePage));
+    final container = ProviderScope.containerOf(context);
+
+    await tester.tap(find.text('刷新状态'));
+    await tester.pump();
+    container.read(agentsProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'status_scope': 'daemon',
+        'daemon_agent_did': 'did:agent:daemon',
+        'daemon': <String, Object?>{
+          'agent_did': 'did:agent:daemon',
+          'status': 'ready',
+        },
+      },
+    );
+    await tester.pump(agentStatusRefreshMinimumIndicatorDuration);
+    expect(find.text('刷新中'), findsNothing);
+
+    await tester.tap(find.text('刷新状态'));
+    await tester.pump();
+
+    expect(control.refreshCount, 2);
+    expect(find.text('刷新中'), findsOneWidget);
+    expect(find.text('10 秒内只能刷新一次。'), findsNothing);
+  });
 
   testWidgets(
     'status payload clears refresh pending state and diagnostics are redacted',
@@ -353,7 +554,7 @@ void main() {
 
       await tester.tap(find.text('刷新状态'));
       await tester.pump();
-      expect(find.text('正在刷新状态'), findsOneWidget);
+      expect(find.text('刷新中'), findsOneWidget);
 
       container.read(agentsProvider.notifier).applyControlPayload(
         <String, Object?>{
@@ -375,7 +576,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('正在刷新状态'), findsNothing);
+      expect(find.text('刷新中'), findsNothing);
       expect(find.textContaining('/Users/alice'), findsNothing);
       expect(find.textContaining('/tmp/awiki'), findsNothing);
       expect(find.textContaining('secretvalue'), findsNothing);
@@ -384,4 +585,14 @@ void main() {
       expect(find.text('<redacted>'), findsWidgets);
     },
   );
+}
+
+class _CountingRefreshAgentControlService extends FakeAgentControlService {
+  int refreshCount = 0;
+
+  @override
+  Future<void> refreshDaemonStatus(String daemonAgentDid) async {
+    refreshCount += 1;
+    await super.refreshDaemonStatus(daemonAgentDid);
+  }
 }

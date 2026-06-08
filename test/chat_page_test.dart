@@ -7,6 +7,9 @@ import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
+import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
@@ -531,6 +534,84 @@ void main() {
     expect(gateway.lastSentThreadId, 'dm:did:test:peer');
     expect(gateway.lastSentContent, 'hello');
     expect(find.text('hello'), findsOneWidget);
+  });
+
+  testWidgets('发送给 Runtime Agent 后显示处理中提示，收到回复后隐藏', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:agent-processing',
+      displayName: '我的智能体',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:agent:runtime',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          agentsProvider.overrideWith((ref) {
+            final controller = AgentsController(ref);
+            controller.state = const AgentsState(
+              agents: <AgentSummary>[
+                AgentSummary(
+                  agentDid: 'did:agent:runtime',
+                  kind: AgentKind.runtime,
+                  daemonAgentDid: 'did:agent:daemon',
+                  runtime: 'hermes',
+                  displayName: '我的智能体',
+                  activeState: 'active',
+                  latest: AgentLatestStatus(status: 'ready'),
+                ),
+              ],
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+
+    await tester.enterText(find.byType(CupertinoTextField), '请总结');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('请总结'), findsOneWidget);
+    expect(find.text('智能体正在处理...'), findsOneWidget);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    container
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(
+          ChatMessage(
+            localId: 'agent-processing-reply',
+            remoteId: 'agent-processing-reply',
+            threadId: conversation.threadId,
+            senderDid: 'did:agent:runtime',
+            receiverDid: session.did,
+            content: '总结完成',
+            createdAt: DateTime.now(),
+            isMine: false,
+            sendState: MessageSendState.sent,
+          ),
+        );
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('总结完成'), findsOneWidget);
+    expect(find.text('智能体正在处理...'), findsNothing);
   });
 
   testWidgets('聊天窗口在会话列表刷新到新消息时补拉历史', (tester) async {

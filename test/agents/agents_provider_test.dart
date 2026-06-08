@@ -150,7 +150,7 @@ void main() {
       );
 
       final state = container.read(agentsProvider);
-      expect(state.pendingStatusQueryAtByDaemon, isEmpty);
+      expect(state.pendingStatusQueryAtByDaemon, contains('did:agent:daemon'));
       expect(state.agents.map((agent) => agent.agentDid), [
         'did:agent:daemon',
         'did:agent:runtime',
@@ -161,6 +161,11 @@ void main() {
       expect(runtime.daemonAgentDid, 'did:agent:daemon');
       expect(runtime.latest.status, 'needs_config');
       expect(runtime.latest.needsConfig, isTrue);
+      await Future<void>.delayed(agentStatusRefreshMinimumIndicatorDuration);
+      expect(
+        container.read(agentsProvider).pendingStatusQueryAtByDaemon,
+        isEmpty,
+      );
     },
   );
 
