@@ -290,7 +290,7 @@ void main() {
     final thread = sendContainer.read(
       chatThreadProvider(conversation.threadId),
     );
-    expect(thread.agentProcessing, isNull);
+    expect(thread.agentPendingTurns, isEmpty);
   });
 
   test('发送给智能体成功后显示处理中，收到智能体回复后清除', () async {
@@ -325,8 +325,13 @@ void main() {
 
     var thread = sendContainer.read(chatThreadProvider(conversation.threadId));
     expect(thread.isAgentProcessing, isTrue);
-    expect(thread.agentProcessing?.agentDid, 'did:peer');
-    expect(thread.agentProcessing?.pendingReplyCount, 1);
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(thread.agentPendingTurns.single.agentDid, 'did:peer');
+    expect(thread.agentPendingTurns.single.remoteMessageId, isNotEmpty);
+    expect(
+      thread.pendingAgentTurnForMessage(thread.messages.single),
+      isNotNull,
+    );
 
     sendContainer
         .read(chatThreadsProvider.notifier)
@@ -345,7 +350,7 @@ void main() {
         );
 
     thread = sendContainer.read(chatThreadProvider(conversation.threadId));
-    expect(thread.agentProcessing, isNull);
+    expect(thread.agentPendingTurns, isEmpty);
     expect(
       thread.messages.map((message) => message.content),
       contains('已经总结完成。'),
@@ -384,7 +389,8 @@ void main() {
 
     final startedAt = sendContainer
         .read(chatThreadProvider(conversation.threadId))
-        .agentProcessing!
+        .agentPendingTurns
+        .single
         .startedAt;
     gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
       'did:peer': <ChatMessage>[
@@ -410,7 +416,7 @@ void main() {
       chatThreadProvider(conversation.threadId),
     );
     expect(thread.isAgentProcessing, isTrue);
-    expect(thread.agentProcessing?.pendingReplyCount, 1);
+    expect(thread.pendingAgentReplyCount, 1);
   });
 
   test('连续发给智能体时按回复数量递减处理中状态', () async {
@@ -451,7 +457,15 @@ void main() {
         );
 
     var thread = sendContainer.read(chatThreadProvider(conversation.threadId));
-    expect(thread.agentProcessing?.pendingReplyCount, 2);
+    expect(thread.pendingAgentReplyCount, 2);
+    final firstMessage = thread.messages.firstWhere(
+      (message) => message.content == '第一个问题',
+    );
+    final secondMessage = thread.messages.firstWhere(
+      (message) => message.content == '第二个问题',
+    );
+    expect(thread.pendingAgentTurnForMessage(firstMessage), isNotNull);
+    expect(thread.pendingAgentTurnForMessage(secondMessage), isNotNull);
 
     sendContainer
         .read(chatThreadsProvider.notifier)
@@ -471,7 +485,30 @@ void main() {
 
     thread = sendContainer.read(chatThreadProvider(conversation.threadId));
     expect(thread.isAgentProcessing, isTrue);
-    expect(thread.agentProcessing?.pendingReplyCount, 1);
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(thread.pendingAgentTurnForMessage(firstMessage), isNull);
+    expect(thread.pendingAgentTurnForMessage(secondMessage), isNotNull);
+
+    sendContainer
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(
+          ChatMessage(
+            localId: 'agent-reply-a',
+            remoteId: 'agent-reply-a',
+            threadId: conversation.threadId,
+            senderDid: 'did:peer',
+            receiverDid: 'did:me',
+            content: '第一个回答',
+            createdAt: DateTime.now(),
+            isMine: false,
+            sendState: MessageSendState.sent,
+          ),
+        );
+
+    thread = sendContainer.read(chatThreadProvider(conversation.threadId));
+    expect(thread.isAgentProcessing, isTrue);
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(thread.pendingAgentTurnForMessage(secondMessage), isNotNull);
 
     sendContainer
         .read(chatThreadsProvider.notifier)
@@ -490,7 +527,7 @@ void main() {
         );
 
     thread = sendContainer.read(chatThreadProvider(conversation.threadId));
-    expect(thread.agentProcessing, isNull);
+    expect(thread.agentPendingTurns, isEmpty);
   });
 
   test('连续发送不会用旧快照覆盖后续 pending', () async {

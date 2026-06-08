@@ -1,11 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show SelectableText, SelectionArea;
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/app_router.dart';
 import '../../app/e2e_semantics.dart';
 import '../../app/app_services.dart';
+import '../../application/models/attachment_models.dart';
 import '../../core/group_display_name.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/chat_message.dart';
@@ -88,6 +92,7 @@ class ChatView extends ConsumerStatefulWidget {
 class _ChatViewState extends ConsumerState<ChatView> {
   final textController = TextEditingController();
   final scrollController = ScrollController();
+  AttachmentDraft? _pendingAttachment;
   bool _isRefreshingCurrentConversation = false;
   bool _didRequestAgents = false;
   final Set<String> _downloadingAttachmentMessageIds = <String>{};
@@ -103,6 +108,15 @@ class _ChatViewState extends ConsumerState<ChatView> {
     textController.dispose();
     scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant ChatView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.conversation.threadId != widget.conversation.threadId) {
+      _pendingAttachment = null;
+      textController.clear();
+    }
   }
 
   @override
@@ -140,8 +154,20 @@ class _ChatViewState extends ConsumerState<ChatView> {
       );
     });
     final messages = thread.messages;
-    final showAgentProcessing =
-        runtimeAgent != null && thread.isAgentProcessing;
+    final activePendingTurns = runtimeAgent == null
+        ? const <AgentPendingTurn>[]
+        : thread.agentPendingTurns
+              .where((turn) => turn.isActive)
+              .toList(growable: false);
+    final messageIdsWithAgentProcessing = <String>{
+      for (final message in messages)
+        if (thread.pendingAgentTurnForMessage(message) != null) message.localId,
+    };
+    final unmatchedPendingTurns = activePendingTurns
+        .where(
+          (turn) => !messages.any((message) => turn.matchesMessage(message)),
+        )
+        .toList(growable: false);
     final page = SafeArea(
       bottom: false,
       child: Column(
@@ -192,9 +218,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
                     ? responsive.displayScaled(92)
                     : responsive.spacing(widget.embedded ? 124 : 140),
               ),
-              itemCount: messages.length + (showAgentProcessing ? 1 : 0),
+              itemCount: messages.length + unmatchedPendingTurns.length,
               itemBuilder: (_, index) {
                 if (index >= messages.length) {
+                  final turn = unmatchedPendingTurns[index - messages.length];
                   return Padding(
                     padding: EdgeInsets.only(
                       bottom: macStyle
@@ -202,9 +229,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                           : responsive.spacing(24),
                     ),
                     child: _AgentProcessingIndicator(
-                      label: thread.isAgentProcessingOverdue
-                          ? '智能体仍在处理，稍后可刷新查看'
-                          : '智能体正在处理...',
+                      label: _agentProcessingLabel(turn),
                       avatarSeed: _agentProcessingAvatarSeed(
                         runtimeAgent,
                         currentConversation,
@@ -214,6 +239,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
                   );
                 }
                 final message = messages[index];
+                final pendingTurn = runtimeAgent == null
+                    ? null
+                    : thread.pendingAgentTurnForMessage(message);
                 final previous = index == 0 ? null : messages[index - 1];
                 final next = index + 1 < messages.length
                     ? messages[index + 1]
@@ -230,6 +258,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
                       macStyle: macStyle,
                       current: message,
                       next: next,
+                      hasAgentProcessing: pendingTurn != null,
+                      nextHasAgentProcessing:
+                          next != null &&
+                          messageIdsWithAgentProcessing.contains(next.localId),
                     ),
                   ),
                   child: Column(
@@ -269,6 +301,18 @@ class _ChatViewState extends ConsumerState<ChatView> {
                         isDownloading: _downloadingAttachmentMessageIds
                             .contains(message.localId),
                       ),
+                      if (pendingTurn != null) ...<Widget>[
+                        SizedBox(
+                          height: macStyle
+                              ? responsive.displayScaled(7)
+                              : responsive.spacing(7),
+                        ),
+                        _MessageAgentProcessingStatus(
+                          label: _agentProcessingLabel(pendingTurn),
+                          overdue: pendingTurn.isOverdue,
+                          macStyle: macStyle,
+                        ),
+                      ],
                     ],
                   ),
                 );
@@ -279,20 +323,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
             embedded: widget.embedded,
             macStyle: macStyle,
             controller: textController,
-            onSend: () async {
-              final value = textController.text;
-              textController.clear();
-              await ref
-                  .read(chatThreadsProvider.notifier)
-                  .sendMessage(
-                    conversation: widget.conversation,
-                    content: value,
-                    expectedAgentReplyDid: runtimeAgent?.agentDid,
-                  );
-            },
+            pendingAttachment: _pendingAttachment,
+            onSend: () => _submitComposer(currentConversation),
             onAttach: () async {
-              await _pickAndSendAttachment(currentConversation);
+              await _pickAndStageAttachment();
             },
+            onRemoveAttachment: _clearPendingAttachment,
           ),
         ],
       ),
@@ -337,7 +373,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     );
   }
 
-  Future<void> _pickAndSendAttachment(ConversationSummary conversation) async {
+  Future<void> _pickAndStageAttachment() async {
     try {
       final draft = await ref
           .read(attachmentPickerServiceProvider)
@@ -348,26 +384,59 @@ class _ChatViewState extends ConsumerState<ChatView> {
       if (!mounted) {
         return;
       }
-      final caption = textController.text.trim().isEmpty
-          ? null
-          : textController.text.trim();
-      textController.clear();
-      await ref
-          .read(chatThreadsProvider.notifier)
-          .sendAttachment(
-            conversation: conversation,
-            attachment: draft,
-            caption: caption,
-            expectedAgentReplyDid: _runtimeAgentForConversation(
-              conversation,
-              ref.read(agentsProvider).agents,
-            )?.agentDid,
-          );
+      setState(() {
+        _pendingAttachment = draft;
+      });
     } catch (error) {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.fromError(error));
     }
+  }
+
+  void _clearPendingAttachment() {
+    if (_pendingAttachment == null) {
+      return;
+    }
+    setState(() {
+      _pendingAttachment = null;
+    });
+  }
+
+  Future<void> _submitComposer(ConversationSummary conversation) async {
+    final attachment = _pendingAttachment;
+    final content = textController.text.trim();
+    if (attachment == null && content.isEmpty) {
+      return;
+    }
+    textController.clear();
+    if (attachment != null) {
+      setState(() {
+        _pendingAttachment = null;
+      });
+    }
+    final expectedAgentReplyDid = _runtimeAgentForConversation(
+      conversation,
+      ref.read(agentsProvider).agents,
+    )?.agentDid;
+    if (attachment != null) {
+      await ref
+          .read(chatThreadsProvider.notifier)
+          .sendAttachment(
+            conversation: conversation,
+            attachment: attachment,
+            caption: content.isEmpty ? null : content,
+            expectedAgentReplyDid: expectedAgentReplyDid,
+          );
+      return;
+    }
+    await ref
+        .read(chatThreadsProvider.notifier)
+        .sendMessage(
+          conversation: conversation,
+          content: content,
+          expectedAgentReplyDid: expectedAgentReplyDid,
+        );
   }
 
   Future<void> _downloadAttachment(
@@ -587,10 +656,21 @@ class _ChatViewState extends ConsumerState<ChatView> {
     required bool macStyle,
     required ChatMessage current,
     required ChatMessage? next,
+    required bool hasAgentProcessing,
+    required bool nextHasAgentProcessing,
   }) {
     final defaultSpacing = macStyle
         ? responsive.displayScaled(16)
         : responsive.spacing(24);
+    if (hasAgentProcessing) {
+      return macStyle ? responsive.displayScaled(18) : responsive.spacing(24);
+    }
+    if (nextHasAgentProcessing &&
+        next != null &&
+        current.isMine == next.isMine &&
+        !_shouldShowDivider(current, next)) {
+      return macStyle ? responsive.displayScaled(8) : responsive.spacing(10);
+    }
     if (_shouldTightenBeforeSenderLabel(current, next)) {
       return macStyle ? responsive.displayScaled(6) : responsive.spacing(8);
     }
@@ -674,6 +754,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return agentDid;
     }
     return conversation.displayName;
+  }
+
+  String _agentProcessingLabel(AgentPendingTurn turn) {
+    return turn.isOverdue ? '智能体仍在处理，稍后可刷新查看' : '智能体正在处理...';
   }
 }
 
@@ -1335,6 +1419,101 @@ class _AgentProcessingIndicator extends StatelessWidget {
   }
 }
 
+class _MessageAgentProcessingStatus extends StatelessWidget {
+  const _MessageAgentProcessingStatus({
+    required this.label,
+    required this.overdue,
+    required this.macStyle,
+  });
+
+  final String label;
+  final bool overdue;
+  final bool macStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final foreground = overdue
+        ? (macStyle ? const Color(0xFF9A5A00) : const Color(0xFF936300))
+        : (macStyle ? const Color(0xFF64718A) : theme.secondaryText);
+    final background = overdue
+        ? const Color(0xFFFFF5DC)
+        : (macStyle ? const Color(0xFFF6F8FC) : theme.subtleSurface);
+    final border = overdue
+        ? const Color(0xFFE9D49D)
+        : (macStyle
+              ? const Color(0xFFE0E7F1)
+              : theme.border.withValues(alpha: 0.68));
+    final iconSize = macStyle
+        ? responsive.displayScaled(12.5)
+        : responsive.scaled(13);
+    return Semantics(
+      liveRegion: true,
+      label: label,
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: macStyle
+                ? responsive.displayScaled(420)
+                : (responsive.isLarge ? 500 : 640),
+          ),
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: macStyle
+                  ? responsive.displayScaled(10)
+                  : responsive.spacing(11),
+              vertical: macStyle
+                  ? responsive.displayScaled(6)
+                  : responsive.spacing(7),
+            ),
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(
+                macStyle ? responsive.displayScaled(8) : 12,
+              ),
+              border: Border.all(color: border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (overdue)
+                  Icon(CupertinoIcons.clock, color: foreground, size: iconSize)
+                else
+                  CupertinoActivityIndicator(
+                    radius: iconSize / 2,
+                    color: foreground,
+                  ),
+                SizedBox(
+                  width: macStyle
+                      ? responsive.displayScaled(7)
+                      : responsive.spacing(7),
+                ),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: foreground,
+                      fontSize: macStyle
+                          ? responsive.displayScaled(12)
+                          : responsive.metaSm,
+                      fontWeight: FontWeight.w500,
+                      height: 1.25,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
@@ -1407,14 +1586,16 @@ class _MessageBubble extends StatelessWidget {
 
   Widget _buildMacBubble(BuildContext context, bool isMine) {
     final responsive = context.awikiResponsive;
+    final textStyle = TextStyle(
+      color: const Color(0xFF17213A),
+      fontSize: responsive.displayScaled(14),
+      height: 1.45,
+    );
     final child = message.attachment == null
-        ? Text(
-            message.content,
-            style: TextStyle(
-              color: const Color(0xFF17213A),
-              fontSize: responsive.displayScaled(14),
-              height: 1.45,
-            ),
+        ? _MessageTextContent(
+            text: message.content,
+            style: textStyle,
+            renderMarkdown: !isMine,
           )
         : _AttachmentContent(
             message: message,
@@ -1448,12 +1629,14 @@ class _MessageBubble extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Text(
-                '发送失败',
-                style: TextStyle(
-                  fontSize: responsive.displayScaled(12),
-                  color: const Color(0xFFFF3B30),
-                  fontWeight: FontWeight.w600,
+              SelectionArea(
+                child: Text(
+                  '发送失败',
+                  style: TextStyle(
+                    fontSize: responsive.displayScaled(12),
+                    color: const Color(0xFFFF3B30),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               if (onRetry != null) ...<Widget>[
@@ -1526,6 +1709,11 @@ class _MessageBubble extends StatelessWidget {
     final isMine = message.isMine;
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    final textStyle = TextStyle(
+      color: theme.title,
+      fontSize: responsive.bodyMd,
+      height: responsive.isPhone ? 1.5 : 1.4,
+    );
     if (macStyle) {
       return _buildMacBubble(context, isMine);
     }
@@ -1587,13 +1775,10 @@ class _MessageBubble extends StatelessWidget {
                         ),
                       ),
                       child: message.attachment == null
-                          ? Text(
-                              message.content,
-                              style: TextStyle(
-                                color: theme.title,
-                                fontSize: responsive.bodyMd,
-                                height: responsive.isPhone ? 1.5 : 1.4,
-                              ),
+                          ? _MessageTextContent(
+                              text: message.content,
+                              style: textStyle,
+                              renderMarkdown: !isMine,
                             )
                           : _AttachmentContent(
                               message: message,
@@ -1608,12 +1793,14 @@ class _MessageBubble extends StatelessWidget {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
-                          Text(
-                            '发送失败',
-                            style: TextStyle(
-                              fontSize: responsive.metaSm,
-                              color: theme.danger,
-                              fontWeight: FontWeight.w500,
+                          SelectionArea(
+                            child: Text(
+                              '发送失败',
+                              style: TextStyle(
+                                fontSize: responsive.metaSm,
+                                color: theme.danger,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                           if (onRetry != null) ...<Widget>[
@@ -1700,8 +1887,8 @@ class _AttachmentContent extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           if (caption != null && caption.isNotEmpty) ...<Widget>[
-            Text(
-              caption,
+            _MessageTextContent(
+              text: caption,
               style: TextStyle(
                 color: macStyle ? const Color(0xFF17213A) : theme.title,
                 fontSize: macStyle
@@ -1709,6 +1896,7 @@ class _AttachmentContent extends StatelessWidget {
                     : responsive.bodyMd,
                 height: 1.4,
               ),
+              renderMarkdown: !message.isMine,
             ),
             SizedBox(
               height: macStyle
@@ -1760,10 +1948,9 @@ class _AttachmentContent extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(
-                      attachment.displayName,
+                    _SelectableMessageText(
+                      text: attachment.displayName,
                       maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                       style: titleStyle,
                     ),
                     SizedBox(
@@ -1798,6 +1985,124 @@ class _AttachmentContent extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _MessageTextContent extends StatelessWidget {
+  const _MessageTextContent({
+    required this.text,
+    required this.style,
+    required this.renderMarkdown,
+  });
+
+  final String text;
+  final TextStyle style;
+  final bool renderMarkdown;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!renderMarkdown) {
+      return _SelectableMessageText(text: text, style: style);
+    }
+    return MarkdownBody(
+      data: text,
+      selectable: true,
+      shrinkWrap: true,
+      styleSheet: _chatMarkdownStyleSheet(context, style),
+    );
+  }
+}
+
+MarkdownStyleSheet _chatMarkdownStyleSheet(
+  BuildContext context,
+  TextStyle bodyStyle,
+) {
+  final theme = context.awikiTheme;
+  final responsive = context.awikiResponsive;
+  final fontSize = bodyStyle.fontSize ?? responsive.bodyMd;
+  final codeBackground = theme.surface.withValues(alpha: 0.74);
+  final quoteBackground = theme.surface.withValues(alpha: 0.58);
+  return MarkdownStyleSheet(
+    a: bodyStyle.copyWith(
+      color: theme.primary,
+      fontWeight: FontWeight.w600,
+      decoration: TextDecoration.none,
+    ),
+    p: bodyStyle,
+    pPadding: EdgeInsets.zero,
+    strong: bodyStyle.copyWith(fontWeight: FontWeight.w700),
+    em: bodyStyle.copyWith(fontStyle: FontStyle.italic),
+    del: bodyStyle.copyWith(decoration: TextDecoration.lineThrough),
+    code: bodyStyle.copyWith(
+      fontFamily: 'monospace',
+      fontSize: fontSize * 0.92,
+      backgroundColor: codeBackground,
+    ),
+    h1: bodyStyle.copyWith(fontSize: fontSize + 2, fontWeight: FontWeight.w700),
+    h1Padding: EdgeInsets.only(bottom: responsive.spacing(4)),
+    h2: bodyStyle.copyWith(fontSize: fontSize + 1, fontWeight: FontWeight.w700),
+    h2Padding: EdgeInsets.only(bottom: responsive.spacing(4)),
+    h3: bodyStyle.copyWith(fontWeight: FontWeight.w700),
+    h3Padding: EdgeInsets.only(bottom: responsive.spacing(3)),
+    h4: bodyStyle.copyWith(fontWeight: FontWeight.w600),
+    h4Padding: EdgeInsets.only(bottom: responsive.spacing(3)),
+    h5: bodyStyle.copyWith(fontWeight: FontWeight.w600),
+    h5Padding: EdgeInsets.zero,
+    h6: bodyStyle.copyWith(fontWeight: FontWeight.w600),
+    h6Padding: EdgeInsets.zero,
+    blockSpacing: responsive.spacing(6),
+    listIndent: responsive.spacing(18),
+    listBullet: bodyStyle,
+    listBulletPadding: EdgeInsets.only(right: responsive.spacing(5)),
+    blockquote: bodyStyle,
+    blockquotePadding: EdgeInsets.symmetric(
+      horizontal: responsive.spacing(9),
+      vertical: responsive.spacing(6),
+    ),
+    blockquoteDecoration: BoxDecoration(
+      color: quoteBackground,
+      border: Border(
+        left: BorderSide(color: theme.border, width: responsive.scaled(3)),
+      ),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    codeblockPadding: EdgeInsets.all(responsive.spacing(8)),
+    codeblockDecoration: BoxDecoration(
+      color: codeBackground,
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(color: theme.border.withValues(alpha: 0.8)),
+    ),
+    horizontalRuleDecoration: BoxDecoration(
+      border: Border(top: BorderSide(color: theme.border)),
+    ),
+  );
+}
+
+class _SelectableMessageText extends StatelessWidget {
+  const _SelectableMessageText({
+    required this.text,
+    required this.style,
+    this.maxLines,
+  });
+
+  final String text;
+  final TextStyle style;
+  final int? maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    return SelectableText(
+      text,
+      maxLines: maxLines,
+      style: style,
+      showCursor: false,
+      scrollPhysics: const NeverScrollableScrollPhysics(),
+      textWidthBasis: TextWidthBasis.parent,
+      textHeightBehavior: const TextHeightBehavior(
+        applyHeightToFirstAscent: false,
+        applyHeightToLastDescent: false,
       ),
     );
   }
@@ -1912,33 +2217,128 @@ String _formatFileSize(int bytes) {
   return '${value.toStringAsFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}';
 }
 
-class _Composer extends StatelessWidget {
+class _Composer extends StatefulWidget {
   const _Composer({
     required this.embedded,
     required this.macStyle,
     required this.controller,
+    required this.pendingAttachment,
     required this.onSend,
     required this.onAttach,
+    required this.onRemoveAttachment,
   });
 
   final bool embedded;
   final bool macStyle;
   final TextEditingController controller;
+  final AttachmentDraft? pendingAttachment;
   final Future<void> Function() onSend;
   final Future<void> Function() onAttach;
+  final VoidCallback onRemoveAttachment;
+
+  @override
+  State<_Composer> createState() => _ComposerState();
+}
+
+class _ComposerState extends State<_Composer> {
+  final FocusNode _inputFocusNode = FocusNode();
+  bool _isSending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_handleTextChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _Composer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_handleTextChanged);
+      widget.controller.addListener(_handleTextChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_handleTextChanged);
+    _inputFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _handleTextChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  bool get _canSubmit {
+    return widget.pendingAttachment != null ||
+        widget.controller.text.trim().isNotEmpty;
+  }
 
   Future<void> _submitIfNeeded() async {
-    if (controller.text.trim().isEmpty) {
+    if (!_canSubmit || _isSending) {
       return;
     }
-    await onSend();
+    setState(() {
+      _isSending = true;
+    });
+    try {
+      await widget.onSend();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+        });
+      }
+    }
+  }
+
+  KeyEventResult _handleInputKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    if (key != LogicalKeyboardKey.enter &&
+        key != LogicalKeyboardKey.numpadEnter) {
+      return KeyEventResult.ignored;
+    }
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      _insertNewlineAtSelection();
+      return KeyEventResult.handled;
+    }
+    unawaited(_submitIfNeeded());
+    return KeyEventResult.handled;
+  }
+
+  void _insertNewlineAtSelection() {
+    final value = widget.controller.value;
+    final text = value.text;
+    final selection = value.selection;
+    if (!selection.isValid) {
+      widget.controller.text = '$text\n';
+      widget.controller.selection = TextSelection.collapsed(
+        offset: widget.controller.text.length,
+      );
+      return;
+    }
+    final start = selection.start.clamp(0, text.length);
+    final end = selection.end.clamp(0, text.length);
+    final nextText = text.replaceRange(start, end, '\n');
+    widget.controller.value = value.copyWith(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: start + 1),
+      composing: TextRange.empty,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
-    if (macStyle) {
+    final canSubmit = _canSubmit;
+    if (widget.macStyle) {
       return SafeArea(
         top: false,
         child: LayoutBuilder(
@@ -1954,12 +2354,11 @@ class _Composer extends StatelessWidget {
                 responsive.displayScaled(16),
               ),
               child: Container(
-                height: responsive.displayScaled(52),
                 padding: EdgeInsets.fromLTRB(
                   responsive.displayScaled(12),
-                  0,
                   responsive.displayScaled(8),
-                  0,
+                  responsive.displayScaled(8),
+                  responsive.displayScaled(8),
                 ),
                 decoration: BoxDecoration(
                   color: CupertinoColors.white,
@@ -1975,72 +2374,95 @@ class _Composer extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    if (showAttachment) ...<Widget>[
-                      GestureDetector(
-                        key: const Key('chat-attachment-button'),
-                        onTap: onAttach,
-                        behavior: HitTestBehavior.opaque,
-                        child: SizedBox(
-                          width: responsive.displayScaled(34),
-                          height: responsive.displayScaled(34),
-                          child: Icon(
-                            CupertinoIcons.paperclip,
-                            color: const Color(0xFF34415C),
-                            size: responsive.displayScaled(22),
-                          ),
-                        ),
+                    if (widget.pendingAttachment != null) ...<Widget>[
+                      _PendingAttachmentPreview(
+                        attachment: widget.pendingAttachment!,
+                        macStyle: true,
+                        onRemove: widget.onRemoveAttachment,
                       ),
-                      SizedBox(width: responsive.displayScaled(10)),
+                      SizedBox(height: responsive.displayScaled(8)),
                     ],
-                    Expanded(
-                      child: e2eSemantics(
-                        identifier: 'e2e-chat-input',
-                        label: context.l10n.chatInputPlaceholder,
-                        textField: true,
-                        child: CupertinoTextField(
-                          controller: controller,
-                          placeholder: context.l10n.chatInputPlaceholder,
-                          textInputAction: TextInputAction.send,
-                          onSubmitted: (_) async => _submitIfNeeded(),
-                          decoration: null,
-                          padding: EdgeInsets.zero,
-                          style: TextStyle(
-                            color: const Color(0xFF17213A),
-                            fontSize: responsive.displayScaled(13.5),
-                          ),
-                          placeholderStyle: TextStyle(
-                            color: const Color(0xFF8A96AA),
-                            fontSize: responsive.displayScaled(13.5),
-                          ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: responsive.displayScaled(10)),
-                    e2eSemantics(
-                      identifier: 'e2e-chat-send-button',
-                      label: '发送',
-                      button: true,
-                      child: GestureDetector(
-                        onTap: _submitIfNeeded,
-                        behavior: HitTestBehavior.opaque,
-                        child: Container(
-                          width: responsive.displayScaled(36),
-                          height: responsive.displayScaled(36),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0B65F8),
-                            borderRadius: BorderRadius.circular(
-                              responsive.displayScaled(9),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: <Widget>[
+                        if (showAttachment) ...<Widget>[
+                          GestureDetector(
+                            key: const Key('chat-attachment-button'),
+                            onTap: widget.onAttach,
+                            behavior: HitTestBehavior.opaque,
+                            child: SizedBox(
+                              width: responsive.displayScaled(34),
+                              height: responsive.displayScaled(34),
+                              child: Icon(
+                                CupertinoIcons.paperclip,
+                                color: const Color(0xFF34415C),
+                                size: responsive.displayScaled(22),
+                              ),
                             ),
                           ),
-                          child: Icon(
-                            CupertinoIcons.paperplane_fill,
-                            color: CupertinoColors.white,
-                            size: responsive.displayScaled(18),
+                          SizedBox(width: responsive.displayScaled(10)),
+                        ],
+                        Expanded(
+                          child: _ComposerTextField(
+                            controller: widget.controller,
+                            focusNode: _inputFocusNode,
+                            onKeyEvent: _handleInputKeyEvent,
+                            placeholder: context.l10n.chatInputPlaceholder,
+                            textStyle: TextStyle(
+                              color: const Color(0xFF17213A),
+                              fontSize: responsive.displayScaled(13.5),
+                              height: 1.32,
+                            ),
+                            placeholderStyle: TextStyle(
+                              color: const Color(0xFF8A96AA),
+                              fontSize: responsive.displayScaled(13.5),
+                            ),
+                            padding: EdgeInsets.symmetric(
+                              vertical: responsive.displayScaled(7),
+                            ),
+                            maxLines: 5,
+                            onSubmitted: (_) async => _submitIfNeeded(),
                           ),
                         ),
-                      ),
+                        SizedBox(width: responsive.displayScaled(10)),
+                        e2eSemantics(
+                          identifier: 'e2e-chat-send-button',
+                          label: '发送',
+                          button: true,
+                          child: GestureDetector(
+                            key: const Key('chat-send-button'),
+                            onTap: _submitIfNeeded,
+                            behavior: HitTestBehavior.opaque,
+                            child: Container(
+                              width: responsive.displayScaled(36),
+                              height: responsive.displayScaled(36),
+                              decoration: BoxDecoration(
+                                color: canSubmit
+                                    ? const Color(0xFF0B65F8)
+                                    : const Color(0xFFE5EAF2),
+                                borderRadius: BorderRadius.circular(
+                                  responsive.displayScaled(9),
+                                ),
+                              ),
+                              child: _isSending
+                                  ? const CupertinoActivityIndicator(
+                                      radius: 8,
+                                      color: CupertinoColors.white,
+                                    )
+                                  : Icon(
+                                      CupertinoIcons.paperplane_fill,
+                                      color: canSubmit
+                                          ? CupertinoColors.white
+                                          : const Color(0xFF8A96AA),
+                                      size: responsive.displayScaled(18),
+                                    ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -2050,7 +2472,7 @@ class _Composer extends StatelessWidget {
         ),
       );
     }
-    final outerPadding = embedded
+    final outerPadding = widget.embedded
         ? const EdgeInsets.fromLTRB(16, 8, 16, 16)
         : responsive.scaledInsets(const EdgeInsets.fromLTRB(16, 8, 16, 16));
     return SafeArea(
@@ -2058,16 +2480,23 @@ class _Composer extends StatelessWidget {
       child: Padding(
         padding: outerPadding,
         child: Container(
-          constraints: embedded
-              ? BoxConstraints.tightFor(height: responsive.navBarHeight)
-              : BoxConstraints(minHeight: responsive.controlHeight),
+          constraints: BoxConstraints(
+            minHeight: widget.embedded
+                ? responsive.navBarHeight
+                : responsive.controlHeight,
+          ),
           padding: responsive.scaledInsets(
-            EdgeInsets.fromLTRB(14, embedded ? 8 : 10, 14, embedded ? 8 : 10),
+            EdgeInsets.fromLTRB(
+              14,
+              widget.embedded ? 8 : 10,
+              14,
+              widget.embedded ? 8 : 10,
+            ),
           ),
           decoration: BoxDecoration(
             color: theme.surface,
             borderRadius: BorderRadius.circular(
-              embedded ? 24 : responsive.radius(26),
+              widget.embedded ? 24 : responsive.radius(26),
             ),
             boxShadow: const <BoxShadow>[
               BoxShadow(
@@ -2077,65 +2506,229 @@ class _Composer extends StatelessWidget {
               ),
             ],
           ),
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              TopBarActionButton(
-                key: const Key('chat-attachment-button'),
-                onTap: onAttach,
-                child: Padding(
-                  padding: EdgeInsets.all(responsive.spacing(6)),
-                  child: AwikiAssetIcon(
-                    assetName: 'assets/icons/icon_plus.svg',
-                    size: responsive.iconMd,
-                  ),
+              if (widget.pendingAttachment != null) ...<Widget>[
+                _PendingAttachmentPreview(
+                  attachment: widget.pendingAttachment!,
+                  macStyle: false,
+                  onRemove: widget.onRemoveAttachment,
                 ),
-              ),
-              SizedBox(width: responsive.spacing(8)),
-              Expanded(
-                child: e2eSemantics(
-                  identifier: 'e2e-chat-input',
-                  label: context.l10n.chatInputPlaceholder,
-                  textField: true,
-                  child: CupertinoTextField(
-                    controller: controller,
-                    placeholder: context.l10n.chatInputPlaceholder,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) async => _submitIfNeeded(),
-                    decoration: null,
-                    padding: EdgeInsets.symmetric(
-                      vertical: responsive.spacing(10),
-                    ),
-                    style: TextStyle(
-                      fontSize: responsive.bodyMd,
-                      color: theme.title,
-                    ),
-                    placeholderStyle: TextStyle(
-                      fontSize: responsive.bodyMd,
-                      color: theme.secondaryText,
+                SizedBox(height: responsive.spacing(8)),
+              ],
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  TopBarActionButton(
+                    key: const Key('chat-attachment-button'),
+                    onTap: widget.onAttach,
+                    child: Padding(
+                      padding: EdgeInsets.all(responsive.spacing(6)),
+                      child: AwikiAssetIcon(
+                        assetName: 'assets/icons/icon_plus.svg',
+                        size: responsive.iconMd,
+                      ),
                     ),
                   ),
-                ),
-              ),
-              SizedBox(width: responsive.spacing(8)),
-              e2eSemantics(
-                identifier: 'e2e-chat-send-button',
-                label: '发送',
-                button: true,
-                child: TopBarActionButton(
-                  onTap: _submitIfNeeded,
-                  child: Padding(
-                    padding: EdgeInsets.all(responsive.spacing(6)),
-                    child: AwikiAssetIcon(
-                      assetName: 'assets/icons/icon_send.svg',
-                      color: theme.primary,
-                      size: responsive.iconMd,
+                  SizedBox(width: responsive.spacing(8)),
+                  Expanded(
+                    child: _ComposerTextField(
+                      controller: widget.controller,
+                      focusNode: _inputFocusNode,
+                      onKeyEvent: _handleInputKeyEvent,
+                      placeholder: context.l10n.chatInputPlaceholder,
+                      textStyle: TextStyle(
+                        fontSize: responsive.bodyMd,
+                        color: theme.title,
+                        height: 1.32,
+                      ),
+                      placeholderStyle: TextStyle(
+                        fontSize: responsive.bodyMd,
+                        color: theme.secondaryText,
+                      ),
+                      padding: EdgeInsets.symmetric(
+                        vertical: responsive.spacing(10),
+                      ),
+                      maxLines: 4,
+                      onSubmitted: (_) async => _submitIfNeeded(),
                     ),
                   ),
-                ),
+                  SizedBox(width: responsive.spacing(8)),
+                  e2eSemantics(
+                    identifier: 'e2e-chat-send-button',
+                    label: '发送',
+                    button: true,
+                    child: TopBarActionButton(
+                      key: const Key('chat-send-button'),
+                      onTap: _submitIfNeeded,
+                      child: Padding(
+                        padding: EdgeInsets.all(responsive.spacing(6)),
+                        child: _isSending
+                            ? CupertinoActivityIndicator(
+                                radius: responsive.displayScaled(8),
+                              )
+                            : AwikiAssetIcon(
+                                assetName: 'assets/icons/icon_send.svg',
+                                color: canSubmit
+                                    ? theme.primary
+                                    : theme.secondaryText,
+                                size: responsive.iconMd,
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ComposerTextField extends StatelessWidget {
+  const _ComposerTextField({
+    required this.controller,
+    required this.focusNode,
+    required this.onKeyEvent,
+    required this.placeholder,
+    required this.textStyle,
+    required this.placeholderStyle,
+    required this.padding,
+    required this.maxLines,
+    required this.onSubmitted,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final FocusOnKeyEventCallback onKeyEvent;
+  final String placeholder;
+  final TextStyle textStyle;
+  final TextStyle placeholderStyle;
+  final EdgeInsetsGeometry padding;
+  final int maxLines;
+  final ValueChanged<String> onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      focusNode: focusNode,
+      onKeyEvent: onKeyEvent,
+      child: e2eSemantics(
+        identifier: 'e2e-chat-input',
+        label: placeholder,
+        textField: true,
+        child: CupertinoTextField(
+          controller: controller,
+          placeholder: placeholder,
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.send,
+          minLines: 1,
+          maxLines: maxLines,
+          onSubmitted: onSubmitted,
+          decoration: null,
+          padding: padding,
+          style: textStyle,
+          placeholderStyle: placeholderStyle,
+        ),
+      ),
+    );
+  }
+}
+
+class _PendingAttachmentPreview extends StatelessWidget {
+  const _PendingAttachmentPreview({
+    required this.attachment,
+    required this.macStyle,
+    required this.onRemove,
+  });
+
+  final AttachmentDraft attachment;
+  final bool macStyle;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final radius = responsive.radius(macStyle ? 8 : 12);
+    return Container(
+      key: const Key('chat-pending-attachment-preview'),
+      padding: EdgeInsets.fromLTRB(
+        responsive.spacing(macStyle ? 9 : 10),
+        responsive.spacing(macStyle ? 7 : 8),
+        responsive.spacing(macStyle ? 6 : 7),
+        responsive.spacing(macStyle ? 7 : 8),
+      ),
+      decoration: BoxDecoration(
+        color: macStyle ? const Color(0xFFF6F8FC) : const Color(0xFFF7F9FD),
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: const Color(0xFFE1E7F0)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: responsive.displayScaled(macStyle ? 28 : 32),
+            height: responsive.displayScaled(macStyle ? 28 : 32),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAF2FF),
+              borderRadius: BorderRadius.circular(responsive.radius(8)),
+            ),
+            child: Icon(
+              CupertinoIcons.doc,
+              color: const Color(0xFF0B65F8),
+              size: responsive.displayScaled(macStyle ? 16 : 18),
+            ),
+          ),
+          SizedBox(width: responsive.spacing(9)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  attachment.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: const Color(0xFF101B32),
+                    fontSize: macStyle
+                        ? responsive.displayScaled(12.5)
+                        : responsive.bodySm,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                SizedBox(height: responsive.spacing(2)),
+                Text(
+                  _formatAttachmentMeta(
+                    attachment.mimeType,
+                    attachment.sizeBytes,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: const Color(0xFF66728A),
+                    fontSize: responsive.metaSm,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          CupertinoButton(
+            key: const Key('chat-pending-attachment-remove-button'),
+            padding: EdgeInsets.all(responsive.spacing(4)),
+            minimumSize: Size(
+              responsive.displayScaled(28),
+              responsive.displayScaled(28),
+            ),
+            onPressed: onRemove,
+            child: Icon(
+              CupertinoIcons.xmark_circle_fill,
+              color: const Color(0xFF8A96AA),
+              size: responsive.displayScaled(18),
+            ),
+          ),
+        ],
       ),
     );
   }

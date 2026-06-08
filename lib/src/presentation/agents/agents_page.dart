@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show SelectableText;
+import 'package:flutter/material.dart'
+    show SelectableText, SelectionArea, SelectionContainer;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -573,119 +574,126 @@ class _AgentDetailPane extends StatelessWidget {
         agent.isDaemon && state.isStatusQueryPending(agent.agentDid);
     return SafeArea(
       bottom: false,
-      child: ListView(
-        padding: EdgeInsets.all(responsive.spacing(24)),
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  agent.displayName,
-                  style: TextStyle(
-                    color: const Color(0xFF101B32),
-                    fontSize: responsive.titleXl,
-                    fontWeight: FontWeight.w700,
+      child: SelectionArea(
+        child: ListView(
+          padding: EdgeInsets.all(responsive.spacing(24)),
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    agent.displayName,
+                    maxLines: 2,
+                    style: TextStyle(
+                      color: const Color(0xFF101B32),
+                      fontSize: responsive.titleXl,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
+                _StatusPill(status: agent.latest.status),
+              ],
+            ),
+            SizedBox(height: responsive.spacing(14)),
+            SelectionContainer.disabled(
+              child: Wrap(
+                spacing: responsive.spacing(8),
+                runSpacing: responsive.spacing(8),
+                children: <Widget>[
+                  if (agent.isDaemon)
+                    _ActionButton(
+                      icon: CupertinoIcons.refresh,
+                      label: isRefreshing ? '刷新中' : '刷新状态',
+                      isLoading: isRefreshing,
+                      onPressed: state.isActing || isRefreshing
+                          ? null
+                          : () => onRefresh(agent),
+                    ),
+                  if (agent.isDaemon)
+                    _ActionButton(
+                      icon: CupertinoIcons.sparkles,
+                      label: '创建 Hermes',
+                      onPressed: state.isActing || agent.latest.needsUpgrade
+                          ? null
+                          : () => onCreateRuntime(agent),
+                    ),
+                  if (agent.isRuntime)
+                    _ActionButton(
+                      icon: CupertinoIcons.chat_bubble_2,
+                      label: '打开聊天',
+                      onPressed: () => onOpenChat(agent),
+                    ),
+                  _ActionButton(
+                    icon: CupertinoIcons.pencil,
+                    label: '改名',
+                    onPressed: state.isActing ? null : () => onRename(agent),
+                  ),
+                  if (agent.isRuntime)
+                    _ActionButton(
+                      icon: CupertinoIcons.arrow_counterclockwise,
+                      label: '重置 Session',
+                      onPressed: state.isActing
+                          ? null
+                          : () => onResetRuntime(agent),
+                    ),
+                  if (agent.isRuntime)
+                    _ActionButton(
+                      icon: CupertinoIcons.play_arrow,
+                      label: '重试 Run',
+                      onPressed: state.isActing
+                          ? null
+                          : () => onRetryRun(agent),
+                    ),
+                  if (agent.isDaemon)
+                    _ActionButton(
+                      icon: CupertinoIcons.arrow_up_circle,
+                      label: '升级',
+                      onPressed: state.isActing ? null : () => onUpgrade(agent),
+                    ),
+                  if (agent.isDaemon)
+                    _ActionButton(
+                      icon: CupertinoIcons.chevron_left_slash_chevron_right,
+                      label: '安装命令',
+                      onPressed: state.isActing ? null : onCreateInstallCommand,
+                    ),
+                  _ActionButton(
+                    icon: CupertinoIcons.xmark_circle,
+                    label: '解绑',
+                    danger: true,
+                    onPressed: state.isActing ? null : onUnbind,
+                  ),
+                ],
               ),
-              _StatusPill(status: agent.latest.status),
+            ),
+            if (state.error != null) ...<Widget>[
+              SizedBox(height: responsive.spacing(10)),
+              _AgentErrorBanner(message: state.error!),
             ],
-          ),
-          SizedBox(height: responsive.spacing(14)),
-          Wrap(
-            spacing: responsive.spacing(8),
-            runSpacing: responsive.spacing(8),
-            children: <Widget>[
-              if (agent.isDaemon)
-                _ActionButton(
-                  icon: CupertinoIcons.refresh,
-                  label: isRefreshing ? '刷新中' : '刷新状态',
-                  isLoading: isRefreshing,
-                  onPressed: state.isActing || isRefreshing
-                      ? null
-                      : () => onRefresh(agent),
-                ),
-              if (agent.isDaemon)
-                _ActionButton(
-                  icon: CupertinoIcons.sparkles,
-                  label: '创建 Hermes',
-                  onPressed: state.isActing || agent.latest.needsUpgrade
-                      ? null
-                      : () => onCreateRuntime(agent),
-                ),
-              if (agent.isRuntime)
-                _ActionButton(
-                  icon: CupertinoIcons.chat_bubble_2,
-                  label: '打开聊天',
-                  onPressed: () => onOpenChat(agent),
-                ),
-              _ActionButton(
-                icon: CupertinoIcons.pencil,
-                label: '改名',
-                onPressed: state.isActing ? null : () => onRename(agent),
-              ),
-              if (agent.isRuntime)
-                _ActionButton(
-                  icon: CupertinoIcons.arrow_counterclockwise,
-                  label: '重置 Session',
-                  onPressed: state.isActing
-                      ? null
-                      : () => onResetRuntime(agent),
-                ),
-              if (agent.isRuntime)
-                _ActionButton(
-                  icon: CupertinoIcons.play_arrow,
-                  label: '重试 Run',
-                  onPressed: state.isActing ? null : () => onRetryRun(agent),
-                ),
-              if (agent.isDaemon)
-                _ActionButton(
-                  icon: CupertinoIcons.arrow_up_circle,
-                  label: '升级',
-                  onPressed: state.isActing ? null : () => onUpgrade(agent),
-                ),
-              if (agent.isDaemon)
-                _ActionButton(
-                  icon: CupertinoIcons.chevron_left_slash_chevron_right,
-                  label: '安装命令',
-                  onPressed: state.isActing ? null : onCreateInstallCommand,
-                ),
-              _ActionButton(
-                icon: CupertinoIcons.xmark_circle,
-                label: '解绑',
-                danger: true,
-                onPressed: state.isActing ? null : onUnbind,
-              ),
+            SizedBox(height: responsive.spacing(18)),
+            if (runtimes.isNotEmpty) ...<Widget>[
+              const _SectionTitle('Runtime'),
+              SizedBox(height: responsive.spacing(8)),
+              for (final runtime in runtimes) _RuntimeRow(runtime: runtime),
+              SizedBox(height: responsive.spacing(18)),
             ],
-          ),
-          if (state.error != null) ...<Widget>[
-            SizedBox(height: responsive.spacing(10)),
-            _AgentErrorBanner(message: state.error!),
-          ],
-          SizedBox(height: responsive.spacing(18)),
-          if (runtimes.isNotEmpty) ...<Widget>[
-            const _SectionTitle('Runtime'),
+            if (agent.isRuntime && agent.recentRuns.isNotEmpty) ...<Widget>[
+              const _SectionTitle('最近 Run'),
+              SizedBox(height: responsive.spacing(8)),
+              _RunStatusPanel(run: agent.recentRuns.first),
+              SizedBox(height: responsive.spacing(18)),
+            ],
+            const _SectionTitle('高级诊断'),
             SizedBox(height: responsive.spacing(8)),
-            for (final runtime in runtimes) _RuntimeRow(runtime: runtime),
+            _InfoGrid(agent: agent),
+            if (agent.latest.lastErrorSummary != null ||
+                agent.latest.diagnosticsSummary.isNotEmpty) ...<Widget>[
+              SizedBox(height: responsive.spacing(10)),
+              _DiagnosticsPanel(agent: agent),
+            ],
             SizedBox(height: responsive.spacing(18)),
+            const SelectionContainer.disabled(child: _DisabledAdvancedAction()),
           ],
-          if (agent.isRuntime && agent.recentRuns.isNotEmpty) ...<Widget>[
-            const _SectionTitle('最近 Run'),
-            SizedBox(height: responsive.spacing(8)),
-            _RunStatusPanel(run: agent.recentRuns.first),
-            SizedBox(height: responsive.spacing(18)),
-          ],
-          const _SectionTitle('高级诊断'),
-          SizedBox(height: responsive.spacing(8)),
-          _InfoGrid(agent: agent),
-          if (agent.latest.lastErrorSummary != null ||
-              agent.latest.diagnosticsSummary.isNotEmpty) ...<Widget>[
-            SizedBox(height: responsive.spacing(10)),
-            _DiagnosticsPanel(agent: agent),
-          ],
-          SizedBox(height: responsive.spacing(18)),
-          const _DisabledAdvancedAction(),
-        ],
+        ),
       ),
     );
   }
@@ -711,7 +719,16 @@ class _RuntimeRow extends StatelessWidget {
         children: <Widget>[
           const Icon(CupertinoIcons.sparkles, color: Color(0xFF0B65F8)),
           SizedBox(width: responsive.spacing(10)),
-          Expanded(child: Text(runtime.displayName)),
+          Expanded(
+            child: Text(
+              runtime.displayName,
+              maxLines: 2,
+              style: const TextStyle(
+                color: Color(0xFF101B32),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
           _StatusPill(status: runtime.latest.status),
         ],
       ),
@@ -744,7 +761,6 @@ class _RunStatusPanel extends StatelessWidget {
                 child: Text(
                   run.runId,
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Color(0xFF101B32),
                     fontFamily: 'monospace',
@@ -775,7 +791,6 @@ class _RunStatusPanel extends StatelessWidget {
                   _redactDiagnosticValue(run.lastErrorSummary),
               ].join(' · '),
               maxLines: 2,
-              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: AwikiMeColors.danger,
                 fontSize: responsive.metaSm,
@@ -837,7 +852,6 @@ class _DiagnosticsPanel extends StatelessWidget {
                       child: Text(
                         entry.key,
                         maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: const Color(0xFF66728A),
                           fontSize: responsive.metaSm,
@@ -911,7 +925,6 @@ class _InfoGrid extends StatelessWidget {
                       child: Text(
                         _redactDiagnosticValue(entry.value, key: entry.key),
                         maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Color(0xFF101B32),
                           fontFamily: 'monospace',
@@ -986,59 +999,30 @@ class _AgentErrorBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return Container(
-      padding: EdgeInsets.all(responsive.spacing(12)),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF3F3),
-        borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(color: const Color(0xFFFFD2D2)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Icon(
-            CupertinoIcons.exclamationmark_circle_fill,
-            color: AwikiMeColors.danger,
-            size: responsive.iconSm,
-          ),
-          SizedBox(width: responsive.spacing(8)),
-          Expanded(
+    final retryButton = onRetry == null
+        ? null
+        : CupertinoButton(
+            padding: EdgeInsets.symmetric(
+              horizontal: responsive.spacing(10),
+              vertical: responsive.spacing(5),
+            ),
+            minimumSize: Size.zero,
+            borderRadius: BorderRadius.circular(responsive.radius(8)),
+            color: CupertinoColors.white,
+            onPressed: onRetry,
             child: Text(
-              message,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
+              '重试',
               style: TextStyle(
-                color: const Color(0xFF8A1F1F),
+                color: AwikiMeColors.danger,
                 fontSize: responsive.metaSm,
-                height: 1.35,
+                fontWeight: FontWeight.w700,
               ),
             ),
-          ),
-          SizedBox(width: responsive.spacing(8)),
-          _InlineCopyButton(text: message),
-          if (onRetry != null) ...<Widget>[
-            SizedBox(width: responsive.spacing(8)),
-            CupertinoButton(
-              padding: EdgeInsets.symmetric(
-                horizontal: responsive.spacing(10),
-                vertical: responsive.spacing(5),
-              ),
-              minimumSize: Size.zero,
-              borderRadius: BorderRadius.circular(responsive.radius(8)),
-              color: CupertinoColors.white,
-              onPressed: onRetry,
-              child: Text(
-                '重试',
-                style: TextStyle(
-                  color: AwikiMeColors.danger,
-                  fontSize: responsive.metaSm,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
+          );
+    return AwikiMeErrorNotice(
+      message: message,
+      compact: true,
+      trailing: retryButton,
     );
   }
 }
@@ -1061,7 +1045,7 @@ class _CopyableDiagnosticText extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Expanded(
-          child: SelectableText(
+          child: Text(
             text,
             maxLines: 3,
             style: TextStyle(color: color, fontSize: fontSize),
@@ -1082,24 +1066,26 @@ class _InlineCopyButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return CupertinoButton(
-      padding: EdgeInsets.all(responsive.spacing(5)),
-      minimumSize: Size(
-        responsive.displayScaled(28),
-        responsive.displayScaled(28),
-      ),
-      borderRadius: BorderRadius.circular(responsive.radius(7)),
-      color: CupertinoColors.white,
-      onPressed: () async {
-        await Clipboard.setData(ClipboardData(text: text));
-        if (context.mounted) {
-          AwikiMeToast.show(context, '已复制');
-        }
-      },
-      child: Icon(
-        CupertinoIcons.doc_on_doc,
-        color: const Color(0xFF44506A),
-        size: responsive.iconSm,
+    return SelectionContainer.disabled(
+      child: CupertinoButton(
+        padding: EdgeInsets.all(responsive.spacing(5)),
+        minimumSize: Size(
+          responsive.displayScaled(28),
+          responsive.displayScaled(28),
+        ),
+        borderRadius: BorderRadius.circular(responsive.radius(7)),
+        color: CupertinoColors.white,
+        onPressed: () async {
+          await Clipboard.setData(ClipboardData(text: text));
+          if (context.mounted) {
+            AwikiMeToast.show(context, '已复制');
+          }
+        },
+        child: Icon(
+          CupertinoIcons.doc_on_doc,
+          color: const Color(0xFF44506A),
+          size: responsive.iconSm,
+        ),
       ),
     );
   }

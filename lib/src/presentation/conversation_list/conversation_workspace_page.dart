@@ -21,6 +21,7 @@ import '../group/group_list_page.dart';
 import '../group/group_provider.dart';
 import '../profile/peer_profile_provider.dart';
 import '../shared/awiki_me_design.dart';
+import '../shared/awiki_me_feedback.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/copyable_did_line.dart';
 import '../shared/formatters/display_formatters.dart';
@@ -539,14 +540,10 @@ class _MacPeerProfilePanel extends ConsumerWidget {
         child: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Text(
-              context.l10n.peerProfileLoadFailed,
+            child: AwikiMeErrorText(
+              message: context.l10n.peerProfileLoadFailed,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFFFF3B30),
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+              compact: true,
             ),
           ),
         ),
@@ -581,14 +578,10 @@ class _MacPeerProfilePanel extends ConsumerWidget {
         child: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Text(
-              context.l10n.peerProfileLoadFailed,
+            child: AwikiMeErrorText(
+              message: context.l10n.peerProfileLoadFailed,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFFFF3B30),
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+              compact: true,
             ),
           ),
         ),

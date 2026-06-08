@@ -18,6 +18,7 @@ import '../chat/chat_page.dart';
 import '../chat/chat_provider.dart';
 import '../conversation_list/conversation_provider.dart';
 import '../friends/friends_provider.dart';
+import 'awiki_me_feedback.dart';
 import 'avatar_badge.dart';
 import 'formatters/display_formatters.dart';
 import 'responsive_layout.dart';
@@ -388,11 +389,7 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                     ),
                     if (_errorText != null) ...<Widget>[
                       const SizedBox(height: 12),
-                      _InlineNotice(
-                        text: _errorText!,
-                        color: const Color(0xFFFF3B30),
-                        background: const Color(0xFFFFECEA),
-                      ),
+                      _InlineNotice(text: _errorText!, danger: true),
                     ],
                     if (_profile != null) ...<Widget>[
                       const SizedBox(height: 18),
@@ -403,8 +400,6 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                       const SizedBox(height: 12),
                       const _InlineNotice(
                         text: '消息将通过已验证 DID 连接发送；首次联系外部身份请谨慎确认。',
-                        color: Color(0xFF0B65F8),
-                        background: Color(0xFFEAF2FF),
                       ),
                       if (_isAddContact) ...<Widget>[
                         const SizedBox(height: 16),
@@ -696,28 +691,30 @@ class _IdentityMetaLine extends StatelessWidget {
 }
 
 class _InlineNotice extends StatelessWidget {
-  const _InlineNotice({
-    required this.text,
-    required this.color,
-    required this.background,
-  });
+  const _InlineNotice({required this.text, this.danger = false});
 
   final String text;
-  final Color color;
-  final Color background;
+  final bool danger;
 
   @override
   Widget build(BuildContext context) {
+    if (danger) {
+      return AwikiMeErrorNotice(message: text, compact: true);
+    }
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: background,
+        color: const Color(0xFFEAF2FF),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         text,
-        style: TextStyle(color: color, fontSize: 12, height: 1.35),
+        style: const TextStyle(
+          color: Color(0xFF0B65F8),
+          fontSize: 12,
+          height: 1.35,
+        ),
       ),
     );
   }

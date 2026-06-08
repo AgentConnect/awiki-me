@@ -10,7 +10,8 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show SelectableText;
+import 'package:flutter/material.dart'
+    show SelectableText, SelectionArea, SelectionContainer;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../test_support.dart';
@@ -210,6 +211,96 @@ void main() {
 
     expect(find.text('打开聊天'), findsOneWidget);
     expect(find.text('did:agent:daemon:b'), findsWidgets);
+  });
+
+  testWidgets('agent detail supports cross-field selection for diagnostics', (
+    tester,
+  ) async {
+    final control = FakeAgentControlService()
+      ..agents = <AgentSummary>[
+        const AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'failed',
+            version: '1.2.3',
+            platform: 'linux-arm64',
+            service: 'systemd_user',
+            lastErrorCode: 'gateway_error',
+            lastErrorSummary: 'gateway timeout',
+            diagnosticsSummary: <String, Object?>{'runner': 'queue=3'},
+          ),
+        ),
+        const AgentSummary(
+          agentDid: 'did:agent:runtime',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'hermes',
+          handle: 'awiki-agent-hermes',
+          displayName: 'Hermes Runtime',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final context = tester.element(find.byType(AgentsWorkspacePage));
+    ProviderScope.containerOf(
+      context,
+    ).read(agentsProvider.notifier).select('did:agent:daemon');
+    await tester.pumpAndSettle();
+
+    final detailSelectionArea = find.byType(SelectionArea);
+    expect(detailSelectionArea, findsOneWidget);
+    expect(
+      find
+          .byWidgetPredicate(
+            (widget) => widget is SelectionContainer && widget.delegate == null,
+          )
+          .evaluate()
+          .length,
+      greaterThanOrEqualTo(2),
+    );
+    Finder detailText(String text) =>
+        find.descendant(of: detailSelectionArea, matching: find.text(text));
+    expect(detailText('代理 1'), findsOneWidget);
+    expect(detailText('failed'), findsWidgets);
+    expect(detailText('Runtime'), findsOneWidget);
+    expect(detailText('Hermes Runtime'), findsOneWidget);
+    expect(detailText('ready'), findsWidgets);
+    expect(detailText('高级诊断'), findsOneWidget);
+    expect(detailText('DID'), findsOneWidget);
+    expect(detailText('did:agent:daemon'), findsWidgets);
+    expect(detailText('platform'), findsOneWidget);
+    expect(detailText('linux-arm64'), findsOneWidget);
+    expect(detailText('service'), findsOneWidget);
+    expect(detailText('systemd_user'), findsOneWidget);
+    expect(detailText('error'), findsOneWidget);
+    expect(detailText('gateway_error'), findsOneWidget);
+    expect(detailText('诊断摘要'), findsOneWidget);
+    expect(detailText('gateway timeout'), findsOneWidget);
+    expect(detailText('runner'), findsOneWidget);
+    expect(detailText('queue=3'), findsOneWidget);
   });
 
   testWidgets('runtime detail shows latest run status with redacted error', (

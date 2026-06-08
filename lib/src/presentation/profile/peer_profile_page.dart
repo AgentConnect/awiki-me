@@ -54,9 +54,9 @@ class PeerProfilePage extends ConsumerWidget {
                 ? const Center(child: CupertinoActivityIndicator())
                 : profile == null
                 ? Center(
-                    child: Text(
-                      context.l10n.peerProfileLoadFailed,
-                      style: TextStyle(color: theme.danger),
+                    child: AwikiMeErrorText(
+                      message: context.l10n.peerProfileLoadFailed,
+                      textAlign: TextAlign.center,
                     ),
                   )
                 : ListView(
