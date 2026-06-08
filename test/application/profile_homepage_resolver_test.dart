@@ -26,6 +26,38 @@ void main() {
     );
   });
 
+  test('bare full handle is expanded with DID domain', () {
+    final resolver = ProfileHomepageResolver(
+      environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
+    );
+
+    expect(
+      resolver.homepageUrl(baseProfile.copyWith(fullHandle: 'zhuocheng')),
+      'https://zhuocheng.anpclaw.com',
+    );
+  });
+
+  test('domain-qualified handle wins over bare full handle', () {
+    final resolver = ProfileHomepageResolver(
+      environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
+    );
+
+    expect(
+      resolver.homepageUrl(
+        const UserProfile(
+          did: 'did:test',
+          nickName: 'Zhuocheng',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          handle: 'zhuocheng.anpclaw.com',
+          fullHandle: 'zhuocheng',
+        ),
+      ),
+      'https://zhuocheng.anpclaw.com',
+    );
+  });
+
   test('did domain wins over environment for bare handle profiles', () {
     final resolver = ProfileHomepageResolver(
       environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),

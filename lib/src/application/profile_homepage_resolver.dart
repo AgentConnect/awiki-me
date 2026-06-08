@@ -9,16 +9,20 @@ class ProfileHomepageResolver {
 
   String homepageUrl(UserProfile profile) {
     final fullHandle = _cleanHandle(profile.fullHandle);
-    if (fullHandle != null) {
+    if (fullHandle != null && _isDomainQualifiedHandle(fullHandle)) {
       return _urlForHandle(fullHandle);
     }
 
     final handle = _cleanHandle(profile.handle);
-    if (handle != null && handle.contains('.')) {
+    if (handle != null && _isDomainQualifiedHandle(handle)) {
       return _urlForHandle(handle);
     }
 
     final didDomain = _didDomain(profile.did);
+    if (fullHandle != null && didDomain != null) {
+      return _urlForHandle('$fullHandle.$didDomain');
+    }
+
     if (handle != null && didDomain != null) {
       return _urlForHandle('$handle.$didDomain');
     }
@@ -32,8 +36,16 @@ class ProfileHomepageResolver {
       return _urlForHandle('$handle.${_environment.didDomain}');
     }
 
+    if (fullHandle != null) {
+      return _urlForHandle('$fullHandle.${_environment.didDomain}');
+    }
+
     return '';
   }
+}
+
+bool _isDomainQualifiedHandle(String handle) {
+  return handle.contains('.');
 }
 
 String? _cleanHandle(String? value) {
