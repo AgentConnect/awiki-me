@@ -41,6 +41,84 @@ void main() {
     }
   });
 
+  test('app action capabilities expose MVP allowlist only', () {
+    const payload =
+        '{"schema":"awiki.app.capabilities.v1","capabilities":["message.summarize_plain","contact.update_note","message.send","message.e2ee_forward"],"require_confirmation_for_write_actions":true}';
+
+    final capabilities = AgentControlPayloads.decodeAppCapabilities(payload);
+
+    expect(capabilities, isNotNull);
+    expect(capabilities!.allowedMvpCapabilities, <String>[
+      'message.summarize_plain',
+      'contact.update_note',
+    ]);
+    expect(AgentControlPayloads.isAllowedAppAction('message.send'), isFalse);
+    expect(
+      AgentControlPayloads.isAllowedAppAction('message.e2ee_forward'),
+      isFalse,
+    );
+  });
+
+  test('app action request parses contact write confirmation state', () {
+    const payload =
+        '{"schema":"awiki.app.action.v1","action_id":"act_1","action":"contact.update_note","state":"requires_confirmation","requires_confirmation":true,"args":{"contact_did":"did:human:bob","note":"Follow up"}}';
+
+    final request = AgentControlPayloads.decodeAppAction(payload);
+
+    expect(request, isNotNull);
+    expect(request!.actionId, 'act_1');
+    expect(request.action, 'contact.update_note');
+    expect(request.isAllowedInMvp, isTrue);
+    expect(request.needsUserConfirmation, isTrue);
+    expect(
+      AgentControlPayloads.requiresAppActionConfirmation(request.action),
+      isTrue,
+    );
+    expect(request.args['contact_did'], 'did:human:bob');
+  });
+
+  test('app action parser rejects private state payloads', () {
+    const payload =
+        '{"schema":"awiki.app.action.v1","action_id":"act_secret","action":"message.create_draft","args":{"private_key":"secret"}}';
+
+    expect(AgentControlPayloads.decodeAppAction(payload), isNull);
+  });
+
+  test('app action result reducer updates terminal state', () {
+    const request =
+        '{"schema":"awiki.app.action.v1","action_id":"act_draft","action":"message.create_draft","state":"requested","args":{"source_message_id":"msg_1"}}';
+    const result =
+        '{"schema":"awiki.app.action.result.v1","action_id":"act_draft","action":"message.create_draft","state":"succeeded","result":{"draft_text":"Looks good"}}';
+
+    final afterRequest = AppActionReducer.reducePayloadJson(
+      const <String, AppActionRecord>{},
+      request,
+    );
+    final afterResult = AppActionReducer.reducePayloadJson(
+      afterRequest,
+      result,
+    );
+
+    expect(afterRequest['act_draft']?.state, appActionStateRequested);
+    expect(afterResult['act_draft']?.state, appActionStateSucceeded);
+    expect(afterResult['act_draft']?.isTerminal, isTrue);
+    expect(
+      afterResult['act_draft']?.result?.result['draft_text'],
+      'Looks good',
+    );
+  });
+
+  test('message sync schema decodes as hidden system payload', () {
+    const payload =
+        '{"schema":"awiki.message.sync.v1","kind":"runtime_final","message_id":"msg_1"}';
+
+    final sync = AgentControlPayloads.decodeMessageSync(payload);
+
+    expect(sync, isNotNull);
+    expect(sync!.payload['kind'], 'runtime_final');
+    expect(AgentControlPayloads.isControl(payload), isTrue);
+  });
+
   test('runtime create command carries token in args only', () {
     final payload = runtimeAgentCreatePayload(
       controllerDid: 'did:human:alice',
