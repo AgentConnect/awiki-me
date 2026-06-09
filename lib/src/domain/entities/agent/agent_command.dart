@@ -133,4 +133,26 @@ Map<String, Object?> daemonUpgradePayload({String targetVersion = 'latest'}) {
   };
 }
 
+Map<String, Object?> daemonDeletePayload({required String daemonAgentDid}) {
+  return <String, Object?>{
+    'schema': AgentControlPayloads.commandSchema,
+    'command_id': agentCommandId(),
+    'command': 'daemon.delete',
+    'target_agent_kind': 'daemon',
+    'args': <String, Object?>{'daemon_agent_did': daemonAgentDid},
+  };
+}
+
+Map<String, Object?> runtimeAgentDeletePayload({
+  required String runtimeAgentDid,
+}) {
+  return <String, Object?>{
+    'schema': AgentControlPayloads.commandSchema,
+    'command_id': agentCommandId(),
+    'command': 'runtime.agent.delete',
+    'target_agent_kind': 'runtime',
+    'args': <String, Object?>{'runtime_agent_did': runtimeAgentDid},
+  };
+}
+
 String encodeAgentCommand(Map<String, Object?> payload) => jsonEncode(payload);

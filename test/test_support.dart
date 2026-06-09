@@ -1255,6 +1255,9 @@ class FakeAgentControlService implements AgentControlService {
   String? lastInboxThreadKind;
   String nextInboxThreadRequestId = 'cmd_runtime_inbox_thread_test';
   String? lastUnboundAgentDid;
+  String? lastDeletedDaemonDid;
+  String? lastDeletedRuntimeDaemonDid;
+  String? lastDeletedRuntimeDid;
   String? lastRenamedAgentDid;
   String? lastDisplayName;
   String? lastUpgradeDaemonDid;
@@ -1342,6 +1345,20 @@ class FakeAgentControlService implements AgentControlService {
   Future<void> unbindAgent(String agentDid) async {
     lastUnboundAgentDid = agentDid;
     agents = agents.where((agent) => agent.agentDid != agentDid).toList();
+  }
+
+  @override
+  Future<void> deleteDaemon(String daemonAgentDid) async {
+    lastDeletedDaemonDid = daemonAgentDid;
+  }
+
+  @override
+  Future<void> deleteRuntimeAgent({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+  }) async {
+    lastDeletedRuntimeDaemonDid = daemonAgentDid;
+    lastDeletedRuntimeDid = runtimeAgentDid;
   }
 
   @override

@@ -45,6 +45,11 @@ abstract interface class AgentControlService {
     String? cursor,
   });
   Future<void> upgradeDaemon(String daemonAgentDid);
+  Future<void> deleteDaemon(String daemonAgentDid);
+  Future<void> deleteRuntimeAgent({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+  });
   Future<AgentSummary> updateDisplayName({
     required String agentDid,
     required String displayName,
@@ -225,6 +230,25 @@ class DefaultAgentControlService implements AgentControlService {
   @override
   Future<void> upgradeDaemon(String daemonAgentDid) {
     return _sendDaemonPayload(daemonAgentDid, daemonUpgradePayload());
+  }
+
+  @override
+  Future<void> deleteDaemon(String daemonAgentDid) {
+    return _sendDaemonPayload(
+      daemonAgentDid,
+      daemonDeletePayload(daemonAgentDid: daemonAgentDid),
+    );
+  }
+
+  @override
+  Future<void> deleteRuntimeAgent({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+  }) {
+    return _sendDaemonPayload(
+      daemonAgentDid,
+      runtimeAgentDeletePayload(runtimeAgentDid: runtimeAgentDid),
+    );
   }
 
   @override

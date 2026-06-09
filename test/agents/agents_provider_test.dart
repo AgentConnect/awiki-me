@@ -211,6 +211,99 @@ void main() {
     expect(runtime.latest.status, 'ready');
   });
 
+  test('deleteSelected sends runtime delete through owning daemon', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:runtime',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'hermes',
+          displayName: 'Hermes',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+    container.read(agentsProvider.notifier).select('did:agent:runtime');
+
+    await container.read(agentsProvider.notifier).deleteSelected();
+
+    expect(control.lastDeletedRuntimeDaemonDid, 'did:agent:daemon');
+    expect(control.lastDeletedRuntimeDid, 'did:agent:runtime');
+    expect(control.lastDeletedDaemonDid, isNull);
+    expect(control.lastUnboundAgentDid, isNull);
+  });
+
+  test(
+    'archive control payload removes archived agents from current list',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+          AgentSummary(
+            agentDid: 'did:agent:runtime',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'hermes',
+            displayName: 'Hermes',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'state': 'archived',
+          'daemon_agent_did': 'did:agent:daemon',
+          'result': <String, Object?>{
+            'command': 'runtime.agent.delete',
+            'runtime_agent_did': 'did:agent:runtime',
+            'daemon_agent_did': 'did:agent:daemon',
+          },
+        },
+      );
+
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        ['did:agent:daemon'],
+      );
+
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'state': 'archived',
+          'daemon_agent_did': 'did:agent:daemon',
+          'result': <String, Object?>{
+            'command': 'daemon.delete',
+            'daemon_agent_did': 'did:agent:daemon',
+          },
+        },
+      );
+
+      expect(container.read(agentsProvider).agents, isEmpty);
+    },
+  );
+
   test(
     'daemon status payload does not replace inventory display names',
     () async {

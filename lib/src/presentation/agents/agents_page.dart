@@ -71,7 +71,7 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
       onResetRuntime: (agent) =>
           _confirmResetRuntimeSession(context, ref, agent),
       onUpgrade: (agent) => _confirmUpgradeDaemon(context, ref, agent),
-      onUnbind: () => _confirmUnbindSelected(context, ref),
+      onDelete: (agent) => _confirmDeleteAgent(context, ref, agent),
     );
 
     if (responsive.supportsTwoPane) {
@@ -618,7 +618,7 @@ class _AgentDetailPane extends StatelessWidget {
     required this.onRetryRun,
     required this.onResetRuntime,
     required this.onUpgrade,
-    required this.onUnbind,
+    required this.onDelete,
   });
 
   final AgentsState state;
@@ -630,7 +630,7 @@ class _AgentDetailPane extends StatelessWidget {
   final ValueChanged<AgentSummary> onRetryRun;
   final ValueChanged<AgentSummary> onResetRuntime;
   final ValueChanged<AgentSummary> onUpgrade;
-  final VoidCallback onUnbind;
+  final ValueChanged<AgentSummary> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -723,10 +723,12 @@ class _AgentDetailPane extends StatelessWidget {
                       onPressed: state.isActing ? null : () => onUpgrade(agent),
                     ),
                   _ActionButton(
-                    icon: CupertinoIcons.xmark_circle,
-                    label: '解绑',
+                    icon: CupertinoIcons.trash,
+                    label: agent.isDaemon ? '删除代理' : '删除智能体',
                     danger: true,
-                    onPressed: state.isActing ? null : onUnbind,
+                    onPressed: state.isActing || !state.canDeleteAgent(agent)
+                        ? null
+                        : () => onDelete(agent),
                   ),
                 ],
               ),
@@ -1449,16 +1451,23 @@ Future<void> _confirmUpgradeDaemon(
   }
 }
 
-Future<void> _confirmUnbindSelected(BuildContext context, WidgetRef ref) async {
+Future<void> _confirmDeleteAgent(
+  BuildContext context,
+  WidgetRef ref,
+  AgentSummary agent,
+) async {
+  final isDaemon = agent.isDaemon;
   final confirmed = await _confirm(
     context,
-    title: '解绑',
-    message: '解绑不会删除 DID、聊天历史或远端身份记录。',
-    actionLabel: '解绑',
+    title: isDaemon ? '删除代理' : '删除智能体',
+    message: isDaemon
+        ? '删除后会停止宿主机上的代理服务，并移除它创建的智能体。本地数据会归档保留，不会继续使用。'
+        : '删除后该智能体会从列表中移除。本地数据会归档保留，不会继续使用。',
+    actionLabel: '删除',
     destructive: true,
   );
   if (confirmed) {
-    await ref.read(agentsProvider.notifier).unbindSelected();
+    await ref.read(agentsProvider.notifier).deleteSelected();
   }
 }
 

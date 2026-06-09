@@ -401,7 +401,7 @@ void main() {
     expect(find.textContaining('<redacted>'), findsOneWidget);
   });
 
-  testWidgets('rename and unbind are reachable from detail pane', (
+  testWidgets('rename and delete are reachable from detail pane', (
     tester,
   ) async {
     final control = FakeAgentControlService();
@@ -429,11 +429,12 @@ void main() {
     expect(control.lastRenamedAgentDid, 'did:agent:daemon');
     expect(control.lastDisplayName, '我的代理');
 
-    await tester.tap(find.text('解绑'));
+    await tester.tap(find.text('删除代理'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('解绑').last);
+    await tester.tap(find.text('删除').last);
     await tester.pumpAndSettle();
-    expect(control.lastUnboundAgentDid, 'did:agent:daemon');
+    expect(control.lastDeletedDaemonDid, 'did:agent:daemon');
+    expect(control.lastUnboundAgentDid, isNull);
   });
 
   testWidgets('install command opens a compact host-install dialog', (

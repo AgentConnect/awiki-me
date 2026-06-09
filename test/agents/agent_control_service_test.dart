@@ -50,6 +50,44 @@ void main() {
     expect(messages.lastIdempotencyKey, 'agent-status:did:agent:daemon');
   });
 
+  test('deleteDaemon sends daemon.delete control payload', () async {
+    final messages = _MessagesStub();
+    final service = DefaultAgentControlService(
+      inventory: _InventoryStub(),
+      messages: messages,
+    );
+
+    await service.deleteDaemon('did:agent:daemon');
+
+    expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
+    expect(messages.lastSecure, isFalse);
+    expect(messages.lastPayload?['command'], 'daemon.delete');
+    final args = messages.lastPayload?['args'] as Map<String, Object?>;
+    expect(args['daemon_agent_did'], 'did:agent:daemon');
+  });
+
+  test(
+    'deleteRuntimeAgent sends runtime.agent.delete through daemon',
+    () async {
+      final messages = _MessagesStub();
+      final service = DefaultAgentControlService(
+        inventory: _InventoryStub(),
+        messages: messages,
+      );
+
+      await service.deleteRuntimeAgent(
+        daemonAgentDid: 'did:agent:daemon',
+        runtimeAgentDid: 'did:agent:runtime',
+      );
+
+      expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
+      expect(messages.lastSecure, isFalse);
+      expect(messages.lastPayload?['command'], 'runtime.agent.delete');
+      final args = messages.lastPayload?['args'] as Map<String, Object?>;
+      expect(args['runtime_agent_did'], 'did:agent:runtime');
+    },
+  );
+
   test(
     'runtime inbox query sends daemon control payload and returns request id',
     () async {

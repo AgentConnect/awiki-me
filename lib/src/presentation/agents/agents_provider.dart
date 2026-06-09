@@ -58,6 +58,24 @@ class AgentsState {
       .where((agent) => agent.isRuntime && agent.daemonAgentDid == daemonDid)
       .toList();
 
+  AgentSummary? daemonForRuntime(AgentSummary runtime) {
+    final daemonDid = runtime.daemonAgentDid;
+    if (daemonDid == null) {
+      return null;
+    }
+    for (final agent in agents) {
+      if (agent.agentDid == daemonDid && agent.isDaemon) {
+        return agent;
+      }
+    }
+    return null;
+  }
+
+  bool canDeleteAgent(AgentSummary agent) {
+    final daemon = agent.isDaemon ? agent : daemonForRuntime(agent);
+    return daemon != null && _daemonAcceptsControlCommands(daemon);
+  }
+
   bool isStatusQueryPending(String daemonDid) {
     return pendingStatusQueryAtByDaemon.containsKey(daemonDid);
   }
@@ -260,6 +278,34 @@ class AgentsController extends StateNotifier<AgentsState> {
           .read(agentControlServiceProvider)
           .unbindAgent(selected.agentDid);
       await load();
+    });
+  }
+
+  Future<void> deleteSelected() async {
+    final selected = state.selectedAgent;
+    if (selected == null) {
+      return;
+    }
+    final daemon = selected.isDaemon
+        ? selected
+        : state.daemonForRuntime(selected);
+    if (daemon == null || !_daemonAcceptsControlCommands(daemon)) {
+      state = state.copyWith(error: '代理当前不可达，暂时不能删除。');
+      return;
+    }
+    await _act(() async {
+      if (selected.isDaemon) {
+        await ref
+            .read(agentControlServiceProvider)
+            .deleteDaemon(selected.agentDid);
+      } else {
+        await ref
+            .read(agentControlServiceProvider)
+            .deleteRuntimeAgent(
+              daemonAgentDid: daemon.agentDid,
+              runtimeAgentDid: selected.agentDid,
+            );
+      }
     });
   }
 
@@ -572,6 +618,26 @@ class AgentsController extends StateNotifier<AgentsState> {
           fallbackEventAt: eventAt,
         );
       }
+    } else if (command == 'runtime.agent.delete') {
+      final runtimeDid =
+          _string(result['runtime_agent_did']) ?? _string(result['agent_did']);
+      if (runtimeDid != null &&
+          (_string(payload['state']) == 'archived' ||
+              _string(result['active_state']) == 'archived')) {
+        byDid.remove(runtimeDid);
+      }
+    } else if (command == 'daemon.delete') {
+      final daemonDid =
+          _string(result['daemon_agent_did']) ??
+          _string(payload['daemon_agent_did']);
+      if (daemonDid != null &&
+          (_string(payload['state']) == 'archived' ||
+              _string(result['active_state']) == 'archived')) {
+        byDid.removeWhere(
+          (_, agent) =>
+              agent.agentDid == daemonDid || agent.daemonAgentDid == daemonDid,
+        );
+      }
     }
     final runs = payload['runs'];
     if (runs is List) {
@@ -747,6 +813,20 @@ bool _isStaleAgentStatus(AgentSummary current, DateTime? incomingEventAt) {
     return false;
   }
   return incomingEventAt.isBefore(currentAt);
+}
+
+bool _daemonAcceptsControlCommands(AgentSummary daemon) {
+  if (!daemon.isDaemon || daemon.activeState != 'active') {
+    return false;
+  }
+  return switch (daemon.latest.status) {
+    'ready' ||
+    'needs_config' ||
+    'needs_upgrade' ||
+    'upgrading' ||
+    'archiving' => true,
+    _ => false,
+  };
 }
 
 Map<String, DateTime> _withoutKey(Map<String, DateTime> input, String key) {
