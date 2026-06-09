@@ -32,8 +32,49 @@ void main() {
 
     expect(find.text('智能体'), findsWidgets);
     expect(find.text('代理 1'), findsWidgets);
-    expect(find.text('刷新状态'), findsOneWidget);
+    expect(find.text('刷新状态'), findsNothing);
+    expect(find.byIcon(CupertinoIcons.refresh), findsWidgets);
     expect(find.text('创建 Hermes'), findsOneWidget);
+    expect(find.text('升级'), findsNothing);
+    expect(find.text('安装命令'), findsNothing);
+  });
+
+  testWidgets('daemon upgrade action appears only when upgrade is needed', (
+    tester,
+  ) async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'needs_upgrade',
+            platform: 'linux-amd64',
+            needsUpgrade: true,
+          ),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('升级'), findsOneWidget);
+    expect(find.text('安装命令'), findsNothing);
   });
 
   testWidgets('runtime actions open chat and send control commands', (
@@ -429,7 +470,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('安装命令'));
+    await tester.tap(find.byIcon(CupertinoIcons.plus_circle_fill));
     await tester.pumpAndSettle();
 
     expect(find.text('到宿主机安装代理'), findsOneWidget);
@@ -492,11 +533,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('刷新状态'));
+      await tester.tap(_agentRefreshButton().first);
       await tester.pump();
 
       expect(control.lastRefreshedDaemonDid, 'did:agent:daemon');
-      expect(find.text('刷新中'), findsOneWidget);
+      expect(find.text('刷新中'), findsNothing);
+      expect(find.text('刷新状态'), findsNothing);
 
       await tester.pump(const Duration(seconds: 10));
       await tester.pump();
@@ -539,14 +581,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('刷新状态'));
-    await tester.pump();
-    await tester.tap(find.text('刷新中'));
+    await tester.tap(_agentRefreshButton().first);
     await tester.pump();
 
     expect(control.refreshCount, 1);
     expect(find.text('10 秒内只能刷新一次。'), findsNothing);
-    expect(find.text('刷新中'), findsOneWidget);
+    expect(find.text('刷新中'), findsNothing);
+    expect(_agentRefreshButton(), findsNothing);
   });
 
   testWidgets('refresh can be triggered again after loading clears', (
@@ -584,7 +625,7 @@ void main() {
     final context = tester.element(find.byType(AgentsWorkspacePage));
     final container = ProviderScope.containerOf(context);
 
-    await tester.tap(find.text('刷新状态'));
+    await tester.tap(_agentRefreshButton().first);
     await tester.pump();
     container.read(agentsProvider.notifier).applyControlPayload(
       <String, Object?>{
@@ -600,11 +641,11 @@ void main() {
     await tester.pump(agentStatusRefreshMinimumIndicatorDuration);
     expect(find.text('刷新中'), findsNothing);
 
-    await tester.tap(find.text('刷新状态'));
+    await tester.tap(_agentRefreshButton().first);
     await tester.pump();
 
     expect(control.refreshCount, 2);
-    expect(find.text('刷新中'), findsOneWidget);
+    expect(find.text('刷新中'), findsNothing);
     expect(find.text('10 秒内只能刷新一次。'), findsNothing);
   });
 
@@ -643,9 +684,9 @@ void main() {
       final context = tester.element(find.byType(AgentsWorkspacePage));
       final container = ProviderScope.containerOf(context);
 
-      await tester.tap(find.text('刷新状态'));
+      await tester.tap(_agentRefreshButton().first);
       await tester.pump();
-      expect(find.text('刷新中'), findsOneWidget);
+      expect(find.text('刷新中'), findsNothing);
 
       container.read(agentsProvider.notifier).applyControlPayload(
         <String, Object?>{
@@ -687,3 +728,5 @@ class _CountingRefreshAgentControlService extends FakeAgentControlService {
     await super.refreshDaemonStatus(daemonAgentDid);
   }
 }
+
+Finder _agentRefreshButton() => find.byIcon(CupertinoIcons.refresh);

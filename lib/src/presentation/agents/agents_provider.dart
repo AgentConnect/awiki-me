@@ -10,7 +10,9 @@ import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/install_command.dart';
+import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/session_provider.dart';
+import 'agent_display_name.dart';
 
 const agentStatusQueryTimeout = Duration(seconds: 10);
 const agentStatusRefreshMinimumIndicatorDuration = Duration(milliseconds: 1500);
@@ -104,11 +106,12 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = const AgentsState();
       return;
     }
+    final cacheOwner = _agentCacheOwner(session);
     state = state.copyWith(isLoading: true, clearError: true);
-    await _loadCached(session.did);
+    await _loadCached(cacheOwner);
     try {
       final agents = await ref.read(agentControlServiceProvider).listAgents();
-      await _saveCache(session.did, agents);
+      await _saveCache(cacheOwner, agents);
       state = state.copyWith(
         agents: agents,
         selectedAgentDid: _nextSelection(agents),
@@ -307,7 +310,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     );
     final session = ref.read(sessionProvider).session;
     if (session != null) {
-      unawaited(_saveCache(session.did, merged));
+      unawaited(_saveCache(_agentCacheOwner(session), merged));
     }
   }
 
@@ -548,6 +551,7 @@ class AgentsController extends StateNotifier<AgentsState> {
           },
           fallbackStatus: _string(payload['state']),
           fallbackEventAt: eventAt,
+          allowPayloadDisplayName: true,
         );
       }
     } else if (command == 'daemon.upgrade') {
@@ -649,6 +653,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     required Map<String, Object?> payload,
     String? fallbackStatus,
     DateTime? fallbackEventAt,
+    bool allowPayloadDisplayName = false,
   }) {
     final incomingEventAt = _agentStatusTimestamp(payload, fallbackEventAt);
     if (current != null && _isStaleAgentStatus(current, incomingEventAt)) {
@@ -673,9 +678,9 @@ class AgentsController extends StateNotifier<AgentsState> {
       runtime: _string(payload['runtime']) ?? current?.runtime,
       handle: _string(payload['handle']) ?? current?.handle,
       displayName:
-          _string(payload['display_name']) ??
+          (allowPayloadDisplayName ? _string(payload['display_name']) : null) ??
           current?.displayName ??
-          (kind == AgentKind.daemon ? '代理 1' : 'Hermes'),
+          AgentDisplayName.fallbackForKind(kind),
       activeState: current?.activeState ?? 'active',
       latest: latest,
       recentRuns: current?.recentRuns ?? const <AgentRunStatus>[],
@@ -766,6 +771,14 @@ Map<String, Object?> _readMap(Object? value) {
 String? _string(Object? value) {
   final text = value?.toString().trim();
   return text == null || text.isEmpty ? null : text;
+}
+
+String _agentCacheOwner(SessionIdentity session) {
+  final handle = session.handle?.trim().toLowerCase();
+  if (handle != null && handle.isNotEmpty) {
+    return 'controller-handle:$handle';
+  }
+  return 'controller-did:${session.did.trim()}';
 }
 
 DateTime? _dateTime(Object? value) {

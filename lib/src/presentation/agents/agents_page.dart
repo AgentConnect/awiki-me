@@ -12,6 +12,7 @@ import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
+import 'agent_display_name.dart';
 import 'agents_provider.dart';
 
 class AgentsWorkspacePage extends ConsumerStatefulWidget {
@@ -49,6 +50,9 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
       footer: widget.listFooter,
       onCreateDaemon: () =>
           ref.read(agentsProvider.notifier).createDaemonInstallCommand(),
+      onRefreshDaemon: (agent) {
+        ref.read(agentsProvider.notifier).refreshDaemonStatus(agent.agentDid);
+      },
       onSelect: (agentDid) =>
           ref.read(agentsProvider.notifier).select(agentDid),
       onRetry: () => ref.read(agentsProvider.notifier).load(),
@@ -67,8 +71,6 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
       onResetRuntime: (agent) =>
           _confirmResetRuntimeSession(context, ref, agent),
       onUpgrade: (agent) => _confirmUpgradeDaemon(context, ref, agent),
-      onCreateInstallCommand: () =>
-          ref.read(agentsProvider.notifier).createDaemonInstallCommand(),
       onUnbind: () => _confirmUnbindSelected(context, ref),
     );
 
@@ -112,6 +114,7 @@ class _AgentListPane extends StatelessWidget {
     required this.state,
     required this.footer,
     required this.onCreateDaemon,
+    required this.onRefreshDaemon,
     required this.onSelect,
     required this.onRetry,
   });
@@ -119,6 +122,7 @@ class _AgentListPane extends StatelessWidget {
   final AgentsState state;
   final Widget? footer;
   final VoidCallback onCreateDaemon;
+  final ValueChanged<AgentSummary> onRefreshDaemon;
   final ValueChanged<String> onSelect;
   final VoidCallback onRetry;
 
@@ -183,7 +187,11 @@ class _AgentListPane extends StatelessWidget {
                       ),
                     ),
                   ),
-                _AgentHierarchyList(state: state, onSelect: onSelect),
+                _AgentHierarchyList(
+                  state: state,
+                  onSelect: onSelect,
+                  onRefreshDaemon: onRefreshDaemon,
+                ),
               ],
             ),
           ),
@@ -195,10 +203,15 @@ class _AgentListPane extends StatelessWidget {
 }
 
 class _AgentHierarchyList extends StatelessWidget {
-  const _AgentHierarchyList({required this.state, required this.onSelect});
+  const _AgentHierarchyList({
+    required this.state,
+    required this.onSelect,
+    required this.onRefreshDaemon,
+  });
 
   final AgentsState state;
   final ValueChanged<String> onSelect;
+  final ValueChanged<AgentSummary> onRefreshDaemon;
 
   @override
   Widget build(BuildContext context) {
@@ -209,8 +222,10 @@ class _AgentHierarchyList extends StatelessWidget {
         for (final group in groups) ...<Widget>[
           _AgentDaemonGroup(
             group: group,
+            state: state,
             selectedAgentDid: selectedDid,
             onSelect: onSelect,
+            onRefreshDaemon: onRefreshDaemon,
           ),
         ],
       ],
@@ -254,13 +269,17 @@ class _AgentTreeGroup {
 class _AgentDaemonGroup extends StatelessWidget {
   const _AgentDaemonGroup({
     required this.group,
+    required this.state,
     required this.selectedAgentDid,
     required this.onSelect,
+    required this.onRefreshDaemon,
   });
 
   final _AgentTreeGroup group;
+  final AgentsState state;
   final String? selectedAgentDid;
   final ValueChanged<String> onSelect;
+  final ValueChanged<AgentSummary> onRefreshDaemon;
 
   @override
   Widget build(BuildContext context) {
@@ -286,6 +305,11 @@ class _AgentDaemonGroup extends StatelessWidget {
             selected: selectedAgentDid == daemon.agentDid,
             onTap: () => onSelect(daemon.agentDid),
             runtimeCount: runtimes.length,
+            onRefresh:
+                state.isActing || state.isStatusQueryPending(daemon.agentDid)
+                ? null
+                : () => onRefreshDaemon(daemon),
+            isRefreshing: state.isStatusQueryPending(daemon.agentDid),
           ),
           if (runtimes.isEmpty)
             _EmptyRuntimeHint()
@@ -398,6 +422,8 @@ class _AgentListTile extends StatelessWidget {
     required this.onTap,
     this.depth = 0,
     this.runtimeCount,
+    this.onRefresh,
+    this.isRefreshing = false,
   });
 
   final AgentSummary agent;
@@ -405,11 +431,14 @@ class _AgentListTile extends StatelessWidget {
   final VoidCallback onTap;
   final int depth;
   final int? runtimeCount;
+  final VoidCallback? onRefresh;
+  final bool isRefreshing;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final isChild = depth > 0;
+    final title = AgentDisplayName.title(agent);
     return Padding(
       padding: EdgeInsets.only(
         left: isChild ? responsive.spacing(30) : 0,
@@ -418,7 +447,7 @@ class _AgentListTile extends StatelessWidget {
       child: AppPressableTile(
         onTap: onTap,
         selected: selected,
-        semanticLabel: agent.displayName,
+        semanticLabel: title,
         borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
         backgroundColor: CupertinoColors.transparent,
         selectedBackgroundColor: const Color(0xFFE8F0FF),
@@ -467,7 +496,7 @@ class _AgentListTile extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
-                            agent.displayName,
+                            title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -489,6 +518,15 @@ class _AgentListTile extends StatelessWidget {
                         ],
                       ),
                     ),
+                    if (agent.isDaemon) ...<Widget>[
+                      SizedBox(width: responsive.spacing(8)),
+                      _DaemonRefreshIconButton(
+                        onPressed: onRefresh,
+                        isLoading: isRefreshing,
+                        size: responsive.displayScaled(28),
+                      ),
+                    ],
+                    SizedBox(width: responsive.spacing(8)),
                     _StatusDot(status: agent.latest.status),
                   ],
                 ),
@@ -531,6 +569,35 @@ class _AgentKindIcon extends StatelessWidget {
   }
 }
 
+class _DaemonRefreshIconButton extends StatelessWidget {
+  const _DaemonRefreshIconButton({
+    required this.onPressed,
+    required this.isLoading,
+    required this.size,
+  });
+
+  final VoidCallback? onPressed;
+  final bool isLoading;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null && !isLoading;
+    final color = enabled ? const Color(0xFF0B65F8) : const Color(0xFF9AA6B8);
+    return AppIconButton(
+      onPressed: onPressed,
+      semanticLabel: '刷新状态',
+      tooltip: '刷新状态',
+      size: size,
+      isLoading: isLoading,
+      backgroundColor: const Color(0xFFF3F7FF),
+      borderColor: const Color(0xFFDCE8FF),
+      borderRadius: BorderRadius.circular(size / 2),
+      child: Icon(CupertinoIcons.refresh, size: size * 0.52, color: color),
+    );
+  }
+}
+
 String _agentListSubtitle(AgentSummary agent, int? runtimeCount) {
   if (agent.isDaemon) {
     final count = runtimeCount ?? 0;
@@ -551,7 +618,6 @@ class _AgentDetailPane extends StatelessWidget {
     required this.onRetryRun,
     required this.onResetRuntime,
     required this.onUpgrade,
-    required this.onCreateInstallCommand,
     required this.onUnbind,
   });
 
@@ -564,7 +630,6 @@ class _AgentDetailPane extends StatelessWidget {
   final ValueChanged<AgentSummary> onRetryRun;
   final ValueChanged<AgentSummary> onResetRuntime;
   final ValueChanged<AgentSummary> onUpgrade;
-  final VoidCallback onCreateInstallCommand;
   final VoidCallback onUnbind;
 
   @override
@@ -579,6 +644,7 @@ class _AgentDetailPane extends StatelessWidget {
         : const <AgentSummary>[];
     final isRefreshing =
         agent.isDaemon && state.isStatusQueryPending(agent.agentDid);
+    final title = AgentDisplayName.title(agent);
     return SafeArea(
       bottom: false,
       child: SelectionArea(
@@ -589,7 +655,7 @@ class _AgentDetailPane extends StatelessWidget {
               children: <Widget>[
                 Expanded(
                   child: Text(
-                    agent.displayName,
+                    title,
                     maxLines: 2,
                     style: TextStyle(
                       color: const Color(0xFF101B32),
@@ -608,10 +674,9 @@ class _AgentDetailPane extends StatelessWidget {
                 runSpacing: responsive.spacing(8),
                 children: <Widget>[
                   if (agent.isDaemon)
-                    _ActionButton(
-                      icon: CupertinoIcons.refresh,
-                      label: isRefreshing ? '刷新中' : '刷新状态',
+                    _DaemonRefreshIconButton(
                       isLoading: isRefreshing,
+                      size: responsive.displayScaled(34),
                       onPressed: state.isActing || isRefreshing
                           ? null
                           : () => onRefresh(agent),
@@ -651,17 +716,11 @@ class _AgentDetailPane extends StatelessWidget {
                           ? null
                           : () => onRetryRun(agent),
                     ),
-                  if (agent.isDaemon)
+                  if (agent.isDaemon && agent.latest.needsUpgrade)
                     _ActionButton(
                       icon: CupertinoIcons.arrow_up_circle,
                       label: '升级',
                       onPressed: state.isActing ? null : () => onUpgrade(agent),
-                    ),
-                  if (agent.isDaemon)
-                    _ActionButton(
-                      icon: CupertinoIcons.chevron_left_slash_chevron_right,
-                      label: '安装命令',
-                      onPressed: state.isActing ? null : onCreateInstallCommand,
                     ),
                   _ActionButton(
                     icon: CupertinoIcons.xmark_circle,
@@ -714,6 +773,7 @@ class _RuntimeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final title = AgentDisplayName.title(runtime);
     return Container(
       margin: EdgeInsets.only(bottom: responsive.spacing(8)),
       padding: EdgeInsets.all(responsive.spacing(12)),
@@ -728,7 +788,7 @@ class _RuntimeRow extends StatelessWidget {
           SizedBox(width: responsive.spacing(10)),
           Expanded(
             child: Text(
-              runtime.displayName,
+              title,
               maxLines: 2,
               style: const TextStyle(
                 color: Color(0xFF101B32),
@@ -954,22 +1014,20 @@ class _ActionButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.danger = false,
-    this.isLoading = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback? onPressed;
   final bool danger;
-  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
     return AppPressable(
-      onTap: isLoading ? null : onPressed,
+      onTap: onPressed,
       semanticLabel: label,
       tooltip: label,
-      enabled: onPressed != null && !isLoading,
+      enabled: onPressed != null,
       scaleOnPress: true,
       pressedScale: 0.98,
       borderRadius: BorderRadius.circular(8),
@@ -996,14 +1054,11 @@ class _ActionButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            if (isLoading)
-              const CupertinoActivityIndicator(radius: 8)
-            else
-              Icon(
-                icon,
-                size: 17,
-                color: danger ? AwikiMeColors.danger : const Color(0xFF0B65F8),
-              ),
+            Icon(
+              icon,
+              size: 17,
+              color: danger ? AwikiMeColors.danger : const Color(0xFF0B65F8),
+            ),
             const SizedBox(width: 6),
             Text(
               label,
@@ -1269,11 +1324,12 @@ Future<void> _openRuntimeChat(
   WidgetRef ref,
   AgentSummary agent,
 ) {
+  final title = AgentDisplayName.title(agent);
   return openDirectConversationForDid(
     context,
     ref,
     peerDid: agent.agentDid,
-    peerName: agent.displayName,
+    peerName: title,
     avatarSeed: agent.handle ?? agent.agentDid,
   );
 }
@@ -1283,7 +1339,7 @@ Future<void> _showRenameAgentDialog(
   WidgetRef ref,
   AgentSummary agent,
 ) async {
-  final controller = TextEditingController(text: agent.displayName);
+  final controller = TextEditingController(text: AgentDisplayName.title(agent));
   final result = await showCupertinoDialog<String>(
     context: context,
     builder: (dialogContext) => CupertinoAlertDialog(

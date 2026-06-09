@@ -159,6 +159,7 @@ void main() {
       final runtime = state.agents.last;
       expect(runtime.isRuntime, isTrue);
       expect(runtime.daemonAgentDid, 'did:agent:daemon');
+      expect(runtime.displayName, '未命名智能体');
       expect(runtime.latest.status, 'needs_config');
       expect(runtime.latest.needsConfig, isTrue);
       await Future<void>.delayed(agentStatusRefreshMinimumIndicatorDuration);
@@ -206,8 +207,68 @@ void main() {
         .singleWhere((agent) => agent.agentDid == 'did:agent:runtime-new');
     expect(runtime.kind, AgentKind.runtime);
     expect(runtime.daemonAgentDid, 'did:agent:daemon');
+    expect(runtime.displayName, 'Hermes Runtime');
     expect(runtime.latest.status, 'ready');
   });
+
+  test(
+    'daemon status payload does not replace inventory display names',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '书房代理',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+          AgentSummary(
+            agentDid: 'did:agent:runtime',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'hermes',
+            displayName: '写作助手',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'snapshot',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'display_name': 'awiki-daemon-random',
+            'handle': 'awiki-daemon-random',
+            'status': 'ready',
+          },
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': 'did:agent:runtime',
+              'daemon_agent_did': 'did:agent:daemon',
+              'display_name': 'awiki-agent-random',
+              'handle': 'awiki-agent-random',
+              'runtime': 'hermes',
+              'status': 'needs_config',
+            },
+          ],
+        },
+      );
+
+      final agents = container.read(agentsProvider).agents;
+      final daemon = agents.singleWhere((agent) => agent.isDaemon);
+      final runtime = agents.singleWhere((agent) => agent.isRuntime);
+      expect(daemon.displayName, '书房代理');
+      expect(runtime.displayName, '写作助手');
+      expect(runtime.latest.status, 'needs_config');
+    },
+  );
 
   test(
     'control status deduplicates event ids and ignores stale latest',
@@ -455,6 +516,52 @@ void main() {
     },
   );
 
+  test('agent cache follows login handle across DID rotation', () async {
+    final localStore = FakeProductLocalStore();
+    final firstControl = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    final firstContainer = _container(
+      firstControl,
+      localStore: localStore,
+      session: const SessionIdentity(
+        did: 'did:human:old',
+        credentialName: 'default',
+        displayName: 'Me',
+        handle: 'zhuocheng.anpclaw.com',
+      ),
+    );
+    addTearDown(firstContainer.dispose);
+    await firstContainer.read(agentsProvider.notifier).load();
+
+    final secondContainer = _container(
+      _FailingAgentControlService(Exception('offline')),
+      localStore: localStore,
+      session: const SessionIdentity(
+        did: 'did:human:new',
+        credentialName: 'default',
+        displayName: 'Me',
+        handle: 'Zhuocheng.Anpclaw.Com',
+      ),
+    );
+    addTearDown(secondContainer.dispose);
+
+    await secondContainer.read(agentsProvider.notifier).load();
+
+    final state = secondContainer.read(agentsProvider);
+    expect(state.agents.map((agent) => agent.agentDid), ['did:agent:daemon']);
+    expect(localStore.agentStates.values.map((item) => item.ownerDid).toSet(), {
+      'controller-handle:zhuocheng.anpclaw.com',
+    });
+  });
+
   test('stale snapshot does not prune newer runtime state', () async {
     final control = FakeAgentControlService()
       ..agents = <AgentSummary>[
@@ -595,6 +702,11 @@ void main() {
 ProviderContainer _container(
   FakeAgentControlService control, {
   FakeProductLocalStore? localStore,
+  SessionIdentity session = const SessionIdentity(
+    did: 'did:human:me',
+    credentialName: 'default',
+    displayName: 'Me',
+  ),
 }) {
   return ProviderContainer(
     overrides: <Override>[
@@ -603,13 +715,7 @@ ProviderContainer _container(
         localStore ?? FakeProductLocalStore(),
       ),
       sessionProvider.overrideWith((ref) {
-        return SessionController()..setSession(
-          const SessionIdentity(
-            did: 'did:human:me',
-            credentialName: 'default',
-            displayName: 'Me',
-          ),
-        );
+        return SessionController()..setSession(session);
       }),
     ],
   );

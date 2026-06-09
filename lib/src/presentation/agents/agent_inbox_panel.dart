@@ -7,6 +7,7 @@ import '../shared/awiki_me_feedback.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
+import 'agent_display_name.dart';
 import 'agent_inbox_provider.dart';
 import 'agents_provider.dart';
 
@@ -110,7 +111,7 @@ class _AgentInboxPanelState extends ConsumerState<AgentInboxPanel> {
               },
             )
           : _AgentInboxListView(
-              runtimeLabel: runtime.displayName,
+              runtimeLabel: AgentDisplayName.title(runtime),
               state: state,
               onScopeChanged: (scope) {
                 ref

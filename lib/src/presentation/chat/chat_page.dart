@@ -19,6 +19,7 @@ import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../../app/ui_feedback.dart';
 import '../agents/agent_inbox_panel.dart';
+import '../agents/agent_display_name.dart';
 import '../agents/agents_provider.dart';
 import '../conversation_list/conversation_peer_classifier.dart';
 import '../conversation_list/conversation_provider.dart';
@@ -763,13 +764,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
     AgentSummary? runtimeAgent,
     ConversationSummary conversation,
   ) {
-    final displayName = runtimeAgent?.displayName.trim();
-    if (displayName != null && displayName.isNotEmpty) {
-      return displayName;
-    }
-    final agentDid = runtimeAgent?.agentDid.trim();
-    if (agentDid != null && agentDid.isNotEmpty) {
-      return agentDid;
+    if (runtimeAgent != null) {
+      return AgentDisplayName.title(runtimeAgent);
     }
     return conversation.displayName;
   }
