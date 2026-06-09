@@ -37,6 +37,25 @@ void main() {
     expect(legacy.jwtToken, 'jwt-123');
   });
 
+  test('daemon subkey package maps to bootstrap user subkey package', () {
+    const package = core.DaemonSubkeyPrivatePackage(
+      schema: 'awiki.daemon.user_subkey_package.v1',
+      userDid: 'did:human:me',
+      verificationMethod: 'did:human:me#daemon-key-1',
+      keyType: 'Multikey/Ed25519',
+      publicKeyMultibase: 'zPublic',
+      privateKeyMultibase: 'zPrivate',
+    );
+
+    final mapped = mapper.userSubkeyPackageFromCore(package);
+
+    expect(mapped.userDid, 'did:human:me');
+    expect(mapped.verificationMethod, 'did:human:me#daemon-key-1');
+    expect(mapped.keyType, 'Multikey/Ed25519');
+    expect(mapped.publicKeyMultibase, 'zPublic');
+    expect(mapped.privateKeyMultibase, 'zPrivate');
+  });
+
   test('thread refs map to SDK thread refs and message targets', () {
     expect(
       mapper.threadRefToCore(const AppThreadRef.direct('did:peer')),

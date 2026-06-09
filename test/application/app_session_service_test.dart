@@ -5,6 +5,7 @@ import 'package:awiki_me/src/application/ports/auth_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/im_core_runtime_port.dart';
 import 'package:awiki_me/src/application/ports/realtime_core_port.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -283,6 +284,11 @@ class _FakeIdentities implements IdentityCorePort {
   Future<AppSession> resolveIdentity(String identityIdOrAlias) async {
     resolvedSelectors.add(identityIdOrAlias);
     return _resolvedIdentity ?? _session(identityIdOrAlias);
+  }
+
+  @override
+  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(String identityIdOrAlias) {
+    throw UnsupportedError('unsupported');
   }
 
   @override

@@ -206,7 +206,7 @@ void main() {
   });
 
   test(
-    'bootstrapMessageAgent delegates desired state without create command',
+    'bootstrapMessageAgent loads daemon subkey and delegates desired state',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -218,21 +218,24 @@ void main() {
             latest: AgentLatestStatus(status: 'registering'),
           ),
         ];
-      final container = _container(control);
+      final identities = FakeIdentityCorePort(
+        daemonSubkeyPackage: const UserSubkeyPackage(
+          userDid: 'did:human:me',
+          verificationMethod: 'did:human:me#daemon-key-1',
+          publicKeyMultibase: 'zPublic',
+          privateKeyMultibase: 'zPrivate',
+        ),
+      );
+      final container = _container(control, identities: identities);
       addTearDown(container.dispose);
       await container
           .read(agentsProvider.notifier)
           .bootstrapMessageAgent(
             daemonDid: 'did:agent:daemon',
             appInstanceId: 'app_1',
-            userSubkeyPackage: const UserSubkeyPackage(
-              userDid: 'did:human:me',
-              verificationMethod: 'did:human:me#daemon-key-1',
-              publicKeyMultibase: 'zPublic',
-              privateKeyMultibase: 'zPrivate',
-            ),
           );
 
+      expect(identities.lastDaemonSubkeySelector, 'default');
       expect(control.lastBootstrapDaemonDid, 'did:agent:daemon');
       expect(control.lastBootstrapControllerDid, 'did:human:me');
       expect(control.lastBootstrapAppInstanceId, 'app_1');
@@ -631,10 +634,14 @@ void main() {
 ProviderContainer _container(
   FakeAgentControlService control, {
   FakeProductLocalStore? localStore,
+  FakeIdentityCorePort? identities,
 }) {
   return ProviderContainer(
     overrides: <Override>[
       agentControlServiceProvider.overrideWithValue(control),
+      identityCorePortProvider.overrideWithValue(
+        identities ?? FakeIdentityCorePort(),
+      ),
       productLocalStoreProvider.overrideWithValue(
         localStore ?? FakeProductLocalStore(),
       ),

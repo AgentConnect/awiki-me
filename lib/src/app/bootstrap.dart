@@ -11,6 +11,7 @@ import '../application/messaging_service.dart';
 import '../application/onboarding_service.dart';
 import '../application/onboarding_support_service.dart';
 import '../application/ports/agent_inventory_port.dart';
+import '../application/ports/identity_core_port.dart';
 import '../application/product_local_store.dart';
 import '../application/profile_application_service.dart';
 import '../application/realtime_application_service.dart';
@@ -55,6 +56,7 @@ class AppBootstrap {
     required this.localePreferenceService,
     required this.updateService,
     this.appSessionService,
+    this.identityCorePort,
     this.onboardingService,
     this.onboardingSupportService,
     this.messagingService,
@@ -77,6 +79,7 @@ class AppBootstrap {
   final LocalePreferenceService localePreferenceService;
   final UpdateService updateService;
   final AppSessionService? appSessionService;
+  final IdentityCorePort? identityCorePort;
   final OnboardingService? onboardingService;
   final OnboardingSupportService? onboardingSupportService;
   final MessagingService? messagingService;
@@ -185,6 +188,7 @@ class AppBootstrap {
       localePreferenceService: localePreferenceService,
       updateService: updateService,
       appSessionService: appSessionService,
+      identityCorePort: identityAdapter,
       onboardingService: onboardingService,
       onboardingSupportService: onboardingSupportService,
       messagingService: messagingService,

@@ -10,6 +10,7 @@ import '../application/messaging_service.dart';
 import '../application/onboarding_service.dart';
 import '../application/onboarding_support_service.dart';
 import '../application/ports/agent_inventory_port.dart';
+import '../application/ports/identity_core_port.dart';
 import '../application/product_local_store.dart';
 import '../application/profile_application_service.dart';
 import '../application/realtime_application_service.dart';
@@ -53,6 +54,11 @@ final realtimeUpdatesProvider = StreamProvider<RealtimeUpdate>((ref) {
 final appSessionServiceProvider = Provider<AppSessionService>(
   (ref) =>
       throw UnimplementedError('appSessionServiceProvider must be overridden'),
+);
+
+final identityCorePortProvider = Provider<IdentityCorePort>(
+  (ref) =>
+      throw UnimplementedError('identityCorePortProvider must be overridden'),
 );
 
 final onboardingServiceProvider = Provider<OnboardingService>(

@@ -222,7 +222,7 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   Future<void> bootstrapMessageAgent({
     required String daemonDid,
-    required UserSubkeyPackage userSubkeyPackage,
+    UserSubkeyPackage? userSubkeyPackage,
     String? appInstanceId,
   }) async {
     final session = ref.read(sessionProvider).session;
@@ -233,13 +233,18 @@ class AgentsController extends StateNotifier<AgentsState> {
     final resolvedAppInstanceId =
         appInstanceId ?? _defaultAppInstanceId(session.credentialName);
     await _act(() async {
+      final subkeyPackage =
+          userSubkeyPackage ??
+          await ref
+              .read(identityCorePortProvider)
+              .loadDaemonSubkeyPackage(session.credentialName);
       await ref
           .read(agentControlServiceProvider)
           .ensureMessageAgentBootstrap(
             daemonAgentDid: daemonDid,
             controllerDid: session.did,
             appInstanceId: resolvedAppInstanceId,
-            userSubkeyPackage: userSubkeyPackage,
+            userSubkeyPackage: subkeyPackage,
             userHandle: session.handle,
           );
     });

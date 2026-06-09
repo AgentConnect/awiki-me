@@ -1,4 +1,5 @@
 import '../models/app_session.dart';
+import '../../domain/entities/agent/agent_bootstrap.dart';
 
 abstract interface class IdentityCorePort {
   Future<List<AppSession>> listLocalIdentities();
@@ -6,6 +7,8 @@ abstract interface class IdentityCorePort {
   Future<AppSession?> defaultIdentity();
 
   Future<AppSession> resolveIdentity(String identityIdOrAlias);
+
+  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(String identityIdOrAlias);
 
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias);
 

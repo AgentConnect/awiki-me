@@ -10,6 +10,7 @@ import '../../application/thread_id_utils.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/chat_attachment.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
+import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_summary.dart';
@@ -52,6 +53,18 @@ class AwikiImCoreMappers {
       displayName: session.displayName,
       handle: session.handle,
       jwtToken: session.jwtToken,
+    );
+  }
+
+  UserSubkeyPackage userSubkeyPackageFromCore(
+    core.DaemonSubkeyPrivatePackage package,
+  ) {
+    return UserSubkeyPackage(
+      userDid: package.userDid,
+      verificationMethod: package.verificationMethod,
+      publicKeyMultibase: package.publicKeyMultibase,
+      privateKeyMultibase: package.privateKeyMultibase,
+      keyType: package.keyType,
     );
   }
 

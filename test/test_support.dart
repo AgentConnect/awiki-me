@@ -13,6 +13,7 @@ import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
+import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
 import 'package:awiki_me/src/application/product_local_store.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
@@ -134,6 +135,7 @@ List<Override> fakeApplicationServiceOverrides(
   final resolvedRealtime = realtimeGateway ?? FakeRealtimeGateway();
   return <Override>[
     appSessionServiceProvider.overrideWithValue(FakeAppSessionService(gateway)),
+    identityCorePortProvider.overrideWithValue(FakeIdentityCorePort()),
     profileApplicationServiceProvider.overrideWithValue(
       FakeProfileApplicationService(gateway),
     ),
@@ -1697,6 +1699,80 @@ class FakeOnboardingSupportService implements OnboardingSupportService {
   Future<void> sendOtp({required String phone}) {
     return gateway.sendOtp(phone: phone);
   }
+}
+
+class FakeIdentityCorePort implements IdentityCorePort {
+  FakeIdentityCorePort({
+    UserSubkeyPackage? daemonSubkeyPackage,
+    AppSession? defaultSession,
+  }) : daemonSubkeyPackage =
+           daemonSubkeyPackage ??
+           const UserSubkeyPackage(
+             userDid: 'did:human:me',
+             verificationMethod: 'did:human:me#daemon-key-1',
+             publicKeyMultibase: 'zPublic',
+             privateKeyMultibase: 'zPrivate',
+           ),
+       defaultSession =
+           defaultSession ??
+           const AppSession(
+             did: 'did:human:me',
+             identityId: 'default',
+             displayName: 'Me',
+             localAlias: 'default',
+           );
+
+  final UserSubkeyPackage daemonSubkeyPackage;
+  final AppSession defaultSession;
+  String? lastDaemonSubkeySelector;
+
+  @override
+  Future<AppSession?> defaultIdentity() async => defaultSession;
+
+  @override
+  Future<List<AppSession>> listLocalIdentities() async => <AppSession>[
+    defaultSession,
+  ];
+
+  @override
+  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(
+    String identityIdOrAlias,
+  ) async {
+    lastDaemonSubkeySelector = identityIdOrAlias;
+    return daemonSubkeyPackage;
+  }
+
+  @override
+  Future<AppSession> recoverHandle({
+    required String phone,
+    required String otp,
+    required String handle,
+  }) async => defaultSession;
+
+  @override
+  Future<AppSession> registerHandleWithEmail({
+    required String email,
+    required String handle,
+    String? inviteCode,
+    String? displayName,
+  }) async => defaultSession;
+
+  @override
+  Future<AppSession> registerHandleWithPhone({
+    required String phone,
+    required String otp,
+    required String handle,
+    String? inviteCode,
+    String? displayName,
+  }) async => defaultSession;
+
+  @override
+  Future<AppSession> resolveIdentity(String identityIdOrAlias) async =>
+      defaultSession;
+
+  @override
+  Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async =>
+      defaultSession;
 }
 
 AppSession _appSessionFromLegacy(SessionIdentity session) {

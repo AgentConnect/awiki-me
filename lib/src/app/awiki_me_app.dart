@@ -47,6 +47,10 @@ class AwikiMeApp extends StatelessWidget {
           appSessionServiceProvider.overrideWithValue(
             bootstrap.appSessionService!,
           ),
+        if (bootstrap.identityCorePort != null)
+          identityCorePortProvider.overrideWithValue(
+            bootstrap.identityCorePort!,
+          ),
         if (bootstrap.onboardingService != null)
           onboardingServiceProvider.overrideWithValue(
             bootstrap.onboardingService!,

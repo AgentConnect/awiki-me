@@ -3,6 +3,7 @@ import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/profile_core_port.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -122,6 +123,11 @@ class _FakeIdentities implements IdentityCorePort {
   @override
   Future<AppSession> resolveIdentity(String identityIdOrAlias) async {
     return _session(identityIdOrAlias);
+  }
+
+  @override
+  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(String identityIdOrAlias) {
+    throw UnsupportedError('unsupported');
   }
 
   @override

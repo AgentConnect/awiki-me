@@ -2,6 +2,7 @@ import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
 import '../../application/models/app_session.dart';
 import '../../application/ports/identity_core_port.dart';
+import '../../domain/entities/agent/agent_bootstrap.dart';
 import 'awiki_im_core_mappers.dart';
 import 'awiki_im_core_runtime.dart';
 
@@ -34,6 +35,28 @@ class AwikiImCoreIdentityAdapter implements IdentityCorePort {
     final coreInstance = await _runtime.coreInstance();
     final identity = await _resolveIdentity(coreInstance, identityIdOrAlias);
     return _mappers.appSessionFromIdentity(identity);
+  }
+
+  @override
+  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(
+    String identityIdOrAlias,
+  ) async {
+    final coreInstance = await _runtime.coreInstance();
+    final selector = _selectorFromString(identityIdOrAlias);
+    try {
+      final package = await coreInstance.loadDaemonSubkeyPackage(selector);
+      return _mappers.userSubkeyPackageFromCore(package);
+    } on core.AwikiImCoreException catch (error) {
+      if (!_shouldTryLocalAliasFallback(selector, error)) {
+        rethrow;
+      }
+    }
+    final package = await coreInstance.loadDaemonSubkeyPackage(
+      core.IdentitySelector.localAlias(
+        _trimLeadingAt(identityIdOrAlias.trim()),
+      ),
+    );
+    return _mappers.userSubkeyPackageFromCore(package);
   }
 
   @override
