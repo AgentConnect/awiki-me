@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_services.dart';
 import '../../application/models/product_local_models.dart';
 import '../../data/agent/user_service_agent_inventory_adapter.dart';
+import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/agent_status.dart';
@@ -216,6 +217,31 @@ class AgentsController extends StateNotifier<AgentsState> {
             controllerDid: session.did,
           );
       await load();
+    });
+  }
+
+  Future<void> bootstrapMessageAgent({
+    required String daemonDid,
+    required UserSubkeyPackage userSubkeyPackage,
+    String? appInstanceId,
+  }) async {
+    final session = ref.read(sessionProvider).session;
+    if (session == null) {
+      state = state.copyWith(error: '请先登录。');
+      return;
+    }
+    final resolvedAppInstanceId =
+        appInstanceId ?? _defaultAppInstanceId(session.credentialName);
+    await _act(() async {
+      await ref
+          .read(agentControlServiceProvider)
+          .ensureMessageAgentBootstrap(
+            daemonAgentDid: daemonDid,
+            controllerDid: session.did,
+            appInstanceId: resolvedAppInstanceId,
+            userSubkeyPackage: userSubkeyPackage,
+            userHandle: session.handle,
+          );
     });
   }
 
@@ -734,6 +760,14 @@ Map<String, Object?> _readMap(Object? value) {
 String? _string(Object? value) {
   final text = value?.toString().trim();
   return text == null || text.isEmpty ? null : text;
+}
+
+String _defaultAppInstanceId(String credentialName) {
+  final normalized = credentialName.trim().replaceAll(
+    RegExp(r'[^a-zA-Z0-9_.-]+'),
+    '_',
+  );
+  return normalized.isEmpty ? 'app_1' : 'app_$normalized';
 }
 
 DateTime? _dateTime(Object? value) {

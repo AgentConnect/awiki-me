@@ -3,6 +3,7 @@ import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -48,6 +49,113 @@ void main() {
     expect(messages.lastPayload?['command'], 'agent.status.query');
     expect(messages.lastSecure, isFalse);
     expect(messages.lastIdempotencyKey, 'agent-status:did:agent:daemon');
+  });
+
+  test(
+    'ensureMessageAgentBootstrap sends one ordinary bootstrap payload',
+    () async {
+      final inventory = _InventoryStub();
+      final messages = _MessagesStub();
+      final service = DefaultAgentControlService(
+        inventory: inventory,
+        messages: messages,
+      );
+
+      await service.ensureMessageAgentBootstrap(
+        daemonAgentDid: 'did:agent:daemon',
+        controllerDid: 'did:human:me',
+        appInstanceId: 'app_1',
+        userHandle: 'alice.awiki.ai',
+        userSubkeyPackage: const UserSubkeyPackage(
+          userDid: 'did:human:me',
+          verificationMethod: 'did:human:me#daemon-key-1',
+          publicKeyMultibase: 'zPublic',
+          privateKeyMultibase: 'zPrivate',
+        ),
+      );
+
+      expect(inventory.runtimeTokenDaemonDid, 'did:agent:daemon');
+      expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
+      expect(messages.lastSecure, isFalse);
+      expect(
+        messages.lastIdempotencyKey,
+        'message-agent-bootstrap:did:human:me:app_1',
+      );
+      expect(messages.lastPayload?['schema'], daemonBootstrapSchema);
+      expect(
+        messages.lastPayload?['bootstrap_id'],
+        matches(RegExp(r'^boot_[0-9a-f]{24}$')),
+      );
+      expect(messages.lastPayload?['controller_did'], 'did:human:me');
+      expect(messages.lastPayload?['app_instance_id'], 'app_1');
+      expect(messages.lastPayload?['user_handle'], 'alice.awiki.ai');
+      expect(
+        messages.lastPayload?.containsKey('private_key_multibase'),
+        isFalse,
+      );
+      final package =
+          messages.lastPayload?['user_subkey_package'] as Map<String, Object?>;
+      expect(package['schema'], userSubkeyPackageSchema);
+      expect(package['verification_method'], 'did:human:me#daemon-key-1');
+      expect(package['private_key_multibase'], 'zPrivate');
+      final desired =
+          messages.lastPayload?['desired_message_agent']
+              as Map<String, Object?>;
+      expect(desired['role'], appMessageHandlerRole);
+      expect(desired['runtime'], appMessageHandlerRuntime);
+      expect(
+        desired['ensure_once_key'],
+        'app-message-agent:did:human:me:app_1',
+      );
+      expect(desired['runtime_registration_token'], 'runtime-token');
+      expect(desired['allowed_actions'], defaultMessageAgentActions);
+    },
+  );
+
+  test('bootstrap rejects non daemon-key-1 verification method locally', () {
+    expect(
+      () => const UserSubkeyPackage(
+        userDid: 'did:human:me',
+        verificationMethod: 'did:human:me#other-key',
+        publicKeyMultibase: 'zPublic',
+        privateKeyMultibase: 'zPrivate',
+      ).toJson(),
+      throwsArgumentError,
+    );
+  });
+
+  test('bootstrap rejects empty private key material locally', () {
+    expect(
+      () => const UserSubkeyPackage(
+        userDid: 'did:human:me',
+        verificationMethod: 'did:human:me#daemon-key-1',
+        publicKeyMultibase: 'zPublic',
+        privateKeyMultibase: ' ',
+      ).toJson(),
+      throwsArgumentError,
+    );
+  });
+
+  test('bootstrap id is stable and avoids truncation collisions', () {
+    final first = messageAgentBootstrapId(
+      userDid: 'did:human:${'a' * 160}',
+      appInstanceId: 'app_${'x' * 160}',
+    );
+    final second = messageAgentBootstrapId(
+      userDid: 'did:human:${'a' * 159}b',
+      appInstanceId: 'app_${'x' * 160}',
+    );
+
+    expect(first, matches(RegExp(r'^boot_[0-9a-f]{24}$')));
+    expect(second, matches(RegExp(r'^boot_[0-9a-f]{24}$')));
+    expect(first, isNot(second));
+    expect(
+      first,
+      messageAgentBootstrapId(
+        userDid: 'did:human:${'a' * 160}',
+        appInstanceId: 'app_${'x' * 160}',
+      ),
+    );
   });
 
   test(

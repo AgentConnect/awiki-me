@@ -1,4 +1,5 @@
 import '../config/awiki_environment_config.dart';
+import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/agent/agent_command.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/install_command.dart';
@@ -16,6 +17,14 @@ abstract interface class AgentControlService {
   Future<void> createHermesRuntime({
     required String daemonAgentDid,
     required String controllerDid,
+  });
+  Future<void> ensureMessageAgentBootstrap({
+    required String daemonAgentDid,
+    required String controllerDid,
+    required String appInstanceId,
+    required UserSubkeyPackage userSubkeyPackage,
+    String? userHandle,
+    String? runtimeRegistrationToken,
   });
   Future<void> resetRuntimeSession({
     required String daemonAgentDid,
@@ -139,6 +148,52 @@ class DefaultAgentControlService implements AgentControlService {
         clientRequestId: requestId,
       ),
       idempotencyKey: 'runtime-create:$daemonAgentDid:$requestId',
+    );
+  }
+
+  @override
+  Future<void> ensureMessageAgentBootstrap({
+    required String daemonAgentDid,
+    required String controllerDid,
+    required String appInstanceId,
+    required UserSubkeyPackage userSubkeyPackage,
+    String? userHandle,
+    String? runtimeRegistrationToken,
+  }) async {
+    final userDid = userSubkeyPackage.userDid;
+    final idempotencyKey = messageAgentBootstrapIdempotencyKey(
+      userDid: userDid,
+      appInstanceId: appInstanceId,
+    );
+    final runtimeToken =
+        runtimeRegistrationToken ??
+        (await _inventory.issueRuntimeToken(
+          controllerDid: controllerDid,
+          daemonAgentDid: daemonAgentDid,
+          runtime: appMessageHandlerRuntime,
+        )).token;
+    final envelope = DaemonBootstrapEnvelope(
+      bootstrapId: messageAgentBootstrapId(
+        userDid: userDid,
+        appInstanceId: appInstanceId,
+      ),
+      idempotencyKey: idempotencyKey,
+      appInstanceId: appInstanceId,
+      controllerDid: controllerDid,
+      userHandle: userHandle,
+      userSubkeyPackage: userSubkeyPackage,
+      desiredMessageAgent: DesiredMessageAgent(
+        ensureOnceKey: messageAgentEnsureOnceKey(
+          userDid: userDid,
+          appInstanceId: appInstanceId,
+        ),
+        runtimeRegistrationToken: runtimeToken,
+      ),
+    );
+    await _sendDaemonPayload(
+      daemonAgentDid,
+      envelope.toJson(),
+      idempotencyKey: idempotencyKey,
     );
   }
 

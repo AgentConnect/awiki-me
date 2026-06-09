@@ -24,6 +24,7 @@ import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
@@ -1214,6 +1215,10 @@ class FakeAgentControlService implements AgentControlService {
   );
   String? lastRefreshedDaemonDid;
   String? lastRuntimeCreateDaemonDid;
+  String? lastBootstrapDaemonDid;
+  String? lastBootstrapControllerDid;
+  String? lastBootstrapAppInstanceId;
+  UserSubkeyPackage? lastBootstrapUserSubkeyPackage;
   String? lastResetDaemonDid;
   String? lastResetRuntimeDid;
   String? lastRetryDaemonDid;
@@ -1247,6 +1252,21 @@ class FakeAgentControlService implements AgentControlService {
     required String controllerDid,
   }) async {
     lastRuntimeCreateDaemonDid = daemonAgentDid;
+  }
+
+  @override
+  Future<void> ensureMessageAgentBootstrap({
+    required String daemonAgentDid,
+    required String controllerDid,
+    required String appInstanceId,
+    required UserSubkeyPackage userSubkeyPackage,
+    String? userHandle,
+    String? runtimeRegistrationToken,
+  }) async {
+    lastBootstrapDaemonDid = daemonAgentDid;
+    lastBootstrapControllerDid = controllerDid;
+    lastBootstrapAppInstanceId = appInstanceId;
+    lastBootstrapUserSubkeyPackage = userSubkeyPackage;
   }
 
   @override

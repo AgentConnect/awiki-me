@@ -24,6 +24,23 @@ void main() {
     );
   });
 
+  test('daemon bootstrap and app action schemas are hidden controls', () {
+    const schemas = <String>[
+      AgentControlPayloads.daemonBootstrapSchema,
+      AgentControlPayloads.messageSyncSchema,
+      AgentControlPayloads.appCapabilitiesSchema,
+      AgentControlPayloads.appActionSchema,
+      AgentControlPayloads.appActionResultSchema,
+      AgentControlPayloads.notificationSchema,
+      'awiki.future.system.v1',
+    ];
+
+    for (final schema in schemas) {
+      final payload = '{"schema":"$schema"}';
+      expect(AgentControlPayloads.isControl(payload), isTrue, reason: schema);
+    }
+  });
+
   test('runtime create command carries token in args only', () {
     final payload = runtimeAgentCreatePayload(
       controllerDid: 'did:human:alice',

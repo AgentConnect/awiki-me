@@ -5,6 +5,12 @@ final class AgentControlPayloads {
 
   static const commandSchema = 'awiki.agent.command.v1';
   static const statusSchema = 'awiki.agent.status.v1';
+  static const daemonBootstrapSchema = 'awiki.daemon.bootstrap.v1';
+  static const messageSyncSchema = 'awiki.message.sync.v1';
+  static const appCapabilitiesSchema = 'awiki.app.capabilities.v1';
+  static const appActionSchema = 'awiki.app.action.v1';
+  static const appActionResultSchema = 'awiki.app.action.result.v1';
+  static const notificationSchema = 'awiki.agent.notification.v1';
 
   static Map<String, Object?>? decode(String? payloadJson) {
     if (payloadJson == null || payloadJson.trim().isEmpty) {
@@ -37,6 +43,22 @@ final class AgentControlPayloads {
   static bool isStatus(String? payloadJson) =>
       schema(payloadJson) == statusSchema;
 
+  static bool isSystemSchema(String? value) {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return false;
+    }
+    return normalized.startsWith('awiki.') ||
+        normalized == commandSchema ||
+        normalized == statusSchema ||
+        normalized == daemonBootstrapSchema ||
+        normalized == messageSyncSchema ||
+        normalized == appCapabilitiesSchema ||
+        normalized == appActionSchema ||
+        normalized == appActionResultSchema ||
+        normalized == notificationSchema;
+  }
+
   static bool isControl(String? payloadJson) =>
-      isCommand(payloadJson) || isStatus(payloadJson);
+      isSystemSchema(schema(payloadJson));
 }

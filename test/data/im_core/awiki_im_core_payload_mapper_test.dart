@@ -7,7 +7,7 @@ void main() {
 
   test('control payload message is not renderable chat content', () {
     const payload =
-        '{"schema":"awiki.agent.status.v1","status_scope":"daemon","daemon":{"status":"ready"}}';
+        '{"schema":"awiki.daemon.bootstrap.v1","bootstrap_id":"boot_1"}';
     const message = core.Message(
       id: 'msg-control',
       threadKind: 'direct',

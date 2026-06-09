@@ -1,4 +1,5 @@
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
@@ -203,6 +204,46 @@ void main() {
     expect(runtime.daemonAgentDid, 'did:agent:daemon');
     expect(runtime.latest.status, 'ready');
   });
+
+  test(
+    'bootstrapMessageAgent delegates desired state without create command',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'registering'),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container
+          .read(agentsProvider.notifier)
+          .bootstrapMessageAgent(
+            daemonDid: 'did:agent:daemon',
+            appInstanceId: 'app_1',
+            userSubkeyPackage: const UserSubkeyPackage(
+              userDid: 'did:human:me',
+              verificationMethod: 'did:human:me#daemon-key-1',
+              publicKeyMultibase: 'zPublic',
+              privateKeyMultibase: 'zPrivate',
+            ),
+          );
+
+      expect(control.lastBootstrapDaemonDid, 'did:agent:daemon');
+      expect(control.lastBootstrapControllerDid, 'did:human:me');
+      expect(control.lastBootstrapAppInstanceId, 'app_1');
+      expect(
+        control.lastBootstrapUserSubkeyPackage?.verificationMethod,
+        'did:human:me#daemon-key-1',
+      );
+      expect(control.lastRuntimeCreateDaemonDid, isNull);
+      expect(control.lastRefreshedDaemonDid, isNull);
+    },
+  );
 
   test(
     'control status deduplicates event ids and ignores stale latest',
