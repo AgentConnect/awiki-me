@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_services.dart';
 import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
+import '../shared/formatters/display_formatters.dart';
 import '../friends/friends_provider.dart';
 import 'profile_provider.dart';
 import '../../domain/entities/user_profile.dart';
@@ -52,12 +53,14 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
         .read(friendsProvider.notifier)
         .checkRelationship(did);
     UserProfile resolved = profile;
-    final homepageUrl = _homepageUrl(profile);
-    final markdown = await ref.read(homepageMarkdownLoaderProvider)(
-      homepageUrl,
-    );
-    if (markdown != null && markdown.trim().isNotEmpty) {
-      resolved = profile.copyWith(profileMarkdown: markdown);
+    final homepageUrl = DidDisplayFormatter.homepageUrl(profile);
+    if (homepageUrl.isNotEmpty) {
+      final markdown = await ref.read(homepageMarkdownLoaderProvider)(
+        homepageUrl,
+      );
+      if (markdown != null && markdown.trim().isNotEmpty) {
+        resolved = profile.copyWith(profileMarkdown: markdown);
+      }
     }
     state = state.copyWith(
       profile: resolved,
@@ -76,14 +79,6 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
     ref
         .read(uiFeedbackProvider.notifier)
         .showError(AppMessage.linkOpenFailed('$error'));
-  }
-
-  String _homepageUrl(UserProfile profile) {
-    final handle = profile.handle?.trim();
-    final username = handle != null && handle.isNotEmpty
-        ? handle
-        : (profile.nickName.trim().isNotEmpty ? profile.nickName.trim() : did);
-    return 'https://$username.awiki.ai';
   }
 }
 

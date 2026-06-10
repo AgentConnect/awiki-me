@@ -8,6 +8,49 @@ class AvatarBadge extends StatelessWidget {
     required this.seed,
     this.size = 48,
     this.labelOverride,
+    this.avatarUri,
+  });
+
+  final String seed;
+  final double size;
+  final String? labelOverride;
+  final String? avatarUri;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = _FallbackAvatarBadge(
+      seed: seed,
+      size: size,
+      labelOverride: labelOverride,
+    );
+    final uri = _safeAvatarUri(avatarUri);
+    if (uri == null) {
+      return fallback;
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(size / 2),
+      child: Image.network(
+        uri.toString(),
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) {
+            return child;
+          }
+          return fallback;
+        },
+      ),
+    );
+  }
+}
+
+class _FallbackAvatarBadge extends StatelessWidget {
+  const _FallbackAvatarBadge({
+    required this.seed,
+    required this.size,
+    this.labelOverride,
   });
 
   final String seed;
@@ -63,4 +106,22 @@ class AvatarBadge extends StatelessWidget {
         : value.codeUnits.fold<int>(0, (a, b) => a + b);
     return palettes[hash % palettes.length];
   }
+}
+
+Uri? _safeAvatarUri(String? raw) {
+  final trimmed = raw?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  final uri = Uri.tryParse(trimmed);
+  if (uri == null || !uri.isAbsolute || uri.scheme != 'https') {
+    return null;
+  }
+  final path = uri.path.toLowerCase();
+  if (path.endsWith('.svg') ||
+      path.endsWith('.html') ||
+      path.endsWith('.htm')) {
+    return null;
+  }
+  return uri;
 }

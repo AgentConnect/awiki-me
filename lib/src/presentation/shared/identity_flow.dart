@@ -55,6 +55,7 @@ Future<void> openDirectConversationForProfile(
     ref,
     peerDid: profile.did,
     peerName: DidDisplayFormatter.profileName(profile),
+    avatarUri: profile.avatarUri,
     avatarSeed: profile.handle ?? profile.did,
   );
 }
@@ -64,6 +65,7 @@ Future<void> openDirectConversationForDid(
   WidgetRef ref, {
   required String peerDid,
   required String peerName,
+  String? avatarUri,
   String? avatarSeed,
 }) async {
   final session = ref.read(sessionProvider).session;
@@ -92,6 +94,7 @@ Future<void> openDirectConversationForDid(
           existing.first,
           peerDid: peer,
           peerName: peerName,
+          avatarUri: avatarUri,
           avatarSeed: avatarSeed,
         )
       : ConversationSummary(
@@ -102,6 +105,7 @@ Future<void> openDirectConversationForDid(
           unreadCount: 0,
           isGroup: false,
           targetDid: peer,
+          avatarUri: avatarUri,
           avatarSeed: avatarSeed ?? peer,
         );
 
@@ -125,6 +129,7 @@ ConversationSummary _directConversationForPeer(
   ConversationSummary existing, {
   required String peerDid,
   required String peerName,
+  String? avatarUri,
   String? avatarSeed,
 }) {
   final existingTarget = existing.targetDid?.trim() ?? '';
@@ -143,7 +148,9 @@ ConversationSummary _directConversationForPeer(
     isGroup: false,
     targetDid: peerDid,
     groupId: null,
+    avatarUri: avatarUri ?? existing.avatarUri,
     avatarSeed: avatarSeed ?? existing.avatarSeed ?? peerDid,
+    lastMessagePayloadJson: existing.lastMessagePayloadJson,
   );
 }
 
@@ -537,7 +544,11 @@ class _IdentityPreviewCard extends StatelessWidget {
         children: <Widget>[
           Row(
             children: <Widget>[
-              AvatarBadge(seed: displayName, size: 52),
+              AvatarBadge(
+                seed: displayName,
+                size: 52,
+                avatarUri: profile.avatarUri,
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -605,7 +616,8 @@ class _IdentityPreviewCard extends StatelessWidget {
 
   String _inferIdentityType(UserProfile profile) {
     final joined = <String>[
-      profile.nickName,
+      profile.subjectType ?? '',
+      profile.displayName,
       profile.handle ?? '',
       profile.bio,
       ...profile.tags,

@@ -40,12 +40,14 @@ class FriendsPage extends ConsumerWidget {
     WidgetRef ref,
     String peerDid,
     String peerName,
+    String? avatarUri,
   ) async {
     await openDirectConversationForDid(
       context,
       ref,
       peerDid: peerDid,
       peerName: peerName,
+      avatarUri: avatarUri,
     );
   }
 
@@ -80,8 +82,14 @@ class FriendsPage extends ConsumerWidget {
                 (item) => _FriendRow.contact(
                   seed: _displayName(item),
                   title: _displayName(item),
-                  onTap: () =>
-                      _openContact(context, ref, item.did, _displayName(item)),
+                  avatarUri: item.avatarUri,
+                  onTap: () => _openContact(
+                    context,
+                    ref,
+                    item.did,
+                    _displayName(item),
+                    item.avatarUri,
+                  ),
                 ),
               )
               .toList(),
@@ -99,6 +107,7 @@ class FriendsPage extends ConsumerWidget {
                 (item) => _FriendRow.contact(
                   seed: _displayName(item),
                   title: _displayName(item),
+                  avatarUri: item.avatarUri,
                   trailing: _RelationshipActionButton(
                     label: '关注',
                     onTap: () => _runRelationshipAction(
@@ -106,8 +115,13 @@ class FriendsPage extends ConsumerWidget {
                       () => ref.read(friendsProvider.notifier).follow(item.did),
                     ),
                   ),
-                  onTap: () =>
-                      _openContact(context, ref, item.did, _displayName(item)),
+                  onTap: () => _openContact(
+                    context,
+                    ref,
+                    item.did,
+                    _displayName(item),
+                    item.avatarUri,
+                  ),
                 ),
               )
               .toList(),
@@ -283,18 +297,21 @@ class _FriendRow extends StatelessWidget {
     required this.title,
     required this.onTap,
     this.trailing,
+    this.avatarUri,
   }) : isGroup = false;
 
   const _FriendRow.group({required this.title, required this.onTap})
     : isGroup = true,
       seed = 'group',
-      trailing = null;
+      trailing = null,
+      avatarUri = null;
 
   final bool isGroup;
   final String seed;
   final String title;
   final VoidCallback onTap;
   final Widget? trailing;
+  final String? avatarUri;
 
   @override
   Widget build(BuildContext context) {
@@ -328,7 +345,7 @@ class _FriendRow extends StatelessWidget {
                     size: 20,
                   ),
                 )
-              : AvatarBadge(seed: seed, size: 32),
+              : AvatarBadge(seed: seed, size: 32, avatarUri: avatarUri),
           onTap: onTap,
         ),
       ),
@@ -607,6 +624,7 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
               child: _FriendRow.contact(
                 seed: displayName,
                 title: displayName,
+                avatarUri: item.avatarUri,
                 trailing: isFollowing
                     ? _RelationshipActionButton(
                         label: '取消关注',
@@ -627,6 +645,7 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
                   ref,
                   peerDid: item.did,
                   peerName: displayName,
+                  avatarUri: item.avatarUri,
                 ),
               ),
             );
@@ -669,12 +688,14 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
     WidgetRef ref, {
     required String peerDid,
     required String peerName,
+    String? avatarUri,
   }) async {
     await openDirectConversationForDid(
       context,
       ref,
       peerDid: peerDid,
       peerName: peerName,
+      avatarUri: avatarUri,
     );
   }
 }

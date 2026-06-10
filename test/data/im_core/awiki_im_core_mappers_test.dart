@@ -420,10 +420,17 @@ void main() {
         bio: 'bio',
         tags: ['ai'],
         markdown: '# Alice',
+        avatarUri: 'https://cdn.example/alice.png',
+        profileUri: 'https://profiles.example/alice',
+        subjectType: 'person',
       ),
     );
     final patch = mapper.profilePatchToCore(
-      const ProfilePatch(nickName: 'New Alice', profileMarkdown: 'new md'),
+      const ProfilePatch(
+        displayName: 'New Alice',
+        profileMarkdown: 'new md',
+        avatarUri: 'https://cdn.example/new-alice.png',
+      ),
     );
     final relationship = mapper.relationshipFromCore(
       const core.RelationStatus(
@@ -438,6 +445,7 @@ void main() {
           core.RelationshipListItem(
             did: 'did:carol',
             handle: 'carol.awiki',
+            avatarUri: 'https://cdn.example/carol.png',
             relationship: 'follower',
           ),
         ],
@@ -447,13 +455,50 @@ void main() {
     );
 
     expect(profile.nickName, 'Alice');
+    expect(profile.displayName, 'Alice');
+    expect(profile.avatarUri, 'https://cdn.example/alice.png');
+    expect(profile.profileUri, 'https://profiles.example/alice');
+    expect(profile.subjectType, 'person');
     expect(profile.profileMarkdown, '# Alice');
     expect(patch.displayName, 'New Alice');
     expect(patch.markdown, 'new md');
+    expect(patch.avatarUri, 'https://cdn.example/new-alice.png');
     expect(relationship.relationship, 'following');
     expect(relationshipPage.items.single.displayName, 'carol.awiki');
+    expect(
+      relationshipPage.items.single.avatarUri,
+      'https://cdn.example/carol.png',
+    );
     expect(relationshipPage.items.single.relationship, 'follower');
     expect(relationshipPage.nextCursor, '11');
+  });
+
+  test('group DTOs map display profile fields from Group Host summaries', () {
+    final summary = mapper.groupFromCoreSummary(
+      const core.GroupSummary(
+        did: 'did:group',
+        name: 'Legacy name',
+        displayName: 'Project Group',
+        avatarUri: 'https://cdn.example/group.png',
+        memberCount: 7,
+      ),
+    );
+    final snapshot = mapper.groupFromCoreSnapshot(
+      const core.GroupSnapshot(
+        did: 'did:group',
+        displayName: 'Project Group Snapshot',
+        avatarUri: 'https://cdn.example/group-snapshot.png',
+        description: 'Group description',
+        memberCount: 8,
+      ),
+    );
+
+    expect(summary.displayName, 'Project Group');
+    expect(summary.name, 'Project Group');
+    expect(summary.avatarUri, 'https://cdn.example/group.png');
+    expect(snapshot.displayName, 'Project Group Snapshot');
+    expect(snapshot.avatarUri, 'https://cdn.example/group-snapshot.png');
+    expect(snapshot.description, 'Group description');
   });
 
   test('realtime connection states map into existing app enum', () {

@@ -8,6 +8,7 @@ class ConversationSummary {
     required this.isGroup,
     this.targetDid,
     this.groupId,
+    this.avatarUri,
     this.avatarSeed,
     this.lastMessagePayloadJson,
   });
@@ -20,6 +21,7 @@ class ConversationSummary {
   final bool isGroup;
   final String? targetDid;
   final String? groupId;
+  final String? avatarUri;
   final String? avatarSeed;
   final String? lastMessagePayloadJson;
 }

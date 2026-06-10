@@ -39,6 +39,12 @@ class PeerProfilePage extends ConsumerWidget {
         : (profile.profileMarkdown.trim().isNotEmpty
               ? profile.profileMarkdown.trim()
               : profile.bio.trim());
+    final displayName = profile == null
+        ? ''
+        : DidDisplayFormatter.profileName(profile);
+    final homepageUrl = profile == null
+        ? ''
+        : DidDisplayFormatter.homepageUrl(profile);
     return Stack(
       children: <Widget>[
         CupertinoPageScaffold(
@@ -78,10 +84,9 @@ class PeerProfilePage extends ConsumerWidget {
                             Row(
                               children: <Widget>[
                                 AvatarBadge(
-                                  seed: DidDisplayFormatter.profileName(
-                                    profile,
-                                  ),
+                                  seed: displayName,
                                   size: 72,
+                                  avatarUri: profile.avatarUri,
                                 ),
                                 const SizedBox(width: 16),
                                 Expanded(
@@ -90,9 +95,7 @@ class PeerProfilePage extends ConsumerWidget {
                                         CrossAxisAlignment.start,
                                     children: <Widget>[
                                       Text(
-                                        DidDisplayFormatter.profileName(
-                                          profile,
-                                        ),
+                                        displayName,
                                         style: TextStyle(
                                           fontSize:
                                               context.awikiResponsive.isPhone
@@ -137,24 +140,23 @@ class PeerProfilePage extends ConsumerWidget {
                               ],
                             ),
                             const SizedBox(height: 16),
-                            AppInlineLinkRow(
-                              label: DidDisplayFormatter.homepageUrl(profile),
-                              onTap: () async {
-                                final url = Uri.parse(
-                                  DidDisplayFormatter.homepageUrl(profile),
-                                );
-                                try {
-                                  await launchUrl(
-                                    url,
-                                    mode: LaunchMode.externalApplication,
-                                  );
-                                } catch (error) {
-                                  ref
-                                      .read(peerProfileProvider(did).notifier)
-                                      .showLinkOpenError(error);
-                                }
-                              },
-                            ),
+                            if (homepageUrl.isNotEmpty)
+                              AppInlineLinkRow(
+                                label: homepageUrl,
+                                onTap: () async {
+                                  final url = Uri.parse(homepageUrl);
+                                  try {
+                                    await launchUrl(
+                                      url,
+                                      mode: LaunchMode.externalApplication,
+                                    );
+                                  } catch (error) {
+                                    ref
+                                        .read(peerProfileProvider(did).notifier)
+                                        .showLinkOpenError(error);
+                                  }
+                                },
+                              ),
                           ],
                         ),
                       ),
@@ -200,14 +202,13 @@ class PeerProfilePage extends ConsumerWidget {
                           );
                           final conversation = ConversationSummary(
                             threadId: threadId,
-                            displayName: DidDisplayFormatter.profileName(
-                              profile,
-                            ),
+                            displayName: displayName,
                             lastMessagePreview: '',
                             lastMessageAt: DateTime.now(),
                             unreadCount: 0,
                             isGroup: false,
                             targetDid: profile.did,
+                            avatarUri: profile.avatarUri,
                           );
                           await ref
                               .read(chatThreadsProvider.notifier)

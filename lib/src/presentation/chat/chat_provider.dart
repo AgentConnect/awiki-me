@@ -564,7 +564,9 @@ ConversationSummary _withConversationPreview(
     isGroup: conversation.isGroup,
     targetDid: conversation.targetDid,
     groupId: conversation.groupId,
+    avatarUri: conversation.avatarUri,
     avatarSeed: conversation.avatarSeed,
+    lastMessagePayloadJson: conversation.lastMessagePayloadJson,
   );
 }
 

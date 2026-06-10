@@ -17,7 +17,7 @@ void main() {
       bio: 'Initial bio',
       tags: <String>[],
       profileMarkdown: '# Bob',
-      handle: 'bob',
+      handle: 'bob.awiki.ai',
     );
     final gateway = FakeAwikiGateway()..myProfile = serverProfile;
     final container = ProviderContainer(
@@ -60,7 +60,7 @@ void main() {
       bio: 'Initial bio',
       tags: <String>[],
       profileMarkdown: '# Carol',
-      handle: 'carol',
+      handle: 'carol.awiki.ai',
     );
     final homepageCompleter = Completer<String?>();
     final gateway = FakeAwikiGateway()..myProfile = serverProfile;
@@ -105,7 +105,7 @@ void main() {
       bio: 'Initial bio',
       tags: <String>[],
       profileMarkdown: '# Dana\n\n# 如何与我通信\n\nKeep this copy',
-      handle: 'dana',
+      handle: 'dana.awiki.ai',
     );
     final gateway = FakeAwikiGateway()..myProfile = serverProfile;
     final container = ProviderContainer(

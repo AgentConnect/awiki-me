@@ -20,20 +20,23 @@ class SelectedConversationController
     final groupId = current.groupId?.trim() ?? '';
     for (final group in groups) {
       if (group.groupId != groupId ||
-          GroupDisplayName.isIdLike(group.name, groupId) ||
-          group.name == current.displayName) {
+          GroupDisplayName.isIdLike(group.displayName, groupId) ||
+          (group.displayName == current.displayName &&
+              group.avatarUri == current.avatarUri)) {
         continue;
       }
       state = ConversationSummary(
         threadId: current.threadId,
-        displayName: group.name,
+        displayName: group.displayName,
         lastMessagePreview: current.lastMessagePreview,
         lastMessageAt: current.lastMessageAt,
         unreadCount: current.unreadCount,
         isGroup: current.isGroup,
         targetDid: current.targetDid,
         groupId: current.groupId,
+        avatarUri: group.avatarUri ?? current.avatarUri,
         avatarSeed: current.avatarSeed,
+        lastMessagePayloadJson: current.lastMessagePayloadJson,
       );
       return;
     }

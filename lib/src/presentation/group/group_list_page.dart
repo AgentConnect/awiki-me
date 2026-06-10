@@ -250,7 +250,7 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        _group.name,
+                        _group.displayName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AwikiMeTextStyles.navTitle,
@@ -265,14 +265,18 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                     children: <Widget>[
                       Row(
                         children: <Widget>[
-                          AvatarBadge(seed: _group.name, size: 56),
+                          AvatarBadge(
+                            seed: _group.displayName,
+                            size: 56,
+                            avatarUri: _group.avatarUri,
+                          ),
                           const SizedBox(width: 16),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
                                 Text(
-                                  _group.name,
+                                  _group.displayName,
                                   style: AwikiMeTextStyles.sectionTitle,
                                 ),
                                 const SizedBox(height: 4),
@@ -569,13 +573,17 @@ class _GroupCard extends StatelessWidget {
       child: AppCardSection(
         child: Row(
           children: <Widget>[
-            AvatarBadge(seed: group.name, size: 52),
+            AvatarBadge(
+              seed: group.displayName,
+              size: 52,
+              avatarUri: group.avatarUri,
+            ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(group.name, style: AwikiMeTextStyles.cardTitle),
+                  Text(group.displayName, style: AwikiMeTextStyles.cardTitle),
                   const SizedBox(height: 6),
                   Text(
                     group.description.isEmpty

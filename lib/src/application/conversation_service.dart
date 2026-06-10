@@ -134,6 +134,7 @@ ConversationSummary _applyOverlay(
     isGroup: item.isGroup,
     targetDid: item.targetDid,
     groupId: item.groupId,
+    avatarUri: item.avatarUri,
     avatarSeed: overlay.avatarSeed ?? item.avatarSeed,
     lastMessagePayloadJson: item.lastMessagePayloadJson,
   );

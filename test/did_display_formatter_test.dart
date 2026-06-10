@@ -1,3 +1,4 @@
+import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/shared/formatters/display_formatters.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -10,6 +11,102 @@ void main() {
     expect(
       DidDisplayFormatter.compactDid('did:wba:awiki.ai:user:alice:k1_legacy'),
       'k1_legacy',
+    );
+  });
+
+  test('profileName falls back from display name to handle and DID', () {
+    expect(
+      DidDisplayFormatter.profileName(
+        const UserProfile(
+          did: 'did:wba:awiki.ai:user:alice:e1_key',
+          displayName: 'Alice',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          handle: 'alice.awiki.ai',
+        ),
+      ),
+      'Alice',
+    );
+    expect(
+      DidDisplayFormatter.profileName(
+        const UserProfile(
+          did: 'did:wba:awiki.ai:user:bob:e1_key',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          handle: 'bob.awiki.ai',
+        ),
+      ),
+      'bob.awiki.ai',
+    );
+  });
+
+  test('homepageUrl uses profileUri then handle and never displayName', () {
+    expect(
+      DidDisplayFormatter.homepageUrl(
+        const UserProfile(
+          did: 'did:alice',
+          displayName: 'Alice',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          profileUri: 'https://profiles.example/alice',
+          handle: 'alice.awiki.ai',
+        ),
+      ),
+      'https://profiles.example/alice',
+    );
+    expect(
+      DidDisplayFormatter.homepageUrl(
+        const UserProfile(
+          did: 'did:bob',
+          displayName: 'Bob',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          handle: 'bob.awiki.ai',
+        ),
+      ),
+      'https://bob.awiki.ai',
+    );
+    expect(
+      DidDisplayFormatter.homepageUrl(
+        const UserProfile(
+          did: 'did:carol',
+          displayName: 'Carol',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+        ),
+      ),
+      isEmpty,
+    );
+    expect(
+      DidDisplayFormatter.homepageUrl(
+        const UserProfile(
+          did: 'did:dana',
+          displayName: 'Dana',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          profileUri: 'http://profiles.example/dana',
+        ),
+      ),
+      isEmpty,
+    );
+    expect(
+      DidDisplayFormatter.homepageUrl(
+        const UserProfile(
+          did: 'did:erin',
+          displayName: 'Erin',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          handle: 'http://erin.example',
+        ),
+      ),
+      isEmpty,
     );
   });
 }

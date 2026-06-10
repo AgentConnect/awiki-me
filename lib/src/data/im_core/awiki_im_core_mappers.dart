@@ -186,6 +186,7 @@ class AwikiImCoreMappers {
       isGroup: isGroup,
       targetDid: targetDid,
       groupId: groupId,
+      avatarUri: null,
       avatarSeed: overlay?.avatarSeed,
       lastMessagePayloadJson: lastMessage?.body.payloadJson,
     );
@@ -194,10 +195,12 @@ class AwikiImCoreMappers {
   GroupSummary groupFromCoreSummary(core.GroupSummary group) {
     return GroupSummary(
       groupId: group.did,
-      name: _nonEmpty(group.name) ?? group.did,
+      displayName:
+          _nonEmpty(group.displayName) ?? _nonEmpty(group.name) ?? group.did,
       description: '',
       memberCount: group.memberCount ?? 0,
       lastMessageAt: _tryParseDateTime(group.lastMessageAt),
+      avatarUri: _nonEmpty(group.avatarUri),
       myRole: group.membershipStatus,
     );
   }
@@ -205,10 +208,12 @@ class AwikiImCoreMappers {
   GroupSummary groupFromCoreSnapshot(core.GroupSnapshot group) {
     return GroupSummary(
       groupId: group.did,
-      name: _nonEmpty(group.name) ?? group.did,
+      displayName:
+          _nonEmpty(group.displayName) ?? _nonEmpty(group.name) ?? group.did,
       description: group.description ?? '',
       memberCount: group.memberCount ?? 0,
       lastMessageAt: _tryParseDateTime(group.lastMessageAt),
+      avatarUri: _nonEmpty(group.avatarUri),
       myRole: group.myRole ?? group.membershipStatus,
     );
   }
@@ -227,20 +232,25 @@ class AwikiImCoreMappers {
   UserProfile userProfileFromCore(core.UserProfile profile) {
     return UserProfile(
       did: profile.subject,
-      nickName: profile.displayName ?? _compactDid(profile.subject),
-      bio: profile.bio ?? '',
+      displayName:
+          _nonEmpty(profile.displayName) ?? _compactDid(profile.subject),
+      bio: _nonEmpty(profile.bio) ?? _nonEmpty(profile.description) ?? '',
       tags: profile.tags,
       profileMarkdown: profile.markdown ?? '',
       handle: profile.handle,
+      avatarUri: _nonEmpty(profile.avatarUri) ?? _nonEmpty(profile.avatarUrl),
+      profileUri: _nonEmpty(profile.profileUri),
+      subjectType: _nonEmpty(profile.subjectType),
     );
   }
 
   core.ProfilePatch profilePatchToCore(ProfilePatch patch) {
     return core.ProfilePatch(
-      displayName: patch.nickName,
+      displayName: patch.effectiveDisplayName,
       bio: patch.bio,
       tags: patch.tags,
       markdown: patch.profileMarkdown,
+      avatarUri: patch.avatarUri,
     );
   }
 
@@ -249,6 +259,7 @@ class AwikiImCoreMappers {
       did: status.peer,
       displayName: status.displayName ?? _compactDid(status.peer),
       relationship: status.relationship ?? 'none',
+      avatarUri: null,
     );
   }
 
@@ -262,6 +273,7 @@ class AwikiImCoreMappers {
           _nonEmpty(item.handle) ??
           _compactDid(item.did),
       relationship: item.relationship,
+      avatarUri: _nonEmpty(item.avatarUri) ?? _nonEmpty(item.avatarUrl),
     );
   }
 
@@ -307,6 +319,7 @@ class AwikiImCoreMappers {
       isGroup: isGroup,
       targetDid: targetDid,
       groupId: chatMessage.groupId,
+      avatarUri: null,
       lastMessagePayloadJson: message.body.payloadJson,
     );
     return RealtimeUpdate(
@@ -316,7 +329,7 @@ class AwikiImCoreMappers {
           ? null
           : GroupSummary(
               groupId: chatMessage.groupId!,
-              name: chatMessage.groupId!,
+              displayName: chatMessage.groupId!,
               description: '',
               memberCount: 0,
               lastMessageAt: chatMessage.createdAt,

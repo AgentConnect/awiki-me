@@ -80,7 +80,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              AvatarBadge(seed: title, size: responsive.isPhone ? 54 : 44),
+              AvatarBadge(
+                seed: title,
+                size: responsive.isPhone ? 54 : 44,
+                avatarUri: profile.avatarUri,
+              ),
               SizedBox(width: responsive.spacing(16)),
               Expanded(
                 child: Padding(
@@ -138,9 +142,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             homepageUrl: homepageUrl,
             followersCount: friendsState.followers.length,
             followingCount: friendsState.following.length,
-            onHomepageTap: () async {
-              await _openHomepage(homepageUrl);
-            },
+            onHomepageTap: homepageUrl.isEmpty
+                ? null
+                : () async {
+                    await _openHomepage(homepageUrl);
+                  },
           ),
           SizedBox(height: responsive.spacing(48)),
           _ProfileContentSection(
@@ -201,7 +207,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     BuildContext context,
     UserProfile profile,
   ) async {
-    final nickController = TextEditingController(text: profile.nickName);
+    final nickController = TextEditingController(text: profile.displayName);
     final bioController = TextEditingController(text: profile.bio);
     final tagsController = TextEditingController(text: profile.tags.join(', '));
 
@@ -241,7 +247,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             isDefaultAction: true,
             onPressed: () async {
               final patch = ProfilePatch(
-                nickName: nickController.text.trim(),
+                displayName: nickController.text.trim(),
                 bio: bioController.text.trim(),
                 tags: tagsController.text
                     .split(',')
@@ -271,7 +277,7 @@ class _ProfileRelationshipBar extends StatelessWidget {
   final String homepageUrl;
   final int followersCount;
   final int followingCount;
-  final VoidCallback onHomepageTap;
+  final VoidCallback? onHomepageTap;
 
   @override
   Widget build(BuildContext context) {
@@ -279,10 +285,17 @@ class _ProfileRelationshipBar extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final stackVertically = constraints.maxWidth < 360;
-        final link = ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: responsive.isPhone ? 320 : 260),
-          child: AppInlineLinkRow(label: homepageUrl, onTap: onHomepageTap),
-        );
+        final link = homepageUrl.isEmpty
+            ? null
+            : ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: responsive.isPhone ? 320 : 260,
+                ),
+                child: AppInlineLinkRow(
+                  label: homepageUrl,
+                  onTap: onHomepageTap,
+                ),
+              );
         final stats = Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
@@ -301,11 +314,16 @@ class _ProfileRelationshipBar extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              link,
-              SizedBox(height: responsive.spacing(12)),
+              if (link != null) ...<Widget>[
+                link,
+                SizedBox(height: responsive.spacing(12)),
+              ],
               stats,
             ],
           );
+        }
+        if (link == null) {
+          return stats;
         }
         return Row(
           crossAxisAlignment: CrossAxisAlignment.center,

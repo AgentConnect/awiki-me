@@ -1,3 +1,4 @@
+import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -87,6 +88,32 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tapped, isTrue);
+  });
+
+  testWidgets('AvatarBadge loads only safe HTTPS avatar URIs', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const CupertinoPageScaffold(
+          child: SafeArea(
+            child: Column(
+              children: <Widget>[
+                AvatarBadge(
+                  seed: 'Alice',
+                  avatarUri: 'https://cdn.example/alice.png',
+                ),
+                AvatarBadge(
+                  seed: 'Bob',
+                  avatarUri: 'http://cdn.example/bob.png',
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.text('B'), findsOneWidget);
   });
 }
 

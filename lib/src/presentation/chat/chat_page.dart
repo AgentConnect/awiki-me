@@ -479,19 +479,23 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return base;
     }
     final groupName = _currentGroupName(base.groupId!);
-    if (groupName == null || groupName == base.displayName) {
+    final groupAvatarUri = _currentGroupAvatarUri(base.groupId!);
+    if ((groupName == null || groupName == base.displayName) &&
+        groupAvatarUri == base.avatarUri) {
       return base;
     }
     return ConversationSummary(
       threadId: base.threadId,
-      displayName: groupName,
+      displayName: groupName ?? base.displayName,
       lastMessagePreview: base.lastMessagePreview,
       lastMessageAt: base.lastMessageAt,
       unreadCount: base.unreadCount,
       isGroup: base.isGroup,
       targetDid: base.targetDid,
       groupId: base.groupId,
+      avatarUri: groupAvatarUri ?? base.avatarUri,
       avatarSeed: base.avatarSeed,
+      lastMessagePayloadJson: base.lastMessagePayloadJson,
     );
   }
 
@@ -499,8 +503,18 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final groups = ref.watch(groupProvider).groups;
     for (final group in groups) {
       if (group.groupId == groupId &&
-          !GroupDisplayName.isIdLike(group.name, groupId)) {
-        return group.name;
+          !GroupDisplayName.isIdLike(group.displayName, groupId)) {
+        return group.displayName;
+      }
+    }
+    return null;
+  }
+
+  String? _currentGroupAvatarUri(String groupId) {
+    final groups = ref.watch(groupProvider).groups;
+    for (final group in groups) {
+      if (group.groupId == groupId) {
+        return group.avatarUri;
       }
     }
     return null;
@@ -700,7 +714,11 @@ class _ChatHeader extends StatelessWidget {
 
             return Row(
               children: <Widget>[
-                AvatarBadge(seed: compactName, size: avatarSize),
+                AvatarBadge(
+                  seed: compactName,
+                  size: avatarSize,
+                  avatarUri: conversation.avatarUri,
+                ),
                 SizedBox(width: responsive.displayScaled(10)),
                 Expanded(
                   child: Row(
@@ -820,7 +838,11 @@ class _ChatHeader extends StatelessWidget {
             ),
           ),
           SizedBox(width: responsive.spacing(4)),
-          AvatarBadge(seed: compactName, size: responsive.avatarSizeMd),
+          AvatarBadge(
+            seed: compactName,
+            size: responsive.avatarSizeMd,
+            avatarUri: conversation.avatarUri,
+          ),
           SizedBox(width: responsive.spacing(12)),
           Expanded(
             child: Column(

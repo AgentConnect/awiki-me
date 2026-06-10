@@ -20,12 +20,13 @@ Future<void> openGroupChat(
 }) async {
   final conversation = ConversationSummary(
     threadId: 'group:${group.groupId}',
-    displayName: group.name,
+    displayName: group.displayName,
     lastMessagePreview: '',
     lastMessageAt: group.lastMessageAt ?? DateTime.now(),
     unreadCount: 0,
     isGroup: true,
     groupId: group.groupId,
+    avatarUri: group.avatarUri,
     avatarSeed: group.groupId,
   );
 

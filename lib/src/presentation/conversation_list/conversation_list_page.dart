@@ -249,6 +249,7 @@ class _MacConversationListState extends State<_MacConversationList> {
                             item,
                             context.l10n,
                           ),
+                          avatarUri: item.avatarUri,
                           preview: item.lastMessagePreview,
                           timeLabel: DateTimeFormatter.conversationTime(
                             item.lastMessageAt,
@@ -349,6 +350,7 @@ class _ConversationRefreshView extends StatelessWidget {
                     item,
                     context.l10n,
                   ),
+                  avatarUri: item.avatarUri,
                   preview: item.lastMessagePreview,
                   timeLabel: DateTimeFormatter.conversationTime(
                     item.lastMessageAt,
@@ -409,6 +411,7 @@ class _MacListIconButton extends StatelessWidget {
 class _MacConversationRow extends StatelessWidget {
   const _MacConversationRow({
     required this.title,
+    required this.avatarUri,
     required this.preview,
     required this.timeLabel,
     required this.unreadCount,
@@ -418,6 +421,7 @@ class _MacConversationRow extends StatelessWidget {
   });
 
   final String title;
+  final String? avatarUri;
   final String preview;
   final String timeLabel;
   final int unreadCount;
@@ -450,7 +454,11 @@ class _MacConversationRow extends StatelessWidget {
               Stack(
                 clipBehavior: Clip.none,
                 children: <Widget>[
-                  AvatarBadge(seed: title, size: responsive.displayScaled(42)),
+                  AvatarBadge(
+                    seed: title,
+                    size: responsive.displayScaled(42),
+                    avatarUri: avatarUri,
+                  ),
                   Positioned(
                     right: responsive.displayScaled(-2),
                     bottom: responsive.displayScaled(-2),
@@ -596,6 +604,7 @@ class _MacConversationEmptyState extends StatelessWidget {
 class _ConversationRow extends StatelessWidget {
   const _ConversationRow({
     required this.title,
+    required this.avatarUri,
     required this.preview,
     required this.timeLabel,
     required this.unreadCount,
@@ -604,6 +613,7 @@ class _ConversationRow extends StatelessWidget {
   });
 
   final String title;
+  final String? avatarUri;
   final String preview;
   final String timeLabel;
   final int unreadCount;
@@ -633,7 +643,11 @@ class _ConversationRow extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           child: Row(
             children: <Widget>[
-              AvatarBadge(seed: title, size: responsive.avatarSizeMd),
+              AvatarBadge(
+                seed: title,
+                size: responsive.avatarSizeMd,
+                avatarUri: avatarUri,
+              ),
               SizedBox(width: responsive.spacing(14)),
               Expanded(
                 child: Column(

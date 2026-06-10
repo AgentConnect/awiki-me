@@ -77,22 +77,25 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   }
 
   void applyGroupNames(List<GroupSummary> groups) {
-    final groupNamesById = <String, String>{
+    final groupsById = <String, GroupSummary>{
       for (final group in groups)
-        if (!GroupDisplayName.isIdLike(group.name, group.groupId))
-          group.groupId: group.name,
+        if (!GroupDisplayName.isIdLike(group.displayName, group.groupId))
+          group.groupId: group,
     };
-    if (groupNamesById.isEmpty || state.conversations.isEmpty) {
+    if (groupsById.isEmpty || state.conversations.isEmpty) {
       return;
     }
 
     var changed = false;
     final next = state.conversations.map((conversation) {
       final groupId = conversation.groupId?.trim() ?? '';
-      final groupName = groupNamesById[groupId];
+      final group = groupsById[groupId];
+      final groupName = group?.displayName;
+      final groupAvatarUri = group?.avatarUri;
       if (!conversation.isGroup ||
           groupName == null ||
-          groupName == conversation.displayName) {
+          (groupName == conversation.displayName &&
+              groupAvatarUri == conversation.avatarUri)) {
         return conversation;
       }
       changed = true;
@@ -105,7 +108,9 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         isGroup: conversation.isGroup,
         targetDid: conversation.targetDid,
         groupId: conversation.groupId,
+        avatarUri: groupAvatarUri ?? conversation.avatarUri,
         avatarSeed: conversation.avatarSeed,
+        lastMessagePayloadJson: conversation.lastMessagePayloadJson,
       );
     }).toList();
     if (!changed) {
@@ -128,7 +133,9 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         isGroup: item.isGroup,
         targetDid: item.targetDid,
         groupId: item.groupId,
+        avatarUri: item.avatarUri,
         avatarSeed: item.avatarSeed,
+        lastMessagePayloadJson: item.lastMessagePayloadJson,
       );
     }).toList();
     state = state.copyWith(conversations: next);
@@ -199,7 +206,9 @@ ConversationSummary _mergeConversationTitle({
     isGroup: refreshed.isGroup,
     targetDid: refreshed.targetDid,
     groupId: refreshed.groupId,
+    avatarUri: refreshed.avatarUri ?? local.avatarUri,
     avatarSeed: refreshed.avatarSeed ?? local.avatarSeed,
+    lastMessagePayloadJson: refreshed.lastMessagePayloadJson,
   );
 }
 

@@ -619,7 +619,11 @@ class _MacPeerProfilePanel extends ConsumerWidget {
               children: <Widget>[
                 Row(
                   children: <Widget>[
-                    AvatarBadge(seed: name, size: 56),
+                    AvatarBadge(
+                      seed: name,
+                      size: 56,
+                      avatarUri: profile.avatarUri,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -776,7 +780,7 @@ class _MacPeerProfilePanel extends ConsumerWidget {
   }
 
   String _identityCardTitleForProfile(UserProfile profile) {
-    final userName = profile.nickName.trim();
+    final userName = profile.displayName.trim();
     final handle = profile.handle?.trim() ?? '';
     final titleName = userName.isNotEmpty
         ? userName
@@ -848,7 +852,7 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
     final members = ref.watch(groupMembersProvider(groupId));
     final theme = context.awikiTheme;
     return _MacPanelShell(
-      title: '${_group.name} 的群聊信息',
+      title: '${_group.displayName} 的群聊信息',
       onClose: widget.onClose,
       closeIcon: widget.useBackButton ? CupertinoIcons.chevron_left : null,
       closeButtonKey: widget.useBackButton
@@ -866,14 +870,18 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
               children: <Widget>[
                 Row(
                   children: <Widget>[
-                    AvatarBadge(seed: _group.name, size: 56),
+                    AvatarBadge(
+                      seed: _group.displayName,
+                      size: 56,
+                      avatarUri: _group.avatarUri,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
-                            _group.name,
+                            _group.displayName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AwikiMeTextStyles.cardTitle,
@@ -1078,10 +1086,11 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
         : groupId;
     return GroupSummary(
       groupId: groupId,
-      name: name,
+      displayName: name,
       description: '',
       memberCount: 0,
       lastMessageAt: conversation.lastMessageAt,
+      avatarUri: conversation.avatarUri,
     );
   }
 }

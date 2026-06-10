@@ -47,8 +47,8 @@ class DidDisplayFormatter {
   }
 
   static String profileName(UserProfile profile) {
-    if (profile.nickName.trim().isNotEmpty) {
-      return profile.nickName.trim();
+    if (profile.displayName.trim().isNotEmpty) {
+      return profile.displayName.trim();
     }
     if (profile.handle?.trim().isNotEmpty == true) {
       return profile.handle!.trim();
@@ -57,10 +57,17 @@ class DidDisplayFormatter {
   }
 
   static String homepageUrl(UserProfile profile) {
+    final profileUri = profile.profileUri?.trim();
+    if (profileUri != null && profileUri.isNotEmpty) {
+      return profileUri.startsWith('https://') ? profileUri : '';
+    }
     final handle = profile.handle?.trim();
-    final username = handle != null && handle.isNotEmpty
-        ? handle
-        : profileName(profile);
-    return 'https://$username.awiki.ai';
+    if (handle == null || handle.isEmpty) {
+      return '';
+    }
+    if (handle.startsWith('http://')) {
+      return '';
+    }
+    return handle.startsWith('https://') ? handle : 'https://$handle';
   }
 }
