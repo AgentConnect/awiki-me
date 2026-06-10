@@ -591,7 +591,8 @@ class _AgentInboxMessageRow extends StatelessWidget {
             Text(
               outgoing
                   ? 'Agent'
-                  : DidDisplayFormatter.compactDid(message.senderDid),
+                  : message.senderHandle ??
+                        DidDisplayFormatter.compactDid(message.senderDid),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(

@@ -75,6 +75,51 @@ void main() {
     expect(mapped.serverSequence, 42);
   });
 
+  test('scoped direct message keeps stable thread id and peer metadata', () {
+    const message = core.Message(
+      id: 'msg-scoped',
+      threadKind: 'thread',
+      threadId: 'dm:peer-scope:v1:abc123',
+      direction: core.MessageDirection.incoming,
+      sender: 'did:bob:new',
+      receiver: 'did:alice',
+      body: core.MessageBodyView(text: 'hello', kind: 'text'),
+      sentAt: '2026-05-23T09:00:00Z',
+      metadata: core.MessageMetadata(
+        attributes: <core.MessageMetadataAttribute>[
+          core.MessageMetadataAttribute(key: 'peer_user_id', value: 'user-bob'),
+          core.MessageMetadataAttribute(
+            key: 'peer_full_handle',
+            value: 'Bob.AnPClaw.com',
+          ),
+          core.MessageMetadataAttribute(
+            key: 'peer_current_did',
+            value: 'did:bob:new',
+          ),
+        ],
+      ),
+    );
+
+    final mapped = mapper.chatMessageFromCore(message, ownerDid: 'did:alice');
+    final conversation = mapper.conversationFromCore(
+      const core.Conversation(
+        threadKind: 'thread',
+        threadId: 'dm:peer-scope:v1:abc123',
+        participants: <String>['bob.anpclaw.com'],
+        unreadCount: 1,
+        messageCount: 1,
+        lastMessage: message,
+      ),
+      ownerDid: 'did:alice',
+    );
+
+    expect(mapped.threadId, 'dm:peer-scope:v1:abc123');
+    expect(conversation.threadId, 'dm:peer-scope:v1:abc123');
+    expect(conversation.targetPeer, 'bob.anpclaw.com');
+    expect(conversation.targetDid, 'did:bob:new');
+    expect(conversation.displayName, 'bob.anpclaw.com');
+  });
+
   test('control payload maps into non-renderable chat message', () {
     const payload =
         '{"schema":"awiki.agent.status.v1","status_scope":"daemon","daemon":{"status":"ready"}}';

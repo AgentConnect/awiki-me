@@ -38,14 +38,14 @@ class FriendsPage extends ConsumerWidget {
   Future<void> _openContact(
     BuildContext context,
     WidgetRef ref,
-    String peerDid,
-    String peerName,
+    RelationshipSummary item,
   ) async {
     await openDirectConversationForDid(
       context,
       ref,
-      peerDid: peerDid,
-      peerName: peerName,
+      peerDid: item.did,
+      peerHandle: item.handle,
+      peerName: _displayName(item),
     );
   }
 
@@ -80,8 +80,7 @@ class FriendsPage extends ConsumerWidget {
                 (item) => _FriendRow.contact(
                   seed: _displayName(item),
                   title: _displayName(item),
-                  onTap: () =>
-                      _openContact(context, ref, item.did, _displayName(item)),
+                  onTap: () => _openContact(context, ref, item),
                 ),
               )
               .toList(),
@@ -106,8 +105,7 @@ class FriendsPage extends ConsumerWidget {
                       () => ref.read(friendsProvider.notifier).follow(item.did),
                     ),
                   ),
-                  onTap: () =>
-                      _openContact(context, ref, item.did, _displayName(item)),
+                  onTap: () => _openContact(context, ref, item),
                 ),
               )
               .toList(),
@@ -637,8 +635,7 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
                 onTap: () => _openContact(
                   context,
                   ref,
-                  peerDid: item.did,
-                  peerName: displayName,
+                  item: item,
                 ),
               ),
             );
@@ -679,14 +676,14 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
   Future<void> _openContact(
     BuildContext context,
     WidgetRef ref, {
-    required String peerDid,
-    required String peerName,
+    required RelationshipSummary item,
   }) async {
     await openDirectConversationForDid(
       context,
       ref,
-      peerDid: peerDid,
-      peerName: peerName,
+      peerDid: item.did,
+      peerHandle: item.handle,
+      peerName: _displayName(item),
     );
   }
 }

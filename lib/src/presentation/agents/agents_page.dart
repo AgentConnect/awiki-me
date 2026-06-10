@@ -959,6 +959,8 @@ class _InfoGrid extends StatelessWidget {
       if (agent.handle != null) 'handle': agent.handle!,
       if (agent.daemonAgentDid != null) 'daemon': agent.daemonAgentDid!,
       if (agent.latest.version != null) 'version': agent.latest.version!,
+      if (agent.latest.latestVersion != null)
+        'latest': agent.latest.latestVersion!,
       if (agent.latest.minSupportedVersion != null)
         'min': agent.latest.minSupportedVersion!,
       if (agent.latest.platform != null) 'platform': agent.latest.platform!,

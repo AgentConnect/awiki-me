@@ -10,6 +10,7 @@ class ConversationPeerTarget {
   const ConversationPeerTarget({
     required this.isGroup,
     required this.threadId,
+    required this.isDeletedAgentConversation,
     this.targetDid,
     this.groupId,
   });
@@ -20,6 +21,7 @@ class ConversationPeerTarget {
     return ConversationPeerTarget(
       isGroup: conversation.isGroup,
       threadId: conversation.threadId,
+      isDeletedAgentConversation: conversation.isDeletedAgentConversation,
       targetDid: conversation.targetDid,
       groupId: conversation.groupId,
     );
@@ -27,6 +29,7 @@ class ConversationPeerTarget {
 
   final bool isGroup;
   final String threadId;
+  final bool isDeletedAgentConversation;
   final String? targetDid;
   final String? groupId;
 
@@ -35,12 +38,19 @@ class ConversationPeerTarget {
     return other is ConversationPeerTarget &&
         other.isGroup == isGroup &&
         other.threadId == threadId &&
+        other.isDeletedAgentConversation == isDeletedAgentConversation &&
         other.targetDid == targetDid &&
         other.groupId == groupId;
   }
 
   @override
-  int get hashCode => Object.hash(isGroup, threadId, targetDid, groupId);
+  int get hashCode => Object.hash(
+    isGroup,
+    threadId,
+    isDeletedAgentConversation,
+    targetDid,
+    groupId,
+  );
 }
 
 enum ConversationPeerKind { group, human, agent, myRuntimeAgent, unknown }
@@ -136,6 +146,11 @@ final conversationPeerClassificationProvider =
       final targetDid = target.targetDid?.trim();
       if (targetDid == null || targetDid.isEmpty) {
         return const ConversationPeerClassification.unknown();
+      }
+      if (target.isDeletedAgentConversation) {
+        return const ConversationPeerClassification.agent(
+          agentKind: PeerAgentKind.runtime,
+        );
       }
 
       final agents = ref.watch(agentsProvider).agents;

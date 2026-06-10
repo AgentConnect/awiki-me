@@ -9,6 +9,7 @@ class ConversationSummary {
     required this.unreadCount,
     required this.isGroup,
     this.targetDid,
+    this.targetPeer,
     this.groupId,
     this.avatarSeed,
     this.lastMessagePayloadJson,
@@ -22,6 +23,7 @@ class ConversationSummary {
   final int unreadCount;
   final bool isGroup;
   final String? targetDid;
+  final String? targetPeer;
   final String? groupId;
   final String? avatarSeed;
   final String? lastMessagePayloadJson;
@@ -38,6 +40,7 @@ class ConversationSummary {
     int? unreadCount,
     bool? isGroup,
     Object? targetDid = _conversationSummaryUnset,
+    Object? targetPeer = _conversationSummaryUnset,
     Object? groupId = _conversationSummaryUnset,
     Object? avatarSeed = _conversationSummaryUnset,
     Object? lastMessagePayloadJson = _conversationSummaryUnset,
@@ -51,6 +54,7 @@ class ConversationSummary {
       unreadCount: unreadCount ?? this.unreadCount,
       isGroup: isGroup ?? this.isGroup,
       targetDid: _resolveNullableString(targetDid, this.targetDid),
+      targetPeer: _resolveNullableString(targetPeer, this.targetPeer),
       groupId: _resolveNullableString(groupId, this.groupId),
       avatarSeed: _resolveNullableString(avatarSeed, this.avatarSeed),
       lastMessagePayloadJson: _resolveNullableString(

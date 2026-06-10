@@ -451,9 +451,7 @@ class _MacConversationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final badgeLabel = isDeletedAgentConversation
-        ? '已删除'
-        : classification.compactBadgeLabel;
+    final badgeLabel = classification.compactBadgeLabel;
     return Padding(
       padding: EdgeInsets.only(bottom: responsive.displayScaled(6)),
       child: AppPressableTile(
@@ -497,11 +495,12 @@ class _MacConversationRow extends StatelessWidget {
                     Row(
                       children: <Widget>[
                         Expanded(
-                          child: Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
+                          child: _ConversationTitleStatusLine(
+                            title: title,
+                            isDeletedAgentConversation:
+                                isDeletedAgentConversation,
+                            compact: true,
+                            titleStyle: TextStyle(
                               color: const Color(0xFF17213A),
                               fontSize: responsive.displayScaled(13.5),
                               fontWeight: FontWeight.w400,
@@ -518,10 +517,6 @@ class _MacConversationRow extends StatelessWidget {
                         ),
                       ],
                     ),
-                    if (isDeletedAgentConversation) ...<Widget>[
-                      SizedBox(height: responsive.displayScaled(5)),
-                      const _DeletedAgentConversationBadge(compact: true),
-                    ],
                     SizedBox(height: responsive.displayScaled(5)),
                     Row(
                       children: <Widget>[
@@ -629,9 +624,7 @@ class _ConversationRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
-    final badgeLabel = isDeletedAgentConversation
-        ? '已删除'
-        : classification.compactBadgeLabel;
+    final badgeLabel = classification.compactBadgeLabel;
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: responsive.tabContentHorizontalPadding,
@@ -649,7 +642,23 @@ class _ConversationRow extends StatelessWidget {
         ),
         child: Row(
           children: <Widget>[
-            AvatarBadge(seed: title, size: responsive.avatarSizeMd),
+            Stack(
+              clipBehavior: Clip.none,
+              children: <Widget>[
+                AvatarBadge(seed: title, size: responsive.avatarSizeMd),
+                if (badgeLabel != null)
+                  Positioned(
+                    right: responsive.displayScaled(-2),
+                    bottom: responsive.displayScaled(-2),
+                    child: _ConversationPeerBadge(
+                      label: badgeLabel,
+                      isGroup: classification.isGroup,
+                      compact: true,
+                      borderColor: CupertinoColors.white,
+                    ),
+                  ),
+              ],
+            ),
             SizedBox(width: responsive.spacing(14)),
             Expanded(
               child: Column(
@@ -658,34 +667,23 @@ class _ConversationRow extends StatelessWidget {
                   Row(
                     children: <Widget>[
                       Expanded(
-                        child: Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                        child: _ConversationTitleStatusLine(
+                          title: title,
+                          isDeletedAgentConversation:
+                              isDeletedAgentConversation,
+                          compact: false,
+                          titleStyle: TextStyle(
                             fontSize: responsive.bodyMd,
                             fontWeight: FontWeight.w400,
                             color: theme.title,
                           ),
                         ),
                       ),
-                      if (badgeLabel != null) ...<Widget>[
-                        SizedBox(width: responsive.spacing(8)),
-                        _ConversationPeerBadge(
-                          label: badgeLabel,
-                          isGroup: classification.isGroup,
-                          muted: isDeletedAgentConversation,
-                        ),
-                      ],
                     ],
                   ),
                   SizedBox(height: responsive.spacing(4)),
                   Row(
                     children: <Widget>[
-                      if (isDeletedAgentConversation) ...<Widget>[
-                        const _DeletedAgentConversationBadge(),
-                        SizedBox(width: responsive.spacing(7)),
-                      ],
                       Expanded(
                         child: Text(
                           preview.isEmpty
@@ -744,6 +742,42 @@ class _ConversationRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ConversationTitleStatusLine extends StatelessWidget {
+  const _ConversationTitleStatusLine({
+    required this.title,
+    required this.titleStyle,
+    required this.isDeletedAgentConversation,
+    required this.compact,
+  });
+
+  final String title;
+  final TextStyle titleStyle;
+  final bool isDeletedAgentConversation;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Flexible(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: titleStyle,
+          ),
+        ),
+        if (isDeletedAgentConversation) ...<Widget>[
+          SizedBox(width: responsive.displayScaled(compact ? 6 : 7)),
+          _DeletedAgentConversationBadge(compact: compact),
+        ],
+      ],
     );
   }
 }

@@ -1587,6 +1587,51 @@ void main() {
     expect(find.text('第一行\n第二行'), findsOneWidget);
   });
 
+  testWidgets('输入法组合输入时 Enter 不触发发送', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:ime-composing',
+      displayName: 'Tester',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+
+    await tester.tap(find.byType(CupertinoTextField));
+    await tester.enterText(find.byType(CupertinoTextField), 'ni');
+    final input = tester.widget<CupertinoTextField>(
+      find.byType(CupertinoTextField),
+    );
+    input.controller!.value = input.controller!.value.copyWith(
+      composing: const TextRange(start: 0, end: 2),
+    );
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastSentContent, isNull);
+    expect(input.controller?.text, 'ni');
+  });
+
   testWidgets('群聊左侧消息只在连续发送开头显示发送人 handle', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(

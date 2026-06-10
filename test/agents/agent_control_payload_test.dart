@@ -86,5 +86,19 @@ void main() {
     expect(threadArgs['thread_id'], 'group:did:group:team');
     expect(threadArgs['kind'], 'group');
     expect(threadArgs['group_did'], 'did:group:team');
+
+    final directThreadPayload = runtimeInboxThreadQueryPayload(
+      runtimeAgentDid: 'did:agent:runtime',
+      threadId: 'dm:peer-scope:v1:bob',
+      kind: 'direct',
+      peerDid: 'did:human:bob-current',
+      peerHandle: 'bob.anpclaw.com',
+      commandId: 'cmd_direct_thread',
+    );
+    final directThreadArgs =
+        directThreadPayload['args'] as Map<String, Object?>;
+    expect(directThreadArgs['thread_id'], 'dm:peer-scope:v1:bob');
+    expect(directThreadArgs['peer_did'], 'did:human:bob-current');
+    expect(directThreadArgs['peer_handle'], 'bob.anpclaw.com');
   });
 }

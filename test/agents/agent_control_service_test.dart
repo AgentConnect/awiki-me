@@ -127,18 +127,20 @@ void main() {
     final requestId = await service.queryRuntimeInboxThread(
       daemonAgentDid: 'did:agent:daemon',
       runtimeAgentDid: 'did:agent:runtime',
-      threadId: 'direct:did:human:bob',
+      threadId: 'dm:peer-scope:v1:bob',
       kind: 'direct',
       peerDid: 'did:human:bob',
+      peerHandle: 'bob.anpclaw.com',
     );
 
     expect(requestId, startsWith('cmd_runtime_inbox_thread_'));
     expect(messages.lastSecure, isFalse);
     expect(messages.lastPayload?['command'], 'runtime.inbox.thread.query');
     final args = messages.lastPayload?['args'] as Map<String, Object?>;
-    expect(args['thread_id'], 'direct:did:human:bob');
+    expect(args['thread_id'], 'dm:peer-scope:v1:bob');
     expect(args['kind'], 'direct');
     expect(args['peer_did'], 'did:human:bob');
+    expect(args['peer_handle'], 'bob.anpclaw.com');
   });
 
   test('createDaemonInstallCommand returns token-only main command', () async {

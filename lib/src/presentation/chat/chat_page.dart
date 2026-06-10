@@ -2339,8 +2339,13 @@ class _ComposerState extends State<_Composer> {
             widget.controller.text.trim().isNotEmpty);
   }
 
+  bool get _isComposingInput {
+    final composing = widget.controller.value.composing;
+    return composing.isValid && !composing.isCollapsed;
+  }
+
   Future<void> _submitIfNeeded() async {
-    if (!widget.enabled || !_canSubmit || _isSending) {
+    if (!widget.enabled || !_canSubmit || _isSending || _isComposingInput) {
       return;
     }
     setState(() {
@@ -2367,6 +2372,9 @@ class _ComposerState extends State<_Composer> {
     final key = event.logicalKey;
     if (key != LogicalKeyboardKey.enter &&
         key != LogicalKeyboardKey.numpadEnter) {
+      return KeyEventResult.ignored;
+    }
+    if (_isComposingInput) {
       return KeyEventResult.ignored;
     }
     if (HardwareKeyboard.instance.isShiftPressed) {

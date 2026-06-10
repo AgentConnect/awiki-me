@@ -857,7 +857,7 @@ class ChatThreadsController
     final refreshed = ref
         .read(conversationListProvider)
         .conversations
-        .where((item) => item.threadId == fallback.threadId);
+        .where((item) => _sameConversationTarget(item, fallback));
     return refreshed.isEmpty ? fallback : refreshed.first;
   }
 
@@ -899,12 +899,48 @@ ConversationSummary _newerConversation(
   return first.lastMessageAt.isBefore(second.lastMessageAt) ? second : first;
 }
 
+bool _sameConversationTarget(
+  ConversationSummary first,
+  ConversationSummary second,
+) {
+  if (first.threadId == second.threadId) {
+    return true;
+  }
+  if (first.isGroup || second.isGroup) {
+    return false;
+  }
+  final firstPeer = _normalizedDirectPeer(first.targetPeer);
+  final secondPeer = _normalizedDirectPeer(second.targetPeer);
+  if (firstPeer != null && secondPeer != null) {
+    return firstPeer == secondPeer;
+  }
+  final firstDid = first.targetDid?.trim();
+  final secondDid = second.targetDid?.trim();
+  return firstDid != null &&
+      firstDid.isNotEmpty &&
+      secondDid != null &&
+      secondDid.isNotEmpty &&
+      firstDid == secondDid;
+}
+
+String? _normalizedDirectPeer(String? value) {
+  final peer = value?.trim();
+  if (peer == null || peer.isEmpty) {
+    return null;
+  }
+  return peer.startsWith('did:') ? peer : peer.toLowerCase();
+}
+
 AppThreadRef _historyThreadRefFor(ConversationSummary conversation) {
   final groupId = conversation.groupId?.trim();
   if (conversation.isGroup && groupId != null && groupId.isNotEmpty) {
     return AppThreadRef.group(groupId);
   }
   final peerDid = conversation.targetDid?.trim();
+  final peer = conversation.targetPeer?.trim();
+  if (!conversation.isGroup && peer != null && peer.isNotEmpty) {
+    return AppThreadRef.direct(peer);
+  }
   if (!conversation.isGroup && peerDid != null && peerDid.isNotEmpty) {
     return AppThreadRef.direct(peerDid);
   }
@@ -917,6 +953,10 @@ AppThreadRef _sendThreadRefFor(ConversationSummary conversation) {
     return AppThreadRef.group(groupId);
   }
   final peerDid = conversation.targetDid?.trim();
+  final peer = conversation.targetPeer?.trim();
+  if (!conversation.isGroup && peer != null && peer.isNotEmpty) {
+    return AppThreadRef.direct(peer);
+  }
   if (!conversation.isGroup && peerDid != null && peerDid.isNotEmpty) {
     return AppThreadRef.direct(peerDid);
   }

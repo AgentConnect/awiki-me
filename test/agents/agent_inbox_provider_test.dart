@@ -34,7 +34,10 @@ void main() {
           'state': 'succeeded',
           'result': <String, Object?>{
             'items': <Object?>[
-              <String, Object?>{'thread_id': 'direct:old', 'kind': 'direct'},
+              <String, Object?>{
+                'thread_id': 'dm:peer-scope:v1:old',
+                'kind': 'direct',
+              },
             ],
           },
         },
@@ -76,10 +79,12 @@ void main() {
     final container = _container(control);
     addTearDown(container.dispose);
     const item = AgentInboxItem(
-      threadId: 'direct:did:human:bob',
+      threadId: 'dm:peer-scope:v1:bob',
       kind: 'direct',
-      title: 'Bob',
+      title: 'bob.anpclaw.com',
       peerDid: 'did:human:bob',
+      peerHandle: 'bob.anpclaw.com',
+      peerUserId: 'user-bob',
       lastMessagePreview: '',
       unreadCount: 0,
       hasAttachments: false,
@@ -93,6 +98,7 @@ void main() {
           runtimeAgentDid: 'did:agent:runtime',
           item: item,
         );
+    expect(control.lastInboxThreadPeerHandle, 'bob.anpclaw.com');
     container.read(agentInboxProvider.notifier).applyControlPayload(
       <String, Object?>{
         'schema': AgentControlPayloads.statusSchema,
@@ -100,13 +106,14 @@ void main() {
         'request_id': 'cmd_thread_current',
         'state': 'succeeded',
         'result': <String, Object?>{
-          'thread_id': 'direct:did:human:bob',
+          'thread_id': 'dm:peer-scope:v1:bob',
           'kind': 'direct',
-          'title': 'Bob',
+          'title': 'bob.anpclaw.com',
           'messages': <Object?>[
             <String, Object?>{
               'message_id': 'msg-1',
               'sender_did': 'did:human:bob',
+              'sender_handle': 'bob.anpclaw.com',
               'direction': 'incoming',
               'content_type': 'attachment',
               'text': 'caption',
@@ -126,6 +133,7 @@ void main() {
 
     final thread = container.read(agentInboxProvider).thread;
     expect(thread.messages, hasLength(1));
+    expect(thread.messages.first.senderHandle, 'bob.anpclaw.com');
     expect(thread.messages.first.attachments.first.filename, 'report.pdf');
     expect(thread.messages.first.attachments.first.sizeBytes, 1024);
   });
@@ -151,9 +159,11 @@ void main() {
         'result': <String, Object?>{
           'items': <Object?>[
             <String, Object?>{
-              'thread_id': 'direct:did:human:bob',
+              'thread_id': 'dm:peer-scope:v1:bob',
               'kind': 'direct',
-              'title': 'Bob',
+              'title': 'bob.anpclaw.com',
+              'peer_handle': 'bob.anpclaw.com',
+              'peer_user_id': 'user-bob',
             },
           ],
           'next_cursor': '1',
@@ -173,9 +183,11 @@ void main() {
         'result': <String, Object?>{
           'items': <Object?>[
             <String, Object?>{
-              'thread_id': 'direct:did:human:bob',
+              'thread_id': 'dm:peer-scope:v1:bob',
               'kind': 'direct',
-              'title': 'Bob duplicate',
+              'title': 'bob.anpclaw.com duplicate',
+              'peer_handle': 'bob.anpclaw.com',
+              'peer_user_id': 'user-bob',
             },
             <String, Object?>{
               'thread_id': 'group:did:group:team',
@@ -190,7 +202,7 @@ void main() {
 
     final items = container.read(agentInboxProvider).items;
     expect(items.map((item) => item.threadId), <String>[
-      'direct:did:human:bob',
+      'dm:peer-scope:v1:bob',
       'group:did:group:team',
     ]);
     expect(container.read(agentInboxProvider).nextCursor, isNull);
@@ -202,10 +214,12 @@ void main() {
     final container = _container(control);
     addTearDown(container.dispose);
     const item = AgentInboxItem(
-      threadId: 'direct:did:human:bob',
+      threadId: 'dm:peer-scope:v1:bob',
       kind: 'direct',
-      title: 'Bob',
+      title: 'bob.anpclaw.com',
       peerDid: 'did:human:bob',
+      peerHandle: 'bob.anpclaw.com',
+      peerUserId: 'user-bob',
       lastMessagePreview: '',
       unreadCount: 0,
       hasAttachments: false,

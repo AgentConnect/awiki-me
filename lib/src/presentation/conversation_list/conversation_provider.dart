@@ -64,13 +64,19 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   }
 
   void upsertConversation(ConversationSummary conversation) {
-    final byThread = <String, ConversationSummary>{
-      for (final item in state.conversations) item.threadId: item,
-    };
-    byThread[conversation.threadId] = _mergeConversationTitle(
-      refreshed: conversation,
-      local: byThread[conversation.threadId],
+    final existing = _matchingConversationForUpsert(
+      state.conversations,
+      conversation,
     );
+    final mergedConversation = _mergeConversationTitle(
+      refreshed: conversation,
+      local: existing,
+    );
+    final byThread = <String, ConversationSummary>{
+      for (final item in state.conversations)
+        if (item.threadId != existing?.threadId) item.threadId: item,
+    };
+    byThread[mergedConversation.threadId] = mergedConversation;
     final merged = byThread.values.toList()
       ..sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
     state = state.copyWith(conversations: merged);
@@ -126,23 +132,27 @@ List<ConversationSummary> _mergeConversationRefresh({
   required List<ConversationSummary> refreshed,
   required List<ConversationSummary> local,
 }) {
-  final localByThread = <String, ConversationSummary>{
-    for (final conversation in local) conversation.threadId: conversation,
-  };
-  final mergedRefreshed = refreshed
-      .map(
-        (conversation) => _mergeConversationTitle(
-          refreshed: conversation,
-          local: localByThread[conversation.threadId],
-        ),
-      )
-      .toList();
+  final consumedLocalThreadIds = <String>{};
+  final mergedRefreshed = refreshed.map((conversation) {
+    final matchedLocal = _matchingConversationForUpsert(
+      local.where((item) => !consumedLocalThreadIds.contains(item.threadId)),
+      conversation,
+    );
+    if (matchedLocal != null) {
+      consumedLocalThreadIds.add(matchedLocal.threadId);
+    }
+    return _mergeConversationTitle(
+      refreshed: conversation,
+      local: matchedLocal,
+    );
+  }).toList();
   final refreshedThreadIds = <String>{
     for (final conversation in refreshed) conversation.threadId,
   };
   final localOnly = local
       .where(
         (conversation) =>
+            !consumedLocalThreadIds.contains(conversation.threadId) &&
             !refreshedThreadIds.contains(conversation.threadId) &&
             conversation.lastMessagePreview.trim().isNotEmpty,
       )
@@ -152,6 +162,26 @@ List<ConversationSummary> _mergeConversationRefresh({
   }
   return <ConversationSummary>[...mergedRefreshed, ...localOnly]
     ..sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
+}
+
+ConversationSummary? _matchingConversationForUpsert(
+  Iterable<ConversationSummary> conversations,
+  ConversationSummary incoming,
+) {
+  for (final item in conversations) {
+    if (item.threadId == incoming.threadId) {
+      return item;
+    }
+  }
+  if (incoming.isGroup) {
+    return null;
+  }
+  for (final item in conversations) {
+    if (!item.isGroup && _sameDirectConversationTarget(item, incoming)) {
+      return item;
+    }
+  }
+  return null;
 }
 
 ConversationSummary _mergeConversationTitle({
@@ -185,7 +215,7 @@ ConversationSummary _mergeDirectConversationTitle({
   required ConversationSummary refreshed,
   required ConversationSummary local,
 }) {
-  if (local.isGroup || local.targetDid?.trim() != refreshed.targetDid?.trim()) {
+  if (local.isGroup || !_sameDirectConversationTarget(local, refreshed)) {
     return refreshed;
   }
   final localName = local.displayName.trim();
@@ -208,6 +238,32 @@ bool _isBetterDirectConversationTitle(String localName, String refreshedName) {
   }
   return AgentDisplayName.isUserVisibleName(localName) &&
       !AgentDisplayName.isUserVisibleName(refreshedName);
+}
+
+bool _sameDirectConversationTarget(
+  ConversationSummary first,
+  ConversationSummary second,
+) {
+  final firstPeer = _normalizedDirectPeer(first.targetPeer);
+  final secondPeer = _normalizedDirectPeer(second.targetPeer);
+  if (firstPeer != null && secondPeer != null) {
+    return firstPeer == secondPeer;
+  }
+  final firstDid = first.targetDid?.trim();
+  final secondDid = second.targetDid?.trim();
+  return firstDid != null &&
+      firstDid.isNotEmpty &&
+      secondDid != null &&
+      secondDid.isNotEmpty &&
+      firstDid == secondDid;
+}
+
+String? _normalizedDirectPeer(String? value) {
+  final peer = value?.trim();
+  if (peer == null || peer.isEmpty) {
+    return null;
+  }
+  return peer.startsWith('did:') ? peer : peer.toLowerCase();
 }
 
 final conversationListProvider =

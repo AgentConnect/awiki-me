@@ -771,6 +771,8 @@ class AgentsController extends StateNotifier<AgentsState> {
       if (!payload.containsKey('last_seen_at') && fallbackEventAt != null)
         'last_seen_at': fallbackEventAt.toUtc().toIso8601String(),
       if (payload.containsKey('version')) 'version': payload['version'],
+      if (payload.containsKey('latest_version'))
+        'latest_version': payload['latest_version'],
       if (payload.containsKey('min_supported_version'))
         'min_supported_version': payload['min_supported_version'],
       if (payload.containsKey('platform')) 'platform': payload['platform'],

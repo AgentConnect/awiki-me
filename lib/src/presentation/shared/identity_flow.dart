@@ -55,6 +55,7 @@ Future<void> openDirectConversationForProfile(
     context,
     ref,
     peerDid: profile.did,
+    peerHandle: profile.fullHandle ?? profile.handle,
     peerName: DidDisplayFormatter.profileName(profile),
     avatarSeed: profile.handle ?? profile.did,
   );
@@ -65,6 +66,7 @@ Future<void> openDirectConversationForDid(
   WidgetRef ref, {
   required String peerDid,
   required String peerName,
+  String? peerHandle,
   String? avatarSeed,
 }) async {
   final session = ref.read(sessionProvider).session;
@@ -83,15 +85,24 @@ Future<void> openDirectConversationForDid(
     return;
   }
 
-  final threadId = dmThreadIdForDids(session.did, peer);
+  final peerTarget = _directPeerTarget(peerDid: peer, peerHandle: peerHandle);
+  final threadId = peerTarget.startsWith('did:')
+      ? dmThreadIdForDids(session.did, peerTarget)
+      : 'dm:pending:$peerTarget';
   final existing = ref
       .read(conversationListProvider)
       .conversations
-      .where((item) => item.threadId == threadId);
+      .where(
+        (item) =>
+            item.threadId == threadId ||
+            item.targetPeer?.trim() == peerTarget ||
+            item.targetDid?.trim() == peer,
+      );
   final conversation = existing.isNotEmpty
       ? _directConversationForPeer(
           existing.first,
           peerDid: peer,
+          peerTarget: peerTarget,
           peerName: peerName,
           avatarSeed: avatarSeed,
         )
@@ -103,6 +114,7 @@ Future<void> openDirectConversationForDid(
           unreadCount: 0,
           isGroup: false,
           targetDid: peer,
+          targetPeer: peerTarget,
           avatarSeed: avatarSeed ?? peer,
         );
 
@@ -125,13 +137,15 @@ Future<void> openDirectConversationForDid(
 ConversationSummary _directConversationForPeer(
   ConversationSummary existing, {
   required String peerDid,
+  required String peerTarget,
   required String peerName,
   String? avatarSeed,
 }) {
   final existingTarget = existing.targetDid?.trim() ?? '';
+  final existingPeer = existing.targetPeer?.trim() ?? '';
   final keepExistingName =
       !existing.isGroup &&
-      existingTarget == peerDid &&
+      (existingTarget == peerDid || existingPeer == peerTarget) &&
       existing.displayName.trim().isNotEmpty;
   return ConversationSummary(
     threadId: existing.threadId,
@@ -143,9 +157,18 @@ ConversationSummary _directConversationForPeer(
     unreadCount: existing.unreadCount,
     isGroup: false,
     targetDid: peerDid,
+    targetPeer: peerTarget,
     groupId: null,
     avatarSeed: avatarSeed ?? existing.avatarSeed ?? peerDid,
   );
+}
+
+String _directPeerTarget({required String peerDid, String? peerHandle}) {
+  final handle = peerHandle?.trim();
+  if (handle != null && handle.isNotEmpty) {
+    return handle.toLowerCase();
+  }
+  return peerDid.trim();
 }
 
 String _directConversationName(String peerName, String peerDid) {

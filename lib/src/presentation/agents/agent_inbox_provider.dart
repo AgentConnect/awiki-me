@@ -17,6 +17,8 @@ class AgentInboxItem {
     required this.hasAttachments,
     required this.lastContentType,
     this.peerDid,
+    this.peerHandle,
+    this.peerUserId,
     this.groupId,
     this.groupDid,
     this.lastMessageAtMs,
@@ -26,6 +28,8 @@ class AgentInboxItem {
   final String kind;
   final String title;
   final String? peerDid;
+  final String? peerHandle;
+  final String? peerUserId;
   final String? groupId;
   final String? groupDid;
   final String lastMessagePreview;
@@ -40,6 +44,8 @@ class AgentInboxItem {
       kind: _string(json['kind']) ?? 'direct',
       title: _string(json['title']) ?? '未命名会话',
       peerDid: _string(json['peer_did']),
+      peerHandle: _string(json['peer_handle']),
+      peerUserId: _string(json['peer_user_id']),
       groupId: _string(json['group_id']),
       groupDid: _string(json['group_did']),
       lastMessagePreview: _string(json['last_message_preview']) ?? '',
@@ -81,6 +87,7 @@ class AgentInboxMessage {
   const AgentInboxMessage({
     required this.messageId,
     required this.senderDid,
+    this.senderHandle,
     required this.direction,
     required this.contentType,
     required this.text,
@@ -91,6 +98,7 @@ class AgentInboxMessage {
 
   final String messageId;
   final String senderDid;
+  final String? senderHandle;
   final int? sentAtMs;
   final String direction;
   final String contentType;
@@ -103,6 +111,7 @@ class AgentInboxMessage {
     return AgentInboxMessage(
       messageId: _string(json['message_id']) ?? '',
       senderDid: _string(json['sender_did']) ?? '',
+      senderHandle: _string(json['sender_handle']),
       sentAtMs: _int(json['sent_at_ms']),
       direction: _string(json['direction']) ?? 'unknown',
       contentType: _string(json['content_type']) ?? 'text',
@@ -355,6 +364,7 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
             threadId: item.threadId,
             kind: item.kind,
             peerDid: item.peerDid,
+            peerHandle: item.peerHandle,
             groupDid: item.groupDid,
           );
       state = state.copyWith(
@@ -397,6 +407,7 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
         unreadCount: 0,
         hasAttachments: false,
         lastContentType: 'text',
+        peerHandle: kind == 'direct' ? state.thread.title : null,
       ),
     );
     _threadPrepending = true;
@@ -412,6 +423,7 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
             threadId: item.threadId,
             kind: item.kind,
             peerDid: item.peerDid,
+            peerHandle: item.peerHandle,
             groupDid: item.groupDid,
             cursor: cursor,
           );
