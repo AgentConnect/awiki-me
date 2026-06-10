@@ -545,6 +545,10 @@ class AgentsController extends StateNotifier<AgentsState> {
         if (runtimeDid == null) {
           continue;
         }
+        if (_isArchivedAgentPayload(runtimePayload)) {
+          byDid.remove(runtimeDid);
+          continue;
+        }
         byDid[runtimeDid] = _mergeAgent(
           byDid[runtimeDid],
           agentDid: runtimeDid,
@@ -827,6 +831,12 @@ bool _daemonAcceptsControlCommands(AgentSummary daemon) {
     'archiving' => true,
     _ => false,
   };
+}
+
+bool _isArchivedAgentPayload(Map<String, Object?> payload) {
+  final activeState = _string(payload['active_state']);
+  final status = _string(payload['status']);
+  return activeState == 'archived' || status == 'archived';
 }
 
 Map<String, DateTime> _withoutKey(Map<String, DateTime> input, String key) {

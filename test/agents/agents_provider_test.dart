@@ -304,6 +304,48 @@ void main() {
     },
   );
 
+  test('status snapshot ignores archived runtime payloads', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+
+    container.read(agentsProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'status_scope': 'snapshot',
+        'daemon_agent_did': 'did:agent:daemon',
+        'daemon': <String, Object?>{
+          'agent_did': 'did:agent:daemon',
+          'status': 'ready',
+        },
+        'runtimes': <Object?>[
+          <String, Object?>{
+            'agent_did': 'did:agent:archived-runtime',
+            'daemon_agent_did': 'did:agent:daemon',
+            'runtime': 'hermes',
+            'status': 'archived',
+            'active_state': 'archived',
+          },
+        ],
+      },
+    );
+
+    expect(
+      container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+      ['did:agent:daemon'],
+    );
+  });
+
   test(
     'daemon status payload does not replace inventory display names',
     () async {
