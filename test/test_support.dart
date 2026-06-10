@@ -1725,6 +1725,7 @@ class FakeIdentityCorePort implements IdentityCorePort {
   final UserSubkeyPackage daemonSubkeyPackage;
   final AppSession defaultSession;
   String? lastDaemonSubkeySelector;
+  String? lastEnsuredDaemonSubkeySelector;
 
   @override
   Future<AppSession?> defaultIdentity() async => defaultSession;
@@ -1739,6 +1740,14 @@ class FakeIdentityCorePort implements IdentityCorePort {
     String identityIdOrAlias,
   ) async {
     lastDaemonSubkeySelector = identityIdOrAlias;
+    return daemonSubkeyPackage;
+  }
+
+  @override
+  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(
+    String identityIdOrAlias,
+  ) async {
+    lastEnsuredDaemonSubkeySelector = identityIdOrAlias;
     return daemonSubkeyPackage;
   }
 

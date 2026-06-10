@@ -10,6 +10,8 @@ abstract interface class IdentityCorePort {
 
   Future<UserSubkeyPackage> loadDaemonSubkeyPackage(String identityIdOrAlias);
 
+  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(String identityIdOrAlias);
+
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias);
 
   Future<AppSession> registerHandleWithPhone({

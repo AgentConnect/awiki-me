@@ -60,6 +60,28 @@ class AwikiImCoreIdentityAdapter implements IdentityCorePort {
   }
 
   @override
+  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(
+    String identityIdOrAlias,
+  ) async {
+    final coreInstance = await _runtime.coreInstance();
+    final selector = _selectorFromString(identityIdOrAlias);
+    try {
+      final package = await coreInstance.ensureDaemonSubkeyPackage(selector);
+      return _mappers.userSubkeyPackageFromCore(package);
+    } on core.AwikiImCoreException catch (error) {
+      if (!_shouldTryLocalAliasFallback(selector, error)) {
+        rethrow;
+      }
+    }
+    final package = await coreInstance.ensureDaemonSubkeyPackage(
+      core.IdentitySelector.localAlias(
+        _trimLeadingAt(identityIdOrAlias.trim()),
+      ),
+    );
+    return _mappers.userSubkeyPackageFromCore(package);
+  }
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
     final coreInstance = await _runtime.coreInstance();
     final result = await _deleteLocalIdentity(coreInstance, identityIdOrAlias);

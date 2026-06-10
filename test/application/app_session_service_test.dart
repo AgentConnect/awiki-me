@@ -292,6 +292,11 @@ class _FakeIdentities implements IdentityCorePort {
   }
 
   @override
+  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(String identityIdOrAlias) {
+    throw UnsupportedError('unsupported');
+  }
+
+  @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
     deletedSelectors.add(identityIdOrAlias);
     return _defaultIdentity ?? _session(identityIdOrAlias);

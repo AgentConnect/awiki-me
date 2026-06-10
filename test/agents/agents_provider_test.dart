@@ -206,7 +206,7 @@ void main() {
   });
 
   test(
-    'bootstrapMessageAgent loads daemon subkey and delegates desired state',
+    'bootstrapMessageAgent ensures daemon subkey and delegates desired state',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -235,7 +235,8 @@ void main() {
             appInstanceId: 'app_1',
           );
 
-      expect(identities.lastDaemonSubkeySelector, 'default');
+      expect(identities.lastEnsuredDaemonSubkeySelector, 'default');
+      expect(identities.lastDaemonSubkeySelector, isNull);
       expect(control.lastBootstrapDaemonDid, 'did:agent:daemon');
       expect(control.lastBootstrapControllerDid, 'did:human:me');
       expect(control.lastBootstrapAppInstanceId, 'app_1');

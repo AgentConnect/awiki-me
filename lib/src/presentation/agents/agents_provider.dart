@@ -237,7 +237,7 @@ class AgentsController extends StateNotifier<AgentsState> {
           userSubkeyPackage ??
           await ref
               .read(identityCorePortProvider)
-              .loadDaemonSubkeyPackage(session.credentialName);
+              .ensureDaemonSubkeyPackage(session.credentialName);
       await ref
           .read(agentControlServiceProvider)
           .ensureMessageAgentBootstrap(
