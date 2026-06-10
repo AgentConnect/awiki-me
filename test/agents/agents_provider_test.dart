@@ -47,6 +47,68 @@ void main() {
     },
   );
 
+  test('load applies stable daemon and runtime ordering', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:runtime-b-2',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon-b',
+          runtime: 'hermes',
+          displayName: 'Beta Runtime',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:daemon-b',
+          kind: AgentKind.daemon,
+          displayName: 'B 代理',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'registering'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:runtime-a-2',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon-a',
+          runtime: 'hermes',
+          displayName: 'Beta Runtime',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:runtime-a-1',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon-a',
+          runtime: 'hermes',
+          displayName: 'Alpha Runtime',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:daemon-a',
+          kind: AgentKind.daemon,
+          displayName: 'A 代理',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'registering'),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+
+    await container.read(agentsProvider.notifier).load();
+
+    expect(
+      container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+      [
+        'did:agent:daemon-a',
+        'did:agent:daemon-b',
+        'did:agent:runtime-a-1',
+        'did:agent:runtime-a-2',
+        'did:agent:runtime-b-2',
+      ],
+    );
+  });
+
   test('load maps authorization failures to a friendly agent error', () async {
     final control = _FailingAgentControlService(
       Exception(

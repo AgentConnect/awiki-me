@@ -384,6 +384,55 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
+  testWidgets('macOS 最近会话保留已删除智能体并显示状态', (tester) async {
+    final deletedConversation = ConversationSummary(
+      threadId: 'dm:deleted-agent',
+      displayName: '旧智能体',
+      lastMessagePreview: '旧回复',
+      lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:deleted-agent',
+      peerLifecycleState: ConversationPeerLifecycleState.deletedAgent,
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[deletedConversation]
+      ..dmHistoryByPeerDid = const <String, List<ChatMessage>>{
+        'did:test:deleted-agent': <ChatMessage>[],
+      };
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('旧智能体'), findsOneWidget);
+    expect(find.text('智能体已删除'), findsOneWidget);
+
+    await tester.tap(find.text('旧智能体'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('智能体已删除，无法继续发送消息'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
   testWidgets('macOS 身份卡在右侧栏替换会话信息并支持关闭', (tester) async {
     const peerProfile = UserProfile(
       did: 'did:peer',

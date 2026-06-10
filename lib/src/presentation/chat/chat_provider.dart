@@ -885,16 +885,10 @@ ConversationSummary _withConversationPreview(
   ConversationSummary conversation,
   ChatMessage message,
 ) {
-  return ConversationSummary(
-    threadId: conversation.threadId,
-    displayName: conversation.displayName,
+  return conversation.copyWith(
     lastMessagePreview: message.previewText,
     lastMessageAt: message.createdAt,
     unreadCount: message.isMine ? 0 : conversation.unreadCount,
-    isGroup: conversation.isGroup,
-    targetDid: conversation.targetDid,
-    groupId: conversation.groupId,
-    avatarSeed: conversation.avatarSeed,
   );
 }
 

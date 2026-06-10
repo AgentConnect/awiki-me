@@ -268,6 +268,8 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                             item.lastMessageAt,
                           ),
                           unreadCount: item.unreadCount,
+                          isDeletedAgentConversation:
+                              item.isDeletedAgentConversation,
                           classification: classification,
                           isSelected: widget.selectedThreadId == item.threadId,
                           onTap: () => widget.onOpen(item),
@@ -380,6 +382,7 @@ class _ConversationRefreshView extends ConsumerWidget {
                     item.lastMessageAt,
                   ),
                   unreadCount: item.unreadCount,
+                  isDeletedAgentConversation: item.isDeletedAgentConversation,
                   classification: classification,
                   isSelected: selectedThreadId == item.threadId,
                   onTap: () => onOpen(item),
@@ -430,6 +433,7 @@ class _MacConversationRow extends StatelessWidget {
     required this.preview,
     required this.timeLabel,
     required this.unreadCount,
+    required this.isDeletedAgentConversation,
     required this.classification,
     required this.isSelected,
     required this.onTap,
@@ -439,6 +443,7 @@ class _MacConversationRow extends StatelessWidget {
   final String preview;
   final String timeLabel;
   final int unreadCount;
+  final bool isDeletedAgentConversation;
   final ConversationPeerClassification classification;
   final bool isSelected;
   final VoidCallback onTap;
@@ -446,7 +451,9 @@ class _MacConversationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final badgeLabel = classification.compactBadgeLabel;
+    final badgeLabel = isDeletedAgentConversation
+        ? '已删除'
+        : classification.compactBadgeLabel;
     return Padding(
       padding: EdgeInsets.only(bottom: responsive.displayScaled(6)),
       child: AppPressableTile(
@@ -475,6 +482,7 @@ class _MacConversationRow extends StatelessWidget {
                       child: _ConversationPeerBadge(
                         label: badgeLabel,
                         isGroup: classification.isGroup,
+                        muted: isDeletedAgentConversation,
                         compact: true,
                         borderColor: CupertinoColors.white,
                       ),
@@ -510,6 +518,10 @@ class _MacConversationRow extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (isDeletedAgentConversation) ...<Widget>[
+                      SizedBox(height: responsive.displayScaled(5)),
+                      const _DeletedAgentConversationBadge(compact: true),
+                    ],
                     SizedBox(height: responsive.displayScaled(5)),
                     Row(
                       children: <Widget>[
@@ -598,6 +610,7 @@ class _ConversationRow extends StatelessWidget {
     required this.preview,
     required this.timeLabel,
     required this.unreadCount,
+    required this.isDeletedAgentConversation,
     required this.classification,
     required this.onTap,
     required this.isSelected,
@@ -607,6 +620,7 @@ class _ConversationRow extends StatelessWidget {
   final String preview;
   final String timeLabel;
   final int unreadCount;
+  final bool isDeletedAgentConversation;
   final ConversationPeerClassification classification;
   final VoidCallback onTap;
   final bool isSelected;
@@ -615,7 +629,9 @@ class _ConversationRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
-    final badgeLabel = classification.compactBadgeLabel;
+    final badgeLabel = isDeletedAgentConversation
+        ? '已删除'
+        : classification.compactBadgeLabel;
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: responsive.tabContentHorizontalPadding,
@@ -658,22 +674,33 @@ class _ConversationRow extends StatelessWidget {
                         _ConversationPeerBadge(
                           label: badgeLabel,
                           isGroup: classification.isGroup,
+                          muted: isDeletedAgentConversation,
                         ),
                       ],
                     ],
                   ),
                   SizedBox(height: responsive.spacing(4)),
-                  Text(
-                    preview.isEmpty
-                        ? context.l10n.conversationsNoMessagePreview
-                        : preview,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: responsive.bodySm,
-                      height: 1.2,
-                      color: theme.secondaryText,
-                    ),
+                  Row(
+                    children: <Widget>[
+                      if (isDeletedAgentConversation) ...<Widget>[
+                        const _DeletedAgentConversationBadge(),
+                        SizedBox(width: responsive.spacing(7)),
+                      ],
+                      Expanded(
+                        child: Text(
+                          preview.isEmpty
+                              ? context.l10n.conversationsNoMessagePreview
+                              : preview,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: responsive.bodySm,
+                            height: 1.2,
+                            color: theme.secondaryText,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -725,22 +752,28 @@ class _ConversationPeerBadge extends StatelessWidget {
   const _ConversationPeerBadge({
     required this.label,
     required this.isGroup,
+    this.muted = false,
     this.compact = false,
     this.borderColor,
   });
 
   final String label;
   final bool isGroup;
+  final bool muted;
   final bool compact;
   final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final background = isGroup
+    final background = muted
+        ? const Color(0xFFF1F3F7)
+        : isGroup
         ? const Color(0xFFEFE4FF)
         : const Color(0xFFEAF2FF);
-    final foreground = isGroup
+    final foreground = muted
+        ? const Color(0xFF66728A)
+        : isGroup
         ? const Color(0xFF7C3AED)
         : const Color(0xFF0B65F8);
     return Container(
@@ -762,6 +795,40 @@ class _ConversationPeerBadge extends StatelessWidget {
         style: TextStyle(
           color: foreground,
           fontSize: responsive.displayScaled(compact ? 9 : 10.5),
+          fontWeight: FontWeight.w600,
+          height: 1,
+        ),
+      ),
+    );
+  }
+}
+
+class _DeletedAgentConversationBadge extends StatelessWidget {
+  const _DeletedAgentConversationBadge({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Container(
+      key: const Key('deleted-agent-conversation-badge'),
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.displayScaled(compact ? 6 : 7),
+        vertical: responsive.displayScaled(compact ? 2 : 3),
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F3F7),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFE1E7F0)),
+      ),
+      child: Text(
+        '智能体已删除',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: const Color(0xFF66728A),
+          fontSize: responsive.displayScaled(compact ? 10 : 10.5),
           fontWeight: FontWeight.w600,
           height: 1,
         ),

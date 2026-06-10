@@ -125,6 +125,101 @@ void main() {
       ]);
       expect(core.listCount, 1);
     });
+
+    test(
+      'keeps archived runtime conversations and marks them deleted',
+      () async {
+        final core = _FakeConversations(
+          items: <ConversationSummary>[
+            _conversation(
+              'dm:alice:daemon',
+              targetDid: 'did:agent:daemon',
+              minutesAgo: 1,
+            ),
+            _conversation(
+              'dm:alice:runtime',
+              targetDid: 'did:agent:runtime',
+              minutesAgo: 2,
+            ),
+            _conversation('dm:alice:bob', targetDid: 'did:bob', minutesAgo: 3),
+          ],
+        );
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: InMemoryAwikiProductLocalStore(),
+          agentInventory: const _FakeAgentInventory(
+            agents: <AgentSummary>[
+              AgentSummary(
+                agentDid: 'did:agent:daemon',
+                kind: AgentKind.daemon,
+                displayName: '代理 1',
+                activeState: 'archived',
+                latest: AgentLatestStatus(status: 'archived'),
+              ),
+              AgentSummary(
+                agentDid: 'did:agent:runtime',
+                kind: AgentKind.runtime,
+                daemonAgentDid: 'did:agent:daemon',
+                runtime: 'hermes',
+                displayName: 'Hermes',
+                activeState: 'archived',
+                latest: AgentLatestStatus(status: 'archived'),
+              ),
+            ],
+          ),
+        );
+
+        final conversations = await service.listConversations(
+          ownerDid: 'did:alice',
+        );
+
+        expect(conversations.map((item) => item.targetDid), [
+          'did:agent:runtime',
+          'did:bob',
+        ]);
+        expect(conversations.first.isDeletedAgentConversation, isTrue);
+        expect(conversations.last.isDeletedAgentConversation, isFalse);
+      },
+    );
+
+    test(
+      'projects runtime agent display name onto direct conversations',
+      () async {
+        final core = _FakeConversations(
+          items: <ConversationSummary>[
+            _conversation(
+              'dm:alice:runtime',
+              targetDid: 'did:agent:runtime',
+              minutesAgo: 1,
+              displayName: 'awiki-agent-random',
+            ),
+          ],
+        );
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: InMemoryAwikiProductLocalStore(),
+          agentInventory: const _FakeAgentInventory(
+            agents: <AgentSummary>[
+              AgentSummary(
+                agentDid: 'did:agent:runtime',
+                kind: AgentKind.runtime,
+                daemonAgentDid: 'did:agent:daemon',
+                runtime: 'hermes',
+                displayName: '写作助手',
+                activeState: 'active',
+                latest: AgentLatestStatus(status: 'ready'),
+              ),
+            ],
+          ),
+        );
+
+        final conversations = await service.listConversations(
+          ownerDid: 'did:alice',
+        );
+
+        expect(conversations.single.displayName, '写作助手');
+      },
+    );
   });
 
   group('ImCoreMessagingService', () {
@@ -148,10 +243,11 @@ ConversationSummary _conversation(
   String threadId, {
   required int minutesAgo,
   String targetDid = 'did:bob',
+  String? displayName,
 }) {
   return ConversationSummary(
     threadId: threadId,
-    displayName: threadId,
+    displayName: displayName ?? threadId,
     lastMessagePreview: 'preview',
     lastMessageAt: DateTime.utc(
       2026,

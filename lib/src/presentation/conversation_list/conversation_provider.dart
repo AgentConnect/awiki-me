@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
 import '../../core/group_display_name.dart';
+import '../../domain/entities/agent/agent_display_name.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_summary.dart';
 import '../../domain/services/notification_facade.dart';
@@ -96,17 +97,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         return conversation;
       }
       changed = true;
-      return ConversationSummary(
-        threadId: conversation.threadId,
-        displayName: groupName,
-        lastMessagePreview: conversation.lastMessagePreview,
-        lastMessageAt: conversation.lastMessageAt,
-        unreadCount: conversation.unreadCount,
-        isGroup: conversation.isGroup,
-        targetDid: conversation.targetDid,
-        groupId: conversation.groupId,
-        avatarSeed: conversation.avatarSeed,
-      );
+      return conversation.copyWith(displayName: groupName);
     }).toList();
     if (!changed) {
       return;
@@ -119,17 +110,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       if (item.threadId != threadId || item.unreadCount == 0) {
         return item;
       }
-      return ConversationSummary(
-        threadId: item.threadId,
-        displayName: item.displayName,
-        lastMessagePreview: item.lastMessagePreview,
-        lastMessageAt: item.lastMessageAt,
-        unreadCount: 0,
-        isGroup: item.isGroup,
-        targetDid: item.targetDid,
-        groupId: item.groupId,
-        avatarSeed: item.avatarSeed,
-      );
+      return item.copyWith(unreadCount: 0);
     }).toList();
     state = state.copyWith(conversations: next);
     _notification.updateBadgeCount(state.unreadCount);
@@ -177,9 +158,13 @@ ConversationSummary _mergeConversationTitle({
   required ConversationSummary refreshed,
   required ConversationSummary? local,
 }) {
-  if (local == null ||
-      !refreshed.isGroup ||
-      local.groupId?.trim() != refreshed.groupId?.trim()) {
+  if (local == null) {
+    return refreshed;
+  }
+  if (!refreshed.isGroup) {
+    return _mergeDirectConversationTitle(refreshed: refreshed, local: local);
+  }
+  if (local.groupId?.trim() != refreshed.groupId?.trim()) {
     return refreshed;
   }
   final groupId = refreshed.groupId?.trim() ?? '';
@@ -190,17 +175,39 @@ ConversationSummary _mergeConversationTitle({
       GroupDisplayName.isIdLike(localName, groupId)) {
     return refreshed;
   }
-  return ConversationSummary(
-    threadId: refreshed.threadId,
+  return refreshed.copyWith(
     displayName: local.displayName,
-    lastMessagePreview: refreshed.lastMessagePreview,
-    lastMessageAt: refreshed.lastMessageAt,
-    unreadCount: refreshed.unreadCount,
-    isGroup: refreshed.isGroup,
-    targetDid: refreshed.targetDid,
-    groupId: refreshed.groupId,
     avatarSeed: refreshed.avatarSeed ?? local.avatarSeed,
   );
+}
+
+ConversationSummary _mergeDirectConversationTitle({
+  required ConversationSummary refreshed,
+  required ConversationSummary local,
+}) {
+  if (local.isGroup || local.targetDid?.trim() != refreshed.targetDid?.trim()) {
+    return refreshed;
+  }
+  final localName = local.displayName.trim();
+  final refreshedName = refreshed.displayName.trim();
+  if (localName.isEmpty ||
+      localName == refreshedName ||
+      !_isBetterDirectConversationTitle(localName, refreshedName)) {
+    return refreshed;
+  }
+  return refreshed.copyWith(
+    displayName: local.displayName,
+    avatarSeed: refreshed.avatarSeed ?? local.avatarSeed,
+    peerLifecycleState: local.peerLifecycleState,
+  );
+}
+
+bool _isBetterDirectConversationTitle(String localName, String refreshedName) {
+  if (refreshedName.isEmpty || refreshedName.startsWith('did:')) {
+    return true;
+  }
+  return AgentDisplayName.isUserVisibleName(localName) &&
+      !AgentDisplayName.isUserVisibleName(refreshedName);
 }
 
 final conversationListProvider =

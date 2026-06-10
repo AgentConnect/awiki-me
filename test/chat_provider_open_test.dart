@@ -1201,6 +1201,44 @@ void main() {
     expect(refreshed.lastMessagePreview, '实时新消息');
     expect(refreshed.unreadCount, 1);
   });
+
+  test('实时私聊消息不会把已知智能体名称降级成 handle', () {
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(
+          ConversationSummary(
+            threadId: 'dm:did:me:did:agent:runtime',
+            displayName: '写作助手',
+            lastMessagePreview: '旧消息',
+            lastMessageAt: DateTime(2026, 5, 8, 10),
+            unreadCount: 0,
+            isGroup: false,
+            targetDid: 'did:agent:runtime',
+          ),
+        );
+
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(
+          ConversationSummary(
+            threadId: 'dm:did:me:did:agent:runtime',
+            displayName: 'awiki-agent-random',
+            lastMessagePreview: '实时新消息',
+            lastMessageAt: DateTime(2026, 5, 8, 10, 6),
+            unreadCount: 1,
+            isGroup: false,
+            targetDid: 'did:agent:runtime',
+          ),
+        );
+
+    final refreshed = container
+        .read(conversationListProvider)
+        .conversations
+        .single;
+    expect(refreshed.displayName, '写作助手');
+    expect(refreshed.lastMessagePreview, '实时新消息');
+    expect(refreshed.unreadCount, 1);
+  });
 }
 
 class _ThrowingMarkReadGateway extends FakeAwikiGateway {

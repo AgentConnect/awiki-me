@@ -128,7 +128,9 @@ class AgentsController extends StateNotifier<AgentsState> {
     state = state.copyWith(isLoading: true, clearError: true);
     await _loadCached(cacheOwner);
     try {
-      final agents = await ref.read(agentControlServiceProvider).listAgents();
+      final agents = _stableAgentOrder(
+        await ref.read(agentControlServiceProvider).listAgents(),
+      );
       await _saveCache(cacheOwner, agents);
       state = state.copyWith(
         agents: agents,
@@ -465,10 +467,11 @@ class AgentsController extends StateNotifier<AgentsState> {
         continue;
       }
     }
-    if (agents.isNotEmpty) {
+    final ordered = _stableAgentOrder(agents);
+    if (ordered.isNotEmpty) {
       state = state.copyWith(
-        agents: agents,
-        selectedAgentDid: _nextSelection(agents),
+        agents: ordered,
+        selectedAgentDid: _nextSelection(ordered),
       );
     }
   }
@@ -660,14 +663,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         byDid[runtimeDid] = _mergeRuntimeRunStatus(current, run);
       }
     }
-    final ordered = byDid.values.toList()
-      ..sort((a, b) {
-        if (a.kind != b.kind) {
-          return a.isDaemon ? -1 : 1;
-        }
-        return a.displayName.compareTo(b.displayName);
-      });
-    return ordered;
+    return _stableAgentOrder(byDid.values);
   }
 
   AgentSummary _mergeRuntimeRunStatus(
@@ -817,6 +813,45 @@ bool _isStaleAgentStatus(AgentSummary current, DateTime? incomingEventAt) {
     return false;
   }
   return incomingEventAt.isBefore(currentAt);
+}
+
+List<AgentSummary> _stableAgentOrder(Iterable<AgentSummary> agents) {
+  final ordered = agents.toList();
+  ordered.sort((a, b) {
+    if (a.kind != b.kind) {
+      return a.isDaemon ? -1 : 1;
+    }
+    if (a.isRuntime) {
+      final daemonCompare = _compareNullableText(
+        a.daemonAgentDid,
+        b.daemonAgentDid,
+      );
+      if (daemonCompare != 0) {
+        return daemonCompare;
+      }
+    }
+    final titleCompare = _agentSortTitle(a).compareTo(_agentSortTitle(b));
+    if (titleCompare != 0) {
+      return titleCompare;
+    }
+    final runtimeCompare = _compareNullableText(a.runtime, b.runtime);
+    if (runtimeCompare != 0) {
+      return runtimeCompare;
+    }
+    return a.agentDid.compareTo(b.agentDid);
+  });
+  return ordered;
+}
+
+String _agentSortTitle(AgentSummary agent) {
+  final title = AgentDisplayName.title(agent).trim().toLowerCase();
+  return title.isEmpty ? AgentDisplayName.fallbackForKind(agent.kind) : title;
+}
+
+int _compareNullableText(String? left, String? right) {
+  final a = left?.trim().toLowerCase() ?? '';
+  final b = right?.trim().toLowerCase() ?? '';
+  return a.compareTo(b);
 }
 
 bool _daemonAcceptsControlCommands(AgentSummary daemon) {

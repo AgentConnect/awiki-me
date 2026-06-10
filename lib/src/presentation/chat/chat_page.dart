@@ -129,6 +129,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final currentConversation = _currentConversationForTitle();
     _requestAgentsIfNeeded(currentConversation);
     final agents = ref.watch(agentsProvider).agents;
+    final isDeletedAgentConversation =
+        currentConversation.isDeletedAgentConversation;
     final runtimeAgent = _runtimeAgentForConversation(
       currentConversation,
       agents,
@@ -196,6 +198,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
             macStyle: macStyle,
             isRefreshing: _isRefreshingCurrentConversation || thread.isLoading,
             classification: peerClassification,
+            isDeletedAgentConversation: isDeletedAgentConversation,
             isFollowing: _isFollowableDirect(currentConversation)
                 ? friendsState.isFollowing(currentConversation.targetDid!)
                 : false,
@@ -343,6 +346,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
             macStyle: macStyle,
             controller: textController,
             pendingAttachment: _pendingAttachment,
+            enabled: !isDeletedAgentConversation,
+            disabledReason: isDeletedAgentConversation
+                ? '智能体已删除，无法继续发送消息'
+                : null,
             onSend: () => _submitComposer(currentConversation),
             onAttach: () async {
               await _pickAndStageAttachment();
@@ -393,6 +400,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   Future<void> _pickAndStageAttachment() async {
+    if (_currentConversationForTitle().isDeletedAgentConversation) {
+      return;
+    }
     try {
       final draft = await ref
           .read(attachmentPickerServiceProvider)
@@ -423,6 +433,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   Future<void> _submitComposer(ConversationSummary conversation) async {
+    if (conversation.isDeletedAgentConversation) {
+      return;
+    }
     final attachment = _pendingAttachment;
     final content = textController.text.trim();
     if (attachment == null && content.isEmpty) {
@@ -600,17 +613,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     if (groupName == null || groupName == base.displayName) {
       return base;
     }
-    return ConversationSummary(
-      threadId: base.threadId,
-      displayName: groupName,
-      lastMessagePreview: base.lastMessagePreview,
-      lastMessageAt: base.lastMessageAt,
-      unreadCount: base.unreadCount,
-      isGroup: base.isGroup,
-      targetDid: base.targetDid,
-      groupId: base.groupId,
-      avatarSeed: base.avatarSeed,
-    );
+    return base.copyWith(displayName: groupName);
   }
 
   String? _currentGroupName(String groupId) {
@@ -782,6 +785,7 @@ class _ChatHeader extends StatelessWidget {
     required this.macStyle,
     required this.isRefreshing,
     required this.classification,
+    required this.isDeletedAgentConversation,
     required this.isFollowing,
     required this.onDetails,
     required this.onRefresh,
@@ -802,6 +806,7 @@ class _ChatHeader extends StatelessWidget {
   final bool macStyle;
   final bool isRefreshing;
   final ConversationPeerClassification classification;
+  final bool isDeletedAgentConversation;
   final bool isFollowing;
   final bool showAgentInbox;
   final VoidCallback onDetails;
@@ -822,7 +827,9 @@ class _ChatHeader extends StatelessWidget {
     );
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
-    final agentBadgeLabel = classification.chatBadgeLabel;
+    final agentBadgeLabel = isDeletedAgentConversation
+        ? '智能体已删除'
+        : classification.chatBadgeLabel;
     if (macStyle) {
       return Container(
         height: responsive.displayScaled(64),
@@ -869,8 +876,12 @@ class _ChatHeader extends StatelessWidget {
                         SizedBox(width: responsive.displayScaled(8)),
                         _MacChatPill(
                           label: agentBadgeLabel,
-                          color: const Color(0xFFEAF2FF),
-                          textColor: const Color(0xFF0B65F8),
+                          color: isDeletedAgentConversation
+                              ? const Color(0xFFF1F3F7)
+                              : const Color(0xFFEAF2FF),
+                          textColor: isDeletedAgentConversation
+                              ? const Color(0xFF66728A)
+                              : const Color(0xFF0B65F8),
                         ),
                       ],
                       if (showSecurityPill) ...<Widget>[
@@ -988,7 +999,10 @@ class _ChatHeader extends StatelessWidget {
                     ),
                     if (agentBadgeLabel != null) ...<Widget>[
                       SizedBox(width: responsive.spacing(8)),
-                      _ChatAgentPill(label: agentBadgeLabel),
+                      _ChatAgentPill(
+                        label: agentBadgeLabel,
+                        muted: isDeletedAgentConversation,
+                      ),
                     ],
                   ],
                 ),
@@ -1095,9 +1109,10 @@ class _MacChatPill extends StatelessWidget {
 }
 
 class _ChatAgentPill extends StatelessWidget {
-  const _ChatAgentPill({required this.label});
+  const _ChatAgentPill({required this.label, this.muted = false});
 
   final String label;
+  final bool muted;
 
   @override
   Widget build(BuildContext context) {
@@ -1108,7 +1123,7 @@ class _ChatAgentPill extends StatelessWidget {
         vertical: responsive.displayScaled(3),
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFFEAF2FF),
+        color: muted ? const Color(0xFFF1F3F7) : const Color(0xFFEAF2FF),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -1116,7 +1131,7 @@ class _ChatAgentPill extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: const Color(0xFF0B65F8),
+          color: muted ? const Color(0xFF66728A) : const Color(0xFF0B65F8),
           fontSize: responsive.displayScaled(10.5),
           fontWeight: FontWeight.w600,
           height: 1,
@@ -2265,6 +2280,8 @@ class _Composer extends StatefulWidget {
     required this.macStyle,
     required this.controller,
     required this.pendingAttachment,
+    this.enabled = true,
+    this.disabledReason,
     required this.onSend,
     required this.onAttach,
     required this.onRemoveAttachment,
@@ -2274,6 +2291,8 @@ class _Composer extends StatefulWidget {
   final bool macStyle;
   final TextEditingController controller;
   final AttachmentDraft? pendingAttachment;
+  final bool enabled;
+  final String? disabledReason;
   final Future<void> Function() onSend;
   final Future<void> Function() onAttach;
   final VoidCallback onRemoveAttachment;
@@ -2315,12 +2334,13 @@ class _ComposerState extends State<_Composer> {
   }
 
   bool get _canSubmit {
-    return widget.pendingAttachment != null ||
-        widget.controller.text.trim().isNotEmpty;
+    return widget.enabled &&
+        (widget.pendingAttachment != null ||
+            widget.controller.text.trim().isNotEmpty);
   }
 
   Future<void> _submitIfNeeded() async {
-    if (!_canSubmit || _isSending) {
+    if (!widget.enabled || !_canSubmit || _isSending) {
       return;
     }
     setState(() {
@@ -2338,6 +2358,9 @@ class _ComposerState extends State<_Composer> {
   }
 
   KeyEventResult _handleInputKeyEvent(FocusNode node, KeyEvent event) {
+    if (!widget.enabled) {
+      return KeyEventResult.handled;
+    }
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
@@ -2380,6 +2403,7 @@ class _ComposerState extends State<_Composer> {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     final canSubmit = _canSubmit;
+    final disabledReason = widget.disabledReason ?? '当前会话无法继续发送消息';
     if (widget.macStyle) {
       return SafeArea(
         top: false,
@@ -2419,7 +2443,12 @@ class _ComposerState extends State<_Composer> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    if (widget.pendingAttachment != null) ...<Widget>[
+                    if (!widget.enabled)
+                      _DisabledComposerNotice(
+                        message: disabledReason,
+                        macStyle: true,
+                      )
+                    else if (widget.pendingAttachment != null) ...<Widget>[
                       _PendingAttachmentPreview(
                         attachment: widget.pendingAttachment!,
                         macStyle: true,
@@ -2427,100 +2456,101 @@ class _ComposerState extends State<_Composer> {
                       ),
                       SizedBox(height: responsive.displayScaled(8)),
                     ],
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: <Widget>[
-                        if (showAttachment) ...<Widget>[
-                          AppIconButton(
-                            key: const Key('chat-attachment-button'),
-                            onPressed: widget.onAttach,
-                            semanticLabel: '添加附件',
-                            tooltip: '添加附件',
-                            size: responsive.displayScaled(34),
-                            borderRadius: BorderRadius.circular(
-                              responsive.displayScaled(9),
-                            ),
-                            child: Icon(
-                              CupertinoIcons.paperclip,
-                              color: const Color(0xFF34415C),
-                              size: responsive.displayScaled(22),
-                            ),
-                          ),
-                          SizedBox(width: responsive.displayScaled(10)),
-                        ],
-                        Expanded(
-                          child: _ComposerTextField(
-                            controller: widget.controller,
-                            focusNode: _inputFocusNode,
-                            onKeyEvent: _handleInputKeyEvent,
-                            placeholder: context.l10n.chatInputPlaceholder,
-                            textStyle: TextStyle(
-                              color: const Color(0xFF17213A),
-                              fontSize: responsive.displayScaled(13.5),
-                              height: 1.32,
-                            ),
-                            placeholderStyle: TextStyle(
-                              color: const Color(0xFF8A96AA),
-                              fontSize: responsive.displayScaled(13.5),
-                            ),
-                            padding: EdgeInsets.symmetric(
-                              vertical: responsive.displayScaled(7),
-                            ),
-                            maxLines: 5,
-                            onSubmitted: (_) async => _submitIfNeeded(),
-                          ),
-                        ),
-                        SizedBox(width: responsive.displayScaled(10)),
-                        AppPressable(
-                          key: const Key('chat-send-button'),
-                          onTap: _submitIfNeeded,
-                          semanticLabel: '发送',
-                          semanticsIdentifier: 'e2e-chat-send-button',
-                          tooltip: '发送',
-                          enabled: true,
-                          scaleOnPress: true,
-                          pressedScale: 0.94,
-                          borderRadius: BorderRadius.circular(
-                            responsive.displayScaled(9),
-                          ),
-                          builder: (context, state, child) {
-                            return AnimatedOpacity(
-                              opacity: state.pressed
-                                  ? 0.82
-                                  : state.hovered || state.focused
-                                  ? 0.92
-                                  : 1,
-                              duration: const Duration(milliseconds: 120),
-                              child: child,
-                            );
-                          },
-                          child: Container(
-                            width: responsive.displayScaled(36),
-                            height: responsive.displayScaled(36),
-                            decoration: BoxDecoration(
-                              color: canSubmit
-                                  ? const Color(0xFF0B65F8)
-                                  : const Color(0xFFE5EAF2),
+                    if (widget.enabled)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: <Widget>[
+                          if (showAttachment) ...<Widget>[
+                            AppIconButton(
+                              key: const Key('chat-attachment-button'),
+                              onPressed: widget.onAttach,
+                              semanticLabel: '添加附件',
+                              tooltip: '添加附件',
+                              size: responsive.displayScaled(34),
                               borderRadius: BorderRadius.circular(
                                 responsive.displayScaled(9),
                               ),
+                              child: Icon(
+                                CupertinoIcons.paperclip,
+                                color: const Color(0xFF34415C),
+                                size: responsive.displayScaled(22),
+                              ),
                             ),
-                            child: _isSending
-                                ? const CupertinoActivityIndicator(
-                                    radius: 8,
-                                    color: CupertinoColors.white,
-                                  )
-                                : Icon(
-                                    CupertinoIcons.paperplane_fill,
-                                    color: canSubmit
-                                        ? CupertinoColors.white
-                                        : const Color(0xFF8A96AA),
-                                    size: responsive.displayScaled(18),
-                                  ),
+                            SizedBox(width: responsive.displayScaled(10)),
+                          ],
+                          Expanded(
+                            child: _ComposerTextField(
+                              controller: widget.controller,
+                              focusNode: _inputFocusNode,
+                              onKeyEvent: _handleInputKeyEvent,
+                              placeholder: context.l10n.chatInputPlaceholder,
+                              textStyle: TextStyle(
+                                color: const Color(0xFF17213A),
+                                fontSize: responsive.displayScaled(13.5),
+                                height: 1.32,
+                              ),
+                              placeholderStyle: TextStyle(
+                                color: const Color(0xFF8A96AA),
+                                fontSize: responsive.displayScaled(13.5),
+                              ),
+                              padding: EdgeInsets.symmetric(
+                                vertical: responsive.displayScaled(7),
+                              ),
+                              maxLines: 5,
+                              onSubmitted: (_) async => _submitIfNeeded(),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                          SizedBox(width: responsive.displayScaled(10)),
+                          AppPressable(
+                            key: const Key('chat-send-button'),
+                            onTap: _submitIfNeeded,
+                            semanticLabel: '发送',
+                            semanticsIdentifier: 'e2e-chat-send-button',
+                            tooltip: '发送',
+                            enabled: true,
+                            scaleOnPress: true,
+                            pressedScale: 0.94,
+                            borderRadius: BorderRadius.circular(
+                              responsive.displayScaled(9),
+                            ),
+                            builder: (context, state, child) {
+                              return AnimatedOpacity(
+                                opacity: state.pressed
+                                    ? 0.82
+                                    : state.hovered || state.focused
+                                    ? 0.92
+                                    : 1,
+                                duration: const Duration(milliseconds: 120),
+                                child: child,
+                              );
+                            },
+                            child: Container(
+                              width: responsive.displayScaled(36),
+                              height: responsive.displayScaled(36),
+                              decoration: BoxDecoration(
+                                color: canSubmit
+                                    ? const Color(0xFF0B65F8)
+                                    : const Color(0xFFE5EAF2),
+                                borderRadius: BorderRadius.circular(
+                                  responsive.displayScaled(9),
+                                ),
+                              ),
+                              child: _isSending
+                                  ? const CupertinoActivityIndicator(
+                                      radius: 8,
+                                      color: CupertinoColors.white,
+                                    )
+                                  : Icon(
+                                      CupertinoIcons.paperplane_fill,
+                                      color: canSubmit
+                                          ? CupertinoColors.white
+                                          : const Color(0xFF8A96AA),
+                                      size: responsive.displayScaled(18),
+                                    ),
+                            ),
+                          ),
+                        ],
+                      ),
                   ],
                 ),
               ),
@@ -2566,7 +2596,12 @@ class _ComposerState extends State<_Composer> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              if (widget.pendingAttachment != null) ...<Widget>[
+              if (!widget.enabled)
+                _DisabledComposerNotice(
+                  message: disabledReason,
+                  macStyle: false,
+                )
+              else if (widget.pendingAttachment != null) ...<Widget>[
                 _PendingAttachmentPreview(
                   attachment: widget.pendingAttachment!,
                   macStyle: false,
@@ -2574,73 +2609,74 @@ class _ComposerState extends State<_Composer> {
                 ),
                 SizedBox(height: responsive.spacing(8)),
               ],
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: <Widget>[
-                  TopBarActionButton(
-                    key: const Key('chat-attachment-button'),
-                    onTap: widget.onAttach,
-                    semanticsLabel: '添加附件',
-                    tooltip: '添加附件',
-                    child: Padding(
-                      padding: EdgeInsets.all(responsive.spacing(6)),
-                      child: AwikiAssetIcon(
-                        assetName: 'assets/icons/icon_plus.svg',
-                        size: responsive.iconMd,
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: responsive.spacing(8)),
-                  Expanded(
-                    child: _ComposerTextField(
-                      controller: widget.controller,
-                      focusNode: _inputFocusNode,
-                      onKeyEvent: _handleInputKeyEvent,
-                      placeholder: context.l10n.chatInputPlaceholder,
-                      textStyle: TextStyle(
-                        fontSize: responsive.bodyMd,
-                        color: theme.title,
-                        height: 1.32,
-                      ),
-                      placeholderStyle: TextStyle(
-                        fontSize: responsive.bodyMd,
-                        color: theme.secondaryText,
-                      ),
-                      padding: EdgeInsets.symmetric(
-                        vertical: responsive.spacing(10),
-                      ),
-                      maxLines: 4,
-                      onSubmitted: (_) async => _submitIfNeeded(),
-                    ),
-                  ),
-                  SizedBox(width: responsive.spacing(8)),
-                  e2eSemantics(
-                    identifier: 'e2e-chat-send-button',
-                    label: '发送',
-                    button: true,
-                    child: TopBarActionButton(
-                      key: const Key('chat-send-button'),
-                      onTap: _submitIfNeeded,
-                      semanticsLabel: '发送',
-                      tooltip: '发送',
+              if (widget.enabled)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: <Widget>[
+                    TopBarActionButton(
+                      key: const Key('chat-attachment-button'),
+                      onTap: widget.onAttach,
+                      semanticsLabel: '添加附件',
+                      tooltip: '添加附件',
                       child: Padding(
                         padding: EdgeInsets.all(responsive.spacing(6)),
-                        child: _isSending
-                            ? CupertinoActivityIndicator(
-                                radius: responsive.displayScaled(8),
-                              )
-                            : AwikiAssetIcon(
-                                assetName: 'assets/icons/icon_send.svg',
-                                color: canSubmit
-                                    ? theme.primary
-                                    : theme.secondaryText,
-                                size: responsive.iconMd,
-                              ),
+                        child: AwikiAssetIcon(
+                          assetName: 'assets/icons/icon_plus.svg',
+                          size: responsive.iconMd,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+                    SizedBox(width: responsive.spacing(8)),
+                    Expanded(
+                      child: _ComposerTextField(
+                        controller: widget.controller,
+                        focusNode: _inputFocusNode,
+                        onKeyEvent: _handleInputKeyEvent,
+                        placeholder: context.l10n.chatInputPlaceholder,
+                        textStyle: TextStyle(
+                          fontSize: responsive.bodyMd,
+                          color: theme.title,
+                          height: 1.32,
+                        ),
+                        placeholderStyle: TextStyle(
+                          fontSize: responsive.bodyMd,
+                          color: theme.secondaryText,
+                        ),
+                        padding: EdgeInsets.symmetric(
+                          vertical: responsive.spacing(10),
+                        ),
+                        maxLines: 4,
+                        onSubmitted: (_) async => _submitIfNeeded(),
+                      ),
+                    ),
+                    SizedBox(width: responsive.spacing(8)),
+                    e2eSemantics(
+                      identifier: 'e2e-chat-send-button',
+                      label: '发送',
+                      button: true,
+                      child: TopBarActionButton(
+                        key: const Key('chat-send-button'),
+                        onTap: _submitIfNeeded,
+                        semanticsLabel: '发送',
+                        tooltip: '发送',
+                        child: Padding(
+                          padding: EdgeInsets.all(responsive.spacing(6)),
+                          child: _isSending
+                              ? CupertinoActivityIndicator(
+                                  radius: responsive.displayScaled(8),
+                                )
+                              : AwikiAssetIcon(
+                                  assetName: 'assets/icons/icon_send.svg',
+                                  color: canSubmit
+                                      ? theme.primary
+                                      : theme.secondaryText,
+                                  size: responsive.iconMd,
+                                ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
             ],
           ),
         ),
@@ -2693,6 +2729,46 @@ class _ComposerTextField extends StatelessWidget {
           padding: padding,
           style: textStyle,
           placeholderStyle: placeholderStyle,
+        ),
+      ),
+    );
+  }
+}
+
+class _DisabledComposerNotice extends StatelessWidget {
+  const _DisabledComposerNotice({
+    required this.message,
+    required this.macStyle,
+  });
+
+  final String message;
+  final bool macStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Container(
+      key: const Key('chat-disabled-composer-notice'),
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.displayScaled(macStyle ? 10 : 12),
+        vertical: responsive.displayScaled(macStyle ? 8 : 10),
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F7FA),
+        borderRadius: BorderRadius.circular(
+          responsive.radius(macStyle ? 8 : 14),
+        ),
+        border: Border.all(color: const Color(0xFFE1E7F0)),
+      ),
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: const Color(0xFF66728A),
+          fontSize: responsive.displayScaled(macStyle ? 12 : 13),
+          height: 1.25,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );

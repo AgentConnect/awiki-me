@@ -1958,6 +1958,66 @@ void main() {
     );
   });
 
+  testWidgets('已删除智能体会话保留历史但禁用发送', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:deleted-agent',
+      displayName: '旧智能体',
+      lastMessagePreview: '旧回复',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:agent:deleted-runtime',
+      peerLifecycleState: ConversationPeerLifecycleState.deletedAgent,
+    );
+    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
+      conversation.targetDid!: <ChatMessage>[
+        ChatMessage(
+          localId: 'deleted-agent-history',
+          remoteId: 'deleted-agent-history',
+          threadId: conversation.threadId,
+          senderDid: conversation.targetDid!,
+          receiverDid: session.did,
+          content: '历史消息仍可查看',
+          createdAt: DateTime(2026, 4, 5, 12, 1),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+      ],
+    };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await tester.pumpAndSettle();
+
+    expect(find.text('智能体已删除'), findsOneWidget);
+    expect(find.text('智能体已删除，无法继续发送消息'), findsOneWidget);
+    expect(find.text('历史消息仍可查看'), findsOneWidget);
+    expect(find.byType(CupertinoTextField), findsNothing);
+    expect(find.byKey(const Key('chat-attachment-button')), findsNothing);
+    expect(find.byKey(const Key('chat-send-button')), findsNothing);
+    expect(gateway.lastSentContent, isNull);
+  });
+
   testWidgets('纯附件消息不显示文本附件分隔线', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(

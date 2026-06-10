@@ -1,3 +1,5 @@
+import '../domain/entities/agent/agent_display_name.dart';
+import '../domain/entities/agent/agent_summary.dart';
 import '../domain/entities/conversation_summary.dart';
 import 'agent/agent_control_projection.dart';
 import 'models/app_thread_ref.dart';
@@ -58,16 +60,21 @@ class ImCoreConversationService implements ConversationService {
       ownerDid: ownerDid,
       threadIds: items.map((item) => item.threadId),
     );
-    final daemonAgentDids = await _loadDaemonAgentDids();
+    final agentProjection = await _loadAgentConversationProjection();
     final visible = items
         .where(
           (item) => shouldShowConversationForChatList(
             item,
-            daemonAgentDids: daemonAgentDids,
+            daemonAgentDids: agentProjection.daemonAgentDids,
           ),
         )
         .where((item) => overlays[item.threadId]?.hidden != true)
-        .map((item) => _applyOverlay(item, overlays[item.threadId]))
+        .map(
+          (item) => _applyOverlay(
+            _applyAgentLifecycleProjection(item, agentProjection),
+            overlays[item.threadId],
+          ),
+        )
         .toList();
     visible.sort((a, b) {
       final aPinned = overlays[a.threadId]?.pinned == true;
@@ -100,22 +107,42 @@ class ImCoreConversationService implements ConversationService {
     );
   }
 
-  Future<Set<String>> _loadDaemonAgentDids() async {
+  Future<_AgentConversationProjection>
+  _loadAgentConversationProjection() async {
     final inventory = _agentInventory;
     if (inventory == null) {
-      return const <String>{};
+      return const _AgentConversationProjection();
     }
     try {
-      final agents = await inventory.listAgents();
-      return agents
-          .where((agent) => agent.isDaemon)
-          .map((agent) => agent.agentDid.trim())
-          .where((agentDid) => agentDid.isNotEmpty)
-          .toSet();
+      final agents = await inventory.listAgents(includeInactive: true);
+      return _AgentConversationProjection.fromAgents(agents);
     } on Object {
-      return const <String>{};
+      return const _AgentConversationProjection();
     }
   }
+}
+
+ConversationSummary _applyAgentLifecycleProjection(
+  ConversationSummary item,
+  _AgentConversationProjection projection,
+) {
+  final targetDid = item.targetDid?.trim();
+  if (targetDid == null || targetDid.isEmpty) {
+    return item;
+  }
+  if (!projection.deletedRuntimeAgentDids.contains(targetDid)) {
+    final agent = projection.agentByDid[targetDid];
+    if (agent == null) {
+      return item;
+    }
+    return item.copyWith(displayName: AgentDisplayName.title(agent));
+  }
+  return item.copyWith(
+    displayName: projection.agentByDid[targetDid] == null
+        ? item.displayName
+        : AgentDisplayName.title(projection.agentByDid[targetDid]!),
+    peerLifecycleState: ConversationPeerLifecycleState.deletedAgent,
+  );
 }
 
 ConversationSummary _applyOverlay(
@@ -125,16 +152,51 @@ ConversationSummary _applyOverlay(
   if (overlay == null) {
     return item;
   }
-  return ConversationSummary(
-    threadId: item.threadId,
+  return item.copyWith(
     displayName: overlay.customTitle ?? item.displayName,
-    lastMessagePreview: item.lastMessagePreview,
-    lastMessageAt: item.lastMessageAt,
-    unreadCount: item.unreadCount,
-    isGroup: item.isGroup,
-    targetDid: item.targetDid,
-    groupId: item.groupId,
     avatarSeed: overlay.avatarSeed ?? item.avatarSeed,
-    lastMessagePayloadJson: item.lastMessagePayloadJson,
   );
+}
+
+class _AgentConversationProjection {
+  const _AgentConversationProjection({
+    this.daemonAgentDids = const <String>{},
+    this.deletedRuntimeAgentDids = const <String>{},
+    this.agentByDid = const <String, AgentSummary>{},
+  });
+
+  factory _AgentConversationProjection.fromAgents(List<AgentSummary> agents) {
+    final daemonDids = <String>{};
+    final deletedRuntimeDids = <String>{};
+    final agentByDid = <String, AgentSummary>{};
+    for (final agent in agents) {
+      final agentDid = agent.agentDid.trim();
+      if (agentDid.isEmpty) {
+        continue;
+      }
+      agentByDid[agentDid] = agent;
+      if (agent.isDaemon) {
+        daemonDids.add(agentDid);
+        continue;
+      }
+      if (agent.isRuntime && _isArchivedAgent(agent)) {
+        deletedRuntimeDids.add(agentDid);
+      }
+    }
+    return _AgentConversationProjection(
+      daemonAgentDids: daemonDids,
+      deletedRuntimeAgentDids: deletedRuntimeDids,
+      agentByDid: agentByDid,
+    );
+  }
+
+  final Set<String> daemonAgentDids;
+  final Set<String> deletedRuntimeAgentDids;
+  final Map<String, AgentSummary> agentByDid;
+}
+
+bool _isArchivedAgent(AgentSummary agent) {
+  final activeState = agent.activeState.trim().toLowerCase();
+  final latestStatus = agent.latest.status.trim().toLowerCase();
+  return activeState == 'archived' || latestStatus == 'archived';
 }

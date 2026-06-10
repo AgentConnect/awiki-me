@@ -24,17 +24,7 @@ class SelectedConversationController
           group.name == current.displayName) {
         continue;
       }
-      state = ConversationSummary(
-        threadId: current.threadId,
-        displayName: group.name,
-        lastMessagePreview: current.lastMessagePreview,
-        lastMessageAt: current.lastMessageAt,
-        unreadCount: current.unreadCount,
-        isGroup: current.isGroup,
-        targetDid: current.targetDid,
-        groupId: current.groupId,
-        avatarSeed: current.avatarSeed,
-      );
+      state = current.copyWith(displayName: group.name);
       return;
     }
   }
