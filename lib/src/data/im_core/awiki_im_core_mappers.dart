@@ -63,8 +63,10 @@ class AwikiImCoreMappers {
       userDid: package.userDid,
       verificationMethod: package.verificationMethod,
       publicKeyMultibase: package.publicKeyMultibase,
-      privateKeyMultibase: package.privateKeyMultibase,
+      privateKeyPem: package.privateKeyPem,
       keyType: package.keyType,
+      keyAlgorithm: package.keyAlgorithm,
+      privateKeyEncoding: package.privateKeyEncoding,
     );
   }
 

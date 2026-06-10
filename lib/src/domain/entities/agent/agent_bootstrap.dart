@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
 const daemonBootstrapSchema = 'awiki.daemon.bootstrap.v1';
-const userSubkeyPackageSchema = 'awiki.daemon.user_subkey_package.v1';
+const userSubkeyPackageSchema = 'awiki.daemon.user_subkey_package.v2';
 const appMessageHandlerRole = 'app_message_handler';
 const appMessageHandlerRuntime = 'hermes';
 
@@ -32,17 +32,25 @@ class UserSubkeyPackage {
     required this.userDid,
     required this.verificationMethod,
     required this.publicKeyMultibase,
-    required this.privateKeyMultibase,
+    String? privateKeyPem,
+    String? privateKeyMultibase,
     this.keyType,
+    this.keyAlgorithm = 'Ed25519',
+    this.privateKeyEncoding = 'pem',
     this.expiresAt,
     this.allowedScopes = defaultMessageAgentScopes,
-  });
+  }) : privateKeyPem = privateKeyPem ?? privateKeyMultibase ?? '',
+       privateKeyMultibase = privateKeyMultibase ?? privateKeyPem ?? '';
 
   final String userDid;
   final String verificationMethod;
   final String publicKeyMultibase;
+  final String privateKeyPem;
+  @Deprecated('Use privateKeyPem for PEM v2 packages.')
   final String privateKeyMultibase;
   final String? keyType;
+  final String? keyAlgorithm;
+  final String privateKeyEncoding;
   final DateTime? expiresAt;
   final List<String> allowedScopes;
 
@@ -53,14 +61,24 @@ class UserSubkeyPackage {
       verificationMethod: verificationMethod,
     );
     _requireNonEmpty(publicKeyMultibase, 'publicKeyMultibase');
-    _requireNonEmpty(privateKeyMultibase, 'privateKeyMultibase');
+    _requireNonEmpty(privateKeyPem, 'privateKeyPem');
+    if (privateKeyEncoding.trim() != 'pem') {
+      throw ArgumentError.value(
+        privateKeyEncoding,
+        'privateKeyEncoding',
+        'must be pem for $userSubkeyPackageSchema',
+      );
+    }
     return <String, Object?>{
       'schema': userSubkeyPackageSchema,
       'user_did': userDid.trim(),
       'verification_method': verificationMethod.trim(),
       if (_nonEmpty(keyType) != null) 'key_type': keyType!.trim(),
+      if (_nonEmpty(keyAlgorithm) != null)
+        'key_algorithm': keyAlgorithm!.trim(),
       'public_key_multibase': publicKeyMultibase.trim(),
-      'private_key_multibase': privateKeyMultibase.trim(),
+      'private_key_encoding': privateKeyEncoding.trim(),
+      'private_key_pem': privateKeyPem.trim(),
       if (expiresAt != null) 'expires_at': expiresAt!.toUtc().toIso8601String(),
       'allowed_scopes': allowedScopes,
     };

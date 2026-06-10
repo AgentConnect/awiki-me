@@ -97,7 +97,9 @@ void main() {
           messages.lastPayload?['user_subkey_package'] as Map<String, Object?>;
       expect(package['schema'], userSubkeyPackageSchema);
       expect(package['verification_method'], 'did:human:me#daemon-key-1');
-      expect(package['private_key_multibase'], 'zPrivate');
+      expect(package['private_key_encoding'], 'pem');
+      expect(package['private_key_pem'], 'zPrivate');
+      expect(package.containsKey('private_key_multibase'), isFalse);
       final desired =
           messages.lastPayload?['desired_message_agent']
               as Map<String, Object?>;
@@ -131,6 +133,19 @@ void main() {
         verificationMethod: 'did:human:me#daemon-key-1',
         publicKeyMultibase: 'zPublic',
         privateKeyMultibase: ' ',
+      ).toJson(),
+      throwsArgumentError,
+    );
+  });
+
+  test('bootstrap rejects unsupported private key encoding locally', () {
+    expect(
+      () => const UserSubkeyPackage(
+        userDid: 'did:human:me',
+        verificationMethod: 'did:human:me#daemon-key-1',
+        publicKeyMultibase: 'zPublic',
+        privateKeyPem: 'pemPrivate',
+        privateKeyEncoding: 'multibase-ed25519-private',
       ).toJson(),
       throwsArgumentError,
     );
