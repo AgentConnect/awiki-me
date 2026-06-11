@@ -9,7 +9,8 @@ Map<String, Object?> runtimeAgentCreatePayload({
   required String controllerDid,
   required String registrationToken,
   required String clientRequestId,
-  String displayName = 'Hermes',
+  required String handle,
+  required String displayName,
 }) {
   return <String, Object?>{
     'schema': AgentControlPayloads.commandSchema,
@@ -18,6 +19,7 @@ Map<String, Object?> runtimeAgentCreatePayload({
     'target_agent_kind': 'runtime',
     'args': <String, Object?>{
       'runtime': 'hermes',
+      'handle': handle,
       'controller_did': controllerDid,
       'registration_token': registrationToken,
       'display_name': displayName,

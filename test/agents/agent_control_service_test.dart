@@ -22,9 +22,13 @@ void main() {
       await service.createHermesRuntime(
         daemonAgentDid: 'did:agent:daemon',
         controllerDid: 'did:human:me',
+        handle: 'alice-hermes',
+        displayName: 'Alice Hermes',
       );
 
       expect(inventory.runtimeTokenDaemonDid, 'did:agent:daemon');
+      expect(inventory.runtimeTokenHandle, 'alice-hermes');
+      expect(inventory.runtimeTokenDisplayName, 'Alice Hermes');
       expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
       expect(messages.lastSecure, isFalse);
       expect(messages.lastPayload?['schema'], 'awiki.agent.command.v1');
@@ -33,6 +37,8 @@ void main() {
       expect(args['controller_did'], 'did:human:me');
       expect(args['registration_token'], 'runtime-token');
       expect(args['runtime'], 'hermes');
+      expect(args['handle'], 'alice-hermes');
+      expect(args['display_name'], 'Alice Hermes');
     },
   );
 
@@ -171,6 +177,8 @@ void main() {
 
 class _InventoryStub implements AgentInventoryPort {
   String? runtimeTokenDaemonDid;
+  String? runtimeTokenHandle;
+  String? runtimeTokenDisplayName;
 
   @override
   Future<AgentRegistrationToken> issueDaemonToken({
@@ -185,8 +193,12 @@ class _InventoryStub implements AgentInventoryPort {
     required String controllerDid,
     required String daemonAgentDid,
     required String runtime,
+    required String handle,
+    required String displayName,
   }) async {
     runtimeTokenDaemonDid = daemonAgentDid;
+    runtimeTokenHandle = handle;
+    runtimeTokenDisplayName = displayName;
     return const AgentRegistrationToken(token: 'runtime-token');
   }
 

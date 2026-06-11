@@ -16,6 +16,8 @@ abstract interface class AgentControlService {
   Future<void> createHermesRuntime({
     required String daemonAgentDid,
     required String controllerDid,
+    required String handle,
+    required String displayName,
   });
   Future<void> resetRuntimeSession({
     required String daemonAgentDid,
@@ -130,11 +132,15 @@ class DefaultAgentControlService implements AgentControlService {
   Future<void> createHermesRuntime({
     required String daemonAgentDid,
     required String controllerDid,
+    required String handle,
+    required String displayName,
   }) async {
     final token = await _inventory.issueRuntimeToken(
       controllerDid: controllerDid,
       daemonAgentDid: daemonAgentDid,
       runtime: 'hermes',
+      handle: handle,
+      displayName: displayName,
     );
     final requestId = agentCommandId('app_req');
     await _sendDaemonPayload(
@@ -143,6 +149,8 @@ class DefaultAgentControlService implements AgentControlService {
         controllerDid: controllerDid,
         registrationToken: token.token,
         clientRequestId: requestId,
+        handle: handle,
+        displayName: displayName,
       ),
       idempotencyKey: 'runtime-create:$daemonAgentDid:$requestId',
     );

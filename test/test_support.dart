@@ -337,6 +337,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int sendEmailVerificationCalls = 0;
   int checkEmailVerifiedCalls = 0;
   int lookupHandleRegistrationCalls = 0;
+  int validateHandleCalls = 0;
   int registerHandleCalls = 0;
   int registerHandleWithEmailCalls = 0;
   int recoverHandleCalls = 0;
@@ -731,6 +732,27 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   }) async {
     lookupHandleRegistrationCalls += 1;
     return handleRegistrationStatus;
+  }
+
+  Future<HandleAvailability> validateHandle({
+    required String handle,
+    String? domain,
+  }) async {
+    validateHandleCalls += 1;
+    final normalizedHandle = handle.trim().toLowerCase();
+    final normalizedDomain = domain?.trim().toLowerCase();
+    final registered =
+        handleRegistrationStatus == HandleRegistrationStatus.registered;
+    return HandleAvailability(
+      handle: normalizedHandle,
+      domain: normalizedDomain,
+      fullHandle: normalizedDomain == null
+          ? null
+          : '$normalizedHandle.$normalizedDomain',
+      available: !registered,
+      reason: registered ? 'unavailable' : null,
+      message: registered ? "Handle '$normalizedHandle' 已被占用" : null,
+    );
   }
 
   @override
@@ -1182,6 +1204,8 @@ class FakeAgentInventoryPort implements AgentInventoryPort {
     required String controllerDid,
     required String daemonAgentDid,
     required String runtime,
+    required String handle,
+    required String displayName,
   }) async {
     return nextRuntimeToken;
   }
@@ -1240,6 +1264,8 @@ class FakeAgentControlService implements AgentControlService {
   );
   String? lastRefreshedDaemonDid;
   String? lastRuntimeCreateDaemonDid;
+  String? lastRuntimeCreateHandle;
+  String? lastRuntimeCreateDisplayName;
   String? lastResetDaemonDid;
   String? lastResetRuntimeDid;
   String? lastRetryDaemonDid;
@@ -1275,8 +1301,12 @@ class FakeAgentControlService implements AgentControlService {
   Future<void> createHermesRuntime({
     required String daemonAgentDid,
     required String controllerDid,
+    required String handle,
+    required String displayName,
   }) async {
     lastRuntimeCreateDaemonDid = daemonAgentDid;
+    lastRuntimeCreateHandle = handle;
+    lastRuntimeCreateDisplayName = displayName;
   }
 
   @override
@@ -1712,6 +1742,14 @@ class FakeOnboardingSupportService implements OnboardingSupportService {
     required String handle,
   }) {
     return gateway.lookupHandleRegistration(handle: handle);
+  }
+
+  @override
+  Future<HandleAvailability> validateHandle({
+    required String handle,
+    String? domain,
+  }) {
+    return gateway.validateHandle(handle: handle, domain: domain);
   }
 
   @override

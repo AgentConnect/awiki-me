@@ -7,6 +7,8 @@ import '../../domain/entities/conversation_summary.dart';
 import '../../l10n/l10n.dart';
 import '../chat/chat_page.dart';
 import '../chat/chat_provider.dart';
+import '../agents/agent_status_indicator.dart';
+import '../agents/agent_visual_status.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
@@ -258,6 +260,11 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                                   ? const ConversationPeerClassification.group()
                                   : const ConversationPeerClassification.unknown(),
                             );
+                        final agentStatus = _conversationAgentStatus(
+                          ref,
+                          item,
+                          classification,
+                        );
                         return _MacConversationRow(
                           title: DidDisplayFormatter.conversationTitle(
                             item,
@@ -271,6 +278,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                           isDeletedAgentConversation:
                               item.isDeletedAgentConversation,
                           classification: classification,
+                          agentStatus: agentStatus,
                           isSelected: widget.selectedThreadId == item.threadId,
                           onTap: () => widget.onOpen(item),
                         );
@@ -372,6 +380,11 @@ class _ConversationRefreshView extends ConsumerWidget {
                           ? const ConversationPeerClassification.group()
                           : const ConversationPeerClassification.unknown(),
                     );
+                final agentStatus = _conversationAgentStatus(
+                  ref,
+                  item,
+                  classification,
+                );
                 return _ConversationRow(
                   title: DidDisplayFormatter.conversationTitle(
                     item,
@@ -384,6 +397,7 @@ class _ConversationRefreshView extends ConsumerWidget {
                   unreadCount: item.unreadCount,
                   isDeletedAgentConversation: item.isDeletedAgentConversation,
                   classification: classification,
+                  agentStatus: agentStatus,
                   isSelected: selectedThreadId == item.threadId,
                   onTap: () => onOpen(item),
                 );
@@ -435,6 +449,7 @@ class _MacConversationRow extends StatelessWidget {
     required this.unreadCount,
     required this.isDeletedAgentConversation,
     required this.classification,
+    required this.agentStatus,
     required this.isSelected,
     required this.onTap,
   });
@@ -445,6 +460,7 @@ class _MacConversationRow extends StatelessWidget {
   final int unreadCount;
   final bool isDeletedAgentConversation;
   final ConversationPeerClassification classification;
+  final AgentVisualStatus? agentStatus;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -507,6 +523,13 @@ class _MacConversationRow extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (agentStatus != null) ...<Widget>[
+                          SizedBox(width: responsive.displayScaled(7)),
+                          AgentStatusDot(
+                            status: agentStatus!,
+                            size: responsive.displayScaled(8),
+                          ),
+                        ],
                         SizedBox(width: responsive.displayScaled(8)),
                         Text(
                           timeLabel,
@@ -607,6 +630,7 @@ class _ConversationRow extends StatelessWidget {
     required this.unreadCount,
     required this.isDeletedAgentConversation,
     required this.classification,
+    required this.agentStatus,
     required this.onTap,
     required this.isSelected,
   });
@@ -617,6 +641,7 @@ class _ConversationRow extends StatelessWidget {
   final int unreadCount;
   final bool isDeletedAgentConversation;
   final ConversationPeerClassification classification;
+  final AgentVisualStatus? agentStatus;
   final VoidCallback onTap;
   final bool isSelected;
 
@@ -716,6 +741,13 @@ class _ConversationRow extends StatelessWidget {
                       letterSpacing: 0,
                     ),
                   ),
+                  if (agentStatus != null) ...<Widget>[
+                    SizedBox(height: responsive.spacing(7)),
+                    AgentStatusDot(
+                      status: agentStatus!,
+                      size: responsive.scaled(8),
+                    ),
+                  ],
                   if (unreadCount > 0) ...<Widget>[
                     SizedBox(height: responsive.spacing(8)),
                     Container(
@@ -744,6 +776,28 @@ class _ConversationRow extends StatelessWidget {
       ),
     );
   }
+}
+
+AgentVisualStatus? _conversationAgentStatus(
+  WidgetRef ref,
+  ConversationSummary conversation,
+  ConversationPeerClassification classification,
+) {
+  if (!classification.isAgent || conversation.isDeletedAgentConversation) {
+    return null;
+  }
+  final runtimeAgent = classification.localRuntimeAgent;
+  if (runtimeAgent == null) {
+    return const AgentVisualStatus(AgentVisualStatusKind.unknown);
+  }
+  final thread = ref.watch(chatThreadProvider(conversation.threadId));
+  final hasPendingTurn = thread.agentPendingTurns.any(
+    (turn) => turn.isActive && turn.agentDid == runtimeAgent.agentDid,
+  );
+  return AgentVisualStatus.fromAgent(
+    runtimeAgent,
+    hasPendingTurn: hasPendingTurn,
+  );
 }
 
 class _ConversationTitleStatusLine extends StatelessWidget {

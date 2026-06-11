@@ -1362,6 +1362,125 @@ void main() {
     expect(find.text('report.pdf'), findsOneWidget);
   });
 
+  testWidgets('选择附件后输入框保持焦点', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final picker = FakeAttachmentPickerService()
+      ..nextPick = AttachmentDraft(
+        filename: 'focus.md',
+        mimeType: 'text/markdown',
+        bytes: Uint8List.fromList(<int>[35]),
+        sizeBytes: 1,
+      );
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:attachment-focus',
+      displayName: 'Tester',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          attachmentPickerServiceProvider.overrideWithValue(picker),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byType(CupertinoTextField));
+    await tester.pump();
+    var input = tester.widget<CupertinoTextField>(
+      find.byType(CupertinoTextField),
+    );
+    expect(input.focusNode?.hasFocus, isTrue);
+
+    await tester.tap(find.byKey(const Key('chat-attachment-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('focus.md'), findsOneWidget);
+    input = tester.widget<CupertinoTextField>(find.byType(CupertinoTextField));
+    expect(input.focusNode?.hasFocus, isTrue);
+  });
+
+  testWidgets('macOS 选择附件后输入框保持焦点', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final picker = FakeAttachmentPickerService()
+      ..nextPick = AttachmentDraft(
+        filename: 'mac-focus.md',
+        mimeType: 'text/markdown',
+        bytes: Uint8List.fromList(<int>[35]),
+        sizeBytes: 1,
+      );
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:mac-attachment-focus',
+      displayName: 'Tester',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1100, 760));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(
+            conversation: conversation,
+            embedded: true,
+            macStyle: true,
+          ),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          attachmentPickerServiceProvider.overrideWithValue(picker),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byType(CupertinoTextField));
+    await tester.pump();
+    var input = tester.widget<CupertinoTextField>(
+      find.byType(CupertinoTextField),
+    );
+    expect(input.focusNode?.hasFocus, isTrue);
+
+    await tester.tap(find.byKey(const Key('chat-attachment-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('mac-focus.md'), findsOneWidget);
+    input = tester.widget<CupertinoTextField>(find.byType(CupertinoTextField));
+    expect(input.focusNode?.hasFocus, isTrue);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
   testWidgets('暂存附件支持取消，取消后只发送文本', (tester) async {
     final gateway = FakeAwikiGateway();
     final picker = FakeAttachmentPickerService()

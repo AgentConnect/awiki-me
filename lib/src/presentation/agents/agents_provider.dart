@@ -215,7 +215,11 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
   }
 
-  Future<void> createHermesRuntime(String daemonDid) async {
+  Future<void> createHermesRuntime(
+    String daemonDid, {
+    required String handle,
+    required String displayName,
+  }) async {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
       state = state.copyWith(error: '请先登录。');
@@ -227,6 +231,8 @@ class AgentsController extends StateNotifier<AgentsState> {
           .createHermesRuntime(
             daemonAgentDid: daemonDid,
             controllerDid: session.did,
+            handle: handle,
+            displayName: displayName,
           );
       await load();
     });

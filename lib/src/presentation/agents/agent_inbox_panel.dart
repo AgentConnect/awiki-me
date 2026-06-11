@@ -228,6 +228,11 @@ class _AgentInboxListView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasItems = state.items.isNotEmpty;
+    final showBlockingLoading = state.isLoading && !hasItems;
+    final showBlockingError = state.error != null && !hasItems;
+    final showInlineError =
+        state.error != null && hasItems && !state.hasListTimeout;
     return Column(
       children: <Widget>[
         Padding(
@@ -266,36 +271,46 @@ class _AgentInboxListView extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: state.isLoading
+          child: showBlockingLoading
               ? const Center(child: CupertinoActivityIndicator())
-              : state.error != null
+              : showBlockingError
               ? _AgentInboxError(message: state.error!, onRetry: onRefresh)
-              : state.items.isEmpty
+              : !hasItems
               ? const Center(
                   child: Text(
                     '这个 Agent 暂时没有收件箱消息',
                     style: TextStyle(color: Color(0xFF6B7280), fontSize: 13),
                   ),
                 )
-              : ListView.separated(
+              : ListView(
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 18),
-                  itemCount:
-                      state.items.length + (state.nextCursor == null ? 0 : 1),
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    if (index == state.items.length) {
-                      return _LoadMoreButton(
+                  children: <Widget>[
+                    if (showInlineError) ...<Widget>[
+                      _AgentInboxInlineError(
+                        message: state.error!,
+                        onRetry: onRefresh,
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    for (var index = 0; index < state.items.length; index++)
+                      Padding(
+                        padding: EdgeInsets.only(
+                          bottom: index == state.items.length - 1 ? 0 : 8,
+                        ),
+                        child: _AgentInboxRow(
+                          item: state.items[index],
+                          onTap: () => onOpenItem(state.items[index]),
+                        ),
+                      ),
+                    if (state.nextCursor != null) ...<Widget>[
+                      if (state.items.isNotEmpty) const SizedBox(height: 8),
+                      _LoadMoreButton(
                         label: '加载更多会话',
                         isLoading: state.isRefreshing,
                         onTap: state.isRefreshing ? null : onLoadMore,
-                      );
-                    }
-                    final item = state.items[index];
-                    return _AgentInboxRow(
-                      item: item,
-                      onTap: () => onOpenItem(item),
-                    );
-                  },
+                      ),
+                    ],
+                  ],
                 ),
         ),
       ],
@@ -501,6 +516,11 @@ class _AgentInboxThreadView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasMessages = state.messages.isNotEmpty;
+    final showBlockingLoading = state.isLoading && !hasMessages;
+    final showBlockingError = state.error != null && !hasMessages;
+    final showInlineError =
+        state.error != null && hasMessages && !state.hasTimeout;
     return Column(
       children: <Widget>[
         Padding(
@@ -528,38 +548,45 @@ class _AgentInboxThreadView extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: state.isLoading
+          child: showBlockingLoading
               ? const Center(child: CupertinoActivityIndicator())
-              : state.error != null
+              : showBlockingError
               ? _AgentInboxError(message: state.error!, onRetry: onRefresh)
-              : state.messages.isEmpty
+              : !hasMessages
               ? const Center(
                   child: Text(
                     '这个线程暂时没有消息',
                     style: TextStyle(color: Color(0xFF6B7280), fontSize: 13),
                   ),
                 )
-              : ListView.separated(
+              : ListView(
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 20),
-                  itemCount:
-                      state.messages.length +
-                      (state.nextCursor == null ? 0 : 1),
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    if (index == 0 && state.nextCursor != null) {
-                      return _LoadMoreButton(
+                  children: <Widget>[
+                    if (showInlineError) ...<Widget>[
+                      _AgentInboxInlineError(
+                        message: state.error!,
+                        onRetry: onRefresh,
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    if (state.nextCursor != null) ...<Widget>[
+                      _LoadMoreButton(
                         label: '加载更早消息',
                         isLoading: state.isRefreshing,
                         onTap: state.isRefreshing ? null : onLoadMore,
-                      );
-                    }
-                    final messageIndex = state.nextCursor == null
-                        ? index
-                        : index - 1;
-                    return _AgentInboxMessageRow(
-                      message: state.messages[messageIndex],
-                    );
-                  },
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    for (var index = 0; index < state.messages.length; index++)
+                      Padding(
+                        padding: EdgeInsets.only(
+                          bottom: index == state.messages.length - 1 ? 0 : 8,
+                        ),
+                        child: _AgentInboxMessageRow(
+                          message: state.messages[index],
+                        ),
+                      ),
+                  ],
                 ),
         ),
       ],
@@ -575,6 +602,7 @@ class _AgentInboxMessageRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final outgoing = message.direction == 'outgoing';
+    final visibleAttachments = message.attachments;
     return Align(
       alignment: outgoing ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -619,9 +647,9 @@ class _AgentInboxMessageRow extends StatelessWidget {
                 style: TextStyle(color: Color(0xFF8A94A8), fontSize: 11),
               ),
             ],
-            if (message.attachments.isNotEmpty) ...<Widget>[
+            if (visibleAttachments.isNotEmpty) ...<Widget>[
               const SizedBox(height: 8),
-              ...message.attachments.map(_AgentInboxAttachmentRow.new),
+              ...visibleAttachments.map(_AgentInboxAttachmentRow.new),
             ],
           ],
         ),
@@ -752,6 +780,38 @@ class _AgentInboxError extends StatelessWidget {
                 '重试',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AgentInboxInlineError extends StatelessWidget {
+  const _AgentInboxInlineError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return AwikiMeErrorNotice(
+      message: message,
+      compact: true,
+      trailing: AppPressable(
+        onTap: onRetry,
+        semanticLabel: '重试',
+        tooltip: '重试',
+        borderRadius: BorderRadius.circular(7),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Text(
+            '重试',
+            style: TextStyle(
+              color: Color(0xFF0B65F8),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),

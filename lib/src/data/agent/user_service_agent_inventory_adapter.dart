@@ -156,14 +156,17 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
     required String controllerDid,
     required String daemonAgentDid,
     required String runtime,
+    required String handle,
+    required String displayName,
   }) {
     return _issueToken(<String, Object?>{
       'agent_kind': 'runtime',
       'controller_did': controllerDid,
+      'handle': handle,
       'metadata': <String, Object?>{
         'runtime': runtime,
         'daemon_agent_did': daemonAgentDid,
-        'default_display_name': 'Hermes',
+        'default_display_name': displayName,
         'client_request_id':
             'app_req_${DateTime.now().toUtc().microsecondsSinceEpoch}',
       },

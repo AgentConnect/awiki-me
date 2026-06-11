@@ -126,17 +126,51 @@ void main() {
                 },
               ],
             },
+            <String, Object?>{
+              'message_id': 'msg-2',
+              'sender_did': 'did:human:bob',
+              'sender_handle': 'bob.anpclaw.com',
+              'direction': 'incoming',
+              'content_type': 'attachment',
+              'text': '',
+              'attachments': <Object?>[
+                <String, Object?>{
+                  'attachment_id': 'att-2',
+                  'mime_type': 'text/markdown',
+                },
+              ],
+            },
           ],
         },
       },
     );
 
     final thread = container.read(agentInboxProvider).thread;
-    expect(thread.messages, hasLength(1));
+    expect(thread.messages, hasLength(2));
     expect(thread.messages.first.senderHandle, 'bob.anpclaw.com');
     expect(thread.messages.first.attachments.first.filename, 'report.pdf');
     expect(thread.messages.first.attachments.first.sizeBytes, 1024);
+    expect(thread.messages.last.attachments.first.filename, '未命名附件');
   });
+
+  test(
+    'attachment content type without attachment payload stays plain message',
+    () {
+      final message = AgentInboxMessage.fromJson(<String, Object?>{
+        'message_id': 'msg-empty-attachment',
+        'sender_did': 'did:human:bob',
+        'sender_handle': 'bob.anpclaw.com',
+        'direction': 'incoming',
+        'content_type': 'attachment',
+        'text': 'hello',
+        'attachments': const <Object?>[],
+      });
+
+      expect(message.contentType, 'attachment');
+      expect(message.text, 'hello');
+      expect(message.attachments, isEmpty);
+    },
+  );
 
   test('list pagination appends unique items', () async {
     final control = FakeAgentControlService()
@@ -286,6 +320,61 @@ void main() {
       <String>['msg-old', 'msg-new'],
     );
   });
+
+  test(
+    'timeout keeps existing inbox data visible while refresh remains pending',
+    () async {
+      AgentInboxController.responseTimeout = const Duration(milliseconds: 10);
+      addTearDown(() {
+        AgentInboxController.responseTimeout = const Duration(seconds: 20);
+      });
+      final control = FakeAgentControlService()
+        ..nextInboxRequestId = 'cmd_inbox_initial';
+      final container = _container(control);
+      addTearDown(container.dispose);
+
+      await container
+          .read(agentInboxProvider.notifier)
+          .queryInbox(
+            daemonAgentDid: 'did:agent:daemon',
+            runtimeAgentDid: 'did:agent:runtime',
+          );
+      container.read(agentInboxProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'runtime_inbox',
+          'request_id': 'cmd_inbox_initial',
+          'state': 'succeeded',
+          'result': <String, Object?>{
+            'items': <Object?>[
+              <String, Object?>{
+                'thread_id': 'dm:peer-scope:v1:bob',
+                'kind': 'direct',
+                'title': 'bob.anpclaw.com',
+                'last_message_preview': 'hello',
+              },
+            ],
+          },
+        },
+      );
+
+      control.nextInboxRequestId = 'cmd_inbox_refresh';
+      await container
+          .read(agentInboxProvider.notifier)
+          .queryInbox(
+            daemonAgentDid: 'did:agent:daemon',
+            runtimeAgentDid: 'did:agent:runtime',
+            refresh: true,
+          );
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      final state = container.read(agentInboxProvider);
+      expect(state.items.single.lastMessagePreview, 'hello');
+      expect(state.isLoading, isFalse);
+      expect(state.isRefreshing, isTrue);
+      expect(state.hasListTimeout, isTrue);
+    },
+  );
 }
 
 ProviderContainer _container(FakeAgentControlService control) {

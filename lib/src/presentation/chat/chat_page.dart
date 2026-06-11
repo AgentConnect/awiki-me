@@ -2362,6 +2362,21 @@ class _ComposerState extends State<_Composer> {
     }
   }
 
+  Future<void> _attachIfNeeded() async {
+    if (!widget.enabled) {
+      return;
+    }
+    await widget.onAttach();
+    if (!mounted || !widget.enabled) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.enabled) {
+        _inputFocusNode.requestFocus();
+      }
+    });
+  }
+
   KeyEventResult _handleInputKeyEvent(FocusNode node, KeyEvent event) {
     if (!widget.enabled) {
       return KeyEventResult.handled;
@@ -2471,7 +2486,7 @@ class _ComposerState extends State<_Composer> {
                           if (showAttachment) ...<Widget>[
                             AppIconButton(
                               key: const Key('chat-attachment-button'),
-                              onPressed: widget.onAttach,
+                              onPressed: _attachIfNeeded,
                               semanticLabel: '添加附件',
                               tooltip: '添加附件',
                               size: responsive.displayScaled(34),
@@ -2623,7 +2638,7 @@ class _ComposerState extends State<_Composer> {
                   children: <Widget>[
                     TopBarActionButton(
                       key: const Key('chat-attachment-button'),
-                      onTap: widget.onAttach,
+                      onTap: _attachIfNeeded,
                       semanticsLabel: '添加附件',
                       tooltip: '添加附件',
                       child: Padding(
@@ -2719,7 +2734,6 @@ class _ComposerTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Focus(
-      focusNode: focusNode,
       onKeyEvent: onKeyEvent,
       child: e2eSemantics(
         identifier: 'e2e-chat-input',
@@ -2727,6 +2741,7 @@ class _ComposerTextField extends StatelessWidget {
         textField: true,
         child: CupertinoTextField(
           controller: controller,
+          focusNode: focusNode,
           placeholder: placeholder,
           keyboardType: TextInputType.multiline,
           textInputAction: TextInputAction.send,

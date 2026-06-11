@@ -142,6 +142,21 @@ class AwikiOnboardingUtilityClient {
     );
   }
 
+  Future<Map<String, Object?>> validateHandle({
+    required String handle,
+    String? domain,
+  }) {
+    return _serviceClient.rpcCall(
+      path: handleRpcEndpoint,
+      method: 'validate',
+      params: <String, Object?>{
+        'handle': handle,
+        if (domain != null && domain.trim().isNotEmpty)
+          'domain': domain.trim().toLowerCase(),
+      },
+    );
+  }
+
   Future<void> sendEmailVerification({
     required String baseUrl,
     required String email,

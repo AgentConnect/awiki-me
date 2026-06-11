@@ -1,18 +1,26 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart'
-    show SelectableText, SelectionArea, SelectionContainer;
+    show Color, SelectableText, SelectionArea, SelectionContainer;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../domain/entities/agent/install_command.dart';
+import '../../app/app_services.dart';
+import '../../application/config/awiki_environment_config.dart';
 import '../../domain/entities/agent/agent_status.dart';
+import '../../domain/entities/agent/install_command.dart';
 import '../../domain/entities/agent/agent_summary.dart';
+import '../../domain/repositories/awiki_account_gateway.dart';
 import '../shared/identity_flow.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../chat/chat_provider.dart';
 import 'agent_display_name.dart';
+import 'agent_status_indicator.dart';
+import 'agent_visual_status.dart';
 import 'agents_provider.dart';
 
 class AgentsWorkspacePage extends ConsumerStatefulWidget {
@@ -45,9 +53,11 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
 
     final state = ref.watch(agentsProvider);
     final responsive = context.awikiResponsive;
+    final pendingAgentDids = _pendingAgentDids(ref.watch(chatThreadsProvider));
     final list = _AgentListPane(
       state: state,
       footer: widget.listFooter,
+      pendingAgentDids: pendingAgentDids,
       onCreateDaemon: () =>
           ref.read(agentsProvider.notifier).createDaemonInstallCommand(),
       onRefreshDaemon: (agent) {
@@ -60,11 +70,16 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
     final detail = _AgentDetailPane(
       state: state,
       selected: state.selectedAgent,
+      pendingAgentDids: pendingAgentDids,
       onRefresh: (agent) {
         ref.read(agentsProvider.notifier).refreshDaemonStatus(agent.agentDid);
       },
-      onCreateRuntime: (agent) =>
-          ref.read(agentsProvider.notifier).createHermesRuntime(agent.agentDid),
+      onCreateRuntime: (agent) => _showCreateHermesDialog(
+        context,
+        ref,
+        agent,
+        state.runtimesFor(agent.agentDid),
+      ),
       onOpenChat: (agent) => _openRuntimeChat(context, ref, agent),
       onRename: (agent) => _showRenameAgentDialog(context, ref, agent),
       onRetryRun: (agent) => _showRetryRunDialog(context, ref, agent),
@@ -113,6 +128,7 @@ class _AgentListPane extends StatelessWidget {
   const _AgentListPane({
     required this.state,
     required this.footer,
+    required this.pendingAgentDids,
     required this.onCreateDaemon,
     required this.onRefreshDaemon,
     required this.onSelect,
@@ -121,6 +137,7 @@ class _AgentListPane extends StatelessWidget {
 
   final AgentsState state;
   final Widget? footer;
+  final Set<String> pendingAgentDids;
   final VoidCallback onCreateDaemon;
   final ValueChanged<AgentSummary> onRefreshDaemon;
   final ValueChanged<String> onSelect;
@@ -189,6 +206,7 @@ class _AgentListPane extends StatelessWidget {
                   ),
                 _AgentHierarchyList(
                   state: state,
+                  pendingAgentDids: pendingAgentDids,
                   onSelect: onSelect,
                   onRefreshDaemon: onRefreshDaemon,
                 ),
@@ -205,11 +223,13 @@ class _AgentListPane extends StatelessWidget {
 class _AgentHierarchyList extends StatelessWidget {
   const _AgentHierarchyList({
     required this.state,
+    required this.pendingAgentDids,
     required this.onSelect,
     required this.onRefreshDaemon,
   });
 
   final AgentsState state;
+  final Set<String> pendingAgentDids;
   final ValueChanged<String> onSelect;
   final ValueChanged<AgentSummary> onRefreshDaemon;
 
@@ -223,6 +243,7 @@ class _AgentHierarchyList extends StatelessWidget {
           _AgentDaemonGroup(
             group: group,
             state: state,
+            pendingAgentDids: pendingAgentDids,
             selectedAgentDid: selectedDid,
             onSelect: onSelect,
             onRefreshDaemon: onRefreshDaemon,
@@ -270,6 +291,7 @@ class _AgentDaemonGroup extends StatelessWidget {
   const _AgentDaemonGroup({
     required this.group,
     required this.state,
+    required this.pendingAgentDids,
     required this.selectedAgentDid,
     required this.onSelect,
     required this.onRefreshDaemon,
@@ -277,6 +299,7 @@ class _AgentDaemonGroup extends StatelessWidget {
 
   final _AgentTreeGroup group;
   final AgentsState state;
+  final Set<String> pendingAgentDids;
   final String? selectedAgentDid;
   final ValueChanged<String> onSelect;
   final ValueChanged<AgentSummary> onRefreshDaemon;
@@ -291,6 +314,7 @@ class _AgentDaemonGroup extends StatelessWidget {
         padding: EdgeInsets.only(bottom: responsive.spacing(10)),
         child: _OrphanRuntimeGroup(
           runtimes: runtimes,
+          pendingAgentDids: pendingAgentDids,
           selectedAgentDid: selectedAgentDid,
           onSelect: onSelect,
         ),
@@ -302,6 +326,7 @@ class _AgentDaemonGroup extends StatelessWidget {
         children: <Widget>[
           _AgentListTile(
             agent: daemon,
+            pendingAgentDids: pendingAgentDids,
             selected: selectedAgentDid == daemon.agentDid,
             onTap: () => onSelect(daemon.agentDid),
             runtimeCount: runtimes.length,
@@ -317,6 +342,7 @@ class _AgentDaemonGroup extends StatelessWidget {
             for (final runtime in runtimes)
               _AgentListTile(
                 agent: runtime,
+                pendingAgentDids: pendingAgentDids,
                 selected: selectedAgentDid == runtime.agentDid,
                 onTap: () => onSelect(runtime.agentDid),
                 depth: 1,
@@ -330,11 +356,13 @@ class _AgentDaemonGroup extends StatelessWidget {
 class _OrphanRuntimeGroup extends StatelessWidget {
   const _OrphanRuntimeGroup({
     required this.runtimes,
+    required this.pendingAgentDids,
     required this.selectedAgentDid,
     required this.onSelect,
   });
 
   final List<AgentSummary> runtimes;
+  final Set<String> pendingAgentDids;
   final String? selectedAgentDid;
   final ValueChanged<String> onSelect;
 
@@ -363,6 +391,7 @@ class _OrphanRuntimeGroup extends StatelessWidget {
         for (final runtime in runtimes)
           _AgentListTile(
             agent: runtime,
+            pendingAgentDids: pendingAgentDids,
             selected: selectedAgentDid == runtime.agentDid,
             onTap: () => onSelect(runtime.agentDid),
           ),
@@ -418,6 +447,7 @@ class _EmptyRuntimeHint extends StatelessWidget {
 class _AgentListTile extends StatelessWidget {
   const _AgentListTile({
     required this.agent,
+    required this.pendingAgentDids,
     required this.selected,
     required this.onTap,
     this.depth = 0,
@@ -427,6 +457,7 @@ class _AgentListTile extends StatelessWidget {
   });
 
   final AgentSummary agent;
+  final Set<String> pendingAgentDids;
   final bool selected;
   final VoidCallback onTap;
   final int depth;
@@ -439,6 +470,10 @@ class _AgentListTile extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final isChild = depth > 0;
     final title = AgentDisplayName.title(agent);
+    final visualStatus = AgentVisualStatus.fromAgent(
+      agent,
+      hasPendingTurn: pendingAgentDids.contains(agent.agentDid),
+    );
     return Padding(
       padding: EdgeInsets.only(
         left: isChild ? responsive.spacing(30) : 0,
@@ -507,7 +542,11 @@ class _AgentListTile extends StatelessWidget {
                           ),
                           SizedBox(height: responsive.spacing(3)),
                           Text(
-                            _agentListSubtitle(agent, runtimeCount),
+                            _agentListSubtitle(
+                              agent,
+                              runtimeCount,
+                              visualStatus,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -527,7 +566,7 @@ class _AgentListTile extends StatelessWidget {
                       ),
                     ],
                     SizedBox(width: responsive.spacing(8)),
-                    _StatusDot(status: agent.latest.status),
+                    AgentStatusDot(status: visualStatus),
                   ],
                 ),
               ),
@@ -598,19 +637,24 @@ class _DaemonRefreshIconButton extends StatelessWidget {
   }
 }
 
-String _agentListSubtitle(AgentSummary agent, int? runtimeCount) {
+String _agentListSubtitle(
+  AgentSummary agent,
+  int? runtimeCount,
+  AgentVisualStatus visualStatus,
+) {
   if (agent.isDaemon) {
     final count = runtimeCount ?? 0;
-    return 'Daemon · $count 个 Agent · ${agent.latest.status}';
+    return 'Daemon · $count 个 Agent · ${visualStatus.label}';
   }
   final runtime = agent.runtime ?? 'Runtime';
-  return '$runtime · ${agent.latest.status}';
+  return '$runtime · ${visualStatus.label}';
 }
 
 class _AgentDetailPane extends StatelessWidget {
   const _AgentDetailPane({
     required this.state,
     required this.selected,
+    required this.pendingAgentDids,
     required this.onRefresh,
     required this.onCreateRuntime,
     required this.onOpenChat,
@@ -623,6 +667,7 @@ class _AgentDetailPane extends StatelessWidget {
 
   final AgentsState state;
   final AgentSummary? selected;
+  final Set<String> pendingAgentDids;
   final ValueChanged<AgentSummary> onRefresh;
   final ValueChanged<AgentSummary> onCreateRuntime;
   final ValueChanged<AgentSummary> onOpenChat;
@@ -639,12 +684,13 @@ class _AgentDetailPane extends StatelessWidget {
     if (agent == null) {
       return const Center(child: Text('选择一个代理'));
     }
-    final runtimes = agent.isDaemon
-        ? state.runtimesFor(agent.agentDid)
-        : const <AgentSummary>[];
     final isRefreshing =
         agent.isDaemon && state.isStatusQueryPending(agent.agentDid);
     final title = AgentDisplayName.title(agent);
+    final visualStatus = AgentVisualStatus.fromAgent(
+      agent,
+      hasPendingTurn: pendingAgentDids.contains(agent.agentDid),
+    );
     return SafeArea(
       bottom: false,
       child: SelectionArea(
@@ -664,7 +710,7 @@ class _AgentDetailPane extends StatelessWidget {
                     ),
                   ),
                 ),
-                _StatusPill(status: agent.latest.status),
+                AgentStatusPill(status: visualStatus),
               ],
             ),
             SizedBox(height: responsive.spacing(14)),
@@ -738,12 +784,6 @@ class _AgentDetailPane extends StatelessWidget {
               _AgentErrorBanner(message: state.error!),
             ],
             SizedBox(height: responsive.spacing(18)),
-            if (runtimes.isNotEmpty) ...<Widget>[
-              const _SectionTitle('Runtime'),
-              SizedBox(height: responsive.spacing(8)),
-              for (final runtime in runtimes) _RuntimeRow(runtime: runtime),
-              SizedBox(height: responsive.spacing(18)),
-            ],
             if (agent.isRuntime && agent.recentRuns.isNotEmpty) ...<Widget>[
               const _SectionTitle('最近 Run'),
               SizedBox(height: responsive.spacing(8)),
@@ -753,53 +793,10 @@ class _AgentDetailPane extends StatelessWidget {
             const _SectionTitle('高级诊断'),
             SizedBox(height: responsive.spacing(8)),
             _InfoGrid(agent: agent),
-            if (agent.latest.lastErrorSummary != null ||
-                agent.latest.diagnosticsSummary.isNotEmpty) ...<Widget>[
-              SizedBox(height: responsive.spacing(10)),
-              _DiagnosticsPanel(agent: agent),
-            ],
-            SizedBox(height: responsive.spacing(18)),
-            const SelectionContainer.disabled(child: _DisabledAdvancedAction()),
+            SizedBox(height: responsive.spacing(10)),
+            _DiagnosticsPanel(agent: agent),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _RuntimeRow extends StatelessWidget {
-  const _RuntimeRow({required this.runtime});
-
-  final AgentSummary runtime;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final title = AgentDisplayName.title(runtime);
-    return Container(
-      margin: EdgeInsets.only(bottom: responsive.spacing(8)),
-      padding: EdgeInsets.all(responsive.spacing(12)),
-      decoration: BoxDecoration(
-        color: CupertinoColors.white,
-        borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(color: const Color(0xFFE5EAF2)),
-      ),
-      child: Row(
-        children: <Widget>[
-          const Icon(CupertinoIcons.sparkles, color: Color(0xFF0B65F8)),
-          SizedBox(width: responsive.spacing(10)),
-          Expanded(
-            child: Text(
-              title,
-              maxLines: 2,
-              style: const TextStyle(
-                color: Color(0xFF101B32),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          _StatusPill(status: runtime.latest.status),
-        ],
       ),
     );
   }
@@ -837,7 +834,7 @@ class _RunStatusPanel extends StatelessWidget {
                   ),
                 ),
               ),
-              _StatusPill(status: run.status),
+              _RunStatusPill(status: run.status),
             ],
           ),
           if (updatedAt != null) ...<Widget>[
@@ -883,6 +880,7 @@ class _DiagnosticsPanel extends StatelessWidget {
     final diagnostics = agent.latest.diagnosticsSummary.entries
         .where((entry) => entry.value != null)
         .toList();
+    final emptyText = _diagnosticsEmptyText(agent);
     return Container(
       padding: EdgeInsets.all(responsive.spacing(14)),
       decoration: BoxDecoration(
@@ -940,11 +938,39 @@ class _DiagnosticsPanel extends StatelessWidget {
                   ],
                 ),
               ),
+          ] else if (agent.latest.lastErrorSummary == null) ...<Widget>[
+            SizedBox(height: responsive.spacing(8)),
+            Text(
+              emptyText,
+              style: TextStyle(
+                color: const Color(0xFF66728A),
+                fontSize: responsive.bodySm,
+              ),
+            ),
           ],
         ],
       ),
     );
   }
+}
+
+String _diagnosticsEmptyText(AgentSummary agent) {
+  final status = agent.latest.status.trim().toLowerCase();
+  if (status == 'registering' ||
+      status == 'creating' ||
+      status == 'installing') {
+    return '代理尚未完成状态上报。';
+  }
+  if (status == 'offline') {
+    return '代理离线，暂时无法获取最新诊断。';
+  }
+  if (agent.latest.needsConfig || status == 'needs_config') {
+    return '暂无诊断摘要，请刷新状态或完成代理配置后再查看。';
+  }
+  if (status == 'failed') {
+    return '暂无诊断摘要，请刷新状态获取最新诊断。';
+  }
+  return '暂无异常诊断信息。';
 }
 
 class _InfoGrid extends StatelessWidget {
@@ -1201,25 +1227,8 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _StatusDot extends StatelessWidget {
-  const _StatusDot({required this.status});
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 9,
-      height: 9,
-      decoration: BoxDecoration(
-        color: _statusColor(status),
-        shape: BoxShape.circle,
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.status});
+class _RunStatusPill extends StatelessWidget {
+  const _RunStatusPill({required this.status});
   final String status;
 
   @override
@@ -1227,13 +1236,13 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
-        color: _statusColor(status).withValues(alpha: 0.14),
+        color: _runStatusColor(status).withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(99),
       ),
       child: Text(
         status,
         style: TextStyle(
-          color: _statusColor(status),
+          color: _runStatusColor(status),
           fontSize: 12,
           fontWeight: FontWeight.w700,
         ),
@@ -1242,35 +1251,28 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-class _DisabledAdvancedAction extends StatelessWidget {
-  const _DisabledAdvancedAction();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Opacity(
-      opacity: 0.55,
-      child: _ActionButton(
-        icon: CupertinoIcons.wrench,
-        label: '重建 Runtime',
-        onPressed: null,
-      ),
-    );
-  }
-}
-
-Color _statusColor(String status) {
-  switch (status) {
-    case 'ready':
+Color _runStatusColor(String status) {
+  switch (status.trim().toLowerCase()) {
+    case 'succeeded':
+    case 'finished':
       return AwikiMeColors.online;
     case 'failed':
-    case 'offline':
       return AwikiMeColors.danger;
-    case 'needs_config':
-    case 'needs_upgrade':
+    case 'queued':
+    case 'pending':
+    case 'running':
       return AwikiMeColors.alert;
     default:
       return const Color(0xFF66728A);
   }
+}
+
+Set<String> _pendingAgentDids(Map<String, ChatThreadState> threads) {
+  return <String>{
+    for (final thread in threads.values)
+      for (final turn in thread.agentPendingTurns)
+        if (turn.isActive) turn.agentDid,
+  };
 }
 
 String _redactDiagnosticValue(Object? value, {String? key}) {
@@ -1378,6 +1380,671 @@ Future<void> _showRenameAgentDialog(
     return;
   }
   await ref.read(agentsProvider.notifier).renameSelected(displayName);
+}
+
+Future<void> _showCreateHermesDialog(
+  BuildContext context,
+  WidgetRef ref,
+  AgentSummary daemon,
+  List<AgentSummary> existingRuntimes,
+) async {
+  final result = await showCupertinoDialog<_RuntimeAgentCreationDraft>(
+    context: context,
+    builder: (dialogContext) => _CreateHermesDialog(
+      initialDisplayName: _nextHermesDisplayName(existingRuntimes),
+      handleDomain: AwikiEnvironmentConfig.fromEnvironment().didDomain,
+      validateHandle: (handle, domain) {
+        return ref
+            .read(onboardingSupportServiceProvider)
+            .validateHandle(handle: handle, domain: domain);
+      },
+    ),
+  );
+  if (result == null) {
+    return;
+  }
+  await ref
+      .read(agentsProvider.notifier)
+      .createHermesRuntime(
+        daemon.agentDid,
+        handle: result.handle,
+        displayName: result.displayName,
+      );
+}
+
+class _RuntimeAgentCreationDraft {
+  const _RuntimeAgentCreationDraft({
+    required this.displayName,
+    required this.handle,
+  });
+
+  final String displayName;
+  final String handle;
+}
+
+class _CreateHermesDialog extends StatefulWidget {
+  const _CreateHermesDialog({
+    required this.initialDisplayName,
+    required this.handleDomain,
+    required this.validateHandle,
+  });
+
+  final String initialDisplayName;
+  final String handleDomain;
+  final Future<HandleAvailability> Function(String handle, String domain)
+  validateHandle;
+
+  @override
+  State<_CreateHermesDialog> createState() => _CreateHermesDialogState();
+}
+
+class _CreateHermesDialogState extends State<_CreateHermesDialog> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _handleController;
+  final FocusNode _handleFocusNode = FocusNode();
+  Timer? _handleValidationDebounce;
+  bool _normalizingHandle = false;
+  String? _submittedNameError;
+  String? _submittedHandleError;
+  String? _remoteHandle;
+  bool _remoteHandleChecking = false;
+  HandleAvailability? _remoteAvailability;
+  String? _remoteValidationError;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.initialDisplayName)
+      ..addListener(_onFieldChanged);
+    _handleController = TextEditingController()
+      ..addListener(_normalizeHandleInput);
+  }
+
+  @override
+  void dispose() {
+    _nameController
+      ..removeListener(_onFieldChanged)
+      ..dispose();
+    _handleController
+      ..removeListener(_normalizeHandleInput)
+      ..dispose();
+    _handleValidationDebounce?.cancel();
+    _handleFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _onFieldChanged() {
+    if (_submittedNameError != null || _submittedHandleError != null) {
+      setState(() {
+        _submittedNameError = null;
+        _submittedHandleError = null;
+      });
+      return;
+    }
+    setState(() {});
+  }
+
+  void _normalizeHandleInput() {
+    if (_normalizingHandle) {
+      return;
+    }
+    final normalized = _normalizeAgentHandleInput(_handleController.text);
+    if (normalized != _handleController.text) {
+      _normalizingHandle = true;
+      _handleController.value = TextEditingValue(
+        text: normalized,
+        selection: TextSelection.collapsed(offset: normalized.length),
+      );
+      _normalizingHandle = false;
+    }
+    _onFieldChanged();
+    _scheduleHandleAvailabilityCheck();
+  }
+
+  void _scheduleHandleAvailabilityCheck() {
+    _handleValidationDebounce?.cancel();
+    final handle = _handleController.text.trim();
+    if (_validateAgentHandle(handle) != null) {
+      setState(() {
+        _remoteHandle = null;
+        _remoteHandleChecking = false;
+        _remoteAvailability = null;
+        _remoteValidationError = null;
+      });
+      return;
+    }
+    setState(() {
+      _remoteHandle = handle;
+      _remoteHandleChecking = true;
+      _remoteAvailability = null;
+      _remoteValidationError = null;
+    });
+    _handleValidationDebounce = Timer(
+      const Duration(milliseconds: 450),
+      () => _checkHandleAvailability(handle),
+    );
+  }
+
+  Future<void> _checkHandleAvailability(String handle) async {
+    try {
+      final availability = await widget.validateHandle(
+        handle,
+        widget.handleDomain,
+      );
+      if (!mounted || _remoteHandle != handle) {
+        return;
+      }
+      setState(() {
+        _remoteHandleChecking = false;
+        _remoteAvailability = availability;
+        _remoteValidationError = null;
+        _submittedHandleError = null;
+      });
+    } catch (_) {
+      if (!mounted || _remoteHandle != handle) {
+        return;
+      }
+      setState(() {
+        _remoteHandleChecking = false;
+        _remoteAvailability = null;
+        _remoteValidationError = '暂时无法校验可用性，创建时会再次确认';
+        _submittedHandleError = null;
+      });
+    }
+  }
+
+  void _submit() {
+    final displayName = _nameController.text.trim();
+    final handle = _handleController.text.trim();
+    final nameError = _validateAgentDisplayName(displayName);
+    final handleError =
+        _validateAgentHandle(handle) ??
+        (_remoteHandleChecking ? '正在校验 Handle 可用性' : null) ??
+        _remoteHandleError(handle);
+    if (nameError != null || handleError != null) {
+      setState(() {
+        _submittedNameError = nameError;
+        _submittedHandleError = handleError;
+      });
+      if (handleError != null) {
+        _handleFocusNode.requestFocus();
+      }
+      return;
+    }
+    Navigator.of(
+      context,
+    ).pop(_RuntimeAgentCreationDraft(displayName: displayName, handle: handle));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final handle = _handleController.text.trim();
+    final displayName = _nameController.text.trim();
+    final nameError =
+        _submittedNameError ?? _softValidateAgentDisplayName(displayName);
+    final remoteError = _remoteHandleError(handle);
+    final handleError =
+        _submittedHandleError ??
+        _softValidateAgentHandle(handle) ??
+        remoteError;
+    final canSubmit =
+        _validateAgentDisplayName(displayName) == null &&
+        _validateAgentHandle(handle) == null &&
+        !_remoteHandleChecking &&
+        remoteError == null;
+    final maxWidth = responsive.isPhone ? double.infinity : 430.0;
+    return CupertinoPopupSurface(
+      isSurfacePainted: false,
+      child: Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: responsive.spacing(18),
+            vertical: responsive.spacing(22),
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: CupertinoColors.white,
+                borderRadius: BorderRadius.circular(responsive.radius(14)),
+                boxShadow: const <BoxShadow>[
+                  BoxShadow(
+                    color: Color(0x260B1220),
+                    blurRadius: 34,
+                    offset: Offset(0, 18),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(responsive.spacing(18)),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            '创建 Hermes',
+                            style: TextStyle(
+                              color: const Color(0xFF101B32),
+                              fontSize: responsive.titleLg,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        AppIconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          semanticLabel: '关闭',
+                          tooltip: '关闭',
+                          size: responsive.displayScaled(32),
+                          backgroundColor: const Color(0xFFF5F7FB),
+                          borderColor: const Color(0xFFE4E9F2),
+                          child: Icon(
+                            CupertinoIcons.xmark,
+                            color: const Color(0xFF66728A),
+                            size: responsive.iconSm,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: responsive.spacing(14)),
+                    _AgentDialogField(
+                      label: '名称',
+                      controller: _nameController,
+                      placeholder: 'Hermes',
+                      errorText: nameError,
+                      textInputAction: TextInputAction.next,
+                    ),
+                    SizedBox(height: responsive.spacing(12)),
+                    _AgentDialogField(
+                      label: 'Handle',
+                      controller: _handleController,
+                      placeholder: 'my-hermes',
+                      errorText: handleError,
+                      focusNode: _handleFocusNode,
+                      prefix: const Text('@'),
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _submit(),
+                    ),
+                    SizedBox(height: responsive.spacing(8)),
+                    _HandlePreview(
+                      handle: handle,
+                      domain: widget.handleDomain,
+                      isValid: _validateAgentHandle(handle) == null,
+                      isChecking: _remoteHandleChecking,
+                      availability: _previewAvailability(handle),
+                      fallbackMessage: _remoteValidationError,
+                    ),
+                    SizedBox(height: responsive.spacing(18)),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: _DialogSecondaryButton(
+                            label: '取消',
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ),
+                        SizedBox(width: responsive.spacing(10)),
+                        Expanded(
+                          child: AppPrimaryButton(
+                            label: '创建',
+                            onPressed: canSubmit ? _submit : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String? _remoteHandleError(String handle) {
+    if (handle.isEmpty || _validateAgentHandle(handle) != null) {
+      return null;
+    }
+    final availability = _previewAvailability(handle);
+    if (availability == null || availability.available) {
+      return null;
+    }
+    if (availability.reason == 'unavailable') {
+      return '这个 Handle 已被使用';
+    }
+    return availability.message?.trim().isNotEmpty == true
+        ? availability.message
+        : '这个 Handle 不可使用';
+  }
+
+  HandleAvailability? _previewAvailability(String handle) {
+    if (handle.isEmpty || _remoteHandle != handle) {
+      return null;
+    }
+    return _remoteAvailability;
+  }
+}
+
+class _AgentDialogField extends StatelessWidget {
+  const _AgentDialogField({
+    required this.label,
+    required this.controller,
+    required this.placeholder,
+    this.errorText,
+    this.focusNode,
+    this.prefix,
+    this.textInputAction,
+    this.onSubmitted,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final String placeholder;
+  final String? errorText;
+  final FocusNode? focusNode;
+  final Widget? prefix;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final hasError = errorText != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          label,
+          style: TextStyle(
+            color: const Color(0xFF66728A),
+            fontSize: responsive.metaSm,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        SizedBox(height: responsive.spacing(6)),
+        CupertinoTextField(
+          controller: controller,
+          focusNode: focusNode,
+          placeholder: placeholder,
+          prefix: prefix == null
+              ? null
+              : Padding(
+                  padding: EdgeInsets.only(left: responsive.spacing(10)),
+                  child: DefaultTextStyle(
+                    style: TextStyle(
+                      color: const Color(0xFF66728A),
+                      fontSize: responsive.bodyMd,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    child: prefix!,
+                  ),
+                ),
+          padding: EdgeInsets.symmetric(
+            horizontal: responsive.spacing(12),
+            vertical: responsive.spacing(11),
+          ),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFD),
+            borderRadius: BorderRadius.circular(responsive.radius(9)),
+            border: Border.all(
+              color: hasError
+                  ? const Color(0xFFE14E4E)
+                  : const Color(0xFFDDE5F1),
+            ),
+          ),
+          style: TextStyle(
+            color: const Color(0xFF101B32),
+            fontSize: responsive.bodyMd,
+          ),
+          placeholderStyle: TextStyle(
+            color: const Color(0xFF98A4B8),
+            fontSize: responsive.bodyMd,
+          ),
+          textInputAction: textInputAction,
+          onSubmitted: onSubmitted,
+        ),
+        if (hasError) ...<Widget>[
+          SizedBox(height: responsive.spacing(5)),
+          Text(
+            errorText!,
+            style: TextStyle(
+              color: const Color(0xFFE14E4E),
+              fontSize: responsive.metaSm,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _HandlePreview extends StatelessWidget {
+  const _HandlePreview({
+    required this.handle,
+    required this.domain,
+    required this.isValid,
+    required this.isChecking,
+    this.availability,
+    this.fallbackMessage,
+  });
+
+  final String handle;
+  final String domain;
+  final bool isValid;
+  final bool isChecking;
+  final HandleAvailability? availability;
+  final String? fallbackMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final preview = handle.isEmpty ? '@handle.$domain' : '@$handle.$domain';
+    final message = _handlePreviewMessage(
+      handle: handle,
+      isValid: isValid,
+      isChecking: isChecking,
+      availability: availability,
+      fallbackMessage: fallbackMessage,
+    );
+    final color = _handlePreviewColor(
+      isValid: isValid,
+      isChecking: isChecking,
+      availability: availability,
+      fallbackMessage: fallbackMessage,
+    );
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.spacing(12),
+        vertical: responsive.spacing(9),
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F7FC),
+        borderRadius: BorderRadius.circular(responsive.radius(8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            '最终 Handle：$preview',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: isValid
+                  ? const Color(0xFF22304A)
+                  : const Color(0xFF66728A),
+              fontSize: responsive.metaSm,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (message != null) ...<Widget>[
+            SizedBox(height: responsive.spacing(4)),
+            Text(
+              message,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: responsive.metaSm,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+String? _handlePreviewMessage({
+  required String handle,
+  required bool isValid,
+  required bool isChecking,
+  required HandleAvailability? availability,
+  required String? fallbackMessage,
+}) {
+  if (handle.isEmpty || !isValid) {
+    return null;
+  }
+  if (isChecking) {
+    return '正在校验可用性...';
+  }
+  if (availability != null) {
+    if (availability.available) {
+      return '这个 Handle 可以使用';
+    }
+    return availability.reason == 'unavailable'
+        ? '这个 Handle 已被使用'
+        : availability.message ?? '这个 Handle 不可使用';
+  }
+  return fallbackMessage;
+}
+
+Color _handlePreviewColor({
+  required bool isValid,
+  required bool isChecking,
+  required HandleAvailability? availability,
+  required String? fallbackMessage,
+}) {
+  if (!isValid || isChecking) {
+    return const Color(0xFF66728A);
+  }
+  if (availability?.available == true) {
+    return const Color(0xFF1B7F4B);
+  }
+  if (availability?.available == false) {
+    return const Color(0xFFE14E4E);
+  }
+  if (fallbackMessage != null) {
+    return const Color(0xFF66728A);
+  }
+  return const Color(0xFF66728A);
+}
+
+class _DialogSecondaryButton extends StatelessWidget {
+  const _DialogSecondaryButton({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return AppPressable(
+      onTap: onPressed,
+      semanticLabel: label,
+      borderRadius: BorderRadius.circular(responsive.radius(9)),
+      scaleOnPress: true,
+      child: Container(
+        constraints: BoxConstraints(minHeight: responsive.controlHeight),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F7FB),
+          borderRadius: BorderRadius.circular(responsive.radius(9)),
+          border: Border.all(color: const Color(0xFFE1E7F0)),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            color: const Color(0xFF4B5870),
+            fontSize: responsive.bodyMd,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _nextHermesDisplayName(List<AgentSummary> runtimes) {
+  final used = <int>{};
+  for (final runtime in runtimes) {
+    if (runtime.runtime != 'hermes') {
+      continue;
+    }
+    final name = AgentDisplayName.title(runtime).trim();
+    if (name == 'Hermes') {
+      used.add(1);
+      continue;
+    }
+    final match = RegExp(r'^Hermes ([2-9][0-9]*)$').firstMatch(name);
+    if (match != null) {
+      used.add(int.parse(match.group(1)!));
+    }
+  }
+  if (!used.contains(1)) {
+    return 'Hermes';
+  }
+  var next = 2;
+  while (used.contains(next)) {
+    next += 1;
+  }
+  return 'Hermes $next';
+}
+
+String _normalizeAgentHandleInput(String value) {
+  return value.trim().replaceFirst(RegExp(r'^@+'), '').toLowerCase();
+}
+
+String? _softValidateAgentDisplayName(String value) {
+  return value.isEmpty ? null : _validateAgentDisplayName(value);
+}
+
+String? _validateAgentDisplayName(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return '请输入智能体名称';
+  }
+  if (trimmed.length > 40) {
+    return '名称最多 40 个字符';
+  }
+  return null;
+}
+
+String? _softValidateAgentHandle(String value) {
+  return value.isEmpty ? null : _validateAgentHandle(value);
+}
+
+String? _validateAgentHandle(String value) {
+  final handle = value.trim();
+  if (handle.isEmpty) {
+    return '请输入 Handle';
+  }
+  if (handle.length > 63) {
+    return 'Handle 最多 63 个字符';
+  }
+  if (!RegExp(r'^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$').hasMatch(handle)) {
+    return '仅支持小写字母、数字和连字符，且首尾必须是字母或数字';
+  }
+  if (handle.contains('--')) {
+    return 'Handle 不能包含连续连字符';
+  }
+  return null;
 }
 
 Future<void> _showRetryRunDialog(

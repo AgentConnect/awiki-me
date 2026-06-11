@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
@@ -75,8 +76,8 @@ class AgentInboxAttachment {
   factory AgentInboxAttachment.fromJson(Map<String, Object?> json) {
     return AgentInboxAttachment(
       attachmentId: _string(json['attachment_id']) ?? '',
-      filename: _string(json['filename']) ?? '附件',
-      mimeType: _string(json['mime_type']) ?? 'application/octet-stream',
+      filename: _string(json['filename']) ?? '未命名附件',
+      mimeType: _string(json['mime_type']) ?? '文件',
       sizeBytes: _int(json['size_bytes']),
       downloadState: _string(json['download_state']),
     );
@@ -160,6 +161,9 @@ class AgentInboxThreadState {
   final int? fetchedAtMs;
   final String? error;
 
+  bool get hasTimeout =>
+      error == _daemonNoResponseMessage && messages.isNotEmpty;
+
   AgentInboxThreadState copyWith({
     String? runtimeAgentDid,
     String? threadId,
@@ -218,6 +222,9 @@ class AgentInboxState {
   final String? error;
   final AgentInboxThreadState thread;
 
+  bool get hasListTimeout =>
+      error == _daemonNoResponseMessage && items.isNotEmpty;
+
   AgentInboxState copyWith({
     String? runtimeAgentDid,
     String? daemonAgentDid,
@@ -251,6 +258,9 @@ class AgentInboxState {
 
 class AgentInboxController extends StateNotifier<AgentInboxState> {
   AgentInboxController(this.ref) : super(const AgentInboxState());
+
+  @visibleForTesting
+  static Duration responseTimeout = const Duration(seconds: 20);
 
   final Ref ref;
   Timer? _listTimeout;
@@ -323,7 +333,11 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
       _scheduleListTimeout(requestId);
     } catch (error) {
       _listAppending = false;
-      state = state.copyWith(isRefreshing: false, error: error.toString());
+      state = state.copyWith(
+        isLoading: false,
+        isRefreshing: false,
+        error: error.toString(),
+      );
     }
   }
 
@@ -435,6 +449,7 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
       _threadPrepending = false;
       state = state.copyWith(
         thread: state.thread.copyWith(
+          isLoading: false,
           isRefreshing: false,
           error: error.toString(),
         ),
@@ -559,29 +574,29 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
 
   void _scheduleListTimeout(String requestId) {
     _listTimeout?.cancel();
-    _listTimeout = Timer(const Duration(seconds: 20), () {
+    _listTimeout = Timer(responseTimeout, () {
       if (!mounted || state.lastRequestId != requestId) {
         return;
       }
       state = state.copyWith(
-        isLoading: false,
-        isRefreshing: false,
-        error: 'Daemon 暂时没有返回，请稍后重试',
+        isLoading: state.items.isEmpty,
+        isRefreshing: state.items.isNotEmpty,
+        error: _daemonNoResponseMessage,
       );
     });
   }
 
   void _scheduleThreadTimeout(String requestId) {
     _threadTimeout?.cancel();
-    _threadTimeout = Timer(const Duration(seconds: 20), () {
+    _threadTimeout = Timer(responseTimeout, () {
       if (!mounted || state.thread.lastRequestId != requestId) {
         return;
       }
       state = state.copyWith(
         thread: state.thread.copyWith(
-          isLoading: false,
-          isRefreshing: false,
-          error: 'Daemon 暂时没有返回，请稍后重试',
+          isLoading: state.thread.messages.isEmpty,
+          isRefreshing: state.thread.messages.isNotEmpty,
+          error: _daemonNoResponseMessage,
         ),
       );
     });
@@ -660,6 +675,8 @@ bool _bool(Object? value) {
   }
   return value?.toString().toLowerCase() == 'true';
 }
+
+const _daemonNoResponseMessage = 'Daemon 暂时没有返回，请稍后重试';
 
 final agentInboxProvider =
     StateNotifierProvider<AgentInboxController, AgentInboxState>(

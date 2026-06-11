@@ -10,4 +10,9 @@ abstract interface class OnboardingSupportService {
   Future<HandleRegistrationStatus> lookupHandleRegistration({
     required String handle,
   });
+
+  Future<HandleAvailability> validateHandle({
+    required String handle,
+    String? domain,
+  });
 }

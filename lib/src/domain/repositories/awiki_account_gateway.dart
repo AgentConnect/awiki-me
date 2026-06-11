@@ -2,6 +2,24 @@ import '../entities/session_identity.dart';
 
 enum HandleRegistrationStatus { registered, notRegistered }
 
+class HandleAvailability {
+  const HandleAvailability({
+    required this.handle,
+    required this.available,
+    this.domain,
+    this.fullHandle,
+    this.reason,
+    this.message,
+  });
+
+  final String handle;
+  final String? domain;
+  final String? fullHandle;
+  final bool available;
+  final String? reason;
+  final String? message;
+}
+
 abstract class AwikiAccountGateway {
   Future<SessionIdentity?> restoreSession();
 

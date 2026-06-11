@@ -374,6 +374,8 @@ class _FakeAgentInventory implements AgentInventoryPort {
     required String controllerDid,
     required String daemonAgentDid,
     required String runtime,
+    required String handle,
+    required String displayName,
   }) {
     throw UnimplementedError();
   }

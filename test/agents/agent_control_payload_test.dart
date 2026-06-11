@@ -29,6 +29,8 @@ void main() {
       controllerDid: 'did:human:alice',
       registrationToken: 'runtime-token',
       clientRequestId: 'app_req_1',
+      handle: 'alice-hermes',
+      displayName: 'Alice Hermes',
     );
 
     expect(payload['schema'], AgentControlPayloads.commandSchema);
@@ -38,6 +40,8 @@ void main() {
     expect(args['runtime'], 'hermes');
     expect(args['controller_did'], 'did:human:alice');
     expect(args['registration_token'], 'runtime-token');
+    expect(args['handle'], 'alice-hermes');
+    expect(args['display_name'], 'Alice Hermes');
     expect(args['client_request_id'], 'app_req_1');
   });
 
