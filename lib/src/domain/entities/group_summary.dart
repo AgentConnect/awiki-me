@@ -6,6 +6,7 @@ class GroupSummary {
     required this.memberCount,
     required this.lastMessageAt,
     this.myRole,
+    this.membershipStatus,
   });
 
   final String groupId;
@@ -14,4 +15,5 @@ class GroupSummary {
   final int memberCount;
   final DateTime? lastMessageAt;
   final String? myRole;
+  final String? membershipStatus;
 }

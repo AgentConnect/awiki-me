@@ -340,7 +340,7 @@ class _FakeGroups implements GroupApplicationService {
   @override
   Future<GroupSummary> addMember({
     required String groupDid,
-    required String memberDid,
+    required String memberRef,
     String role = 'member',
   }) async => _group();
 
@@ -385,7 +385,7 @@ class _FakeGroups implements GroupApplicationService {
   @override
   Future<GroupSummary> removeMember({
     required String groupDid,
-    required String memberDid,
+    required String memberRef,
   }) async => _group();
 }
 

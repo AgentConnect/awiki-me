@@ -594,6 +594,7 @@ void main() {
                 description: '',
                 memberCount: 3,
                 lastMessageAt: null,
+                membershipStatus: 'active',
               ),
             );
             return controller;
@@ -605,6 +606,57 @@ void main() {
 
     expect(find.text('融资协作群'), findsOneWidget);
     expect(find.text('funding'), findsNothing);
+  });
+
+  testWidgets('已不在群聊时禁用发送输入区', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'group:did:test:group:removed',
+      displayName: '历史群聊',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:test:group:removed',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          groupProvider.overrideWith((ref) {
+            final controller = GroupController(ref);
+            controller.upsertGroup(
+              GroupSummary(
+                groupId: conversation.groupId!,
+                name: '历史群聊',
+                description: '',
+                memberCount: 3,
+                lastMessageAt: null,
+                myRole: 'member',
+                membershipStatus: 'removed',
+              ),
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('你已不在这个群聊中，不能继续发送消息'), findsOneWidget);
+    expect(find.byKey(const Key('chat-send-button')), findsNothing);
+    expect(find.byKey(const Key('chat-attachment-button')), findsNothing);
   });
 
   testWidgets('聊天输入框回车后直接发送消息', (tester) async {

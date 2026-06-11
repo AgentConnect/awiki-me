@@ -33,12 +33,12 @@ abstract interface class GroupCorePort {
 
   Future<GroupSummary> addMember({
     required String groupDid,
-    required String memberDid,
+    required String memberRef,
     String role = 'member',
   });
 
   Future<GroupSummary> removeMember({
     required String groupDid,
-    required String memberDid,
+    required String memberRef,
   });
 }

@@ -189,7 +189,8 @@ class AwikiImCoreMappers {
       description: '',
       memberCount: group.memberCount ?? 0,
       lastMessageAt: _tryParseDateTime(group.lastMessageAt),
-      myRole: group.membershipStatus,
+      myRole: group.myRole,
+      membershipStatus: group.membershipStatus,
     );
   }
 
@@ -201,6 +202,7 @@ class AwikiImCoreMappers {
       memberCount: group.memberCount ?? 0,
       lastMessageAt: _tryParseDateTime(group.lastMessageAt),
       myRole: group.myRole ?? group.membershipStatus,
+      membershipStatus: group.membershipStatus,
     );
   }
 
@@ -323,6 +325,7 @@ class AwikiImCoreMappers {
               description: '',
               memberCount: 0,
               lastMessageAt: chatMessage.createdAt,
+              membershipStatus: null,
             ),
     );
   }

@@ -16,6 +16,7 @@ import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../agents/agent_inbox_panel.dart';
 import '../app_shell/providers/selected_conversation_provider.dart';
+import '../app_shell/providers/session_provider.dart';
 import '../chat/chat_page.dart';
 import '../group/group_list_page.dart';
 import '../group/group_provider.dart';
@@ -844,6 +845,8 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
     _requestGroup(groupId);
     _requestMembers(groupId);
     final members = ref.watch(groupMembersProvider(groupId));
+    final currentDid = ref.watch(sessionProvider).session?.did;
+    final canManageMembers = canManageGroupMembers(_group);
     final theme = context.awikiTheme;
     return _MacPanelShell(
       title: '${_group.name} 的群聊信息',
@@ -917,13 +920,15 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                _MacPanelIconButton(
-                  key: const Key('mac-group-info-add-member-button'),
-                  semanticLabel: '添加成员',
-                  icon: CupertinoIcons.person_add,
-                  onTap: _openAddMemberDialog,
-                ),
-                const SizedBox(width: 8),
+                if (canManageMembers) ...<Widget>[
+                  _MacPanelIconButton(
+                    key: const Key('mac-group-info-add-member-button'),
+                    semanticLabel: '添加成员',
+                    icon: CupertinoIcons.person_add,
+                    onTap: _openAddMemberDialog,
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 _MacPanelIconButton(
                   key: const Key('mac-group-info-refresh-button'),
                   semanticLabel: '刷新成员',
@@ -943,7 +948,17 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
                         .map(
                           (item) => Padding(
                             padding: const EdgeInsets.only(bottom: 12),
-                            child: _MacGroupMemberRow(item: item),
+                            child: GroupMemberRow(
+                              item: item,
+                              onRemove:
+                                  canRemoveGroupMember(
+                                    group: _group,
+                                    member: item,
+                                    currentDid: currentDid,
+                                  )
+                                  ? () => _confirmRemoveMember(item)
+                                  : null,
+                            ),
                           ),
                         )
                         .toList(),
@@ -1067,6 +1082,23 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
     );
   }
 
+  Future<void> _confirmRemoveMember(GroupMemberSummary member) async {
+    await showRemoveGroupMemberDialog(
+      context: context,
+      ref: ref,
+      groupId: _group.groupId,
+      member: member,
+      onGroupUpdated: (updated) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _group = updated;
+        });
+      },
+    );
+  }
+
   GroupSummary _groupFromConversation(ConversationSummary conversation) {
     final groupId = conversation.groupId?.trim().isNotEmpty == true
         ? conversation.groupId!.trim()
@@ -1080,41 +1112,8 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
       description: '',
       memberCount: 0,
       lastMessageAt: conversation.lastMessageAt,
+      membershipStatus: null,
     );
-  }
-}
-
-class _MacGroupMemberRow extends StatelessWidget {
-  const _MacGroupMemberRow({required this.item});
-
-  final GroupMemberSummary item;
-
-  @override
-  Widget build(BuildContext context) {
-    final handle = _handleLabel(item);
-    return Row(
-      children: <Widget>[
-        AvatarBadge(seed: handle, size: 36),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            handle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AwikiMeTextStyles.cardTitle,
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _handleLabel(GroupMemberSummary item) {
-    final handle = item.handle.trim();
-    final did = item.did.trim();
-    if (handle.isNotEmpty && handle != did) {
-      return handle;
-    }
-    return DidDisplayFormatter.compactDid(did);
   }
 }
 

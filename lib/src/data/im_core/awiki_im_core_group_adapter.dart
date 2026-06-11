@@ -112,20 +112,25 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
   @override
   Future<GroupSummary> addMember({
     required String groupDid,
-    required String memberDid,
+    required String memberRef,
     String role = 'member',
-  }) {
-    // TODO(im-core): enable when Dart group mutation facade exposes addMember.
-    throw UnsupportedError('IM Core group addMember is not available yet');
+  }) async {
+    final result = await _runtime.withCurrentClient(
+      (client) =>
+          client.groups.addMember(groupDid, memberRef: memberRef, role: role),
+    );
+    return _groupFromResult(result);
   }
 
   @override
   Future<GroupSummary> removeMember({
     required String groupDid,
-    required String memberDid,
-  }) {
-    // TODO(im-core): enable when Dart group mutation facade exposes removeMember.
-    throw UnsupportedError('IM Core group removeMember is not available yet');
+    required String memberRef,
+  }) async {
+    final result = await _runtime.withCurrentClient(
+      (client) => client.groups.removeMember(groupDid, memberRef: memberRef),
+    );
+    return _groupFromResult(result);
   }
 
   GroupSummary _groupFromResult(core.GroupReadResult result) {

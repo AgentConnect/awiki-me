@@ -825,19 +825,30 @@ void main() {
     expect(find.text('did:test:member'), findsNothing);
     expect(find.byType(GroupDetailPage), findsNothing);
 
-    const memberDid = 'did:wba:awiki.ai:user:bob:e1_member';
+    const memberRef = 'did:wba:awiki.ai:user:bob:e1_member';
     await tester.tap(find.byKey(const Key('mac-group-info-add-member-button')));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(CupertinoTextField).last, memberDid);
+    expect(find.text('成员 handle 或 DID'), findsOneWidget);
+    await tester.enterText(find.byType(CupertinoTextField).last, memberRef);
     await tester.tap(find.text('添加'));
     await tester.pumpAndSettle();
 
     expect(gateway.lastAddedGroupId, group.groupId);
-    expect(gateway.lastAddedMemberDid, memberDid);
+    expect(gateway.lastAddedMemberRef, memberRef);
     expect(find.text('bob'), findsOneWidget);
-    expect(find.text(memberDid), findsNothing);
+    expect(find.text(memberRef), findsNothing);
     expect(find.text('3 人'), findsOneWidget);
+
+    await tester.tap(find.bySemanticsLabel('移除成员').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('移除'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastRemovedGroupId, group.groupId);
+    expect(gateway.lastRemovedMemberRef, memberRef);
+    expect(find.text('bob'), findsNothing);
+    expect(find.text('2 人'), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

@@ -105,12 +105,24 @@ class GroupController extends StateNotifier<GroupState> {
 
   Future<GroupSummary> addGroupMember({
     required String groupId,
-    required String memberDid,
+    required String memberRef,
     String role = 'member',
   }) async {
     final updated = await ref
         .read(groupApplicationServiceProvider)
-        .addMember(groupDid: groupId, memberDid: memberDid, role: role);
+        .addMember(groupDid: groupId, memberRef: memberRef, role: role);
+    upsertGroup(updated);
+    await loadGroupMembers(groupId);
+    return updated;
+  }
+
+  Future<GroupSummary> removeGroupMember({
+    required String groupId,
+    required String memberRef,
+  }) async {
+    final updated = await ref
+        .read(groupApplicationServiceProvider)
+        .removeMember(groupDid: groupId, memberRef: memberRef);
     upsertGroup(updated);
     await loadGroupMembers(groupId);
     return updated;

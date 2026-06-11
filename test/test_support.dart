@@ -311,8 +311,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   String? lastCreatedGroupPrompt;
   String? lastJoinedGroupDid;
   String? lastAddedGroupId;
-  String? lastAddedMemberDid;
+  String? lastAddedMemberRef;
   String? lastAddedMemberRole;
+  String? lastRemovedGroupId;
+  String? lastRemovedMemberRef;
   String? lastSentThreadId;
   String? lastSentPeerDid;
   String? lastSentGroupId;
@@ -446,6 +448,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       memberCount: 1,
       lastMessageAt: DateTime.now(),
       myRole: 'owner',
+      membershipStatus: 'active',
     );
     groups = <GroupSummary>[
       ...groups.where((item) => item.groupId != group.groupId),
@@ -485,6 +488,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
         description: '',
         memberCount: 0,
         lastMessageAt: null,
+        membershipStatus: null,
       ),
     );
   }
@@ -516,6 +520,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       memberCount: 1,
       lastMessageAt: DateTime.now(),
       myRole: 'member',
+      membershipStatus: 'active',
     );
     groups = <GroupSummary>[
       ...groups.where((item) => item.groupId != group.groupId),
@@ -527,21 +532,21 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   @override
   Future<GroupSummary> addGroupMember({
     required String groupId,
-    required String memberDid,
+    required String memberRef,
     String role = 'member',
   }) async {
     lastAddedGroupId = groupId;
-    lastAddedMemberDid = memberDid;
+    lastAddedMemberRef = memberRef;
     lastAddedMemberRole = role;
     final members = <GroupMemberSummary>[
       ...(groupMembersByGroupId[groupId] ?? const <GroupMemberSummary>[]),
     ];
-    if (!members.any((item) => item.did == memberDid)) {
+    if (!members.any((item) => item.did == memberRef)) {
       members.add(
         GroupMemberSummary(
-          userId: memberDid,
-          did: memberDid,
-          handle: memberDid,
+          userId: memberRef,
+          did: memberRef,
+          handle: memberRef,
           role: role,
           profileUrl: null,
         ),
@@ -556,6 +561,37 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       memberCount: members.length,
       lastMessageAt: current.lastMessageAt,
       myRole: current.myRole,
+      membershipStatus: current.membershipStatus,
+    );
+    groups = <GroupSummary>[
+      ...groups.where((item) => item.groupId != updated.groupId),
+      updated,
+    ];
+    return updated;
+  }
+
+  @override
+  Future<GroupSummary> removeGroupMember({
+    required String groupId,
+    required String memberRef,
+  }) async {
+    lastRemovedGroupId = groupId;
+    lastRemovedMemberRef = memberRef;
+    final members = <GroupMemberSummary>[
+      for (final item
+          in groupMembersByGroupId[groupId] ?? const <GroupMemberSummary>[])
+        if (item.did != memberRef && item.handle != memberRef) item,
+    ];
+    groupMembersByGroupId[groupId] = members;
+    final current = await getGroup(groupId);
+    final updated = GroupSummary(
+      groupId: current.groupId,
+      name: current.name,
+      description: current.description,
+      memberCount: members.length,
+      lastMessageAt: current.lastMessageAt,
+      myRole: current.myRole,
+      membershipStatus: current.membershipStatus,
     );
     groups = <GroupSummary>[
       ...groups.where((item) => item.groupId != updated.groupId),
@@ -1557,12 +1593,12 @@ class FakeGroupApplicationService implements GroupApplicationService {
   @override
   Future<GroupSummary> addMember({
     required String groupDid,
-    required String memberDid,
+    required String memberRef,
     String role = 'member',
   }) {
     return gateway.addGroupMember(
       groupId: groupDid,
-      memberDid: memberDid,
+      memberRef: memberRef,
       role: role,
     );
   }
@@ -1624,9 +1660,9 @@ class FakeGroupApplicationService implements GroupApplicationService {
   @override
   Future<GroupSummary> removeMember({
     required String groupDid,
-    required String memberDid,
+    required String memberRef,
   }) {
-    throw UnimplementedError();
+    return gateway.removeGroupMember(groupId: groupDid, memberRef: memberRef);
   }
 }
 

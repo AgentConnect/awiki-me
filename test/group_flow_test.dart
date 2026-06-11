@@ -139,7 +139,7 @@ void main() {
 
   testWidgets('群详情可以添加成员并刷新成员列表', (tester) async {
     const groupDid = 'did:wba:awiki.ai:group:e1_group';
-    const memberDid = 'did:wba:awiki.ai:user:bob:e1_member';
+    const memberRef = 'did:wba:awiki.ai:user:bob:e1_member';
     final gateway = FakeAwikiGateway()
       ..loginResult = session
       ..groups = <GroupSummary>[
@@ -188,15 +188,77 @@ void main() {
     await tester.tap(find.byKey(const Key('group-detail-add-member-button')));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(CupertinoTextField).last, memberDid);
+    expect(find.text('成员 handle 或 DID'), findsOneWidget);
+    expect(find.text('支持普通用户和智能体，输入 handle 或 DID 后会直接加入群聊。'), findsOneWidget);
+
+    await tester.enterText(find.byType(CupertinoTextField).last, memberRef);
     await tester.tap(find.text('添加'));
     await tester.pumpAndSettle();
 
     expect(gateway.lastAddedGroupId, groupDid);
-    expect(gateway.lastAddedMemberDid, memberDid);
+    expect(gateway.lastAddedMemberRef, memberRef);
     expect(find.text('bob'), findsOneWidget);
-    expect(find.text(memberDid), findsNothing);
+    expect(find.text(memberRef), findsNothing);
     expect(find.text('2 人'), findsOneWidget);
+  });
+
+  testWidgets('群详情可以移除成员并刷新成员列表', (tester) async {
+    const groupDid = 'did:wba:awiki.ai:group:e1_group';
+    const memberDid = 'did:wba:awiki.ai:user:bob:e1_member';
+    final gateway = FakeAwikiGateway()
+      ..loginResult = session
+      ..groups = <GroupSummary>[
+        GroupSummary(
+          groupId: groupDid,
+          name: '融资协作群',
+          description: '',
+          memberCount: 2,
+          lastMessageAt: DateTime(2026, 5, 17, 10),
+          myRole: 'owner',
+        ),
+      ]
+      ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+        groupDid: <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: session.did,
+            did: session.did,
+            handle: session.handle ?? session.did,
+            role: 'owner',
+            profileUrl: null,
+          ),
+          const GroupMemberSummary(
+            userId: memberDid,
+            did: memberDid,
+            handle: 'bob.awiki.ai',
+            role: 'member',
+            profileUrl: null,
+          ),
+        ],
+      };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: GroupDetailPage(initialGroup: gateway.groups.first),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('bob.awiki.ai'), findsOneWidget);
+
+    final removeButton = find.bySemanticsLabel('移除成员').last;
+    await tester.tap(removeButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('移除成员'), findsOneWidget);
+    await tester.tap(find.text('移除'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastRemovedGroupId, groupDid);
+    expect(gateway.lastRemovedMemberRef, memberDid);
+    expect(find.text('bob.awiki.ai'), findsNothing);
+    expect(find.text('1 人'), findsOneWidget);
   });
 
   testWidgets('群详情成员刷新按钮显示 loading 并只刷新成员列表', (tester) async {

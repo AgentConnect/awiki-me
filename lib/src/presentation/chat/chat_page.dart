@@ -135,6 +135,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
       currentConversation,
       agents,
     );
+    final groupSendDisabledReason = _groupSendDisabledReason(
+      currentConversation,
+    );
     final peerClassification = ref
         .watch(
           conversationPeerClassificationProvider(
@@ -346,10 +349,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
             macStyle: macStyle,
             controller: textController,
             pendingAttachment: _pendingAttachment,
-            enabled: !isDeletedAgentConversation,
+            enabled:
+                !isDeletedAgentConversation && groupSendDisabledReason == null,
             disabledReason: isDeletedAgentConversation
                 ? '智能体已删除，无法继续发送消息'
-                : null,
+                : groupSendDisabledReason,
             onSend: () => _submitComposer(currentConversation),
             onAttach: () async {
               await _pickAndStageAttachment();
@@ -400,7 +404,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   Future<void> _pickAndStageAttachment() async {
-    if (_currentConversationForTitle().isDeletedAgentConversation) {
+    final conversation = _currentConversationForTitle();
+    if (conversation.isDeletedAgentConversation ||
+        _groupSendDisabledReason(conversation) != null) {
       return;
     }
     try {
@@ -433,7 +439,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   Future<void> _submitComposer(ConversationSummary conversation) async {
-    if (conversation.isDeletedAgentConversation) {
+    if (conversation.isDeletedAgentConversation ||
+        _groupSendDisabledReason(conversation) != null) {
       return;
     }
     final attachment = _pendingAttachment;
@@ -623,6 +630,30 @@ class _ChatViewState extends ConsumerState<ChatView> {
           !GroupDisplayName.isIdLike(group.name, groupId)) {
         return group.name;
       }
+    }
+    return null;
+  }
+
+  String? _groupSendDisabledReason(ConversationSummary conversation) {
+    if (!conversation.isGroup) {
+      return null;
+    }
+    final groupId = conversation.groupId?.trim();
+    if (groupId == null || groupId.isEmpty) {
+      return null;
+    }
+    for (final group in ref.watch(groupProvider).groups) {
+      if (group.groupId != groupId) {
+        continue;
+      }
+      final status = group.membershipStatus?.trim();
+      if (status == null || status.isEmpty || status == 'active') {
+        return null;
+      }
+      if (status == 'left' || status == 'removed') {
+        return '你已不在这个群聊中，不能继续发送消息';
+      }
+      return '当前群聊暂时不能发送消息';
     }
     return null;
   }

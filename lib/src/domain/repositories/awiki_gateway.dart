@@ -55,8 +55,13 @@ abstract class AwikiGateway {
 
   Future<GroupSummary> addGroupMember({
     required String groupId,
-    required String memberDid,
+    required String memberRef,
     String role = 'member',
+  });
+
+  Future<GroupSummary> removeGroupMember({
+    required String groupId,
+    required String memberRef,
   });
 
   Future<GroupSummary> getGroup(String groupId);

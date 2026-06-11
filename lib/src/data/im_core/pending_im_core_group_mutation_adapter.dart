@@ -6,17 +6,17 @@ class PendingImCoreGroupMutationAdapter {
 
   Future<GroupSummary> addMember({
     required String groupDid,
-    required String memberDid,
+    required String memberRef,
     String role = 'member',
   }) {
-    throw UnsupportedError('IM Core group addMember is not available yet');
+    throw UnsupportedError('Group addMember is not configured');
   }
 
   Future<GroupSummary> removeMember({
     required String groupDid,
-    required String memberDid,
+    required String memberRef,
   }) {
-    throw UnsupportedError('IM Core group removeMember is not available yet');
+    throw UnsupportedError('Group removeMember is not configured');
   }
 }
 
@@ -24,17 +24,17 @@ mixin PendingImCoreGroupMutations on GroupCorePort {
   @override
   Future<GroupSummary> addMember({
     required String groupDid,
-    required String memberDid,
+    required String memberRef,
     String role = 'member',
   }) {
-    throw UnsupportedError('IM Core group addMember is not available yet');
+    throw UnsupportedError('Group addMember is not configured');
   }
 
   @override
   Future<GroupSummary> removeMember({
     required String groupDid,
-    required String memberDid,
+    required String memberRef,
   }) {
-    throw UnsupportedError('IM Core group removeMember is not available yet');
+    throw UnsupportedError('Group removeMember is not configured');
   }
 }
