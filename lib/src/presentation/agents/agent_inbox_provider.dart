@@ -261,10 +261,16 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
 
   @visibleForTesting
   static Duration responseTimeout = const Duration(seconds: 20);
+  @visibleForTesting
+  static Duration statusPollInterval = const Duration(milliseconds: 700);
+  @visibleForTesting
+  static int statusPollAttempts = 35;
 
   final Ref ref;
   Timer? _listTimeout;
   Timer? _threadTimeout;
+  Timer? _listStatusPoll;
+  Timer? _threadStatusPoll;
   bool _listAppending = false;
   bool _threadPrepending = false;
 
@@ -298,6 +304,11 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
           );
       state = state.copyWith(lastRequestId: requestId);
       _scheduleListTimeout(requestId);
+      _pollListStatus(
+        daemonAgentDid: daemonAgentDid,
+        runtimeAgentDid: runtimeAgentDid,
+        requestId: requestId,
+      );
     } catch (error) {
       state = state.copyWith(
         isLoading: false,
@@ -331,6 +342,11 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
           );
       state = state.copyWith(lastRequestId: requestId);
       _scheduleListTimeout(requestId);
+      _pollListStatus(
+        daemonAgentDid: daemonAgentDid,
+        runtimeAgentDid: runtimeAgentDid,
+        requestId: requestId,
+      );
     } catch (error) {
       _listAppending = false;
       state = state.copyWith(
@@ -385,6 +401,11 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
         thread: state.thread.copyWith(lastRequestId: requestId),
       );
       _scheduleThreadTimeout(requestId);
+      _pollThreadStatus(
+        daemonAgentDid: daemonAgentDid,
+        runtimeAgentDid: runtimeAgentDid,
+        requestId: requestId,
+      );
     } catch (error) {
       state = state.copyWith(
         thread: state.thread.copyWith(
@@ -445,6 +466,11 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
         thread: state.thread.copyWith(lastRequestId: requestId),
       );
       _scheduleThreadTimeout(requestId);
+      _pollThreadStatus(
+        daemonAgentDid: daemonAgentDid,
+        runtimeAgentDid: runtimeAgentDid,
+        requestId: requestId,
+      );
     } catch (error) {
       _threadPrepending = false;
       state = state.copyWith(
@@ -481,8 +507,13 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
         requestId != state.lastRequestId) {
       return;
     }
+    if (!_matchesCurrentMailboxPayload(payload)) {
+      return;
+    }
     _listTimeout?.cancel();
     _listTimeout = null;
+    _listStatusPoll?.cancel();
+    _listStatusPoll = null;
     final shouldAppend = _listAppending;
     _listAppending = false;
     final succeeded = _string(payload['state']) == 'succeeded';
@@ -529,8 +560,13 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
         requestId != state.thread.lastRequestId) {
       return;
     }
+    if (!_matchesCurrentMailboxPayload(payload)) {
+      return;
+    }
     _threadTimeout?.cancel();
     _threadTimeout = null;
+    _threadStatusPoll?.cancel();
+    _threadStatusPoll = null;
     final shouldPrepend = _threadPrepending;
     _threadPrepending = false;
     final succeeded = _string(payload['state']) == 'succeeded';
@@ -574,6 +610,15 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
     );
   }
 
+  bool _matchesCurrentMailboxPayload(Map<String, Object?> payload) {
+    final payloadDaemonDid = _string(payload['daemon_agent_did']);
+    final payloadRuntimeDid = _string(payload['runtime_agent_did']);
+    return payloadDaemonDid != null &&
+        payloadRuntimeDid != null &&
+        payloadDaemonDid == state.daemonAgentDid &&
+        payloadRuntimeDid == state.runtimeAgentDid;
+  }
+
   void _scheduleListTimeout(String requestId) {
     _listTimeout?.cancel();
     _listTimeout = Timer(responseTimeout, () {
@@ -604,10 +649,96 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
     });
   }
 
+  void _pollListStatus({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    required String requestId,
+  }) {
+    _listStatusPoll?.cancel();
+    var attempts = 0;
+    _listStatusPoll = Timer.periodic(statusPollInterval, (timer) async {
+      if (!mounted || state.lastRequestId != requestId) {
+        timer.cancel();
+        return;
+      }
+      attempts += 1;
+      final payload = await _findStatusPayload(
+        daemonAgentDid: daemonAgentDid,
+        runtimeAgentDid: runtimeAgentDid,
+        requestId: requestId,
+        statusScope: 'runtime_inbox',
+      );
+      if (!mounted || state.lastRequestId != requestId) {
+        timer.cancel();
+        return;
+      }
+      if (payload != null) {
+        timer.cancel();
+        _applyInboxPayload(payload);
+        return;
+      }
+      if (attempts >= statusPollAttempts) {
+        timer.cancel();
+      }
+    });
+  }
+
+  void _pollThreadStatus({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    required String requestId,
+  }) {
+    _threadStatusPoll?.cancel();
+    var attempts = 0;
+    _threadStatusPoll = Timer.periodic(statusPollInterval, (timer) async {
+      if (!mounted || state.thread.lastRequestId != requestId) {
+        timer.cancel();
+        return;
+      }
+      attempts += 1;
+      final payload = await _findStatusPayload(
+        daemonAgentDid: daemonAgentDid,
+        runtimeAgentDid: runtimeAgentDid,
+        requestId: requestId,
+        statusScope: 'runtime_inbox_thread',
+      );
+      if (!mounted || state.thread.lastRequestId != requestId) {
+        timer.cancel();
+        return;
+      }
+      if (payload != null) {
+        timer.cancel();
+        _applyThreadPayload(payload);
+        return;
+      }
+      if (attempts >= statusPollAttempts) {
+        timer.cancel();
+      }
+    });
+  }
+
+  Future<Map<String, Object?>?> _findStatusPayload({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    required String requestId,
+    required String statusScope,
+  }) {
+    return ref
+        .read(agentControlStatusStoreProvider)
+        .findStatusPayload(
+          daemonAgentDid: daemonAgentDid,
+          runtimeAgentDid: runtimeAgentDid,
+          requestId: requestId,
+          statusScope: statusScope,
+        );
+  }
+
   @override
   void dispose() {
     _listTimeout?.cancel();
     _threadTimeout?.cancel();
+    _listStatusPoll?.cancel();
+    _threadStatusPoll?.cancel();
     super.dispose();
   }
 }

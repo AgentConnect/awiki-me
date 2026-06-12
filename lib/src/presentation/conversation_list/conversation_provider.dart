@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
@@ -99,6 +101,10 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           ownerDid: session.did,
           conversation: conversation,
         );
+  }
+
+  void restoreConversationBestEffort(ConversationSummary conversation) {
+    unawaited(restoreConversation(conversation).catchError((_) {}));
   }
 
   Future<void> deleteFromRecents(ConversationSummary conversation) async {
