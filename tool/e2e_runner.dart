@@ -792,6 +792,7 @@ class CommandRunner {
       process: process,
       sink: sink,
       checkExit: checkExit,
+      logFile: logFile,
     );
   }
 }
@@ -802,17 +803,20 @@ class RunningProcess {
     required this.process,
     required this.sink,
     required this.checkExit,
+    this.logFile,
   });
 
   RunningProcess.fake(this.label)
     : process = null,
       sink = null,
-      checkExit = false;
+      checkExit = false,
+      logFile = null;
 
   final String label;
   final Process? process;
   final IOSink? sink;
   final bool checkExit;
+  final File? logFile;
 
   Future<int> wait({Duration timeout = const Duration(minutes: 5)}) async {
     final current = process;
@@ -823,19 +827,30 @@ class RunningProcess {
       timeout,
       onTimeout: () {
         current.kill();
-        throw E2eFailure('$label timed out after ${timeout.inSeconds}s.');
+        throw E2eFailure(
+          '$label timed out after ${timeout.inSeconds}s.'
+          '${_logHint()}',
+        );
       },
     );
     await sink?.flush();
     await sink?.close();
     if (exit != 0 && checkExit) {
-      throw E2eFailure('$label exited with code $exit.');
+      throw E2eFailure('$label exited with code $exit.${_logHint()}');
     }
     return exit;
   }
 
   void kill() {
     process?.kill();
+  }
+
+  String _logHint() {
+    final path = logFile?.path;
+    if (path == null || path.isEmpty) {
+      return '';
+    }
+    return ' See log: $path';
   }
 }
 

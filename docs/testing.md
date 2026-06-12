@@ -94,11 +94,24 @@ Real E2E requires local configuration, two devices or simulators, Maestro, and
 a reachable non-production backend:
 
 ```bash
+# Copy the example first, then edit the local file with two isolated
+# non-production accounts and the device IDs/names for your host.
+cp awiki_e2e.example.yaml awiki_e2e.local.yaml
 dart run tool/e2e_runner.dart --config awiki_e2e.local.yaml
 ```
 
 Never commit `awiki_e2e.local.yaml`, `.e2e/`, real credentials, generated local
 state, or device-specific reports. The example config is documentation only.
+The runner writes `timings.json` and Maestro logs under
+`.e2e/reports/<runId>/`; record the path in manual/nightly evidence, but keep
+the files local.
+
+For Android, configure either two already-running `adb` serials under
+`device.android.ids` or two independent AVD names under
+`device.android.avdNames`. For iOS, configure two simulator UDIDs under
+`device.ios.ids` or two simulator names under `device.ios.names`.
+Real-device E2E should remain a manual, nightly, or release gate unless the
+project has stable devices, OTP test accounts, Maestro, and backend isolation.
 
 ## Recommended Local Gate
 

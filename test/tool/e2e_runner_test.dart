@@ -233,6 +233,76 @@ message:
         ),
       );
     });
+
+    test('rejects partial and duplicate mobile device configuration', () async {
+      final partialAndroidIds = await _writeConfig('''
+platform: android
+app: {}
+service: {}
+device:
+  android:
+    ids:
+      a: emulator-5554
+otp: {}
+accounts:
+  a:
+    phone: "+8610011110001"
+    handle: alice
+  b:
+    phone: "+8610011110002"
+    handle: bob
+message: {}
+''');
+      final partialAndroidConfig = E2eConfig.load(partialAndroidIds);
+      expect(
+        () => AndroidDeviceManager(
+          CommandRunner(root: Directory.current, dryRun: true),
+          partialAndroidConfig,
+          Directory.systemTemp,
+        ).prepare(),
+        throwsA(
+          isA<E2eFailure>().having(
+            (error) => error.message,
+            'message',
+            'Configure both android.ids.a and android.ids.b, or omit both.',
+          ),
+        ),
+      );
+
+      final duplicateIosIds = await _writeConfig('''
+platform: ios
+app: {}
+service: {}
+device:
+  ios:
+    ids:
+      a: IOS-DEVICE
+      b: IOS-DEVICE
+otp: {}
+accounts:
+  a:
+    phone: "+8610011110001"
+    handle: alice
+  b:
+    phone: "+8610011110002"
+    handle: bob
+message: {}
+''');
+      final duplicateIosConfig = E2eConfig.load(duplicateIosIds);
+      expect(
+        () => IosDeviceManager(
+          CommandRunner(root: Directory.current, dryRun: true),
+          duplicateIosConfig,
+        ).prepare(),
+        throwsA(
+          isA<E2eFailure>().having(
+            (error) => error.message,
+            'message',
+            'iOS E2E requires two different simulator UDIDs.',
+          ),
+        ),
+      );
+    });
   });
 
   group('CommandRunner dry-run', () {
@@ -329,6 +399,82 @@ message: {}
         ),
       );
     });
+
+    test('reports process log file on non-zero exit', () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_me_e2e_process_test_',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final logFile = File('${root.path}/failed.log');
+      final process = await CommandRunner(root: root, dryRun: false).start(
+        'false',
+        const <String>[],
+        label: 'maestro-login-a',
+        logFile: logFile,
+      );
+
+      expect(
+        () => process.wait(),
+        throwsA(
+          isA<E2eFailure>()
+              .having(
+                (error) => error.message,
+                'message',
+                contains('maestro-login-a exited with code 1.'),
+              )
+              .having(
+                (error) => error.message,
+                'message',
+                contains('See log: ${logFile.path}'),
+              ),
+        ),
+      );
+    });
+  });
+
+  group('Maestro selectors', () {
+    test('flows use E2E identifiers present in app source', () {
+      final sourceIds = _sourceE2eIds();
+      final referencedIds = _maestroReferencedIds();
+
+      expect(
+        referencedIds,
+        containsAll(<String>{
+          'e2e-phone-input',
+          'e2e-send-otp-button',
+          'e2e-otp-sent',
+          'e2e-otp-input',
+          'e2e-otp-complete',
+          'e2e-login-next-button',
+          'e2e-handle-input',
+          'e2e-complete-login-button',
+          'e2e-quick-actions-button',
+          'e2e-start-conversation-menu-item',
+          'e2e-identity-lookup-input',
+          'e2e-identity-lookup-search-button',
+          'e2e-identity-start-chat-button',
+          'e2e-chat-back-button',
+          'e2e-chat-input',
+          'e2e-chat-send-button',
+        }),
+      );
+      final staticIds = referencedIds
+          .where((id) => !id.startsWith(r'${'))
+          .toSet();
+      expect(sourceIds, containsAll(staticIds));
+      expect(
+        File('lib/src/app/e2e_semantics.dart').readAsStringSync(),
+        contains('e2e-message-'),
+      );
+      expect(
+        File('lib/src/presentation/chat/chat_page.dart').readAsStringSync(),
+        contains('e2eMessageIdentifier(message.content)'),
+      );
+    });
   });
 }
 
@@ -344,4 +490,33 @@ Future<File> _writeConfig(String contents) async {
     }
   });
   return file;
+}
+
+Set<String> _maestroReferencedIds() {
+  final ids = <String>{};
+  for (final file in Directory(
+    '.maestro',
+  ).listSync().whereType<File>().where((file) => file.path.endsWith('.yaml'))) {
+    final contents = file.readAsStringSync();
+    for (final match in RegExp(r'id:\s*([^\s]+)').allMatches(contents)) {
+      ids.add(match.group(1)!.trim().replaceAll('"', ''));
+    }
+  }
+  return ids;
+}
+
+Set<String> _sourceE2eIds() {
+  final ids = <String>{};
+  for (final directory in <String>['lib/src', 'lib/l10n']) {
+    for (final entity in Directory(directory).listSync(recursive: true)) {
+      if (entity is! File || !entity.path.endsWith('.dart')) {
+        continue;
+      }
+      final contents = entity.readAsStringSync();
+      for (final match in RegExp(r'''e2e-[a-z0-9-]+''').allMatches(contents)) {
+        ids.add(match.group(0)!);
+      }
+    }
+  }
+  return ids;
 }
