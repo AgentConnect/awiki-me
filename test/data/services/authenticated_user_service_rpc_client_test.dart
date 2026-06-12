@@ -92,6 +92,48 @@ void main() {
       );
     },
   );
+
+  test('propagates non-auth RPC errors without refreshing token', () async {
+    final sessions = _FakeSessions(
+      current: _session(jwtToken: 'valid-token'),
+      refreshed: _session(jwtToken: 'fresh-token'),
+    );
+    final httpClient = _QueueHttpClient([
+      http.Response(
+        '{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid params"},"id":"req-1"}',
+        200,
+      ),
+    ]);
+    final client = AuthenticatedUserServiceRpcClient(
+      client: AwikiOnboardingUtilityHttpClient(
+        baseUrl: 'https://example.test',
+        httpClient: httpClient,
+      ),
+      sessions: AuthSessionCoordinator(sessions: sessions),
+    );
+
+    await expectLater(
+      client.rpcCall(
+        path: '/user-service/agent-inventory/rpc',
+        method: 'list_agents',
+        params: const <String, Object?>{'include_inactive': false},
+      ),
+      throwsA(
+        isA<AwikiOnboardingUtilityError>().having(
+          (error) => error.message,
+          'message',
+          'invalid params',
+        ),
+      ),
+    );
+
+    expect(sessions.refreshCount, 0);
+    expect(httpClient.requests, hasLength(1));
+    expect(
+      httpClient.requests.single.headers['Authorization'],
+      'Bearer valid-token',
+    );
+  });
 }
 
 class _QueueHttpClient extends http.BaseClient {

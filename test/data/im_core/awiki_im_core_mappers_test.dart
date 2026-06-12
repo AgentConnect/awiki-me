@@ -37,6 +37,45 @@ void main() {
     expect(legacy.jwtToken, 'jwt-123');
   });
 
+  test(
+    'identity display name falls back through handle, alias, compact DID',
+    () {
+      const withHandle = core.IdentitySummary(
+        id: 'id-handle',
+        did: 'did:wba:awiki.ai:user:alice:e1_1234567890',
+        handle: 'alice.awiki.ai',
+        isDefault: false,
+        readyForAuth: true,
+        readyForMessaging: true,
+      );
+      const withAlias = core.IdentitySummary(
+        id: 'id-alias',
+        did: 'did:wba:awiki.ai:user:bob:e1_1234567890',
+        localAlias: 'bob-local',
+        isDefault: false,
+        readyForAuth: true,
+        readyForMessaging: true,
+      );
+      const withDidOnly = core.IdentitySummary(
+        id: 'id-did',
+        did: 'did:wba:awiki.ai:user:carol:e1_1234567890',
+        isDefault: false,
+        readyForAuth: true,
+        readyForMessaging: true,
+      );
+
+      expect(
+        mapper.appSessionFromIdentity(withHandle).displayName,
+        'alice.awiki.ai',
+      );
+      expect(mapper.appSessionFromIdentity(withAlias).displayName, 'bob-local');
+      expect(
+        mapper.appSessionFromIdentity(withDidOnly).displayName,
+        'did:wba:aw…567890',
+      );
+    },
+  );
+
   test('daemon subkey package maps to bootstrap user subkey package', () {
     const package = core.DaemonSubkeyPrivatePackage(
       schema: 'awiki.daemon.user_subkey_package.v2',
@@ -519,6 +558,55 @@ void main() {
     );
     expect(relationshipPage.items.single.relationship, 'follower');
     expect(relationshipPage.nextCursor, '11');
+  });
+
+  test('profile display fields fall back without becoming identity source', () {
+    final profile = mapper.userProfileFromCore(
+      const core.UserProfile(
+        subject: 'did:wba:awiki.ai:user:alice:e1_1234567890',
+        handle: 'alice.awiki.ai',
+        fullHandle: 'alice.awiki.ai',
+        avatarUrl: 'https://cdn.example/legacy-avatar.png',
+        profileUri: 'https://profiles.example/alice',
+        subjectType: 'person',
+      ),
+    );
+
+    expect(profile.did, 'did:wba:awiki.ai:user:alice:e1_1234567890');
+    expect(profile.displayName, 'did:wba:aw…567890');
+    expect(profile.nickName, 'did:wba:aw…567890');
+    expect(profile.handle, 'alice.awiki.ai');
+    expect(profile.fullHandle, 'alice.awiki.ai');
+    expect(profile.avatarUri, 'https://cdn.example/legacy-avatar.png');
+    expect(profile.profileUri, 'https://profiles.example/alice');
+    expect(profile.subjectType, 'person');
+  });
+
+  test('relationship list display falls back to handle then compact DID', () {
+    final page = mapper.relationshipPageFromCore(
+      const core.RelationshipPage(
+        items: <core.RelationshipListItem>[
+          core.RelationshipListItem(
+            did: 'did:wba:awiki.ai:user:bob:e1_1234567890',
+            handle: 'bob.awiki.ai',
+            avatarUrl: 'https://cdn.example/bob-legacy.png',
+            relationship: 'following',
+          ),
+          core.RelationshipListItem(
+            did: 'did:wba:awiki.ai:user:carol:e1_1234567890',
+            relationship: 'follower',
+          ),
+        ],
+        hasMore: false,
+      ),
+    );
+
+    expect(page.items[0].did, 'did:wba:awiki.ai:user:bob:e1_1234567890');
+    expect(page.items[0].handle, 'bob.awiki.ai');
+    expect(page.items[0].displayName, 'bob.awiki.ai');
+    expect(page.items[0].avatarUri, 'https://cdn.example/bob-legacy.png');
+    expect(page.items[1].displayName, 'did:wba:aw…567890');
+    expect(page.nextCursor, isNull);
   });
 
   test('group DTOs map display profile fields from Group Host summaries', () {
