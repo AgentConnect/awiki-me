@@ -9,7 +9,10 @@ Map<String, Object?> runtimeAgentCreatePayload({
   required String controllerDid,
   required String registrationToken,
   required String clientRequestId,
+  String runtime = 'hermes',
   String displayName = 'Hermes',
+  String? handle,
+  String? workspace,
 }) {
   return <String, Object?>{
     'schema': AgentControlPayloads.commandSchema,
@@ -17,13 +20,33 @@ Map<String, Object?> runtimeAgentCreatePayload({
     'command': 'runtime.agent.create',
     'target_agent_kind': 'runtime',
     'args': <String, Object?>{
-      'runtime': 'hermes',
+      'runtime': runtime,
       'controller_did': controllerDid,
       'registration_token': registrationToken,
       'display_name': displayName,
       'client_request_id': clientRequestId,
+      if (handle != null) 'handle': handle,
+      if (workspace != null) 'workspace': workspace,
     },
     'reply_policy': <String, Object?>{'progress': true, 'final': true},
+  };
+}
+
+Map<String, Object?> runtimeTaskSubmitPayload({
+  required String runtimeAgentDid,
+  required String text,
+  String? commandId,
+  String? taskId,
+  String? conversationId,
+}) {
+  return <String, Object?>{
+    'schema': AgentControlPayloads.commandSchema,
+    'command_id': commandId ?? agentCommandId('cmd_runtime_task'),
+    'command': 'runtime.task.submit',
+    'target_agent_did': runtimeAgentDid,
+    if (taskId != null) 'task_id': taskId,
+    if (conversationId != null) 'conversation_id': conversationId,
+    'args': <String, Object?>{'text': text},
   };
 }
 

@@ -136,6 +136,44 @@ void main() {
     expect(args['client_request_id'], 'app_req_1');
   });
 
+  test('runtime create command allows explicit test runtime', () {
+    final payload = runtimeAgentCreatePayload(
+      controllerDid: 'did:human:alice',
+      registrationToken: 'runtime-token',
+      clientRequestId: 'app_req_1',
+      runtime: 'test-runtime-uds',
+      displayName: 'System Test',
+      handle: 'alice-runtime',
+      workspace: '/tmp/awiki-runtime',
+    );
+
+    final args = payload['args'] as Map<String, Object?>;
+    expect(args['runtime'], 'test-runtime-uds');
+    expect(args['display_name'], 'System Test');
+    expect(args['handle'], 'alice-runtime');
+    expect(args['workspace'], '/tmp/awiki-runtime');
+  });
+
+  test('runtime task submit command carries target runtime and text', () {
+    final payload = runtimeTaskSubmitPayload(
+      runtimeAgentDid: 'did:agent:runtime',
+      text: 'run the system test runtime',
+      commandId: 'cmd_task',
+      taskId: 'task_1',
+      conversationId: 'conv_1',
+    );
+
+    expect(payload['schema'], AgentControlPayloads.commandSchema);
+    expect(payload['command'], 'runtime.task.submit');
+    expect(payload['target_agent_did'], 'did:agent:runtime');
+    expect(payload['command_id'], 'cmd_task');
+    expect(payload['task_id'], 'task_1');
+    expect(payload['conversation_id'], 'conv_1');
+    final args = payload['args'] as Map<String, Object?>;
+    expect(args['text'], 'run the system test runtime');
+    expect(args.containsKey('prompt'), isFalse);
+  });
+
   test('runtime retry command references a run id without prompt text', () {
     final payload = runtimeRunRetryPayload(
       runtimeAgentDid: 'did:agent:runtime',
