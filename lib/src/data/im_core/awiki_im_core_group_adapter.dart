@@ -115,11 +115,11 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
     required String memberRef,
     String role = 'member',
   }) async {
-    final result = await _runtime.withCurrentClient(
+    await _runtime.withCurrentClient(
       (client) =>
           client.groups.addMember(groupDid, memberRef: memberRef, role: role),
     );
-    return _groupFromResult(result);
+    return getGroup(groupDid);
   }
 
   @override
@@ -127,10 +127,10 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
     required String groupDid,
     required String memberRef,
   }) async {
-    final result = await _runtime.withCurrentClient(
+    await _runtime.withCurrentClient(
       (client) => client.groups.removeMember(groupDid, memberRef: memberRef),
     );
-    return _groupFromResult(result);
+    return getGroup(groupDid);
   }
 
   GroupSummary _groupFromResult(core.GroupReadResult result) {

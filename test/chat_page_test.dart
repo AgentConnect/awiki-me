@@ -1225,6 +1225,86 @@ void main() {
     expect(gateway.fetchDmHistoryCalls, 1);
   });
 
+  testWidgets('聊天窗口在会话列表切换为 canonical thread 后仍补拉到当前窗口', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    const agentDid = 'did:test:agent';
+    const agentHandle = 'hermes-test.anpclaw.com';
+    final openedConversation = ConversationSummary(
+      threadId: 'dm:${session.did}:$agentDid',
+      displayName: 'Hermes',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 5, 8, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentDid,
+    );
+    final canonicalConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:hermes-test',
+      displayName: 'Hermes',
+      lastMessagePreview: '我在。',
+      lastMessageAt: DateTime(2026, 5, 8, 12, 1),
+      unreadCount: 1,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentHandle,
+    );
+    final reply = ChatMessage(
+      localId: 'reply-agent-canonical',
+      remoteId: 'reply-agent-canonical',
+      threadId: canonicalConversation.threadId,
+      senderDid: agentDid,
+      receiverDid: session.did,
+      content: '我在。',
+      createdAt: canonicalConversation.lastMessageAt,
+      isMine: false,
+      sendState: MessageSendState.sent,
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: openedConversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+
+    gateway
+      ..conversations = <ConversationSummary>[canonicalConversation]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
+        agentHandle: <ChatMessage>[reply],
+      };
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await container.read(conversationListProvider.notifier).refresh();
+    await tester.pump();
+
+    expect(find.text('我在。'), findsOneWidget);
+    expect(
+      container
+          .read(chatThreadProvider(openedConversation.threadId))
+          .messages
+          .map((message) => message.content),
+      contains('我在。'),
+    );
+    expect(
+      container
+          .read(chatThreadProvider(canonicalConversation.threadId))
+          .messages,
+      isEmpty,
+    );
+  });
+
   testWidgets('聊天窗口居中时间使用消息发送时间的本地时区显示', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(

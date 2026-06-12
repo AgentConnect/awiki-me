@@ -586,6 +586,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Update failed. Please download it from GitHub.';
 
   @override
+  String get daemonUpgradeStarted => 'Daemon upgrade started.';
+
+  @override
   String get requestTimeoutRetry =>
       'The request timed out. Please check your network and try again.';
 

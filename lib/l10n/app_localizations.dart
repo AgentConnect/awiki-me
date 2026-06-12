@@ -1136,6 +1136,12 @@ abstract class AppLocalizations {
   /// **'更新失败，请前往 GitHub 下载。'**
   String get updateInstallFailed;
 
+  /// No description provided for @daemonUpgradeStarted.
+  ///
+  /// In zh, this message translates to:
+  /// **'已开始升级代理。'**
+  String get daemonUpgradeStarted;
+
   /// No description provided for @requestTimeoutRetry.
   ///
   /// In zh, this message translates to:

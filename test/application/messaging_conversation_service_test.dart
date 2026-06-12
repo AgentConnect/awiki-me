@@ -74,6 +74,73 @@ void main() {
       expect(core.markReadCount, 1);
     });
 
+    test('hides recents by stable direct peer key', () async {
+      final conversation = _conversation(
+        'dm:alice:old-did',
+        targetDid: 'did:old-bob',
+        targetPeer: 'bob.anpclaw.com',
+        minutesAgo: 1,
+      );
+      final core = _FakeConversations(
+        items: <ConversationSummary>[conversation],
+      );
+      final store = InMemoryAwikiProductLocalStore();
+      final service = ImCoreConversationService(
+        conversations: core,
+        localStore: store,
+      );
+
+      await service.hideConversationFromRecents(
+        ownerDid: 'did:alice',
+        conversation: conversation,
+      );
+
+      final conversations = await service.listConversations(
+        ownerDid: 'did:alice',
+      );
+
+      expect(conversations, isEmpty);
+      expect(
+        (await store.loadConversationOverlay(
+          ownerDid: 'did:alice',
+          threadId: 'direct:bob.anpclaw.com',
+        ))?.hidden,
+        isTrue,
+      );
+    });
+
+    test('restores hidden direct conversation when opened again', () async {
+      final conversation = _conversation(
+        'dm:alice:old-did',
+        targetDid: 'did:old-bob',
+        targetPeer: 'bob.anpclaw.com',
+        minutesAgo: 1,
+      );
+      final core = _FakeConversations(
+        items: <ConversationSummary>[conversation],
+      );
+      final store = InMemoryAwikiProductLocalStore();
+      final service = ImCoreConversationService(
+        conversations: core,
+        localStore: store,
+      );
+
+      await service.hideConversationFromRecents(
+        ownerDid: 'did:alice',
+        conversation: conversation,
+      );
+      await service.restoreConversationToRecents(
+        ownerDid: 'did:alice',
+        conversation: conversation,
+      );
+
+      final conversations = await service.listConversations(
+        ownerDid: 'did:alice',
+      );
+
+      expect(conversations.map((item) => item.threadId), ['dm:alice:old-did']);
+    });
+
     test('filters known daemon agent control conversations', () async {
       final core = _FakeConversations(
         items: <ConversationSummary>[
@@ -273,6 +340,125 @@ void main() {
           'zhuocheng-test-hermes.anpclaw.com',
         );
         expect(conversations.single.displayName, '改名后的智能体');
+      },
+    );
+
+    test(
+      'hides merged runtime conversation by agent key across DID and handle rows',
+      () async {
+        final didRow = _conversation(
+          'dm:did:human:did:agent:runtime',
+          targetDid: 'did:agent:runtime',
+          targetPeer: 'did:agent:runtime',
+          minutesAgo: 2,
+          displayName: 'zhuocheng-test-hermes',
+        );
+        final handleRow = _conversation(
+          'dm:peer-scope:v1:runtime',
+          targetDid: 'did:agent:runtime',
+          targetPeer: 'zhuocheng-test-hermes.anpclaw.com',
+          minutesAgo: 1,
+          displayName: 'zhuocheng-test-hermes.anpclaw.com',
+        );
+        final core = _FakeConversations(
+          items: <ConversationSummary>[didRow, handleRow],
+        );
+        final store = InMemoryAwikiProductLocalStore();
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: store,
+          agentInventory: const _FakeAgentInventory(
+            agents: <AgentSummary>[
+              AgentSummary(
+                agentDid: 'did:agent:runtime',
+                kind: AgentKind.runtime,
+                daemonAgentDid: 'did:agent:daemon',
+                runtime: 'hermes',
+                handle: 'zhuocheng-test-hermes',
+                displayName: '改名后的智能体',
+                activeState: 'active',
+                latest: AgentLatestStatus(status: 'ready'),
+              ),
+            ],
+          ),
+        );
+
+        final merged = await service.listConversations(ownerDid: 'did:human');
+        await service.hideConversationFromRecents(
+          ownerDid: 'did:human',
+          conversation: merged.single,
+        );
+        final conversations = await service.listConversations(
+          ownerDid: 'did:human',
+        );
+
+        expect(merged.single.visibilityKey, 'runtime:did:agent:runtime');
+        expect(conversations, isEmpty);
+      },
+    );
+
+    test(
+      'restores hidden runtime conversation by agent key from a raw row',
+      () async {
+        final didRow = _conversation(
+          'dm:did:human:did:agent:runtime',
+          targetDid: 'did:agent:runtime',
+          targetPeer: 'did:agent:runtime',
+          minutesAgo: 2,
+          displayName: 'zhuocheng-test-hermes',
+        );
+        final handleRow = _conversation(
+          'dm:peer-scope:v1:runtime',
+          targetDid: 'did:agent:runtime',
+          targetPeer: 'zhuocheng-test-hermes.anpclaw.com',
+          minutesAgo: 1,
+          displayName: 'zhuocheng-test-hermes.anpclaw.com',
+        );
+        final core = _FakeConversations(
+          items: <ConversationSummary>[didRow, handleRow],
+        );
+        final store = InMemoryAwikiProductLocalStore();
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: store,
+          agentInventory: const _FakeAgentInventory(
+            agents: <AgentSummary>[
+              AgentSummary(
+                agentDid: 'did:agent:runtime',
+                kind: AgentKind.runtime,
+                daemonAgentDid: 'did:agent:daemon',
+                runtime: 'hermes',
+                handle: 'zhuocheng-test-hermes',
+                displayName: '改名后的智能体',
+                activeState: 'active',
+                latest: AgentLatestStatus(status: 'ready'),
+              ),
+            ],
+          ),
+        );
+
+        final merged = await service.listConversations(ownerDid: 'did:human');
+        await service.hideConversationFromRecents(
+          ownerDid: 'did:human',
+          conversation: merged.single,
+        );
+        await service.restoreConversationToRecents(
+          ownerDid: 'did:human',
+          conversation: didRow,
+        );
+        final conversations = await service.listConversations(
+          ownerDid: 'did:human',
+        );
+
+        expect(
+          (await store.loadConversationOverlay(
+            ownerDid: 'did:human',
+            threadId: 'runtime:did:agent:runtime',
+          ))?.hidden,
+          isFalse,
+        );
+        expect(conversations, hasLength(1));
+        expect(conversations.single.visibilityKey, 'runtime:did:agent:runtime');
       },
     );
   });

@@ -252,6 +252,7 @@
   "updateReadyToInstall": "下载完成，准备安装。",
   "updatePermissionRequired": "请允许安装未知应用后重试。",
   "updateInstallFailed": "更新失败，请前往 GitHub 下载。",
+  "daemonUpgradeStarted": "已开始升级代理。",
   "requestTimeoutRetry": "请求超时，请检查网络后重试。",
   "networkUnavailableRetry": "网络连接暂时不可用，请检查网络后重试。",
   "operationFailedRetry": "操作失败，请稍后重试。",

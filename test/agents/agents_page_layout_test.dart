@@ -219,7 +219,7 @@ void main() {
       final fields = find.byType(CupertinoTextField);
       expect(fields, findsNWidgets(2));
       final nameField = tester.widget<CupertinoTextField>(fields.at(0));
-      expect(nameField.controller?.text, 'Hermes 2');
+      expect(nameField.controller?.text, 'Hermes2');
 
       await tester.enterText(fields.at(1), '@My-Agent');
       await tester.pump(const Duration(milliseconds: 500));
@@ -487,14 +487,14 @@ void main() {
           activeState: 'active',
           latest: AgentLatestStatus(status: 'ready'),
         ),
-        AgentSummary(
+        const AgentSummary(
           agentDid: 'did:agent:runtime',
           kind: AgentKind.runtime,
           daemonAgentDid: 'did:agent:daemon',
           runtime: 'hermes',
           displayName: 'Hermes',
           activeState: 'active',
-          latest: const AgentLatestStatus(status: 'ready'),
+          latest: AgentLatestStatus(status: 'ready'),
           recentRuns: <AgentRunStatus>[
             AgentRunStatus(
               runId: 'run_running',

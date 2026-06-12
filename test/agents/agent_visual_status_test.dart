@@ -5,14 +5,14 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('active run takes precedence over latest ready status', () {
-    final agent = AgentSummary(
+    const agent = AgentSummary(
       agentDid: 'did:agent:runtime',
       kind: AgentKind.runtime,
       daemonAgentDid: 'did:agent:daemon',
       runtime: 'hermes',
       displayName: 'Hermes',
       activeState: 'active',
-      latest: const AgentLatestStatus(status: 'ready'),
+      latest: AgentLatestStatus(status: 'ready'),
       recentRuns: <AgentRunStatus>[
         AgentRunStatus(
           runId: 'run_1',
@@ -43,6 +43,21 @@ void main() {
     final status = AgentVisualStatus.fromAgent(agent, hasPendingTurn: true);
 
     expect(status.kind, AgentVisualStatusKind.processing);
+  });
+
+  test('pending daemon upgrade takes precedence over needs-upgrade latest', () {
+    const agent = AgentSummary(
+      agentDid: 'did:agent:daemon',
+      kind: AgentKind.daemon,
+      displayName: '代理 1',
+      activeState: 'active',
+      latest: AgentLatestStatus(status: 'needs_upgrade', needsUpgrade: true),
+    );
+
+    final status = AgentVisualStatus.fromAgent(agent, isPendingUpgrade: true);
+
+    expect(status.kind, AgentVisualStatusKind.processing);
+    expect(status.rawStatus, 'upgrading');
   });
 
   test(

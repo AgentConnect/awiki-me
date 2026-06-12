@@ -1,9 +1,13 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart'
+    show PopupMenuEntry, PopupMenuItem, RelativeRect, showMenu;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
+import '../../app/ui_feedback.dart';
 import '../../core/date_time_formatter.dart';
 import '../../domain/entities/conversation_summary.dart';
+import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../chat/chat_page.dart';
 import '../chat/chat_provider.dart';
@@ -53,6 +57,7 @@ class ConversationListPage extends ConsumerWidget {
         bottomInset: bottomInset,
         onRefresh: () => ref.read(conversationListProvider.notifier).refresh(),
         onOpen: (item) => _openConversation(context, ref, item),
+        onDelete: (item) => _deleteConversationFromRecents(context, ref, item),
         onShowActions: () => showCommonQuickActionsMenu(context, ref),
         onStartConversation: () => showStartConversationDialog(context, ref),
       );
@@ -73,6 +78,7 @@ class ConversationListPage extends ConsumerWidget {
         bottomInset: bottomInset,
         onRefresh: () => ref.read(conversationListProvider.notifier).refresh(),
         onOpen: (item) => _openConversation(context, ref, item),
+        onDelete: (item) => _deleteConversationFromRecents(context, ref, item),
       ),
     );
   }
@@ -82,6 +88,7 @@ class ConversationListPage extends ConsumerWidget {
     WidgetRef ref,
     ConversationSummary item,
   ) async {
+    await ref.read(conversationListProvider.notifier).restoreConversation(item);
     await ref.read(chatThreadsProvider.notifier).openConversation(item);
     if (!context.mounted) {
       return;
@@ -92,6 +99,44 @@ class ConversationListPage extends ConsumerWidget {
     }
     await AppNavigator.push(context, (_) => ChatPage(conversation: item));
   }
+
+  Future<void> _deleteConversationFromRecents(
+    BuildContext context,
+    WidgetRef ref,
+    ConversationSummary item,
+  ) async {
+    final confirmed = await AppNavigator.showDialog<bool>(
+      context,
+      (dialogContext) => CupertinoAlertDialog(
+        title: const Text('删除会话'),
+        content: const Text('会话将从最近列表移除，历史消息仍会保留。重新打开或收到新消息后，会话会再次出现在列表中。'),
+        actions: <Widget>[
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(context.l10n.commonCancel),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    try {
+      await ref.read(conversationListProvider.notifier).deleteFromRecents(item);
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showInfo(AppMessage.conversationRemovedFromRecents());
+    } catch (error) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
+    }
+  }
 }
 
 class _MacConversationList extends ConsumerStatefulWidget {
@@ -101,6 +146,7 @@ class _MacConversationList extends ConsumerStatefulWidget {
     required this.bottomInset,
     required this.onRefresh,
     required this.onOpen,
+    required this.onDelete,
     required this.onShowActions,
     required this.onStartConversation,
   });
@@ -110,6 +156,7 @@ class _MacConversationList extends ConsumerStatefulWidget {
   final double bottomInset;
   final Future<void> Function() onRefresh;
   final ValueChanged<ConversationSummary> onOpen;
+  final ValueChanged<ConversationSummary> onDelete;
   final VoidCallback onShowActions;
   final VoidCallback onStartConversation;
 
@@ -281,6 +328,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                           agentStatus: agentStatus,
                           isSelected: widget.selectedThreadId == item.threadId,
                           onTap: () => widget.onOpen(item),
+                          onDelete: () => widget.onDelete(item),
                         );
                       },
                     ),
@@ -334,6 +382,7 @@ class _ConversationRefreshView extends ConsumerWidget {
     required this.bottomInset,
     required this.onRefresh,
     required this.onOpen,
+    required this.onDelete,
   });
 
   final List<ConversationSummary> conversations;
@@ -342,6 +391,7 @@ class _ConversationRefreshView extends ConsumerWidget {
   final double bottomInset;
   final Future<void> Function() onRefresh;
   final ValueChanged<ConversationSummary> onOpen;
+  final ValueChanged<ConversationSummary> onDelete;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -400,6 +450,7 @@ class _ConversationRefreshView extends ConsumerWidget {
                   agentStatus: agentStatus,
                   isSelected: selectedThreadId == item.threadId,
                   onTap: () => onOpen(item),
+                  onLongPress: () => onDelete(item),
                 );
               },
             ),
@@ -452,6 +503,7 @@ class _MacConversationRow extends StatelessWidget {
     required this.agentStatus,
     required this.isSelected,
     required this.onTap,
+    required this.onDelete,
   });
 
   final String title;
@@ -463,117 +515,126 @@ class _MacConversationRow extends StatelessWidget {
   final AgentVisualStatus? agentStatus;
   final bool isSelected;
   final VoidCallback onTap;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final badgeLabel = classification.compactBadgeLabel;
-    return Padding(
-      padding: EdgeInsets.only(bottom: responsive.displayScaled(6)),
-      child: AppPressableTile(
-        onTap: onTap,
-        selected: isSelected,
-        semanticLabel: title,
-        borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
-        backgroundColor: CupertinoColors.white,
-        selectedBackgroundColor: const Color(0xFFE8F0FF),
-        border: Border.all(
-          color: isSelected ? const Color(0xFFCFE0FF) : const Color(0x00FFFFFF),
-        ),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          padding: EdgeInsets.all(responsive.displayScaled(10)),
-          child: Row(
-            children: <Widget>[
-              Stack(
-                clipBehavior: Clip.none,
-                children: <Widget>[
-                  AvatarBadge(seed: title, size: responsive.displayScaled(42)),
-                  if (badgeLabel != null)
-                    Positioned(
-                      right: responsive.displayScaled(-2),
-                      bottom: responsive.displayScaled(-2),
-                      child: _ConversationPeerBadge(
-                        label: badgeLabel,
-                        isGroup: classification.isGroup,
-                        muted: isDeletedAgentConversation,
-                        compact: true,
-                        borderColor: CupertinoColors.white,
-                      ),
-                    ),
-                ],
-              ),
-              SizedBox(width: responsive.displayScaled(10)),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return _ConversationContextMenuRegion(
+      onDelete: onDelete,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: responsive.displayScaled(6)),
+        child: AppPressableTile(
+          onTap: onTap,
+          selected: isSelected,
+          semanticLabel: title,
+          borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
+          backgroundColor: CupertinoColors.white,
+          selectedBackgroundColor: const Color(0xFFE8F0FF),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFFCFE0FF)
+                : const Color(0x00FFFFFF),
+          ),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            padding: EdgeInsets.all(responsive.displayScaled(10)),
+            child: Row(
+              children: <Widget>[
+                Stack(
+                  clipBehavior: Clip.none,
                   children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: _ConversationTitleStatusLine(
-                            title: title,
-                            isDeletedAgentConversation:
-                                isDeletedAgentConversation,
-                            compact: true,
-                            titleStyle: TextStyle(
-                              color: const Color(0xFF17213A),
-                              fontSize: responsive.displayScaled(13.5),
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                        ),
-                        if (agentStatus != null) ...<Widget>[
-                          SizedBox(width: responsive.displayScaled(7)),
-                          AgentStatusDot(
-                            status: agentStatus!,
-                            size: responsive.displayScaled(8),
-                          ),
-                        ],
-                        SizedBox(width: responsive.displayScaled(8)),
-                        Text(
-                          timeLabel,
-                          style: TextStyle(
-                            color: const Color(0xFF66728A),
-                            fontSize: responsive.displayScaled(10.5),
-                          ),
-                        ),
-                      ],
+                    AvatarBadge(
+                      seed: title,
+                      size: responsive.displayScaled(42),
                     ),
-                    SizedBox(height: responsive.displayScaled(5)),
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Text(
-                            preview.isEmpty
-                                ? context.l10n.conversationsNoMessagePreview
-                                : preview,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: const Color(0xFF66728A),
-                              fontSize: responsive.displayScaled(11.5),
-                              height: 1.25,
-                            ),
-                          ),
+                    if (badgeLabel != null)
+                      Positioned(
+                        right: responsive.displayScaled(-2),
+                        bottom: responsive.displayScaled(-2),
+                        child: _ConversationPeerBadge(
+                          label: badgeLabel,
+                          isGroup: classification.isGroup,
+                          muted: isDeletedAgentConversation,
+                          compact: true,
+                          borderColor: CupertinoColors.white,
                         ),
-                        if (unreadCount > 0) ...<Widget>[
-                          SizedBox(width: responsive.displayScaled(8)),
-                          Container(
-                            width: responsive.displayScaled(8),
-                            height: responsive.displayScaled(8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0B65F8),
-                              borderRadius: BorderRadius.circular(99),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
+                      ),
                   ],
                 ),
-              ),
-            ],
+                SizedBox(width: responsive.displayScaled(10)),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: _ConversationTitleStatusLine(
+                              title: title,
+                              isDeletedAgentConversation:
+                                  isDeletedAgentConversation,
+                              compact: true,
+                              titleStyle: TextStyle(
+                                color: const Color(0xFF17213A),
+                                fontSize: responsive.displayScaled(13.5),
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: responsive.displayScaled(5)),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              preview.isEmpty
+                                  ? context.l10n.conversationsNoMessagePreview
+                                  : preview,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: const Color(0xFF66728A),
+                                fontSize: responsive.displayScaled(11.5),
+                                height: 1.25,
+                              ),
+                            ),
+                          ),
+                          if (unreadCount > 0) ...<Widget>[
+                            SizedBox(width: responsive.displayScaled(8)),
+                            Container(
+                              width: responsive.displayScaled(8),
+                              height: responsive.displayScaled(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0B65F8),
+                                borderRadius: BorderRadius.circular(99),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                if (agentStatus != null) ...<Widget>[
+                  SizedBox(width: responsive.displayScaled(7)),
+                  AgentStatusDot(
+                    status: agentStatus!,
+                    size: responsive.displayScaled(8),
+                  ),
+                ],
+                SizedBox(width: responsive.displayScaled(8)),
+                Text(
+                  timeLabel,
+                  style: TextStyle(
+                    color: const Color(0xFF66728A),
+                    fontSize: responsive.displayScaled(10.5),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -632,6 +693,7 @@ class _ConversationRow extends StatelessWidget {
     required this.classification,
     required this.agentStatus,
     required this.onTap,
+    required this.onLongPress,
     required this.isSelected,
   });
 
@@ -643,6 +705,7 @@ class _ConversationRow extends StatelessWidget {
   final ConversationPeerClassification classification;
   final AgentVisualStatus? agentStatus;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
   final bool isSelected;
 
   @override
@@ -656,6 +719,7 @@ class _ConversationRow extends StatelessWidget {
       ),
       child: AppPressableTile(
         onTap: onTap,
+        onLongPress: onLongPress,
         selected: isSelected,
         semanticLabel: title,
         borderRadius: BorderRadius.circular(responsive.radius(18)),
@@ -775,6 +839,60 @@ class _ConversationRow extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _ConversationContextMenuRegion extends StatefulWidget {
+  const _ConversationContextMenuRegion({
+    required this.child,
+    required this.onDelete,
+  });
+
+  final Widget child;
+  final VoidCallback onDelete;
+
+  @override
+  State<_ConversationContextMenuRegion> createState() =>
+      _ConversationContextMenuRegionState();
+}
+
+class _ConversationContextMenuRegionState
+    extends State<_ConversationContextMenuRegion> {
+  Offset? _secondaryTapPosition;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onSecondaryTapDown: (details) {
+        _secondaryTapPosition = details.globalPosition;
+      },
+      onSecondaryTap: _showMenu,
+      child: widget.child,
+    );
+  }
+
+  Future<void> _showMenu() async {
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final position = _secondaryTapPosition;
+    if (overlay == null || position == null) {
+      widget.onDelete();
+      return;
+    }
+    final selected = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromPoints(position, position),
+        Offset.zero & overlay.size,
+      ),
+      items: const <PopupMenuEntry<String>>[
+        PopupMenuItem<String>(value: 'delete', child: Text('删除会话')),
+      ],
+    );
+    if (selected == 'delete') {
+      widget.onDelete();
+    }
   }
 }
 

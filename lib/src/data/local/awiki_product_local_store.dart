@@ -47,13 +47,28 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
     required bool hidden,
     required DateTime updatedAt,
   }) async {
-    final key = _compoundKey(ownerDid, threadId);
+    await setConversationHidden(
+      ownerDid: ownerDid,
+      conversationKey: threadId,
+      hidden: hidden,
+      updatedAt: updatedAt,
+    );
+  }
+
+  @override
+  Future<void> setConversationHidden({
+    required String ownerDid,
+    required String conversationKey,
+    required bool hidden,
+    required DateTime updatedAt,
+  }) async {
+    final key = _compoundKey(ownerDid, conversationKey);
     final existing = _overlays[key];
     _overlays[key] =
         (existing ??
                 ProductConversationOverlay(
                   ownerDid: ownerDid,
-                  threadId: threadId,
+                  threadId: conversationKey,
                   updatedAt: updatedAt,
                 ))
             .copyWith(hidden: hidden, updatedAt: updatedAt);

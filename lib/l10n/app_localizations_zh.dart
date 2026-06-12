@@ -559,6 +559,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updateInstallFailed => '更新失败，请前往 GitHub 下载。';
 
   @override
+  String get daemonUpgradeStarted => '已开始升级代理。';
+
+  @override
   String get requestTimeoutRetry => '请求超时，请检查网络后重试。';
 
   @override

@@ -356,7 +356,14 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (!shouldShow) {
       return;
     }
-    ref.read(chatThreadsProvider.notifier).applyRealtimeUpdate(message);
+    ref
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(message, conversation: conversation);
+    unawaited(
+      ref
+          .read(conversationListProvider.notifier)
+          .restoreConversation(conversation),
+    );
     ref
         .read(conversationListProvider.notifier)
         .upsertConversation(conversation);

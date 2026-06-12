@@ -23,6 +23,18 @@ abstract interface class ConversationService {
     required bool hidden,
     DateTime? updatedAt,
   });
+
+  Future<void> hideConversationFromRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+    DateTime? updatedAt,
+  });
+
+  Future<void> restoreConversationToRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+    DateTime? updatedAt,
+  });
 }
 
 class ImCoreConversationService implements ConversationService {
@@ -56,23 +68,27 @@ class ImCoreConversationService implements ConversationService {
       limit: limit,
       unreadOnly: unreadOnly,
     );
+    final agentProjection = await _loadAgentConversationProjection();
+    final mergedItems = _mergeAgentConversationDuplicates(
+      items,
+      agentProjection,
+    );
     final overlays = await _localStore.loadConversationOverlays(
       ownerDid: ownerDid,
-      threadIds: items.map((item) => item.threadId),
+      threadIds: _overlayKeysForConversations(mergedItems),
     );
-    final agentProjection = await _loadAgentConversationProjection();
-    final visible = _mergeAgentConversationDuplicates(items, agentProjection)
+    final visible = mergedItems
         .where(
           (item) => shouldShowConversationForChatList(
             item,
             daemonAgentDids: agentProjection.daemonAgentDids,
           ),
         )
-        .where((item) => overlays[item.threadId]?.hidden != true)
+        .where((item) => !_isConversationHidden(item, overlays))
         .map(
           (item) => _applyOverlay(
             _applyAgentLifecycleProjection(item, agentProjection),
-            overlays[item.threadId],
+            _preferredOverlayForConversation(item, overlays),
           ),
         )
         .toList();
@@ -107,6 +123,39 @@ class ImCoreConversationService implements ConversationService {
     );
   }
 
+  @override
+  Future<void> hideConversationFromRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+    DateTime? updatedAt,
+  }) async {
+    final normalized = await _conversationWithVisibilityKey(conversation);
+    return _localStore.setConversationHidden(
+      ownerDid: ownerDid,
+      conversationKey: normalized.visibilityKey,
+      hidden: true,
+      updatedAt: updatedAt ?? DateTime.now().toUtc(),
+    );
+  }
+
+  @override
+  Future<void> restoreConversationToRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+    DateTime? updatedAt,
+  }) async {
+    final normalized = await _conversationWithVisibilityKey(conversation);
+    final now = updatedAt ?? DateTime.now().toUtc();
+    for (final key in normalized.visibilityKeys) {
+      await _localStore.setConversationHidden(
+        ownerDid: ownerDid,
+        conversationKey: key,
+        hidden: false,
+        updatedAt: now,
+      );
+    }
+  }
+
   Future<_AgentConversationProjection>
   _loadAgentConversationProjection() async {
     final inventory = _agentInventory;
@@ -120,22 +169,75 @@ class ImCoreConversationService implements ConversationService {
       return const _AgentConversationProjection();
     }
   }
+
+  Future<ConversationSummary> _conversationWithVisibilityKey(
+    ConversationSummary conversation,
+  ) async {
+    final projection = await _loadAgentConversationProjection();
+    return conversation.copyWith(
+      conversationKey: _conversationMergeKey(conversation, projection),
+    );
+  }
+}
+
+Iterable<String> _overlayKeysForConversations(
+  Iterable<ConversationSummary> conversations,
+) {
+  final keys = <String>{};
+  for (final conversation in conversations) {
+    keys.addAll(conversation.visibilityKeys);
+  }
+  return keys;
+}
+
+bool _isConversationHidden(
+  ConversationSummary conversation,
+  Map<String, ProductConversationOverlay> overlays,
+) {
+  return conversation.visibilityKeys.any(
+    (key) => overlays[key]?.hidden == true,
+  );
+}
+
+ProductConversationOverlay? _preferredOverlayForConversation(
+  ConversationSummary conversation,
+  Map<String, ProductConversationOverlay> overlays,
+) {
+  for (final key in conversation.visibilityKeys) {
+    final overlay = overlays[key];
+    if (overlay != null) {
+      return overlay;
+    }
+  }
+  return null;
 }
 
 List<ConversationSummary> _mergeAgentConversationDuplicates(
   List<ConversationSummary> items,
   _AgentConversationProjection projection,
 ) {
-  if (items.length < 2 || projection.runtimeAgents.isEmpty) {
+  if (items.isEmpty) {
     return items;
+  }
+  if (items.length < 2 || projection.runtimeAgents.isEmpty) {
+    return items
+        .map(
+          (item) => item.copyWith(
+            conversationKey: _conversationMergeKey(item, projection),
+          ),
+        )
+        .toList(growable: false);
   }
   final byKey = <String, ConversationSummary>{};
   for (final item in items) {
     final key = _conversationMergeKey(item, projection);
     final existing = byKey[key];
     byKey[key] = existing == null
-        ? item
-        : _mergeConversationDuplicate(existing, item);
+        ? item.copyWith(conversationKey: key)
+        : _mergeConversationDuplicate(
+            existing,
+            item,
+          ).copyWith(conversationKey: key);
   }
   return byKey.values.toList();
 }

@@ -13,6 +13,7 @@ import '../../application/models/attachment_models.dart';
 import '../../core/group_display_name.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_summary.dart';
 import '../../l10n/app_message.dart';
@@ -173,7 +174,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
         return;
       }
       unawaited(
-        ref.read(chatThreadsProvider.notifier).openConversation(updated),
+        ref
+            .read(chatThreadsProvider.notifier)
+            .openConversation(
+              updated,
+              displayThreadId: widget.conversation.threadId,
+            ),
       );
     });
     final messages = thread.messages;
@@ -536,7 +542,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
     try {
       await ref
           .read(chatThreadsProvider.notifier)
-          .refreshConversation(conversation);
+          .refreshConversation(
+            conversation,
+            displayThreadId: widget.conversation.threadId,
+          );
       final elapsed = DateTime.now().difference(startedAt);
       const minimumVisibleTime = Duration(milliseconds: 350);
       if (elapsed < minimumVisibleTime) {
@@ -603,6 +612,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
   ) {
     for (final conversation in conversations) {
       if (conversation.threadId == widget.conversation.threadId) {
+        return conversation;
+      }
+    }
+    for (final conversation in conversations) {
+      if (sameConversationTarget(conversation, widget.conversation)) {
         return conversation;
       }
     }

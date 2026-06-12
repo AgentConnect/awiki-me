@@ -18,6 +18,7 @@ class AgentVisualStatus {
   factory AgentVisualStatus.fromAgent(
     AgentSummary? agent, {
     bool hasPendingTurn = false,
+    bool isPendingUpgrade = false,
   }) {
     if (agent == null) {
       return const AgentVisualStatus(AgentVisualStatusKind.unknown);
@@ -27,6 +28,12 @@ class AgentVisualStatus {
       return AgentVisualStatus(
         AgentVisualStatusKind.disabled,
         rawStatus: activeState,
+      );
+    }
+    if (isPendingUpgrade) {
+      return const AgentVisualStatus(
+        AgentVisualStatusKind.processing,
+        rawStatus: 'upgrading',
       );
     }
     if (hasPendingTurn || agent.recentRuns.any(AgentVisualStatus.isActiveRun)) {

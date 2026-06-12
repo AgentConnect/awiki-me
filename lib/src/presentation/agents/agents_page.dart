@@ -12,6 +12,8 @@ import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/install_command.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/repositories/awiki_account_gateway.dart';
+import '../../l10n/app_message.dart';
+import '../../app/ui_feedback.dart';
 import '../shared/identity_flow.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
@@ -327,6 +329,7 @@ class _AgentDaemonGroup extends StatelessWidget {
           _AgentListTile(
             agent: daemon,
             pendingAgentDids: pendingAgentDids,
+            pendingDaemonUpgrades: state.pendingDaemonUpgrades,
             selected: selectedAgentDid == daemon.agentDid,
             onTap: () => onSelect(daemon.agentDid),
             runtimeCount: runtimes.length,
@@ -343,6 +346,7 @@ class _AgentDaemonGroup extends StatelessWidget {
               _AgentListTile(
                 agent: runtime,
                 pendingAgentDids: pendingAgentDids,
+                pendingDaemonUpgrades: state.pendingDaemonUpgrades,
                 selected: selectedAgentDid == runtime.agentDid,
                 onTap: () => onSelect(runtime.agentDid),
                 depth: 1,
@@ -392,6 +396,7 @@ class _OrphanRuntimeGroup extends StatelessWidget {
           _AgentListTile(
             agent: runtime,
             pendingAgentDids: pendingAgentDids,
+            pendingDaemonUpgrades: const <String>{},
             selected: selectedAgentDid == runtime.agentDid,
             onTap: () => onSelect(runtime.agentDid),
           ),
@@ -448,6 +453,7 @@ class _AgentListTile extends StatelessWidget {
   const _AgentListTile({
     required this.agent,
     required this.pendingAgentDids,
+    required this.pendingDaemonUpgrades,
     required this.selected,
     required this.onTap,
     this.depth = 0,
@@ -458,6 +464,7 @@ class _AgentListTile extends StatelessWidget {
 
   final AgentSummary agent;
   final Set<String> pendingAgentDids;
+  final Set<String> pendingDaemonUpgrades;
   final bool selected;
   final VoidCallback onTap;
   final int depth;
@@ -473,6 +480,7 @@ class _AgentListTile extends StatelessWidget {
     final visualStatus = AgentVisualStatus.fromAgent(
       agent,
       hasPendingTurn: pendingAgentDids.contains(agent.agentDid),
+      isPendingUpgrade: pendingDaemonUpgrades.contains(agent.agentDid),
     );
     return Padding(
       padding: EdgeInsets.only(
@@ -686,10 +694,13 @@ class _AgentDetailPane extends StatelessWidget {
     }
     final isRefreshing =
         agent.isDaemon && state.isStatusQueryPending(agent.agentDid);
+    final isUpgrading =
+        agent.isDaemon && state.isDaemonUpgradePending(agent.agentDid);
     final title = AgentDisplayName.title(agent);
     final visualStatus = AgentVisualStatus.fromAgent(
       agent,
       hasPendingTurn: pendingAgentDids.contains(agent.agentDid),
+      isPendingUpgrade: isUpgrading,
     );
     return SafeArea(
       bottom: false,
@@ -765,8 +776,10 @@ class _AgentDetailPane extends StatelessWidget {
                   if (agent.isDaemon && agent.latest.needsUpgrade)
                     _ActionButton(
                       icon: CupertinoIcons.arrow_up_circle,
-                      label: '升级',
-                      onPressed: state.isActing ? null : () => onUpgrade(agent),
+                      label: isUpgrading ? '升级中' : '升级',
+                      onPressed: state.isActing || isUpgrading
+                          ? null
+                          : () => onUpgrade(agent),
                     ),
                   _ActionButton(
                     icon: CupertinoIcons.trash,
@@ -2009,29 +2022,10 @@ class _DialogSecondaryButton extends StatelessWidget {
 }
 
 String _nextHermesDisplayName(List<AgentSummary> runtimes) {
-  final used = <int>{};
-  for (final runtime in runtimes) {
-    if (runtime.runtime != 'hermes') {
-      continue;
-    }
-    final name = AgentDisplayName.title(runtime).trim();
-    if (name == 'Hermes') {
-      used.add(1);
-      continue;
-    }
-    final match = RegExp(r'^Hermes ([2-9][0-9]*)$').firstMatch(name);
-    if (match != null) {
-      used.add(int.parse(match.group(1)!));
-    }
-  }
-  if (!used.contains(1)) {
-    return 'Hermes';
-  }
-  var next = 2;
-  while (used.contains(next)) {
-    next += 1;
-  }
-  return 'Hermes $next';
+  final count = runtimes
+      .where((runtime) => runtime.runtime?.trim().toLowerCase() == 'hermes')
+      .length;
+  return 'Hermes${count + 1}';
 }
 
 String _normalizeAgentHandleInput(String value) {
@@ -2143,7 +2137,14 @@ Future<void> _confirmUpgradeDaemon(
     actionLabel: '升级',
   );
   if (confirmed) {
-    await ref.read(agentsProvider.notifier).upgradeDaemon(agent.agentDid);
+    final started = await ref
+        .read(agentsProvider.notifier)
+        .upgradeDaemon(agent.agentDid);
+    if (started) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showInfo(AppMessage.daemonUpgradeStarted());
+    }
   }
 }
 

@@ -13,6 +13,7 @@ class ConversationSummary {
     this.groupId,
     this.avatarSeed,
     this.lastMessagePayloadJson,
+    this.conversationKey,
     this.peerLifecycleState = ConversationPeerLifecycleState.active,
   });
 
@@ -27,10 +28,64 @@ class ConversationSummary {
   final String? groupId;
   final String? avatarSeed;
   final String? lastMessagePayloadJson;
+  final String? conversationKey;
   final ConversationPeerLifecycleState peerLifecycleState;
 
   bool get isDeletedAgentConversation =>
       peerLifecycleState == ConversationPeerLifecycleState.deletedAgent;
+
+  String get visibilityKey {
+    final explicitKey = conversationKey?.trim();
+    if (explicitKey != null && explicitKey.isNotEmpty) {
+      return explicitKey;
+    }
+    if (isGroup) {
+      final group = groupId?.trim();
+      if (group != null && group.isNotEmpty) {
+        return 'group:$group';
+      }
+    } else {
+      final peer = targetPeer?.trim();
+      if (peer != null && peer.isNotEmpty) {
+        return 'direct:${_normalizeDirectPeer(peer)}';
+      }
+      final did = targetDid?.trim();
+      if (did != null && did.isNotEmpty) {
+        return 'direct:$did';
+      }
+    }
+    final thread = threadId.trim();
+    return thread.isEmpty ? 'thread:' : 'thread:$thread';
+  }
+
+  List<String> get visibilityKeys {
+    final keys = <String>[];
+    void add(String value) {
+      final key = value.trim();
+      if (key.isNotEmpty && !keys.contains(key)) {
+        keys.add(key);
+      }
+    }
+
+    add(visibilityKey);
+    if (isGroup) {
+      final group = groupId?.trim();
+      if (group != null && group.isNotEmpty) {
+        add('group:$group');
+      }
+    } else {
+      final peer = targetPeer?.trim();
+      if (peer != null && peer.isNotEmpty) {
+        add('direct:${_normalizeDirectPeer(peer)}');
+      }
+      final did = targetDid?.trim();
+      if (did != null && did.isNotEmpty) {
+        add('direct:$did');
+      }
+    }
+    add(threadId);
+    return keys;
+  }
 
   ConversationSummary copyWith({
     String? threadId,
@@ -44,6 +99,7 @@ class ConversationSummary {
     Object? groupId = _conversationSummaryUnset,
     Object? avatarSeed = _conversationSummaryUnset,
     Object? lastMessagePayloadJson = _conversationSummaryUnset,
+    Object? conversationKey = _conversationSummaryUnset,
     ConversationPeerLifecycleState? peerLifecycleState,
   }) {
     return ConversationSummary(
@@ -61,6 +117,10 @@ class ConversationSummary {
         lastMessagePayloadJson,
         this.lastMessagePayloadJson,
       ),
+      conversationKey: _resolveNullableString(
+        conversationKey,
+        this.conversationKey,
+      ),
       peerLifecycleState: peerLifecycleState ?? this.peerLifecycleState,
     );
   }
@@ -73,4 +133,9 @@ String? _resolveNullableString(Object? value, String? current) {
     return current;
   }
   return value as String?;
+}
+
+String _normalizeDirectPeer(String value) {
+  final peer = value.trim();
+  return peer.startsWith('did:') ? peer : peer.toLowerCase();
 }
