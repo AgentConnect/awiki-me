@@ -331,15 +331,15 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                               style: AwikiMeTextStyles.sectionTitle,
                             ),
                           ),
-                          if (canManageMembers) ...<Widget>[
-                            _GroupDetailIconButton(
-                              key: const Key('group-detail-add-member-button'),
-                              semanticLabel: '添加成员',
-                              icon: CupertinoIcons.person_add,
-                              onTap: _showAddMemberDialog,
-                            ),
-                            const SizedBox(width: 8),
-                          ],
+                          _GroupDetailIconButton(
+                            key: const Key('group-detail-add-member-button'),
+                            semanticLabel: '添加成员',
+                            icon: CupertinoIcons.person_add,
+                            onTap: canManageMembers
+                                ? _showAddMemberDialog
+                                : null,
+                          ),
+                          const SizedBox(width: 8),
                           _GroupDetailIconButton(
                             key: const Key(
                               'group-detail-refresh-members-button',
@@ -375,6 +375,7 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                                         )
                                         ? () => _confirmRemoveMember(item)
                                         : null,
+                                    showRemoveButton: true,
                                   ),
                                 ),
                               )
@@ -612,6 +613,7 @@ class _GroupDetailIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
+    final enabled = onTap != null && !isLoading;
     return AppIconButton(
       onPressed: isLoading ? null : onTap,
       semanticLabel: semanticLabel,
@@ -623,7 +625,7 @@ class _GroupDetailIconButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(responsive.radius(8)),
       child: Icon(
         icon,
-        color: const Color(0xFF34415C),
+        color: enabled ? const Color(0xFF34415C) : theme.tertiaryText,
         size: responsive.iconSm,
       ),
     );
@@ -695,10 +697,16 @@ class _GroupCard extends StatelessWidget {
 }
 
 class GroupMemberRow extends StatelessWidget {
-  const GroupMemberRow({super.key, required this.item, required this.onRemove});
+  const GroupMemberRow({
+    super.key,
+    required this.item,
+    required this.onRemove,
+    this.showRemoveButton = false,
+  });
 
   final GroupMemberSummary item;
   final VoidCallback? onRemove;
+  final bool showRemoveButton;
 
   @override
   Widget build(BuildContext context) {
@@ -717,7 +725,7 @@ class GroupMemberRow extends StatelessWidget {
             style: AwikiMeTextStyles.cardTitle,
           ),
         ),
-        if (onRemove != null) ...<Widget>[
+        if (showRemoveButton || onRemove != null) ...<Widget>[
           const SizedBox(width: 8),
           AppIconButton(
             onPressed: onRemove,
@@ -729,7 +737,9 @@ class GroupMemberRow extends StatelessWidget {
             borderRadius: BorderRadius.circular(responsive.radius(8)),
             child: Icon(
               CupertinoIcons.minus_circle,
-              color: theme.secondaryText,
+              color: onRemove == null
+                  ? theme.tertiaryText
+                  : theme.secondaryText,
               size: responsive.iconSm,
             ),
           ),
@@ -803,6 +813,10 @@ String _memberDisplayLabel(GroupMemberSummary member) {
 bool canManageGroupMembers(GroupSummary group) {
   final role = _groupRoleRank(group.myRole);
   return role >= _groupRoleRank('admin');
+}
+
+bool hasKnownGroupRole(GroupSummary group) {
+  return _groupRoleRank(group.myRole) > 0;
 }
 
 bool canRemoveGroupMember({

@@ -242,6 +242,60 @@ void main() {
     expect(container.read(agentInboxProvider).nextCursor, isNull);
   });
 
+  test(
+    'list payload keeps stable direct item when duplicate aliases appear',
+    () async {
+      final control = FakeAgentControlService()
+        ..nextInboxRequestId = 'cmd_inbox_current';
+      final container = _container(control);
+      addTearDown(container.dispose);
+
+      await container
+          .read(agentInboxProvider.notifier)
+          .queryInbox(
+            daemonAgentDid: 'did:agent:daemon',
+            runtimeAgentDid: 'did:agent:runtime',
+          );
+      container.read(agentInboxProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'runtime_inbox',
+          'request_id': 'cmd_inbox_current',
+          'state': 'succeeded',
+          'result': <String, Object?>{
+            'items': <Object?>[
+              <String, Object?>{
+                'thread_id': 'dm:did:human:bob',
+                'kind': 'direct',
+                'title': 'did:human:bob',
+                'peer_did': 'did:human:bob',
+                'last_message_preview': 'legacy',
+                'last_message_at_ms': 100,
+              },
+              <String, Object?>{
+                'thread_id': 'dm:peer-scope:v1:bob',
+                'kind': 'direct',
+                'title': 'bob.anpclaw.com',
+                'peer_did': 'did:human:bob',
+                'peer_handle': 'bob.anpclaw.com',
+                'peer_user_id': 'user-bob',
+                'last_message_preview': 'stable',
+                'last_message_at_ms': 90,
+              },
+            ],
+          },
+        },
+      );
+
+      final items = container.read(agentInboxProvider).items;
+      expect(items, hasLength(1));
+      expect(items.single.threadId, 'dm:peer-scope:v1:bob');
+      expect(items.single.title, 'bob.anpclaw.com');
+      expect(items.single.peerHandle, 'bob.anpclaw.com');
+      expect(items.single.lastMessagePreview, 'stable');
+    },
+  );
+
   test('thread pagination prepends older unique messages', () async {
     final control = FakeAgentControlService()
       ..nextInboxThreadRequestId = 'cmd_thread_first';

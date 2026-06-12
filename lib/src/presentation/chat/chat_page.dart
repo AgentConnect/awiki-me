@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show SelectableText, SelectionArea;
+import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -1727,7 +1727,7 @@ class _MessageBubble extends StatelessWidget {
               color: isMine ? const Color(0xFFEAF2FF) : const Color(0xFFDDE5F0),
             ),
           ),
-          child: child,
+          child: SelectionArea(child: child),
         ),
         if (message.sendState == MessageSendState.failed) ...<Widget>[
           SizedBox(height: responsive.displayScaled(8)),
@@ -1879,18 +1879,20 @@ class _MessageBubble extends StatelessWidget {
                           bottomRight: const Radius.circular(22),
                         ),
                       ),
-                      child: message.attachment == null
-                          ? _MessageTextContent(
-                              text: message.content,
-                              style: textStyle,
-                              renderMarkdown: !isMine,
-                            )
-                          : _AttachmentContent(
-                              message: message,
-                              macStyle: false,
-                              onDownload: onDownload,
-                              isDownloading: isDownloading,
-                            ),
+                      child: SelectionArea(
+                        child: message.attachment == null
+                            ? _MessageTextContent(
+                                text: message.content,
+                                style: textStyle,
+                                renderMarkdown: !isMine,
+                              )
+                            : _AttachmentContent(
+                                message: message,
+                                macStyle: false,
+                                onDownload: onDownload,
+                                isDownloading: isDownloading,
+                              ),
+                      ),
                     ),
                     if (message.sendState ==
                         MessageSendState.failed) ...<Widget>[
@@ -2053,7 +2055,7 @@ class _AttachmentContent extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    _SelectableMessageText(
+                    _MessagePlainText(
                       text: attachment.displayName,
                       maxLines: 2,
                       style: titleStyle,
@@ -2109,11 +2111,11 @@ class _MessageTextContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!renderMarkdown) {
-      return _SelectableMessageText(text: text, style: style);
+      return _MessagePlainText(text: text, style: style);
     }
     return MarkdownBody(
       data: text,
-      selectable: true,
+      selectable: false,
       shrinkWrap: true,
       styleSheet: _chatMarkdownStyleSheet(context, style),
     );
@@ -2185,8 +2187,8 @@ MarkdownStyleSheet _chatMarkdownStyleSheet(
   );
 }
 
-class _SelectableMessageText extends StatelessWidget {
-  const _SelectableMessageText({
+class _MessagePlainText extends StatelessWidget {
+  const _MessagePlainText({
     required this.text,
     required this.style,
     this.maxLines,
@@ -2198,12 +2200,11 @@ class _SelectableMessageText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SelectableText(
+    return Text(
       text,
       maxLines: maxLines,
       style: style,
-      showCursor: false,
-      scrollPhysics: const NeverScrollableScrollPhysics(),
+      overflow: maxLines == null ? null : TextOverflow.ellipsis,
       textWidthBasis: TextWidthBasis.parent,
       textHeightBehavior: const TextHeightBehavior(
         applyHeightToFirstAscent: false,

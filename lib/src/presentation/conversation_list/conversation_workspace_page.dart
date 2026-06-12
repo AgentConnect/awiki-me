@@ -920,15 +920,13 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                if (canManageMembers) ...<Widget>[
-                  _MacPanelIconButton(
-                    key: const Key('mac-group-info-add-member-button'),
-                    semanticLabel: '添加成员',
-                    icon: CupertinoIcons.person_add,
-                    onTap: _openAddMemberDialog,
-                  ),
-                  const SizedBox(width: 8),
-                ],
+                _MacPanelIconButton(
+                  key: const Key('mac-group-info-add-member-button'),
+                  semanticLabel: '添加成员',
+                  icon: CupertinoIcons.person_add,
+                  onTap: canManageMembers ? _openAddMemberDialog : null,
+                ),
+                const SizedBox(width: 8),
                 _MacPanelIconButton(
                   key: const Key('mac-group-info-refresh-button'),
                   semanticLabel: '刷新成员',
@@ -958,6 +956,7 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
                                   )
                                   ? () => _confirmRemoveMember(item)
                                   : null,
+                              showRemoveButton: true,
                             ),
                           ),
                         )
@@ -1032,9 +1031,7 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
   }
 
   bool _hasCompleteGroupData(GroupSummary group) {
-    return group.description.trim().isNotEmpty ||
-        group.memberCount > 0 ||
-        (group.myRole?.trim().isNotEmpty ?? false);
+    return hasKnownGroupRole(group);
   }
 
   Future<void> _refreshMembers() async {
@@ -1258,6 +1255,8 @@ class _MacPanelIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final enabled = onTap != null && !isLoading;
     return AppIconButton(
       onPressed: isLoading ? null : onTap,
       semanticLabel: semanticLabel,
@@ -1269,7 +1268,7 @@ class _MacPanelIconButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
       child: Icon(
         icon,
-        color: const Color(0xFF34415C),
+        color: enabled ? const Color(0xFF34415C) : theme.tertiaryText,
         size: responsive.displayScaled(16),
       ),
     );

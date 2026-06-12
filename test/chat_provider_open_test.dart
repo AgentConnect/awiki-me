@@ -1239,6 +1239,58 @@ void main() {
     expect(refreshed.lastMessagePreview, '实时新消息');
     expect(refreshed.unreadCount, 1);
   });
+
+  test('本地 DID 会话和刷新的 full handle 会话会合并为同一个智能体会话', () async {
+    const agentDid = 'did:agent:runtime';
+    const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(
+          ConversationSummary(
+            threadId: 'dm:did:human:$agentDid',
+            displayName: 'zhuocheng-test-hermes',
+            lastMessagePreview: '本地消息',
+            lastMessageAt: DateTime(2026, 5, 8, 10),
+            unreadCount: 0,
+            isGroup: false,
+            targetDid: agentDid,
+            targetPeer: agentDid,
+          ),
+        );
+    gateway.conversations = <ConversationSummary>[
+      ConversationSummary(
+        threadId: 'dm:peer-scope:v1:runtime',
+        displayName: '改名后的智能体',
+        lastMessagePreview: '刷新消息',
+        lastMessageAt: DateTime(2026, 5, 8, 10, 1),
+        unreadCount: 1,
+        isGroup: false,
+        targetDid: agentDid,
+        targetPeer: agentHandle,
+      ),
+    ];
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:human',
+            credentialName: 'human.json',
+            displayName: 'Me',
+            handle: 'zhuocheng',
+          ),
+        );
+
+    await container.read(conversationListProvider.notifier).refresh();
+
+    final conversations = container
+        .read(conversationListProvider)
+        .conversations;
+    expect(conversations, hasLength(1));
+    expect(conversations.single.threadId, 'dm:peer-scope:v1:runtime');
+    expect(conversations.single.targetDid, agentDid);
+    expect(conversations.single.targetPeer, agentHandle);
+    expect(conversations.single.displayName, '改名后的智能体');
+  });
 }
 
 class _ThrowingMarkReadGateway extends FakeAwikiGateway {

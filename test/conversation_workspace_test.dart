@@ -22,6 +22,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_provide
 import 'package:awiki_me/src/presentation/conversation_list/conversation_list_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
+import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
@@ -849,6 +850,109 @@ void main() {
     expect(gateway.lastRemovedMemberRef, memberRef);
     expect(find.text('bob'), findsNothing);
     expect(find.text('2 人'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 群聊信息保留完整群权限避免按钮抖动', (tester) async {
+    const groupId = 'did:test:group:funding';
+    final fullGroup = GroupSummary(
+      groupId: groupId,
+      name: '融资协作群',
+      description: '同步融资材料和里程碑',
+      memberCount: 2,
+      lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+      myRole: 'owner',
+      membershipStatus: 'active',
+    );
+    final groupConversation = ConversationSummary(
+      threadId: 'group:funding',
+      displayName: '融资协作群',
+      lastMessagePreview: 'hello group',
+      lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: groupId,
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[groupConversation]
+      ..groups = <GroupSummary>[fullGroup]
+      ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+        groupId: const <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: 'did:test:owner',
+            did: 'did:test:owner',
+            handle: 'owner.awiki',
+            role: 'owner',
+          ),
+          GroupMemberSummary(
+            userId: 'did:test:member',
+            did: 'did:test:member',
+            handle: 'member.awiki',
+            role: 'member',
+          ),
+        ],
+      };
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('融资协作群').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('群聊信息'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('mac-group-info-add-member-button')),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsLabel('移除成员'), findsWidgets);
+
+    gateway.groups = <GroupSummary>[
+      GroupSummary(
+        groupId: groupId,
+        name: groupId,
+        description: '',
+        memberCount: 0,
+        lastMessageAt: DateTime(2026, 3, 28, 10, 26),
+      ),
+    ];
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ConversationWorkspacePage)),
+    );
+    await container.read(groupProvider.notifier).refresh();
+    await tester.pumpAndSettle();
+
+    expect(find.text('融资协作群 的群聊信息'), findsOneWidget);
+    expect(find.text('同步融资材料和里程碑'), findsOneWidget);
+    expect(find.text('owner'), findsWidgets);
+    expect(
+      find.byKey(const Key('mac-group-info-add-member-button')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.bySemanticsLabel('移除成员').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('移除成员'), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

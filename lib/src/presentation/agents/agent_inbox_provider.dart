@@ -509,7 +509,9 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
               .toList()
         : const <AgentInboxItem>[];
     state = state.copyWith(
-      items: shouldAppend ? _mergeItems(state.items, parsedItems) : parsedItems,
+      items: shouldAppend
+          ? _mergeItems(state.items, parsedItems)
+          : _dedupeItems(parsedItems),
       nextCursor: _string(result['next_cursor']),
       clearNextCursor: result['next_cursor'] == null,
       fetchedAtMs: _int(result['fetched_at_ms']),
@@ -614,12 +616,141 @@ List<AgentInboxItem> _mergeItems(
   List<AgentInboxItem> existing,
   List<AgentInboxItem> incoming,
 ) {
-  final seen = existing.map((item) => item.threadId).toSet();
-  return <AgentInboxItem>[
-    ...existing,
-    for (final item in incoming)
-      if (seen.add(item.threadId)) item,
-  ];
+  final merged = _dedupeItems(existing);
+  final aliasToIndex = <String, int>{};
+  for (var index = 0; index < merged.length; index += 1) {
+    _registerInboxItemAliases(aliasToIndex, index, merged[index]);
+  }
+  for (final item in incoming) {
+    _mergeInboxItem(merged, aliasToIndex, item);
+  }
+  return merged;
+}
+
+List<AgentInboxItem> _dedupeItems(List<AgentInboxItem> items) {
+  final merged = <AgentInboxItem>[];
+  final aliasToIndex = <String, int>{};
+  for (final item in items) {
+    _mergeInboxItem(merged, aliasToIndex, item);
+  }
+  return merged;
+}
+
+void _mergeInboxItem(
+  List<AgentInboxItem> merged,
+  Map<String, int> aliasToIndex,
+  AgentInboxItem item,
+) {
+  final aliases = _inboxItemAliases(item);
+  int? index;
+  for (final alias in aliases) {
+    final candidate = aliasToIndex[alias];
+    if (candidate != null) {
+      index = candidate;
+      break;
+    }
+  }
+  if (index == null) {
+    merged.add(item);
+    _registerInboxItemAliases(aliasToIndex, merged.length - 1, item);
+    return;
+  }
+  final preferred = _preferInboxItem(merged[index], item);
+  merged[index] = preferred;
+  _registerInboxItemAliases(aliasToIndex, index, item);
+  _registerInboxItemAliases(aliasToIndex, index, preferred);
+}
+
+void _registerInboxItemAliases(
+  Map<String, int> aliasToIndex,
+  int index,
+  AgentInboxItem item,
+) {
+  for (final alias in _inboxItemAliases(item)) {
+    aliasToIndex[alias] = index;
+  }
+}
+
+List<String> _inboxItemAliases(AgentInboxItem item) {
+  final aliases = <String>{};
+  final kind = item.kind.toLowerCase();
+  if (kind == 'direct') {
+    final peerUserId = _stableKey(item.peerUserId);
+    final peerHandle = _normalizedHandleKey(item.peerHandle);
+    final peerDid = _stableKey(item.peerDid);
+    if (peerUserId != null && peerHandle != null) {
+      aliases.add('direct:scope:$peerUserId:$peerHandle');
+    }
+    if (peerHandle != null) {
+      aliases.add('direct:handle:$peerHandle');
+    }
+    if (peerDid != null) {
+      aliases.add('direct:did:$peerDid');
+    }
+  } else if (kind == 'group') {
+    final groupDid = _stableKey(item.groupDid);
+    final groupId = _stableKey(item.groupId);
+    if (groupDid != null) {
+      aliases.add('group:did:$groupDid');
+    }
+    if (groupId != null) {
+      aliases.add('group:id:$groupId');
+    }
+  }
+  final threadId = _stableKey(item.threadId);
+  if (threadId != null) {
+    aliases.add('thread:$threadId');
+  }
+  return aliases.toList(growable: false);
+}
+
+AgentInboxItem _preferInboxItem(
+  AgentInboxItem current,
+  AgentInboxItem candidate,
+) {
+  final currentScore = _inboxItemQualityScore(current);
+  final candidateScore = _inboxItemQualityScore(candidate);
+  if (candidateScore != currentScore) {
+    return candidateScore > currentScore ? candidate : current;
+  }
+  final currentTime = current.lastMessageAtMs;
+  final candidateTime = candidate.lastMessageAtMs;
+  if (currentTime != null &&
+      candidateTime != null &&
+      candidateTime != currentTime) {
+    return candidateTime > currentTime ? candidate : current;
+  }
+  if (currentTime == null && candidateTime != null) {
+    return candidate;
+  }
+  return current;
+}
+
+int _inboxItemQualityScore(AgentInboxItem item) {
+  var score = _stableKey(item.threadId) == null ? 0 : 1;
+  final kind = item.kind.toLowerCase();
+  if (kind == 'direct') {
+    if (item.threadId.startsWith('dm:peer-scope:v1:')) {
+      score += 8;
+    }
+    if (_stableKey(item.peerUserId) != null &&
+        _normalizedHandleKey(item.peerHandle) != null) {
+      score += 8;
+    } else if (_normalizedHandleKey(item.peerHandle) != null) {
+      score += 4;
+    }
+    if (_stableKey(item.peerDid) != null) {
+      score += 2;
+    }
+  } else if (kind == 'group') {
+    if (_stableKey(item.groupDid) != null || _stableKey(item.groupId) != null) {
+      score += 6;
+    }
+  }
+  if (_stableKey(item.title) != null) {
+    score += 1;
+  }
+  return score;
 }
 
 List<AgentInboxMessage> _prependMessages(
@@ -658,6 +789,13 @@ String? _string(Object? value) {
   final text = value?.toString().trim();
   return text == null || text.isEmpty ? null : text;
 }
+
+String? _stableKey(String? value) {
+  final text = value?.trim();
+  return text == null || text.isEmpty ? null : text;
+}
+
+String? _normalizedHandleKey(String? value) => _stableKey(value)?.toLowerCase();
 
 int? _int(Object? value) {
   if (value is int) {

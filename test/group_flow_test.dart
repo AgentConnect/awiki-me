@@ -261,6 +261,66 @@ void main() {
     expect(find.text('1 人'), findsOneWidget);
   });
 
+  testWidgets('群详情普通成员仍显示管理按钮但保持禁用', (tester) async {
+    const groupDid = 'did:wba:awiki.ai:group:e1_group';
+    const memberDid = 'did:wba:awiki.ai:user:bob:e1_member';
+    final gateway = FakeAwikiGateway()
+      ..loginResult = session
+      ..groups = <GroupSummary>[
+        GroupSummary(
+          groupId: groupDid,
+          name: '融资协作群',
+          description: '',
+          memberCount: 2,
+          lastMessageAt: DateTime(2026, 5, 17, 10),
+          myRole: 'member',
+        ),
+      ]
+      ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+        groupDid: <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: session.did,
+            did: session.did,
+            handle: session.handle ?? session.did,
+            role: 'member',
+            profileUrl: null,
+          ),
+          const GroupMemberSummary(
+            userId: memberDid,
+            did: memberDid,
+            handle: 'bob.awiki.ai',
+            role: 'member',
+            profileUrl: null,
+          ),
+        ],
+      };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: GroupDetailPage(initialGroup: gateway.groups.first),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final addButton = find.byKey(const Key('group-detail-add-member-button'));
+    expect(addButton, findsOneWidget);
+    await tester.tap(addButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('成员 handle 或 DID'), findsNothing);
+
+    final removeButton = find.bySemanticsLabel('移除成员').last;
+    expect(removeButton, findsOneWidget);
+    await tester.tap(removeButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('移除成员'), findsNothing);
+    expect(gateway.lastRemovedGroupId, isNull);
+    expect(gateway.lastRemovedMemberRef, isNull);
+  });
+
   testWidgets('群详情成员刷新按钮显示 loading 并只刷新成员列表', (tester) async {
     const groupDid = 'did:wba:awiki.ai:group:e1_group';
     final memberRefresh = Completer<void>();

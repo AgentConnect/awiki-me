@@ -19,7 +19,7 @@ import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show SelectableText;
+import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -746,13 +746,8 @@ void main() {
         .openConversation(conversation);
     await tester.pumpAndSettle();
 
-    expect(
-      find.descendant(
-        of: find.byType(SelectableText),
-        matching: find.text('这是一条可以复制的消息'),
-      ),
-      findsOneWidget,
-    );
+    expect(find.byType(SelectionArea), findsWidgets);
+    expect(find.text('这是一条可以复制的消息'), findsOneWidget);
   });
 
   testWidgets('对方文本消息按 Markdown 渲染并保留可选中复制', (tester) async {
@@ -808,7 +803,7 @@ void main() {
 
     final body = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
     expect(body.data, markdown);
-    expect(body.selectable, isTrue);
+    expect(body.selectable, isFalse);
   });
 
   testWidgets('自己发出的 Markdown 样式文本仍按普通文本显示', (tester) async {
@@ -863,13 +858,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(MarkdownBody), findsNothing);
-    expect(
-      find.descendant(
-        of: find.byType(SelectableText),
-        matching: find.text(text),
-      ),
-      findsOneWidget,
-    );
+    expect(find.text(text), findsOneWidget);
   });
 
   testWidgets('群聊和 Agent 收到的消息都按 Markdown 渲染', (tester) async {
@@ -951,7 +940,7 @@ void main() {
 
     var body = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
     expect(body.data, groupMarkdown);
-    expect(body.selectable, isTrue);
+    expect(body.selectable, isFalse);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -969,7 +958,7 @@ void main() {
 
     body = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
     expect(body.data, agentMarkdown);
-    expect(body.selectable, isTrue);
+    expect(body.selectable, isFalse);
   });
 
   testWidgets('发送给 Runtime Agent 后在对应消息下显示处理中提示', (tester) async {
@@ -2086,20 +2075,8 @@ void main() {
         .openConversation(conversation);
     await tester.pumpAndSettle();
 
-    expect(
-      find.descendant(
-        of: find.byType(SelectableText),
-        matching: find.text('附件说明'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byType(SelectableText),
-        matching: find.text('copyable-report.pdf'),
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('附件说明'), findsOneWidget);
+    expect(find.text('copyable-report.pdf'), findsOneWidget);
   });
 
   testWidgets('对方附件说明按 Markdown 渲染，文件名仍按普通文本复制', (tester) async {
@@ -2164,14 +2141,8 @@ void main() {
 
     final body = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
     expect(body.data, caption);
-    expect(body.selectable, isTrue);
-    expect(
-      find.descendant(
-        of: find.byType(SelectableText),
-        matching: find.text(filename),
-      ),
-      findsOneWidget,
-    );
+    expect(body.selectable, isFalse);
+    expect(find.text(filename), findsOneWidget);
   });
 
   testWidgets('已删除智能体会话保留历史但禁用发送', (tester) async {

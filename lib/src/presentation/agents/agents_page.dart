@@ -1335,9 +1335,36 @@ Future<void> _openRuntimeChat(
     context,
     ref,
     peerDid: agent.agentDid,
+    peerHandle: _agentFullHandle(agent),
     peerName: title,
     avatarSeed: agent.handle ?? agent.agentDid,
   );
+}
+
+String? _agentFullHandle(AgentSummary agent) {
+  final handle = _trimLeadingAt(agent.handle);
+  if (handle == null || handle.isEmpty) {
+    return null;
+  }
+  if (handle.contains('.')) {
+    return handle.toLowerCase();
+  }
+  final domain = AwikiEnvironmentConfig.fromEnvironment().didDomain.trim();
+  if (domain.isEmpty) {
+    return handle.toLowerCase();
+  }
+  return '$handle.$domain'.toLowerCase();
+}
+
+String? _trimLeadingAt(String? value) {
+  var text = value?.trim();
+  if (text == null) {
+    return null;
+  }
+  while (text!.startsWith('@')) {
+    text = text.substring(1).trimLeft();
+  }
+  return text.trim();
 }
 
 Future<void> _showRenameAgentDialog(

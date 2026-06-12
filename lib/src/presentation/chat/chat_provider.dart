@@ -909,18 +909,21 @@ bool _sameConversationTarget(
   if (first.isGroup || second.isGroup) {
     return false;
   }
+  final firstDid = first.targetDid?.trim();
+  final secondDid = second.targetDid?.trim();
+  if (firstDid != null &&
+      firstDid.isNotEmpty &&
+      secondDid != null &&
+      secondDid.isNotEmpty &&
+      firstDid == secondDid) {
+    return true;
+  }
   final firstPeer = _normalizedDirectPeer(first.targetPeer);
   final secondPeer = _normalizedDirectPeer(second.targetPeer);
   if (firstPeer != null && secondPeer != null) {
     return firstPeer == secondPeer;
   }
-  final firstDid = first.targetDid?.trim();
-  final secondDid = second.targetDid?.trim();
-  return firstDid != null &&
-      firstDid.isNotEmpty &&
-      secondDid != null &&
-      secondDid.isNotEmpty &&
-      firstDid == secondDid;
+  return false;
 }
 
 String? _normalizedDirectPeer(String? value) {

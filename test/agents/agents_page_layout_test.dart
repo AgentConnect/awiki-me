@@ -134,11 +134,23 @@ void main() {
       'did:agent:runtime',
     );
     expect(
+      container.read(selectedConversationProvider)?.targetPeer,
+      'awiki-agent-hermes.awiki.ai',
+    );
+    expect(
       container
           .read(conversationListProvider)
           .conversations
           .any((item) => item.targetDid == 'did:agent:runtime'),
       isTrue,
+    );
+    expect(
+      container
+          .read(conversationListProvider)
+          .conversations
+          .singleWhere((item) => item.targetDid == 'did:agent:runtime')
+          .targetPeer,
+      'awiki-agent-hermes.awiki.ai',
     );
 
     await tester.tap(find.text('重置 Session'));
