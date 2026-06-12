@@ -253,6 +253,7 @@
   "updatePermissionRequired": "请允许安装未知应用后重试。",
   "updateInstallFailed": "更新失败，请前往 GitHub 下载。",
   "requestTimeoutRetry": "请求超时，请检查网络后重试。",
+  "networkUnavailableRetry": "网络连接暂时不可用，请检查网络后重试。",
   "operationFailedRetry": "操作失败，请稍后重试。",
   "featureNotImplemented": "功能暂未实现，请等待后续版本。",
   "otpSent": "验证码已发送，请留意短信。",

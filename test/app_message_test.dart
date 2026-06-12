@@ -35,4 +35,33 @@ void main() {
 
     expect(message, AppMessage.didNotFoundOrRevoked());
   });
+
+  test('maps im-core transport unavailable errors to friendly network copy', () {
+    final message = AppMessage.fromError(
+      const core.AwikiImCoreException(
+        code: 'transport_unavailable',
+        message:
+            'transport unavailable: error sending request for url (https://anpclaw.com/user-service/did/profile/rpc)',
+      ),
+    );
+
+    expect(message, AppMessage.networkUnavailableRetry());
+    expect(message.resolve(AppLocalizationsZh()), '网络连接暂时不可用，请检查网络后重试。');
+    expect(
+      message.resolve(AppLocalizationsEn()),
+      'Network connection is temporarily unavailable. Please check your network and try again.',
+    );
+  });
+
+  test('maps common socket and DNS failures to friendly network copy', () {
+    final socketMessage = AppMessage.fromError(
+      Exception('SocketException: Failed host lookup: anpclaw.com'),
+    );
+    final refusedMessage = AppMessage.fromError(
+      Exception('Connection refused'),
+    );
+
+    expect(socketMessage, AppMessage.networkUnavailableRetry());
+    expect(refusedMessage, AppMessage.networkUnavailableRetry());
+  });
 }

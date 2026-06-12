@@ -562,6 +562,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get requestTimeoutRetry => '请求超时，请检查网络后重试。';
 
   @override
+  String get networkUnavailableRetry => '网络连接暂时不可用，请检查网络后重试。';
+
+  @override
   String get operationFailedRetry => '操作失败，请稍后重试。';
 
   @override

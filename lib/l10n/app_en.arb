@@ -253,6 +253,7 @@
   "updatePermissionRequired": "Please allow installs from this source and try again.",
   "updateInstallFailed": "Update failed. Please download it from GitHub.",
   "requestTimeoutRetry": "The request timed out. Please check your network and try again.",
+  "networkUnavailableRetry": "Network connection is temporarily unavailable. Please check your network and try again.",
   "operationFailedRetry": "The operation failed. Please try again later.",
   "featureNotImplemented": "This feature is not available yet.",
   "otpSent": "Verification code sent. Please check your messages.",

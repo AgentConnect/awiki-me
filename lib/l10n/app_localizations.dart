@@ -1142,6 +1142,12 @@ abstract class AppLocalizations {
   /// **'请求超时，请检查网络后重试。'**
   String get requestTimeoutRetry;
 
+  /// No description provided for @networkUnavailableRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'网络连接暂时不可用，请检查网络后重试。'**
+  String get networkUnavailableRetry;
+
   /// No description provided for @operationFailedRetry.
   ///
   /// In zh, this message translates to:
