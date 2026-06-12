@@ -124,4 +124,24 @@ flutter test
 dart run tool/e2e_runner.dart --config awiki_e2e.example.yaml --dry-run
 ```
 
-Run integration and real-device E2E when the platform and devices are available.
+## CI Gate
+
+The GitHub Actions quick gate mirrors the local required checks:
+
+```bash
+flutter pub get
+dart analyze
+flutter test
+dart run tool/e2e_runner.dart --config awiki_e2e.example.yaml --dry-run
+```
+
+This gate intentionally does not run Linux desktop integration or real-device
+E2E. Linux desktop integration becomes a required CI step only after this repo
+adds a `linux/` runner and the native SDK paths used by the integration suite
+are supported on Linux. Real Android/iOS E2E belongs in a manual, nightly, or
+release gate unless stable devices, Maestro, non-production accounts, and
+backend isolation are available.
+
+Run integration and real-device E2E when the platform and devices are available,
+and record pass/fail evidence plus any report paths in the handoff or release
+notes.

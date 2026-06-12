@@ -26,8 +26,11 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Flutter analyze
-        run: flutter analyze
+      - name: Dart analyze
+        run: dart analyze
 
       - name: Flutter test
         run: flutter test
+
+      - name: E2E runner dry-run
+        run: dart run tool/e2e_runner.dart --config awiki_e2e.example.yaml --dry-run
