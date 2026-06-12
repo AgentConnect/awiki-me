@@ -17,6 +17,19 @@ flutter test
 flutter run
 ```
 
+## Testing
+
+The testing strategy is documented in [docs/testing.md](docs/testing.md).
+
+Recommended local gate:
+
+```bash
+PUB_HOSTED_URL=https://mirrors.tuna.tsinghua.edu.cn/dart-pub flutter pub get
+dart analyze
+flutter test
+dart run tool/e2e_runner.dart --config awiki_e2e.example.yaml --dry-run
+```
+
 ## Backend Environment
 
 The app reads a single backend root from `AWIKI_BASE_URL` and derives the

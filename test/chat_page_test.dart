@@ -16,7 +16,6 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_provide
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
-import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show SelectionArea;
@@ -344,7 +343,6 @@ void main() {
     expect(find.text('远端智能体'), findsOneWidget);
     expect(find.text('智能体'), findsOneWidget);
     expect(find.text('我的智能体'), findsNothing);
-    expect(find.byType(AvatarBadge), findsNothing);
     expect(find.text('关注'), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = null;

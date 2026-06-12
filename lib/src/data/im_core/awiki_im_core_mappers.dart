@@ -47,13 +47,7 @@ class AwikiImCoreMappers {
   }
 
   SessionIdentity legacySessionFromAppSession(AppSession session) {
-    return SessionIdentity(
-      did: session.did,
-      credentialName: session.localAlias ?? session.identityId,
-      displayName: session.displayName,
-      handle: session.handle,
-      jwtToken: session.jwtToken,
-    );
+    return session.toLegacySessionIdentity();
   }
 
   UserSubkeyPackage userSubkeyPackageFromCore(

@@ -1,3 +1,5 @@
+import '../../domain/entities/session_identity.dart';
+
 class AppSession {
   const AppSession({
     required this.did,
@@ -38,6 +40,18 @@ class AppSession {
       authenticated: authenticated ?? this.authenticated,
       expiresAt: expiresAt ?? this.expiresAt,
       jwtToken: jwtToken ?? this.jwtToken,
+    );
+  }
+}
+
+extension AppSessionLegacyIdentity on AppSession {
+  SessionIdentity toLegacySessionIdentity() {
+    return SessionIdentity(
+      did: did,
+      credentialName: localAlias ?? identityId,
+      displayName: displayName,
+      handle: handle,
+      jwtToken: jwtToken,
     );
   }
 }

@@ -8,8 +8,8 @@ import 'package:flutter/material.dart' as material;
 import '../application/agent/agent_control_service.dart';
 import '../application/auth/auth_session_coordinator.dart';
 import '../application/conversation_service.dart';
+import '../application/models/app_session.dart';
 import '../data/agent/user_service_agent_inventory_adapter.dart';
-import '../data/im_core/awiki_im_core_mappers.dart';
 import '../data/services/authenticated_user_service_rpc_client.dart';
 import '../presentation/app_shell/app_shell.dart';
 import '../presentation/app_shell/providers/app_lifecycle_provider.dart';
@@ -77,11 +77,7 @@ class AwikiMeApp extends StatelessWidget {
                 onSessionUpdated: (session) {
                   ref
                       .read(sessionProvider.notifier)
-                      .setSession(
-                        const AwikiImCoreMappers().legacySessionFromAppSession(
-                          session,
-                        ),
-                      );
+                      .setSession(session.toLegacySessionIdentity());
                 },
               );
               return inventory.withAuthenticatedClient(

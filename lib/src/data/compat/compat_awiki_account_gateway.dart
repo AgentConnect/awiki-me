@@ -182,15 +182,3 @@ class CompatAwikiAccountGateway implements AwikiAccountGateway {
     return session.toLegacySessionIdentity();
   }
 }
-
-extension AppSessionLegacyMapping on AppSession {
-  SessionIdentity toLegacySessionIdentity() {
-    return SessionIdentity(
-      did: did,
-      credentialName: localAlias ?? identityId,
-      displayName: displayName,
-      handle: handle,
-      jwtToken: jwtToken,
-    );
-  }
-}

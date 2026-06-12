@@ -694,10 +694,15 @@ class AndroidDeviceManager {
 }
 
 class CommandRunner {
-  CommandRunner({required this.root, required this.dryRun});
+  CommandRunner({
+    required this.root,
+    required this.dryRun,
+    void Function(String line)? logLine,
+  }) : _logLine = logLine ?? _line;
 
   final Directory root;
   final bool dryRun;
+  final void Function(String line) _logLine;
 
   Future<void> requireExecutable(String executable) async {
     final result = await capture(Platform.isWindows ? 'where' : 'which', [
@@ -707,7 +712,9 @@ class CommandRunner {
     if (path.isEmpty && !dryRun) {
       throw E2eFailure('Required executable was not found: $executable');
     }
-    _line('$executable: ${path.isEmpty ? 'dry-run' : path.split('\n').first}');
+    _logLine(
+      '$executable: ${path.isEmpty ? 'dry-run' : path.split('\n').first}',
+    );
   }
 
   Future<void> run(
@@ -733,7 +740,7 @@ class CommandRunner {
     List<String> args, {
     bool allowFailure = false,
   }) async {
-    _command(executable, args);
+    _command(executable, args, logLine: _logLine);
     if (dryRun) {
       return '';
     }
@@ -762,7 +769,7 @@ class CommandRunner {
     bool checkExit = true,
     bool detached = false,
   }) async {
-    _command(executable, args);
+    _command(executable, args, logLine: _logLine);
     if (dryRun) {
       return RunningProcess.fake(label);
     }
@@ -1354,8 +1361,13 @@ String _formatDuration(Duration duration) {
   return '${duration.inMilliseconds}ms';
 }
 
-void _command(String executable, List<String> args) {
-  stdout.writeln('\$ $executable ${args.map(_quoteCommandArg).join(' ')}');
+void _command(
+  String executable,
+  List<String> args, {
+  void Function(String line)? logLine,
+}) {
+  final line = '\$ $executable ${args.map(_quoteCommandArg).join(' ')}';
+  (logLine ?? _line)(line);
 }
 
 String _messageIdentifier(String content) {
