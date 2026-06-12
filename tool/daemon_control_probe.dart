@@ -113,8 +113,12 @@ Future<Map<String, Object?>> _parseInventory(
           'agent_kind': agent.kind == AgentKind.daemon ? 'daemon' : 'runtime',
           'daemon_agent_did': agent.daemonAgentDid,
           'runtime': agent.runtime,
+          'handle': agent.handle,
           'display_name': agent.displayName,
           'active_state': agent.activeState,
+          'status': agent.latest.status,
+          'service': agent.latest.service,
+          'diagnostics_summary': agent.latest.diagnosticsSummary,
         },
       )
       .toList(growable: false);

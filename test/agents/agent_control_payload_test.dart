@@ -1,5 +1,6 @@
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -219,5 +220,41 @@ void main() {
     expect(threadArgs['thread_id'], 'group:did:group:team');
     expect(threadArgs['kind'], 'group');
     expect(threadArgs['group_did'], 'did:group:team');
+  });
+
+  test('agent inventory summary maps daemon install inventory fields', () {
+    final summary = AgentSummary.fromJson(<String, Object?>{
+      'agent_did': 'did:wba:agent.example:agent:daemon:e1_daemon',
+      'agent_kind': 'daemon',
+      'handle': 'alice-daemon',
+      'display_name': 'Alice Daemon',
+      'active_state': 'active',
+      'status': <String, Object?>{
+        'status': 'ready',
+        'service': 'foreground',
+        'diagnostics_summary': <String, Object?>{
+          'installation_status': 'not_installed',
+          'runner_status': 'not_running',
+          'config_summary': <String, Object?>{'service_installed': false},
+        },
+      },
+    });
+
+    expect(summary.isDaemon, isTrue);
+    expect(summary.agentDid, 'did:wba:agent.example:agent:daemon:e1_daemon');
+    expect(summary.handle, 'alice-daemon');
+    expect(summary.displayName, 'Alice Daemon');
+    expect(summary.activeState, 'active');
+    expect(summary.latest.status, 'ready');
+    expect(summary.latest.service, 'foreground');
+    expect(
+      summary.latest.diagnosticsSummary['installation_status'],
+      'not_installed',
+    );
+    expect(
+      (summary.latest.diagnosticsSummary['config_summary']
+          as Map<String, Object?>)['service_installed'],
+      isFalse,
+    );
   });
 }
