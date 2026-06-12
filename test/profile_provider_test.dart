@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/profile_homepage_resolver.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,6 +27,11 @@ void main() {
         awikiGatewayProvider.overrideWithValue(gateway),
         profileApplicationServiceProvider.overrideWithValue(
           FakeProfileApplicationService(gateway),
+        ),
+        profileHomepageResolverProvider.overrideWithValue(
+          ProfileHomepageResolver(
+            environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
+          ),
         ),
         homepageMarkdownLoaderProvider.overrideWithValue(
           (_) async => remoteMarkdown,
@@ -70,6 +77,11 @@ void main() {
         profileApplicationServiceProvider.overrideWithValue(
           FakeProfileApplicationService(gateway),
         ),
+        profileHomepageResolverProvider.overrideWithValue(
+          ProfileHomepageResolver(
+            environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
+          ),
+        ),
         homepageMarkdownLoaderProvider.overrideWithValue(
           (_) => homepageCompleter.future,
         ),
@@ -113,6 +125,11 @@ void main() {
         awikiGatewayProvider.overrideWithValue(gateway),
         profileApplicationServiceProvider.overrideWithValue(
           FakeProfileApplicationService(gateway),
+        ),
+        profileHomepageResolverProvider.overrideWithValue(
+          ProfileHomepageResolver(
+            environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
+          ),
         ),
         homepageMarkdownLoaderProvider.overrideWithValue(
           (_) async => '<!doctype html><html><body></body></html>',

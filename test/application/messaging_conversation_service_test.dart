@@ -125,6 +125,156 @@ void main() {
       ]);
       expect(core.listCount, 1);
     });
+
+    test(
+      'keeps archived runtime conversations and marks them deleted',
+      () async {
+        final core = _FakeConversations(
+          items: <ConversationSummary>[
+            _conversation(
+              'dm:alice:daemon',
+              targetDid: 'did:agent:daemon',
+              minutesAgo: 1,
+            ),
+            _conversation(
+              'dm:alice:runtime',
+              targetDid: 'did:agent:runtime',
+              minutesAgo: 2,
+            ),
+            _conversation('dm:alice:bob', targetDid: 'did:bob', minutesAgo: 3),
+          ],
+        );
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: InMemoryAwikiProductLocalStore(),
+          agentInventory: const _FakeAgentInventory(
+            agents: <AgentSummary>[
+              AgentSummary(
+                agentDid: 'did:agent:daemon',
+                kind: AgentKind.daemon,
+                displayName: '代理 1',
+                activeState: 'archived',
+                latest: AgentLatestStatus(status: 'archived'),
+              ),
+              AgentSummary(
+                agentDid: 'did:agent:runtime',
+                kind: AgentKind.runtime,
+                daemonAgentDid: 'did:agent:daemon',
+                runtime: 'hermes',
+                displayName: 'Hermes',
+                activeState: 'archived',
+                latest: AgentLatestStatus(status: 'archived'),
+              ),
+            ],
+          ),
+        );
+
+        final conversations = await service.listConversations(
+          ownerDid: 'did:alice',
+        );
+
+        expect(conversations.map((item) => item.targetDid), [
+          'did:agent:runtime',
+          'did:bob',
+        ]);
+        expect(conversations.first.isDeletedAgentConversation, isTrue);
+        expect(conversations.last.isDeletedAgentConversation, isFalse);
+      },
+    );
+
+    test(
+      'projects runtime agent display name onto direct conversations',
+      () async {
+        final core = _FakeConversations(
+          items: <ConversationSummary>[
+            _conversation(
+              'dm:alice:runtime',
+              targetDid: 'did:agent:runtime',
+              minutesAgo: 1,
+              displayName: 'awiki-agent-random',
+            ),
+          ],
+        );
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: InMemoryAwikiProductLocalStore(),
+          agentInventory: const _FakeAgentInventory(
+            agents: <AgentSummary>[
+              AgentSummary(
+                agentDid: 'did:agent:runtime',
+                kind: AgentKind.runtime,
+                daemonAgentDid: 'did:agent:daemon',
+                runtime: 'hermes',
+                displayName: '写作助手',
+                activeState: 'active',
+                latest: AgentLatestStatus(status: 'ready'),
+              ),
+            ],
+          ),
+        );
+
+        final conversations = await service.listConversations(
+          ownerDid: 'did:alice',
+        );
+
+        expect(conversations.single.displayName, '写作助手');
+      },
+    );
+
+    test(
+      'merges runtime DID and handle conversations into one current agent row',
+      () async {
+        final core = _FakeConversations(
+          items: <ConversationSummary>[
+            _conversation(
+              'dm:did:human:did:agent:runtime',
+              targetDid: 'did:agent:runtime',
+              targetPeer: 'did:agent:runtime',
+              minutesAgo: 2,
+              displayName: 'zhuocheng-test-hermes',
+            ),
+            _conversation(
+              'dm:peer-scope:v1:runtime',
+              targetDid: 'did:agent:runtime',
+              targetPeer: 'zhuocheng-test-hermes.anpclaw.com',
+              minutesAgo: 1,
+              displayName: 'zhuocheng-test-hermes.anpclaw.com',
+            ),
+          ],
+        );
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: InMemoryAwikiProductLocalStore(),
+          agentInventory: const _FakeAgentInventory(
+            agents: <AgentSummary>[
+              AgentSummary(
+                agentDid: 'did:agent:runtime',
+                kind: AgentKind.runtime,
+                daemonAgentDid: 'did:agent:daemon',
+                runtime: 'hermes',
+                handle: 'zhuocheng-test-hermes',
+                displayName: '改名后的智能体',
+                activeState: 'active',
+                latest: AgentLatestStatus(status: 'ready'),
+              ),
+            ],
+          ),
+        );
+
+        final conversations = await service.listConversations(
+          ownerDid: 'did:human',
+        );
+
+        expect(conversations, hasLength(1));
+        expect(conversations.single.threadId, 'dm:peer-scope:v1:runtime');
+        expect(conversations.single.targetDid, 'did:agent:runtime');
+        expect(
+          conversations.single.targetPeer,
+          'zhuocheng-test-hermes.anpclaw.com',
+        );
+        expect(conversations.single.displayName, '改名后的智能体');
+      },
+    );
   });
 
   group('ImCoreMessagingService', () {
@@ -148,10 +298,12 @@ ConversationSummary _conversation(
   String threadId, {
   required int minutesAgo,
   String targetDid = 'did:bob',
+  String? targetPeer,
+  String? displayName,
 }) {
   return ConversationSummary(
     threadId: threadId,
-    displayName: threadId,
+    displayName: displayName ?? threadId,
     lastMessagePreview: 'preview',
     lastMessageAt: DateTime.utc(
       2026,
@@ -162,6 +314,7 @@ ConversationSummary _conversation(
     unreadCount: 0,
     isGroup: false,
     targetDid: targetDid,
+    targetPeer: targetPeer,
   );
 }
 
@@ -278,6 +431,8 @@ class _FakeAgentInventory implements AgentInventoryPort {
     required String controllerDid,
     required String daemonAgentDid,
     required String runtime,
+    required String handle,
+    required String displayName,
   }) {
     throw UnimplementedError();
   }

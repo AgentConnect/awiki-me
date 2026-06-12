@@ -23,9 +23,13 @@ void main() {
       await service.createHermesRuntime(
         daemonAgentDid: 'did:agent:daemon',
         controllerDid: 'did:human:me',
+        handle: 'alice-hermes',
+        displayName: 'Alice Hermes',
       );
 
       expect(inventory.runtimeTokenDaemonDid, 'did:agent:daemon');
+      expect(inventory.runtimeTokenHandle, 'alice-hermes');
+      expect(inventory.runtimeTokenDisplayName, 'Alice Hermes');
       expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
       expect(messages.lastSecure, isFalse);
       expect(messages.lastPayload?['schema'], 'awiki.agent.command.v1');
@@ -34,6 +38,8 @@ void main() {
       expect(args['controller_did'], 'did:human:me');
       expect(args['registration_token'], 'runtime-token');
       expect(args['runtime'], 'hermes');
+      expect(args['handle'], 'alice-hermes');
+      expect(args['display_name'], 'Alice Hermes');
     },
   );
 
@@ -50,6 +56,44 @@ void main() {
     expect(messages.lastSecure, isFalse);
     expect(messages.lastIdempotencyKey, 'agent-status:did:agent:daemon');
   });
+
+  test('deleteDaemon sends daemon.delete control payload', () async {
+    final messages = _MessagesStub();
+    final service = DefaultAgentControlService(
+      inventory: _InventoryStub(),
+      messages: messages,
+    );
+
+    await service.deleteDaemon('did:agent:daemon');
+
+    expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
+    expect(messages.lastSecure, isFalse);
+    expect(messages.lastPayload?['command'], 'daemon.delete');
+    final args = messages.lastPayload?['args'] as Map<String, Object?>;
+    expect(args['daemon_agent_did'], 'did:agent:daemon');
+  });
+
+  test(
+    'deleteRuntimeAgent sends runtime.agent.delete through daemon',
+    () async {
+      final messages = _MessagesStub();
+      final service = DefaultAgentControlService(
+        inventory: _InventoryStub(),
+        messages: messages,
+      );
+
+      await service.deleteRuntimeAgent(
+        daemonAgentDid: 'did:agent:daemon',
+        runtimeAgentDid: 'did:agent:runtime',
+      );
+
+      expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
+      expect(messages.lastSecure, isFalse);
+      expect(messages.lastPayload?['command'], 'runtime.agent.delete');
+      final args = messages.lastPayload?['args'] as Map<String, Object?>;
+      expect(args['runtime_agent_did'], 'did:agent:runtime');
+    },
+  );
 
   test(
     'ensureMessageAgentBootstrap sends one ordinary bootstrap payload',
@@ -212,18 +256,20 @@ void main() {
     final requestId = await service.queryRuntimeInboxThread(
       daemonAgentDid: 'did:agent:daemon',
       runtimeAgentDid: 'did:agent:runtime',
-      threadId: 'direct:did:human:bob',
+      threadId: 'dm:peer-scope:v1:bob',
       kind: 'direct',
       peerDid: 'did:human:bob',
+      peerHandle: 'bob.anpclaw.com',
     );
 
     expect(requestId, startsWith('cmd_runtime_inbox_thread_'));
     expect(messages.lastSecure, isFalse);
     expect(messages.lastPayload?['command'], 'runtime.inbox.thread.query');
     final args = messages.lastPayload?['args'] as Map<String, Object?>;
-    expect(args['thread_id'], 'direct:did:human:bob');
+    expect(args['thread_id'], 'dm:peer-scope:v1:bob');
     expect(args['kind'], 'direct');
     expect(args['peer_did'], 'did:human:bob');
+    expect(args['peer_handle'], 'bob.anpclaw.com');
   });
 
   test('createDaemonInstallCommand returns token-only main command', () async {
@@ -254,6 +300,8 @@ void main() {
 
 class _InventoryStub implements AgentInventoryPort {
   String? runtimeTokenDaemonDid;
+  String? runtimeTokenHandle;
+  String? runtimeTokenDisplayName;
 
   @override
   Future<AgentRegistrationToken> issueDaemonToken({
@@ -268,8 +316,12 @@ class _InventoryStub implements AgentInventoryPort {
     required String controllerDid,
     required String daemonAgentDid,
     required String runtime,
+    required String handle,
+    required String displayName,
   }) async {
     runtimeTokenDaemonDid = daemonAgentDid;
+    runtimeTokenHandle = handle;
+    runtimeTokenDisplayName = displayName;
     return const AgentRegistrationToken(token: 'runtime-token');
   }
 

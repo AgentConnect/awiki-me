@@ -11,7 +11,12 @@ import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/install_command.dart';
+import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/session_provider.dart';
+import 'agent_display_name.dart';
+
+const agentStatusQueryTimeout = Duration(seconds: 10);
+const agentStatusRefreshMinimumIndicatorDuration = Duration(milliseconds: 1500);
 
 class AgentsState {
   const AgentsState({
@@ -21,7 +26,6 @@ class AgentsState {
     this.isActing = false,
     this.installCommand,
     this.error,
-    this.lastRefreshAtByDaemon = const <String, DateTime>{},
     this.pendingStatusQueryAtByDaemon = const <String, DateTime>{},
     this.seenControlEventIds = const <String>{},
   });
@@ -32,7 +36,6 @@ class AgentsState {
   final bool isActing;
   final InstallCommand? installCommand;
   final String? error;
-  final Map<String, DateTime> lastRefreshAtByDaemon;
   final Map<String, DateTime> pendingStatusQueryAtByDaemon;
   final Set<String> seenControlEventIds;
 
@@ -56,6 +59,24 @@ class AgentsState {
       .where((agent) => agent.isRuntime && agent.daemonAgentDid == daemonDid)
       .toList();
 
+  AgentSummary? daemonForRuntime(AgentSummary runtime) {
+    final daemonDid = runtime.daemonAgentDid;
+    if (daemonDid == null) {
+      return null;
+    }
+    for (final agent in agents) {
+      if (agent.agentDid == daemonDid && agent.isDaemon) {
+        return agent;
+      }
+    }
+    return null;
+  }
+
+  bool canDeleteAgent(AgentSummary agent) {
+    final daemon = agent.isDaemon ? agent : daemonForRuntime(agent);
+    return daemon != null && _daemonAcceptsControlCommands(daemon);
+  }
+
   bool isStatusQueryPending(String daemonDid) {
     return pendingStatusQueryAtByDaemon.containsKey(daemonDid);
   }
@@ -70,7 +91,6 @@ class AgentsState {
     bool clearInstallCommand = false,
     String? error,
     bool clearError = false,
-    Map<String, DateTime>? lastRefreshAtByDaemon,
     Map<String, DateTime>? pendingStatusQueryAtByDaemon,
     Set<String>? seenControlEventIds,
   }) {
@@ -85,8 +105,6 @@ class AgentsState {
           ? null
           : (installCommand ?? this.installCommand),
       error: clearError ? null : (error ?? this.error),
-      lastRefreshAtByDaemon:
-          lastRefreshAtByDaemon ?? this.lastRefreshAtByDaemon,
       pendingStatusQueryAtByDaemon:
           pendingStatusQueryAtByDaemon ?? this.pendingStatusQueryAtByDaemon,
       seenControlEventIds: seenControlEventIds ?? this.seenControlEventIds,
@@ -99,6 +117,7 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   final Ref ref;
   final Map<String, Timer> _statusQueryTimeouts = <String, Timer>{};
+  final Map<String, Timer> _statusQueryClearTimers = <String, Timer>{};
 
   Future<void> load() async {
     final session = ref.read(sessionProvider).session;
@@ -106,11 +125,14 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = const AgentsState();
       return;
     }
+    final cacheOwner = _agentCacheOwner(session);
     state = state.copyWith(isLoading: true, clearError: true);
-    await _loadCached(session.did);
+    await _loadCached(cacheOwner);
     try {
-      final agents = await ref.read(agentControlServiceProvider).listAgents();
-      await _saveCache(session.did, agents);
+      final agents = _stableAgentOrder(
+        await ref.read(agentControlServiceProvider).listAgents(),
+      );
+      await _saveCache(cacheOwner, agents);
       state = state.copyWith(
         agents: agents,
         selectedAgentDid: _nextSelection(agents),
@@ -159,15 +181,12 @@ class AgentsController extends StateNotifier<AgentsState> {
     String daemonDid, {
     bool fromAutoLoad = false,
   }) async {
-    final last = state.lastRefreshAtByDaemon[daemonDid];
     final now = DateTime.now().toUtc();
-    if (last != null && now.difference(last) < const Duration(seconds: 10)) {
-      if (!fromAutoLoad) {
-        state = state.copyWith(error: '10 秒内只能刷新一次。');
-      }
+    if (state.isStatusQueryPending(daemonDid)) {
       return;
     }
     if (!fromAutoLoad) {
+      _statusQueryClearTimers.remove(daemonDid)?.cancel();
       state = state.copyWith(
         pendingStatusQueryAtByDaemon: <String, DateTime>{
           ...state.pendingStatusQueryAtByDaemon,
@@ -182,16 +201,10 @@ class AgentsController extends StateNotifier<AgentsState> {
       await ref
           .read(agentControlServiceProvider)
           .refreshDaemonStatus(daemonDid);
-      state = state.copyWith(
-        isActing: false,
-        lastRefreshAtByDaemon: <String, DateTime>{
-          ...state.lastRefreshAtByDaemon,
-          daemonDid: now,
-        },
-        clearError: true,
-      );
+      state = state.copyWith(isActing: false, clearError: true);
     } catch (error) {
       _statusQueryTimeouts.remove(daemonDid)?.cancel();
+      _statusQueryClearTimers.remove(daemonDid)?.cancel();
       final nextPending = fromAutoLoad
           ? state.pendingStatusQueryAtByDaemon
           : _withoutKey(state.pendingStatusQueryAtByDaemon, daemonDid);
@@ -203,7 +216,11 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
   }
 
-  Future<void> createHermesRuntime(String daemonDid) async {
+  Future<void> createHermesRuntime(
+    String daemonDid, {
+    required String handle,
+    required String displayName,
+  }) async {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
       state = state.copyWith(error: '请先登录。');
@@ -215,6 +232,8 @@ class AgentsController extends StateNotifier<AgentsState> {
           .createHermesRuntime(
             daemonAgentDid: daemonDid,
             controllerDid: session.did,
+            handle: handle,
+            displayName: displayName,
           );
       await load();
     });
@@ -301,6 +320,34 @@ class AgentsController extends StateNotifier<AgentsState> {
     });
   }
 
+  Future<void> deleteSelected() async {
+    final selected = state.selectedAgent;
+    if (selected == null) {
+      return;
+    }
+    final daemon = selected.isDaemon
+        ? selected
+        : state.daemonForRuntime(selected);
+    if (daemon == null || !_daemonAcceptsControlCommands(daemon)) {
+      state = state.copyWith(error: '代理当前不可达，暂时不能删除。');
+      return;
+    }
+    await _act(() async {
+      if (selected.isDaemon) {
+        await ref
+            .read(agentControlServiceProvider)
+            .deleteDaemon(selected.agentDid);
+      } else {
+        await ref
+            .read(agentControlServiceProvider)
+            .deleteRuntimeAgent(
+              daemonAgentDid: daemon.agentDid,
+              runtimeAgentDid: selected.agentDid,
+            );
+      }
+    });
+  }
+
   Future<void> renameSelected(String displayName) async {
     final selected = state.selectedAgent;
     if (selected == null) {
@@ -333,9 +380,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     final daemonDid =
         _string(payload['daemon_agent_did']) ??
         _string(_readMap(payload['daemon'])['agent_did']);
-    final nextPending = daemonDid == null
-        ? state.pendingStatusQueryAtByDaemon
-        : _withoutKey(state.pendingStatusQueryAtByDaemon, daemonDid);
+    final nextPending = _pendingAfterStatusPayload(daemonDid);
     if (daemonDid != null) {
       _statusQueryTimeouts.remove(daemonDid)?.cancel();
     }
@@ -350,7 +395,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     );
     final session = ref.read(sessionProvider).session;
     if (session != null) {
-      unawaited(_saveCache(session.did, merged));
+      unawaited(_saveCache(_agentCacheOwner(session), merged));
     }
   }
 
@@ -366,7 +411,7 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   void _scheduleStatusQueryTimeout(String daemonDid) {
     _statusQueryTimeouts.remove(daemonDid)?.cancel();
-    _statusQueryTimeouts[daemonDid] = Timer(const Duration(seconds: 10), () {
+    _statusQueryTimeouts[daemonDid] = Timer(agentStatusQueryTimeout, () {
       _statusQueryTimeouts.remove(daemonDid);
       if (!mounted ||
           !state.pendingStatusQueryAtByDaemon.containsKey(daemonDid)) {
@@ -382,12 +427,56 @@ class AgentsController extends StateNotifier<AgentsState> {
     });
   }
 
+  Map<String, DateTime> _pendingAfterStatusPayload(String? daemonDid) {
+    if (daemonDid == null) {
+      return state.pendingStatusQueryAtByDaemon;
+    }
+    final pendingAt = state.pendingStatusQueryAtByDaemon[daemonDid];
+    if (pendingAt == null) {
+      _statusQueryClearTimers.remove(daemonDid)?.cancel();
+      return state.pendingStatusQueryAtByDaemon;
+    }
+    final elapsed = DateTime.now().toUtc().difference(pendingAt);
+    final remaining = agentStatusRefreshMinimumIndicatorDuration - elapsed;
+    if (remaining > Duration.zero) {
+      _scheduleStatusQueryClear(daemonDid, pendingAt, remaining);
+      return state.pendingStatusQueryAtByDaemon;
+    }
+    _statusQueryClearTimers.remove(daemonDid)?.cancel();
+    return _withoutKey(state.pendingStatusQueryAtByDaemon, daemonDid);
+  }
+
+  void _scheduleStatusQueryClear(
+    String daemonDid,
+    DateTime pendingAt,
+    Duration delay,
+  ) {
+    _statusQueryClearTimers.remove(daemonDid)?.cancel();
+    _statusQueryClearTimers[daemonDid] = Timer(delay, () {
+      _statusQueryClearTimers.remove(daemonDid);
+      if (!mounted ||
+          state.pendingStatusQueryAtByDaemon[daemonDid] != pendingAt) {
+        return;
+      }
+      state = state.copyWith(
+        pendingStatusQueryAtByDaemon: _withoutKey(
+          state.pendingStatusQueryAtByDaemon,
+          daemonDid,
+        ),
+      );
+    });
+  }
+
   @override
   void dispose() {
     for (final timer in _statusQueryTimeouts.values) {
       timer.cancel();
     }
     _statusQueryTimeouts.clear();
+    for (final timer in _statusQueryClearTimers.values) {
+      timer.cancel();
+    }
+    _statusQueryClearTimers.clear();
     super.dispose();
   }
 
@@ -415,10 +504,11 @@ class AgentsController extends StateNotifier<AgentsState> {
         continue;
       }
     }
-    if (agents.isNotEmpty) {
+    final ordered = _stableAgentOrder(agents);
+    if (ordered.isNotEmpty) {
       state = state.copyWith(
-        agents: agents,
-        selectedAgentDid: _nextSelection(agents),
+        agents: ordered,
+        selectedAgentDid: _nextSelection(ordered),
       );
     }
   }
@@ -495,6 +585,10 @@ class AgentsController extends StateNotifier<AgentsState> {
         if (runtimeDid == null) {
           continue;
         }
+        if (_isArchivedAgentPayload(runtimePayload)) {
+          byDid.remove(runtimeDid);
+          continue;
+        }
         byDid[runtimeDid] = _mergeAgent(
           byDid[runtimeDid],
           agentDid: runtimeDid,
@@ -547,6 +641,7 @@ class AgentsController extends StateNotifier<AgentsState> {
           },
           fallbackStatus: _string(payload['state']),
           fallbackEventAt: eventAt,
+          allowPayloadDisplayName: true,
         );
       }
     } else if (command == 'daemon.upgrade') {
@@ -567,6 +662,26 @@ class AgentsController extends StateNotifier<AgentsState> {
           fallbackEventAt: eventAt,
         );
       }
+    } else if (command == 'runtime.agent.delete') {
+      final runtimeDid =
+          _string(result['runtime_agent_did']) ?? _string(result['agent_did']);
+      if (runtimeDid != null &&
+          (_string(payload['state']) == 'archived' ||
+              _string(result['active_state']) == 'archived')) {
+        byDid.remove(runtimeDid);
+      }
+    } else if (command == 'daemon.delete') {
+      final daemonDid =
+          _string(result['daemon_agent_did']) ??
+          _string(payload['daemon_agent_did']);
+      if (daemonDid != null &&
+          (_string(payload['state']) == 'archived' ||
+              _string(result['active_state']) == 'archived')) {
+        byDid.removeWhere(
+          (_, agent) =>
+              agent.agentDid == daemonDid || agent.daemonAgentDid == daemonDid,
+        );
+      }
     }
     final runs = payload['runs'];
     if (runs is List) {
@@ -585,14 +700,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         byDid[runtimeDid] = _mergeRuntimeRunStatus(current, run);
       }
     }
-    final ordered = byDid.values.toList()
-      ..sort((a, b) {
-        if (a.kind != b.kind) {
-          return a.isDaemon ? -1 : 1;
-        }
-        return a.displayName.compareTo(b.displayName);
-      });
-    return ordered;
+    return _stableAgentOrder(byDid.values);
   }
 
   AgentSummary _mergeRuntimeRunStatus(
@@ -648,6 +756,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     required Map<String, Object?> payload,
     String? fallbackStatus,
     DateTime? fallbackEventAt,
+    bool allowPayloadDisplayName = false,
   }) {
     final incomingEventAt = _agentStatusTimestamp(payload, fallbackEventAt);
     if (current != null && _isStaleAgentStatus(current, incomingEventAt)) {
@@ -672,9 +781,9 @@ class AgentsController extends StateNotifier<AgentsState> {
       runtime: _string(payload['runtime']) ?? current?.runtime,
       handle: _string(payload['handle']) ?? current?.handle,
       displayName:
-          _string(payload['display_name']) ??
+          (allowPayloadDisplayName ? _string(payload['display_name']) : null) ??
           current?.displayName ??
-          (kind == AgentKind.daemon ? '代理 1' : 'Hermes'),
+          AgentDisplayName.fallbackForKind(kind),
       activeState: current?.activeState ?? 'active',
       latest: latest,
       recentRuns: current?.recentRuns ?? const <AgentRunStatus>[],
@@ -699,6 +808,8 @@ class AgentsController extends StateNotifier<AgentsState> {
       if (!payload.containsKey('last_seen_at') && fallbackEventAt != null)
         'last_seen_at': fallbackEventAt.toUtc().toIso8601String(),
       if (payload.containsKey('version')) 'version': payload['version'],
+      if (payload.containsKey('latest_version'))
+        'latest_version': payload['latest_version'],
       if (payload.containsKey('min_supported_version'))
         'min_supported_version': payload['min_supported_version'],
       if (payload.containsKey('platform')) 'platform': payload['platform'],
@@ -743,6 +854,65 @@ bool _isStaleAgentStatus(AgentSummary current, DateTime? incomingEventAt) {
   return incomingEventAt.isBefore(currentAt);
 }
 
+List<AgentSummary> _stableAgentOrder(Iterable<AgentSummary> agents) {
+  final ordered = agents.toList();
+  ordered.sort((a, b) {
+    if (a.kind != b.kind) {
+      return a.isDaemon ? -1 : 1;
+    }
+    if (a.isRuntime) {
+      final daemonCompare = _compareNullableText(
+        a.daemonAgentDid,
+        b.daemonAgentDid,
+      );
+      if (daemonCompare != 0) {
+        return daemonCompare;
+      }
+    }
+    final titleCompare = _agentSortTitle(a).compareTo(_agentSortTitle(b));
+    if (titleCompare != 0) {
+      return titleCompare;
+    }
+    final runtimeCompare = _compareNullableText(a.runtime, b.runtime);
+    if (runtimeCompare != 0) {
+      return runtimeCompare;
+    }
+    return a.agentDid.compareTo(b.agentDid);
+  });
+  return ordered;
+}
+
+String _agentSortTitle(AgentSummary agent) {
+  final title = AgentDisplayName.title(agent).trim().toLowerCase();
+  return title.isEmpty ? AgentDisplayName.fallbackForKind(agent.kind) : title;
+}
+
+int _compareNullableText(String? left, String? right) {
+  final a = left?.trim().toLowerCase() ?? '';
+  final b = right?.trim().toLowerCase() ?? '';
+  return a.compareTo(b);
+}
+
+bool _daemonAcceptsControlCommands(AgentSummary daemon) {
+  if (!daemon.isDaemon || daemon.activeState != 'active') {
+    return false;
+  }
+  return switch (daemon.latest.status) {
+    'ready' ||
+    'needs_config' ||
+    'needs_upgrade' ||
+    'upgrading' ||
+    'archiving' => true,
+    _ => false,
+  };
+}
+
+bool _isArchivedAgentPayload(Map<String, Object?> payload) {
+  final activeState = _string(payload['active_state']);
+  final status = _string(payload['status']);
+  return activeState == 'archived' || status == 'archived';
+}
+
 Map<String, DateTime> _withoutKey(Map<String, DateTime> input, String key) {
   if (!input.containsKey(key)) {
     return input;
@@ -773,6 +943,14 @@ String _defaultAppInstanceId(String credentialName) {
     '_',
   );
   return normalized.isEmpty ? 'app_1' : 'app_$normalized';
+}
+
+String _agentCacheOwner(SessionIdentity session) {
+  final handle = session.handle?.trim().toLowerCase();
+  if (handle != null && handle.isNotEmpty) {
+    return 'controller-handle:$handle';
+  }
+  return 'controller-did:${session.did.trim()}';
 }
 
 DateTime? _dateTime(Object? value) {

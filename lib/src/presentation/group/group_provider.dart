@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
+import '../../core/group_display_name.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_summary.dart';
 import '../app_shell/providers/selected_conversation_provider.dart';
@@ -38,8 +39,13 @@ class GroupController extends StateNotifier<GroupState> {
   Future<void> refresh() async {
     state = state.copyWith(isLoading: true);
     final groups = await ref.read(groupApplicationServiceProvider).listGroups();
-    state = state.copyWith(groups: groups, isLoading: false);
-    _applyGroupsToConversations(groups);
+    final merged = _mergeGroupList(
+      local: state.groups,
+      incoming: groups,
+      keepLocalOnly: false,
+    );
+    state = state.copyWith(groups: merged, isLoading: false);
+    _applyGroupsToConversations(merged);
   }
 
   Future<List<GroupMemberSummary>> loadGroupMembers(String groupId) async {
@@ -105,29 +111,35 @@ class GroupController extends StateNotifier<GroupState> {
 
   Future<GroupSummary> addGroupMember({
     required String groupId,
-    required String memberDid,
+    required String memberRef,
     String role = 'member',
   }) async {
     final updated = await ref
         .read(groupApplicationServiceProvider)
-        .addMember(groupDid: groupId, memberDid: memberDid, role: role);
+        .addMember(groupDid: groupId, memberRef: memberRef, role: role);
+    upsertGroup(updated);
+    await loadGroupMembers(groupId);
+    return updated;
+  }
+
+  Future<GroupSummary> removeGroupMember({
+    required String groupId,
+    required String memberRef,
+  }) async {
+    final updated = await ref
+        .read(groupApplicationServiceProvider)
+        .removeMember(groupDid: groupId, memberRef: memberRef);
     upsertGroup(updated);
     await loadGroupMembers(groupId);
     return updated;
   }
 
   void upsertGroup(GroupSummary group) {
-    final byGroupId = <String, GroupSummary>{
-      for (final item in state.groups) item.groupId: item,
-    };
-    byGroupId[group.groupId] = group;
-    final merged = byGroupId.values.toList()
-      ..sort(
-        (a, b) => (b.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0))
-            .compareTo(
-              a.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0),
-            ),
-      );
+    final merged = _mergeGroupList(
+      local: state.groups,
+      incoming: <GroupSummary>[group],
+      keepLocalOnly: true,
+    );
     state = state.copyWith(groups: merged);
     _applyGroupsToConversations(merged);
   }
@@ -153,3 +165,111 @@ final groupMembersProvider = Provider.family<List<GroupMemberSummary>, String>((
   return ref.watch(groupProvider).membersByGroup[groupId] ??
       const <GroupMemberSummary>[];
 });
+
+List<GroupSummary> _mergeGroupList({
+  required List<GroupSummary> local,
+  required List<GroupSummary> incoming,
+  required bool keepLocalOnly,
+}) {
+  final localByGroupId = <String, GroupSummary>{
+    for (final item in local) item.groupId: item,
+  };
+  final mergedByGroupId = <String, GroupSummary>{};
+  for (final group in incoming) {
+    mergedByGroupId[group.groupId] = _mergeGroupSummary(
+      local: localByGroupId[group.groupId],
+      incoming: group,
+    );
+  }
+  if (keepLocalOnly) {
+    for (final entry in localByGroupId.entries) {
+      mergedByGroupId.putIfAbsent(entry.key, () => entry.value);
+    }
+  }
+  return mergedByGroupId.values.toList()..sort(
+    (a, b) => (b.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+        .compareTo(a.lastMessageAt ?? DateTime.fromMillisecondsSinceEpoch(0)),
+  );
+}
+
+GroupSummary _mergeGroupSummary({
+  required GroupSummary? local,
+  required GroupSummary incoming,
+}) {
+  if (local == null) {
+    return incoming;
+  }
+  return GroupSummary(
+    groupId: incoming.groupId,
+    name: _mergeGroupName(local: local, incoming: incoming),
+    description: _preferNonEmpty(incoming.description, local.description) ?? '',
+    memberCount: incoming.memberCount > 0
+        ? incoming.memberCount
+        : local.memberCount,
+    lastMessageAt: incoming.lastMessageAt ?? local.lastMessageAt,
+    myRole: _mergeRole(local: local, incoming: incoming),
+    membershipStatus: _preferNonEmptyOptional(
+      incoming.membershipStatus,
+      local.membershipStatus,
+    ),
+  );
+}
+
+String _mergeGroupName({
+  required GroupSummary local,
+  required GroupSummary incoming,
+}) {
+  final incomingName = incoming.name.trim();
+  if (incomingName.isEmpty) {
+    return local.name;
+  }
+  final localName = local.name.trim();
+  final incomingIsIdLike = GroupDisplayName.isIdLike(
+    incomingName,
+    incoming.groupId,
+  );
+  final localIsFriendly =
+      localName.isNotEmpty &&
+      !GroupDisplayName.isIdLike(localName, local.groupId);
+  if (incomingIsIdLike && localIsFriendly) {
+    return local.name;
+  }
+  return incoming.name;
+}
+
+String? _mergeRole({
+  required GroupSummary local,
+  required GroupSummary incoming,
+}) {
+  final incomingRole = _trimToNull(incoming.myRole);
+  if (_isKnownGroupRole(incomingRole)) {
+    return incomingRole;
+  }
+  final incomingStatus = _trimToNull(incoming.membershipStatus);
+  if (incomingStatus != null && incomingStatus != 'active') {
+    return incomingRole;
+  }
+  return local.myRole;
+}
+
+String? _preferNonEmpty(String? incoming, String? local) {
+  final incomingText = incoming?.trim();
+  if (incomingText != null && incomingText.isNotEmpty) {
+    return incoming;
+  }
+  return local;
+}
+
+String? _preferNonEmptyOptional(String? incoming, String? local) {
+  final value = _trimToNull(incoming);
+  return value ?? _trimToNull(local);
+}
+
+String? _trimToNull(String? value) {
+  final text = value?.trim();
+  return text == null || text.isEmpty ? null : text;
+}
+
+bool _isKnownGroupRole(String? role) {
+  return role == 'owner' || role == 'admin' || role == 'member';
+}

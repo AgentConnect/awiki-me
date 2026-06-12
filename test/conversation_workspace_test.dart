@@ -8,15 +8,21 @@ import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
+import 'package:awiki_me/src/domain/entities/peer_agent_identity.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
+import 'package:awiki_me/src/presentation/agents/agent_status_indicator.dart';
+import 'package:awiki_me/src/presentation/agents/agent_visual_status.dart';
 import 'package:awiki_me/src/presentation/agents/agents_page.dart';
+import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
+import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_list_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
+import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
@@ -164,11 +170,13 @@ void main() {
         ],
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
     expect(find.bySemanticsLabel('Agent 收件箱'), findsOneWidget);
     await tester.tap(find.bySemanticsLabel('Agent 收件箱'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
     expect(find.text('Agent 收件箱'), findsOneWidget);
     expect(find.text('Hermes'), findsWidgets);
@@ -305,6 +313,269 @@ void main() {
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 最近会话和信息面板只给真实智能体显示 AI 标记', (tester) async {
+    final humanConversation = ConversationSummary(
+      threadId: 'dm:human',
+      displayName: '普通用户',
+      lastMessagePreview: 'hello',
+      lastMessageAt: DateTime(2026, 3, 28, 10, 24),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:human',
+    );
+    final agentConversation = ConversationSummary(
+      threadId: 'dm:agent',
+      displayName: '远端智能体',
+      lastMessagePreview: 'ready',
+      lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:agent',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[
+        humanConversation,
+        agentConversation,
+      ]
+      ..dmHistoryByPeerDid = const <String, List<ChatMessage>>{
+        'did:test:human': <ChatMessage>[],
+        'did:test:agent': <ChatMessage>[],
+      };
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+          peerIdentityServiceProvider.overrideWithValue(
+            FakePeerIdentityService(
+              identities: const <String, PeerAgentIdentity>{
+                'did:test:agent': PeerAgentIdentity.agent(
+                  agentKind: PeerAgentKind.runtime,
+                ),
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('AI'), findsOneWidget);
+
+    await tester.tap(find.text('普通用户'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('类型:'), findsOneWidget);
+    expect(find.text('用户'), findsOneWidget);
+    expect(find.text('Personal Agent'), findsNothing);
+
+    await tester.tap(find.text('远端智能体'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('智能体'), findsWidgets);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 最近会话为正在处理的本地智能体显示状态圆点', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:human:me',
+      credentialName: 'me.json',
+      displayName: 'Me',
+      handle: 'me',
+    );
+    final agentConversation = ConversationSummary(
+      threadId: 'dm:did:agent:runtime',
+      displayName: 'Hermes',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 6, 4, 10),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:agent:runtime',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[agentConversation]
+      ..dmHistoryByPeerDid = const <String, List<ChatMessage>>{
+        'did:agent:runtime': <ChatMessage>[],
+      };
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:runtime',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'hermes',
+          displayName: 'Hermes',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+          agentsProvider.overrideWith((ref) {
+            final controller = AgentsController(ref);
+            controller.state = AgentsState(agents: control.agents);
+            return controller;
+          }),
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final initialDot = tester.widget<AgentStatusDot>(
+      find.byType(AgentStatusDot).first,
+    );
+    expect(initialDot.status.kind, AgentVisualStatusKind.ready);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ConversationWorkspacePage)),
+    );
+    await container
+        .read(chatThreadsProvider.notifier)
+        .sendMessage(
+          conversation: agentConversation,
+          content: '请处理',
+          expectedAgentReplyDid: 'did:agent:runtime',
+        );
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final processingDot = tester.widget<AgentStatusDot>(
+      find.byType(AgentStatusDot).first,
+    );
+    expect(processingDot.status.kind, AgentVisualStatusKind.processing);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 最近会话保留已删除智能体并显示状态', (tester) async {
+    final deletedConversation = ConversationSummary(
+      threadId: 'dm:deleted-agent',
+      displayName: '旧智能体',
+      lastMessagePreview: '旧回复',
+      lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:deleted-agent',
+      peerLifecycleState: ConversationPeerLifecycleState.deletedAgent,
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[deletedConversation]
+      ..dmHistoryByPeerDid = const <String, List<ChatMessage>>{
+        'did:test:deleted-agent': <ChatMessage>[],
+      };
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('旧智能体'), findsOneWidget);
+    expect(find.text('智能体已删除'), findsOneWidget);
+
+    await tester.tap(find.text('旧智能体'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('智能体已删除，无法继续发送消息'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('手机宽度下已删除智能体状态显示在名称旁边', (tester) async {
+    final deletedConversation = ConversationSummary(
+      threadId: 'dm:deleted-agent-mobile',
+      displayName: '旧智能体',
+      lastMessagePreview: '旧回复',
+      lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:deleted-agent-mobile',
+      peerLifecycleState: ConversationPeerLifecycleState.deletedAgent,
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[deletedConversation]
+      ..dmHistoryByPeerDid = const <String, List<ChatMessage>>{
+        'did:test:deleted-agent-mobile': <ChatMessage>[],
+      };
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('旧智能体'), findsOneWidget);
+    expect(find.text('AI'), findsOneWidget);
+    expect(find.text('智能体已删除'), findsOneWidget);
+
+    await tester.tap(find.text('旧智能体'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('智能体已删除'), findsOneWidget);
+    expect(find.text('智能体已删除，无法继续发送消息'), findsOneWidget);
   });
 
   testWidgets('macOS 身份卡在右侧栏替换会话信息并支持关闭', (tester) async {
@@ -555,19 +826,133 @@ void main() {
     expect(find.text('did:test:member'), findsNothing);
     expect(find.byType(GroupDetailPage), findsNothing);
 
-    const memberDid = 'did:wba:awiki.ai:user:bob:e1_member';
+    const memberRef = 'did:wba:awiki.ai:user:bob:e1_member';
     await tester.tap(find.byKey(const Key('mac-group-info-add-member-button')));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(CupertinoTextField).last, memberDid);
+    expect(find.text('成员 handle 或 DID'), findsOneWidget);
+    await tester.enterText(find.byType(CupertinoTextField).last, memberRef);
     await tester.tap(find.text('添加'));
     await tester.pumpAndSettle();
 
     expect(gateway.lastAddedGroupId, group.groupId);
-    expect(gateway.lastAddedMemberDid, memberDid);
+    expect(gateway.lastAddedMemberRef, memberRef);
     expect(find.text('bob'), findsOneWidget);
-    expect(find.text(memberDid), findsNothing);
+    expect(find.text(memberRef), findsNothing);
     expect(find.text('3 人'), findsOneWidget);
+
+    await tester.tap(find.bySemanticsLabel('移除成员').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('移除'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastRemovedGroupId, group.groupId);
+    expect(gateway.lastRemovedMemberRef, memberRef);
+    expect(find.text('bob'), findsNothing);
+    expect(find.text('2 人'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 群聊信息保留完整群权限避免按钮抖动', (tester) async {
+    const groupId = 'did:test:group:funding';
+    final fullGroup = GroupSummary(
+      groupId: groupId,
+      name: '融资协作群',
+      description: '同步融资材料和里程碑',
+      memberCount: 2,
+      lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+      myRole: 'owner',
+      membershipStatus: 'active',
+    );
+    final groupConversation = ConversationSummary(
+      threadId: 'group:funding',
+      displayName: '融资协作群',
+      lastMessagePreview: 'hello group',
+      lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: groupId,
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[groupConversation]
+      ..groups = <GroupSummary>[fullGroup]
+      ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+        groupId: const <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: 'did:test:owner',
+            did: 'did:test:owner',
+            handle: 'owner.awiki',
+            role: 'owner',
+          ),
+          GroupMemberSummary(
+            userId: 'did:test:member',
+            did: 'did:test:member',
+            handle: 'member.awiki',
+            role: 'member',
+          ),
+        ],
+      };
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('融资协作群').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('群聊信息'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('mac-group-info-add-member-button')),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsLabel('移除成员'), findsWidgets);
+
+    gateway.groups = <GroupSummary>[
+      GroupSummary(
+        groupId: groupId,
+        name: groupId,
+        description: '',
+        memberCount: 0,
+        lastMessageAt: DateTime(2026, 3, 28, 10, 26),
+      ),
+    ];
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ConversationWorkspacePage)),
+    );
+    await container.read(groupProvider.notifier).refresh();
+    await tester.pumpAndSettle();
+
+    expect(find.text('融资协作群 的群聊信息'), findsOneWidget);
+    expect(find.text('同步融资材料和里程碑'), findsOneWidget);
+    expect(find.text('owner'), findsWidgets);
+    expect(
+      find.byKey(const Key('mac-group-info-add-member-button')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.bySemanticsLabel('移除成员').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('移除成员'), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

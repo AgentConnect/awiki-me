@@ -124,6 +124,7 @@ Map<String, Object?> runtimeInboxThreadQueryPayload({
   required String threadId,
   required String kind,
   String? peerDid,
+  String? peerHandle,
   String? groupDid,
   int limit = 50,
   String? cursor,
@@ -139,6 +140,7 @@ Map<String, Object?> runtimeInboxThreadQueryPayload({
       'thread_id': threadId,
       'kind': kind,
       if (peerDid != null) 'peer_did': peerDid,
+      if (peerHandle != null) 'peer_handle': peerHandle,
       if (groupDid != null) 'group_did': groupDid,
       'limit': limit,
       if (cursor != null) 'cursor': cursor,
@@ -153,6 +155,28 @@ Map<String, Object?> daemonUpgradePayload({String targetVersion = 'latest'}) {
     'command': 'daemon.upgrade',
     'target_agent_kind': 'daemon',
     'args': <String, Object?>{'target_version': targetVersion},
+  };
+}
+
+Map<String, Object?> daemonDeletePayload({required String daemonAgentDid}) {
+  return <String, Object?>{
+    'schema': AgentControlPayloads.commandSchema,
+    'command_id': agentCommandId(),
+    'command': 'daemon.delete',
+    'target_agent_kind': 'daemon',
+    'args': <String, Object?>{'daemon_agent_did': daemonAgentDid},
+  };
+}
+
+Map<String, Object?> runtimeAgentDeletePayload({
+  required String runtimeAgentDid,
+}) {
+  return <String, Object?>{
+    'schema': AgentControlPayloads.commandSchema,
+    'command_id': agentCommandId(),
+    'command': 'runtime.agent.delete',
+    'target_agent_kind': 'runtime',
+    'args': <String, Object?>{'runtime_agent_did': runtimeAgentDid},
   };
 }
 

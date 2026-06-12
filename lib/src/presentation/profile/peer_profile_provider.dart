@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_services.dart';
 import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
-import '../shared/formatters/display_formatters.dart';
 import '../friends/friends_provider.dart';
 import 'profile_provider.dart';
 import '../../domain/entities/user_profile.dart';
@@ -53,7 +52,9 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
         .read(friendsProvider.notifier)
         .checkRelationship(did);
     UserProfile resolved = profile;
-    final homepageUrl = DidDisplayFormatter.homepageUrl(profile);
+    final homepageUrl = ref
+        .read(profileHomepageResolverProvider)
+        .homepageUrl(profile);
     if (homepageUrl.isNotEmpty) {
       final markdown = await ref.read(homepageMarkdownLoaderProvider)(
         homepageUrl,

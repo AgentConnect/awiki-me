@@ -34,7 +34,10 @@ void main() {
           'state': 'succeeded',
           'result': <String, Object?>{
             'items': <Object?>[
-              <String, Object?>{'thread_id': 'direct:old', 'kind': 'direct'},
+              <String, Object?>{
+                'thread_id': 'dm:peer-scope:v1:old',
+                'kind': 'direct',
+              },
             ],
           },
         },
@@ -76,10 +79,12 @@ void main() {
     final container = _container(control);
     addTearDown(container.dispose);
     const item = AgentInboxItem(
-      threadId: 'direct:did:human:bob',
+      threadId: 'dm:peer-scope:v1:bob',
       kind: 'direct',
-      title: 'Bob',
+      title: 'bob.anpclaw.com',
       peerDid: 'did:human:bob',
+      peerHandle: 'bob.anpclaw.com',
+      peerUserId: 'user-bob',
       lastMessagePreview: '',
       unreadCount: 0,
       hasAttachments: false,
@@ -93,6 +98,7 @@ void main() {
           runtimeAgentDid: 'did:agent:runtime',
           item: item,
         );
+    expect(control.lastInboxThreadPeerHandle, 'bob.anpclaw.com');
     container.read(agentInboxProvider.notifier).applyControlPayload(
       <String, Object?>{
         'schema': AgentControlPayloads.statusSchema,
@@ -100,13 +106,14 @@ void main() {
         'request_id': 'cmd_thread_current',
         'state': 'succeeded',
         'result': <String, Object?>{
-          'thread_id': 'direct:did:human:bob',
+          'thread_id': 'dm:peer-scope:v1:bob',
           'kind': 'direct',
-          'title': 'Bob',
+          'title': 'bob.anpclaw.com',
           'messages': <Object?>[
             <String, Object?>{
               'message_id': 'msg-1',
               'sender_did': 'did:human:bob',
+              'sender_handle': 'bob.anpclaw.com',
               'direction': 'incoming',
               'content_type': 'attachment',
               'text': 'caption',
@@ -119,16 +126,51 @@ void main() {
                 },
               ],
             },
+            <String, Object?>{
+              'message_id': 'msg-2',
+              'sender_did': 'did:human:bob',
+              'sender_handle': 'bob.anpclaw.com',
+              'direction': 'incoming',
+              'content_type': 'attachment',
+              'text': '',
+              'attachments': <Object?>[
+                <String, Object?>{
+                  'attachment_id': 'att-2',
+                  'mime_type': 'text/markdown',
+                },
+              ],
+            },
           ],
         },
       },
     );
 
     final thread = container.read(agentInboxProvider).thread;
-    expect(thread.messages, hasLength(1));
+    expect(thread.messages, hasLength(2));
+    expect(thread.messages.first.senderHandle, 'bob.anpclaw.com');
     expect(thread.messages.first.attachments.first.filename, 'report.pdf');
     expect(thread.messages.first.attachments.first.sizeBytes, 1024);
+    expect(thread.messages.last.attachments.first.filename, '未命名附件');
   });
+
+  test(
+    'attachment content type without attachment payload stays plain message',
+    () {
+      final message = AgentInboxMessage.fromJson(<String, Object?>{
+        'message_id': 'msg-empty-attachment',
+        'sender_did': 'did:human:bob',
+        'sender_handle': 'bob.anpclaw.com',
+        'direction': 'incoming',
+        'content_type': 'attachment',
+        'text': 'hello',
+        'attachments': const <Object?>[],
+      });
+
+      expect(message.contentType, 'attachment');
+      expect(message.text, 'hello');
+      expect(message.attachments, isEmpty);
+    },
+  );
 
   test('list pagination appends unique items', () async {
     final control = FakeAgentControlService()
@@ -151,9 +193,11 @@ void main() {
         'result': <String, Object?>{
           'items': <Object?>[
             <String, Object?>{
-              'thread_id': 'direct:did:human:bob',
+              'thread_id': 'dm:peer-scope:v1:bob',
               'kind': 'direct',
-              'title': 'Bob',
+              'title': 'bob.anpclaw.com',
+              'peer_handle': 'bob.anpclaw.com',
+              'peer_user_id': 'user-bob',
             },
           ],
           'next_cursor': '1',
@@ -173,9 +217,11 @@ void main() {
         'result': <String, Object?>{
           'items': <Object?>[
             <String, Object?>{
-              'thread_id': 'direct:did:human:bob',
+              'thread_id': 'dm:peer-scope:v1:bob',
               'kind': 'direct',
-              'title': 'Bob duplicate',
+              'title': 'bob.anpclaw.com duplicate',
+              'peer_handle': 'bob.anpclaw.com',
+              'peer_user_id': 'user-bob',
             },
             <String, Object?>{
               'thread_id': 'group:did:group:team',
@@ -190,11 +236,65 @@ void main() {
 
     final items = container.read(agentInboxProvider).items;
     expect(items.map((item) => item.threadId), <String>[
-      'direct:did:human:bob',
+      'dm:peer-scope:v1:bob',
       'group:did:group:team',
     ]);
     expect(container.read(agentInboxProvider).nextCursor, isNull);
   });
+
+  test(
+    'list payload keeps stable direct item when duplicate aliases appear',
+    () async {
+      final control = FakeAgentControlService()
+        ..nextInboxRequestId = 'cmd_inbox_current';
+      final container = _container(control);
+      addTearDown(container.dispose);
+
+      await container
+          .read(agentInboxProvider.notifier)
+          .queryInbox(
+            daemonAgentDid: 'did:agent:daemon',
+            runtimeAgentDid: 'did:agent:runtime',
+          );
+      container.read(agentInboxProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'runtime_inbox',
+          'request_id': 'cmd_inbox_current',
+          'state': 'succeeded',
+          'result': <String, Object?>{
+            'items': <Object?>[
+              <String, Object?>{
+                'thread_id': 'dm:did:human:bob',
+                'kind': 'direct',
+                'title': 'did:human:bob',
+                'peer_did': 'did:human:bob',
+                'last_message_preview': 'legacy',
+                'last_message_at_ms': 100,
+              },
+              <String, Object?>{
+                'thread_id': 'dm:peer-scope:v1:bob',
+                'kind': 'direct',
+                'title': 'bob.anpclaw.com',
+                'peer_did': 'did:human:bob',
+                'peer_handle': 'bob.anpclaw.com',
+                'peer_user_id': 'user-bob',
+                'last_message_preview': 'stable',
+                'last_message_at_ms': 90,
+              },
+            ],
+          },
+        },
+      );
+
+      final items = container.read(agentInboxProvider).items;
+      expect(items, hasLength(1));
+      expect(items.single.threadId, 'dm:peer-scope:v1:bob');
+      expect(items.single.title, 'bob.anpclaw.com');
+      expect(items.single.peerHandle, 'bob.anpclaw.com');
+      expect(items.single.lastMessagePreview, 'stable');
+    },
+  );
 
   test('thread pagination prepends older unique messages', () async {
     final control = FakeAgentControlService()
@@ -202,10 +302,12 @@ void main() {
     final container = _container(control);
     addTearDown(container.dispose);
     const item = AgentInboxItem(
-      threadId: 'direct:did:human:bob',
+      threadId: 'dm:peer-scope:v1:bob',
       kind: 'direct',
-      title: 'Bob',
+      title: 'bob.anpclaw.com',
       peerDid: 'did:human:bob',
+      peerHandle: 'bob.anpclaw.com',
+      peerUserId: 'user-bob',
       lastMessagePreview: '',
       unreadCount: 0,
       hasAttachments: false,
@@ -272,6 +374,61 @@ void main() {
       <String>['msg-old', 'msg-new'],
     );
   });
+
+  test(
+    'timeout keeps existing inbox data visible while refresh remains pending',
+    () async {
+      AgentInboxController.responseTimeout = const Duration(milliseconds: 10);
+      addTearDown(() {
+        AgentInboxController.responseTimeout = const Duration(seconds: 20);
+      });
+      final control = FakeAgentControlService()
+        ..nextInboxRequestId = 'cmd_inbox_initial';
+      final container = _container(control);
+      addTearDown(container.dispose);
+
+      await container
+          .read(agentInboxProvider.notifier)
+          .queryInbox(
+            daemonAgentDid: 'did:agent:daemon',
+            runtimeAgentDid: 'did:agent:runtime',
+          );
+      container.read(agentInboxProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'runtime_inbox',
+          'request_id': 'cmd_inbox_initial',
+          'state': 'succeeded',
+          'result': <String, Object?>{
+            'items': <Object?>[
+              <String, Object?>{
+                'thread_id': 'dm:peer-scope:v1:bob',
+                'kind': 'direct',
+                'title': 'bob.anpclaw.com',
+                'last_message_preview': 'hello',
+              },
+            ],
+          },
+        },
+      );
+
+      control.nextInboxRequestId = 'cmd_inbox_refresh';
+      await container
+          .read(agentInboxProvider.notifier)
+          .queryInbox(
+            daemonAgentDid: 'did:agent:daemon',
+            runtimeAgentDid: 'did:agent:runtime',
+            refresh: true,
+          );
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      final state = container.read(agentInboxProvider);
+      expect(state.items.single.lastMessagePreview, 'hello');
+      expect(state.isLoading, isFalse);
+      expect(state.isRefreshing, isTrue);
+      expect(state.hasListTimeout, isTrue);
+    },
+  );
 }
 
 ProviderContainer _container(FakeAgentControlService control) {

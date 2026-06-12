@@ -49,6 +49,9 @@ class AppMessage {
   factory AppMessage.requestTimeoutRetry() =>
       const AppMessage._('requestTimeoutRetry');
 
+  factory AppMessage.networkUnavailableRetry() =>
+      const AppMessage._('networkUnavailableRetry');
+
   factory AppMessage.operationFailedRetry() =>
       const AppMessage._('operationFailedRetry');
 
@@ -154,6 +157,9 @@ class AppMessage {
     }
     if (raw.contains('TimeoutException') || raw.contains('timed out')) {
       return AppMessage.requestTimeoutRetry();
+    }
+    if (_isNetworkUnavailable(raw)) {
+      return AppMessage.networkUnavailableRetry();
     }
     if (_isMissingOrInvalidAuthorization(raw)) {
       return AppMessage.sessionExpiredRelogin();
@@ -278,6 +284,8 @@ class AppMessage {
         return l10n.updateInstallFailed;
       case 'requestTimeoutRetry':
         return l10n.requestTimeoutRetry;
+      case 'networkUnavailableRetry':
+        return l10n.networkUnavailableRetry;
       case 'operationFailedRetry':
         return l10n.operationFailedRetry;
       case 'featureNotImplemented':
@@ -359,6 +367,8 @@ class AppMessage {
         return 'You received a new message';
       case 'requestTimeoutRetry':
         return 'The request timed out. Please check your network and try again.';
+      case 'networkUnavailableRetry':
+        return 'Network connection is temporarily unavailable. Please check your network and try again.';
       case 'operationFailedRetry':
         return 'The operation failed. Please try again later.';
       case 'featureNotImplemented':
@@ -418,6 +428,24 @@ class AppMessage {
         compact.contains('http401') ||
         normalized.contains('invalid token') ||
         normalized.contains('empty token');
+  }
+
+  static bool _isNetworkUnavailable(String raw) {
+    final normalized = raw.toLowerCase();
+    return normalized.contains('transport_unavailable') ||
+        normalized.contains('transport unavailable') ||
+        normalized.contains('error sending request for url') ||
+        normalized.contains('socketexception') ||
+        normalized.contains('failed host lookup') ||
+        normalized.contains('connection refused') ||
+        normalized.contains('connection reset') ||
+        normalized.contains('connection closed') ||
+        normalized.contains('network is unreachable') ||
+        normalized.contains('no address associated with hostname') ||
+        normalized.contains('connection failed') ||
+        normalized.contains('tls error') ||
+        normalized.contains('handshake error') ||
+        normalized.contains('certificate verify failed');
   }
 
   @override

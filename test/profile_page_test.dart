@@ -2,6 +2,7 @@ import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/presentation/profile/profile_page.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
@@ -49,7 +50,7 @@ void main() {
 
   testWidgets('个人资料页优先渲染拉取到的 markdown 和 tags', (tester) async {
     const profile = UserProfile(
-      did: 'did:test:456',
+      did: 'did:wba:anpclaw.com:bob:e1_456',
       nickName: 'Bob',
       bio: 'Bio',
       tags: <String>['ai', 'agent'],
@@ -57,18 +58,23 @@ void main() {
       handle: 'bob',
     );
     final gateway = FakeAwikiGateway()..myProfile = profile;
+    String? requestedHomepageUrl;
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const ProfilePage(),
         gateway: gateway,
         profile: profile,
-        homepageMarkdownLoader: (_) async => '# Remote title\n\nRemote body',
+        homepageMarkdownLoader: (url) async {
+          requestedHomepageUrl = url;
+          return '# Remote title\n\nRemote body';
+        },
       ),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
+    expect(requestedHomepageUrl, 'https://bob.anpclaw.com');
     expect(find.text('Remote title'), findsNothing);
     expect(find.text('Remote body'), findsOneWidget);
     expect(find.text('ai'), findsOneWidget);
@@ -172,5 +178,32 @@ void main() {
     expect(find.text('粉丝'), findsOneWidget);
     expect(find.text('1'), findsOneWidget);
     expect(find.text('关注'), findsOneWidget);
+  });
+
+  testWidgets('个人资料页主体支持选中复制完整身份信息', (tester) async {
+    const profile = UserProfile(
+      did: 'did:wba:anpclaw.com:user:elena:e1_full_identity_key',
+      nickName: 'Elena',
+      bio: 'Bio',
+      tags: <String>['copyable'],
+      handle: 'elena',
+      profileMarkdown: '# Elena\n\nCopyable body',
+    );
+    final gateway = FakeAwikiGateway()..myProfile = profile;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: ProfilePage(homepageMarkdownLoader: (_) async => null),
+        gateway: gateway,
+        profile: profile,
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.byType(SelectionArea), findsOneWidget);
+    expect(find.text(profile.did), findsOneWidget);
+    expect(find.text('Copyable body'), findsOneWidget);
+    expect(find.text('copyable'), findsOneWidget);
   });
 }

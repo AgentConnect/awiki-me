@@ -154,14 +154,22 @@ class CompatAwikiGateway implements AwikiGateway {
   @override
   Future<GroupSummary> addGroupMember({
     required String groupId,
-    required String memberDid,
+    required String memberRef,
     String role = 'member',
   }) {
     return _groups.addMember(
       groupDid: groupId,
-      memberDid: memberDid,
+      memberRef: memberRef,
       role: role,
     );
+  }
+
+  @override
+  Future<GroupSummary> removeGroupMember({
+    required String groupId,
+    required String memberRef,
+  }) {
+    return _groups.removeMember(groupDid: groupId, memberRef: memberRef);
   }
 
   @override

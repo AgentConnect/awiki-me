@@ -20,6 +20,7 @@ import '../shared/awiki_me_feedback.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
+import '../shared/widgets/app_widgets.dart';
 import 'providers/app_update_provider.dart';
 import 'providers/app_runtime_provider.dart';
 import 'providers/navigation_provider.dart';
@@ -448,92 +449,105 @@ class _MacDesktopRailItem extends StatelessWidget {
     final icon = selected ? activeIcon : inactiveIcon;
     final height = responsive.displayScaled(compact ? 50.0 : 56.0);
     final width = responsive.displayScaled(58);
-    return Semantics(
-      button: true,
+    return AppPressable(
+      onTap: onTap,
+      semanticLabel: label,
       selected: selected,
-      label: label,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: SizedBox(
-          width: width,
-          height: height,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: <Widget>[
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 140),
-                width: width,
-                height: height,
-                padding: EdgeInsets.symmetric(
-                  vertical: responsive.displayScaled(compact ? 6 : 8),
-                ),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? _macRailActiveBackground
-                      : const Color(0x00FFFFFF),
-                  borderRadius: BorderRadius.circular(
-                    responsive.displayScaled(10),
-                  ),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    SizedBox(
-                      width: responsive.displayScaled(30),
-                      height: responsive.displayScaled(24),
-                      child: Center(
-                        child: Icon(
-                          icon,
-                          color: foreground,
-                          size: responsive.displayScaled(20),
-                          weight: selected ? 700 : 400,
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: responsive.displayScaled(compact ? 2 : 4)),
-                    Text(
-                      label,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: foreground,
-                        fontSize: responsive.displayScaled(10.5),
-                        fontWeight: selected
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                        height: 1,
-                      ),
-                    ),
-                  ],
+      borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
+      pressedScale: 0.98,
+      scaleOnPress: true,
+      builder: (context, state, child) {
+        final overlay = state.pressed
+            ? const Color(0x1A0B65F8)
+            : state.hovered || state.focused
+            ? const Color(0x100B65F8)
+            : const Color(0x00FFFFFF);
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            color: overlay,
+            borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
+          ),
+          child: child,
+        );
+      },
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              width: width,
+              height: height,
+              padding: EdgeInsets.symmetric(
+                vertical: responsive.displayScaled(compact ? 6 : 8),
+              ),
+              decoration: BoxDecoration(
+                color: selected
+                    ? _macRailActiveBackground
+                    : const Color(0x00FFFFFF),
+                borderRadius: BorderRadius.circular(
+                  responsive.displayScaled(10),
                 ),
               ),
-              if (badge != null)
-                Positioned(
-                  right: responsive.displayScaled(5),
-                  top: responsive.displayScaled(4),
-                  child: Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: responsive.displayScaled(5),
-                      vertical: responsive.displayScaled(2),
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF3B30),
-                      borderRadius: BorderRadius.circular(99),
-                      border: Border.all(color: const Color(0xFFF8FBFF)),
-                    ),
-                    child: Text(
-                      badge!,
-                      style: TextStyle(
-                        color: CupertinoColors.white,
-                        fontSize: responsive.displayScaled(9),
-                        fontWeight: FontWeight.w600,
-                        height: 1,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  SizedBox(
+                    width: responsive.displayScaled(30),
+                    height: responsive.displayScaled(24),
+                    child: Center(
+                      child: Icon(
+                        icon,
+                        color: foreground,
+                        size: responsive.displayScaled(20),
+                        weight: selected ? 700 : 400,
                       ),
                     ),
                   ),
+                  SizedBox(height: responsive.displayScaled(compact ? 2 : 4)),
+                  Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: foreground,
+                      fontSize: responsive.displayScaled(10.5),
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                      height: 1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (badge != null)
+              Positioned(
+                right: responsive.displayScaled(5),
+                top: responsive.displayScaled(4),
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: responsive.displayScaled(5),
+                    vertical: responsive.displayScaled(2),
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF3B30),
+                    borderRadius: BorderRadius.circular(99),
+                    border: Border.all(color: const Color(0xFFF8FBFF)),
+                  ),
+                  child: Text(
+                    badge!,
+                    style: TextStyle(
+                      color: CupertinoColors.white,
+                      fontSize: responsive.displayScaled(9),
+                      fontWeight: FontWeight.w600,
+                      height: 1,
+                    ),
+                  ),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );
@@ -557,31 +571,28 @@ class _MacRailAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return Semantics(
-      button: true,
+    return AppPressable(
+      onTap: onTap,
+      semanticLabel: '我',
       selected: selected,
-      label: '我',
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: responsive.displayScaled(38),
-          height: responsive.displayScaled(38),
-          decoration: BoxDecoration(
-            color: selected ? const Color(0xFFDDEBFF) : const Color(0xFFEAF2FF),
-            borderRadius: BorderRadius.circular(responsive.displayScaled(19)),
-            border: Border.all(
-              color: selected
-                  ? const Color(0xFF0B65F8)
-                  : const Color(0x00FFFFFF),
-            ),
+      scaleOnPress: true,
+      pressedScale: 0.96,
+      borderRadius: BorderRadius.circular(responsive.displayScaled(19)),
+      child: Container(
+        width: responsive.displayScaled(38),
+        height: responsive.displayScaled(38),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFDDEBFF) : const Color(0xFFEAF2FF),
+          borderRadius: BorderRadius.circular(responsive.displayScaled(19)),
+          border: Border.all(
+            color: selected ? const Color(0xFF0B65F8) : const Color(0x00FFFFFF),
           ),
-          child: Center(
-            child: AvatarBadge(
-              seed: seed,
-              size: responsive.displayScaled(34),
-              labelOverride: labelOverride,
-            ),
+        ),
+        child: Center(
+          child: AvatarBadge(
+            seed: seed,
+            size: responsive.displayScaled(34),
+            labelOverride: labelOverride,
           ),
         ),
       ),
@@ -796,67 +807,59 @@ class _NavIconButton extends StatelessWidget {
     final foreground = active
         ? AwikiMePalette.actionBlue
         : AwikiMePalette.actionMuted;
-    return Semantics(
-      identifier: e2eIdentifier(semanticsIdentifier),
-      button: true,
-      selected: active,
-      label: label,
+    return AppPressable(
       onTap: onTap,
+      semanticLabel: label,
+      semanticsIdentifier: semanticsIdentifier,
+      selected: active,
+      scaleOnPress: true,
+      pressedScale: responsive.isPhone ? 0.96 : 0.98,
+      borderRadius: BorderRadius.circular(
+        showLabel ? responsive.radius(8) : 10,
+      ),
       child: ExcludeSemantics(
-        child: GestureDetector(
-          onTap: onTap,
-          behavior: HitTestBehavior.opaque,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
-            padding: showLabel
-                ? EdgeInsets.fromLTRB(
-                    responsive.spacing(4),
-                    responsive.spacing(1),
-                    responsive.spacing(4),
-                    responsive.spacing(5),
-                  )
-                : EdgeInsets.zero,
-            decoration: BoxDecoration(
-              color: active && showLabel
-                  ? AwikiMePalette.actionBlueSoft
-                  : const Color(0x00FFFFFF),
-              borderRadius: BorderRadius.circular(
-                showLabel ? responsive.radius(8) : 0,
-              ),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          padding: showLabel
+              ? EdgeInsets.fromLTRB(
+                  responsive.spacing(4),
+                  responsive.spacing(1),
+                  responsive.spacing(4),
+                  responsive.spacing(5),
+                )
+              : EdgeInsets.zero,
+          decoration: BoxDecoration(
+            color: active && showLabel
+                ? AwikiMePalette.actionBlueSoft
+                : const Color(0x00FFFFFF),
+            borderRadius: BorderRadius.circular(
+              showLabel ? responsive.radius(8) : 0,
             ),
-            child: showLabel
-                ? Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      Icon(
-                        icon,
-                        color: foreground,
-                        size: responsive.scaled(24),
-                      ),
-                      const SizedBox(height: 2),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          style: TextStyle(
-                            color: foreground,
-                            fontSize: responsive.scaled(13.25),
-                            fontWeight: FontWeight.w600,
-                            height: 1,
-                          ),
+          ),
+          child: showLabel
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    Icon(icon, color: foreground, size: responsive.scaled(24)),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: foreground,
+                          fontSize: responsive.scaled(13.25),
+                          fontWeight: FontWeight.w600,
+                          height: 1,
                         ),
                       ),
-                    ],
-                  )
-                : Center(
-                    child: Icon(
-                      icon,
-                      color: foreground,
-                      size: responsive.iconLg,
                     ),
-                  ),
-          ),
+                  ],
+                )
+              : Center(
+                  child: Icon(icon, color: foreground, size: responsive.iconLg),
+                ),
         ),
       ),
     );
@@ -906,61 +909,61 @@ class _NavButton extends StatelessWidget {
       return Transform.scale(scale: navIconVisualScale, child: icon);
     }
 
-    return Semantics(
-      identifier: e2eIdentifier(semanticsIdentifier),
-      button: true,
-      selected: active,
-      label: label,
+    return AppPressable(
       onTap: onTap,
+      semanticLabel: label,
+      semanticsIdentifier: semanticsIdentifier,
+      selected: active,
+      scaleOnPress: true,
+      pressedScale: responsive.isPhone ? 0.96 : 0.98,
+      borderRadius: BorderRadius.circular(
+        showLabel ? responsive.radius(8) : 10,
+      ),
       child: ExcludeSemantics(
-        child: GestureDetector(
-          onTap: onTap,
-          behavior: HitTestBehavior.opaque,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
-            curve: Curves.easeOut,
-            width: showLabel ? double.infinity : tapSize,
-            height: showLabel ? double.infinity : tapSize,
-            padding: showLabel
-                ? EdgeInsets.fromLTRB(
-                    responsive.spacing(4),
-                    responsive.spacing(1),
-                    responsive.spacing(4),
-                    responsive.spacing(5),
-                  )
-                : EdgeInsets.zero,
-            decoration: BoxDecoration(
-              color: active && showLabel
-                  ? AwikiMePalette.actionBlueSoft
-                  : const Color(0x00FFFFFF),
-              borderRadius: BorderRadius.circular(
-                showLabel ? responsive.radius(8) : 0,
-              ),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOut,
+          width: showLabel ? double.infinity : tapSize,
+          height: showLabel ? double.infinity : tapSize,
+          padding: showLabel
+              ? EdgeInsets.fromLTRB(
+                  responsive.spacing(4),
+                  responsive.spacing(1),
+                  responsive.spacing(4),
+                  responsive.spacing(5),
+                )
+              : EdgeInsets.zero,
+          decoration: BoxDecoration(
+            color: active && showLabel
+                ? AwikiMePalette.actionBlueSoft
+                : const Color(0x00FFFFFF),
+            borderRadius: BorderRadius.circular(
+              showLabel ? responsive.radius(8) : 0,
             ),
-            child: showLabel
-                ? Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: <Widget>[
-                      buildNavIcon(),
-                      const SizedBox(height: 2),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          style: TextStyle(
-                            color: foreground,
-                            fontSize: labelFontSize,
-                            fontWeight: FontWeight.w600,
-                            height: 1,
-                          ),
+          ),
+          child: showLabel
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: <Widget>[
+                    buildNavIcon(),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: foreground,
+                          fontSize: labelFontSize,
+                          fontWeight: FontWeight.w600,
+                          height: 1,
                         ),
                       ),
-                    ],
-                  )
-                : Center(child: buildNavIcon()),
-          ),
+                    ),
+                  ],
+                )
+              : Center(child: buildNavIcon()),
         ),
       ),
     );

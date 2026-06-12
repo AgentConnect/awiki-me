@@ -48,6 +48,68 @@ void main() {
     },
   );
 
+  test('load applies stable daemon and runtime ordering', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:runtime-b-2',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon-b',
+          runtime: 'hermes',
+          displayName: 'Beta Runtime',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:daemon-b',
+          kind: AgentKind.daemon,
+          displayName: 'B 代理',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'registering'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:runtime-a-2',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon-a',
+          runtime: 'hermes',
+          displayName: 'Beta Runtime',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:runtime-a-1',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon-a',
+          runtime: 'hermes',
+          displayName: 'Alpha Runtime',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:daemon-a',
+          kind: AgentKind.daemon,
+          displayName: 'A 代理',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'registering'),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+
+    await container.read(agentsProvider.notifier).load();
+
+    expect(
+      container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+      [
+        'did:agent:daemon-a',
+        'did:agent:daemon-b',
+        'did:agent:runtime-a-1',
+        'did:agent:runtime-a-2',
+        'did:agent:runtime-b-2',
+      ],
+    );
+  });
+
   test('load maps authorization failures to a friendly agent error', () async {
     final control = _FailingAgentControlService(
       Exception(
@@ -151,7 +213,7 @@ void main() {
       );
 
       final state = container.read(agentsProvider);
-      expect(state.pendingStatusQueryAtByDaemon, isEmpty);
+      expect(state.pendingStatusQueryAtByDaemon, contains('did:agent:daemon'));
       expect(state.agents.map((agent) => agent.agentDid), [
         'did:agent:daemon',
         'did:agent:runtime',
@@ -160,8 +222,14 @@ void main() {
       final runtime = state.agents.last;
       expect(runtime.isRuntime, isTrue);
       expect(runtime.daemonAgentDid, 'did:agent:daemon');
+      expect(runtime.displayName, '未命名智能体');
       expect(runtime.latest.status, 'needs_config');
       expect(runtime.latest.needsConfig, isTrue);
+      await Future<void>.delayed(agentStatusRefreshMinimumIndicatorDuration);
+      expect(
+        container.read(agentsProvider).pendingStatusQueryAtByDaemon,
+        isEmpty,
+      );
     },
   );
 
@@ -202,8 +270,203 @@ void main() {
         .singleWhere((agent) => agent.agentDid == 'did:agent:runtime-new');
     expect(runtime.kind, AgentKind.runtime);
     expect(runtime.daemonAgentDid, 'did:agent:daemon');
+    expect(runtime.displayName, 'Hermes Runtime');
     expect(runtime.latest.status, 'ready');
   });
+
+  test('deleteSelected sends runtime delete through owning daemon', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:runtime',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'hermes',
+          displayName: 'Hermes',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+    container.read(agentsProvider.notifier).select('did:agent:runtime');
+
+    await container.read(agentsProvider.notifier).deleteSelected();
+
+    expect(control.lastDeletedRuntimeDaemonDid, 'did:agent:daemon');
+    expect(control.lastDeletedRuntimeDid, 'did:agent:runtime');
+    expect(control.lastDeletedDaemonDid, isNull);
+    expect(control.lastUnboundAgentDid, isNull);
+  });
+
+  test(
+    'archive control payload removes archived agents from current list',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+          AgentSummary(
+            agentDid: 'did:agent:runtime',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'hermes',
+            displayName: 'Hermes',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'state': 'archived',
+          'daemon_agent_did': 'did:agent:daemon',
+          'result': <String, Object?>{
+            'command': 'runtime.agent.delete',
+            'runtime_agent_did': 'did:agent:runtime',
+            'daemon_agent_did': 'did:agent:daemon',
+          },
+        },
+      );
+
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        ['did:agent:daemon'],
+      );
+
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'state': 'archived',
+          'daemon_agent_did': 'did:agent:daemon',
+          'result': <String, Object?>{
+            'command': 'daemon.delete',
+            'daemon_agent_did': 'did:agent:daemon',
+          },
+        },
+      );
+
+      expect(container.read(agentsProvider).agents, isEmpty);
+    },
+  );
+
+  test('status snapshot ignores archived runtime payloads', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+
+    container.read(agentsProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'status_scope': 'snapshot',
+        'daemon_agent_did': 'did:agent:daemon',
+        'daemon': <String, Object?>{
+          'agent_did': 'did:agent:daemon',
+          'status': 'ready',
+        },
+        'runtimes': <Object?>[
+          <String, Object?>{
+            'agent_did': 'did:agent:archived-runtime',
+            'daemon_agent_did': 'did:agent:daemon',
+            'runtime': 'hermes',
+            'status': 'archived',
+            'active_state': 'archived',
+          },
+        ],
+      },
+    );
+
+    expect(
+      container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+      ['did:agent:daemon'],
+    );
+  });
+
+  test(
+    'daemon status payload does not replace inventory display names',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '书房代理',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+          AgentSummary(
+            agentDid: 'did:agent:runtime',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'hermes',
+            displayName: '写作助手',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'snapshot',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'display_name': 'awiki-daemon-random',
+            'handle': 'awiki-daemon-random',
+            'status': 'ready',
+          },
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': 'did:agent:runtime',
+              'daemon_agent_did': 'did:agent:daemon',
+              'display_name': 'awiki-agent-random',
+              'handle': 'awiki-agent-random',
+              'runtime': 'hermes',
+              'status': 'needs_config',
+            },
+          ],
+        },
+      );
+
+      final agents = container.read(agentsProvider).agents;
+      final daemon = agents.singleWhere((agent) => agent.isDaemon);
+      final runtime = agents.singleWhere((agent) => agent.isRuntime);
+      expect(daemon.displayName, '书房代理');
+      expect(runtime.displayName, '写作助手');
+      expect(runtime.latest.status, 'needs_config');
+    },
+  );
 
   test(
     'bootstrapMessageAgent ensures daemon subkey and delegates desired state',
@@ -495,6 +758,52 @@ void main() {
     },
   );
 
+  test('agent cache follows login handle across DID rotation', () async {
+    final localStore = FakeProductLocalStore();
+    final firstControl = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    final firstContainer = _container(
+      firstControl,
+      localStore: localStore,
+      session: const SessionIdentity(
+        did: 'did:human:old',
+        credentialName: 'default',
+        displayName: 'Me',
+        handle: 'zhuocheng.anpclaw.com',
+      ),
+    );
+    addTearDown(firstContainer.dispose);
+    await firstContainer.read(agentsProvider.notifier).load();
+
+    final secondContainer = _container(
+      _FailingAgentControlService(Exception('offline')),
+      localStore: localStore,
+      session: const SessionIdentity(
+        did: 'did:human:new',
+        credentialName: 'default',
+        displayName: 'Me',
+        handle: 'Zhuocheng.Anpclaw.Com',
+      ),
+    );
+    addTearDown(secondContainer.dispose);
+
+    await secondContainer.read(agentsProvider.notifier).load();
+
+    final state = secondContainer.read(agentsProvider);
+    expect(state.agents.map((agent) => agent.agentDid), ['did:agent:daemon']);
+    expect(localStore.agentStates.values.map((item) => item.ownerDid).toSet(), {
+      'controller-handle:zhuocheng.anpclaw.com',
+    });
+  });
+
   test('stale snapshot does not prune newer runtime state', () async {
     final control = FakeAgentControlService()
       ..agents = <AgentSummary>[
@@ -636,6 +945,11 @@ ProviderContainer _container(
   FakeAgentControlService control, {
   FakeProductLocalStore? localStore,
   FakeIdentityCorePort? identities,
+  SessionIdentity session = const SessionIdentity(
+    did: 'did:human:me',
+    credentialName: 'default',
+    displayName: 'Me',
+  ),
 }) {
   return ProviderContainer(
     overrides: <Override>[
@@ -647,13 +961,7 @@ ProviderContainer _container(
         localStore ?? FakeProductLocalStore(),
       ),
       sessionProvider.overrideWith((ref) {
-        return SessionController()..setSession(
-          const SessionIdentity(
-            did: 'did:human:me',
-            credentialName: 'default',
-            displayName: 'Me',
-          ),
-        );
+        return SessionController()..setSession(session);
       }),
     ],
   );

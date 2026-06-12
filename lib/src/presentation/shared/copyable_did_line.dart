@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
 import 'awiki_me_feedback.dart';
+import 'widgets/app_widgets.dart';
 
 class CopyableDidLine extends StatelessWidget {
   const CopyableDidLine({
@@ -49,31 +50,22 @@ class CopyableDidLine extends StatelessWidget {
           ),
         ),
         SizedBox(width: gap),
-        Semantics(
-          button: true,
-          label: copySemanticLabel,
-          child: GestureDetector(
-            key: buttonKey,
-            onTap: () async {
-              await Clipboard.setData(ClipboardData(text: value));
-              if (!context.mounted) {
-                return;
-              }
-              AwikiMeToast.show(context, copiedMessage);
-            },
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              height: buttonSize,
-              width: buttonSize,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: CupertinoColors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFDDE5F0)),
-              ),
-              child: Icon(icon, color: const Color(0xFF34415C), size: iconSize),
-            ),
-          ),
+        AppIconButton(
+          key: buttonKey,
+          onPressed: () async {
+            await Clipboard.setData(ClipboardData(text: value));
+            if (!context.mounted) {
+              return;
+            }
+            AwikiMeToast.show(context, copiedMessage);
+          },
+          semanticLabel: copySemanticLabel,
+          tooltip: copySemanticLabel,
+          size: buttonSize,
+          backgroundColor: CupertinoColors.white,
+          borderColor: const Color(0xFFDDE5F0),
+          borderRadius: BorderRadius.circular(8),
+          child: Icon(icon, color: const Color(0xFF34415C), size: iconSize),
         ),
       ],
     );

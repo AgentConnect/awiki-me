@@ -132,7 +132,7 @@ String _stripGroupPrefix(String groupDid) {
 
 String? _directPeerFromThreadId(String ownerDid, String threadId) {
   final raw = threadId.trim();
-  if (!raw.startsWith('dm:')) {
+  if (!raw.startsWith('dm:') || raw.startsWith('dm:peer-scope:')) {
     return null;
   }
   final body = raw.substring('dm:'.length);

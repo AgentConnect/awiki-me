@@ -12,13 +12,16 @@ import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
+import 'package:awiki_me/src/application/peer_identity_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
 import 'package:awiki_me/src/application/product_local_store.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
+import 'package:awiki_me/src/application/profile_homepage_resolver.dart';
 import 'package:awiki_me/src/application/realtime_application_service.dart';
 import 'package:awiki_me/src/application/relationship_application_service.dart';
+import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/domain/entities/bridge_capabilities.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -32,6 +35,7 @@ import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
+import 'package:awiki_me/src/domain/entities/peer_agent_identity.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
@@ -86,6 +90,11 @@ Widget buildLocalizedTestApp({
         resolvedLocalePreference,
       ),
       updateServiceProvider.overrideWithValue(resolvedUpdateService),
+      profileHomepageResolverProvider.overrideWithValue(
+        ProfileHomepageResolver(
+          environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
+        ),
+      ),
       attachmentPickerServiceProvider.overrideWithValue(
         FakeAttachmentPickerService(),
       ),
@@ -139,6 +148,7 @@ List<Override> fakeApplicationServiceOverrides(
     profileApplicationServiceProvider.overrideWithValue(
       FakeProfileApplicationService(gateway),
     ),
+    peerIdentityServiceProvider.overrideWithValue(FakePeerIdentityService()),
     conversationServiceProvider.overrideWithValue(
       FakeConversationService(gateway),
     ),
@@ -304,8 +314,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   String? lastCreatedGroupPrompt;
   String? lastJoinedGroupDid;
   String? lastAddedGroupId;
-  String? lastAddedMemberDid;
+  String? lastAddedMemberRef;
   String? lastAddedMemberRole;
+  String? lastRemovedGroupId;
+  String? lastRemovedMemberRef;
   String? lastSentThreadId;
   String? lastSentPeerDid;
   String? lastSentGroupId;
@@ -330,6 +342,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int sendEmailVerificationCalls = 0;
   int checkEmailVerifiedCalls = 0;
   int lookupHandleRegistrationCalls = 0;
+  int validateHandleCalls = 0;
   int registerHandleCalls = 0;
   int registerHandleWithEmailCalls = 0;
   int recoverHandleCalls = 0;
@@ -438,6 +451,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       memberCount: 1,
       lastMessageAt: DateTime.now(),
       myRole: 'owner',
+      membershipStatus: 'active',
     );
     groups = <GroupSummary>[
       ...groups.where((item) => item.groupId != group.groupId),
@@ -477,6 +491,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
         description: '',
         memberCount: 0,
         lastMessageAt: null,
+        membershipStatus: null,
       ),
     );
   }
@@ -508,6 +523,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       memberCount: 1,
       lastMessageAt: DateTime.now(),
       myRole: 'member',
+      membershipStatus: 'active',
     );
     groups = <GroupSummary>[
       ...groups.where((item) => item.groupId != group.groupId),
@@ -519,21 +535,21 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   @override
   Future<GroupSummary> addGroupMember({
     required String groupId,
-    required String memberDid,
+    required String memberRef,
     String role = 'member',
   }) async {
     lastAddedGroupId = groupId;
-    lastAddedMemberDid = memberDid;
+    lastAddedMemberRef = memberRef;
     lastAddedMemberRole = role;
     final members = <GroupMemberSummary>[
       ...(groupMembersByGroupId[groupId] ?? const <GroupMemberSummary>[]),
     ];
-    if (!members.any((item) => item.did == memberDid)) {
+    if (!members.any((item) => item.did == memberRef)) {
       members.add(
         GroupMemberSummary(
-          userId: memberDid,
-          did: memberDid,
-          handle: memberDid,
+          userId: memberRef,
+          did: memberRef,
+          handle: memberRef,
           role: role,
           profileUrl: null,
         ),
@@ -548,6 +564,37 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       memberCount: members.length,
       lastMessageAt: current.lastMessageAt,
       myRole: current.myRole,
+      membershipStatus: current.membershipStatus,
+    );
+    groups = <GroupSummary>[
+      ...groups.where((item) => item.groupId != updated.groupId),
+      updated,
+    ];
+    return updated;
+  }
+
+  @override
+  Future<GroupSummary> removeGroupMember({
+    required String groupId,
+    required String memberRef,
+  }) async {
+    lastRemovedGroupId = groupId;
+    lastRemovedMemberRef = memberRef;
+    final members = <GroupMemberSummary>[
+      for (final item
+          in groupMembersByGroupId[groupId] ?? const <GroupMemberSummary>[])
+        if (item.did != memberRef && item.handle != memberRef) item,
+    ];
+    groupMembersByGroupId[groupId] = members;
+    final current = await getGroup(groupId);
+    final updated = GroupSummary(
+      groupId: current.groupId,
+      name: current.name,
+      description: current.description,
+      memberCount: members.length,
+      lastMessageAt: current.lastMessageAt,
+      myRole: current.myRole,
+      membershipStatus: current.membershipStatus,
     );
     groups = <GroupSummary>[
       ...groups.where((item) => item.groupId != updated.groupId),
@@ -726,6 +773,27 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return handleRegistrationStatus;
   }
 
+  Future<HandleAvailability> validateHandle({
+    required String handle,
+    String? domain,
+  }) async {
+    validateHandleCalls += 1;
+    final normalizedHandle = handle.trim().toLowerCase();
+    final normalizedDomain = domain?.trim().toLowerCase();
+    final registered =
+        handleRegistrationStatus == HandleRegistrationStatus.registered;
+    return HandleAvailability(
+      handle: normalizedHandle,
+      domain: normalizedDomain,
+      fullHandle: normalizedDomain == null
+          ? null
+          : '$normalizedHandle.$normalizedDomain',
+      available: !registered,
+      reason: registered ? 'unavailable' : null,
+      message: registered ? "Handle '$normalizedHandle' 已被占用" : null,
+    );
+  }
+
   @override
   Future<SessionIdentity?> restoreSession() async {
     return null;
@@ -882,6 +950,22 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       return updatedProfile!;
     }
     throw UnimplementedError();
+  }
+}
+
+class FakePeerIdentityService implements PeerIdentityService {
+  FakePeerIdentityService({
+    this.identities = const <String, PeerAgentIdentity>{},
+  });
+
+  final Map<String, PeerAgentIdentity> identities;
+
+  @override
+  Future<PeerAgentIdentity> resolveAgentIdentity(String didOrHandle) async {
+    final normalized = normalizeTestIdentity(didOrHandle);
+    return identities[didOrHandle] ??
+        identities[normalized] ??
+        const PeerAgentIdentity.human();
   }
 }
 
@@ -1159,6 +1243,8 @@ class FakeAgentInventoryPort implements AgentInventoryPort {
     required String controllerDid,
     required String daemonAgentDid,
     required String runtime,
+    required String handle,
+    required String displayName,
   }) async {
     return nextRuntimeToken;
   }
@@ -1221,6 +1307,8 @@ class FakeAgentControlService implements AgentControlService {
   String? lastBootstrapControllerDid;
   String? lastBootstrapAppInstanceId;
   UserSubkeyPackage? lastBootstrapUserSubkeyPackage;
+  String? lastRuntimeCreateHandle;
+  String? lastRuntimeCreateDisplayName;
   String? lastResetDaemonDid;
   String? lastResetRuntimeDid;
   String? lastRetryDaemonDid;
@@ -1234,8 +1322,12 @@ class FakeAgentControlService implements AgentControlService {
   String? lastInboxThreadRuntimeDid;
   String? lastInboxThreadId;
   String? lastInboxThreadKind;
+  String? lastInboxThreadPeerHandle;
   String nextInboxThreadRequestId = 'cmd_runtime_inbox_thread_test';
   String? lastUnboundAgentDid;
+  String? lastDeletedDaemonDid;
+  String? lastDeletedRuntimeDaemonDid;
+  String? lastDeletedRuntimeDid;
   String? lastRenamedAgentDid;
   String? lastDisplayName;
   String? lastUpgradeDaemonDid;
@@ -1252,8 +1344,12 @@ class FakeAgentControlService implements AgentControlService {
   Future<void> createHermesRuntime({
     required String daemonAgentDid,
     required String controllerDid,
+    required String handle,
+    required String displayName,
   }) async {
     lastRuntimeCreateDaemonDid = daemonAgentDid;
+    lastRuntimeCreateHandle = handle;
+    lastRuntimeCreateDisplayName = displayName;
   }
 
   @override
@@ -1323,6 +1419,7 @@ class FakeAgentControlService implements AgentControlService {
     required String threadId,
     required String kind,
     String? peerDid,
+    String? peerHandle,
     String? groupDid,
     int limit = 50,
     String? cursor,
@@ -1331,6 +1428,7 @@ class FakeAgentControlService implements AgentControlService {
     lastInboxThreadRuntimeDid = runtimeAgentDid;
     lastInboxThreadId = threadId;
     lastInboxThreadKind = kind;
+    lastInboxThreadPeerHandle = peerHandle;
     return nextInboxThreadRequestId;
   }
 
@@ -1338,6 +1436,20 @@ class FakeAgentControlService implements AgentControlService {
   Future<void> unbindAgent(String agentDid) async {
     lastUnboundAgentDid = agentDid;
     agents = agents.where((agent) => agent.agentDid != agentDid).toList();
+  }
+
+  @override
+  Future<void> deleteDaemon(String daemonAgentDid) async {
+    lastDeletedDaemonDid = daemonAgentDid;
+  }
+
+  @override
+  Future<void> deleteRuntimeAgent({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+  }) async {
+    lastDeletedRuntimeDaemonDid = daemonAgentDid;
+    lastDeletedRuntimeDid = runtimeAgentDid;
   }
 
   @override
@@ -1503,12 +1615,12 @@ class FakeGroupApplicationService implements GroupApplicationService {
   @override
   Future<GroupSummary> addMember({
     required String groupDid,
-    required String memberDid,
+    required String memberRef,
     String role = 'member',
   }) {
     return gateway.addGroupMember(
       groupId: groupDid,
-      memberDid: memberDid,
+      memberRef: memberRef,
       role: role,
     );
   }
@@ -1570,9 +1682,9 @@ class FakeGroupApplicationService implements GroupApplicationService {
   @override
   Future<GroupSummary> removeMember({
     required String groupDid,
-    required String memberDid,
+    required String memberRef,
   }) {
-    throw UnimplementedError();
+    return gateway.removeGroupMember(groupId: groupDid, memberRef: memberRef);
   }
 }
 
@@ -1688,6 +1800,14 @@ class FakeOnboardingSupportService implements OnboardingSupportService {
     required String handle,
   }) {
     return gateway.lookupHandleRegistration(handle: handle);
+  }
+
+  @override
+  Future<HandleAvailability> validateHandle({
+    required String handle,
+    String? domain,
+  }) {
+    return gateway.validateHandle(handle: handle, domain: domain);
   }
 
   @override

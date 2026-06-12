@@ -38,16 +38,15 @@ class FriendsPage extends ConsumerWidget {
   Future<void> _openContact(
     BuildContext context,
     WidgetRef ref,
-    String peerDid,
-    String peerName,
-    String? avatarUri,
+    RelationshipSummary item,
   ) async {
     await openDirectConversationForDid(
       context,
       ref,
-      peerDid: peerDid,
-      peerName: peerName,
-      avatarUri: avatarUri,
+      peerDid: item.did,
+      peerHandle: item.handle,
+      peerName: _displayName(item),
+      avatarUri: item.avatarUri,
     );
   }
 
@@ -83,13 +82,7 @@ class FriendsPage extends ConsumerWidget {
                   seed: _displayName(item),
                   title: _displayName(item),
                   avatarUri: item.avatarUri,
-                  onTap: () => _openContact(
-                    context,
-                    ref,
-                    item.did,
-                    _displayName(item),
-                    item.avatarUri,
-                  ),
+                  onTap: () => _openContact(context, ref, item),
                 ),
               )
               .toList(),
@@ -115,13 +108,7 @@ class FriendsPage extends ConsumerWidget {
                       () => ref.read(friendsProvider.notifier).follow(item.did),
                     ),
                   ),
-                  onTap: () => _openContact(
-                    context,
-                    ref,
-                    item.did,
-                    _displayName(item),
-                    item.avatarUri,
-                  ),
+                  onTap: () => _openContact(context, ref, item),
                 ),
               )
               .toList(),
@@ -263,9 +250,9 @@ class _FriendsSection extends StatelessWidget {
                   ),
                 ),
                 if (trailingLabel != null && onTrailingTap != null)
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
+                  AppPressableText(
                     onTap: onTrailingTap,
+                    semanticLabel: trailingLabel,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 4,
@@ -403,47 +390,59 @@ class _RelationshipActionButtonInnerState
     final foreground = widget.destructive
         ? theme.danger
         : theme.primaryForeground;
-    return Semantics(
-      button: true,
-      label: widget.label,
-      enabled: !_isBusy,
-      child: GestureDetector(
-        onTap: _isBusy
-            ? null
-            : () async {
-                setState(() => _isBusy = true);
-                try {
-                  await widget.onTap();
-                } finally {
-                  if (mounted) {
-                    setState(() => _isBusy = false);
-                  }
+    return AppPressable(
+      onTap: _isBusy
+          ? null
+          : () async {
+              setState(() => _isBusy = true);
+              try {
+                await widget.onTap();
+              } finally {
+                if (mounted) {
+                  setState(() => _isBusy = false);
                 }
-              },
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          height: 30,
-          constraints: const BoxConstraints(minWidth: 58),
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: _isBusy
-              ? CupertinoActivityIndicator(
-                  radius: 7,
-                  color: widget.destructive ? theme.danger : null,
-                )
-              : Text(
-                  widget.label,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+              }
+            },
+      semanticLabel: widget.label,
+      tooltip: widget.label,
+      enabled: !_isBusy,
+      scaleOnPress: true,
+      pressedScale: 0.97,
+      borderRadius: BorderRadius.circular(8),
+      builder: (context, state, child) {
+        return AnimatedOpacity(
+          opacity: state.pressed
+              ? 0.80
+              : state.hovered || state.focused
+              ? 0.92
+              : 1,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          child: child,
+        );
+      },
+      child: Container(
+        height: 30,
+        constraints: const BoxConstraints(minWidth: 58),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(8),
         ),
+        child: _isBusy
+            ? CupertinoActivityIndicator(
+                radius: 7,
+                color: widget.destructive ? theme.danger : null,
+              )
+            : Text(
+                widget.label,
+                style: TextStyle(
+                  color: foreground,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
       ),
     );
   }
@@ -640,13 +639,7 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
                               .follow(item.did),
                         ),
                       ),
-                onTap: () => _openContact(
-                  context,
-                  ref,
-                  peerDid: item.did,
-                  peerName: displayName,
-                  avatarUri: item.avatarUri,
-                ),
+                onTap: () => _openContact(context, ref, item: item),
               ),
             );
           },
@@ -686,16 +679,15 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
   Future<void> _openContact(
     BuildContext context,
     WidgetRef ref, {
-    required String peerDid,
-    required String peerName,
-    String? avatarUri,
+    required RelationshipSummary item,
   }) async {
     await openDirectConversationForDid(
       context,
       ref,
-      peerDid: peerDid,
-      peerName: peerName,
-      avatarUri: avatarUri,
+      peerDid: item.did,
+      peerHandle: item.handle,
+      peerName: _displayName(item),
+      avatarUri: item.avatarUri,
     );
   }
 }

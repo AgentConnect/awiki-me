@@ -34,13 +34,13 @@ abstract interface class GroupApplicationService {
 
   Future<GroupSummary> addMember({
     required String groupDid,
-    required String memberDid,
+    required String memberRef,
     String role = 'member',
   });
 
   Future<GroupSummary> removeMember({
     required String groupDid,
-    required String memberDid,
+    required String memberRef,
   });
 }
 
@@ -104,12 +104,12 @@ class ImCoreGroupApplicationService implements GroupApplicationService {
   @override
   Future<GroupSummary> addMember({
     required String groupDid,
-    required String memberDid,
+    required String memberRef,
     String role = 'member',
   }) {
     return _groups.addMember(
       groupDid: groupDid,
-      memberDid: memberDid,
+      memberRef: memberRef,
       role: role,
     );
   }
@@ -117,8 +117,8 @@ class ImCoreGroupApplicationService implements GroupApplicationService {
   @override
   Future<GroupSummary> removeMember({
     required String groupDid,
-    required String memberDid,
+    required String memberRef,
   }) {
-    return _groups.removeMember(groupDid: groupDid, memberDid: memberDid);
+    return _groups.removeMember(groupDid: groupDid, memberRef: memberRef);
   }
 }

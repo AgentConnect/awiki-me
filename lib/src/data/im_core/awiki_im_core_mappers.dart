@@ -112,7 +112,7 @@ class AwikiImCoreMappers {
     return ChatMessage(
       localId: message.id,
       remoteId: message.id,
-      threadId: canonicalThreadId(
+      threadId: _messageThreadId(
         ownerDid: ownerDid,
         isGroup: isGroup,
         peerDid: peerDid,
@@ -146,22 +146,26 @@ class AwikiImCoreMappers {
         conversation.threadKind == 'group' ||
         conversation.threadId.startsWith('group:');
     final lastMessage = conversation.lastMessage;
+    final targetPeer = isGroup
+        ? null
+        : _directPeerTarget(
+            _directPeerHandleForMessage(lastMessage) ??
+                _firstNonEmpty(
+                  conversation.participants.where(
+                    (participant) => participant.trim() != ownerDid.trim(),
+                  ),
+                ) ??
+                _directPeerFromConversationThread(ownerDid, conversation),
+          );
     final targetDid = isGroup
         ? null
-        : _firstNonEmpty(
-                conversation.participants.where(
-                  (participant) => participant.trim() != ownerDid.trim(),
-                ),
-              ) ??
-              (lastMessage == null
-                  ? null
-                  : _directPeerForMessage(ownerDid, lastMessage)) ??
-              _directPeerFromConversationThread(ownerDid, conversation);
+        : _directPeerDidForMessage(ownerDid, lastMessage) ??
+              ((targetPeer?.startsWith('did:') ?? false) ? targetPeer : null);
     final groupId = isGroup
         ? lastMessage?.group ?? _stripPrefix(conversation.threadId, 'group:')
         : null;
     return ConversationSummary(
-      threadId: canonicalThreadId(
+      threadId: _conversationThreadId(
         ownerDid: ownerDid,
         isGroup: isGroup,
         peerDid: targetDid,
@@ -172,6 +176,7 @@ class AwikiImCoreMappers {
           overlay?.customTitle ??
           _nonEmpty(conversation.title) ??
           groupId ??
+          targetPeer ??
           targetDid ??
           conversation.threadId,
       lastMessagePreview: lastMessage == null
@@ -185,6 +190,7 @@ class AwikiImCoreMappers {
       unreadCount: conversation.unreadCount,
       isGroup: isGroup,
       targetDid: targetDid,
+      targetPeer: targetPeer,
       groupId: groupId,
       avatarUri: null,
       avatarSeed: overlay?.avatarSeed,
@@ -201,7 +207,8 @@ class AwikiImCoreMappers {
       memberCount: group.memberCount ?? 0,
       lastMessageAt: _tryParseDateTime(group.lastMessageAt),
       avatarUri: _nonEmpty(group.avatarUri),
-      myRole: group.membershipStatus,
+      myRole: group.myRole,
+      membershipStatus: group.membershipStatus,
     );
   }
 
@@ -215,6 +222,7 @@ class AwikiImCoreMappers {
       lastMessageAt: _tryParseDateTime(group.lastMessageAt),
       avatarUri: _nonEmpty(group.avatarUri),
       myRole: group.myRole ?? group.membershipStatus,
+      membershipStatus: group.membershipStatus,
     );
   }
 
@@ -241,6 +249,7 @@ class AwikiImCoreMappers {
       avatarUri: _nonEmpty(profile.avatarUri) ?? _nonEmpty(profile.avatarUrl),
       profileUri: _nonEmpty(profile.profileUri),
       subjectType: _nonEmpty(profile.subjectType),
+      fullHandle: profile.fullHandle,
     );
   }
 
@@ -268,6 +277,7 @@ class AwikiImCoreMappers {
   ) {
     return RelationshipSummary(
       did: item.did,
+      handle: _nonEmpty(item.handle),
       displayName:
           _nonEmpty(item.displayName) ??
           _nonEmpty(item.handle) ??
@@ -309,15 +319,25 @@ class AwikiImCoreMappers {
     }
     final isGroup =
         chatMessage.groupId != null || message.threadKind == 'group';
-    final targetDid = isGroup ? null : _directPeerForMessage(ownerDid, message);
+    final targetPeer = isGroup
+        ? null
+        : _directPeerTarget(
+            _directPeerHandleForMessage(message) ??
+                _directPeerForMessage(ownerDid, message),
+          );
+    final targetDid = isGroup
+        ? null
+        : _directPeerDidForMessage(ownerDid, message);
     final conversation = ConversationSummary(
       threadId: chatMessage.threadId,
-      displayName: chatMessage.groupId ?? targetDid ?? message.sender,
+      displayName:
+          chatMessage.groupId ?? targetPeer ?? targetDid ?? message.sender,
       lastMessagePreview: _messagePreview(message),
       lastMessageAt: chatMessage.createdAt,
       unreadCount: chatMessage.isMine ? 0 : 1,
       isGroup: isGroup,
       targetDid: targetDid,
+      targetPeer: targetPeer,
       groupId: chatMessage.groupId,
       avatarUri: null,
       lastMessagePayloadJson: message.body.payloadJson,
@@ -333,6 +353,7 @@ class AwikiImCoreMappers {
               description: '',
               memberCount: 0,
               lastMessageAt: chatMessage.createdAt,
+              membershipStatus: null,
             ),
     );
   }
@@ -377,12 +398,91 @@ String _stripPrefix(String value, String prefix) {
   return value.startsWith(prefix) ? value.substring(prefix.length) : value;
 }
 
+String _messageThreadId({
+  required String ownerDid,
+  required bool isGroup,
+  String? peerDid,
+  String? groupId,
+  String? fallbackThreadId,
+}) {
+  final fallback = fallbackThreadId?.trim() ?? '';
+  if (!isGroup && _isDirectConversationThreadId(fallback)) {
+    return fallback;
+  }
+  return canonicalThreadId(
+    ownerDid: ownerDid,
+    isGroup: isGroup,
+    peerDid: peerDid,
+    groupId: groupId,
+    fallbackThreadId: fallbackThreadId,
+  );
+}
+
+String _conversationThreadId({
+  required String ownerDid,
+  required bool isGroup,
+  String? peerDid,
+  String? groupId,
+  String? fallbackThreadId,
+}) {
+  final fallback = fallbackThreadId?.trim() ?? '';
+  if (!isGroup &&
+      fallback.isNotEmpty &&
+      _isDirectConversationThreadId(fallback)) {
+    return fallback;
+  }
+  if (isGroup) {
+    return canonicalGroupThreadId(groupId ?? _stripPrefix(fallback, 'group:'));
+  }
+  return canonicalThreadId(
+    ownerDid: ownerDid,
+    isGroup: false,
+    peerDid: peerDid,
+    fallbackThreadId: fallback,
+  );
+}
+
 String? _directPeerForMessage(String ownerDid, core.Message message) {
   if (message.sender.trim() != ownerDid.trim()) {
     return _nonEmpty(message.sender);
   }
   return _nonEmpty(message.receiver) ??
       _directPeerFromThreadId(ownerDid, message.threadId);
+}
+
+String? _directPeerDidForMessage(String ownerDid, core.Message? message) {
+  if (message == null) {
+    return null;
+  }
+  final currentDid =
+      _attribute(message.metadata, 'peer_current_did') ??
+      _attribute(message.metadata, 'resolved_target_did');
+  if (currentDid != null && currentDid.startsWith('did:')) {
+    return currentDid;
+  }
+  final peer = _directPeerForMessage(ownerDid, message);
+  return (peer?.startsWith('did:') ?? false) ? peer : null;
+}
+
+String? _directPeerHandleForMessage(core.Message? message) {
+  if (message == null) {
+    return null;
+  }
+  return _attribute(message.metadata, 'peer_full_handle') ??
+      _attribute(message.metadata, 'target_handle') ??
+      ((message.threadKind == 'direct' &&
+              !message.threadId.startsWith('did:') &&
+              !_isInternalDirectThreadId(message.threadId))
+          ? _nonEmpty(message.threadId)
+          : null);
+}
+
+String? _directPeerTarget(String? value) {
+  final target = _nonEmpty(value);
+  if (target == null) {
+    return null;
+  }
+  return target.startsWith('did:') ? target : target.toLowerCase();
 }
 
 String? _directPeerFromConversationThread(
@@ -393,12 +493,14 @@ String? _directPeerFromConversationThread(
     return null;
   }
   return _directPeerFromThreadId(ownerDid, conversation.threadId) ??
-      _nonEmpty(conversation.threadId);
+      (_isInternalDirectThreadId(conversation.threadId)
+          ? null
+          : _nonEmpty(conversation.threadId));
 }
 
 String? _directPeerFromThreadId(String ownerDid, String threadId) {
   final raw = threadId.trim();
-  if (!raw.startsWith('dm:')) {
+  if (!raw.startsWith('dm:') || _isInternalDirectThreadId(raw)) {
     return null;
   }
   final body = raw.substring('dm:'.length);
@@ -410,6 +512,14 @@ String? _directPeerFromThreadId(String ownerDid, String threadId) {
     return _nonEmpty(body.substring(0, body.length - owner.length - 1));
   }
   return null;
+}
+
+bool _isInternalDirectThreadId(String threadId) {
+  return threadId.trim().startsWith('dm:peer-scope:');
+}
+
+bool _isDirectConversationThreadId(String threadId) {
+  return threadId.trim().startsWith('dm:');
 }
 
 String _compactDid(String did) {

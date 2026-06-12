@@ -71,6 +71,31 @@ class AwikiOnboardingSupportService implements OnboardingSupportService {
       rethrow;
     }
   }
+
+  @override
+  Future<HandleAvailability> validateHandle({
+    required String handle,
+    String? domain,
+  }) async {
+    final normalizedHandle = _normalizeHandle(
+      handle,
+      minLength: 1,
+      maxLength: 63,
+    );
+    final normalizedDomain = domain?.trim().toLowerCase();
+    final result = await _users.validateHandle(
+      handle: normalizedHandle,
+      domain: normalizedDomain,
+    );
+    return HandleAvailability(
+      handle: result['handle']?.toString() ?? normalizedHandle,
+      domain: result['domain']?.toString(),
+      fullHandle: result['full_handle']?.toString(),
+      available: result['available'] == true,
+      reason: result['reason']?.toString(),
+      message: result['message']?.toString(),
+    );
+  }
 }
 
 String _normalizePhone(String phone) {
@@ -89,11 +114,15 @@ String _normalizePhone(String phone) {
   throw ArgumentError('手机号格式不正确，请输入国际格式或中国大陆 11 位手机号');
 }
 
-String _normalizeHandle(String handle) {
+String _normalizeHandle(
+  String handle, {
+  int minLength = 2,
+  int maxLength = 32,
+}) {
   final normalized = handle.trim().toLowerCase();
-  final pattern = RegExp(r'^[a-z0-9-]{2,32}$');
+  final pattern = RegExp('^[a-z0-9-]{$minLength,$maxLength}\$');
   if (!pattern.hasMatch(normalized)) {
-    throw ArgumentError('handle 仅支持小写字母、数字、中划线，长度 2-32，不能包含下划线');
+    throw ArgumentError('handle 仅支持小写字母、数字、中划线，不能包含下划线');
   }
   return normalized;
 }

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/app_router.dart';
+import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_member_summary.dart';
@@ -15,11 +16,13 @@ import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../agents/agent_inbox_panel.dart';
 import '../app_shell/providers/selected_conversation_provider.dart';
+import '../app_shell/providers/session_provider.dart';
 import '../chat/chat_page.dart';
 import '../group/group_list_page.dart';
 import '../group/group_provider.dart';
 import '../profile/peer_profile_provider.dart';
 import '../shared/awiki_me_design.dart';
+import '../shared/awiki_me_feedback.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/copyable_did_line.dart';
 import '../shared/formatters/display_formatters.dart';
@@ -27,6 +30,7 @@ import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'conversation_list_page.dart';
+import 'conversation_peer_classifier.dart';
 
 class ConversationWorkspacePage extends ConsumerWidget {
   const ConversationWorkspacePage({super.key, this.listFooter});
@@ -538,14 +542,10 @@ class _MacPeerProfilePanel extends ConsumerWidget {
         child: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Text(
-              context.l10n.peerProfileLoadFailed,
+            child: AwikiMeErrorText(
+              message: context.l10n.peerProfileLoadFailed,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFFFF3B30),
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+              compact: true,
             ),
           ),
         ),
@@ -580,14 +580,10 @@ class _MacPeerProfilePanel extends ConsumerWidget {
         child: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Text(
-              context.l10n.peerProfileLoadFailed,
+            child: AwikiMeErrorText(
+              message: context.l10n.peerProfileLoadFailed,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFFFF3B30),
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+              compact: true,
             ),
           ),
         ),
@@ -598,7 +594,9 @@ class _MacPeerProfilePanel extends ConsumerWidget {
     final profileContent = profile.profileMarkdown.trim().isNotEmpty
         ? profile.profileMarkdown.trim()
         : profile.bio.trim();
-    final homepageUrl = DidDisplayFormatter.homepageUrl(profile);
+    final homepageUrl = ref
+        .watch(profileHomepageResolverProvider)
+        .homepageUrl(profile);
 
     return _MacPanelShell(
       title: _identityCardTitleForProfile(profile),
@@ -677,14 +675,15 @@ class _MacPeerProfilePanel extends ConsumerWidget {
           const SizedBox(height: 14),
           _MacProfileCard(
             title: '主页',
-            child: GestureDetector(
+            child: AppPressableTile(
               onTap: () async {
                 await launchUrl(
                   Uri.parse(homepageUrl),
                   mode: LaunchMode.externalApplication,
                 );
               },
-              behavior: HitTestBehavior.opaque,
+              semanticLabel: '打开主页',
+              borderRadius: BorderRadius.circular(8),
               child: Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
@@ -850,6 +849,8 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
     _requestGroup(groupId);
     _requestMembers(groupId);
     final members = ref.watch(groupMembersProvider(groupId));
+    final currentDid = ref.watch(sessionProvider).session?.did;
+    final canManageMembers = canManageGroupMembers(_group);
     final theme = context.awikiTheme;
     return _MacPanelShell(
       title: '${_group.displayName} 的群聊信息',
@@ -931,7 +932,7 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
                   key: const Key('mac-group-info-add-member-button'),
                   semanticLabel: '添加成员',
                   icon: CupertinoIcons.person_add,
-                  onTap: _openAddMemberDialog,
+                  onTap: canManageMembers ? _openAddMemberDialog : null,
                 ),
                 const SizedBox(width: 8),
                 _MacPanelIconButton(
@@ -953,7 +954,18 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
                         .map(
                           (item) => Padding(
                             padding: const EdgeInsets.only(bottom: 12),
-                            child: _MacGroupMemberRow(item: item),
+                            child: GroupMemberRow(
+                              item: item,
+                              onRemove:
+                                  canRemoveGroupMember(
+                                    group: _group,
+                                    member: item,
+                                    currentDid: currentDid,
+                                  )
+                                  ? () => _confirmRemoveMember(item)
+                                  : null,
+                              showRemoveButton: true,
+                            ),
                           ),
                         )
                         .toList(),
@@ -1027,9 +1039,7 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
   }
 
   bool _hasCompleteGroupData(GroupSummary group) {
-    return group.description.trim().isNotEmpty ||
-        group.memberCount > 0 ||
-        (group.myRole?.trim().isNotEmpty ?? false);
+    return hasKnownGroupRole(group);
   }
 
   Future<void> _refreshMembers() async {
@@ -1077,6 +1087,23 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
     );
   }
 
+  Future<void> _confirmRemoveMember(GroupMemberSummary member) async {
+    await showRemoveGroupMemberDialog(
+      context: context,
+      ref: ref,
+      groupId: _group.groupId,
+      member: member,
+      onGroupUpdated: (updated) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _group = updated;
+        });
+      },
+    );
+  }
+
   GroupSummary _groupFromConversation(ConversationSummary conversation) {
     final groupId = conversation.groupId?.trim().isNotEmpty == true
         ? conversation.groupId!.trim()
@@ -1091,41 +1118,8 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
       memberCount: 0,
       lastMessageAt: conversation.lastMessageAt,
       avatarUri: conversation.avatarUri,
+      membershipStatus: null,
     );
-  }
-}
-
-class _MacGroupMemberRow extends StatelessWidget {
-  const _MacGroupMemberRow({required this.item});
-
-  final GroupMemberSummary item;
-
-  @override
-  Widget build(BuildContext context) {
-    final handle = _handleLabel(item);
-    return Row(
-      children: <Widget>[
-        AvatarBadge(seed: handle, size: 36),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            handle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AwikiMeTextStyles.cardTitle,
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _handleLabel(GroupMemberSummary item) {
-    final handle = item.handle.trim();
-    final did = item.did.trim();
-    if (handle.isNotEmpty && handle != did) {
-      return handle;
-    }
-    return DidDisplayFormatter.compactDid(did);
   }
 }
 
@@ -1270,30 +1264,21 @@ class _MacPanelIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return Semantics(
-      button: true,
-      enabled: !isLoading && onTap != null,
-      label: semanticLabel,
-      child: GestureDetector(
-        onTap: isLoading ? null : onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          height: responsive.displayScaled(32),
-          width: responsive.displayScaled(32),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: CupertinoColors.white,
-            borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
-            border: Border.all(color: const Color(0xFFDDE5F0)),
-          ),
-          child: isLoading
-              ? CupertinoActivityIndicator(radius: responsive.displayScaled(7))
-              : Icon(
-                  icon,
-                  color: const Color(0xFF34415C),
-                  size: responsive.displayScaled(16),
-                ),
-        ),
+    final theme = context.awikiTheme;
+    final enabled = onTap != null && !isLoading;
+    return AppIconButton(
+      onPressed: isLoading ? null : onTap,
+      semanticLabel: semanticLabel,
+      tooltip: semanticLabel,
+      isLoading: isLoading,
+      size: responsive.displayScaled(32),
+      backgroundColor: CupertinoColors.white,
+      borderColor: const Color(0xFFDDE5F0),
+      borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
+      child: Icon(
+        icon,
+        color: enabled ? const Color(0xFF34415C) : theme.tertiaryText,
+        size: responsive.displayScaled(16),
       ),
     );
   }
@@ -1324,18 +1309,26 @@ class _MacProfilePill extends StatelessWidget {
   }
 }
 
-class _MacAgentDetailPanel extends StatelessWidget {
+class _MacAgentDetailPanel extends ConsumerWidget {
   const _MacAgentDetailPanel({required this.conversation, this.onBack});
 
   final ConversationSummary conversation;
   final VoidCallback? onBack;
 
   @override
-  Widget build(BuildContext context) {
-    final title = DidDisplayFormatter.conversationTitle(
-      conversation,
-      context.l10n,
-    );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final classification = ref
+        .watch(
+          conversationPeerClassificationProvider(
+            ConversationPeerTarget.fromConversation(conversation),
+          ),
+        )
+        .maybeWhen(
+          data: (value) => value,
+          orElse: () => conversation.isGroup
+              ? const ConversationPeerClassification.group()
+              : const ConversationPeerClassification.unknown(),
+        );
     final address = conversation.targetDid?.trim().isNotEmpty == true
         ? conversation.targetDid!.trim()
         : conversation.groupId ?? conversation.threadId;
@@ -1372,10 +1365,7 @@ class _MacAgentDetailPanel extends StatelessWidget {
           ],
         ),
       ),
-      _MacDetailRow(
-        label: '所属:',
-        text: conversation.isGroup ? 'AWiki 群组' : '$title 团队',
-      ),
+      _MacDetailRow(label: '所属:', text: classification.detailOwnerLabel),
       _MacDetailRow(
         label: 'DID:',
         child: CopyableDidLine(
@@ -1386,10 +1376,7 @@ class _MacAgentDetailPanel extends StatelessWidget {
           buttonKey: const Key('mac-conversation-copy-did-button'),
         ),
       ),
-      _MacDetailRow(
-        label: '类型:',
-        text: conversation.isGroup ? 'Group Agent' : 'Personal Agent',
-      ),
+      _MacDetailRow(label: '类型:', text: classification.detailTypeLabel),
       const SizedBox(height: 16),
       const _MacDetailCard(
         title: '会话能力',

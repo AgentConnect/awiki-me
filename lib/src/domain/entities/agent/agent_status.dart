@@ -77,6 +77,7 @@ class AgentLatestStatus {
     required this.status,
     this.lastSeenAt,
     this.version,
+    this.latestVersion,
     this.minSupportedVersion,
     this.platform,
     this.service,
@@ -90,6 +91,7 @@ class AgentLatestStatus {
   final String status;
   final DateTime? lastSeenAt;
   final String? version;
+  final String? latestVersion;
   final String? minSupportedVersion;
   final String? platform;
   final String? service;
@@ -104,6 +106,7 @@ class AgentLatestStatus {
       status: json['status']?.toString() ?? 'offline',
       lastSeenAt: DateTime.tryParse(json['last_seen_at']?.toString() ?? ''),
       version: _optionalString(json['version']),
+      latestVersion: _optionalString(json['latest_version']),
       minSupportedVersion: _optionalString(json['min_supported_version']),
       platform: _optionalString(json['platform']),
       service: _optionalString(json['service']),
@@ -120,6 +123,7 @@ class AgentLatestStatus {
       'status': status,
       'last_seen_at': lastSeenAt?.toUtc().toIso8601String(),
       'version': version,
+      'latest_version': latestVersion,
       'min_supported_version': minSupportedVersion,
       'platform': platform,
       'service': service,

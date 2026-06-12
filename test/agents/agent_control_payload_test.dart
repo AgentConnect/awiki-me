@@ -125,6 +125,8 @@ void main() {
       controllerDid: 'did:human:alice',
       registrationToken: 'runtime-token',
       clientRequestId: 'app_req_1',
+      handle: 'alice-hermes',
+      displayName: 'Alice Hermes',
     );
 
     expect(payload['schema'], AgentControlPayloads.commandSchema);
@@ -134,6 +136,8 @@ void main() {
     expect(args['runtime'], 'hermes');
     expect(args['controller_did'], 'did:human:alice');
     expect(args['registration_token'], 'runtime-token');
+    expect(args['handle'], 'alice-hermes');
+    expect(args['display_name'], 'Alice Hermes');
     expect(args['client_request_id'], 'app_req_1');
   });
 
@@ -220,6 +224,20 @@ void main() {
     expect(threadArgs['thread_id'], 'group:did:group:team');
     expect(threadArgs['kind'], 'group');
     expect(threadArgs['group_did'], 'did:group:team');
+
+    final directThreadPayload = runtimeInboxThreadQueryPayload(
+      runtimeAgentDid: 'did:agent:runtime',
+      threadId: 'dm:peer-scope:v1:bob',
+      kind: 'direct',
+      peerDid: 'did:human:bob-current',
+      peerHandle: 'bob.anpclaw.com',
+      commandId: 'cmd_direct_thread',
+    );
+    final directThreadArgs =
+        directThreadPayload['args'] as Map<String, Object?>;
+    expect(directThreadArgs['thread_id'], 'dm:peer-scope:v1:bob');
+    expect(directThreadArgs['peer_did'], 'did:human:bob-current');
+    expect(directThreadArgs['peer_handle'], 'bob.anpclaw.com');
   });
 
   test('agent inventory summary maps daemon install inventory fields', () {

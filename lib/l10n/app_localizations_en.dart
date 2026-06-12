@@ -590,6 +590,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'The request timed out. Please check your network and try again.';
 
   @override
+  String get networkUnavailableRetry =>
+      'Network connection is temporarily unavailable. Please check your network and try again.';
+
+  @override
   String get operationFailedRetry =>
       'The operation failed. Please try again later.';
 

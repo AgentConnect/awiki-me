@@ -261,6 +261,275 @@ void main() {
     expect(gateway.listConversationsCalls, 1);
   });
 
+  test('普通私聊发送成功后不会显示智能体处理中状态', () async {
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendMessage(conversation: conversation, content: '你好');
+
+    final thread = sendContainer.read(
+      chatThreadProvider(conversation.threadId),
+    );
+    expect(thread.agentPendingTurns, isEmpty);
+  });
+
+  test('发送给智能体成功后显示处理中，收到智能体回复后清除', () async {
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendMessage(
+          conversation: conversation,
+          content: '总结一下',
+          expectedAgentReplyDid: 'did:peer',
+        );
+
+    var thread = sendContainer.read(chatThreadProvider(conversation.threadId));
+    expect(thread.isAgentProcessing, isTrue);
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(thread.agentPendingTurns.single.agentDid, 'did:peer');
+    expect(thread.agentPendingTurns.single.remoteMessageId, isNotEmpty);
+    expect(
+      thread.pendingAgentTurnForMessage(thread.messages.single),
+      isNotNull,
+    );
+
+    sendContainer
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(
+          ChatMessage(
+            localId: 'agent-reply-1',
+            remoteId: 'agent-reply-1',
+            threadId: conversation.threadId,
+            senderDid: 'did:peer',
+            receiverDid: 'did:me',
+            content: '已经总结完成。',
+            createdAt: DateTime.now(),
+            isMine: false,
+            sendState: MessageSendState.sent,
+          ),
+        );
+
+    thread = sendContainer.read(chatThreadProvider(conversation.threadId));
+    expect(thread.agentPendingTurns, isEmpty);
+    expect(
+      thread.messages.map((message) => message.content),
+      contains('已经总结完成。'),
+    );
+  });
+
+  test('发送给智能体后的旧历史回补不会误清处理中状态', () async {
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendMessage(
+          conversation: conversation,
+          content: '新的问题',
+          expectedAgentReplyDid: 'did:peer',
+        );
+
+    final startedAt = sendContainer
+        .read(chatThreadProvider(conversation.threadId))
+        .agentPendingTurns
+        .single
+        .startedAt;
+    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:peer': <ChatMessage>[
+        ChatMessage(
+          localId: 'old-agent-reply',
+          remoteId: 'old-agent-reply',
+          threadId: conversation.threadId,
+          senderDid: 'did:peer',
+          receiverDid: 'did:me',
+          content: '上一轮回复',
+          createdAt: startedAt.subtract(const Duration(minutes: 1)),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+      ],
+    };
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .refreshConversation(conversation);
+
+    final thread = sendContainer.read(
+      chatThreadProvider(conversation.threadId),
+    );
+    expect(thread.isAgentProcessing, isTrue);
+    expect(thread.pendingAgentReplyCount, 1);
+  });
+
+  test('连续发给智能体时按回复数量递减处理中状态', () async {
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendMessage(
+          conversation: conversation,
+          content: '第一个问题',
+          expectedAgentReplyDid: 'did:peer',
+        );
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendMessage(
+          conversation: conversation,
+          content: '第二个问题',
+          expectedAgentReplyDid: 'did:peer',
+        );
+
+    var thread = sendContainer.read(chatThreadProvider(conversation.threadId));
+    expect(thread.pendingAgentReplyCount, 2);
+    final firstMessage = thread.messages.firstWhere(
+      (message) => message.content == '第一个问题',
+    );
+    final secondMessage = thread.messages.firstWhere(
+      (message) => message.content == '第二个问题',
+    );
+    expect(thread.pendingAgentTurnForMessage(firstMessage), isNotNull);
+    expect(thread.pendingAgentTurnForMessage(secondMessage), isNotNull);
+
+    sendContainer
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(
+          ChatMessage(
+            localId: 'agent-reply-a',
+            remoteId: 'agent-reply-a',
+            threadId: conversation.threadId,
+            senderDid: 'did:peer',
+            receiverDid: 'did:me',
+            content: '第一个回答',
+            createdAt: DateTime.now(),
+            isMine: false,
+            sendState: MessageSendState.sent,
+          ),
+        );
+
+    thread = sendContainer.read(chatThreadProvider(conversation.threadId));
+    expect(thread.isAgentProcessing, isTrue);
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(thread.pendingAgentTurnForMessage(firstMessage), isNull);
+    expect(thread.pendingAgentTurnForMessage(secondMessage), isNotNull);
+
+    sendContainer
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(
+          ChatMessage(
+            localId: 'agent-reply-a',
+            remoteId: 'agent-reply-a',
+            threadId: conversation.threadId,
+            senderDid: 'did:peer',
+            receiverDid: 'did:me',
+            content: '第一个回答',
+            createdAt: DateTime.now(),
+            isMine: false,
+            sendState: MessageSendState.sent,
+          ),
+        );
+
+    thread = sendContainer.read(chatThreadProvider(conversation.threadId));
+    expect(thread.isAgentProcessing, isTrue);
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(thread.pendingAgentTurnForMessage(secondMessage), isNotNull);
+
+    sendContainer
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(
+          ChatMessage(
+            localId: 'agent-reply-b',
+            remoteId: 'agent-reply-b',
+            threadId: conversation.threadId,
+            senderDid: 'did:peer',
+            receiverDid: 'did:me',
+            content: '第二个回答',
+            createdAt: DateTime.now(),
+            isMine: false,
+            sendState: MessageSendState.sent,
+          ),
+        );
+
+    thread = sendContainer.read(chatThreadProvider(conversation.threadId));
+    expect(thread.agentPendingTurns, isEmpty);
+  });
+
   test('连续发送不会用旧快照覆盖后续 pending', () async {
     gateway.sendDelay = const Duration(milliseconds: 10);
     final sendContainer = ProviderContainer(
@@ -931,6 +1200,96 @@ void main() {
     expect(refreshed.displayName, '融资协作群');
     expect(refreshed.lastMessagePreview, '实时新消息');
     expect(refreshed.unreadCount, 1);
+  });
+
+  test('实时私聊消息不会把已知智能体名称降级成 handle', () {
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(
+          ConversationSummary(
+            threadId: 'dm:did:me:did:agent:runtime',
+            displayName: '写作助手',
+            lastMessagePreview: '旧消息',
+            lastMessageAt: DateTime(2026, 5, 8, 10),
+            unreadCount: 0,
+            isGroup: false,
+            targetDid: 'did:agent:runtime',
+          ),
+        );
+
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(
+          ConversationSummary(
+            threadId: 'dm:did:me:did:agent:runtime',
+            displayName: 'awiki-agent-random',
+            lastMessagePreview: '实时新消息',
+            lastMessageAt: DateTime(2026, 5, 8, 10, 6),
+            unreadCount: 1,
+            isGroup: false,
+            targetDid: 'did:agent:runtime',
+          ),
+        );
+
+    final refreshed = container
+        .read(conversationListProvider)
+        .conversations
+        .single;
+    expect(refreshed.displayName, '写作助手');
+    expect(refreshed.lastMessagePreview, '实时新消息');
+    expect(refreshed.unreadCount, 1);
+  });
+
+  test('本地 DID 会话和刷新的 full handle 会话会合并为同一个智能体会话', () async {
+    const agentDid = 'did:agent:runtime';
+    const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(
+          ConversationSummary(
+            threadId: 'dm:did:human:$agentDid',
+            displayName: 'zhuocheng-test-hermes',
+            lastMessagePreview: '本地消息',
+            lastMessageAt: DateTime(2026, 5, 8, 10),
+            unreadCount: 0,
+            isGroup: false,
+            targetDid: agentDid,
+            targetPeer: agentDid,
+          ),
+        );
+    gateway.conversations = <ConversationSummary>[
+      ConversationSummary(
+        threadId: 'dm:peer-scope:v1:runtime',
+        displayName: '改名后的智能体',
+        lastMessagePreview: '刷新消息',
+        lastMessageAt: DateTime(2026, 5, 8, 10, 1),
+        unreadCount: 1,
+        isGroup: false,
+        targetDid: agentDid,
+        targetPeer: agentHandle,
+      ),
+    ];
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:human',
+            credentialName: 'human.json',
+            displayName: 'Me',
+            handle: 'zhuocheng',
+          ),
+        );
+
+    await container.read(conversationListProvider.notifier).refresh();
+
+    final conversations = container
+        .read(conversationListProvider)
+        .conversations;
+    expect(conversations, hasLength(1));
+    expect(conversations.single.threadId, 'dm:peer-scope:v1:runtime');
+    expect(conversations.single.targetDid, agentDid);
+    expect(conversations.single.targetPeer, agentHandle);
+    expect(conversations.single.displayName, '改名后的智能体');
   });
 }
 

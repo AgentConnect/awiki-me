@@ -6,11 +6,13 @@ import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
+import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show SelectableText;
+import 'package:flutter/material.dart'
+    show SelectableText, SelectionArea, SelectionContainer;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../test_support.dart';
@@ -31,8 +33,49 @@ void main() {
 
     expect(find.text('智能体'), findsWidgets);
     expect(find.text('代理 1'), findsWidgets);
-    expect(find.text('刷新状态'), findsOneWidget);
+    expect(find.text('刷新状态'), findsNothing);
+    expect(find.byIcon(CupertinoIcons.refresh), findsWidgets);
     expect(find.text('创建 Hermes'), findsOneWidget);
+    expect(find.text('升级'), findsNothing);
+    expect(find.text('安装命令'), findsNothing);
+  });
+
+  testWidgets('daemon upgrade action appears only when upgrade is needed', (
+    tester,
+  ) async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'needs_upgrade',
+            platform: 'linux-amd64',
+            needsUpgrade: true,
+          ),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('升级'), findsOneWidget);
+    expect(find.text('安装命令'), findsNothing);
   });
 
   testWidgets('runtime actions open chat and send control commands', (
@@ -91,17 +134,29 @@ void main() {
       'did:agent:runtime',
     );
     expect(
+      container.read(selectedConversationProvider)?.targetPeer,
+      'awiki-agent-hermes.awiki.ai',
+    );
+    expect(
       container
           .read(conversationListProvider)
           .conversations
           .any((item) => item.targetDid == 'did:agent:runtime'),
       isTrue,
     );
+    expect(
+      container
+          .read(conversationListProvider)
+          .conversations
+          .singleWhere((item) => item.targetDid == 'did:agent:runtime')
+          .targetPeer,
+      'awiki-agent-hermes.awiki.ai',
+    );
 
     await tester.tap(find.text('重置 Session'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('重置').last);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 250));
     expect(control.lastResetDaemonDid, 'did:agent:daemon');
     expect(control.lastResetRuntimeDid, 'did:agent:runtime');
 
@@ -111,6 +166,443 @@ void main() {
     await tester.tap(find.text('重试').last);
     await tester.pumpAndSettle();
     expect(control.lastRetryRunId, 'run_123');
+  });
+
+  testWidgets(
+    'create Hermes dialog normalizes handle and submits previewed values',
+    (tester) async {
+      final control = FakeAgentControlService()
+        ..agents = <AgentSummary>[
+          const AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            handle: 'awiki-daemon-test',
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready', platform: 'linux-amd64'),
+          ),
+          const AgentSummary(
+            agentDid: 'did:agent:runtime',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'hermes',
+            handle: 'alice-hermes',
+            displayName: 'Hermes',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+          ),
+          providerOverrides: <Override>[
+            agentControlServiceProvider.overrideWithValue(control),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('创建 Hermes'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('创建 Hermes'), findsWidgets);
+      final fields = find.byType(CupertinoTextField);
+      expect(fields, findsNWidgets(2));
+      final nameField = tester.widget<CupertinoTextField>(fields.at(0));
+      expect(nameField.controller?.text, 'Hermes 2');
+
+      await tester.enterText(fields.at(1), '@My-Agent');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+
+      final handleField = tester.widget<CupertinoTextField>(fields.at(1));
+      expect(handleField.controller?.text, 'my-agent');
+      expect(find.text('最终 Handle：@my-agent.awiki.ai'), findsOneWidget);
+      expect(find.text('这个 Handle 可以使用'), findsOneWidget);
+
+      await tester.enterText(fields.at(0), '写作助手');
+      await tester.tap(find.text('创建').last);
+      await tester.pumpAndSettle();
+
+      expect(control.lastRuntimeCreateDaemonDid, 'did:agent:daemon');
+      expect(control.lastRuntimeCreateHandle, 'my-agent');
+      expect(control.lastRuntimeCreateDisplayName, '写作助手');
+    },
+  );
+
+  testWidgets('create Hermes dialog blocks unavailable handle', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..handleRegistrationStatus = HandleRegistrationStatus.registered;
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready', platform: 'darwin-arm64'),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        gateway: gateway,
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('创建 Hermes'));
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(1), 'used-agent');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+
+    expect(find.text('这个 Handle 已被使用'), findsWidgets);
+    await tester.enterText(fields.at(0), '写作助手');
+    await tester.tap(find.text('创建').last);
+    await tester.pumpAndSettle();
+
+    expect(control.lastRuntimeCreateDaemonDid, isNull);
+  });
+
+  testWidgets('agent list groups runtime agents under their daemon', (
+    tester,
+  ) async {
+    final control = FakeAgentControlService()
+      ..agents = <AgentSummary>[
+        const AgentSummary(
+          agentDid: 'did:agent:runtime:b',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon:b',
+          runtime: 'hermes',
+          handle: 'awiki-agent-b',
+          displayName: 'Hermes B',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        const AgentSummary(
+          agentDid: 'did:agent:daemon:a',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-a',
+          displayName: 'MacBook Daemon',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready', platform: 'darwin-arm64'),
+        ),
+        const AgentSummary(
+          agentDid: 'did:agent:runtime:a',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon:a',
+          runtime: 'hermes',
+          handle: 'awiki-agent-a',
+          displayName: 'Hermes A',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        const AgentSummary(
+          agentDid: 'did:agent:daemon:b',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-b',
+          displayName: 'Server Daemon',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready', platform: 'linux-arm64'),
+        ),
+      ];
+
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Daemon · 1 个 Agent · 正常'), findsNWidgets(2));
+    expect(find.text('hermes · 正常'), findsNWidgets(2));
+
+    final listPane = find.byType(ListView).first;
+    final daemonATop = tester
+        .getTopLeft(
+          find.descendant(of: listPane, matching: find.text('MacBook Daemon')),
+        )
+        .dy;
+    final runtimeATop = tester
+        .getTopLeft(
+          find.descendant(of: listPane, matching: find.text('Hermes A')),
+        )
+        .dy;
+    final daemonBTop = tester
+        .getTopLeft(
+          find.descendant(of: listPane, matching: find.text('Server Daemon')),
+        )
+        .dy;
+    final runtimeBTop = tester
+        .getTopLeft(
+          find.descendant(of: listPane, matching: find.text('Hermes B')),
+        )
+        .dy;
+    expect(daemonATop, lessThan(runtimeATop));
+    expect(runtimeATop, lessThan(daemonBTop));
+    expect(daemonBTop, lessThan(runtimeBTop));
+
+    await tester.tap(
+      find.descendant(of: listPane, matching: find.text('Hermes B')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('打开聊天'), findsOneWidget);
+    expect(find.text('did:agent:daemon:b'), findsWidgets);
+  });
+
+  testWidgets('agent detail supports cross-field selection for diagnostics', (
+    tester,
+  ) async {
+    final control = FakeAgentControlService()
+      ..agents = <AgentSummary>[
+        const AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'failed',
+            version: '1.2.3',
+            platform: 'linux-arm64',
+            service: 'systemd_user',
+            lastErrorCode: 'gateway_error',
+            lastErrorSummary: 'gateway timeout',
+            diagnosticsSummary: <String, Object?>{'runner': 'queue=3'},
+          ),
+        ),
+        const AgentSummary(
+          agentDid: 'did:agent:runtime',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'hermes',
+          handle: 'awiki-agent-hermes',
+          displayName: 'Hermes Runtime',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final context = tester.element(find.byType(AgentsWorkspacePage));
+    ProviderScope.containerOf(
+      context,
+    ).read(agentsProvider.notifier).select('did:agent:daemon');
+    await tester.pumpAndSettle();
+
+    final detailSelectionArea = find.byType(SelectionArea);
+    expect(detailSelectionArea, findsOneWidget);
+    expect(
+      find
+          .byWidgetPredicate(
+            (widget) => widget is SelectionContainer && widget.delegate == null,
+          )
+          .evaluate()
+          .length,
+      greaterThanOrEqualTo(2),
+    );
+    Finder detailText(String text) =>
+        find.descendant(of: detailSelectionArea, matching: find.text(text));
+    expect(detailText('代理 1'), findsOneWidget);
+    expect(detailText('异常'), findsWidgets);
+    expect(detailText('Runtime'), findsNothing);
+    expect(detailText('Hermes Runtime'), findsNothing);
+    expect(detailText('高级诊断'), findsOneWidget);
+    expect(detailText('DID'), findsOneWidget);
+    expect(detailText('did:agent:daemon'), findsWidgets);
+    expect(detailText('platform'), findsOneWidget);
+    expect(detailText('linux-arm64'), findsOneWidget);
+    expect(detailText('service'), findsOneWidget);
+    expect(detailText('systemd_user'), findsOneWidget);
+    expect(detailText('error'), findsOneWidget);
+    expect(detailText('gateway_error'), findsOneWidget);
+    expect(detailText('诊断摘要'), findsOneWidget);
+    expect(detailText('gateway timeout'), findsOneWidget);
+    expect(detailText('runner'), findsOneWidget);
+    expect(detailText('queue=3'), findsOneWidget);
+  });
+
+  testWidgets('active runtime run is reflected in shared agent status UI', (
+    tester,
+  ) async {
+    final control = FakeAgentControlService()
+      ..agents = <AgentSummary>[
+        const AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        const AgentSummary(
+          agentDid: 'did:agent:runtime',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'hermes',
+          displayName: 'Hermes',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+          recentRuns: <AgentRunStatus>[
+            AgentRunStatus(
+              runId: 'run_running',
+              messageId: 'msg_1',
+              runtimeAgentDid: 'did:agent:runtime',
+              status: 'running',
+            ),
+          ],
+        ),
+      ];
+
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('hermes · 正在处理'), findsOneWidget);
+
+    await tester.tap(find.text('Hermes').first);
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(find.text('正在处理'), findsOneWidget);
+    expect(find.text('最近 Run'), findsOneWidget);
+    expect(find.text('running'), findsOneWidget);
+  });
+
+  testWidgets('agent detail keeps diagnostics summary visible without data', (
+    tester,
+  ) async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'registering'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:offline-daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-offline',
+          displayName: '离线代理',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'offline'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:runtime',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'hermes',
+          handle: 'awiki-agent-hermes',
+          displayName: 'Hermes',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 250));
+    final context = tester.element(find.byType(AgentsWorkspacePage));
+    final container = ProviderScope.containerOf(context);
+
+    expect(find.text('诊断摘要'), findsOneWidget);
+    expect(find.text('代理尚未完成状态上报。'), findsOneWidget);
+
+    container.read(agentsProvider.notifier).select('did:agent:offline-daemon');
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(find.text('诊断摘要'), findsOneWidget);
+    expect(find.text('代理离线，暂时无法获取最新诊断。'), findsOneWidget);
+
+    container.read(agentsProvider.notifier).select('did:agent:runtime');
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(find.text('诊断摘要'), findsOneWidget);
+    expect(find.text('暂无异常诊断信息。'), findsOneWidget);
   });
 
   testWidgets('runtime detail shows latest run status with redacted error', (
@@ -170,7 +662,7 @@ void main() {
     expect(find.textContaining('<redacted>'), findsOneWidget);
   });
 
-  testWidgets('rename and unbind are reachable from detail pane', (
+  testWidgets('rename and delete are reachable from detail pane', (
     tester,
   ) async {
     final control = FakeAgentControlService();
@@ -198,11 +690,12 @@ void main() {
     expect(control.lastRenamedAgentDid, 'did:agent:daemon');
     expect(control.lastDisplayName, '我的代理');
 
-    await tester.tap(find.text('解绑'));
+    await tester.tap(find.text('删除代理'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('解绑').last);
+    await tester.tap(find.text('删除').last);
     await tester.pumpAndSettle();
-    expect(control.lastUnboundAgentDid, 'did:agent:daemon');
+    expect(control.lastDeletedDaemonDid, 'did:agent:daemon');
+    expect(control.lastUnboundAgentDid, isNull);
   });
 
   testWidgets('install command opens a compact host-install dialog', (
@@ -239,7 +732,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('安装命令'));
+    await tester.tap(find.byIcon(CupertinoIcons.plus_circle_fill));
     await tester.pumpAndSettle();
 
     expect(find.text('到宿主机安装代理'), findsOneWidget);
@@ -300,21 +793,123 @@ void main() {
           ],
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 250));
 
-      await tester.tap(find.text('刷新状态'));
+      await tester.tap(_agentRefreshButton().first);
       await tester.pump();
 
       expect(control.lastRefreshedDaemonDid, 'did:agent:daemon');
-      expect(find.text('正在刷新状态'), findsOneWidget);
+      expect(find.text('刷新中'), findsNothing);
+      expect(find.text('刷新状态'), findsNothing);
 
       await tester.pump(const Duration(seconds: 10));
       await tester.pump();
 
       expect(find.text('未收到代理响应'), findsWidgets);
-      expect(find.text('正在刷新状态'), findsNothing);
+      expect(find.text('刷新中'), findsNothing);
     },
   );
+
+  testWidgets('repeated refresh while loading does not send duplicate query', (
+    tester,
+  ) async {
+    final control = _CountingRefreshAgentControlService()
+      ..agents = <AgentSummary>[
+        const AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'registering',
+            platform: 'darwin-arm64',
+          ),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 250));
+
+    await tester.tap(_agentRefreshButton().first);
+    await tester.pump();
+
+    expect(control.refreshCount, 1);
+    expect(find.text('10 秒内只能刷新一次。'), findsNothing);
+    expect(find.text('刷新中'), findsNothing);
+    expect(_agentRefreshButton(), findsNothing);
+  });
+
+  testWidgets('refresh can be triggered again after loading clears', (
+    tester,
+  ) async {
+    final control = _CountingRefreshAgentControlService()
+      ..agents = <AgentSummary>[
+        const AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'registering',
+            platform: 'darwin-arm64',
+          ),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 250));
+    final context = tester.element(find.byType(AgentsWorkspacePage));
+    final container = ProviderScope.containerOf(context);
+
+    await tester.tap(_agentRefreshButton().first);
+    await tester.pump();
+    container.read(agentsProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'status_scope': 'daemon',
+        'daemon_agent_did': 'did:agent:daemon',
+        'daemon': <String, Object?>{
+          'agent_did': 'did:agent:daemon',
+          'status': 'ready',
+        },
+      },
+    );
+    await tester.pump(agentStatusRefreshMinimumIndicatorDuration);
+    expect(find.text('刷新中'), findsNothing);
+
+    await tester.tap(_agentRefreshButton().first);
+    await tester.pump();
+
+    expect(control.refreshCount, 2);
+    expect(find.text('刷新中'), findsNothing);
+    expect(find.text('10 秒内只能刷新一次。'), findsNothing);
+  });
 
   testWidgets(
     'status payload clears refresh pending state and diagnostics are redacted',
@@ -347,13 +942,13 @@ void main() {
           ],
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 250));
       final context = tester.element(find.byType(AgentsWorkspacePage));
       final container = ProviderScope.containerOf(context);
 
-      await tester.tap(find.text('刷新状态'));
+      await tester.tap(_agentRefreshButton().first);
       await tester.pump();
-      expect(find.text('正在刷新状态'), findsOneWidget);
+      expect(find.text('刷新中'), findsNothing);
 
       container.read(agentsProvider.notifier).applyControlPayload(
         <String, Object?>{
@@ -373,9 +968,9 @@ void main() {
           },
         },
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 250));
 
-      expect(find.text('正在刷新状态'), findsNothing);
+      expect(find.text('刷新中'), findsNothing);
       expect(find.textContaining('/Users/alice'), findsNothing);
       expect(find.textContaining('/tmp/awiki'), findsNothing);
       expect(find.textContaining('secretvalue'), findsNothing);
@@ -385,3 +980,15 @@ void main() {
     },
   );
 }
+
+class _CountingRefreshAgentControlService extends FakeAgentControlService {
+  int refreshCount = 0;
+
+  @override
+  Future<void> refreshDaemonStatus(String daemonAgentDid) async {
+    refreshCount += 1;
+    await super.refreshDaemonStatus(daemonAgentDid);
+  }
+}
+
+Finder _agentRefreshButton() => find.byIcon(CupertinoIcons.refresh);

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
@@ -17,6 +18,8 @@ class AgentInboxItem {
     required this.hasAttachments,
     required this.lastContentType,
     this.peerDid,
+    this.peerHandle,
+    this.peerUserId,
     this.groupId,
     this.groupDid,
     this.lastMessageAtMs,
@@ -26,6 +29,8 @@ class AgentInboxItem {
   final String kind;
   final String title;
   final String? peerDid;
+  final String? peerHandle;
+  final String? peerUserId;
   final String? groupId;
   final String? groupDid;
   final String lastMessagePreview;
@@ -40,6 +45,8 @@ class AgentInboxItem {
       kind: _string(json['kind']) ?? 'direct',
       title: _string(json['title']) ?? '未命名会话',
       peerDid: _string(json['peer_did']),
+      peerHandle: _string(json['peer_handle']),
+      peerUserId: _string(json['peer_user_id']),
       groupId: _string(json['group_id']),
       groupDid: _string(json['group_did']),
       lastMessagePreview: _string(json['last_message_preview']) ?? '',
@@ -69,8 +76,8 @@ class AgentInboxAttachment {
   factory AgentInboxAttachment.fromJson(Map<String, Object?> json) {
     return AgentInboxAttachment(
       attachmentId: _string(json['attachment_id']) ?? '',
-      filename: _string(json['filename']) ?? '附件',
-      mimeType: _string(json['mime_type']) ?? 'application/octet-stream',
+      filename: _string(json['filename']) ?? '未命名附件',
+      mimeType: _string(json['mime_type']) ?? '文件',
       sizeBytes: _int(json['size_bytes']),
       downloadState: _string(json['download_state']),
     );
@@ -81,6 +88,7 @@ class AgentInboxMessage {
   const AgentInboxMessage({
     required this.messageId,
     required this.senderDid,
+    this.senderHandle,
     required this.direction,
     required this.contentType,
     required this.text,
@@ -91,6 +99,7 @@ class AgentInboxMessage {
 
   final String messageId;
   final String senderDid;
+  final String? senderHandle;
   final int? sentAtMs;
   final String direction;
   final String contentType;
@@ -103,6 +112,7 @@ class AgentInboxMessage {
     return AgentInboxMessage(
       messageId: _string(json['message_id']) ?? '',
       senderDid: _string(json['sender_did']) ?? '',
+      senderHandle: _string(json['sender_handle']),
       sentAtMs: _int(json['sent_at_ms']),
       direction: _string(json['direction']) ?? 'unknown',
       contentType: _string(json['content_type']) ?? 'text',
@@ -150,6 +160,9 @@ class AgentInboxThreadState {
   final String? lastRequestId;
   final int? fetchedAtMs;
   final String? error;
+
+  bool get hasTimeout =>
+      error == _daemonNoResponseMessage && messages.isNotEmpty;
 
   AgentInboxThreadState copyWith({
     String? runtimeAgentDid,
@@ -209,6 +222,9 @@ class AgentInboxState {
   final String? error;
   final AgentInboxThreadState thread;
 
+  bool get hasListTimeout =>
+      error == _daemonNoResponseMessage && items.isNotEmpty;
+
   AgentInboxState copyWith({
     String? runtimeAgentDid,
     String? daemonAgentDid,
@@ -242,6 +258,9 @@ class AgentInboxState {
 
 class AgentInboxController extends StateNotifier<AgentInboxState> {
   AgentInboxController(this.ref) : super(const AgentInboxState());
+
+  @visibleForTesting
+  static Duration responseTimeout = const Duration(seconds: 20);
 
   final Ref ref;
   Timer? _listTimeout;
@@ -314,7 +333,11 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
       _scheduleListTimeout(requestId);
     } catch (error) {
       _listAppending = false;
-      state = state.copyWith(isRefreshing: false, error: error.toString());
+      state = state.copyWith(
+        isLoading: false,
+        isRefreshing: false,
+        error: error.toString(),
+      );
     }
   }
 
@@ -355,6 +378,7 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
             threadId: item.threadId,
             kind: item.kind,
             peerDid: item.peerDid,
+            peerHandle: item.peerHandle,
             groupDid: item.groupDid,
           );
       state = state.copyWith(
@@ -397,6 +421,7 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
         unreadCount: 0,
         hasAttachments: false,
         lastContentType: 'text',
+        peerHandle: kind == 'direct' ? state.thread.title : null,
       ),
     );
     _threadPrepending = true;
@@ -412,6 +437,7 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
             threadId: item.threadId,
             kind: item.kind,
             peerDid: item.peerDid,
+            peerHandle: item.peerHandle,
             groupDid: item.groupDid,
             cursor: cursor,
           );
@@ -423,6 +449,7 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
       _threadPrepending = false;
       state = state.copyWith(
         thread: state.thread.copyWith(
+          isLoading: false,
           isRefreshing: false,
           error: error.toString(),
         ),
@@ -482,7 +509,9 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
               .toList()
         : const <AgentInboxItem>[];
     state = state.copyWith(
-      items: shouldAppend ? _mergeItems(state.items, parsedItems) : parsedItems,
+      items: shouldAppend
+          ? _mergeItems(state.items, parsedItems)
+          : _dedupeItems(parsedItems),
       nextCursor: _string(result['next_cursor']),
       clearNextCursor: result['next_cursor'] == null,
       fetchedAtMs: _int(result['fetched_at_ms']),
@@ -547,29 +576,29 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
 
   void _scheduleListTimeout(String requestId) {
     _listTimeout?.cancel();
-    _listTimeout = Timer(const Duration(seconds: 20), () {
+    _listTimeout = Timer(responseTimeout, () {
       if (!mounted || state.lastRequestId != requestId) {
         return;
       }
       state = state.copyWith(
-        isLoading: false,
-        isRefreshing: false,
-        error: 'Daemon 暂时没有返回，请稍后重试',
+        isLoading: state.items.isEmpty,
+        isRefreshing: state.items.isNotEmpty,
+        error: _daemonNoResponseMessage,
       );
     });
   }
 
   void _scheduleThreadTimeout(String requestId) {
     _threadTimeout?.cancel();
-    _threadTimeout = Timer(const Duration(seconds: 20), () {
+    _threadTimeout = Timer(responseTimeout, () {
       if (!mounted || state.thread.lastRequestId != requestId) {
         return;
       }
       state = state.copyWith(
         thread: state.thread.copyWith(
-          isLoading: false,
-          isRefreshing: false,
-          error: 'Daemon 暂时没有返回，请稍后重试',
+          isLoading: state.thread.messages.isEmpty,
+          isRefreshing: state.thread.messages.isNotEmpty,
+          error: _daemonNoResponseMessage,
         ),
       );
     });
@@ -587,12 +616,141 @@ List<AgentInboxItem> _mergeItems(
   List<AgentInboxItem> existing,
   List<AgentInboxItem> incoming,
 ) {
-  final seen = existing.map((item) => item.threadId).toSet();
-  return <AgentInboxItem>[
-    ...existing,
-    for (final item in incoming)
-      if (seen.add(item.threadId)) item,
-  ];
+  final merged = _dedupeItems(existing);
+  final aliasToIndex = <String, int>{};
+  for (var index = 0; index < merged.length; index += 1) {
+    _registerInboxItemAliases(aliasToIndex, index, merged[index]);
+  }
+  for (final item in incoming) {
+    _mergeInboxItem(merged, aliasToIndex, item);
+  }
+  return merged;
+}
+
+List<AgentInboxItem> _dedupeItems(List<AgentInboxItem> items) {
+  final merged = <AgentInboxItem>[];
+  final aliasToIndex = <String, int>{};
+  for (final item in items) {
+    _mergeInboxItem(merged, aliasToIndex, item);
+  }
+  return merged;
+}
+
+void _mergeInboxItem(
+  List<AgentInboxItem> merged,
+  Map<String, int> aliasToIndex,
+  AgentInboxItem item,
+) {
+  final aliases = _inboxItemAliases(item);
+  int? index;
+  for (final alias in aliases) {
+    final candidate = aliasToIndex[alias];
+    if (candidate != null) {
+      index = candidate;
+      break;
+    }
+  }
+  if (index == null) {
+    merged.add(item);
+    _registerInboxItemAliases(aliasToIndex, merged.length - 1, item);
+    return;
+  }
+  final preferred = _preferInboxItem(merged[index], item);
+  merged[index] = preferred;
+  _registerInboxItemAliases(aliasToIndex, index, item);
+  _registerInboxItemAliases(aliasToIndex, index, preferred);
+}
+
+void _registerInboxItemAliases(
+  Map<String, int> aliasToIndex,
+  int index,
+  AgentInboxItem item,
+) {
+  for (final alias in _inboxItemAliases(item)) {
+    aliasToIndex[alias] = index;
+  }
+}
+
+List<String> _inboxItemAliases(AgentInboxItem item) {
+  final aliases = <String>{};
+  final kind = item.kind.toLowerCase();
+  if (kind == 'direct') {
+    final peerUserId = _stableKey(item.peerUserId);
+    final peerHandle = _normalizedHandleKey(item.peerHandle);
+    final peerDid = _stableKey(item.peerDid);
+    if (peerUserId != null && peerHandle != null) {
+      aliases.add('direct:scope:$peerUserId:$peerHandle');
+    }
+    if (peerHandle != null) {
+      aliases.add('direct:handle:$peerHandle');
+    }
+    if (peerDid != null) {
+      aliases.add('direct:did:$peerDid');
+    }
+  } else if (kind == 'group') {
+    final groupDid = _stableKey(item.groupDid);
+    final groupId = _stableKey(item.groupId);
+    if (groupDid != null) {
+      aliases.add('group:did:$groupDid');
+    }
+    if (groupId != null) {
+      aliases.add('group:id:$groupId');
+    }
+  }
+  final threadId = _stableKey(item.threadId);
+  if (threadId != null) {
+    aliases.add('thread:$threadId');
+  }
+  return aliases.toList(growable: false);
+}
+
+AgentInboxItem _preferInboxItem(
+  AgentInboxItem current,
+  AgentInboxItem candidate,
+) {
+  final currentScore = _inboxItemQualityScore(current);
+  final candidateScore = _inboxItemQualityScore(candidate);
+  if (candidateScore != currentScore) {
+    return candidateScore > currentScore ? candidate : current;
+  }
+  final currentTime = current.lastMessageAtMs;
+  final candidateTime = candidate.lastMessageAtMs;
+  if (currentTime != null &&
+      candidateTime != null &&
+      candidateTime != currentTime) {
+    return candidateTime > currentTime ? candidate : current;
+  }
+  if (currentTime == null && candidateTime != null) {
+    return candidate;
+  }
+  return current;
+}
+
+int _inboxItemQualityScore(AgentInboxItem item) {
+  var score = _stableKey(item.threadId) == null ? 0 : 1;
+  final kind = item.kind.toLowerCase();
+  if (kind == 'direct') {
+    if (item.threadId.startsWith('dm:peer-scope:v1:')) {
+      score += 8;
+    }
+    if (_stableKey(item.peerUserId) != null &&
+        _normalizedHandleKey(item.peerHandle) != null) {
+      score += 8;
+    } else if (_normalizedHandleKey(item.peerHandle) != null) {
+      score += 4;
+    }
+    if (_stableKey(item.peerDid) != null) {
+      score += 2;
+    }
+  } else if (kind == 'group') {
+    if (_stableKey(item.groupDid) != null || _stableKey(item.groupId) != null) {
+      score += 6;
+    }
+  }
+  if (_stableKey(item.title) != null) {
+    score += 1;
+  }
+  return score;
 }
 
 List<AgentInboxMessage> _prependMessages(
@@ -632,6 +790,13 @@ String? _string(Object? value) {
   return text == null || text.isEmpty ? null : text;
 }
 
+String? _stableKey(String? value) {
+  final text = value?.trim();
+  return text == null || text.isEmpty ? null : text;
+}
+
+String? _normalizedHandleKey(String? value) => _stableKey(value)?.toLowerCase();
+
 int? _int(Object? value) {
   if (value is int) {
     return value;
@@ -648,6 +813,8 @@ bool _bool(Object? value) {
   }
   return value?.toString().toLowerCase() == 'true';
 }
+
+const _daemonNoResponseMessage = 'Daemon 暂时没有返回，请稍后重试';
 
 final agentInboxProvider =
     StateNotifierProvider<AgentInboxController, AgentInboxState>(

@@ -1076,9 +1076,13 @@ class _MacAuthTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return AppPressable(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      semanticLabel: label,
+      selected: selected,
+      scaleOnPress: true,
+      pressedScale: 0.98,
+      borderRadius: BorderRadius.circular(9),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         height: 42,
@@ -1230,9 +1234,11 @@ class _MacCredentialTile extends StatelessWidget {
     final subtitle = (identity.handle?.trim().isNotEmpty == true)
         ? identity.handle!.trim()
         : identity.credentialName;
-    return GestureDetector(
+    return AppPressableTile(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      semanticLabel: identity.displayName,
+      borderRadius: BorderRadius.circular(9),
+      backgroundColor: CupertinoColors.white,
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: _macFieldDecoration(),
@@ -1502,9 +1508,13 @@ class _MacAuthModeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return AppPressable(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      semanticLabel: label,
+      selected: selected,
+      scaleOnPress: true,
+      pressedScale: 0.98,
+      borderRadius: BorderRadius.circular(9),
       child: Container(
         height: 36,
         constraints: const BoxConstraints(minWidth: 86),
@@ -1657,11 +1667,31 @@ class _MacInlineAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return AppPressable(
       onTap: onPressed,
-      behavior: HitTestBehavior.opaque,
+      semanticLabel: label,
+      tooltip: label,
+      enabled: onPressed != null,
+      scaleOnPress: true,
+      pressedScale: 0.98,
+      borderRadius: BorderRadius.circular(8),
+      builder: (context, state, child) {
+        final opacity = !state.enabled
+            ? 0.55
+            : state.pressed
+            ? 0.78
+            : state.hovered || state.focused
+            ? 0.90
+            : 1.0;
+        return AnimatedOpacity(
+          opacity: opacity,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          child: child,
+        );
+      },
       child: Opacity(
-        opacity: onPressed == null ? 0.55 : 1,
+        opacity: 1,
         child: Container(
           height: 34,
           constraints: const BoxConstraints(minWidth: 88, maxWidth: 132),
@@ -1705,11 +1735,31 @@ class _MacPrimaryAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return AppPressable(
       onTap: onPressed,
-      behavior: HitTestBehavior.opaque,
+      semanticLabel: label,
+      tooltip: label,
+      enabled: onPressed != null,
+      scaleOnPress: true,
+      pressedScale: 0.985,
+      borderRadius: BorderRadius.circular(9),
+      builder: (context, state, child) {
+        final opacity = !state.enabled
+            ? 0.55
+            : state.pressed
+            ? 0.84
+            : state.hovered || state.focused
+            ? 0.94
+            : 1.0;
+        return AnimatedOpacity(
+          opacity: opacity,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          child: child,
+        );
+      },
       child: Opacity(
-        opacity: onPressed == null ? 0.55 : 1,
+        opacity: 1,
         child: Container(
           height: 52,
           decoration: BoxDecoration(
@@ -1757,11 +1807,31 @@ class _MacSecondaryAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return AppPressable(
       onTap: onPressed,
-      behavior: HitTestBehavior.opaque,
+      semanticLabel: label,
+      tooltip: label,
+      enabled: onPressed != null,
+      scaleOnPress: true,
+      pressedScale: 0.985,
+      borderRadius: BorderRadius.circular(9),
+      builder: (context, state, child) {
+        final opacity = !state.enabled
+            ? 0.55
+            : state.pressed
+            ? 0.82
+            : state.hovered || state.focused
+            ? 0.92
+            : 1.0;
+        return AnimatedOpacity(
+          opacity: opacity,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          child: child,
+        );
+      },
       child: Opacity(
-        opacity: onPressed == null ? 0.55 : 1,
+        opacity: 1,
         child: Container(
           height: 52,
           decoration: BoxDecoration(
@@ -1919,57 +1989,54 @@ class _AuthModeOption extends StatelessWidget {
     final foreground = selected
         ? AwikiMePalette.actionBlue
         : AwikiMePalette.actionMuted;
-    return Semantics(
-      label: label,
-      button: true,
+    return AppPressable(
+      onTap: onTap,
+      semanticLabel: label,
       selected: selected,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          height: buttonHeight,
-          constraints: BoxConstraints(
-            minWidth: responsive.isPhone
-                ? responsive.displayScaled(96)
-                : responsive.displayScaled(96),
-          ),
-          padding: EdgeInsets.symmetric(horizontal: responsive.spacing(12)),
-          decoration: BoxDecoration(
+      scaleOnPress: true,
+      pressedScale: 0.98,
+      borderRadius: BorderRadius.circular(responsive.radius(9)),
+      child: Container(
+        height: buttonHeight,
+        constraints: BoxConstraints(
+          minWidth: responsive.isPhone
+              ? responsive.displayScaled(96)
+              : responsive.displayScaled(96),
+        ),
+        padding: EdgeInsets.symmetric(horizontal: responsive.spacing(12)),
+        decoration: BoxDecoration(
+          color: selected ? CupertinoColors.white : CupertinoColors.transparent,
+          borderRadius: BorderRadius.circular(responsive.radius(9)),
+          border: Border.all(
             color: selected
-                ? CupertinoColors.white
+                ? AwikiMePalette.actionBlueBorder
                 : CupertinoColors.transparent,
-            borderRadius: BorderRadius.circular(responsive.radius(9)),
-            border: Border.all(
-              color: selected
-                  ? AwikiMePalette.actionBlueBorder
-                  : CupertinoColors.transparent,
-            ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              AwikiAssetIcon(
-                assetName: assetName,
-                size: responsive.iconMd,
-                color: foreground,
-              ),
-              SizedBox(width: responsive.spacing(8)),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  style: AwikiMeTextStyles.buttonLabel.copyWith(
-                    color: foreground,
-                    fontSize: responsive.bodySm,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                    height: 1,
-                  ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            AwikiAssetIcon(
+              assetName: assetName,
+              size: responsive.iconMd,
+              color: foreground,
+            ),
+            SizedBox(width: responsive.spacing(8)),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                maxLines: 1,
+                style: AwikiMeTextStyles.buttonLabel.copyWith(
+                  color: foreground,
+                  fontSize: responsive.bodySm,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  height: 1,
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -2000,9 +2067,13 @@ class _CompactSegmentOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return GestureDetector(
+    return AppPressable(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      semanticLabel: label,
+      selected: selected,
+      scaleOnPress: true,
+      pressedScale: 0.98,
+      borderRadius: BorderRadius.circular(responsive.radius(9)),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         constraints: BoxConstraints(minWidth: minWidth),
@@ -2131,46 +2202,56 @@ class _VerificationInlineButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return e2eSemantics(
-      identifier: onPressed == null ? null : semanticsIdentifier,
-      button: true,
+    return AppPressable(
+      onTap: onPressed,
+      semanticLabel: label,
+      semanticsIdentifier: semanticsIdentifier,
       enabled: onPressed != null,
-      label: label,
-      child: GestureDetector(
-        onTap: onPressed,
-        behavior: HitTestBehavior.opaque,
-        child: Opacity(
-          opacity: onPressed == null ? 0.55 : 1,
-          child: Container(
-            constraints: BoxConstraints(
-              minWidth: responsive.scaled(92),
-              maxWidth: responsive.scaled(132),
-              minHeight: responsive.compactControlHeight,
+      scaleOnPress: true,
+      pressedScale: 0.98,
+      borderRadius: BorderRadius.circular(responsive.radius(8)),
+      builder: (context, state, child) {
+        return AnimatedOpacity(
+          opacity: state.enabled
+              ? state.pressed
+                    ? 0.78
+                    : state.hovered || state.focused
+                    ? 0.90
+                    : 1
+              : 0.55,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          child: child,
+        );
+      },
+      child: Container(
+        constraints: BoxConstraints(
+          minWidth: responsive.scaled(92),
+          maxWidth: responsive.scaled(132),
+          minHeight: responsive.compactControlHeight,
+        ),
+        padding: EdgeInsets.symmetric(horizontal: responsive.spacing(12)),
+        decoration: BoxDecoration(
+          color: AwikiMePalette.actionBlueSoft,
+          borderRadius: BorderRadius.circular(responsive.radius(8)),
+          border: Border.all(color: AwikiMePalette.actionBlueBorder),
+        ),
+        alignment: Alignment.center,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            maxLines: 1,
+            textAlign: TextAlign.center,
+            strutStyle: StrutStyle(
+              fontSize: responsive.bodySm,
+              height: 1,
+              forceStrutHeight: true,
             ),
-            padding: EdgeInsets.symmetric(horizontal: responsive.spacing(12)),
-            decoration: BoxDecoration(
-              color: AwikiMePalette.actionBlueSoft,
-              borderRadius: BorderRadius.circular(responsive.radius(8)),
-              border: Border.all(color: AwikiMePalette.actionBlueBorder),
-            ),
-            alignment: Alignment.center,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                label,
-                maxLines: 1,
-                textAlign: TextAlign.center,
-                strutStyle: StrutStyle(
-                  fontSize: responsive.bodySm,
-                  height: 1,
-                  forceStrutHeight: true,
-                ),
-                style: AwikiMeTextStyles.buttonLabel.copyWith(
-                  color: AwikiMePalette.actionBlue,
-                  fontSize: responsive.bodySm,
-                  height: 1,
-                ),
-              ),
+            style: AwikiMeTextStyles.buttonLabel.copyWith(
+              color: AwikiMePalette.actionBlue,
+              fontSize: responsive.bodySm,
+              height: 1,
             ),
           ),
         ),
@@ -2267,9 +2348,11 @@ class _CredentialCardTile extends StatelessWidget {
     final subtitle = (identity.handle?.trim().isNotEmpty == true)
         ? identity.handle!.trim()
         : identity.credentialName;
-    return GestureDetector(
+    return AppPressableTile(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      semanticLabel: identity.displayName,
+      borderRadius: BorderRadius.circular(responsive.radius(20)),
+      backgroundColor: theme.subtleSurface,
       child: AppSurface(
         padding: responsive.scaledInsets(
           const EdgeInsets.fromLTRB(14, 16, 14, 16),
@@ -2374,9 +2457,10 @@ class _LoginToolButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
-    return GestureDetector(
+    return AppPressableTile(
       onTap: onPressed,
-      behavior: HitTestBehavior.opaque,
+      semanticLabel: label,
+      borderRadius: BorderRadius.circular(responsive.radius(16)),
       child: Opacity(
         opacity: onPressed == null ? 0.5 : 1,
         child: Padding(

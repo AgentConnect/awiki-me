@@ -25,18 +25,9 @@ class SelectedConversationController
               group.avatarUri == current.avatarUri)) {
         continue;
       }
-      state = ConversationSummary(
-        threadId: current.threadId,
+      state = current.copyWith(
         displayName: group.displayName,
-        lastMessagePreview: current.lastMessagePreview,
-        lastMessageAt: current.lastMessageAt,
-        unreadCount: current.unreadCount,
-        isGroup: current.isGroup,
-        targetDid: current.targetDid,
-        groupId: current.groupId,
         avatarUri: group.avatarUri ?? current.avatarUri,
-        avatarSeed: current.avatarSeed,
-        lastMessagePayloadJson: current.lastMessagePayloadJson,
       );
       return;
     }

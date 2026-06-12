@@ -6,7 +6,6 @@ import '../../domain/entities/profile_patch.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
-import '../shared/formatters/display_formatters.dart';
 import 'profile_markdown.dart';
 
 typedef HomepageMarkdownLoader = Future<String?> Function(String url);
@@ -111,7 +110,8 @@ class ProfileController extends StateNotifier<ProfileState> {
     }
     final current = state.profile;
     if (current == null ||
-        DidDisplayFormatter.homepageUrl(current) != homepageUrl) {
+        ref.read(profileHomepageResolverProvider).homepageUrl(current) !=
+            homepageUrl) {
       return;
     }
     state = state.copyWith(
@@ -139,7 +139,9 @@ class ProfileController extends StateNotifier<ProfileState> {
     bool? isLoading,
     bool? isSaving,
   }) {
-    final homepageUrl = DidDisplayFormatter.homepageUrl(profile);
+    final homepageUrl = ref
+        .read(profileHomepageResolverProvider)
+        .homepageUrl(profile);
     final shouldKeepHomepageMarkdown =
         state.homepageMarkdownLoaded && state.homepageUrl == homepageUrl;
     return state.copyWith(

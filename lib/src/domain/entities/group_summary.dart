@@ -8,6 +8,7 @@ class GroupSummary {
     required this.lastMessageAt,
     this.avatarUri,
     this.myRole,
+    this.membershipStatus,
   }) : displayName = displayName ?? name ?? groupId;
 
   final String groupId;
@@ -17,6 +18,7 @@ class GroupSummary {
   final DateTime? lastMessageAt;
   final String? avatarUri;
   final String? myRole;
+  final String? membershipStatus;
 
   String get name => displayName;
 }

@@ -1,15 +1,26 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show SelectableText;
+import 'package:flutter/material.dart'
+    show Color, SelectableText, SelectionArea, SelectionContainer;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../domain/entities/agent/install_command.dart';
+import '../../app/app_services.dart';
+import '../../application/config/awiki_environment_config.dart';
 import '../../domain/entities/agent/agent_status.dart';
+import '../../domain/entities/agent/install_command.dart';
 import '../../domain/entities/agent/agent_summary.dart';
+import '../../domain/repositories/awiki_account_gateway.dart';
 import '../shared/identity_flow.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/responsive_layout.dart';
+import '../shared/widgets/app_widgets.dart';
+import '../chat/chat_provider.dart';
+import 'agent_display_name.dart';
+import 'agent_status_indicator.dart';
+import 'agent_visual_status.dart';
 import 'agents_provider.dart';
 
 class AgentsWorkspacePage extends ConsumerStatefulWidget {
@@ -42,11 +53,16 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
 
     final state = ref.watch(agentsProvider);
     final responsive = context.awikiResponsive;
+    final pendingAgentDids = _pendingAgentDids(ref.watch(chatThreadsProvider));
     final list = _AgentListPane(
       state: state,
       footer: widget.listFooter,
+      pendingAgentDids: pendingAgentDids,
       onCreateDaemon: () =>
           ref.read(agentsProvider.notifier).createDaemonInstallCommand(),
+      onRefreshDaemon: (agent) {
+        ref.read(agentsProvider.notifier).refreshDaemonStatus(agent.agentDid);
+      },
       onSelect: (agentDid) =>
           ref.read(agentsProvider.notifier).select(agentDid),
       onRetry: () => ref.read(agentsProvider.notifier).load(),
@@ -54,19 +70,23 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
     final detail = _AgentDetailPane(
       state: state,
       selected: state.selectedAgent,
-      onRefresh: (agent) =>
-          ref.read(agentsProvider.notifier).refreshDaemonStatus(agent.agentDid),
-      onCreateRuntime: (agent) =>
-          ref.read(agentsProvider.notifier).createHermesRuntime(agent.agentDid),
+      pendingAgentDids: pendingAgentDids,
+      onRefresh: (agent) {
+        ref.read(agentsProvider.notifier).refreshDaemonStatus(agent.agentDid);
+      },
+      onCreateRuntime: (agent) => _showCreateHermesDialog(
+        context,
+        ref,
+        agent,
+        state.runtimesFor(agent.agentDid),
+      ),
       onOpenChat: (agent) => _openRuntimeChat(context, ref, agent),
       onRename: (agent) => _showRenameAgentDialog(context, ref, agent),
       onRetryRun: (agent) => _showRetryRunDialog(context, ref, agent),
       onResetRuntime: (agent) =>
           _confirmResetRuntimeSession(context, ref, agent),
       onUpgrade: (agent) => _confirmUpgradeDaemon(context, ref, agent),
-      onCreateInstallCommand: () =>
-          ref.read(agentsProvider.notifier).createDaemonInstallCommand(),
-      onUnbind: () => _confirmUnbindSelected(context, ref),
+      onDelete: (agent) => _confirmDeleteAgent(context, ref, agent),
     );
 
     if (responsive.supportsTwoPane) {
@@ -89,10 +109,11 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
               children: <Widget>[
                 CupertinoNavigationBar(
                   middle: const Text('智能体'),
-                  leading: CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    onPressed: () =>
+                  leading: TopBarActionButton(
+                    onTap: () =>
                         ref.read(agentsProvider.notifier).clearSelection(),
+                    semanticsLabel: '返回',
+                    tooltip: '返回',
                     child: const Icon(CupertinoIcons.chevron_left),
                   ),
                 ),
@@ -107,14 +128,18 @@ class _AgentListPane extends StatelessWidget {
   const _AgentListPane({
     required this.state,
     required this.footer,
+    required this.pendingAgentDids,
     required this.onCreateDaemon,
+    required this.onRefreshDaemon,
     required this.onSelect,
     required this.onRetry,
   });
 
   final AgentsState state;
   final Widget? footer;
+  final Set<String> pendingAgentDids;
   final VoidCallback onCreateDaemon;
+  final ValueChanged<AgentSummary> onRefreshDaemon;
   final ValueChanged<String> onSelect;
   final VoidCallback onRetry;
 
@@ -144,10 +169,11 @@ class _AgentListPane extends StatelessWidget {
                     ),
                   ),
                 ),
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(34, 34),
+                AppIconButton(
                   onPressed: state.isActing ? null : onCreateDaemon,
+                  semanticLabel: '创建 Daemon',
+                  tooltip: '创建 Daemon',
+                  size: responsive.displayScaled(34),
                   child: const Icon(CupertinoIcons.plus_circle_fill),
                 ),
               ],
@@ -178,12 +204,12 @@ class _AgentListPane extends StatelessWidget {
                       ),
                     ),
                   ),
-                for (final agent in state.agents)
-                  _AgentListTile(
-                    agent: agent,
-                    selected: state.selectedAgent?.agentDid == agent.agentDid,
-                    onTap: () => onSelect(agent.agentDid),
-                  ),
+                _AgentHierarchyList(
+                  state: state,
+                  pendingAgentDids: pendingAgentDids,
+                  onSelect: onSelect,
+                  onRefreshDaemon: onRefreshDaemon,
+                ),
               ],
             ),
           ),
@@ -194,86 +220,441 @@ class _AgentListPane extends StatelessWidget {
   }
 }
 
-class _AgentListTile extends StatelessWidget {
-  const _AgentListTile({
-    required this.agent,
-    required this.selected,
-    required this.onTap,
+class _AgentHierarchyList extends StatelessWidget {
+  const _AgentHierarchyList({
+    required this.state,
+    required this.pendingAgentDids,
+    required this.onSelect,
+    required this.onRefreshDaemon,
   });
 
-  final AgentSummary agent;
-  final bool selected;
-  final VoidCallback onTap;
+  final AgentsState state;
+  final Set<String> pendingAgentDids;
+  final ValueChanged<String> onSelect;
+  final ValueChanged<AgentSummary> onRefreshDaemon;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedDid = state.selectedAgent?.agentDid;
+    final groups = _AgentTreeGroup.fromAgents(state.agents);
+    return Column(
+      children: <Widget>[
+        for (final group in groups) ...<Widget>[
+          _AgentDaemonGroup(
+            group: group,
+            state: state,
+            pendingAgentDids: pendingAgentDids,
+            selectedAgentDid: selectedDid,
+            onSelect: onSelect,
+            onRefreshDaemon: onRefreshDaemon,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _AgentTreeGroup {
+  const _AgentTreeGroup({required this.daemon, required this.runtimes});
+
+  final AgentSummary? daemon;
+  final List<AgentSummary> runtimes;
+
+  static List<_AgentTreeGroup> fromAgents(List<AgentSummary> agents) {
+    final daemons = agents.where((agent) => agent.isDaemon).toList();
+    final groupedRuntimes = <String, List<AgentSummary>>{};
+    final orphanRuntimes = <AgentSummary>[];
+    final daemonDids = daemons.map((agent) => agent.agentDid).toSet();
+    for (final runtime in agents.where((agent) => agent.isRuntime)) {
+      final daemonDid = runtime.daemonAgentDid;
+      if (daemonDid != null && daemonDids.contains(daemonDid)) {
+        groupedRuntimes
+            .putIfAbsent(daemonDid, () => <AgentSummary>[])
+            .add(runtime);
+      } else {
+        orphanRuntimes.add(runtime);
+      }
+    }
+    return <_AgentTreeGroup>[
+      for (final daemon in daemons)
+        _AgentTreeGroup(
+          daemon: daemon,
+          runtimes: groupedRuntimes[daemon.agentDid] ?? const <AgentSummary>[],
+        ),
+      if (orphanRuntimes.isNotEmpty)
+        _AgentTreeGroup(daemon: null, runtimes: orphanRuntimes),
+    ];
+  }
+}
+
+class _AgentDaemonGroup extends StatelessWidget {
+  const _AgentDaemonGroup({
+    required this.group,
+    required this.state,
+    required this.pendingAgentDids,
+    required this.selectedAgentDid,
+    required this.onSelect,
+    required this.onRefreshDaemon,
+  });
+
+  final _AgentTreeGroup group;
+  final AgentsState state;
+  final Set<String> pendingAgentDids;
+  final String? selectedAgentDid;
+  final ValueChanged<String> onSelect;
+  final ValueChanged<AgentSummary> onRefreshDaemon;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final daemon = group.daemon;
+    final runtimes = group.runtimes;
+    if (daemon == null) {
+      return Padding(
+        padding: EdgeInsets.only(bottom: responsive.spacing(10)),
+        child: _OrphanRuntimeGroup(
+          runtimes: runtimes,
+          pendingAgentDids: pendingAgentDids,
+          selectedAgentDid: selectedAgentDid,
+          onSelect: onSelect,
+        ),
+      );
+    }
     return Padding(
-      padding: EdgeInsets.only(bottom: responsive.spacing(6)),
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: onTap,
-        child: Container(
-          padding: EdgeInsets.all(responsive.spacing(12)),
-          decoration: BoxDecoration(
-            color: selected ? const Color(0xFFEAF2FF) : CupertinoColors.white,
-            borderRadius: BorderRadius.circular(responsive.radius(8)),
-            border: Border.all(
-              color: selected
-                  ? const Color(0xFFBBD2FF)
-                  : const Color(0xFFE5EAF2),
+      padding: EdgeInsets.only(bottom: responsive.spacing(10)),
+      child: Column(
+        children: <Widget>[
+          _AgentListTile(
+            agent: daemon,
+            pendingAgentDids: pendingAgentDids,
+            selected: selectedAgentDid == daemon.agentDid,
+            onTap: () => onSelect(daemon.agentDid),
+            runtimeCount: runtimes.length,
+            onRefresh:
+                state.isActing || state.isStatusQueryPending(daemon.agentDid)
+                ? null
+                : () => onRefreshDaemon(daemon),
+            isRefreshing: state.isStatusQueryPending(daemon.agentDid),
+          ),
+          if (runtimes.isEmpty)
+            _EmptyRuntimeHint()
+          else
+            for (final runtime in runtimes)
+              _AgentListTile(
+                agent: runtime,
+                pendingAgentDids: pendingAgentDids,
+                selected: selectedAgentDid == runtime.agentDid,
+                onTap: () => onSelect(runtime.agentDid),
+                depth: 1,
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrphanRuntimeGroup extends StatelessWidget {
+  const _OrphanRuntimeGroup({
+    required this.runtimes,
+    required this.pendingAgentDids,
+    required this.selectedAgentDid,
+    required this.onSelect,
+  });
+
+  final List<AgentSummary> runtimes;
+  final Set<String> pendingAgentDids;
+  final String? selectedAgentDid;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            responsive.spacing(12),
+            responsive.spacing(2),
+            responsive.spacing(12),
+            responsive.spacing(7),
+          ),
+          child: Text(
+            '未关联代理',
+            style: TextStyle(
+              color: const Color(0xFF66728A),
+              fontSize: responsive.metaSm,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          child: Row(
-            children: <Widget>[
-              Icon(
-                agent.isDaemon
-                    ? CupertinoIcons.desktopcomputer
-                    : CupertinoIcons.sparkles,
-                color: const Color(0xFF0B65F8),
-                size: responsive.iconMd,
+        ),
+        for (final runtime in runtimes)
+          _AgentListTile(
+            agent: runtime,
+            pendingAgentDids: pendingAgentDids,
+            selected: selectedAgentDid == runtime.agentDid,
+            onTap: () => onSelect(runtime.agentDid),
+          ),
+      ],
+    );
+  }
+}
+
+class _EmptyRuntimeHint extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Padding(
+      padding: EdgeInsets.only(
+        left: responsive.spacing(30),
+        right: responsive.spacing(4),
+        bottom: responsive.spacing(6),
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 1,
+            height: responsive.displayScaled(28),
+            color: const Color(0xFFDDE5F0),
+          ),
+          SizedBox(width: responsive.spacing(12)),
+          Expanded(
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: responsive.spacing(10),
+                vertical: responsive.spacing(8),
               ),
-              SizedBox(width: responsive.spacing(10)),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F9FD),
+                borderRadius: BorderRadius.circular(responsive.radius(8)),
+                border: Border.all(color: const Color(0xFFE8EDF5)),
+              ),
+              child: Text(
+                '尚未创建 Runtime Agent',
+                style: TextStyle(
+                  color: const Color(0xFF66728A),
+                  fontSize: responsive.metaSm,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgentListTile extends StatelessWidget {
+  const _AgentListTile({
+    required this.agent,
+    required this.pendingAgentDids,
+    required this.selected,
+    required this.onTap,
+    this.depth = 0,
+    this.runtimeCount,
+    this.onRefresh,
+    this.isRefreshing = false,
+  });
+
+  final AgentSummary agent;
+  final Set<String> pendingAgentDids;
+  final bool selected;
+  final VoidCallback onTap;
+  final int depth;
+  final int? runtimeCount;
+  final VoidCallback? onRefresh;
+  final bool isRefreshing;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final isChild = depth > 0;
+    final title = AgentDisplayName.title(agent);
+    final visualStatus = AgentVisualStatus.fromAgent(
+      agent,
+      hasPendingTurn: pendingAgentDids.contains(agent.agentDid),
+    );
+    return Padding(
+      padding: EdgeInsets.only(
+        left: isChild ? responsive.spacing(30) : 0,
+        bottom: responsive.spacing(6),
+      ),
+      child: AppPressableTile(
+        onTap: onTap,
+        selected: selected,
+        semanticLabel: title,
+        borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
+        backgroundColor: CupertinoColors.transparent,
+        selectedBackgroundColor: const Color(0xFFE8F0FF),
+        child: Row(
+          children: <Widget>[
+            if (isChild) ...<Widget>[
+              SizedBox(
+                width: responsive.spacing(12),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    width: 1,
+                    height: responsive.displayScaled(50),
+                    color: const Color(0xFFDDE5F0),
+                  ),
+                ),
+              ),
+              SizedBox(width: responsive.spacing(8)),
+            ],
+            Expanded(
+              child: Container(
+                padding: EdgeInsets.all(
+                  isChild ? responsive.spacing(10) : responsive.spacing(12),
+                ),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? const Color(0xFFEAF2FF)
+                      : isChild
+                      ? const Color(0xFFFAFBFE)
+                      : CupertinoColors.white,
+                  borderRadius: BorderRadius.circular(responsive.radius(8)),
+                  border: Border.all(
+                    color: selected
+                        ? const Color(0xFFBBD2FF)
+                        : isChild
+                        ? const Color(0xFFE8EDF5)
+                        : const Color(0xFFE5EAF2),
+                  ),
+                ),
+                child: Row(
                   children: <Widget>[
-                    Text(
-                      agent.displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: const Color(0xFF101B32),
-                        fontSize: responsive.bodySm,
-                        fontWeight: FontWeight.w700,
+                    _AgentKindIcon(agent: agent, isChild: isChild),
+                    SizedBox(width: responsive.spacing(10)),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: const Color(0xFF101B32),
+                              fontSize: responsive.bodySm,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          SizedBox(height: responsive.spacing(3)),
+                          Text(
+                            _agentListSubtitle(
+                              agent,
+                              runtimeCount,
+                              visualStatus,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: const Color(0xFF66728A),
+                              fontSize: responsive.metaSm,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    SizedBox(height: responsive.spacing(3)),
-                    Text(
-                      '${agent.isDaemon ? 'Daemon' : agent.runtime ?? 'Runtime'} · ${agent.latest.status}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: const Color(0xFF66728A),
-                        fontSize: responsive.metaSm,
+                    if (agent.isDaemon) ...<Widget>[
+                      SizedBox(width: responsive.spacing(8)),
+                      _DaemonRefreshIconButton(
+                        onPressed: onRefresh,
+                        isLoading: isRefreshing,
+                        size: responsive.displayScaled(28),
                       ),
-                    ),
+                    ],
+                    SizedBox(width: responsive.spacing(8)),
+                    AgentStatusDot(status: visualStatus),
                   ],
                 ),
               ),
-              _StatusDot(status: agent.latest.status),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
+class _AgentKindIcon extends StatelessWidget {
+  const _AgentKindIcon({required this.agent, required this.isChild});
+
+  final AgentSummary agent;
+  final bool isChild;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final color = agent.isDaemon
+        ? const Color(0xFF0B65F8)
+        : const Color(0xFF7C4DFF);
+    return Container(
+      width: responsive.displayScaled(isChild ? 28 : 32),
+      height: responsive.displayScaled(isChild ? 28 : 32),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: isChild ? 0.1 : 0.12),
+        borderRadius: BorderRadius.circular(responsive.radius(8)),
+      ),
+      child: Icon(
+        agent.isDaemon
+            ? CupertinoIcons.desktopcomputer
+            : CupertinoIcons.sparkles,
+        color: color,
+        size: isChild ? responsive.iconSm : responsive.iconMd,
+      ),
+    );
+  }
+}
+
+class _DaemonRefreshIconButton extends StatelessWidget {
+  const _DaemonRefreshIconButton({
+    required this.onPressed,
+    required this.isLoading,
+    required this.size,
+  });
+
+  final VoidCallback? onPressed;
+  final bool isLoading;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null && !isLoading;
+    final color = enabled ? const Color(0xFF0B65F8) : const Color(0xFF9AA6B8);
+    return AppIconButton(
+      onPressed: onPressed,
+      semanticLabel: '刷新状态',
+      tooltip: '刷新状态',
+      size: size,
+      isLoading: isLoading,
+      backgroundColor: const Color(0xFFF3F7FF),
+      borderColor: const Color(0xFFDCE8FF),
+      borderRadius: BorderRadius.circular(size / 2),
+      child: Icon(CupertinoIcons.refresh, size: size * 0.52, color: color),
+    );
+  }
+}
+
+String _agentListSubtitle(
+  AgentSummary agent,
+  int? runtimeCount,
+  AgentVisualStatus visualStatus,
+) {
+  if (agent.isDaemon) {
+    final count = runtimeCount ?? 0;
+    return 'Daemon · $count 个 Agent · ${visualStatus.label}';
+  }
+  final runtime = agent.runtime ?? 'Runtime';
+  return '$runtime · ${visualStatus.label}';
+}
+
 class _AgentDetailPane extends StatelessWidget {
   const _AgentDetailPane({
     required this.state,
     required this.selected,
+    required this.pendingAgentDids,
     required this.onRefresh,
     required this.onCreateRuntime,
     required this.onOpenChat,
@@ -281,12 +662,12 @@ class _AgentDetailPane extends StatelessWidget {
     required this.onRetryRun,
     required this.onResetRuntime,
     required this.onUpgrade,
-    required this.onCreateInstallCommand,
-    required this.onUnbind,
+    required this.onDelete,
   });
 
   final AgentsState state;
   final AgentSummary? selected;
+  final Set<String> pendingAgentDids;
   final ValueChanged<AgentSummary> onRefresh;
   final ValueChanged<AgentSummary> onCreateRuntime;
   final ValueChanged<AgentSummary> onOpenChat;
@@ -294,8 +675,7 @@ class _AgentDetailPane extends StatelessWidget {
   final ValueChanged<AgentSummary> onRetryRun;
   final ValueChanged<AgentSummary> onResetRuntime;
   final ValueChanged<AgentSummary> onUpgrade;
-  final VoidCallback onCreateInstallCommand;
-  final VoidCallback onUnbind;
+  final ValueChanged<AgentSummary> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -304,155 +684,119 @@ class _AgentDetailPane extends StatelessWidget {
     if (agent == null) {
       return const Center(child: Text('选择一个代理'));
     }
-    final runtimes = agent.isDaemon
-        ? state.runtimesFor(agent.agentDid)
-        : const <AgentSummary>[];
     final isRefreshing =
         agent.isDaemon && state.isStatusQueryPending(agent.agentDid);
+    final title = AgentDisplayName.title(agent);
+    final visualStatus = AgentVisualStatus.fromAgent(
+      agent,
+      hasPendingTurn: pendingAgentDids.contains(agent.agentDid),
+    );
     return SafeArea(
       bottom: false,
-      child: ListView(
-        padding: EdgeInsets.all(responsive.spacing(24)),
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  agent.displayName,
-                  style: TextStyle(
-                    color: const Color(0xFF101B32),
-                    fontSize: responsive.titleXl,
-                    fontWeight: FontWeight.w700,
+      child: SelectionArea(
+        child: ListView(
+          padding: EdgeInsets.all(responsive.spacing(24)),
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 2,
+                    style: TextStyle(
+                      color: const Color(0xFF101B32),
+                      fontSize: responsive.titleXl,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
+                AgentStatusPill(status: visualStatus),
+              ],
+            ),
+            SizedBox(height: responsive.spacing(14)),
+            SelectionContainer.disabled(
+              child: Wrap(
+                spacing: responsive.spacing(8),
+                runSpacing: responsive.spacing(8),
+                children: <Widget>[
+                  if (agent.isDaemon)
+                    _DaemonRefreshIconButton(
+                      isLoading: isRefreshing,
+                      size: responsive.displayScaled(34),
+                      onPressed: state.isActing || isRefreshing
+                          ? null
+                          : () => onRefresh(agent),
+                    ),
+                  if (agent.isDaemon)
+                    _ActionButton(
+                      icon: CupertinoIcons.sparkles,
+                      label: '创建 Hermes',
+                      onPressed: state.isActing || agent.latest.needsUpgrade
+                          ? null
+                          : () => onCreateRuntime(agent),
+                    ),
+                  if (agent.isRuntime)
+                    _ActionButton(
+                      icon: CupertinoIcons.chat_bubble_2,
+                      label: '打开聊天',
+                      onPressed: () => onOpenChat(agent),
+                    ),
+                  _ActionButton(
+                    icon: CupertinoIcons.pencil,
+                    label: '改名',
+                    onPressed: state.isActing ? null : () => onRename(agent),
+                  ),
+                  if (agent.isRuntime)
+                    _ActionButton(
+                      icon: CupertinoIcons.arrow_counterclockwise,
+                      label: '重置 Session',
+                      onPressed: state.isActing
+                          ? null
+                          : () => onResetRuntime(agent),
+                    ),
+                  if (agent.isRuntime)
+                    _ActionButton(
+                      icon: CupertinoIcons.play_arrow,
+                      label: '重试 Run',
+                      onPressed: state.isActing
+                          ? null
+                          : () => onRetryRun(agent),
+                    ),
+                  if (agent.isDaemon && agent.latest.needsUpgrade)
+                    _ActionButton(
+                      icon: CupertinoIcons.arrow_up_circle,
+                      label: '升级',
+                      onPressed: state.isActing ? null : () => onUpgrade(agent),
+                    ),
+                  _ActionButton(
+                    icon: CupertinoIcons.trash,
+                    label: agent.isDaemon ? '删除代理' : '删除智能体',
+                    danger: true,
+                    onPressed: state.isActing || !state.canDeleteAgent(agent)
+                        ? null
+                        : () => onDelete(agent),
+                  ),
+                ],
               ),
-              _StatusPill(status: agent.latest.status),
+            ),
+            if (state.error != null) ...<Widget>[
+              SizedBox(height: responsive.spacing(10)),
+              _AgentErrorBanner(message: state.error!),
             ],
-          ),
-          SizedBox(height: responsive.spacing(14)),
-          Wrap(
-            spacing: responsive.spacing(8),
-            runSpacing: responsive.spacing(8),
-            children: <Widget>[
-              if (agent.isDaemon)
-                _ActionButton(
-                  icon: CupertinoIcons.refresh,
-                  label: '刷新状态',
-                  onPressed: state.isActing ? null : () => onRefresh(agent),
-                ),
-              if (agent.isDaemon)
-                _ActionButton(
-                  icon: CupertinoIcons.sparkles,
-                  label: '创建 Hermes',
-                  onPressed: state.isActing || agent.latest.needsUpgrade
-                      ? null
-                      : () => onCreateRuntime(agent),
-                ),
-              if (agent.isRuntime)
-                _ActionButton(
-                  icon: CupertinoIcons.chat_bubble_2,
-                  label: '打开聊天',
-                  onPressed: () => onOpenChat(agent),
-                ),
-              _ActionButton(
-                icon: CupertinoIcons.pencil,
-                label: '改名',
-                onPressed: state.isActing ? null : () => onRename(agent),
-              ),
-              if (agent.isRuntime)
-                _ActionButton(
-                  icon: CupertinoIcons.arrow_counterclockwise,
-                  label: '重置 Session',
-                  onPressed: state.isActing
-                      ? null
-                      : () => onResetRuntime(agent),
-                ),
-              if (agent.isRuntime)
-                _ActionButton(
-                  icon: CupertinoIcons.play_arrow,
-                  label: '重试 Run',
-                  onPressed: state.isActing ? null : () => onRetryRun(agent),
-                ),
-              if (agent.isDaemon)
-                _ActionButton(
-                  icon: CupertinoIcons.arrow_up_circle,
-                  label: '升级',
-                  onPressed: state.isActing ? null : () => onUpgrade(agent),
-                ),
-              if (agent.isDaemon)
-                _ActionButton(
-                  icon: CupertinoIcons.chevron_left_slash_chevron_right,
-                  label: '安装命令',
-                  onPressed: state.isActing ? null : onCreateInstallCommand,
-                ),
-              _ActionButton(
-                icon: CupertinoIcons.xmark_circle,
-                label: '解绑',
-                danger: true,
-                onPressed: state.isActing ? null : onUnbind,
-              ),
+            SizedBox(height: responsive.spacing(18)),
+            if (agent.isRuntime && agent.recentRuns.isNotEmpty) ...<Widget>[
+              const _SectionTitle('最近 Run'),
+              SizedBox(height: responsive.spacing(8)),
+              _RunStatusPanel(run: agent.recentRuns.first),
+              SizedBox(height: responsive.spacing(18)),
             ],
-          ),
-          if (isRefreshing) ...<Widget>[
-            SizedBox(height: responsive.spacing(10)),
-            const _RefreshPendingNotice(),
-          ],
-          if (state.error != null) ...<Widget>[
-            SizedBox(height: responsive.spacing(10)),
-            _AgentErrorBanner(message: state.error!),
-          ],
-          SizedBox(height: responsive.spacing(18)),
-          if (runtimes.isNotEmpty) ...<Widget>[
-            const _SectionTitle('Runtime'),
+            const _SectionTitle('高级诊断'),
             SizedBox(height: responsive.spacing(8)),
-            for (final runtime in runtimes) _RuntimeRow(runtime: runtime),
-            SizedBox(height: responsive.spacing(18)),
-          ],
-          if (agent.isRuntime && agent.recentRuns.isNotEmpty) ...<Widget>[
-            const _SectionTitle('最近 Run'),
-            SizedBox(height: responsive.spacing(8)),
-            _RunStatusPanel(run: agent.recentRuns.first),
-            SizedBox(height: responsive.spacing(18)),
-          ],
-          const _SectionTitle('高级诊断'),
-          SizedBox(height: responsive.spacing(8)),
-          _InfoGrid(agent: agent),
-          if (agent.latest.lastErrorSummary != null ||
-              agent.latest.diagnosticsSummary.isNotEmpty) ...<Widget>[
+            _InfoGrid(agent: agent),
             SizedBox(height: responsive.spacing(10)),
             _DiagnosticsPanel(agent: agent),
           ],
-          SizedBox(height: responsive.spacing(18)),
-          const _DisabledAdvancedAction(),
-        ],
-      ),
-    );
-  }
-}
-
-class _RuntimeRow extends StatelessWidget {
-  const _RuntimeRow({required this.runtime});
-
-  final AgentSummary runtime;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    return Container(
-      margin: EdgeInsets.only(bottom: responsive.spacing(8)),
-      padding: EdgeInsets.all(responsive.spacing(12)),
-      decoration: BoxDecoration(
-        color: CupertinoColors.white,
-        borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(color: const Color(0xFFE5EAF2)),
-      ),
-      child: Row(
-        children: <Widget>[
-          const Icon(CupertinoIcons.sparkles, color: Color(0xFF0B65F8)),
-          SizedBox(width: responsive.spacing(10)),
-          Expanded(child: Text(runtime.displayName)),
-          _StatusPill(status: runtime.latest.status),
-        ],
+        ),
       ),
     );
   }
@@ -483,7 +827,6 @@ class _RunStatusPanel extends StatelessWidget {
                 child: Text(
                   run.runId,
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Color(0xFF101B32),
                     fontFamily: 'monospace',
@@ -491,7 +834,7 @@ class _RunStatusPanel extends StatelessWidget {
                   ),
                 ),
               ),
-              _StatusPill(status: run.status),
+              _RunStatusPill(status: run.status),
             ],
           ),
           if (updatedAt != null) ...<Widget>[
@@ -514,7 +857,6 @@ class _RunStatusPanel extends StatelessWidget {
                   _redactDiagnosticValue(run.lastErrorSummary),
               ].join(' · '),
               maxLines: 2,
-              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: AwikiMeColors.danger,
                 fontSize: responsive.metaSm,
@@ -538,6 +880,7 @@ class _DiagnosticsPanel extends StatelessWidget {
     final diagnostics = agent.latest.diagnosticsSummary.entries
         .where((entry) => entry.value != null)
         .toList();
+    final emptyText = _diagnosticsEmptyText(agent);
     return Container(
       padding: EdgeInsets.all(responsive.spacing(14)),
       decoration: BoxDecoration(
@@ -576,7 +919,6 @@ class _DiagnosticsPanel extends StatelessWidget {
                       child: Text(
                         entry.key,
                         maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: const Color(0xFF66728A),
                           fontSize: responsive.metaSm,
@@ -596,11 +938,39 @@ class _DiagnosticsPanel extends StatelessWidget {
                   ],
                 ),
               ),
+          ] else if (agent.latest.lastErrorSummary == null) ...<Widget>[
+            SizedBox(height: responsive.spacing(8)),
+            Text(
+              emptyText,
+              style: TextStyle(
+                color: const Color(0xFF66728A),
+                fontSize: responsive.bodySm,
+              ),
+            ),
           ],
         ],
       ),
     );
   }
+}
+
+String _diagnosticsEmptyText(AgentSummary agent) {
+  final status = agent.latest.status.trim().toLowerCase();
+  if (status == 'registering' ||
+      status == 'creating' ||
+      status == 'installing') {
+    return '代理尚未完成状态上报。';
+  }
+  if (status == 'offline') {
+    return '代理离线，暂时无法获取最新诊断。';
+  }
+  if (agent.latest.needsConfig || status == 'needs_config') {
+    return '暂无诊断摘要，请刷新状态或完成代理配置后再查看。';
+  }
+  if (status == 'failed') {
+    return '暂无诊断摘要，请刷新状态获取最新诊断。';
+  }
+  return '暂无异常诊断信息。';
 }
 
 class _InfoGrid extends StatelessWidget {
@@ -615,6 +985,8 @@ class _InfoGrid extends StatelessWidget {
       if (agent.handle != null) 'handle': agent.handle!,
       if (agent.daemonAgentDid != null) 'daemon': agent.daemonAgentDid!,
       if (agent.latest.version != null) 'version': agent.latest.version!,
+      if (agent.latest.latestVersion != null)
+        'latest': agent.latest.latestVersion!,
       if (agent.latest.minSupportedVersion != null)
         'min': agent.latest.minSupportedVersion!,
       if (agent.latest.platform != null) 'platform': agent.latest.platform!,
@@ -650,7 +1022,6 @@ class _InfoGrid extends StatelessWidget {
                       child: Text(
                         _redactDiagnosticValue(entry.value, key: entry.key),
                         maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Color(0xFF101B32),
                           fontFamily: 'monospace',
@@ -682,30 +1053,53 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoButton(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      color: danger ? const Color(0xFFFFEBEB) : const Color(0xFFEAF2FF),
-      disabledColor: const Color(0xFFE5EAF2),
+    return AppPressable(
+      onTap: onPressed,
+      semanticLabel: label,
+      tooltip: label,
+      enabled: onPressed != null,
+      scaleOnPress: true,
+      pressedScale: 0.98,
       borderRadius: BorderRadius.circular(8),
-      onPressed: onPressed,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(
-            icon,
-            size: 17,
-            color: danger ? AwikiMeColors.danger : const Color(0xFF0B65F8),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
+      builder: (context, state, child) {
+        return AnimatedOpacity(
+          opacity: state.enabled
+              ? state.pressed
+                    ? 0.78
+                    : state.hovered || state.focused
+                    ? 0.90
+                    : 1
+              : 0.55,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          child: child,
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: danger ? const Color(0xFFFFEBEB) : const Color(0xFFEAF2FF),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              icon,
+              size: 17,
               color: danger ? AwikiMeColors.danger : const Color(0xFF0B65F8),
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
             ),
-          ),
-        ],
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: danger ? AwikiMeColors.danger : const Color(0xFF0B65F8),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -720,47 +1114,22 @@ class _AgentErrorBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return Container(
-      padding: EdgeInsets.all(responsive.spacing(12)),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF3F3),
-        borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(color: const Color(0xFFFFD2D2)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Icon(
-            CupertinoIcons.exclamationmark_circle_fill,
-            color: AwikiMeColors.danger,
-            size: responsive.iconSm,
-          ),
-          SizedBox(width: responsive.spacing(8)),
-          Expanded(
-            child: Text(
-              message,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: const Color(0xFF8A1F1F),
-                fontSize: responsive.metaSm,
-                height: 1.35,
-              ),
-            ),
-          ),
-          SizedBox(width: responsive.spacing(8)),
-          _InlineCopyButton(text: message),
-          if (onRetry != null) ...<Widget>[
-            SizedBox(width: responsive.spacing(8)),
-            CupertinoButton(
+    final retryButton = onRetry == null
+        ? null
+        : AppPressable(
+            onTap: onRetry,
+            semanticLabel: '重试',
+            tooltip: '重试',
+            borderRadius: BorderRadius.circular(responsive.radius(8)),
+            child: Container(
               padding: EdgeInsets.symmetric(
                 horizontal: responsive.spacing(10),
                 vertical: responsive.spacing(5),
               ),
-              minimumSize: Size.zero,
-              borderRadius: BorderRadius.circular(responsive.radius(8)),
-              color: CupertinoColors.white,
-              onPressed: onRetry,
+              decoration: BoxDecoration(
+                color: CupertinoColors.white,
+                borderRadius: BorderRadius.circular(responsive.radius(8)),
+              ),
               child: Text(
                 '重试',
                 style: TextStyle(
@@ -770,9 +1139,11 @@ class _AgentErrorBanner extends StatelessWidget {
                 ),
               ),
             ),
-          ],
-        ],
-      ),
+          );
+    return AwikiMeErrorNotice(
+      message: message,
+      compact: true,
+      trailing: retryButton,
     );
   }
 }
@@ -795,7 +1166,7 @@ class _CopyableDiagnosticText extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Expanded(
-          child: SelectableText(
+          child: Text(
             text,
             maxLines: 3,
             style: TextStyle(color: color, fontSize: fontSize),
@@ -816,24 +1187,25 @@ class _InlineCopyButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return CupertinoButton(
-      padding: EdgeInsets.all(responsive.spacing(5)),
-      minimumSize: Size(
-        responsive.displayScaled(28),
-        responsive.displayScaled(28),
-      ),
-      borderRadius: BorderRadius.circular(responsive.radius(7)),
-      color: CupertinoColors.white,
-      onPressed: () async {
-        await Clipboard.setData(ClipboardData(text: text));
-        if (context.mounted) {
-          AwikiMeToast.show(context, '已复制');
-        }
-      },
-      child: Icon(
-        CupertinoIcons.doc_on_doc,
-        color: const Color(0xFF44506A),
-        size: responsive.iconSm,
+    return SelectionContainer.disabled(
+      child: AppIconButton(
+        onPressed: () async {
+          await Clipboard.setData(ClipboardData(text: text));
+          if (context.mounted) {
+            AwikiMeToast.show(context, '已复制');
+          }
+        },
+        semanticLabel: '复制',
+        tooltip: '复制',
+        size: responsive.displayScaled(28),
+        padding: EdgeInsets.all(responsive.spacing(5)),
+        backgroundColor: CupertinoColors.white,
+        borderRadius: BorderRadius.circular(responsive.radius(7)),
+        child: Icon(
+          CupertinoIcons.doc_on_doc,
+          color: const Color(0xFF44506A),
+          size: responsive.iconSm,
+        ),
       ),
     );
   }
@@ -855,25 +1227,8 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _StatusDot extends StatelessWidget {
-  const _StatusDot({required this.status});
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 9,
-      height: 9,
-      decoration: BoxDecoration(
-        color: _statusColor(status),
-        shape: BoxShape.circle,
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.status});
+class _RunStatusPill extends StatelessWidget {
+  const _RunStatusPill({required this.status});
   final String status;
 
   @override
@@ -881,13 +1236,13 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
-        color: _statusColor(status).withValues(alpha: 0.14),
+        color: _runStatusColor(status).withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(99),
       ),
       child: Text(
         status,
         style: TextStyle(
-          color: _statusColor(status),
+          color: _runStatusColor(status),
           fontSize: 12,
           fontWeight: FontWeight.w700,
         ),
@@ -896,57 +1251,28 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-class _DisabledAdvancedAction extends StatelessWidget {
-  const _DisabledAdvancedAction();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Opacity(
-      opacity: 0.55,
-      child: _ActionButton(
-        icon: CupertinoIcons.wrench,
-        label: '重建 Runtime',
-        onPressed: null,
-      ),
-    );
-  }
-}
-
-class _RefreshPendingNotice extends StatelessWidget {
-  const _RefreshPendingNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    return Row(
-      children: <Widget>[
-        const CupertinoActivityIndicator(radius: 8),
-        SizedBox(width: responsive.spacing(8)),
-        Text(
-          '正在刷新状态',
-          style: TextStyle(
-            color: const Color(0xFF66728A),
-            fontSize: responsive.metaSm,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-Color _statusColor(String status) {
-  switch (status) {
-    case 'ready':
+Color _runStatusColor(String status) {
+  switch (status.trim().toLowerCase()) {
+    case 'succeeded':
+    case 'finished':
       return AwikiMeColors.online;
     case 'failed':
-    case 'offline':
       return AwikiMeColors.danger;
-    case 'needs_config':
-    case 'needs_upgrade':
+    case 'queued':
+    case 'pending':
+    case 'running':
       return AwikiMeColors.alert;
     default:
       return const Color(0xFF66728A);
   }
+}
+
+Set<String> _pendingAgentDids(Map<String, ChatThreadState> threads) {
+  return <String>{
+    for (final thread in threads.values)
+      for (final turn in thread.agentPendingTurns)
+        if (turn.isActive) turn.agentDid,
+  };
 }
 
 String _redactDiagnosticValue(Object? value, {String? key}) {
@@ -1004,13 +1330,41 @@ Future<void> _openRuntimeChat(
   WidgetRef ref,
   AgentSummary agent,
 ) {
+  final title = AgentDisplayName.title(agent);
   return openDirectConversationForDid(
     context,
     ref,
     peerDid: agent.agentDid,
-    peerName: agent.displayName,
+    peerHandle: _agentFullHandle(agent),
+    peerName: title,
     avatarSeed: agent.handle ?? agent.agentDid,
   );
+}
+
+String? _agentFullHandle(AgentSummary agent) {
+  final handle = _trimLeadingAt(agent.handle);
+  if (handle == null || handle.isEmpty) {
+    return null;
+  }
+  if (handle.contains('.')) {
+    return handle.toLowerCase();
+  }
+  final domain = AwikiEnvironmentConfig.fromEnvironment().didDomain.trim();
+  if (domain.isEmpty) {
+    return handle.toLowerCase();
+  }
+  return '$handle.$domain'.toLowerCase();
+}
+
+String? _trimLeadingAt(String? value) {
+  var text = value?.trim();
+  if (text == null) {
+    return null;
+  }
+  while (text!.startsWith('@')) {
+    text = text.substring(1).trimLeft();
+  }
+  return text.trim();
 }
 
 Future<void> _showRenameAgentDialog(
@@ -1018,7 +1372,7 @@ Future<void> _showRenameAgentDialog(
   WidgetRef ref,
   AgentSummary agent,
 ) async {
-  final controller = TextEditingController(text: agent.displayName);
+  final controller = TextEditingController(text: AgentDisplayName.title(agent));
   final result = await showCupertinoDialog<String>(
     context: context,
     builder: (dialogContext) => CupertinoAlertDialog(
@@ -1053,6 +1407,671 @@ Future<void> _showRenameAgentDialog(
     return;
   }
   await ref.read(agentsProvider.notifier).renameSelected(displayName);
+}
+
+Future<void> _showCreateHermesDialog(
+  BuildContext context,
+  WidgetRef ref,
+  AgentSummary daemon,
+  List<AgentSummary> existingRuntimes,
+) async {
+  final result = await showCupertinoDialog<_RuntimeAgentCreationDraft>(
+    context: context,
+    builder: (dialogContext) => _CreateHermesDialog(
+      initialDisplayName: _nextHermesDisplayName(existingRuntimes),
+      handleDomain: AwikiEnvironmentConfig.fromEnvironment().didDomain,
+      validateHandle: (handle, domain) {
+        return ref
+            .read(onboardingSupportServiceProvider)
+            .validateHandle(handle: handle, domain: domain);
+      },
+    ),
+  );
+  if (result == null) {
+    return;
+  }
+  await ref
+      .read(agentsProvider.notifier)
+      .createHermesRuntime(
+        daemon.agentDid,
+        handle: result.handle,
+        displayName: result.displayName,
+      );
+}
+
+class _RuntimeAgentCreationDraft {
+  const _RuntimeAgentCreationDraft({
+    required this.displayName,
+    required this.handle,
+  });
+
+  final String displayName;
+  final String handle;
+}
+
+class _CreateHermesDialog extends StatefulWidget {
+  const _CreateHermesDialog({
+    required this.initialDisplayName,
+    required this.handleDomain,
+    required this.validateHandle,
+  });
+
+  final String initialDisplayName;
+  final String handleDomain;
+  final Future<HandleAvailability> Function(String handle, String domain)
+  validateHandle;
+
+  @override
+  State<_CreateHermesDialog> createState() => _CreateHermesDialogState();
+}
+
+class _CreateHermesDialogState extends State<_CreateHermesDialog> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _handleController;
+  final FocusNode _handleFocusNode = FocusNode();
+  Timer? _handleValidationDebounce;
+  bool _normalizingHandle = false;
+  String? _submittedNameError;
+  String? _submittedHandleError;
+  String? _remoteHandle;
+  bool _remoteHandleChecking = false;
+  HandleAvailability? _remoteAvailability;
+  String? _remoteValidationError;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.initialDisplayName)
+      ..addListener(_onFieldChanged);
+    _handleController = TextEditingController()
+      ..addListener(_normalizeHandleInput);
+  }
+
+  @override
+  void dispose() {
+    _nameController
+      ..removeListener(_onFieldChanged)
+      ..dispose();
+    _handleController
+      ..removeListener(_normalizeHandleInput)
+      ..dispose();
+    _handleValidationDebounce?.cancel();
+    _handleFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _onFieldChanged() {
+    if (_submittedNameError != null || _submittedHandleError != null) {
+      setState(() {
+        _submittedNameError = null;
+        _submittedHandleError = null;
+      });
+      return;
+    }
+    setState(() {});
+  }
+
+  void _normalizeHandleInput() {
+    if (_normalizingHandle) {
+      return;
+    }
+    final normalized = _normalizeAgentHandleInput(_handleController.text);
+    if (normalized != _handleController.text) {
+      _normalizingHandle = true;
+      _handleController.value = TextEditingValue(
+        text: normalized,
+        selection: TextSelection.collapsed(offset: normalized.length),
+      );
+      _normalizingHandle = false;
+    }
+    _onFieldChanged();
+    _scheduleHandleAvailabilityCheck();
+  }
+
+  void _scheduleHandleAvailabilityCheck() {
+    _handleValidationDebounce?.cancel();
+    final handle = _handleController.text.trim();
+    if (_validateAgentHandle(handle) != null) {
+      setState(() {
+        _remoteHandle = null;
+        _remoteHandleChecking = false;
+        _remoteAvailability = null;
+        _remoteValidationError = null;
+      });
+      return;
+    }
+    setState(() {
+      _remoteHandle = handle;
+      _remoteHandleChecking = true;
+      _remoteAvailability = null;
+      _remoteValidationError = null;
+    });
+    _handleValidationDebounce = Timer(
+      const Duration(milliseconds: 450),
+      () => _checkHandleAvailability(handle),
+    );
+  }
+
+  Future<void> _checkHandleAvailability(String handle) async {
+    try {
+      final availability = await widget.validateHandle(
+        handle,
+        widget.handleDomain,
+      );
+      if (!mounted || _remoteHandle != handle) {
+        return;
+      }
+      setState(() {
+        _remoteHandleChecking = false;
+        _remoteAvailability = availability;
+        _remoteValidationError = null;
+        _submittedHandleError = null;
+      });
+    } catch (_) {
+      if (!mounted || _remoteHandle != handle) {
+        return;
+      }
+      setState(() {
+        _remoteHandleChecking = false;
+        _remoteAvailability = null;
+        _remoteValidationError = '暂时无法校验可用性，创建时会再次确认';
+        _submittedHandleError = null;
+      });
+    }
+  }
+
+  void _submit() {
+    final displayName = _nameController.text.trim();
+    final handle = _handleController.text.trim();
+    final nameError = _validateAgentDisplayName(displayName);
+    final handleError =
+        _validateAgentHandle(handle) ??
+        (_remoteHandleChecking ? '正在校验 Handle 可用性' : null) ??
+        _remoteHandleError(handle);
+    if (nameError != null || handleError != null) {
+      setState(() {
+        _submittedNameError = nameError;
+        _submittedHandleError = handleError;
+      });
+      if (handleError != null) {
+        _handleFocusNode.requestFocus();
+      }
+      return;
+    }
+    Navigator.of(
+      context,
+    ).pop(_RuntimeAgentCreationDraft(displayName: displayName, handle: handle));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final handle = _handleController.text.trim();
+    final displayName = _nameController.text.trim();
+    final nameError =
+        _submittedNameError ?? _softValidateAgentDisplayName(displayName);
+    final remoteError = _remoteHandleError(handle);
+    final handleError =
+        _submittedHandleError ??
+        _softValidateAgentHandle(handle) ??
+        remoteError;
+    final canSubmit =
+        _validateAgentDisplayName(displayName) == null &&
+        _validateAgentHandle(handle) == null &&
+        !_remoteHandleChecking &&
+        remoteError == null;
+    final maxWidth = responsive.isPhone ? double.infinity : 430.0;
+    return CupertinoPopupSurface(
+      isSurfacePainted: false,
+      child: Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: responsive.spacing(18),
+            vertical: responsive.spacing(22),
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: CupertinoColors.white,
+                borderRadius: BorderRadius.circular(responsive.radius(14)),
+                boxShadow: const <BoxShadow>[
+                  BoxShadow(
+                    color: Color(0x260B1220),
+                    blurRadius: 34,
+                    offset: Offset(0, 18),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(responsive.spacing(18)),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            '创建 Hermes',
+                            style: TextStyle(
+                              color: const Color(0xFF101B32),
+                              fontSize: responsive.titleLg,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        AppIconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          semanticLabel: '关闭',
+                          tooltip: '关闭',
+                          size: responsive.displayScaled(32),
+                          backgroundColor: const Color(0xFFF5F7FB),
+                          borderColor: const Color(0xFFE4E9F2),
+                          child: Icon(
+                            CupertinoIcons.xmark,
+                            color: const Color(0xFF66728A),
+                            size: responsive.iconSm,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: responsive.spacing(14)),
+                    _AgentDialogField(
+                      label: '名称',
+                      controller: _nameController,
+                      placeholder: 'Hermes',
+                      errorText: nameError,
+                      textInputAction: TextInputAction.next,
+                    ),
+                    SizedBox(height: responsive.spacing(12)),
+                    _AgentDialogField(
+                      label: 'Handle',
+                      controller: _handleController,
+                      placeholder: 'my-hermes',
+                      errorText: handleError,
+                      focusNode: _handleFocusNode,
+                      prefix: const Text('@'),
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _submit(),
+                    ),
+                    SizedBox(height: responsive.spacing(8)),
+                    _HandlePreview(
+                      handle: handle,
+                      domain: widget.handleDomain,
+                      isValid: _validateAgentHandle(handle) == null,
+                      isChecking: _remoteHandleChecking,
+                      availability: _previewAvailability(handle),
+                      fallbackMessage: _remoteValidationError,
+                    ),
+                    SizedBox(height: responsive.spacing(18)),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: _DialogSecondaryButton(
+                            label: '取消',
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ),
+                        SizedBox(width: responsive.spacing(10)),
+                        Expanded(
+                          child: AppPrimaryButton(
+                            label: '创建',
+                            onPressed: canSubmit ? _submit : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String? _remoteHandleError(String handle) {
+    if (handle.isEmpty || _validateAgentHandle(handle) != null) {
+      return null;
+    }
+    final availability = _previewAvailability(handle);
+    if (availability == null || availability.available) {
+      return null;
+    }
+    if (availability.reason == 'unavailable') {
+      return '这个 Handle 已被使用';
+    }
+    return availability.message?.trim().isNotEmpty == true
+        ? availability.message
+        : '这个 Handle 不可使用';
+  }
+
+  HandleAvailability? _previewAvailability(String handle) {
+    if (handle.isEmpty || _remoteHandle != handle) {
+      return null;
+    }
+    return _remoteAvailability;
+  }
+}
+
+class _AgentDialogField extends StatelessWidget {
+  const _AgentDialogField({
+    required this.label,
+    required this.controller,
+    required this.placeholder,
+    this.errorText,
+    this.focusNode,
+    this.prefix,
+    this.textInputAction,
+    this.onSubmitted,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final String placeholder;
+  final String? errorText;
+  final FocusNode? focusNode;
+  final Widget? prefix;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final hasError = errorText != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          label,
+          style: TextStyle(
+            color: const Color(0xFF66728A),
+            fontSize: responsive.metaSm,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        SizedBox(height: responsive.spacing(6)),
+        CupertinoTextField(
+          controller: controller,
+          focusNode: focusNode,
+          placeholder: placeholder,
+          prefix: prefix == null
+              ? null
+              : Padding(
+                  padding: EdgeInsets.only(left: responsive.spacing(10)),
+                  child: DefaultTextStyle(
+                    style: TextStyle(
+                      color: const Color(0xFF66728A),
+                      fontSize: responsive.bodyMd,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    child: prefix!,
+                  ),
+                ),
+          padding: EdgeInsets.symmetric(
+            horizontal: responsive.spacing(12),
+            vertical: responsive.spacing(11),
+          ),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFD),
+            borderRadius: BorderRadius.circular(responsive.radius(9)),
+            border: Border.all(
+              color: hasError
+                  ? const Color(0xFFE14E4E)
+                  : const Color(0xFFDDE5F1),
+            ),
+          ),
+          style: TextStyle(
+            color: const Color(0xFF101B32),
+            fontSize: responsive.bodyMd,
+          ),
+          placeholderStyle: TextStyle(
+            color: const Color(0xFF98A4B8),
+            fontSize: responsive.bodyMd,
+          ),
+          textInputAction: textInputAction,
+          onSubmitted: onSubmitted,
+        ),
+        if (hasError) ...<Widget>[
+          SizedBox(height: responsive.spacing(5)),
+          Text(
+            errorText!,
+            style: TextStyle(
+              color: const Color(0xFFE14E4E),
+              fontSize: responsive.metaSm,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _HandlePreview extends StatelessWidget {
+  const _HandlePreview({
+    required this.handle,
+    required this.domain,
+    required this.isValid,
+    required this.isChecking,
+    this.availability,
+    this.fallbackMessage,
+  });
+
+  final String handle;
+  final String domain;
+  final bool isValid;
+  final bool isChecking;
+  final HandleAvailability? availability;
+  final String? fallbackMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final preview = handle.isEmpty ? '@handle.$domain' : '@$handle.$domain';
+    final message = _handlePreviewMessage(
+      handle: handle,
+      isValid: isValid,
+      isChecking: isChecking,
+      availability: availability,
+      fallbackMessage: fallbackMessage,
+    );
+    final color = _handlePreviewColor(
+      isValid: isValid,
+      isChecking: isChecking,
+      availability: availability,
+      fallbackMessage: fallbackMessage,
+    );
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.spacing(12),
+        vertical: responsive.spacing(9),
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F7FC),
+        borderRadius: BorderRadius.circular(responsive.radius(8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            '最终 Handle：$preview',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: isValid
+                  ? const Color(0xFF22304A)
+                  : const Color(0xFF66728A),
+              fontSize: responsive.metaSm,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (message != null) ...<Widget>[
+            SizedBox(height: responsive.spacing(4)),
+            Text(
+              message,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: responsive.metaSm,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+String? _handlePreviewMessage({
+  required String handle,
+  required bool isValid,
+  required bool isChecking,
+  required HandleAvailability? availability,
+  required String? fallbackMessage,
+}) {
+  if (handle.isEmpty || !isValid) {
+    return null;
+  }
+  if (isChecking) {
+    return '正在校验可用性...';
+  }
+  if (availability != null) {
+    if (availability.available) {
+      return '这个 Handle 可以使用';
+    }
+    return availability.reason == 'unavailable'
+        ? '这个 Handle 已被使用'
+        : availability.message ?? '这个 Handle 不可使用';
+  }
+  return fallbackMessage;
+}
+
+Color _handlePreviewColor({
+  required bool isValid,
+  required bool isChecking,
+  required HandleAvailability? availability,
+  required String? fallbackMessage,
+}) {
+  if (!isValid || isChecking) {
+    return const Color(0xFF66728A);
+  }
+  if (availability?.available == true) {
+    return const Color(0xFF1B7F4B);
+  }
+  if (availability?.available == false) {
+    return const Color(0xFFE14E4E);
+  }
+  if (fallbackMessage != null) {
+    return const Color(0xFF66728A);
+  }
+  return const Color(0xFF66728A);
+}
+
+class _DialogSecondaryButton extends StatelessWidget {
+  const _DialogSecondaryButton({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return AppPressable(
+      onTap: onPressed,
+      semanticLabel: label,
+      borderRadius: BorderRadius.circular(responsive.radius(9)),
+      scaleOnPress: true,
+      child: Container(
+        constraints: BoxConstraints(minHeight: responsive.controlHeight),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F7FB),
+          borderRadius: BorderRadius.circular(responsive.radius(9)),
+          border: Border.all(color: const Color(0xFFE1E7F0)),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            color: const Color(0xFF4B5870),
+            fontSize: responsive.bodyMd,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _nextHermesDisplayName(List<AgentSummary> runtimes) {
+  final used = <int>{};
+  for (final runtime in runtimes) {
+    if (runtime.runtime != 'hermes') {
+      continue;
+    }
+    final name = AgentDisplayName.title(runtime).trim();
+    if (name == 'Hermes') {
+      used.add(1);
+      continue;
+    }
+    final match = RegExp(r'^Hermes ([2-9][0-9]*)$').firstMatch(name);
+    if (match != null) {
+      used.add(int.parse(match.group(1)!));
+    }
+  }
+  if (!used.contains(1)) {
+    return 'Hermes';
+  }
+  var next = 2;
+  while (used.contains(next)) {
+    next += 1;
+  }
+  return 'Hermes $next';
+}
+
+String _normalizeAgentHandleInput(String value) {
+  return value.trim().replaceFirst(RegExp(r'^@+'), '').toLowerCase();
+}
+
+String? _softValidateAgentDisplayName(String value) {
+  return value.isEmpty ? null : _validateAgentDisplayName(value);
+}
+
+String? _validateAgentDisplayName(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return '请输入智能体名称';
+  }
+  if (trimmed.length > 40) {
+    return '名称最多 40 个字符';
+  }
+  return null;
+}
+
+String? _softValidateAgentHandle(String value) {
+  return value.isEmpty ? null : _validateAgentHandle(value);
+}
+
+String? _validateAgentHandle(String value) {
+  final handle = value.trim();
+  if (handle.isEmpty) {
+    return '请输入 Handle';
+  }
+  if (handle.length > 63) {
+    return 'Handle 最多 63 个字符';
+  }
+  if (!RegExp(r'^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$').hasMatch(handle)) {
+    return '仅支持小写字母、数字和连字符，且首尾必须是字母或数字';
+  }
+  if (handle.contains('--')) {
+    return 'Handle 不能包含连续连字符';
+  }
+  return null;
 }
 
 Future<void> _showRetryRunDialog(
@@ -1128,16 +2147,23 @@ Future<void> _confirmUpgradeDaemon(
   }
 }
 
-Future<void> _confirmUnbindSelected(BuildContext context, WidgetRef ref) async {
+Future<void> _confirmDeleteAgent(
+  BuildContext context,
+  WidgetRef ref,
+  AgentSummary agent,
+) async {
+  final isDaemon = agent.isDaemon;
   final confirmed = await _confirm(
     context,
-    title: '解绑',
-    message: '解绑不会删除 DID、聊天历史或远端身份记录。',
-    actionLabel: '解绑',
+    title: isDaemon ? '删除代理' : '删除智能体',
+    message: isDaemon
+        ? '删除后会停止宿主机上的代理服务，并移除它创建的智能体。本地数据会归档保留，不会继续使用。'
+        : '删除后该智能体会从列表中移除。本地数据会归档保留，不会继续使用。',
+    actionLabel: '删除',
     destructive: true,
   );
   if (confirmed) {
-    await ref.read(agentsProvider.notifier).unbindSelected();
+    await ref.read(agentsProvider.notifier).deleteSelected();
   }
 }
 
@@ -1249,17 +2275,15 @@ class _InstallCommandDialog extends StatelessWidget {
                         ),
                       ),
                       SizedBox(width: responsive.spacing(8)),
-                      CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size(
-                          responsive.displayScaled(30),
-                          responsive.displayScaled(30),
-                        ),
+                      AppIconButton(
+                        onPressed: onClose,
+                        semanticLabel: '关闭',
+                        tooltip: '关闭',
+                        size: responsive.displayScaled(30),
+                        backgroundColor: const Color(0xFFF4F6FA),
                         borderRadius: BorderRadius.circular(
                           responsive.radius(8),
                         ),
-                        color: const Color(0xFFF4F6FA),
-                        onPressed: onClose,
                         child: Icon(
                           CupertinoIcons.xmark,
                           color: const Color(0xFF66728A),
@@ -1396,16 +2420,14 @@ class _CommandText extends StatelessWidget {
           Positioned(
             top: 0,
             right: 0,
-            child: CupertinoButton(
+            child: AppIconButton(
               key: const Key('agent-install-copy-button'),
-              padding: EdgeInsets.zero,
-              minimumSize: Size(
-                responsive.displayScaled(34),
-                responsive.displayScaled(30),
-              ),
-              borderRadius: BorderRadius.circular(responsive.radius(8)),
-              color: const Color(0xFF1E293B),
               onPressed: onCopy,
+              semanticLabel: '复制安装命令',
+              tooltip: '复制安装命令',
+              size: responsive.displayScaled(34),
+              backgroundColor: const Color(0xFF1E293B),
+              borderRadius: BorderRadius.circular(responsive.radius(8)),
               child: Icon(
                 CupertinoIcons.doc_on_doc,
                 color: const Color(0xFFCBD5E1),

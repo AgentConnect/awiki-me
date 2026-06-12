@@ -17,6 +17,8 @@ abstract interface class AgentControlService {
   Future<void> createHermesRuntime({
     required String daemonAgentDid,
     required String controllerDid,
+    required String handle,
+    required String displayName,
   });
   Future<void> ensureMessageAgentBootstrap({
     required String daemonAgentDid,
@@ -49,11 +51,17 @@ abstract interface class AgentControlService {
     required String threadId,
     required String kind,
     String? peerDid,
+    String? peerHandle,
     String? groupDid,
     int limit = 50,
     String? cursor,
   });
   Future<void> upgradeDaemon(String daemonAgentDid);
+  Future<void> deleteDaemon(String daemonAgentDid);
+  Future<void> deleteRuntimeAgent({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+  });
   Future<AgentSummary> updateDisplayName({
     required String agentDid,
     required String displayName,
@@ -133,11 +141,15 @@ class DefaultAgentControlService implements AgentControlService {
   Future<void> createHermesRuntime({
     required String daemonAgentDid,
     required String controllerDid,
+    required String handle,
+    required String displayName,
   }) async {
     final token = await _inventory.issueRuntimeToken(
       controllerDid: controllerDid,
       daemonAgentDid: daemonAgentDid,
       runtime: 'hermes',
+      handle: handle,
+      displayName: displayName,
     );
     final requestId = agentCommandId('app_req');
     await _sendDaemonPayload(
@@ -146,6 +158,8 @@ class DefaultAgentControlService implements AgentControlService {
         controllerDid: controllerDid,
         registrationToken: token.token,
         clientRequestId: requestId,
+        handle: handle,
+        displayName: displayName,
       ),
       idempotencyKey: 'runtime-create:$daemonAgentDid:$requestId',
     );
@@ -171,6 +185,11 @@ class DefaultAgentControlService implements AgentControlService {
           controllerDid: controllerDid,
           daemonAgentDid: daemonAgentDid,
           runtime: appMessageHandlerRuntime,
+          handle: _messageAgentRuntimeHandle(
+            userDid: userDid,
+            appInstanceId: appInstanceId,
+          ),
+          displayName: 'Hermes Message Agent',
         )).token;
     final envelope = DaemonBootstrapEnvelope(
       bootstrapId: messageAgentBootstrapId(
@@ -254,6 +273,7 @@ class DefaultAgentControlService implements AgentControlService {
     required String threadId,
     required String kind,
     String? peerDid,
+    String? peerHandle,
     String? groupDid,
     int limit = 50,
     String? cursor,
@@ -266,6 +286,7 @@ class DefaultAgentControlService implements AgentControlService {
         threadId: threadId,
         kind: kind,
         peerDid: peerDid,
+        peerHandle: peerHandle,
         groupDid: groupDid,
         limit: limit,
         cursor: cursor,
@@ -280,6 +301,25 @@ class DefaultAgentControlService implements AgentControlService {
   @override
   Future<void> upgradeDaemon(String daemonAgentDid) {
     return _sendDaemonPayload(daemonAgentDid, daemonUpgradePayload());
+  }
+
+  @override
+  Future<void> deleteDaemon(String daemonAgentDid) {
+    return _sendDaemonPayload(
+      daemonAgentDid,
+      daemonDeletePayload(daemonAgentDid: daemonAgentDid),
+    );
+  }
+
+  @override
+  Future<void> deleteRuntimeAgent({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+  }) {
+    return _sendDaemonPayload(
+      daemonAgentDid,
+      runtimeAgentDeletePayload(runtimeAgentDid: runtimeAgentDid),
+    );
   }
 
   @override
@@ -337,4 +377,22 @@ String? _normalizeDownloadBaseUrl(String? value) {
     return null;
   }
   return trimmed.replaceAll(RegExp(r'/+$'), '');
+}
+
+String _messageAgentRuntimeHandle({
+  required String userDid,
+  required String appInstanceId,
+}) {
+  final source = '${userDid.trim()}-${appInstanceId.trim()}'
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9-]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
+  if (source.isEmpty) {
+    return 'hermes-message-agent';
+  }
+  final suffix = source.length > 48
+      ? source.substring(source.length - 48)
+      : source;
+  return 'hermes-$suffix';
 }

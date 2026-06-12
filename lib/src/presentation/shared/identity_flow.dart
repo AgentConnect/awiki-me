@@ -18,6 +18,7 @@ import '../chat/chat_page.dart';
 import '../chat/chat_provider.dart';
 import '../conversation_list/conversation_provider.dart';
 import '../friends/friends_provider.dart';
+import 'awiki_me_feedback.dart';
 import 'avatar_badge.dart';
 import 'formatters/display_formatters.dart';
 import 'responsive_layout.dart';
@@ -54,6 +55,7 @@ Future<void> openDirectConversationForProfile(
     context,
     ref,
     peerDid: profile.did,
+    peerHandle: profile.fullHandle ?? profile.handle,
     peerName: DidDisplayFormatter.profileName(profile),
     avatarUri: profile.avatarUri,
     avatarSeed: profile.handle ?? profile.did,
@@ -65,6 +67,7 @@ Future<void> openDirectConversationForDid(
   WidgetRef ref, {
   required String peerDid,
   required String peerName,
+  String? peerHandle,
   String? avatarUri,
   String? avatarSeed,
 }) async {
@@ -84,15 +87,24 @@ Future<void> openDirectConversationForDid(
     return;
   }
 
-  final threadId = dmThreadIdForDids(session.did, peer);
+  final peerTarget = _directPeerTarget(peerDid: peer, peerHandle: peerHandle);
+  final threadId = peerTarget.startsWith('did:')
+      ? dmThreadIdForDids(session.did, peerTarget)
+      : 'dm:pending:$peerTarget';
   final existing = ref
       .read(conversationListProvider)
       .conversations
-      .where((item) => item.threadId == threadId);
+      .where(
+        (item) =>
+            item.threadId == threadId ||
+            item.targetPeer?.trim() == peerTarget ||
+            item.targetDid?.trim() == peer,
+      );
   final conversation = existing.isNotEmpty
       ? _directConversationForPeer(
           existing.first,
           peerDid: peer,
+          peerTarget: peerTarget,
           peerName: peerName,
           avatarUri: avatarUri,
           avatarSeed: avatarSeed,
@@ -106,6 +118,7 @@ Future<void> openDirectConversationForDid(
           isGroup: false,
           targetDid: peer,
           avatarUri: avatarUri,
+          targetPeer: peerTarget,
           avatarSeed: avatarSeed ?? peer,
         );
 
@@ -128,14 +141,16 @@ Future<void> openDirectConversationForDid(
 ConversationSummary _directConversationForPeer(
   ConversationSummary existing, {
   required String peerDid,
+  required String peerTarget,
   required String peerName,
   String? avatarUri,
   String? avatarSeed,
 }) {
   final existingTarget = existing.targetDid?.trim() ?? '';
+  final existingPeer = existing.targetPeer?.trim() ?? '';
   final keepExistingName =
       !existing.isGroup &&
-      existingTarget == peerDid &&
+      (existingTarget == peerDid || existingPeer == peerTarget) &&
       existing.displayName.trim().isNotEmpty;
   return ConversationSummary(
     threadId: existing.threadId,
@@ -147,11 +162,20 @@ ConversationSummary _directConversationForPeer(
     unreadCount: existing.unreadCount,
     isGroup: false,
     targetDid: peerDid,
+    targetPeer: peerTarget,
     groupId: null,
     avatarUri: avatarUri ?? existing.avatarUri,
     avatarSeed: avatarSeed ?? existing.avatarSeed ?? peerDid,
     lastMessagePayloadJson: existing.lastMessagePayloadJson,
   );
+}
+
+String _directPeerTarget({required String peerDid, String? peerHandle}) {
+  final handle = peerHandle?.trim();
+  if (handle != null && handle.isNotEmpty) {
+    return handle.toLowerCase();
+  }
+  return peerDid.trim();
 }
 
 String _directConversationName(String peerName, String peerDid) {
@@ -362,9 +386,10 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                             ],
                           ),
                         ),
-                        GestureDetector(
+                        TopBarActionButton(
                           onTap: () => Navigator.of(context).pop(),
-                          behavior: HitTestBehavior.opaque,
+                          semanticsLabel: '关闭',
+                          tooltip: '关闭',
                           child: const Padding(
                             padding: EdgeInsets.all(6),
                             child: Icon(
@@ -395,11 +420,7 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                     ),
                     if (_errorText != null) ...<Widget>[
                       const SizedBox(height: 12),
-                      _InlineNotice(
-                        text: _errorText!,
-                        color: const Color(0xFFFF3B30),
-                        background: const Color(0xFFFFECEA),
-                      ),
+                      _InlineNotice(text: _errorText!, danger: true),
                     ],
                     if (_profile != null) ...<Widget>[
                       const SizedBox(height: 18),
@@ -410,8 +431,6 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                       const SizedBox(height: 12),
                       const _InlineNotice(
                         text: '消息将通过已验证 DID 连接发送；首次联系外部身份请谨慎确认。',
-                        color: Color(0xFF0B65F8),
-                        background: Color(0xFFEAF2FF),
                       ),
                       if (_isAddContact) ...<Widget>[
                         const SizedBox(height: 16),
@@ -708,28 +727,30 @@ class _IdentityMetaLine extends StatelessWidget {
 }
 
 class _InlineNotice extends StatelessWidget {
-  const _InlineNotice({
-    required this.text,
-    required this.color,
-    required this.background,
-  });
+  const _InlineNotice({required this.text, this.danger = false});
 
   final String text;
-  final Color color;
-  final Color background;
+  final bool danger;
 
   @override
   Widget build(BuildContext context) {
+    if (danger) {
+      return AwikiMeErrorNotice(message: text, compact: true);
+    }
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: background,
+        color: const Color(0xFFEAF2FF),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         text,
-        style: TextStyle(color: color, fontSize: 12, height: 1.35),
+        style: const TextStyle(
+          color: Color(0xFF0B65F8),
+          fontSize: 12,
+          height: 1.35,
+        ),
       ),
     );
   }

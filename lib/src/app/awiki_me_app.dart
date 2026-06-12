@@ -6,8 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart' as material;
 
 import '../application/agent/agent_control_service.dart';
+import '../application/auth/auth_session_coordinator.dart';
 import '../application/conversation_service.dart';
 import '../data/agent/user_service_agent_inventory_adapter.dart';
+import '../data/im_core/awiki_im_core_mappers.dart';
+import '../data/services/authenticated_user_service_rpc_client.dart';
 import '../presentation/app_shell/app_shell.dart';
 import '../presentation/app_shell/providers/app_lifecycle_provider.dart';
 import '../presentation/app_shell/providers/session_provider.dart';
@@ -66,9 +69,26 @@ class AwikiMeApp extends StatelessWidget {
         if (bootstrap.agentInventoryPort != null)
           agentInventoryPortProvider.overrideWith((ref) {
             final inventory = bootstrap.agentInventoryPort!;
-            if (inventory is UserServiceAgentInventoryAdapter) {
-              return inventory.withBearerTokenProvider(
-                () => ref.read(sessionProvider).session?.jwtToken,
+            if (inventory is UserServiceAgentInventoryAdapter &&
+                bootstrap.appSessionService != null) {
+              final sessions = ref.read(appSessionServiceProvider);
+              final coordinator = AuthSessionCoordinator(
+                sessions: sessions,
+                onSessionUpdated: (session) {
+                  ref
+                      .read(sessionProvider.notifier)
+                      .setSession(
+                        const AwikiImCoreMappers().legacySessionFromAppSession(
+                          session,
+                        ),
+                      );
+                },
+              );
+              return inventory.withAuthenticatedClient(
+                AuthenticatedUserServiceRpcClient(
+                  client: inventory.httpClient,
+                  sessions: coordinator,
+                ),
               );
             }
             return inventory;
@@ -103,6 +123,10 @@ class AwikiMeApp extends StatelessWidget {
         if (bootstrap.profileApplicationService != null)
           profileApplicationServiceProvider.overrideWithValue(
             bootstrap.profileApplicationService!,
+          ),
+        if (bootstrap.peerIdentityService != null)
+          peerIdentityServiceProvider.overrideWithValue(
+            bootstrap.peerIdentityService!,
           ),
         if (bootstrap.directoryApplicationService != null)
           directoryApplicationServiceProvider.overrideWithValue(

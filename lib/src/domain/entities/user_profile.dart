@@ -10,6 +10,7 @@ class UserProfile {
     this.avatarUri,
     this.profileUri,
     this.subjectType,
+    this.fullHandle,
     this.region,
   }) : displayName = displayName ?? nickName ?? '';
 
@@ -22,6 +23,7 @@ class UserProfile {
   final String? avatarUri;
   final String? profileUri;
   final String? subjectType;
+  final String? fullHandle;
   final String? region;
 
   String get nickName => displayName;
@@ -36,6 +38,7 @@ class UserProfile {
     String? avatarUri,
     String? profileUri,
     String? subjectType,
+    String? fullHandle,
     String? region,
   }) {
     return UserProfile(
@@ -48,6 +51,7 @@ class UserProfile {
       avatarUri: avatarUri ?? this.avatarUri,
       profileUri: profileUri ?? this.profileUri,
       subjectType: subjectType ?? this.subjectType,
+      fullHandle: fullHandle ?? this.fullHandle,
       region: region ?? this.region,
     );
   }

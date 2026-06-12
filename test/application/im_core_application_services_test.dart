@@ -47,7 +47,7 @@ void main() {
   );
 
   test(
-    'group service delegates supported methods and leaves mutation unsupported',
+    'group service delegates supported methods and member mutations',
     () async {
       final groups = _FakeGroups();
       final service = ImCoreGroupApplicationService(groups: groups);
@@ -60,14 +60,22 @@ void main() {
         rules: 'rules',
       );
       await service.listGroups(limit: 10);
+      await service.addMember(
+        groupDid: 'did:group',
+        memberRef: 'alice.awiki.ai',
+        role: 'admin',
+      );
+      await service.removeMember(groupDid: 'did:group', memberRef: 'did:alice');
 
       expect(created.groupId, 'did:group');
       expect(groups.createdNames, ['Group']);
       expect(groups.listLimit, 10);
+      expect(groups.addedMembers, ['did:group/alice.awiki.ai/admin']);
+      expect(groups.removedMembers, ['did:group/did:alice']);
 
       const pending = PendingImCoreGroupMutationAdapter();
       expect(
-        () => pending.addMember(groupDid: 'did:group', memberDid: 'did:bob'),
+        () => pending.addMember(groupDid: 'did:group', memberRef: 'did:bob'),
         throwsA(isA<UnsupportedError>()),
       );
     },
@@ -152,6 +160,8 @@ class _FakeDirectory implements DirectoryCorePort {
 
 class _FakeGroups implements GroupCorePort {
   final List<String> createdNames = <String>[];
+  final List<String> addedMembers = <String>[];
+  final List<String> removedMembers = <String>[];
   int? listLimit;
 
   @override
@@ -170,9 +180,12 @@ class _FakeGroups implements GroupCorePort {
   @override
   Future<GroupSummary> addMember({
     required String groupDid,
-    required String memberDid,
+    required String memberRef,
     String role = 'member',
-  }) async => _group();
+  }) async {
+    addedMembers.add('$groupDid/$memberRef/$role');
+    return _group();
+  }
 
   @override
   Future<GroupSummary> getGroup(String groupDid) async => _group();
@@ -205,8 +218,11 @@ class _FakeGroups implements GroupCorePort {
   @override
   Future<GroupSummary> removeMember({
     required String groupDid,
-    required String memberDid,
-  }) async => _group();
+    required String memberRef,
+  }) async {
+    removedMembers.add('$groupDid/$memberRef');
+    return _group();
+  }
 }
 
 class _FakeRelationships implements RelationshipCorePort {

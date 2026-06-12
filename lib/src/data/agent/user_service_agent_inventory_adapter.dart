@@ -4,6 +4,7 @@ import '../../application/config/awiki_environment_config.dart';
 import '../../application/ports/agent_inventory_port.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/install_command.dart';
+import '../services/authenticated_user_service_rpc_client.dart';
 import '../services/awiki_onboarding_utility_client.dart';
 
 class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
@@ -11,23 +12,27 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
     required String userServiceUrl,
     AwikiOnboardingUtilityHttpClient? client,
     String? Function()? bearerTokenProvider,
+    AuthenticatedUserServiceRpcClient? authenticatedClient,
   }) : _client =
            client ?? AwikiOnboardingUtilityHttpClient(baseUrl: userServiceUrl),
        _environment = AwikiEnvironmentConfig(
          baseUrl: userServiceUrl,
          userServiceUrl: userServiceUrl,
        ),
-       _bearerTokenProvider = bearerTokenProvider;
+       _bearerTokenProvider = bearerTokenProvider,
+       _authenticatedClient = authenticatedClient;
 
   UserServiceAgentInventoryAdapter._({
     required String userServiceUrl,
     required AwikiEnvironmentConfig environment,
     AwikiOnboardingUtilityHttpClient? client,
     String? Function()? bearerTokenProvider,
+    AuthenticatedUserServiceRpcClient? authenticatedClient,
   }) : _client =
            client ?? AwikiOnboardingUtilityHttpClient(baseUrl: userServiceUrl),
        _environment = environment,
-       _bearerTokenProvider = bearerTokenProvider;
+       _bearerTokenProvider = bearerTokenProvider,
+       _authenticatedClient = authenticatedClient;
 
   factory UserServiceAgentInventoryAdapter.fromEnvironment() {
     final environment = AwikiEnvironmentConfig.fromEnvironment();
@@ -48,21 +53,35 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
     );
   }
 
+  UserServiceAgentInventoryAdapter withAuthenticatedClient(
+    AuthenticatedUserServiceRpcClient authenticatedClient,
+  ) {
+    return UserServiceAgentInventoryAdapter._(
+      userServiceUrl: _client.baseUrl,
+      environment: _environment,
+      client: _client,
+      bearerTokenProvider: _bearerTokenProvider,
+      authenticatedClient: authenticatedClient,
+    );
+  }
+
   static const String inventoryEndpoint = '/user-service/agent-inventory/rpc';
   static const String registrationEndpoint =
       '/user-service/agent-registration/rpc';
 
+  AwikiOnboardingUtilityHttpClient get httpClient => _client;
+
   final AwikiOnboardingUtilityHttpClient _client;
   final AwikiEnvironmentConfig _environment;
   final String? Function()? _bearerTokenProvider;
+  final AuthenticatedUserServiceRpcClient? _authenticatedClient;
 
   @override
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
-    final result = await _client.rpcCall(
+    final result = await _rpcCall(
       path: inventoryEndpoint,
       method: 'list_agents',
       params: <String, Object?>{'include_inactive': includeInactive},
-      bearerToken: _bearerToken(),
     );
     final agents = result['agents'];
     if (agents is! List) {
@@ -85,14 +104,13 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
     required String agentDid,
     required String displayName,
   }) async {
-    final result = await _client.rpcCall(
+    final result = await _rpcCall(
       path: inventoryEndpoint,
       method: 'update_display_name',
       params: <String, Object?>{
         'agent_did': agentDid,
         'display_name': displayName,
       },
-      bearerToken: _bearerToken(),
     );
     final agent = result['agent'];
     if (agent is Map) {
@@ -107,11 +125,10 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
 
   @override
   Future<void> unbindAgent({required String agentDid}) async {
-    await _client.rpcCall(
+    await _rpcCall(
       path: inventoryEndpoint,
       method: 'unbind_agent',
       params: <String, Object?>{'agent_did': agentDid},
-      bearerToken: _bearerToken(),
     );
   }
 
@@ -139,14 +156,17 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
     required String controllerDid,
     required String daemonAgentDid,
     required String runtime,
+    required String handle,
+    required String displayName,
   }) {
     return _issueToken(<String, Object?>{
       'agent_kind': 'runtime',
       'controller_did': controllerDid,
+      'handle': handle,
       'metadata': <String, Object?>{
         'runtime': runtime,
         'daemon_agent_did': daemonAgentDid,
-        'default_display_name': 'Hermes',
+        'default_display_name': displayName,
         'client_request_id':
             'app_req_${DateTime.now().toUtc().microsecondsSinceEpoch}',
       },
@@ -156,11 +176,10 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
   Future<AgentRegistrationToken> _issueToken(
     Map<String, Object?> params,
   ) async {
-    final result = await _client.rpcCall(
+    final result = await _rpcCall(
       path: registrationEndpoint,
       method: 'issue_token',
       params: params,
-      bearerToken: _bearerToken(),
     );
     final rawToken =
         result['token'] ?? result['registration_token'] ?? result['raw_token'];
@@ -172,6 +191,27 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
       token: token,
       tokenId: result['token_id']?.toString(),
       expiresAt: DateTime.tryParse(result['expires_at']?.toString() ?? ''),
+    );
+  }
+
+  Future<Map<String, Object?>> _rpcCall({
+    required String path,
+    required String method,
+    required Map<String, Object?> params,
+  }) {
+    final authenticatedClient = _authenticatedClient;
+    if (authenticatedClient != null) {
+      return authenticatedClient.rpcCall(
+        path: path,
+        method: method,
+        params: params,
+      );
+    }
+    return _client.rpcCall(
+      path: path,
+      method: method,
+      params: params,
+      bearerToken: _bearerToken(),
     );
   }
 
