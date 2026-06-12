@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
@@ -9,6 +10,7 @@ import 'package:awiki_me/src/presentation/group/create_group_page.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -79,6 +81,35 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);
     }
+  });
+
+  testWidgets('通过 Group DID 加入群失败时停留列表并提示错误', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..loginResult = session
+      ..failNextJoinGroup = true;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const GroupListPage(),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(CupertinoIcons.link));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byType(CupertinoTextField).last,
+      'did:wba:awiki.ai:group:e1_group',
+    );
+    await tester.tap(find.text('加入'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(GroupListPage), findsOneWidget);
+    expect(find.byType(ChatView), findsNothing);
+    expect(gateway.lastJoinedGroupDid, isNull);
   });
 
   testWidgets('群详情显示 Group DID 且不再显示 join-code 操作', (tester) async {
@@ -200,6 +231,64 @@ void main() {
     expect(find.text('bob'), findsOneWidget);
     expect(find.text(memberRef), findsNothing);
     expect(find.text('2 人'), findsOneWidget);
+  });
+
+  testWidgets('群详情添加成员失败时保留对话框并提示错误', (tester) async {
+    const groupDid = 'did:wba:awiki.ai:group:e1_group';
+    final gateway = FakeAwikiGateway()
+      ..loginResult = session
+      ..failNextAddGroupMember = true
+      ..groups = <GroupSummary>[
+        GroupSummary(
+          groupId: groupDid,
+          name: '融资协作群',
+          description: '',
+          memberCount: 1,
+          lastMessageAt: DateTime(2026, 5, 17, 10),
+          myRole: 'owner',
+        ),
+      ]
+      ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+        groupDid: <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: session.did,
+            did: session.did,
+            handle: session.handle ?? session.did,
+            role: 'owner',
+            profileUrl: null,
+          ),
+        ],
+      };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: GroupDetailPage(initialGroup: gateway.groups.first),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('group-detail-add-member-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byType(CupertinoTextField).last,
+      'did:wba:awiki.ai:user:bob:e1_member',
+    );
+    await tester.tap(find.text('添加'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('添加成员'), findsOneWidget);
+    expect(gateway.lastAddedGroupId, isNull);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(GroupDetailPage)),
+    );
+    expect(container.read(uiFeedbackProvider)?.danger, isTrue);
+    expect(container.read(uiFeedbackProvider)?.message.id, 'raw');
+    expect(
+      container.read(uiFeedbackProvider)?.message.detail,
+      'add member failed',
+    );
   });
 
   testWidgets('群详情可以移除成员并刷新成员列表', (tester) async {

@@ -2,6 +2,7 @@ import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -38,6 +39,25 @@ void main() {
     final feedback = container.read(uiFeedbackProvider);
     expect(feedback?.danger, isFalse);
     expect(feedback?.message.id, 'featureNotImplemented');
+  });
+
+  testWidgets('设置页未登录时禁用凭证导出和删除入口', (tester) async {
+    final gateway = FakeAwikiGateway();
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const SettingsPage(), gateway: gateway),
+    );
+
+    expect(find.text('当前暂无可导出的登录凭证'), findsOneWidget);
+    expect(find.text('退出并删除当前登录凭证'), findsOneWidget);
+
+    await tester.tap(find.text('导出身份凭证'));
+    await tester.tap(find.text('退出并删除当前凭证'));
+    await tester.pump();
+
+    expect(gateway.exportCalls, 0);
+    expect(gateway.deleteLocalCredentialCalls, 0);
+    expect(find.byType(CupertinoAlertDialog), findsNothing);
   });
 
   testWidgets('设置页退出并删除当前凭证会删除本地凭证而不显示未实现错误', (tester) async {

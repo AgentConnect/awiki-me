@@ -98,9 +98,12 @@ class ProfileController extends StateNotifier<ProfileState> {
     if (state.profile == null || homepageUrl.isEmpty) {
       return;
     }
-    final markdown = await ref.read(homepageMarkdownLoaderProvider)(
-      homepageUrl,
-    );
+    final String? markdown;
+    try {
+      markdown = await ref.read(homepageMarkdownLoaderProvider)(homepageUrl);
+    } catch (_) {
+      return;
+    }
     if (markdown == null) {
       return;
     }

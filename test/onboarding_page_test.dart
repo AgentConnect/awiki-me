@@ -450,6 +450,40 @@ void main() {
     expect(feedback?.danger, isFalse);
   });
 
+  testWidgets('手机号验证码发送失败时保持可重试且不进入倒计时', (tester) async {
+    final gateway = FakeAwikiGateway()..failNextSendOtp = true;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('登录或注册'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byType(CupertinoTextField).first,
+      '13800138000',
+    );
+    await tester.tap(find.text('发送验证码'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(gateway.sendOtpCalls, 1);
+    expect(find.text('发送验证码'), findsOneWidget);
+    expect(find.textContaining('重新发送（'), findsNothing);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    final state = container.read(onboardingProvider);
+    expect(state.isBusy, isFalse);
+    expect(state.otpResendCountdown, 0);
+    final feedback = container.read(uiFeedbackProvider);
+    expect(feedback?.danger, isTrue);
+    expect(feedback?.message.id, 'raw');
+    expect(feedback?.message.detail, 'otp gateway unavailable');
+  });
+
   testWidgets('邮箱验证成功后检查按钮变成下一步', (tester) async {
     final gateway = FakeAwikiGateway()..emailVerificationResult = true;
 

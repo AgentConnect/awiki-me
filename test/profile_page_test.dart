@@ -133,6 +133,32 @@ void main() {
     expect(find.text('Keep this copy'), findsOneWidget);
   });
 
+  testWidgets('个人资料页主页加载失败时保留本地 profile 正文', (tester) async {
+    const profile = UserProfile(
+      did: 'did:test:homepage-error',
+      nickName: 'Alice',
+      bio: 'Bio',
+      tags: <String>['local'],
+      profileMarkdown: '# Alice\n\nLocal fallback body',
+      handle: 'alice',
+    );
+    final gateway = FakeAwikiGateway()..myProfile = profile;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ProfilePage(),
+        gateway: gateway,
+        profile: profile,
+        homepageMarkdownLoader: (_) async => throw StateError('homepage down'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('Local fallback body'), findsOneWidget);
+    expect(find.text('local'), findsOneWidget);
+  });
+
   testWidgets('个人资料页显示粉丝和关注数量', (tester) async {
     const profile = UserProfile(
       did: 'did:test:789',

@@ -296,6 +296,11 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   bool failNextSend = false;
   bool failNextFollow = false;
   bool failNextListConversations = false;
+  bool failNextSendOtp = false;
+  bool failListFollowing = false;
+  bool failListFollowers = false;
+  bool failNextJoinGroup = false;
+  bool failNextAddGroupMember = false;
   Duration sendDelay = Duration.zero;
   SessionIdentity? refreshedSession;
   HandleRegistrationStatus handleRegistrationStatus =
@@ -515,6 +520,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
 
   @override
   Future<GroupSummary> joinGroup(String groupDid) async {
+    if (failNextJoinGroup) {
+      failNextJoinGroup = false;
+      throw StateError('join group failed');
+    }
     lastJoinedGroupDid = groupDid;
     final group = GroupSummary(
       groupId: groupDid,
@@ -538,6 +547,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     required String memberRef,
     String role = 'member',
   }) async {
+    if (failNextAddGroupMember) {
+      failNextAddGroupMember = false;
+      throw StateError('add member failed');
+    }
     lastAddedGroupId = groupId;
     lastAddedMemberRef = memberRef;
     lastAddedMemberRole = role;
@@ -621,6 +634,9 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
 
   @override
   Future<List<RelationshipSummary>> listFollowers() async {
+    if (failListFollowers) {
+      throw StateError('followers unavailable');
+    }
     return followers;
   }
 
@@ -650,6 +666,9 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
 
   @override
   Future<List<RelationshipSummary>> listFollowing() async {
+    if (failListFollowing) {
+      throw StateError('following unavailable');
+    }
     return following;
   }
 
@@ -840,6 +859,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   @override
   Future<void> sendOtp({required String phone}) async {
     sendOtpCalls += 1;
+    if (failNextSendOtp) {
+      failNextSendOtp = false;
+      throw StateError('otp gateway unavailable');
+    }
   }
 
   @override

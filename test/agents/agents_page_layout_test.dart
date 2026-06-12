@@ -40,6 +40,40 @@ void main() {
     expect(find.text('安装命令'), findsNothing);
   });
 
+  testWidgets('agents workspace shows empty state and load error banner', (
+    tester,
+  ) async {
+    final control = _FailingListAgentControlService()
+      ..agents = const <AgentSummary>[];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('暂无代理'), findsOneWidget);
+    expect(find.text('智能体信息暂时无法加载，请稍后重试。'), findsOneWidget);
+
+    control.failList = false;
+    await tester.tap(find.text('重试'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('智能体信息暂时无法加载，请稍后重试。'), findsNothing);
+    expect(find.text('暂无代理'), findsOneWidget);
+  });
+
   testWidgets('daemon upgrade action appears only when upgrade is needed', (
     tester,
   ) async {
@@ -988,6 +1022,18 @@ class _CountingRefreshAgentControlService extends FakeAgentControlService {
   Future<void> refreshDaemonStatus(String daemonAgentDid) async {
     refreshCount += 1;
     await super.refreshDaemonStatus(daemonAgentDid);
+  }
+}
+
+class _FailingListAgentControlService extends FakeAgentControlService {
+  bool failList = true;
+
+  @override
+  Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
+    if (failList) {
+      throw StateError('agent inventory failed');
+    }
+    return agents;
   }
 }
 

@@ -657,6 +657,48 @@ void main() {
     expect(find.byKey(const Key('chat-attachment-button')), findsNothing);
   });
 
+  testWidgets('打开空历史直聊时显示可发送的空会话', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:empty-history',
+      displayName: 'Empty Peer',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:empty-peer',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await tester.pumpAndSettle();
+
+    expect(gateway.fetchDmHistoryCalls, 1);
+    expect(find.text('Empty Peer'), findsOneWidget);
+    expect(find.byType(CupertinoTextField), findsOneWidget);
+    expect(find.byKey(const Key('chat-send-button')), findsOneWidget);
+    expect(find.textContaining('发送失败'), findsNothing);
+  });
+
   testWidgets('聊天输入框回车后直接发送消息', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(

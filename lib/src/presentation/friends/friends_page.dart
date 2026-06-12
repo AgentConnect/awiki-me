@@ -592,6 +592,22 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
               );
             }
             if (items.isEmpty && index == 1) {
+              if (listState.error != null) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  child: AwikiMeErrorNotice(
+                    message: AppMessage.fromError(
+                      listState.error!,
+                    ).resolve(context.l10n),
+                    trailing: AppSecondaryButton(
+                      label: '重试',
+                      onPressed: () => ref
+                          .read(relationshipListProvider(widget.type).notifier)
+                          .refresh(),
+                    ),
+                  ),
+                );
+              }
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 18),
                 child: AppCardSection(

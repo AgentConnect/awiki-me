@@ -263,6 +263,41 @@ void main() {
     }
   });
 
+  testWidgets('关注列表加载失败时显示错误并支持重试', (tester) async {
+    final gateway = FakeAwikiGateway()..failListFollowing = true;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const RelationshipListPage(
+          type: FriendsRelationshipListType.following,
+        ),
+        gateway: gateway,
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.textContaining('following unavailable'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+
+    gateway
+      ..failListFollowing = false
+      ..following = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: 'did:test:alice',
+          displayName: 'Alice',
+          relationship: 'following',
+        ),
+      ];
+
+    await tester.tap(find.text('重试'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alice'), findsOneWidget);
+    expect(find.textContaining('following unavailable'), findsNothing);
+  });
+
   testWidgets('macOS 点击联系人页 Group 入口在右侧展示群聊列表', (tester) async {
     final groups = <GroupSummary>[
       GroupSummary(
