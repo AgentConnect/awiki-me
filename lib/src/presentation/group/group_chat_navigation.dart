@@ -29,9 +29,9 @@ Future<void> openGroupChat(
     avatarSeed: group.groupId,
   );
 
-  await ref
+  ref
       .read(conversationListProvider.notifier)
-      .restoreConversation(conversation);
+      .restoreConversationBestEffort(conversation);
   ref.read(conversationListProvider.notifier).upsertConversation(conversation);
   await ref.read(chatThreadsProvider.notifier).openConversation(conversation);
   if (!context.mounted) {

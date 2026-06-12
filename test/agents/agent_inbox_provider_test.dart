@@ -160,6 +160,57 @@ void main() {
     expect(thread.messages.last.attachments.first.filename, '未命名附件');
   });
 
+  test('opening inbox thread clears local unread count immediately', () async {
+    final control = FakeAgentControlService()
+      ..nextInboxRequestId = 'cmd_inbox_current'
+      ..nextInboxThreadRequestId = 'cmd_thread_current';
+    final container = _container(control);
+    addTearDown(container.dispose);
+
+    await container
+        .read(agentInboxProvider.notifier)
+        .queryInbox(
+          daemonAgentDid: 'did:agent:daemon',
+          runtimeAgentDid: 'did:agent:runtime',
+        );
+    container.read(agentInboxProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'status_scope': 'runtime_inbox',
+        'daemon_agent_did': 'did:agent:daemon',
+        'runtime_agent_did': 'did:agent:runtime',
+        'request_id': 'cmd_inbox_current',
+        'state': 'succeeded',
+        'result': <String, Object?>{
+          'items': <Object?>[
+            <String, Object?>{
+              'thread_id': 'dm:peer-scope:v1:bob',
+              'kind': 'direct',
+              'title': 'bob.anpclaw.com',
+              'peer_handle': 'bob.anpclaw.com',
+              'peer_user_id': 'user-bob',
+              'last_message_preview': 'hello',
+              'unread_count': 3,
+            },
+          ],
+        },
+      },
+    );
+
+    final item = container.read(agentInboxProvider).items.single;
+    expect(item.unreadCount, 3);
+
+    await container
+        .read(agentInboxProvider.notifier)
+        .queryThread(
+          daemonAgentDid: 'did:agent:daemon',
+          runtimeAgentDid: 'did:agent:runtime',
+          item: item,
+        );
+
+    expect(container.read(agentInboxProvider).items.single.unreadCount, 0);
+  });
+
   test(
     'attachment content type without attachment payload stays plain message',
     () {

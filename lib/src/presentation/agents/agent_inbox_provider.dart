@@ -56,6 +56,24 @@ class AgentInboxItem {
       lastContentType: _string(json['last_content_type']) ?? 'text',
     );
   }
+
+  AgentInboxItem copyWith({int? unreadCount}) {
+    return AgentInboxItem(
+      threadId: threadId,
+      kind: kind,
+      title: title,
+      peerDid: peerDid,
+      peerHandle: peerHandle,
+      peerUserId: peerUserId,
+      groupId: groupId,
+      groupDid: groupDid,
+      lastMessagePreview: lastMessagePreview,
+      lastMessageAtMs: lastMessageAtMs,
+      unreadCount: unreadCount ?? this.unreadCount,
+      hasAttachments: hasAttachments,
+      lastContentType: lastContentType,
+    );
+  }
 }
 
 class AgentInboxAttachment {
@@ -367,9 +385,19 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
         state.thread.runtimeAgentDid == runtimeAgentDid &&
         state.thread.threadId == item.threadId;
     _threadPrepending = false;
+    final items = state.items
+        .map((candidate) {
+          if (candidate.threadId != item.threadId ||
+              candidate.unreadCount == 0) {
+            return candidate;
+          }
+          return candidate.copyWith(unreadCount: 0);
+        })
+        .toList(growable: false);
     state = state.copyWith(
       daemonAgentDid: daemonAgentDid,
       runtimeAgentDid: runtimeAgentDid,
+      items: items,
       thread: state.thread.copyWith(
         runtimeAgentDid: runtimeAgentDid,
         threadId: item.threadId,

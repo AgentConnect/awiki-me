@@ -12,6 +12,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
+import 'package:awiki_me/src/presentation/conversation_list/conversation_list_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
@@ -26,6 +27,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
+
+class _StaticConversationListController extends ConversationListController {
+  _StaticConversationListController(
+    super.ref,
+    List<ConversationSummary> conversations,
+  ) {
+    state = ConversationListState(conversations: conversations);
+  }
+}
 
 void main() {
   testWidgets('macOS 聊天输入条保持发送能力', (tester) async {
@@ -63,6 +73,12 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
       ),
     );
 
@@ -694,6 +710,278 @@ void main() {
     expect(gateway.lastSentThreadId, 'dm:did:test:peer');
     expect(gateway.lastSentContent, 'hello');
     expect(find.text('hello'), findsOneWidget);
+  });
+
+  testWidgets('切换会话后保留各自输入草稿并在发送后清空', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversationA = ConversationSummary(
+      threadId: 'dm:draft-a',
+      displayName: 'Alice',
+      lastMessagePreview: 'alice old preview',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:alice',
+    );
+    final conversationB = ConversationSummary(
+      threadId: 'dm:draft-b',
+      displayName: 'Bob',
+      lastMessagePreview: 'bob old preview',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 1),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:bob',
+    );
+    var selected = conversationA;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            return CupertinoPageScaffold(
+              child: Column(
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      CupertinoButton(
+                        key: const Key('open-draft-a'),
+                        onPressed: () {
+                          setState(() {
+                            selected = conversationA;
+                          });
+                        },
+                        child: const Text('Alice'),
+                      ),
+                      CupertinoButton(
+                        key: const Key('open-draft-b'),
+                        onPressed: () {
+                          setState(() {
+                            selected = conversationB;
+                          });
+                        },
+                        child: const Text('Bob'),
+                      ),
+                    ],
+                  ),
+                  Expanded(
+                    child: ChatView(conversation: selected, embedded: false),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+
+    await tester.enterText(find.byType(CupertinoTextField), 'draft for alice');
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('open-draft-b')));
+    await tester.pumpAndSettle();
+
+    var input = tester.widget<CupertinoTextField>(
+      find.byType(CupertinoTextField),
+    );
+    expect(input.controller?.text, isEmpty);
+
+    await tester.enterText(find.byType(CupertinoTextField), 'draft for bob');
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('open-draft-a')));
+    await tester.pumpAndSettle();
+
+    input = tester.widget<CupertinoTextField>(find.byType(CupertinoTextField));
+    expect(input.controller?.text, 'draft for alice');
+
+    await tester.tap(find.byKey(const Key('open-draft-b')));
+    await tester.pumpAndSettle();
+
+    input = tester.widget<CupertinoTextField>(find.byType(CupertinoTextField));
+    expect(input.controller?.text, 'draft for bob');
+
+    await tester.tap(find.byKey(const Key('open-draft-a')));
+    await tester.pumpAndSettle();
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastSentThreadId, 'dm:did:test:alice');
+    expect(gateway.lastSentContent, 'draft for alice');
+    input = tester.widget<CupertinoTextField>(find.byType(CupertinoTextField));
+    expect(input.controller?.text, isEmpty);
+
+    await tester.tap(find.byKey(const Key('open-draft-b')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open-draft-a')));
+    await tester.pumpAndSettle();
+
+    input = tester.widget<CupertinoTextField>(find.byType(CupertinoTextField));
+    expect(input.controller?.text, isEmpty);
+  });
+
+  testWidgets('最近会话列表显示未发送草稿预览并在草稿清空后恢复原预览', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:draft-preview',
+      displayName: 'Alice',
+      lastMessagePreview: 'alice old preview',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:alice',
+    );
+    gateway.conversations = <ConversationSummary>[conversation];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(embedded: true, bottomInset: 0),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('alice old preview'), findsOneWidget);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ConversationListPage)),
+    );
+    container
+        .read(chatComposerDraftsProvider.notifier)
+        .setText(conversation, 'draft for alice');
+    await tester.pump();
+
+    expect(find.text('[草稿] draft for alice'), findsOneWidget);
+    expect(find.text('alice old preview'), findsNothing);
+
+    container
+        .read(chatComposerDraftsProvider.notifier)
+        .clearDraft(conversation);
+    await tester.pump();
+
+    expect(find.text('[草稿] draft for alice'), findsNothing);
+    expect(find.text('alice old preview'), findsOneWidget);
+  });
+
+  testWidgets('发送中消息只在气泡左侧显示转圈标志', (tester) async {
+    final gateway = FakeAwikiGateway()..sendDelay = const Duration(seconds: 1);
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:sending-inline-status',
+      displayName: 'Tester',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+
+    await tester.enterText(find.byType(CupertinoTextField), 'pending hello');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('pending hello'), findsOneWidget);
+    expect(find.text('发送中...'), findsNothing);
+    expect(find.byType(CupertinoActivityIndicator), findsWidgets);
+
+    await tester.pumpAndSettle(const Duration(seconds: 2));
+  });
+
+  testWidgets('发送给 Runtime Agent 时投递完成后才显示处理中提示', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..sendDelay = const Duration(milliseconds: 80);
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:agent-send-before-processing',
+      displayName: '我的智能体',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:agent:runtime',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          agentsProvider.overrideWith((ref) {
+            final controller = AgentsController(ref);
+            controller.state = const AgentsState(
+              agents: <AgentSummary>[
+                AgentSummary(
+                  agentDid: 'did:agent:runtime',
+                  kind: AgentKind.runtime,
+                  daemonAgentDid: 'did:agent:daemon',
+                  runtime: 'hermes',
+                  displayName: '我的智能体',
+                  activeState: 'active',
+                  latest: AgentLatestStatus(status: 'ready'),
+                ),
+              ],
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+
+    await tester.enterText(find.byType(CupertinoTextField), '请总结');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pump(const Duration(milliseconds: 20));
+
+    expect(find.text('请总结'), findsOneWidget);
+    expect(find.text('发送中...'), findsNothing);
+    expect(find.byType(CupertinoActivityIndicator), findsWidgets);
+    expect(find.text('智能体正在处理...'), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('智能体正在处理...'), findsOneWidget);
   });
 
   testWidgets('文本消息内容支持系统原生选中复制', (tester) async {

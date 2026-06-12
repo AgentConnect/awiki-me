@@ -803,11 +803,10 @@ class _AgentDetailPane extends StatelessWidget {
               _RunStatusPanel(run: agent.recentRuns.first),
               SizedBox(height: responsive.spacing(18)),
             ],
-            const _SectionTitle('高级诊断'),
-            SizedBox(height: responsive.spacing(8)),
-            _InfoGrid(agent: agent),
-            SizedBox(height: responsive.spacing(10)),
-            _DiagnosticsPanel(agent: agent),
+            _DiagnosticInfoPanel(
+              key: ValueKey<String>('diagnostic-${agent.agentDid}'),
+              agent: agent,
+            ),
           ],
         ),
       ),
@@ -882,170 +881,105 @@ class _RunStatusPanel extends StatelessWidget {
   }
 }
 
-class _DiagnosticsPanel extends StatelessWidget {
-  const _DiagnosticsPanel({required this.agent});
+class _DiagnosticInfoPanel extends StatefulWidget {
+  const _DiagnosticInfoPanel({super.key, required this.agent});
 
   final AgentSummary agent;
 
   @override
+  State<_DiagnosticInfoPanel> createState() => _DiagnosticInfoPanelState();
+}
+
+class _DiagnosticInfoPanelState extends State<_DiagnosticInfoPanel> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final diagnostics = agent.latest.diagnosticsSummary.entries
-        .where((entry) => entry.value != null)
-        .toList();
-    final emptyText = _diagnosticsEmptyText(agent);
+    final agent = widget.agent;
+    final essentialRows = _essentialDiagnosticRows(agent);
+    final moreRows = _expandedDiagnosticRows(agent);
+    final errorText = _diagnosticErrorText(agent);
+    final hasMore = moreRows.isNotEmpty;
+
     return Container(
-      padding: EdgeInsets.all(responsive.spacing(14)),
+      padding: EdgeInsets.all(responsive.spacing(16)),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFBF2),
-        borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(color: const Color(0xFFF3D9A2)),
+        color: CupertinoColors.white,
+        borderRadius: BorderRadius.circular(responsive.radius(10)),
+        border: Border.all(color: const Color(0xFFE4EAF3)),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x0F0B1220),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text(
-            '诊断摘要',
-            style: TextStyle(
-              color: Color(0xFF101B32),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          if (agent.latest.lastErrorSummary != null) ...<Widget>[
-            SizedBox(height: responsive.spacing(8)),
-            _CopyableDiagnosticText(
-              text: _redactDiagnosticValue(agent.latest.lastErrorSummary),
-              color: const Color(0xFF7A4A00),
-              fontSize: responsive.bodySm,
-            ),
-          ],
-          if (diagnostics.isNotEmpty) ...<Widget>[
-            SizedBox(height: responsive.spacing(8)),
-            for (final entry in diagnostics)
-              Padding(
-                padding: EdgeInsets.only(bottom: responsive.spacing(5)),
-                child: Row(
+          Row(
+            children: <Widget>[
+              Container(
+                width: responsive.displayScaled(34),
+                height: responsive.displayScaled(34),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0F5FF),
+                  borderRadius: BorderRadius.circular(responsive.radius(9)),
+                ),
+                child: Icon(
+                  CupertinoIcons.info_circle,
+                  color: const Color(0xFF0B65F8),
+                  size: responsive.iconMd,
+                ),
+              ),
+              SizedBox(width: responsive.spacing(10)),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    SizedBox(
-                      width: responsive.displayScaled(116),
-                      child: Text(
-                        entry.key,
-                        maxLines: 1,
-                        style: TextStyle(
-                          color: const Color(0xFF66728A),
-                          fontSize: responsive.metaSm,
-                        ),
+                    Text(
+                      '诊断信息',
+                      style: TextStyle(
+                        color: const Color(0xFF101B32),
+                        fontSize: responsive.bodyMd,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    Expanded(
-                      child: _CopyableDiagnosticText(
-                        text: _redactDiagnosticValue(
-                          entry.value,
-                          key: entry.key,
-                        ),
-                        color: const Color(0xFF101B32),
+                    SizedBox(height: responsive.spacing(2)),
+                    Text(
+                      agent.isDaemon ? '代理运行与身份信息' : '智能体身份信息',
+                      style: TextStyle(
+                        color: const Color(0xFF66728A),
                         fontSize: responsive.metaSm,
                       ),
                     ),
                   ],
                 ),
               ),
-          ] else if (agent.latest.lastErrorSummary == null) ...<Widget>[
-            SizedBox(height: responsive.spacing(8)),
-            Text(
-              emptyText,
-              style: TextStyle(
-                color: const Color(0xFF66728A),
-                fontSize: responsive.bodySm,
+            ],
+          ),
+          SizedBox(height: responsive.spacing(14)),
+          _DiagnosticRows(rows: essentialRows),
+          if (errorText != null) ...<Widget>[
+            SizedBox(height: responsive.spacing(12)),
+            _DiagnosticNotice(text: errorText),
+          ],
+          if (hasMore) ...<Widget>[
+            SizedBox(height: responsive.spacing(12)),
+            SelectionContainer.disabled(
+              child: _DiagnosticMoreButton(
+                expanded: _expanded,
+                onPressed: () => setState(() => _expanded = !_expanded),
               ),
             ),
+            if (_expanded) ...<Widget>[
+              SizedBox(height: responsive.spacing(10)),
+              _DiagnosticRows(rows: moreRows, compact: true),
+            ],
           ],
         ],
-      ),
-    );
-  }
-}
-
-String _diagnosticsEmptyText(AgentSummary agent) {
-  final status = agent.latest.status.trim().toLowerCase();
-  if (status == 'registering' ||
-      status == 'creating' ||
-      status == 'installing') {
-    return '代理尚未完成状态上报。';
-  }
-  if (status == 'offline') {
-    return '代理离线，暂时无法获取最新诊断。';
-  }
-  if (agent.latest.needsConfig || status == 'needs_config') {
-    return '暂无诊断摘要，请刷新状态或完成代理配置后再查看。';
-  }
-  if (status == 'failed') {
-    return '暂无诊断摘要，请刷新状态获取最新诊断。';
-  }
-  return '暂无异常诊断信息。';
-}
-
-class _InfoGrid extends StatelessWidget {
-  const _InfoGrid({required this.agent});
-
-  final AgentSummary agent;
-
-  @override
-  Widget build(BuildContext context) {
-    final items = <String, String>{
-      'DID': agent.agentDid,
-      if (agent.handle != null) 'handle': agent.handle!,
-      if (agent.daemonAgentDid != null) 'daemon': agent.daemonAgentDid!,
-      if (agent.latest.version != null) 'version': agent.latest.version!,
-      if (agent.latest.latestVersion != null)
-        'latest': agent.latest.latestVersion!,
-      if (agent.latest.minSupportedVersion != null)
-        'min': agent.latest.minSupportedVersion!,
-      if (agent.latest.platform != null) 'platform': agent.latest.platform!,
-      if (agent.latest.service != null) 'service': agent.latest.service!,
-      if (agent.latest.lastSeenAt != null)
-        'last_seen': agent.latest.lastSeenAt!.toLocal().toString(),
-      if (agent.latest.lastErrorCode != null)
-        'error': agent.latest.lastErrorCode!,
-    };
-    final responsive = context.awikiResponsive;
-    return Container(
-      padding: EdgeInsets.all(responsive.spacing(14)),
-      decoration: BoxDecoration(
-        color: CupertinoColors.white,
-        borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(color: const Color(0xFFE5EAF2)),
-      ),
-      child: Column(
-        children: items.entries
-            .map(
-              (entry) => Padding(
-                padding: EdgeInsets.only(bottom: responsive.spacing(7)),
-                child: Row(
-                  children: <Widget>[
-                    SizedBox(
-                      width: responsive.displayScaled(96),
-                      child: Text(
-                        entry.key,
-                        style: const TextStyle(color: Color(0xFF66728A)),
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        _redactDiagnosticValue(entry.value, key: entry.key),
-                        maxLines: 2,
-                        style: const TextStyle(
-                          color: Color(0xFF101B32),
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-            .toList(),
       ),
     );
   }
@@ -1161,35 +1095,319 @@ class _AgentErrorBanner extends StatelessWidget {
   }
 }
 
-class _CopyableDiagnosticText extends StatelessWidget {
-  const _CopyableDiagnosticText({
-    required this.text,
-    required this.color,
-    required this.fontSize,
-  });
+class _DiagnosticRows extends StatelessWidget {
+  const _DiagnosticRows({required this.rows, this.compact = false});
 
-  final String text;
-  final Color color;
-  final double fontSize;
+  final List<_DiagnosticRowData> rows;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
       children: <Widget>[
-        Expanded(
-          child: Text(
-            text,
-            maxLines: 3,
-            style: TextStyle(color: color, fontSize: fontSize),
-          ),
-        ),
-        SizedBox(width: responsive.spacing(6)),
-        _InlineCopyButton(text: text),
+        for (var index = 0; index < rows.length; index++) ...<Widget>[
+          if (index > 0)
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: responsive.spacing(4)),
+              child: Container(height: 1, color: const Color(0xFFEFF3F8)),
+            ),
+          _DiagnosticInfoRow(row: rows[index], compact: compact),
+        ],
       ],
     );
   }
+}
+
+class _DiagnosticInfoRow extends StatelessWidget {
+  const _DiagnosticInfoRow({required this.row, required this.compact});
+
+  final _DiagnosticRowData row;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        vertical: responsive.spacing(compact ? 3 : 5),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: <Widget>[
+          SizedBox(
+            width: responsive.displayScaled(compact ? 96 : 112),
+            child: Text(
+              row.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: const Color(0xFF66728A),
+                fontSize: responsive.metaSm,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          SizedBox(width: responsive.spacing(10)),
+          Expanded(
+            child: Text(
+              row.value,
+              maxLines: row.isLong ? 3 : 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: const Color(0xFF18243A),
+                fontSize: compact ? responsive.metaSm : responsive.bodySm,
+                fontWeight: FontWeight.w500,
+                height: 1.28,
+              ),
+            ),
+          ),
+          if (row.copyable) ...<Widget>[
+            SizedBox(width: responsive.spacing(8)),
+            _InlineCopyButton(text: row.copyText ?? row.value),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DiagnosticNotice extends StatelessWidget {
+  const _DiagnosticNotice({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.spacing(12),
+        vertical: responsive.spacing(10),
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF6EA),
+        borderRadius: BorderRadius.circular(responsive.radius(8)),
+        border: Border.all(color: const Color(0xFFF6D7A8)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Padding(
+            padding: EdgeInsets.only(top: responsive.spacing(1)),
+            child: Icon(
+              CupertinoIcons.exclamationmark_triangle,
+              color: const Color(0xFFB26900),
+              size: responsive.iconSm,
+            ),
+          ),
+          SizedBox(width: responsive.spacing(8)),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: const Color(0xFF6F4B16),
+                fontSize: responsive.bodySm,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DiagnosticMoreButton extends StatelessWidget {
+  const _DiagnosticMoreButton({
+    required this.expanded,
+    required this.onPressed,
+  });
+
+  final bool expanded;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return AppPressable(
+      onTap: onPressed,
+      semanticLabel: expanded ? '收起诊断详情' : '查看更多诊断',
+      tooltip: expanded ? '收起' : '查看更多',
+      borderRadius: BorderRadius.circular(responsive.radius(8)),
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: responsive.spacing(10),
+          vertical: responsive.spacing(8),
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF6F8FC),
+          borderRadius: BorderRadius.circular(responsive.radius(8)),
+          border: Border.all(color: const Color(0xFFE5EAF2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              expanded ? '收起' : '查看更多',
+              style: TextStyle(
+                color: const Color(0xFF40506B),
+                fontSize: responsive.metaSm,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            SizedBox(width: responsive.spacing(5)),
+            Icon(
+              expanded
+                  ? CupertinoIcons.chevron_up
+                  : CupertinoIcons.chevron_down,
+              color: const Color(0xFF66728A),
+              size: responsive.iconSm * 0.78,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DiagnosticRowData {
+  const _DiagnosticRowData({
+    required this.label,
+    required this.value,
+    this.copyable = false,
+    this.copyText,
+    this.isLong = false,
+  });
+
+  final String label;
+  final String value;
+  final bool copyable;
+  final String? copyText;
+  final bool isLong;
+}
+
+List<_DiagnosticRowData> _essentialDiagnosticRows(AgentSummary agent) {
+  return <_DiagnosticRowData>[
+    _DiagnosticRowData(
+      label: 'DID',
+      value: agent.agentDid,
+      copyable: true,
+      copyText: agent.agentDid,
+      isLong: true,
+    ),
+    if (_nonEmpty(agent.handle) != null)
+      _DiagnosticRowData(
+        label: 'Handle',
+        value: _nonEmpty(agent.handle)!,
+        copyable: true,
+        copyText: _nonEmpty(agent.handle)!,
+      ),
+    if (agent.isDaemon && _nonEmpty(agent.latest.version) != null)
+      _DiagnosticRowData(
+        label: '当前版本',
+        value: _nonEmpty(agent.latest.version)!,
+      ),
+    if (agent.isDaemon && _nonEmpty(agent.latest.platform) != null)
+      _DiagnosticRowData(label: '平台', value: _nonEmpty(agent.latest.platform)!),
+  ];
+}
+
+List<_DiagnosticRowData> _expandedDiagnosticRows(AgentSummary agent) {
+  final rows = <_DiagnosticRowData>[];
+  final latest = agent.latest;
+  void add(String label, Object? value, {String? key, bool isLong = false}) {
+    final text = _nonEmpty(value);
+    if (text == null) {
+      return;
+    }
+    rows.add(
+      _DiagnosticRowData(
+        label: label,
+        value: _redactDiagnosticValue(text, key: key ?? label),
+        isLong: isLong || text.length > 48,
+      ),
+    );
+  }
+
+  if (agent.isDaemon) {
+    add('最新版本', latest.latestVersion, key: 'latest_version');
+    add('最低可用版本', latest.minSupportedVersion, key: 'min_supported_version');
+    add('服务', latest.service, key: 'service');
+    add('最近上报', latest.lastSeenAt?.toLocal().toString(), key: 'last_seen');
+  }
+  add('错误代码', latest.lastErrorCode, key: 'last_error_code');
+  for (final entry in latest.diagnosticsSummary.entries) {
+    if (!_shouldShowDiagnosticSummaryEntry(agent, entry.key, entry.value)) {
+      continue;
+    }
+    add(_diagnosticLabel(entry.key), entry.value, key: entry.key, isLong: true);
+  }
+  return rows;
+}
+
+String? _diagnosticErrorText(AgentSummary agent) {
+  final summary = _nonEmpty(agent.latest.lastErrorSummary);
+  if (summary == null) {
+    return null;
+  }
+  return _redactDiagnosticValue(summary, key: 'last_error_summary');
+}
+
+bool _shouldShowDiagnosticSummaryEntry(
+  AgentSummary agent,
+  String key,
+  Object? value,
+) {
+  final text = _nonEmpty(value);
+  if (text == null) {
+    return false;
+  }
+  final normalized = key.trim().toLowerCase();
+  const daemonOwnedKeys = <String>{
+    'version',
+    'latest_version',
+    'min_supported_version',
+    'platform',
+    'service',
+    'service_installed',
+    'installation_status',
+    'download_base_url',
+    'base_url',
+  };
+  if (agent.isRuntime && daemonOwnedKeys.contains(normalized)) {
+    return false;
+  }
+  return true;
+}
+
+String _diagnosticLabel(String key) {
+  switch (key.trim().toLowerCase()) {
+    case 'runner':
+      return '运行器';
+    case 'profile_status':
+      return '配置状态';
+    case 'installation_status':
+      return '安装状态';
+    case 'service_installed':
+      return '服务安装';
+    case 'config_summary':
+      return '配置摘要';
+    case 'hermes_profile':
+      return 'Hermes 配置';
+    case 'runner_status':
+      return '运行状态';
+    case 'active_session_count':
+      return '活跃会话';
+    default:
+      return key;
+  }
+}
+
+String? _nonEmpty(Object? value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
 }
 
 class _InlineCopyButton extends StatelessWidget {

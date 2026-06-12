@@ -24,11 +24,13 @@ Future<void> main(List<String> args) async {
 
 class E2eRunner {
   E2eRunner({required this.root, required this.config, required this.options})
-    : commands = CommandRunner(root: root, dryRun: options.dryRun);
+    : paths = E2ePaths(root),
+      commands = CommandRunner(root: root, dryRun: options.dryRun);
 
   final Directory root;
   final E2eConfig config;
   final RunnerOptions options;
+  final E2ePaths paths;
   final CommandRunner commands;
 
   late final Directory reportDir;
@@ -38,8 +40,7 @@ class E2eRunner {
     final totalStopwatch = Stopwatch()..start();
     var succeeded = false;
     final runId = _newRunId();
-    reportDir = Directory('${root.path}/.e2e/reports/$runId')
-      ..createSync(recursive: true);
+    reportDir = paths.reportDir(runId)..createSync(recursive: true);
 
     try {
       _section('AWiki Me E2E $runId');
@@ -285,7 +286,7 @@ class E2eRunner {
     _section('Logging in ${device.label}');
     await _runMaestro(
       device,
-      '.maestro/login.yaml',
+      paths.maestroFlow('login.yaml'),
       {
         'PHONE': account.phone,
         'HANDLE': account.handle,
@@ -308,7 +309,7 @@ class E2eRunner {
     _section('Messaging $label');
     final wait = await _startMaestro(
       receiver,
-      '.maestro/open_chat_and_wait.yaml',
+      paths.maestroFlow('open_chat_and_wait.yaml'),
       {
         'PEER_HANDLE': receiverPeerHandle,
         'MESSAGE_TEXT': message,
@@ -321,7 +322,7 @@ class E2eRunner {
     try {
       await _runMaestro(
         sender,
-        '.maestro/open_chat_and_send.yaml',
+        paths.maestroFlow('open_chat_and_send.yaml'),
         {
           'PEER_HANDLE': senderPeerHandle,
           'MESSAGE_TEXT': message,
@@ -1125,7 +1126,7 @@ class RunnerOptions {
   final bool help;
 
   static RunnerOptions parse(List<String> args) {
-    var configPath = 'awiki_e2e.local.yaml';
+    var configPath = 'e2e/config.local.yaml';
     var skipBuild = false;
     var dryRun = false;
     var help = false;
@@ -1167,14 +1168,25 @@ class RunnerOptions {
 Run the AWiki Me two-device E2E smoke test.
 
 Usage:
-  dart run tool/e2e_runner.dart [--config awiki_e2e.local.yaml] [--skip-build] [--dry-run]
+  dart run e2e/runner.dart [--config e2e/config.local.yaml] [--skip-build] [--dry-run]
 
 Options:
-  --config      Local YAML config path. Defaults to awiki_e2e.local.yaml.
+  --config      Local YAML config path. Defaults to e2e/config.local.yaml.
   --skip-build  Reuse an existing Flutter debug build.
   --dry-run     Print commands without running them.
 ''');
   }
+}
+
+class E2ePaths {
+  E2ePaths(this.root);
+
+  final Directory root;
+
+  Directory reportDir(String runId) =>
+      Directory('${root.path}/e2e/reports/$runId');
+
+  String maestroFlow(String fileName) => 'e2e/maestro/$fileName';
 }
 
 class E2eFailure implements Exception {

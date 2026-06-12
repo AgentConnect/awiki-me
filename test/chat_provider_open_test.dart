@@ -294,6 +294,54 @@ void main() {
     expect(thread.agentPendingTurns, isEmpty);
   });
 
+  test('发送给智能体时必须等消息投递成功后才进入处理中状态', () async {
+    gateway.sendDelay = const Duration(milliseconds: 50);
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    final sendFuture = sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendMessage(
+          conversation: conversation,
+          content: '总结一下',
+          expectedAgentReplyDid: 'did:peer',
+        );
+    await Future<void>.delayed(Duration.zero);
+
+    var thread = sendContainer.read(chatThreadProvider(conversation.threadId));
+    expect(thread.messages.single.sendState, MessageSendState.sending);
+    expect(thread.agentPendingTurns, isEmpty);
+
+    await sendFuture;
+
+    thread = sendContainer.read(chatThreadProvider(conversation.threadId));
+    expect(thread.messages.single.sendState, MessageSendState.sent);
+    expect(thread.isAgentProcessing, isTrue);
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(
+      thread.pendingAgentTurnForMessage(thread.messages.single),
+      isNotNull,
+    );
+  });
+
   test('发送给智能体成功后显示处理中，收到智能体回复后清除', () async {
     final sendContainer = ProviderContainer(
       overrides: <Override>[

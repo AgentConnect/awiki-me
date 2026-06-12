@@ -84,22 +84,6 @@ class AgentPendingTurn {
         message.remoteId?.trim() == remote;
   }
 
-  AgentPendingTurn withRemoteMessageId(String? remoteMessageId) {
-    final normalized = remoteMessageId?.trim();
-    if (normalized == null ||
-        normalized.isEmpty ||
-        normalized == this.remoteMessageId) {
-      return this;
-    }
-    return AgentPendingTurn(
-      agentDid: agentDid,
-      localMessageId: localMessageId,
-      remoteMessageId: normalized,
-      startedAt: startedAt,
-      isOverdue: isOverdue,
-    );
-  }
-
   AgentPendingTurn markOverdue() {
     if (isOverdue) {
       return this;
@@ -111,6 +95,102 @@ class AgentPendingTurn {
       startedAt: startedAt,
       isOverdue: true,
     );
+  }
+}
+
+class ChatComposerDraft {
+  const ChatComposerDraft({this.text = '', this.pendingAttachment});
+
+  final String text;
+  final AttachmentDraft? pendingAttachment;
+
+  bool get isEmpty => text.isEmpty && pendingAttachment == null;
+
+  ChatComposerDraft copyWith({
+    String? text,
+    Object? pendingAttachment = _chatComposerDraftUnset,
+  }) {
+    return ChatComposerDraft(
+      text: text ?? this.text,
+      pendingAttachment: identical(pendingAttachment, _chatComposerDraftUnset)
+          ? this.pendingAttachment
+          : pendingAttachment as AttachmentDraft?,
+    );
+  }
+}
+
+const Object _chatComposerDraftUnset = Object();
+
+class ChatComposerDraftsController
+    extends StateNotifier<Map<String, ChatComposerDraft>> {
+  ChatComposerDraftsController() : super(const <String, ChatComposerDraft>{});
+
+  ChatComposerDraft draftFor(ConversationSummary conversation) {
+    for (final key in _draftKeysFor(conversation)) {
+      final draft = state[key];
+      if (draft != null) {
+        return draft;
+      }
+    }
+    return const ChatComposerDraft();
+  }
+
+  void setText(ConversationSummary conversation, String text) {
+    _upsertDraft(conversation, draftFor(conversation).copyWith(text: text));
+  }
+
+  void setAttachment(
+    ConversationSummary conversation,
+    AttachmentDraft? attachment,
+  ) {
+    _upsertDraft(
+      conversation,
+      draftFor(conversation).copyWith(pendingAttachment: attachment),
+    );
+  }
+
+  void setDraft(ConversationSummary conversation, ChatComposerDraft draft) {
+    _upsertDraft(conversation, draft);
+  }
+
+  void clearDraft(ConversationSummary conversation) {
+    final next = Map<String, ChatComposerDraft>.from(state);
+    for (final key in _draftKeysFor(conversation)) {
+      next.remove(key);
+    }
+    state = next;
+  }
+
+  void _upsertDraft(ConversationSummary conversation, ChatComposerDraft draft) {
+    final keys = _draftKeysFor(conversation);
+    if (keys.isEmpty) {
+      return;
+    }
+    final canonicalKey = keys.first;
+    final next = Map<String, ChatComposerDraft>.from(state);
+    for (final key in keys) {
+      next.remove(key);
+    }
+    if (!draft.isEmpty) {
+      next[canonicalKey] = draft;
+    }
+    state = next;
+  }
+
+  List<String> _draftKeysFor(ConversationSummary conversation) {
+    final keys = <String>[];
+    void add(String value) {
+      final key = value.trim();
+      if (key.isNotEmpty && !keys.contains(key)) {
+        keys.add(key);
+      }
+    }
+
+    for (final key in conversation.visibilityKeys) {
+      add(key);
+    }
+    add(conversation.threadId);
+    return keys;
   }
 }
 
@@ -226,19 +306,12 @@ class ChatThreadsController
     )..add(pending);
     _setMessages(conversation.threadId, current);
     final pendingConversation = _withConversationPreview(conversation, pending);
-    await ref
+    ref
         .read(conversationListProvider.notifier)
-        .restoreConversation(pendingConversation);
+        .restoreConversationBestEffort(pendingConversation);
     ref
         .read(conversationListProvider.notifier)
         .upsertConversation(pendingConversation);
-    _startAgentProcessingIfNeeded(
-      conversation: pendingConversation,
-      expectedAgentReplyDid: expectedAgentReplyDid,
-      localMessageId: pending.localId,
-      remoteMessageId: pending.remoteId,
-      startedAt: pending.createdAt,
-    );
     var latestConversation = pendingConversation;
     try {
       final sent = await ref
@@ -250,10 +323,10 @@ class ChatThreadsController
           .timeout(_sendTimeout);
       final sentInThread = _withThreadId(sent, conversation.threadId);
       _replaceMessage(conversation.threadId, pending.localId, sentInThread);
-      _bindAgentPendingTurnMessageId(
-        conversation.threadId,
-        localMessageId: pending.localId,
-        remoteMessageId: sentInThread.remoteId ?? sentInThread.localId,
+      _startAgentProcessingForDeliveredMessage(
+        conversation: conversation,
+        expectedAgentReplyDid: expectedAgentReplyDid,
+        deliveredMessage: sentInThread,
       );
       latestConversation = _withConversationPreview(conversation, sentInThread);
       ref
@@ -262,10 +335,6 @@ class ChatThreadsController
     } catch (_) {
       final failed = pending.copyWith(sendState: MessageSendState.failed);
       _replaceMessage(conversation.threadId, pending.localId, failed);
-      _removeAgentPendingTurn(
-        conversation.threadId,
-        localMessageId: pending.localId,
-      );
       latestConversation = _withConversationPreview(conversation, failed);
       ref
           .read(conversationListProvider.notifier)
@@ -324,19 +393,12 @@ class ChatThreadsController
     )..add(pending);
     _setMessages(conversation.threadId, current);
     final pendingConversation = _withConversationPreview(conversation, pending);
-    await ref
+    ref
         .read(conversationListProvider.notifier)
-        .restoreConversation(pendingConversation);
+        .restoreConversationBestEffort(pendingConversation);
     ref
         .read(conversationListProvider.notifier)
         .upsertConversation(pendingConversation);
-    _startAgentProcessingIfNeeded(
-      conversation: pendingConversation,
-      expectedAgentReplyDid: expectedAgentReplyDid,
-      localMessageId: pending.localId,
-      remoteMessageId: pending.remoteId,
-      startedAt: pending.createdAt,
-    );
     var latestConversation = pendingConversation;
     try {
       final sent = await ref
@@ -350,10 +412,10 @@ class ChatThreadsController
           .timeout(_attachmentSendTimeout);
       final sentInThread = _withThreadId(sent, conversation.threadId);
       _replaceMessage(conversation.threadId, pending.localId, sentInThread);
-      _bindAgentPendingTurnMessageId(
-        conversation.threadId,
-        localMessageId: pending.localId,
-        remoteMessageId: sentInThread.remoteId ?? sentInThread.localId,
+      _startAgentProcessingForDeliveredMessage(
+        conversation: conversation,
+        expectedAgentReplyDid: expectedAgentReplyDid,
+        deliveredMessage: sentInThread,
       );
       latestConversation = _withConversationPreview(conversation, sentInThread);
       ref
@@ -362,10 +424,6 @@ class ChatThreadsController
     } catch (_) {
       final failed = pending.copyWith(sendState: MessageSendState.failed);
       _replaceMessage(conversation.threadId, pending.localId, failed);
-      _removeAgentPendingTurn(
-        conversation.threadId,
-        localMessageId: pending.localId,
-      );
       latestConversation = _withConversationPreview(conversation, failed);
       ref
           .read(conversationListProvider.notifier)
@@ -405,9 +463,14 @@ class ChatThreadsController
   Future<void> retryMessage({
     required ConversationSummary conversation,
     required ChatMessage message,
+    String? expectedAgentReplyDid,
   }) async {
     if (message.isAttachmentMessage) {
-      await retryAttachment(conversation: conversation, message: message);
+      await retryAttachment(
+        conversation: conversation,
+        message: message,
+        expectedAgentReplyDid: expectedAgentReplyDid,
+      );
       return;
     }
     final retrying = message.copyWith(sendState: MessageSendState.sending);
@@ -422,10 +485,12 @@ class ChatThreadsController
           .read(messagingServiceProvider)
           .retryByResendOriginalContent(retrying)
           .timeout(_sendTimeout);
-      _replaceMessage(
-        conversation.threadId,
-        message.localId,
-        _withThreadId(retried, conversation.threadId),
+      final retriedInThread = _withThreadId(retried, conversation.threadId);
+      _replaceMessage(conversation.threadId, message.localId, retriedInThread);
+      _startAgentProcessingForDeliveredMessage(
+        conversation: conversation,
+        expectedAgentReplyDid: expectedAgentReplyDid,
+        deliveredMessage: retriedInThread,
       );
     } catch (_) {
       final failed = retrying.copyWith(sendState: MessageSendState.failed);
@@ -443,6 +508,7 @@ class ChatThreadsController
   Future<void> retryAttachment({
     required ConversationSummary conversation,
     required ChatMessage message,
+    String? expectedAgentReplyDid,
   }) async {
     final attachment = message.attachment;
     final localPath = attachment?.localPath?.trim();
@@ -473,10 +539,12 @@ class ChatThreadsController
             idempotencyKey: message.localId,
           )
           .timeout(_attachmentSendTimeout);
-      _replaceMessage(
-        conversation.threadId,
-        message.localId,
-        _withThreadId(retried, conversation.threadId),
+      final retriedInThread = _withThreadId(retried, conversation.threadId);
+      _replaceMessage(conversation.threadId, message.localId, retriedInThread);
+      _startAgentProcessingForDeliveredMessage(
+        conversation: conversation,
+        expectedAgentReplyDid: expectedAgentReplyDid,
+        deliveredMessage: retriedInThread,
       );
     } catch (_) {
       final failed = retrying.copyWith(sendState: MessageSendState.failed);
@@ -628,18 +696,21 @@ class ChatThreadsController
     }
   }
 
-  void _startAgentProcessingIfNeeded({
+  void _startAgentProcessingForDeliveredMessage({
     required ConversationSummary conversation,
     required String? expectedAgentReplyDid,
-    required String localMessageId,
-    required String? remoteMessageId,
-    required DateTime startedAt,
+    required ChatMessage deliveredMessage,
   }) {
     final agentDid = expectedAgentReplyDid?.trim();
+    final remoteMessageId = deliveredMessage.remoteId?.trim().isNotEmpty == true
+        ? deliveredMessage.remoteId!.trim()
+        : deliveredMessage.localId.trim();
     if (conversation.isGroup ||
         agentDid == null ||
         agentDid.isEmpty ||
-        localMessageId.trim().isEmpty) {
+        !deliveredMessage.isMine ||
+        deliveredMessage.sendState != MessageSendState.sent ||
+        deliveredMessage.localId.trim().isEmpty) {
       return;
     }
     final threadId = conversation.threadId;
@@ -647,15 +718,14 @@ class ChatThreadsController
     final nextTurns = <AgentPendingTurn>[
       ...current.agentPendingTurns.where(
         (turn) =>
-            turn.localMessageId != localMessageId &&
-            (remoteMessageId == null ||
-                turn.remoteMessageId != remoteMessageId),
+            turn.localMessageId != deliveredMessage.localId &&
+            turn.remoteMessageId != remoteMessageId,
       ),
       AgentPendingTurn(
         agentDid: agentDid,
-        localMessageId: localMessageId,
+        localMessageId: deliveredMessage.localId,
         remoteMessageId: remoteMessageId,
-        startedAt: startedAt,
+        startedAt: deliveredMessage.createdAt,
       ),
     ];
     state = <String, ChatThreadState>{
@@ -663,56 +733,6 @@ class ChatThreadsController
       threadId: current.copyWith(agentPendingTurns: nextTurns),
     };
     _scheduleAgentProcessingOverdue(threadId);
-  }
-
-  void _bindAgentPendingTurnMessageId(
-    String threadId, {
-    required String localMessageId,
-    required String? remoteMessageId,
-  }) {
-    final normalizedRemoteId = remoteMessageId?.trim();
-    if (normalizedRemoteId == null || normalizedRemoteId.isEmpty) {
-      return;
-    }
-    final current = thread(threadId);
-    var changed = false;
-    final nextTurns = current.agentPendingTurns.map((turn) {
-      if (turn.localMessageId != localMessageId) {
-        return turn;
-      }
-      final next = turn.withRemoteMessageId(normalizedRemoteId);
-      changed = changed || next != turn;
-      return next;
-    }).toList();
-    if (!changed) {
-      return;
-    }
-    state = <String, ChatThreadState>{
-      ...state,
-      threadId: current.copyWith(agentPendingTurns: nextTurns),
-    };
-  }
-
-  void _removeAgentPendingTurn(
-    String threadId, {
-    required String localMessageId,
-  }) {
-    final current = thread(threadId);
-    final nextTurns = current.agentPendingTurns
-        .where((turn) => turn.localMessageId != localMessageId)
-        .toList();
-    if (nextTurns.length == current.agentPendingTurns.length) {
-      return;
-    }
-    state = <String, ChatThreadState>{
-      ...state,
-      threadId: current.copyWith(agentPendingTurns: nextTurns),
-    };
-    if (nextTurns.isEmpty) {
-      _cancelAgentProcessingTimer(threadId);
-    } else {
-      _scheduleAgentProcessingOverdue(threadId);
-    }
   }
 
   List<AgentPendingTurn> _nextAgentPendingTurnsAfterMerge(
@@ -1078,6 +1098,12 @@ final chatThreadsProvider =
     StateNotifierProvider<ChatThreadsController, Map<String, ChatThreadState>>(
       (ref) => ChatThreadsController(ref),
     );
+
+final chatComposerDraftsProvider =
+    StateNotifierProvider<
+      ChatComposerDraftsController,
+      Map<String, ChatComposerDraft>
+    >((ref) => ChatComposerDraftsController());
 
 final chatThreadProvider = Provider.family<ChatThreadState, String>((
   ref,

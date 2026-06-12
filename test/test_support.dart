@@ -1142,13 +1142,18 @@ class FakeMessagingService implements MessagingService {
     int limit = 100,
     String? cursor,
   }) {
-    return switch (thread) {
+    final history = switch (thread) {
       AppDirectThreadRef(:final peerDidOrHandle) => gateway.fetchDmHistory(
         peerDidOrHandle,
       ),
       AppGroupThreadRef(:final groupDid) => gateway.fetchGroupHistory(groupDid),
       AppMessageThreadRef(:final threadId) => _loadThreadHistory(threadId),
     };
+    return history.then(
+      (messages) => messages
+          .where((message) => message.hasRenderableContent)
+          .toList(growable: false),
+    );
   }
 
   @override

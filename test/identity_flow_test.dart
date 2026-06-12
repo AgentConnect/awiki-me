@@ -101,7 +101,7 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('添加联系人先解析身份再发送关注请求', (tester) async {
+  testWidgets('关注联系人先解析身份再关注该身份', (tester) async {
     final gateway = FakeAwikiGateway()
       ..publicProfilesByQuery = <String, UserProfile>{
         'cgw.awiki.ai': peerProfile,
@@ -116,7 +116,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('添加联系人'));
+    await tester.tap(find.text('关注联系人'));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('identity-lookup-input')),
@@ -124,13 +124,6 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.descendant(
-        of: find.byKey(const Key('identity-add-reason-field')),
-        matching: find.byType(CupertinoTextField),
-      ),
-      '希望协作测试消息收发',
-    );
     await tester.ensureVisible(
       find.byKey(const Key('identity-add-contact-button')),
     );
@@ -153,8 +146,8 @@ class _IdentityFlowHarness extends ConsumerWidget {
         child: SizedBox(
           width: 240,
           child: AppPrimaryButton(
-            label: '添加联系人',
-            onPressed: () => showAddIdentityDialog(context, ref),
+            label: '关注联系人',
+            onPressed: () => showFollowIdentityDialog(context, ref),
           ),
         ),
       ),

@@ -96,6 +96,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   final textController = TextEditingController();
   final scrollController = ScrollController();
   AttachmentDraft? _pendingAttachment;
+  bool _isApplyingComposerDraft = false;
   bool _isRefreshingCurrentConversation = false;
   bool _didRequestAgents = false;
   final Set<String> _downloadingAttachmentMessageIds = <String>{};
@@ -103,11 +104,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
   @override
   void initState() {
     super.initState();
+    _restoreComposerDraft(widget.conversation);
+    textController.addListener(_persistComposerText);
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
   @override
   void dispose() {
+    textController.removeListener(_persistComposerText);
     textController.dispose();
     scrollController.dispose();
     super.dispose();
@@ -116,10 +120,42 @@ class _ChatViewState extends ConsumerState<ChatView> {
   @override
   void didUpdateWidget(covariant ChatView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.conversation.threadId != widget.conversation.threadId) {
-      _pendingAttachment = null;
-      textController.clear();
+    if (!sameConversationTarget(oldWidget.conversation, widget.conversation)) {
+      _restoreComposerDraft(widget.conversation, updateState: true);
     }
+  }
+
+  void _persistComposerText() {
+    if (_isApplyingComposerDraft) {
+      return;
+    }
+    ref
+        .read(chatComposerDraftsProvider.notifier)
+        .setText(_currentConversationSnapshot(), textController.text);
+  }
+
+  void _restoreComposerDraft(
+    ConversationSummary conversation, {
+    bool updateState = false,
+  }) {
+    final draft = ref
+        .read(chatComposerDraftsProvider.notifier)
+        .draftFor(conversation);
+    void applyDraft() {
+      _pendingAttachment = draft.pendingAttachment;
+      _isApplyingComposerDraft = true;
+      textController.value = TextEditingValue(
+        text: draft.text,
+        selection: TextSelection.collapsed(offset: draft.text.length),
+      );
+      _isApplyingComposerDraft = false;
+    }
+
+    if (updateState && mounted) {
+      setState(applyDraft);
+      return;
+    }
+    applyDraft();
   }
 
   @override
@@ -317,6 +353,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                           .retryMessage(
                                             conversation: widget.conversation,
                                             message: message,
+                                            expectedAgentReplyDid:
+                                                runtimeAgent?.agentDid,
                                           );
                                     }
                                   : null)
@@ -410,7 +448,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   Future<void> _pickAndStageAttachment() async {
-    final conversation = _currentConversationForTitle();
+    final conversation = _currentConversationSnapshot();
     if (conversation.isDeletedAgentConversation ||
         _groupSendDisabledReason(conversation) != null) {
       return;
@@ -428,6 +466,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
       setState(() {
         _pendingAttachment = draft;
       });
+      ref
+          .read(chatComposerDraftsProvider.notifier)
+          .setAttachment(conversation, draft);
     } catch (error) {
       ref
           .read(uiFeedbackProvider.notifier)
@@ -439,9 +480,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
     if (_pendingAttachment == null) {
       return;
     }
+    final conversation = _currentConversationSnapshot();
     setState(() {
       _pendingAttachment = null;
     });
+    ref
+        .read(chatComposerDraftsProvider.notifier)
+        .setAttachment(conversation, null);
   }
 
   Future<void> _submitComposer(ConversationSummary conversation) async {
@@ -455,6 +500,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return;
     }
     textController.clear();
+    ref.read(chatComposerDraftsProvider.notifier).clearDraft(conversation);
     if (attachment != null) {
       setState(() {
         _pendingAttachment = null;
@@ -635,6 +681,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return base;
     }
     return base.copyWith(displayName: groupName);
+  }
+
+  ConversationSummary _currentConversationSnapshot() {
+    final conversations = ref.read(conversationListProvider).conversations;
+    final latest = _matchingConversation(conversations);
+    return latest ?? widget.conversation;
   }
 
   String? _currentGroupName(String groupId) {
@@ -1703,6 +1755,28 @@ class _MessageBubble extends StatelessWidget {
     return macStyle ? responsive.displayScaled(10) : responsive.spacing(10);
   }
 
+  Widget _withSendingIndicator(
+    BuildContext context, {
+    required bool isMine,
+    required bool macStyle,
+    required Widget child,
+  }) {
+    if (!isMine || message.sendState != MessageSendState.sending) {
+      return child;
+    }
+    final responsive = context.awikiResponsive;
+    final gap = macStyle ? responsive.displayScaled(7) : responsive.spacing(8);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: <Widget>[
+        _SendingMessageIndicator(macStyle: macStyle),
+        SizedBox(width: gap),
+        Flexible(child: child),
+      ],
+    );
+  }
+
   Widget _buildMacBubble(BuildContext context, bool isMine) {
     final responsive = context.awikiResponsive;
     final textStyle = TextStyle(
@@ -1728,20 +1802,29 @@ class _MessageBubble extends StatelessWidget {
           : CrossAxisAlignment.start,
       children: <Widget>[
         if (showSenderLabel) _buildSenderLabel(context, macStyle: true),
-        Container(
-          constraints: BoxConstraints(maxWidth: responsive.displayScaled(420)),
-          padding: EdgeInsets.symmetric(
-            horizontal: responsive.displayScaled(14),
-            vertical: responsive.displayScaled(10),
-          ),
-          decoration: BoxDecoration(
-            color: isMine ? const Color(0xFFEAF2FF) : CupertinoColors.white,
-            borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
-            border: Border.all(
-              color: isMine ? const Color(0xFFEAF2FF) : const Color(0xFFDDE5F0),
+        _withSendingIndicator(
+          context,
+          isMine: isMine,
+          macStyle: true,
+          child: Container(
+            constraints: BoxConstraints(
+              maxWidth: responsive.displayScaled(420),
             ),
+            padding: EdgeInsets.symmetric(
+              horizontal: responsive.displayScaled(14),
+              vertical: responsive.displayScaled(10),
+            ),
+            decoration: BoxDecoration(
+              color: isMine ? const Color(0xFFEAF2FF) : CupertinoColors.white,
+              borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
+              border: Border.all(
+                color: isMine
+                    ? const Color(0xFFEAF2FF)
+                    : const Color(0xFFDDE5F0),
+              ),
+            ),
+            child: SelectionArea(child: child),
           ),
-          child: SelectionArea(child: child),
         ),
         if (message.sendState == MessageSendState.failed) ...<Widget>[
           SizedBox(height: responsive.displayScaled(8)),
@@ -1774,15 +1857,6 @@ class _MessageBubble extends StatelessWidget {
                 ),
               ],
             ],
-          ),
-        ] else if (message.sendState == MessageSendState.sending) ...<Widget>[
-          SizedBox(height: responsive.displayScaled(8)),
-          Text(
-            '发送中...',
-            style: TextStyle(
-              fontSize: responsive.displayScaled(12),
-              color: const Color(0xFF8A96AA),
-            ),
           ),
         ],
       ],
@@ -1875,37 +1949,42 @@ class _MessageBubble extends StatelessWidget {
                   children: <Widget>[
                     if (showSenderLabel)
                       _buildSenderLabel(context, macStyle: false),
-                    Container(
-                      padding: responsive.scaledInsets(
-                        const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 16,
+                    _withSendingIndicator(
+                      context,
+                      isMine: isMine,
+                      macStyle: false,
+                      child: Container(
+                        padding: responsive.scaledInsets(
+                          const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 16,
+                          ),
                         ),
-                      ),
-                      decoration: BoxDecoration(
-                        color: isMine
-                            ? AwikiMePalette.actionBlueSoft
-                            : theme.subtleSurface,
-                        borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(isMine ? 22 : 6),
-                          topRight: Radius.circular(isMine ? 6 : 22),
-                          bottomLeft: const Radius.circular(22),
-                          bottomRight: const Radius.circular(22),
+                        decoration: BoxDecoration(
+                          color: isMine
+                              ? AwikiMePalette.actionBlueSoft
+                              : theme.subtleSurface,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(isMine ? 22 : 6),
+                            topRight: Radius.circular(isMine ? 6 : 22),
+                            bottomLeft: const Radius.circular(22),
+                            bottomRight: const Radius.circular(22),
+                          ),
                         ),
-                      ),
-                      child: SelectionArea(
-                        child: message.attachment == null
-                            ? _MessageTextContent(
-                                text: message.content,
-                                style: textStyle,
-                                renderMarkdown: !isMine,
-                              )
-                            : _AttachmentContent(
-                                message: message,
-                                macStyle: false,
-                                onDownload: onDownload,
-                                isDownloading: isDownloading,
-                              ),
+                        child: SelectionArea(
+                          child: message.attachment == null
+                              ? _MessageTextContent(
+                                  text: message.content,
+                                  style: textStyle,
+                                  renderMarkdown: !isMine,
+                                )
+                              : _AttachmentContent(
+                                  message: message,
+                                  macStyle: false,
+                                  onDownload: onDownload,
+                                  isDownloading: isDownloading,
+                                ),
+                        ),
                       ),
                     ),
                     if (message.sendState ==
@@ -1941,16 +2020,6 @@ class _MessageBubble extends StatelessWidget {
                           ],
                         ],
                       ),
-                    ] else if (message.sendState ==
-                        MessageSendState.sending) ...<Widget>[
-                      SizedBox(height: responsive.spacing(8)),
-                      Text(
-                        '发送中...',
-                        style: TextStyle(
-                          fontSize: responsive.metaSm,
-                          color: theme.tertiaryText,
-                        ),
-                      ),
                     ],
                   ],
                 ),
@@ -1958,6 +2027,37 @@ class _MessageBubble extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SendingMessageIndicator extends StatelessWidget {
+  const _SendingMessageIndicator({required this.macStyle});
+
+  final bool macStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final size = macStyle
+        ? responsive.displayScaled(18)
+        : responsive.scaled(18);
+    final radius = macStyle
+        ? responsive.displayScaled(6)
+        : responsive.scaled(6);
+    return Semantics(
+      label: '发送中',
+      liveRegion: true,
+      child: SizedBox.square(
+        dimension: size,
+        child: Center(
+          child: CupertinoActivityIndicator(
+            radius: radius,
+            color: macStyle ? const Color(0xFF8A96AA) : theme.tertiaryText,
+          ),
+        ),
       ),
     );
   }

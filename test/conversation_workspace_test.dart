@@ -43,6 +43,27 @@ class _StaticConversationListController extends ConversationListController {
   }
 }
 
+class _BlockingRestoreConversationListController
+    extends _StaticConversationListController {
+  _BlockingRestoreConversationListController(
+    super.ref,
+    super.items, {
+    required this.restoreStarted,
+    required this.restoreCompleter,
+  });
+
+  final Completer<void> restoreStarted;
+  final Completer<void> restoreCompleter;
+
+  @override
+  Future<void> restoreConversation(ConversationSummary conversation) {
+    if (!restoreStarted.isCompleted) {
+      restoreStarted.complete();
+    }
+    return restoreCompleter.future;
+  }
+}
+
 void main() {
   final conversation = ConversationSummary(
     threadId: 'dm:did:me:did:peer',
@@ -106,6 +127,55 @@ void main() {
       find.byKey(const Key('chat-conversation-info-button')),
       findsOneWidget,
     );
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 最近会话点击不等待恢复最近列表完成', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
+    final restoreStarted = Completer<void>();
+    final restoreCompleter = Completer<void>();
+    addTearDown(() {
+      if (!restoreCompleter.isCompleted) {
+        restoreCompleter.complete();
+      }
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) => _BlockingRestoreConversationListController(
+              ref,
+              gateway.conversations,
+              restoreStarted: restoreStarted,
+              restoreCompleter: restoreCompleter,
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatView), findsNothing);
+
+    await tester.tap(find.text('Marcus Chen'));
+    await tester.pump();
+
+    expect(restoreStarted.isCompleted, isTrue);
+    expect(find.byType(ChatView), findsOneWidget);
+
+    restoreCompleter.complete();
+    await tester.pump();
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

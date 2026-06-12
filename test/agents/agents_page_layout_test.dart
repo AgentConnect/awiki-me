@@ -383,7 +383,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('打开聊天'), findsOneWidget);
-    expect(find.text('did:agent:daemon:b'), findsWidgets);
+    expect(find.text('did:agent:runtime:b'), findsWidgets);
+    expect(find.text('awiki-agent-b'), findsOneWidget);
+    expect(find.text('did:agent:daemon:b'), findsNothing);
   });
 
   testWidgets('agent detail supports cross-field selection for diagnostics', (
@@ -460,18 +462,28 @@ void main() {
     expect(detailText('异常'), findsWidgets);
     expect(detailText('Runtime'), findsNothing);
     expect(detailText('Hermes Runtime'), findsNothing);
-    expect(detailText('高级诊断'), findsOneWidget);
+    expect(detailText('诊断信息'), findsOneWidget);
     expect(detailText('DID'), findsOneWidget);
     expect(detailText('did:agent:daemon'), findsWidgets);
-    expect(detailText('platform'), findsOneWidget);
+    expect(detailText('平台'), findsOneWidget);
     expect(detailText('linux-arm64'), findsOneWidget);
-    expect(detailText('service'), findsOneWidget);
-    expect(detailText('systemd_user'), findsOneWidget);
-    expect(detailText('error'), findsOneWidget);
-    expect(detailText('gateway_error'), findsOneWidget);
-    expect(detailText('诊断摘要'), findsOneWidget);
+    expect(detailText('服务'), findsNothing);
+    expect(detailText('systemd_user'), findsNothing);
+    expect(detailText('错误代码'), findsNothing);
+    expect(detailText('gateway_error'), findsNothing);
+    expect(detailText('诊断摘要'), findsNothing);
     expect(detailText('gateway timeout'), findsOneWidget);
-    expect(detailText('runner'), findsOneWidget);
+    expect(detailText('运行器'), findsNothing);
+    expect(detailText('queue=3'), findsNothing);
+
+    await tester.tap(find.text('查看更多'));
+    await tester.pumpAndSettle();
+
+    expect(detailText('服务'), findsOneWidget);
+    expect(detailText('systemd_user'), findsOneWidget);
+    expect(detailText('错误代码'), findsOneWidget);
+    expect(detailText('gateway_error'), findsOneWidget);
+    expect(detailText('运行器'), findsOneWidget);
     expect(detailText('queue=3'), findsOneWidget);
   });
 
@@ -589,20 +601,20 @@ void main() {
     final context = tester.element(find.byType(AgentsWorkspacePage));
     final container = ProviderScope.containerOf(context);
 
-    expect(find.text('诊断摘要'), findsOneWidget);
-    expect(find.text('代理尚未完成状态上报。'), findsOneWidget);
+    expect(find.text('诊断信息'), findsOneWidget);
+    expect(find.text('代理尚未完成状态上报。'), findsNothing);
 
     container.read(agentsProvider.notifier).select('did:agent:offline-daemon');
     await tester.pump(const Duration(milliseconds: 250));
 
-    expect(find.text('诊断摘要'), findsOneWidget);
-    expect(find.text('代理离线，暂时无法获取最新诊断。'), findsOneWidget);
+    expect(find.text('诊断信息'), findsOneWidget);
+    expect(find.text('代理离线，暂时无法获取最新诊断。'), findsNothing);
 
     container.read(agentsProvider.notifier).select('did:agent:runtime');
     await tester.pump(const Duration(milliseconds: 250));
 
-    expect(find.text('诊断摘要'), findsOneWidget);
-    expect(find.text('暂无异常诊断信息。'), findsOneWidget);
+    expect(find.text('诊断信息'), findsOneWidget);
+    expect(find.text('暂无异常诊断信息。'), findsNothing);
   });
 
   testWidgets('runtime detail shows latest run status with redacted error', (
@@ -972,6 +984,15 @@ void main() {
 
       expect(find.text('刷新中'), findsNothing);
       expect(find.textContaining('/Users/alice'), findsNothing);
+      expect(find.textContaining('/tmp/awiki'), findsNothing);
+      expect(find.textContaining('secretvalue'), findsNothing);
+      expect(find.textContaining('abc.def.ghi'), findsNothing);
+      expect(find.textContaining('<path>'), findsWidgets);
+      expect(find.text('<redacted>'), findsNothing);
+
+      await tester.tap(find.text('查看更多'));
+      await tester.pumpAndSettle();
+
       expect(find.textContaining('/tmp/awiki'), findsNothing);
       expect(find.textContaining('secretvalue'), findsNothing);
       expect(find.textContaining('abc.def.ghi'), findsNothing);

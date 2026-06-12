@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart'
     show PopupMenuEntry, PopupMenuItem, RelativeRect, showMenu;
@@ -49,10 +51,12 @@ class ConversationListPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(conversationListProvider);
+    final composerDrafts = ref.watch(chatComposerDraftsProvider);
     final responsive = context.awikiResponsive;
     if (macStyle && responsive.isMacDesktop) {
       return _MacConversationList(
         conversations: state.conversations,
+        composerDrafts: composerDrafts,
         selectedThreadId: selectedThreadId,
         bottomInset: bottomInset,
         onRefresh: () => ref.read(conversationListProvider.notifier).refresh(),
@@ -73,6 +77,7 @@ class ConversationListPage extends ConsumerWidget {
       onQuickActionsTap: () => showCommonQuickActionsMenu(context, ref),
       child: _ConversationRefreshView(
         conversations: state.conversations,
+        composerDrafts: composerDrafts,
         selectedThreadId: selectedThreadId,
         embedded: embedded,
         bottomInset: bottomInset,
@@ -88,8 +93,10 @@ class ConversationListPage extends ConsumerWidget {
     WidgetRef ref,
     ConversationSummary item,
   ) async {
-    await ref.read(conversationListProvider.notifier).restoreConversation(item);
-    await ref.read(chatThreadsProvider.notifier).openConversation(item);
+    ref
+        .read(conversationListProvider.notifier)
+        .restoreConversationBestEffort(item);
+    unawaited(ref.read(chatThreadsProvider.notifier).openConversation(item));
     if (!context.mounted) {
       return;
     }
@@ -142,6 +149,7 @@ class ConversationListPage extends ConsumerWidget {
 class _MacConversationList extends ConsumerStatefulWidget {
   const _MacConversationList({
     required this.conversations,
+    required this.composerDrafts,
     required this.selectedThreadId,
     required this.bottomInset,
     required this.onRefresh,
@@ -152,6 +160,7 @@ class _MacConversationList extends ConsumerStatefulWidget {
   });
 
   final List<ConversationSummary> conversations;
+  final Map<String, ChatComposerDraft> composerDrafts;
   final String? selectedThreadId;
   final double bottomInset;
   final Future<void> Function() onRefresh;
@@ -312,12 +321,16 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                           item,
                           classification,
                         );
+                        final preview = _conversationPreviewForDraft(
+                          item,
+                          widget.composerDrafts,
+                        );
                         return _MacConversationRow(
                           title: DidDisplayFormatter.conversationTitle(
                             item,
                             context.l10n,
                           ),
-                          preview: item.lastMessagePreview,
+                          preview: preview,
                           timeLabel: DateTimeFormatter.conversationTime(
                             item.lastMessageAt,
                           ),
@@ -377,6 +390,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
 class _ConversationRefreshView extends ConsumerWidget {
   const _ConversationRefreshView({
     required this.conversations,
+    required this.composerDrafts,
     required this.selectedThreadId,
     required this.embedded,
     required this.bottomInset,
@@ -386,6 +400,7 @@ class _ConversationRefreshView extends ConsumerWidget {
   });
 
   final List<ConversationSummary> conversations;
+  final Map<String, ChatComposerDraft> composerDrafts;
   final String? selectedThreadId;
   final bool embedded;
   final double bottomInset;
@@ -435,12 +450,16 @@ class _ConversationRefreshView extends ConsumerWidget {
                   item,
                   classification,
                 );
+                final preview = _conversationPreviewForDraft(
+                  item,
+                  composerDrafts,
+                );
                 return _ConversationRow(
                   title: DidDisplayFormatter.conversationTitle(
                     item,
                     context.l10n,
                   ),
-                  preview: item.lastMessagePreview,
+                  preview: preview,
                   timeLabel: DateTimeFormatter.conversationTime(
                     item.lastMessageAt,
                   ),
@@ -916,6 +935,39 @@ AgentVisualStatus? _conversationAgentStatus(
     runtimeAgent,
     hasPendingTurn: hasPendingTurn,
   );
+}
+
+String _conversationPreviewForDraft(
+  ConversationSummary conversation,
+  Map<String, ChatComposerDraft> drafts,
+) {
+  final draft = _draftForConversation(conversation, drafts);
+  if (draft.isEmpty) {
+    return conversation.lastMessagePreview;
+  }
+  final text = draft.text.trim();
+  if (text.isNotEmpty) {
+    return '[草稿] $text';
+  }
+  final attachment = draft.pendingAttachment;
+  if (attachment != null) {
+    return '[草稿] 附件：${attachment.displayName}';
+  }
+  return conversation.lastMessagePreview;
+}
+
+ChatComposerDraft _draftForConversation(
+  ConversationSummary conversation,
+  Map<String, ChatComposerDraft> drafts,
+) {
+  for (final key in conversation.visibilityKeys) {
+    final draft = drafts[key.trim()];
+    if (draft != null) {
+      return draft;
+    }
+  }
+  final threadDraft = drafts[conversation.threadId.trim()];
+  return threadDraft ?? const ChatComposerDraft();
 }
 
 class _ConversationTitleStatusLine extends StatelessWidget {

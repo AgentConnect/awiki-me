@@ -144,11 +144,11 @@ class AppMessage {
   factory AppMessage.groupNameRequired() =>
       const AppMessage._('groupNameRequired');
 
-  factory AppMessage.addFriendAlreadyExists() =>
-      const AppMessage._('addFriendAlreadyExists');
+  factory AppMessage.followContactAlreadyFollowing() =>
+      const AppMessage._('followContactAlreadyFollowing');
 
-  factory AppMessage.addFriendFollowed() =>
-      const AppMessage._('addFriendFollowed');
+  factory AppMessage.followContactSucceeded() =>
+      const AppMessage._('followContactSucceeded');
 
   factory AppMessage.peerProfileThreadDeleted() =>
       const AppMessage._('peerProfileThreadDeleted');
@@ -356,10 +356,10 @@ class AppMessage {
             : l10n.linkOpenFailedWithDetail(detail!);
       case 'groupNameRequired':
         return l10n.groupNameRequired;
-      case 'addFriendAlreadyExists':
-        return l10n.addFriendAlreadyExists;
-      case 'addFriendFollowed':
-        return l10n.addFriendFollowed;
+      case 'followContactAlreadyFollowing':
+        return l10n.followContactAlreadyFollowing;
+      case 'followContactSucceeded':
+        return l10n.followContactSucceeded;
       case 'peerProfileThreadDeleted':
         return l10n.peerProfileThreadDeleted;
       case 'conversationRemovedFromRecents':

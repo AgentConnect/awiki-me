@@ -473,7 +473,7 @@ abstract class AppLocalizations {
   /// No description provided for @conversationsEmptySubtitle.
   ///
   /// In zh, this message translates to:
-  /// **'去添加好友、关注联系人，或者先加入一个群聊吧。'**
+  /// **'去关注联系人，或者先加入一个群聊吧。'**
   String get conversationsEmptySubtitle;
 
   /// No description provided for @friendsTitle.
@@ -770,35 +770,35 @@ abstract class AppLocalizations {
   /// **'加入群聊'**
   String get quickActionJoinGroup;
 
-  /// No description provided for @quickActionAddFriend.
+  /// No description provided for @quickActionFollowContact.
   ///
   /// In zh, this message translates to:
-  /// **'添加朋友'**
-  String get quickActionAddFriend;
+  /// **'关注联系人'**
+  String get quickActionFollowContact;
 
-  /// No description provided for @addFriendTitle.
+  /// No description provided for @followContactTitle.
   ///
   /// In zh, this message translates to:
-  /// **'添加朋友'**
-  String get addFriendTitle;
+  /// **'关注联系人'**
+  String get followContactTitle;
 
-  /// No description provided for @addFriendPlaceholder.
+  /// No description provided for @followContactPlaceholder.
   ///
   /// In zh, this message translates to:
   /// **'输入 Handle 或 DID'**
-  String get addFriendPlaceholder;
+  String get followContactPlaceholder;
 
-  /// No description provided for @addFriendAlreadyExists.
-  ///
-  /// In zh, this message translates to:
-  /// **'已经添加或正在申请中'**
-  String get addFriendAlreadyExists;
-
-  /// No description provided for @addFriendFollowed.
+  /// No description provided for @followContactAlreadyFollowing.
   ///
   /// In zh, this message translates to:
   /// **'已关注'**
-  String get addFriendFollowed;
+  String get followContactAlreadyFollowing;
+
+  /// No description provided for @followContactSucceeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'已关注'**
+  String get followContactSucceeded;
 
   /// No description provided for @groupListTitle.
   ///

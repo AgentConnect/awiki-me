@@ -84,5 +84,5 @@ venv/
 /awiki_me/
 /icons/
 /dist/
-/.e2e/
-/awiki_e2e.local.yaml
+/e2e/reports/
+/e2e/config.local.yaml
