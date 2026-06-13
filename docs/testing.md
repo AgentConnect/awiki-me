@@ -40,42 +40,108 @@ flutter test
 ### Integration tests
 
 Flutter integration tests live in `integration_test/`. Keep them as smoke tests
-for Flutter engine, platform binding, bootstrap, and a few high-value App paths.
-Do not use integration tests to reimplement message-service wire validation,
-WebSocket internals, E2EE internals, or SDK native ABI checks that belong in
-`awiki-cli-rs2` or AWiki system tests.
+for Flutter engine, platform binding, bootstrap, native SDK loading, and a few
+high-value App paths. Do not use integration tests to reimplement
+message-service wire validation, WebSocket internals, E2EE internals, or SDK
+native ABI checks that belong in `awiki-cli-rs2` or AWiki system tests.
 
-The existing native `AwikiImCore.open` smoke is macOS-only. The current
-`awiki_im_core` plugin declares Android, iOS, and macOS native support; it does
-not declare Linux native support. This repository also does not currently have
-a `linux/` runner. Do not make Linux desktop integration a required gate until
-both the Flutter Linux runner and SDK native support are intentionally added.
-
-Useful commands:
+Useful macOS commands:
 
 ```bash
 flutter test integration_test
 flutter test integration_test -d macos
 ```
 
-For future Linux desktop integration on Ubuntu, the host normally needs Flutter
-Linux desktop prerequisites and an X server:
+Linux desktop integration is supported through the `linux/` runner. Ubuntu
+hosts need Flutter Linux desktop prerequisites and an X server; CI and servers
+without a real desktop should use `xvfb-run`:
 
 ```bash
 sudo apt update
 sudo apt install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libsecret-1-dev xvfb
 flutter config --enable-linux-desktop
 flutter devices
-xvfb-run -a flutter test integration_test -d linux
 ```
 
-Only use the Linux command as a required gate after this repo has a Linux
-runner and every integration test in that gate avoids unsupported native SDK
-paths or the SDK has Linux native support.
+Fast Linux desktop smoke:
 
-The implementation plan for adding a Linux Desktop runner, Linux native
-`awiki_im_core` support, and a real App + CLI peer E2E topology is documented
-in [e2e/linux-desktop-cli-peer-e2e/plan.md](e2e/linux-desktop-cli-peer-e2e/plan.md).
+```bash
+xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux
+```
+
+This uses fake App bootstrap and proves the Linux runner, Flutter shell,
+platform binding, App shell, onboarding shell, and basic widget tree can start
+under Xvfb. It does not test real login, real native SDK state, networking,
+secure storage, User Service, Message Service, or CLI peer behavior.
+
+Linux native SDK smoke:
+
+```bash
+xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux
+```
+
+This opens the real `awiki_im_core` Linux native backend and validates isolated
+SDK paths. Build the Linux native library from the sibling SDK repo first:
+
+```bash
+cd ../awiki-cli-rs2
+scripts/flutter/build-sdk-native.sh --linux-only
+```
+
+The implementation plan and execution evidence for the Linux Desktop runner,
+Linux native `awiki_im_core` support, and App + CLI peer E2E topology are in
+[e2e/linux-desktop-cli-peer-e2e/plan.md](e2e/linux-desktop-cli-peer-e2e/plan.md).
+
+### Desktop App + CLI Peer E2E
+
+`integration_test/desktop_cli_peer_smoke_test.dart` is the one Desktop
+App+CLI peer smoke. It starts the real App bootstrap, prepares or uses a real
+App test identity, uses `awiki-cli-rs2` as the peer client, and checks one
+App -> CLI message plus one CLI -> App message with a unique run id.
+
+The test is skipped unless `AWIKI_E2E=true`, so this command is safe as a
+build/smoke check without backend credentials:
+
+```bash
+xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux
+```
+
+Run the real E2E through the runner so CLI workspace, CLI `HOME`, App state,
+reports, and secrets stay isolated and redacted:
+
+```bash
+DEV_OTP_PHONE="$DEV_OTP_PHONE" \
+DEV_OTP_CODE="$DEV_OTP_CODE" \
+AWIKI_CLI_BIN="../awiki-cli-rs2/target/release/awiki-cli" \
+AWIKI_USER_SERVICE_URL="$AWIKI_USER_SERVICE_URL" \
+AWIKI_MESSAGE_SERVICE_URL="$AWIKI_MESSAGE_SERVICE_URL" \
+dart run tool/desktop_cli_peer_e2e_runner.dart \
+  --platform linux \
+  --service-base-url "$AWIKI_SERVICE_BASE_URL" \
+  --did-domain "$AWIKI_DID_DOMAIN"
+```
+
+Use the same test on macOS:
+
+```bash
+flutter test integration_test/desktop_cli_peer_smoke_test.dart -d macos
+```
+
+Use this Linux headless command when the runner starts Flutter:
+
+```bash
+xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux
+```
+
+The real Desktop App+CLI peer E2E requires non-production User Service,
+Message Service, DID domain, OTP credentials, a built `awiki-cli`, and two
+isolated identities. If User Service and Message Service have different base
+URLs, set both `AWIKI_USER_SERVICE_URL` and `AWIKI_MESSAGE_SERVICE_URL`; local
+legacy `molt-message` on port 9898 does not expose the v2 `/im/rpc` endpoint.
+
+Do not put the real backend + OTP Desktop E2E in the ordinary PR required gate.
+Keep it in manual, nightly, or release gates until the services, account pool,
+and runner environment are stable.
 
 ### Mobile E2E
 
@@ -126,6 +192,8 @@ PUB_HOSTED_URL=https://mirrors.tuna.tsinghua.edu.cn/dart-pub flutter pub get
 dart analyze
 flutter test
 dart run tool/e2e_runner.dart --config awiki_e2e.example.yaml --dry-run
+xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux
+xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux
 ```
 
 ## CI Gate
@@ -137,14 +205,22 @@ flutter pub get
 dart analyze
 flutter test
 dart run tool/e2e_runner.dart --config awiki_e2e.example.yaml --dry-run
+xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux
+xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux
 ```
 
-This gate intentionally does not run Linux desktop integration or real-device
-E2E. Linux desktop integration becomes a required CI step only after this repo
-adds a `linux/` runner and the native SDK paths used by the integration suite
-are supported on Linux. Real Android/iOS E2E belongs in a manual, nightly, or
-release gate unless stable devices, Maestro, non-production accounts, and
-backend isolation are available.
+This gate intentionally does not run real backend + OTP Desktop App+CLI peer
+E2E or real-device E2E. Linux desktop app/native smoke is deterministic and can
+run in PR CI after Linux desktop dependencies and the sibling
+`awiki-cli-rs2` SDK repo are available. The workflow checks out
+`awiki-cli-rs2` beside this repo because `pubspec.yaml` uses
+`../awiki-cli-rs2/packages/awiki_im_core`; set `AWIKI_CLI_RS2_REF` when CI must
+use a non-default SDK branch, and set `AWIKI_CI_READ_TOKEN` if the sibling repo
+requires a token. That SDK ref must include Linux native SDK support and the
+Desktop CLI peer endpoint config support used by the manual E2E runner.
+Real Desktop App+CLI peer E2E and real Android/iOS E2E belong in manual,
+nightly, or release gates unless stable devices, Maestro, non-production
+accounts, and backend isolation are available.
 
 Run integration and real-device E2E when the platform and devices are available,
 and record pass/fail evidence plus any report paths in the handoff or release

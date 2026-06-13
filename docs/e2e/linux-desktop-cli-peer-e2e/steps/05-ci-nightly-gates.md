@@ -8,14 +8,14 @@ Step index：05
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
+| Status | in_progress |
 | Branch | `feature/test-awiki-me` |
-| Started | - |
+| Started | 2026-06-13 22:38:00 CST |
 | Completed | - |
 | Commit | - |
 | Review evidence | - |
 | Verification evidence | - |
-| Next action | 在 Step 01-04 完成后，更新 CI gate 和测试文档 |
+| Next action | 更新 CI gate 和测试文档，保持真实 App+CLI peer E2E 在 manual / nightly / release gate |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 

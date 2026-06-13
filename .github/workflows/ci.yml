@@ -14,8 +14,18 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout AWiki Me
         uses: actions/checkout@v4
+        with:
+          path: test-awiki-me
+
+      - name: Checkout AWiki CLI / IM Core
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/awiki-cli-rs2
+          ref: ${{ vars.AWIKI_CLI_RS2_REF || 'feature/release-0526/agent-im-hutong' }}
+          token: ${{ secrets.AWIKI_CI_READ_TOKEN || github.token }}
+          path: awiki-cli-rs2
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v3
@@ -23,14 +33,65 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
+            libsecret-1-dev xvfb dbus-x11
+
+      - name: Enable Flutter Linux desktop
+        run: flutter config --enable-linux-desktop
+
+      - name: Prepare SQLite source for Linux desktop build
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            curl --fail --location --continue-at - \
+              --connect-timeout 20 \
+              --max-time 120 \
+              --output /tmp/sqlite-autoconf-3520000.tar.gz \
+              https://sqlite.org/2026/sqlite-autoconf-3520000.tar.gz && break
+            if [ "$attempt" = "6" ]; then
+              exit 1
+            fi
+            sleep 5
+          done
+          mkdir -p /tmp/awiki-sqlite3
+          tar -xzf /tmp/sqlite-autoconf-3520000.tar.gz \
+            --strip-components=1 \
+            -C /tmp/awiki-sqlite3
+
+      - name: Build Linux native IM Core
+        working-directory: awiki-cli-rs2
+        run: scripts/flutter/build-sdk-native.sh --linux-only
+
       - name: Install Flutter dependencies
+        working-directory: test-awiki-me
         run: flutter pub get
 
       - name: Dart analyze
+        working-directory: test-awiki-me
         run: dart analyze
 
       - name: Flutter test
+        working-directory: test-awiki-me
         run: flutter test
 
       - name: E2E runner dry-run
+        working-directory: test-awiki-me
         run: dart run tool/e2e_runner.dart --config awiki_e2e.example.yaml --dry-run
+
+      - name: Linux desktop app smoke
+        working-directory: test-awiki-me
+        env:
+          AWIKI_SQLITE3_SOURCE_DIR: /tmp/awiki-sqlite3
+        run: xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux
+
+      - name: Linux native IM Core smoke
+        working-directory: test-awiki-me
+        env:
+          AWIKI_SQLITE3_SOURCE_DIR: /tmp/awiki-sqlite3
+        run: xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux

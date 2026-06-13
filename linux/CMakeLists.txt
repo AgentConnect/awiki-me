@@ -50,6 +50,20 @@ endfunction()
 set(FLUTTER_MANAGED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/flutter")
 add_subdirectory(${FLUTTER_MANAGED_DIR})
 
+# sqlite3_flutter_libs uses CMake FetchContent on Linux. In CI, pre-seed the
+# SQLite source to avoid an unbounded network download during the CMake build.
+if(DEFINED ENV{AWIKI_SQLITE3_SOURCE_DIR})
+  file(TO_CMAKE_PATH "$ENV{AWIKI_SQLITE3_SOURCE_DIR}" AWIKI_SQLITE3_SOURCE_DIR)
+  if(EXISTS "${AWIKI_SQLITE3_SOURCE_DIR}/sqlite3.c")
+    set(FETCHCONTENT_SOURCE_DIR_SQLITE3 "${AWIKI_SQLITE3_SOURCE_DIR}" CACHE PATH
+      "Pre-seeded SQLite source for sqlite3_flutter_libs" FORCE)
+  else()
+    message(WARNING
+      "AWIKI_SQLITE3_SOURCE_DIR is set but sqlite3.c was not found: "
+      "${AWIKI_SQLITE3_SOURCE_DIR}")
+  endif()
+endif()
+
 # System-level dependencies.
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK REQUIRED IMPORTED_TARGET gtk+-3.0)
