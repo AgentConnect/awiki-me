@@ -8,14 +8,14 @@ Step index：02
 
 | 字段 | 值 |
 |---|---|
-| Status | review |
+| Status | done |
 | Branch | `feature/test-awiki-me` / `awiki-cli-rs2` 当前工作分支 |
 | Started | 2026-06-13 20:30:28 CST |
-| Completed | - |
-| Commit | - |
+| Completed | 2026-06-13 20:44:17 CST |
+| Commit | `awiki-cli-rs2:355523f`; `test-awiki-me:dcca508` |
 | Review evidence | Linux plugin declaration、CMake bundled library、loader、build script、docs 与 App smoke 变更已检查；默认 native build 保持 Apple/Android，Linux 通过 `--linux-only` 显式构建；生成的 `.so` 被 `.gitignore` 排除；未纳入 `awiki-cli-rs2` 既有 daemon 脏改 |
 | Verification evidence | `scripts/flutter/build-sdk-native.sh --linux-only --dry-run` 通过；`scripts/flutter/build-sdk-native.sh --dry-run` 通过且默认不跑 Linux；`scripts/flutter/codegen-check.sh` 通过；`cargo test -p im-core-dart --locked` 通过；`scripts/flutter/build-sdk-native.sh --linux-only` 通过；`cd packages/awiki_im_core && flutter test` 通过；`xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` 通过；App bundle 含 `build/linux/x64/debug/bundle/lib/libawiki_im_core.so`；`dart analyze` 和 `flutter test` 通过；两个 repo `git diff --check` 通过 |
-| Next action | 创建 Step 02 聚焦 commit，然后进入 Step 03 |
+| Next action | 启动 Step 03 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -146,7 +146,7 @@ Step index：02
 - Commit 范围：优先在 `awiki-cli-rs2` 建一个 SDK focused commit；`test-awiki-me` native smoke skip 调整可单独 commit。
 - Commit 前状态：`awiki-cli-rs2` 仍有既有 daemon / `Cargo.lock` 脏改；本步骤只纳入 SDK 相关文件。`test-awiki-me` 只包含 Plan、native smoke 和 Linux generated plugin CMake 变化。
 - 纳入文件：`awiki-cli-rs2/.gitignore`、`awiki-cli-rs2/crates/im-core-dart/Cargo.toml`、`awiki-cli-rs2/docs/flutter-sdk/awiki-im-core-flutter-sdk.md`、`awiki-cli-rs2/packages/awiki_im_core/README.md`、`awiki-cli-rs2/packages/awiki_im_core/lib/src/native_library_loader.dart`、`awiki-cli-rs2/packages/awiki_im_core/pubspec.yaml`、`awiki-cli-rs2/packages/awiki_im_core/linux/`、`awiki-cli-rs2/scripts/flutter/build-linux.sh`、`awiki-cli-rs2/scripts/flutter/build-sdk-native.sh`；`test-awiki-me/integration_test/im_core_open_smoke_test.dart`、`test-awiki-me/linux/flutter/generated_plugins.cmake`、本 Plan 和 Step 文档。
-- Commit 后证据：提交后回填 commit hash 和 commit 后 `git status --short --branch`。
+- Commit 后证据：`awiki-cli-rs2:355523f`、`test-awiki-me:dcca508`；`test-awiki-me` 提交后工作区干净；`awiki-cli-rs2` 提交后只剩既有 daemon / `Cargo.lock` 脏改。
 - 遗留未提交变更：`awiki-cli-rs2` 的 daemon 相关脏改与本步骤无关，保留不动；生成的 `packages/awiki_im_core/linux/lib/libawiki_im_core.so` 被 `.gitignore` 排除。
 - 建议消息：`sdk: add awiki im core linux native support`
 
