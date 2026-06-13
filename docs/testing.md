@@ -73,6 +73,10 @@ Only use the Linux command as a required gate after this repo has a Linux
 runner and every integration test in that gate avoids unsupported native SDK
 paths or the SDK has Linux native support.
 
+The implementation plan for adding a Linux Desktop runner, Linux native
+`awiki_im_core` support, and a real App + CLI peer E2E topology is documented
+in [e2e/linux-desktop-cli-peer-e2e/plan.md](e2e/linux-desktop-cli-peer-e2e/plan.md).
+
 ### Mobile E2E
 
 Mobile E2E is driven by `tool/e2e_runner.dart` and Maestro flows under
