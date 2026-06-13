@@ -1,4 +1,4 @@
-# Step 03：CLI peer 账号与服务编排
+# Step 03：Desktop CLI peer 账号与服务编排
 
 主 Plan：[../plan.md](../plan.md)  
 Step index：03  
@@ -15,13 +15,13 @@ Step index：03
 | Commit | - |
 | Review evidence | - |
 | Verification evidence | - |
-| Next action | 在用户确认执行后，设计并实现 E2E runner 的账号 / 服务配置层 |
+| Next action | 在用户确认执行后，设计并实现 Desktop E2E runner 的账号 / 服务配置层 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
 ## 2. 目标
 
-- 结果：提供一个可重复、可清理、可脱敏的 CLI peer 准备流程。
+- 结果：提供一个 macOS / Linux 共用、可重复、可清理、可脱敏的 CLI peer 准备流程。
 - 用户 / 系统可见行为：runner 能构建或定位 `awiki-cli`，创建隔离 workspace，读取非生产测试 OTP，注册或恢复 CLI peer 身份，并确认 CLI 可以访问同一测试服务。
 - 非目标：不在本步骤驱动 Flutter UI，不验证 App 收发消息，不把 `.env` 或真实账号状态提交到 repo。
 - 完成标准：CLI peer 在隔离 workspace 中完成 `id current` / `id status` / `msg inbox --limit 1 --format json` 的可解析检查。
@@ -31,15 +31,16 @@ Step index：03
 - 设计边界：CLI peer 是真实第二客户端，但它的状态和配置必须完全隔离于开发者默认 `~/.awiki-cli/`。
 - 核心决策：从 `user-service/.env` 或调用环境读取 key 名；runner 不记录值。测试账号先支持 register / recover 两种路径，以适配 handle 是否已存在。
 - 契约 / API / 数据流：CLI 只通过 `awiki-cli` public command surface 操作，不直接读写 CLI 内部 SQLite 或身份私钥。
-- 兼容性：保留既有 mobile `tool/e2e_runner.dart`，Linux CLI peer runner 可以是新文件，避免把 mobile Maestro 逻辑混入 desktop。
+- 兼容性：保留既有 mobile `tool/e2e_runner.dart`，Desktop CLI peer runner 可以是新文件，避免把 mobile Maestro 逻辑混入 desktop。
 - 迁移策略：无用户数据迁移；本地 `.e2e/` 可删除重建。
 - 风险控制：所有 child process stdout / stderr 进入 report 前脱敏，至少过滤 OTP、JWT、private key、workspace secret、完整 `.env` 行。
 
 ## 4. 实现方法
 
-1. 定义 Linux CLI peer runner 的输入：
+1. 定义 Desktop CLI peer runner 的输入：
 
    - `AWIKI_CLI_BIN`：已构建的 `awiki-cli` 二进制，或 runner 自动使用 `cargo build -p awiki-cli --bin awiki-cli --release --locked`；
+   - `--platform macos|linux`：选择 Flutter device 和是否使用 `xvfb-run -a`；
    - `DEV_OTP_PHONE` / `DEV_OTP_CODE`：从调用环境读取；
    - `AWIKI_SERVICE_BASE_URL` / `AWIKI_BASE_URL`；
    - `AWIKI_DID_DOMAIN`；
@@ -49,7 +50,7 @@ Step index：03
 2. 初始化 CLI peer workspace：
 
    ```bash
-   export AWIKI_CLI_WORKSPACE_HOME_DIR=".e2e/linux-cli-peer/<run-id>"
+   export AWIKI_CLI_WORKSPACE_HOME_DIR=".e2e/desktop-cli-peer/<run-id>/cli-peer"
    awiki-cli init
    ```
 
@@ -92,7 +93,7 @@ Step index：03
 
 | 仓库 / 模块 / 文件 | 计划变更 | 备注 |
 |---|---|---|
-| `test-awiki-me/tool/linux_cli_peer_e2e_runner.dart` | 新增 Linux CLI peer runner | 与 mobile Maestro runner 分离 |
+| `test-awiki-me/tool/desktop_cli_peer_e2e_runner.dart` | 新增 Desktop CLI peer runner | 与 mobile Maestro runner 分离，支持 `macos` / `linux` |
 | `test-awiki-me/test/tool/` | 新增 runner dry-run / config parsing tests | 不需要真实服务 |
 | `test-awiki-me/awiki_e2e.example.yaml` 或新配置样例 | 可选扩展 Linux desktop 配置 | 不写真实账号值 |
 | `test-awiki-me/.gitignore` | 确认 `.e2e/`、local config 已忽略 | 当前 `.e2e/` 已忽略 |
@@ -101,7 +102,7 @@ Step index：03
 
 ## 6. 依赖
 
-- 前置步骤：Step 02 的 SDK 配置结论；完整 E2E 依赖 Step 01-02，但本步骤 runner dry-run 可独立完成。
+- 前置步骤：Step 02 的 SDK 配置结论；完整 E2E 依赖 Step 01-02，但本步骤 runner dry-run 可独立完成。macOS 可先复用已有 native SDK，Linux 完整执行依赖 Step 02。
 - 外部文档或决策：确认 `user-service/.env` 测试 OTP 是否允许两个 handle；确认测试环境 service base URL / DID domain。
 - 环境前提：`awiki-cli-rs2` 可构建 CLI，非生产服务可访问。
 
@@ -123,7 +124,7 @@ Step index：03
 |---|---|---|
 | Runner unit | `cd test-awiki-me && flutter test test/tool` | dry-run、config parse、secret redaction tests 通过 |
 | CLI build | `cd awiki-cli-rs2 && cargo build -p awiki-cli --bin awiki-cli --release --locked` | 生成 CLI binary |
-| CLI workspace | `AWIKI_CLI_WORKSPACE_HOME_DIR=.e2e/linux-cli-peer/<run-id> awiki-cli init` | 隔离 workspace 初始化成功 |
+| CLI workspace | `AWIKI_CLI_WORKSPACE_HOME_DIR=.e2e/desktop-cli-peer/<run-id>/cli-peer awiki-cli init` | 隔离 workspace 初始化成功 |
 | CLI identity | `awiki-cli id current --format json` / `awiki-cli id status --format json` | 当前身份可解析且 handle 匹配 |
 | CLI inbox | `awiki-cli msg inbox --limit 1 --format json` | 命令成功，输出可解析 |
 | Secret scan | 执行项目约定的 secret scan，覆盖 OTP 赋值、JWT、私钥和完整 `.env` 行 | repo docs / tracked files 不包含敏感值；`.e2e/` 只本地检查 |
@@ -152,7 +153,7 @@ Step index：03
 - 纳入文件：记录本步骤 commit 包含的文件。
 - Commit 后证据：记录 commit hash 和 commit 后 `git status --short --branch`。
 - 遗留未提交变更：必须记录原因以及为什么安全。
-- 建议消息：`test: add linux cli peer e2e runner`
+- 建议消息：`test: add desktop cli peer e2e runner`
 
 ## 11. Blocked 处理
 

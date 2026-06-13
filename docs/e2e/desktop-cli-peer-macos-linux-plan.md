@@ -4,6 +4,7 @@
 创建时间：2026-06-13  
 适用范围：`test-awiki-me` 当前分支合并 `feature/release-0526/agent-im-hutong` 后，复用已有测试框架，补齐 Linux Desktop 运行目标。  
 执行边界：本文是方案文档；当前生成本文档时不执行 merge、不修改测试代码、不运行测试。
+详细执行 Plan：[linux-desktop-cli-peer-e2e/plan.md](linux-desktop-cli-peer-e2e/plan.md)
 
 ## 1. 目标
 
@@ -30,7 +31,7 @@
 - 不测试系统通知弹窗、系统原生文件选择器、窗口拖拽、系统菜单、多显示器行为。
 - 不把 realtime WebSocket 稳定性作为第一阶段阻塞项。
 - 不在这个 Desktop smoke 里重新断言完整 E2EE 内部细节；端到端加密覆盖继续复用已有系统测试 / E2EE 测试框架。
-- 不把真实后端、真实 OTP、真实 CLI peer 的 full E2E 直接放进普通 PR required gate。
+- 不把真实后端、真实 OTP、真实 CLI peer 的 Desktop smoke 直接放进普通 PR required gate。
 
 ## 3. 当前假设
 
@@ -56,7 +57,7 @@ git merge-base --is-ancestor feature/release-0526/agent-im-hutong HEAD
 
 | 既有能力 | 复用方式 |
 |---|---|
-| 单元测试 | 保持 `flutter test` 和现有 focused tests，不为 Linux E2E 重复写业务单测 |
+| 单元测试 | 保持 `flutter test` 和现有 focused tests，不为 Desktop E2E 重复写业务单测 |
 | 系统测试 | 继续作为协议、服务、E2EE 细节的权威验证层 |
 | 端到端加密测试 | 继续覆盖 E2EE 内部行为，Desktop smoke 只验证用户路径消息闭环 |
 | Desktop integration smoke | 复用 App bootstrap / native smoke / E2E selector 约定 |
@@ -336,7 +337,7 @@ flutter test integration_test/desktop_cli_peer_smoke_test.dart -d macos
 xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux
 ```
 
-真实后端 + OTP + CLI peer 的 full E2E 不应第一时间进入 PR required gate。
+真实后端 + OTP + CLI peer 的 Desktop smoke 不应第一时间进入 PR required gate。
 
 ## 9. 验收标准
 
@@ -350,7 +351,7 @@ xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d li
 - [ ] CLI peer 使用独立 workspace。
 - [ ] `.env`、OTP、JWT、私钥、CLI workspace、本地 App state、`.e2e/` 报告不进入 git。
 - [ ] 日志和报告脱敏。
-- [ ] PR quick gate 和 Desktop full E2E gate 分层清楚。
+- [ ] PR quick gate 和 Desktop App+CLI peer smoke gate 分层清楚。
 
 ## 10. 风险和阻塞点
 
@@ -360,7 +361,7 @@ xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d li
 | Linux 无 `linux/` runner | 不能 `-d linux` | 生成 Linux runner，只保留 Linux diff |
 | `awiki_im_core` 不支持 Linux native loader | App Linux 真实 SDK 无法启动 | 补 Linux `.so` build / bundle / loader |
 | 测试 OTP 不能支持两个身份 | App + CLI peer 双身份无法稳定准备 | 使用账号池或固定 App / CLI 两个测试账号 |
-| 后端服务不稳定 | full E2E flake | full E2E 放 manual / nightly / release，不进普通 PR required gate |
+| 后端服务不稳定 | Desktop smoke flake | Desktop smoke 放 manual / nightly / release，不进普通 PR required gate |
 | 日志泄露 secret | 安全风险 | runner 统一 redaction，report 不包含凭据和 identity 文件 |
 
 ## 11. 后续可扩展但本阶段不做
@@ -373,27 +374,31 @@ xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d li
 - Linux CI required gate。
 - 更细的 E2EE UI 层断言。
 
-## 12. Codex 执行提示词
+## 12. Codex Goal 执行提示词
 
 ```text
-请按 `test-awiki-me/docs/e2e/desktop-cli-peer-macos-linux-plan.md` 执行实现。
+请以 `test-awiki-me/docs/e2e/linux-desktop-cli-peer-e2e/plan.md` 为唯一执行入口，并先阅读 `test-awiki-me/docs/e2e/desktop-cli-peer-macos-linux-plan.md` 作为总方案摘要。
 
 开始前先读取：
 - `test-awiki-me/AGENTS.md`
 - `test-awiki-me/docs/e2e/desktop-cli-peer-macos-linux-plan.md`
+- `test-awiki-me/docs/e2e/linux-desktop-cli-peer-e2e/plan.md`
+- 当前第一个未 done 的 Step 文档
+- 主 Plan 的执行台账、Codex Goal 执行协议、验证策略、Blocked 处理和 Plan 变更记录
 - 当前分支的 `git status --short --branch`
 - `feature/release-0526/agent-im-hutong` 上已有测试框架、E2E runner、docs/testing.md 和 CI 配置
 - `awiki-cli-rs2` 中 `awiki_im_core`、`im-core-dart`、CLI peer 相关文档和代码
 
 执行要求：
-1. 先检查 `feature/release-0526/agent-im-hutong` 是否已经是当前分支祖先；如果不是，合并该分支；如果是 no-op，记录证据。
-2. 不要重写已有测试框架，复用该分支已有的单元测试、系统测试、E2EE 测试、Desktop runner、CLI peer 编排和 secret redaction。
-3. 只补齐 Linux Desktop 运行目标：Linux runner、Ubuntu/Xvfb 环境、`awiki_im_core` Linux native build / bundle / loader。
-4. 只新增或调整一个最基础 Desktop E2E smoke：App + CLI peer 双向消息闭环，测试用例同时支持 macOS 和 Linux。
-5. macOS 命令为 `flutter test integration_test/desktop_cli_peer_smoke_test.dart -d macos`；Linux headless 命令为 `xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux`。
-6. 不要把真实后端 + OTP + CLI peer full E2E 放进普通 PR required gate；先放 manual / nightly / release gate。
-7. 不提交 `.env`、OTP、JWT、私钥、CLI workspace、本地 App state、`.e2e/` 报告；所有日志和报告必须脱敏。
-8. 每个步骤完成后运行对应验证，做 Review，修复或记录发现，再创建聚焦 commit。
+1. 从第一个状态不是 `done` 的步骤开始，一次只执行一个步骤；每步开始、进入 Review、blocked、committed、done 时都回填执行台账和 Step 状态。
+2. 先检查 `feature/release-0526/agent-im-hutong` 是否已经是当前分支祖先；如果不是，合并该分支；如果是 no-op，记录证据。
+3. 不要重写已有测试框架，复用该分支已有的单元测试、系统测试、E2EE 测试、Desktop runner、CLI peer 编排和 secret redaction。
+4. 只补齐 Linux Desktop 运行目标：Linux runner、Ubuntu/Xvfb 环境、`awiki_im_core` Linux native build / bundle / loader。
+5. 只新增或调整一个最基础 Desktop E2E smoke：App + CLI peer 双向消息闭环，测试用例同时支持 macOS 和 Linux。
+6. macOS 命令为 `flutter test integration_test/desktop_cli_peer_smoke_test.dart -d macos`；Linux headless 命令为 `xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux`。
+7. 不要把真实后端 + OTP + CLI peer Desktop smoke 放进普通 PR required gate；先放 manual / nightly / release gate。
+8. 不提交 `.env`、OTP、JWT、私钥、CLI workspace、本地 App state、`.e2e/` 报告；所有日志和报告必须脱敏。
+9. 每个步骤完成后运行对应验证，做 Review，修复或记录发现，再创建聚焦 commit；全部步骤完成后执行最终全局 Review 和整体验证。
 ```
 
 ## 13. 参考资料

@@ -1,21 +1,22 @@
-# Plan：Linux Desktop + CLI Peer 端到端测试方案
+# Plan：Desktop CLI Peer macOS / Linux E2E 执行方案
 
 状态：draft  
 DOC：`test-awiki-me/docs/e2e/linux-desktop-cli-peer-e2e/`  
 Harness：`awiki-harness/`  
 创建时间：2026-06-13  
 恢复指针：执行开始前从 Step 01 开始；本轮只产出方案文档，不修改 App runner、SDK 或服务代码。
+总方案摘要：[../desktop-cli-peer-macos-linux-plan.md](../desktop-cli-peer-macos-linux-plan.md)
 
 ## 1. 目标
 
-- 任务目标：设计一套可落地的 Ubuntu headless Linux Desktop 端到端测试方案，用一个 Flutter Linux Desktop App 作为客户端 A，用现有 `awiki-cli-rs2` CLI 作为对端客户端 B，完成真实账号、真实 SDK、真实服务的消息收发闭环。
-- 预期行为：后续实现完成后，可以在没有物理桌面环境的 Ubuntu 上通过 `xvfb-run` 启动 Flutter Linux Desktop integration test，并用 CLI peer 注册 / 恢复账号、发送消息、读取 inbox / history，验证 App A 与 CLI B 双向消息互通。
+- 任务目标：在 `feature/release-0526/agent-im-hutong` 已有单元测试、系统测试、端到端加密测试和 Desktop 测试框架基础上，补齐 Linux Desktop 运行能力，并落地一个 macOS / Linux 共用的最小 App + CLI peer E2E smoke。
+- 预期行为：后续实现完成后，macOS 可以直接运行同一个 Desktop smoke；Ubuntu headless 可以通过 `xvfb-run` 启动 Flutter Linux Desktop integration test。两种平台都使用 Desktop App 作为客户端 A、现有 `awiki-cli-rs2` CLI 作为 peer 客户端 B，验证 App A 与 CLI B 双向消息互通。
 - 非目标：本方案不在当前文档任务里创建 `test-awiki-me/linux/` runner，不修改 `awiki-cli-rs2/packages/awiki_im_core`，不启动真实服务，不写入或提交 `.env` 值、账号凭据、本地状态、`.e2e/` 报告。
-- 完成标准：本文档给出 feasibility verdict、当前阻塞、跨仓实现步骤、账号与服务编排、测试命令、验收标准、风险和后续 Codex Goal 执行协议；每个实施步骤都有独立小 Plan。
+- 完成标准：本文档给出 feasibility verdict、当前阻塞、跨仓实现步骤、账号与服务编排、macOS / Linux 测试命令、验收标准、风险和后续 Codex Goal 执行协议；每个实施步骤都有独立小 Plan。
 
 ## 2. 可行性结论
 
-可以做，但不是只加 `xvfb-run` 就完成。
+可以做，但不是只加 `xvfb-run` 就完成。macOS 路径复用已有 Desktop / native SDK 能力；Linux 路径需要补齐 runner、headless 显示和 native SDK 打包加载。
 
 `xvfb-run -a flutter test integration_test -d linux` 只解决 headless Ubuntu 没有 X Server 的显示问题。完整 E2E 还需要同时满足：
 
@@ -26,7 +27,7 @@ Harness：`awiki-harness/`
 - CLI peer 使用独立 `AWIKI_CLI_WORKSPACE_HOME_DIR`，避免污染开发者默认 CLI workspace；
 - 后端服务地址、DID domain、ANP endpoint、message-service 路由与 App / CLI 使用同一套非生产环境。
 
-满足这些条件后，App + CLI peer 是可行的端到端拓扑。它可以验证真实 Flutter UI、真实 Dart SDK、Rust native SDK、身份注册 / 恢复、User Service、Message Service、CLI peer 和消息存取链路。它不等价于“两台真实桌面设备”的 UI E2E，但足够覆盖首个 Linux headless 端到端闭环。
+满足这些条件后，App + CLI peer 是可行的端到端拓扑。它可以验证真实 Flutter UI、真实 Dart SDK、Rust native SDK、身份注册 / 恢复、User Service、Message Service、CLI peer 和消息存取链路。它不等价于“两台真实桌面设备”的 UI E2E，但足够覆盖首个 Desktop macOS / Linux 端到端闭环。
 
 ## 3. 当前事实
 
@@ -48,24 +49,25 @@ Harness：`awiki-harness/`
 ## 4. 方案拓扑
 
 ```text
-Ubuntu headless host
+Desktop host
   |
-  +-- xvfb-run
+  +-- macOS: flutter test -d macos
+  +-- Linux headless: xvfb-run -a flutter test -d linux
   |     |
-  |     +-- flutter test integration_test/linux_cli_peer_e2e_test.dart -d linux
+  |     +-- flutter test integration_test/desktop_cli_peer_smoke_test.dart
   |           |
-  |           +-- Flutter Linux Desktop App（客户端 A）
+  |           +-- Flutter Desktop App（客户端 A）
   |           |     |
-  |           |     +-- test-awiki-me/linux runner
+  |           |     +-- test-awiki-me/macos 或 test-awiki-me/linux runner
   |           |     +-- awiki_im_core Dart package
-  |           |     +-- awiki_im_core Linux native .so
+  |           |     +-- awiki_im_core macOS native 或 Linux .so
   |           |     +-- User Service / Message Service / ANP endpoint
   |           |
   |           +-- integration test / Dart runner 调用 CLI 子进程
   |
   +-- awiki-cli-rs2 awiki-cli（客户端 B）
         |
-        +-- AWIKI_CLI_WORKSPACE_HOME_DIR=.e2e/linux-cli-peer/<run-id>
+        +-- AWIKI_CLI_WORKSPACE_HOME_DIR=.e2e/desktop-cli-peer/<run-id>/cli-peer
         +-- CLI config 指向同一套非生产服务
         +-- id register / id recover
         +-- msg send / msg inbox / msg history
@@ -79,7 +81,7 @@ Ubuntu headless host
 - CLI B 轮询 `msg inbox` 或 `msg history --with <app-handle>`，直到看到该消息；
 - CLI B 发送一条带唯一 run id 的消息给 App A；
 - App A 通过刷新 / inbox / conversation UI 等确定性路径看到该消息；
-- realtime / WebSocket listener 可以作为第二阶段增强，不作为首个 Linux E2E 必需条件。
+- realtime / WebSocket listener 可以作为第二阶段增强，不作为首个 Desktop App+CLI peer smoke 必需条件。
 
 ## 5. Harness 上下文
 
@@ -103,7 +105,7 @@ Ubuntu headless host
 | 领域 / 仓库 / 模块 | 影响 | 权威文档或代码 |
 |---|---|---|
 | `test-awiki-me` Linux runner | 新增 `linux/` runner，先跑 fake bootstrap smoke，再跑真实 SDK / E2E | `test-awiki-me/AGENTS.md`、`test-awiki-me/docs/testing.md` |
-| `test-awiki-me` integration tests | 新增 Linux native smoke、CLI peer E2E、必要 E2E semantics 和 Dart runner | `test-awiki-me/integration_test/`、`test-awiki-me/tool/e2e_runner.dart` |
+| `test-awiki-me` integration tests | 新增 Linux native smoke；只新增或调整一个 `desktop_cli_peer_smoke_test.dart`，同时支持 macOS / Linux | `test-awiki-me/integration_test/`、`test-awiki-me/tool/e2e_runner.dart` |
 | `awiki-cli-rs2/packages/awiki_im_core` | 声明 Linux plugin，补 loader，打包 `libawiki_im_core.so` | `awiki-cli-rs2/docs/flutter-sdk/awiki-im-core-flutter-sdk.md` |
 | `awiki-cli-rs2/crates/im-core-dart` | Linux native build target 和 feature 组合 | `awiki-cli-rs2/crates/im-core-dart/Cargo.toml` |
 | `awiki-cli-rs2/crates/awiki-cli` | 作为 peer 客户端，隔离 workspace，执行注册 / 恢复 / 消息命令 | `awiki-cli-rs2/docs/architecture/awiki-command-v2.md`、`awiki-cli-rs2/onboarding.md` |
@@ -113,7 +115,7 @@ Ubuntu headless host
 ## 7. 总体设计方法
 
 - 设计边界：`xvfb-run` 只作为显示层；Linux runner、SDK Linux native、账号服务、CLI peer 和 E2E harness 分层验收。
-- 关键决策：第一版用一个 Flutter Linux Desktop App + 一个 CLI peer 代替两台真实桌面设备，先验证端到端消息闭环；两台 App UI 或真实多设备保留为后续。
+- 关键决策：第一版用一个 Flutter Desktop App + 一个 CLI peer 代替两台真实桌面设备，先验证 macOS / Linux 共用的端到端消息闭环；两台 App UI 或真实多设备保留为后续。
 - SDK 策略：因为项目目标包含 Flutter 3.24+，短期按当前 plugin_ffi / CMake 打包思路支持 Linux `.so`；当 Flutter baseline 提升到 3.38+ 后，再评估迁移到 `package_ffi` native assets build hooks。
 - 消息策略：第一版使用 pull / polling 断言 inbox/history，不把 realtime listener 当作首个阻塞条件。
 - 账号策略：使用 `user-service/.env` 中的非生产 `DEV_OTP_PHONE` / `DEV_OTP_CODE` 等 key；运行脚本只读取本地环境变量，不输出、不提交实际值。
@@ -127,7 +129,7 @@ Ubuntu headless host
 | 01 | Linux runner 与 desktop smoke | 无 | `test-awiki-me/linux/` runner；fake bootstrap Linux smoke 可跑 | [steps/01-linux-runner-smoke.md](steps/01-linux-runner-smoke.md) | 必须 | pending |
 | 02 | `awiki_im_core` Linux native SDK | Step 01 可并行前置分析；SDK 改动独立 | Linux `.so` 构建、plugin 声明、loader、native open smoke | [steps/02-linux-native-sdk.md](steps/02-linux-native-sdk.md) | 必须 | pending |
 | 03 | CLI peer 账号与服务编排 | Step 02 的 SDK 配置结论；服务账号策略 | 隔离 CLI workspace、测试账号读取、runner 配置样例 | [steps/03-cli-peer-account-service-orchestration.md](steps/03-cli-peer-account-service-orchestration.md) | 必须 | pending |
-| 04 | App + CLI peer Linux E2E | Step 01-03 | `linux_cli_peer_e2e_test.dart` 和 Dart runner；双向消息验收 | [steps/04-app-cli-peer-e2e.md](steps/04-app-cli-peer-e2e.md) | 必须 | pending |
+| 04 | App + CLI peer Desktop E2E smoke | Step 01-03 | `desktop_cli_peer_smoke_test.dart` 和 Desktop runner；macOS / Linux 双向消息验收 | [steps/04-app-cli-peer-e2e.md](steps/04-app-cli-peer-e2e.md) | 必须 | pending |
 | 05 | CI / nightly gate 与文档收口 | Step 01-04 | quick gate / nightly gate 分层、docs 更新、最终验证证据 | [steps/05-ci-nightly-gates.md](steps/05-ci-nightly-gates.md) | 必须 | pending |
 
 ## 9. 执行台账
@@ -156,7 +158,7 @@ Ubuntu headless host
 ## 10.1 Codex Goal 提示词
 
 ```text
-请以 `test-awiki-me/docs/e2e/linux-desktop-cli-peer-e2e/plan.md` 为唯一规划入口，按文档执行 Linux Desktop + CLI Peer E2E 完整实现。
+请以 `test-awiki-me/docs/e2e/linux-desktop-cli-peer-e2e/plan.md` 为唯一规划入口，按文档执行 Desktop CLI Peer macOS / Linux E2E 完整实现；同时阅读 `test-awiki-me/docs/e2e/desktop-cli-peer-macos-linux-plan.md` 作为总方案摘要。
 
 开始前先读取：
 - `test-awiki-me/docs/e2e/linux-desktop-cli-peer-e2e/plan.md`
@@ -168,7 +170,7 @@ Ubuntu headless host
 
 所有步骤完成后，执行最终全局 Review 和整体验证，记录实际命令、通过/失败/跳过数量、失败或跳过原因、剩余风险和最终工作区状态。
 
-核心注意点：不要提交 `.env` 值、OTP、JWT、私钥、CLI workspace、`.e2e/` 报告或本地状态；先用 Xvfb + fake bootstrap smoke 验证 Linux runner，再接 Linux native SDK，再做真实 App+CLI peer E2E；App 和 CLI 必须通过 SDK/CLI 高层能力走同一非生产服务，不要在 App 内重写 message-service wire payload。
+核心注意点：不要提交 `.env` 值、OTP、JWT、私钥、CLI workspace、`.e2e/` 报告或本地状态；先用 Xvfb + fake bootstrap smoke 验证 Linux runner，再接 Linux native SDK，再做一个 macOS / Linux 共用的真实 App+CLI peer smoke；不要扩展大量 E2E 用例；App 和 CLI 必须通过 SDK/CLI 高层能力走同一非生产服务，不要在 App 内重写 message-service wire payload。
 ```
 
 ## 11. 小 Plan 摘要
@@ -209,14 +211,14 @@ Ubuntu headless host
 - Commit 要求：一个 focused commit。
 - 风险：`DEV_OTP_PHONE` / `DEV_OTP_CODE` 是否允许两个 handle 是完整双端 E2E 的关键未知点。
 
-### Step 04：App + CLI peer Linux E2E
+### Step 04：App + CLI peer Desktop E2E smoke
 
 - 小 Plan：[steps/04-app-cli-peer-e2e.md](steps/04-app-cli-peer-e2e.md)
-- 目标：在 Linux Desktop integration test 中完成 App A 与 CLI B 双向消息验证。
+- 目标：在同一个 Desktop integration test 中完成 App A 与 CLI B 双向消息验证，测试可在 macOS 和 Linux 上运行。
 - 设计方法：真实 `AppBootstrap.create()` + CLI subprocess；第一版使用 polling，不依赖 realtime listener。
-- 实现方法：新增 `integration_test/linux_cli_peer_e2e_test.dart`，补必要 E2E semantics，runner 传入服务配置和 CLI peer 信息。
+- 实现方法：新增或调整 `integration_test/desktop_cli_peer_smoke_test.dart`，补必要 E2E semantics，runner 传入服务配置和 CLI peer 信息。
 - 路径：`test-awiki-me/integration_test/`、`test-awiki-me/lib/src/presentation/`、`test-awiki-me/tool/`。
-- 验证方式：`xvfb-run -a flutter test integration_test/linux_cli_peer_e2e_test.dart -d linux`，并检查 App->CLI、CLI->App 两条唯一消息都被确认。
+- 验证方式：macOS 运行 `flutter test integration_test/desktop_cli_peer_smoke_test.dart -d macos`；Linux headless 运行 `xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux`，并检查 App->CLI、CLI->App 两条唯一消息都被确认。
 - Review 环节：检查测试确定性、超时、日志脱敏、selectors 稳定性和失败证据。
 - Commit 要求：一个 focused commit。
 - 风险：App 侧登录 UI、收件箱刷新和消息列表 selector 可能需要小范围增强。
@@ -290,15 +292,16 @@ xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux
 cd test-awiki-me
 # Required in the shell before running: DEV_OTP_PHONE and DEV_OTP_CODE.
 AWIKI_CLI_BIN="../awiki-cli-rs2/target/release/awiki-cli" \
-dart run tool/linux_cli_peer_e2e_runner.dart \
+dart run tool/desktop_cli_peer_e2e_runner.dart \
   --service-base-url "$AWIKI_SERVICE_BASE_URL" \
-  --did-domain "$AWIKI_DID_DOMAIN"
+  --did-domain "$AWIKI_DID_DOMAIN" \
+  --platform linux
 ```
 
 runner 内部再调用：
 
 ```bash
-xvfb-run -a flutter test integration_test/linux_cli_peer_e2e_test.dart -d linux \
+xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux \
   --dart-define=AWIKI_E2E=true \
   --dart-define=AWIKI_SERVICE_BASE_URL=<non-production-base-url> \
   --dart-define=AWIKI_DID_DOMAIN=<test-did-domain>
@@ -313,7 +316,7 @@ xvfb-run -a flutter test integration_test/linux_cli_peer_e2e_test.dart -d linux 
 - 首选每次运行生成唯一 handle，例如 `e2eapp<runid>` 和 `e2ecli<runid>`；如果服务不允许同一测试手机号注册多个 handle，则改用预置账号池或一个 App 测试账号 + 一个 CLI 测试账号。
 - 对已存在 handle，runner 应先尝试 `id recover`，对新 handle 才尝试 `id register`；具体顺序以 User Service 当前账号策略验证后固化。
 - App 端与 CLI 端必须使用不同本地状态目录，避免同一 DID / key 文件被两个客户端同时读写。
-- CLI 端通过 `AWIKI_CLI_WORKSPACE_HOME_DIR=.e2e/linux-cli-peer/<run-id>` 隔离。
+- CLI 端通过 `AWIKI_CLI_WORKSPACE_HOME_DIR=.e2e/desktop-cli-peer/<run-id>/cli-peer` 隔离。
 - App 端测试状态需要使用临时目录或 `.e2e/linux-app/<run-id>`；如果现有 App path layout 只能走平台 application support directory，后续 Step 04 需要增加测试专用路径注入，不能污染开发者真实 App 状态。
 
 ## 14. 验收标准
@@ -346,11 +349,11 @@ xvfb-run -a flutter test integration_test/linux_cli_peer_e2e_test.dart -d linux 
 | L1 SDK | `cd awiki-cli-rs2 && cargo test -p im-core-dart --locked`、`scripts/flutter/codegen-check.sh` | Rust-Dart facade 和 generated bridge 不回归 |
 | L1 SDK native | `cd awiki-cli-rs2 && scripts/flutter/build-sdk-native.sh --linux-only` | Linux `.so` 生成并复制 / 打包到 plugin 预期位置 |
 | L2 Cross-repo | `cd test-awiki-me && xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` | App 能打开 Linux native SDK |
-| L3 E2E | `cd test-awiki-me && dart run tool/linux_cli_peer_e2e_runner.dart ...` | App+CLI peer 双向消息闭环通过，报告脱敏 |
+| L3 E2E | `cd test-awiki-me && dart run tool/desktop_cli_peer_e2e_runner.dart --platform macos ...` 或 `--platform linux ...` | App+CLI peer 双向消息闭环通过，报告脱敏 |
 
 ## 17. 文档更新
 
-- Harness 文档：本方案不要求立即更新 Harness；如果后续 Linux E2E 成为 AWiki 标准系统测试入口，再更新 `awiki-harness/context/30-tools-env.md` 和 `awiki-harness/context/40-verification.md`。
+- Harness 文档：本方案不要求立即更新 Harness；如果后续 Desktop App+CLI peer smoke 成为 AWiki 标准系统测试入口，再更新 `awiki-harness/context/30-tools-env.md` 和 `awiki-harness/context/40-verification.md`。
 - 子仓库文档：更新 `test-awiki-me/docs/testing.md`，并在 SDK 实现步骤更新 `awiki-cli-rs2/docs/flutter-sdk/awiki-im-core-flutter-sdk.md`。
 - 本次生成的任务文档：`test-awiki-me/docs/e2e/linux-desktop-cli-peer-e2e/plan.md` 与 `steps/*.md`。
 
@@ -376,6 +379,7 @@ xvfb-run -a flutter test integration_test/linux_cli_peer_e2e_test.dart -d linux 
 | 日期 | 变更 | 原因 | 影响步骤 | 是否需要 Review |
 |---|---|---|---|---|
 | 2026-06-13 | 创建初始方案 | 用户要求先确认 Linux Desktop runner、Linux native SDK、CLI peer E2E 可行性并写入 docs | Step 01-05 | 是 |
+| 2026-06-13 | 收敛为 macOS / Linux 共用最小 Desktop smoke | 用户要求最终测试用例可对应 Linux 和 Mac，且先只补一个最基本测试用例 | Step 03-05 | 是 |
 
 ## 21. 风险与回滚
 
