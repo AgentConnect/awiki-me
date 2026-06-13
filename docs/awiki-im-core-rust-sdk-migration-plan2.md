@@ -357,19 +357,19 @@ temp/awiki-me/im-core/
 ```dart
 const serviceBaseUrl = String.fromEnvironment(
   'AWIKI_SERVICE_BASE_URL',
-  defaultValue: 'https://awiki.ai',
+  defaultValue: 'https://awiki.info',
 );
 const userServiceEndpoint = String.fromEnvironment(
   'AWIKI_USER_SERVICE_URL',
-  defaultValue: 'https://awiki.ai',
+  defaultValue: 'https://awiki.info',
 );
 const messageServiceEndpoint = String.fromEnvironment(
   'AWIKI_MESSAGE_SERVICE_URL',
-  defaultValue: 'https://awiki.ai',
+  defaultValue: 'https://awiki.info',
 );
 const didDomain = String.fromEnvironment(
   'AWIKI_DID_DOMAIN',
-  defaultValue: 'awiki.ai',
+  defaultValue: 'awiki.info',
 );
 const anpServiceDid = String.fromEnvironment(
   'AWIKI_ANP_SERVICE_DID',
@@ -1272,7 +1272,7 @@ sqflite    # 如果 ProductLocalStore 不使用 sqflite，或改用 sqlite3/path
 - `flutter test test/onboarding_page_test.dart test/app_runtime_archive_actions_test.dart test/settings_page_test.dart`：通过，覆盖 onboarding service/support service 去 compat 化以及 credential action unsupported 回归。
 - `flutter test test/application test/data/im_core test/data/local test/data/compat test/data/services test/im_core/im_core_boundary_test.dart test/awiki_me_app_localization_test.dart test/bootstrap_test.dart`：通过，覆盖 application/data layer 与 IM Core migration boundary guard。
 - `flutter test`：通过，134 个测试全部通过（旧 ANP/WS/Dart-only IM Core legacy tests 已随旧实现删除）。
-- `flutter test integration_test/im_core_open_smoke_test.dart -d macos`：通过；仍有非致命 linker warning（duplicate library、SDK 静态库对象以 macOS 15.2 构建但 Runner 链到 10.15）以及 `Failed to foreground app; open returned 1`，不影响 smoke 通过。
+- `flutter test tests/integration_test/im_core_open_smoke_test.dart -d macos`：通过；仍有非致命 linker warning（duplicate library、SDK 静态库对象以 macOS 15.2 构建但 Runner 链到 10.15）以及 `Failed to foreground app; open returned 1`，不影响 smoke 通过。
 - `rg -n "awikiGatewayProvider|awikiAccountGatewayProvider|realtimeGatewayProvider" lib/src/presentation`：无匹配，确认 presentation 生产路径不再直接读取旧 gateway/account/realtime providers。
 - `rg -n "awiki_sdk|AwikiAnpSession|AwikiAnpGateway|AwikiAccountService|AwikiWsRealtimeGateway|AwikiMessageClient|AwikiAnpProofBuilder|DidRegistrationFacade|package:(anp|web_socket_channel|archive)" lib pubspec.yaml`：无匹配，确认旧 app-side ANP/IM/WS fallback 与 direct dependency 不在 production path。
 - SDK 侧：`scripts/flutter/codegen-check.sh`、`cargo test -p im-core-dart`、`packages/awiki_im_core` 的 `dart analyze` 与 `flutter test` 已通过。
@@ -1377,7 +1377,7 @@ test/app_runtime_provider_test.dart
 macOS：
 
 ```bash
-flutter test integration_test/im_core_open_smoke_test.dart -d macos
+flutter test tests/integration_test/im_core_open_smoke_test.dart -d macos
 ```
 
 或最小 app 启动 smoke：

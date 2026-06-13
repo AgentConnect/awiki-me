@@ -22,14 +22,14 @@ Step index：01
 ## 2. 目标
 
 - 结果：`test-awiki-me` 支持 Flutter Linux Desktop runner。
-- 用户 / 系统可见行为：在 Ubuntu headless 环境里，`xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 能启动 App shell smoke。
+- 用户 / 系统可见行为：在 Ubuntu headless 环境里，`xvfb-run -a flutter test tests/integration_test/app/app_smoke_test.dart -d linux` 能启动 App shell smoke。
 - 非目标：本步骤不启用真实 `AwikiImCore.open` Linux native backend，不跑真实账号登录，不改 Android / iOS / macOS / web runner。
 - 完成标准：Linux runner 存在，`app_smoke_test.dart` 在 Linux desktop 设备通过；diff 没有无关平台漂移。
 
 ## 3. 设计方法
 
 - 设计边界：先验证 Flutter Desktop runner 与 Xvfb 显示环境，不把 SDK native、服务账号和消息 E2E 混进同一步。
-- 核心决策：`integration_test/app_smoke_test.dart` 当前使用 fake bootstrap，适合作为 Linux runner smoke 的第一道门。
+- 核心决策：`tests/integration_test/app/app_smoke_test.dart` 当前使用 fake bootstrap，适合作为 Linux runner smoke 的第一道门。
 - 契约 / API / 数据流：不改 App 业务契约；只让 Flutter 工具链识别 Linux desktop target。
 - 兼容性：保留已有 Android / iOS / macOS / web runner 现状；若 Flutter 工具更新 `.metadata` 或 plugin registrant，逐项确认只与 Linux enablement 相关。
 - 迁移策略：无用户数据迁移。
@@ -75,7 +75,7 @@ Step index：01
 |---|---|---|
 | `test-awiki-me/linux/` | 新增 Flutter Linux Desktop runner | 由 Flutter 工具生成后 review |
 | `test-awiki-me/.metadata` | 可能记录 Linux platform enablement | 只保留必要变化 |
-| `test-awiki-me/integration_test/app_smoke_test.dart` | 原则上不改 | 当前 fake bootstrap smoke 已适合作为 runner smoke |
+| `test-awiki-me/tests/integration_test/app/app_smoke_test.dart` | 原则上不改 | 当前 fake bootstrap smoke 已适合作为 runner smoke |
 | `test-awiki-me/docs/testing.md` | Step 05 统一更新 gate 文档；本步骤只在需要时补一句现状 | 避免重复文档 |
 
 ## 6. 依赖
@@ -88,7 +88,7 @@ Step index：01
 
 - [ ] `test-awiki-me/linux/` 存在并能被 Flutter 识别。
 - [ ] `flutter devices` 输出包含 Linux desktop 设备。
-- [ ] `xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过。
+- [ ] `xvfb-run -a flutter test tests/integration_test/app/app_smoke_test.dart -d linux` 通过。
 - [ ] `git diff --name-only` 只包含 Linux runner 和必要 metadata / docs。
 - [ ] 没有修改 Android / iOS / macOS / web runner、签名、bundle id 或 generated registrant 的无关内容。
 - [ ] Review 发现已经修复或明确记录。
@@ -101,7 +101,7 @@ Step index：01
 | Flutter deps | `cd test-awiki-me && flutter doctor` | Linux desktop toolchain 可用，或明确记录缺失依赖 |
 | Device | `cd test-awiki-me && flutter devices` | 看到 `Linux (desktop)` |
 | App tests | `cd test-awiki-me && flutter test` | 既有 unit / widget 不回归 |
-| Linux smoke | `cd test-awiki-me && xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` | fake bootstrap App shell smoke 通过 |
+| Linux smoke | `cd test-awiki-me && xvfb-run -a flutter test tests/integration_test/app/app_smoke_test.dart -d linux` | fake bootstrap App shell smoke 通过 |
 | Diff hygiene | `cd test-awiki-me && git diff --check` | 无 whitespace / patch 格式问题 |
 
 如果缺少系统依赖导致 Linux smoke 不能运行，必须记录 `flutter doctor` 和安装缺口；不能把 smoke 通过写成已完成。

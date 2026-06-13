@@ -169,7 +169,7 @@ void main() {
     );
     expect(
       container.read(selectedConversationProvider)?.targetPeer,
-      'awiki-agent-hermes.awiki.ai',
+      'awiki-agent-hermes.awiki.info',
     );
     expect(
       container
@@ -184,7 +184,7 @@ void main() {
           .conversations
           .singleWhere((item) => item.targetDid == 'did:agent:runtime')
           .targetPeer,
-      'awiki-agent-hermes.awiki.ai',
+      'awiki-agent-hermes.awiki.info',
     );
 
     await tester.tap(find.text('重置 Session'));
@@ -261,7 +261,7 @@ void main() {
 
       final handleField = tester.widget<CupertinoTextField>(fields.at(1));
       expect(handleField.controller?.text, 'my-agent');
-      expect(find.text('最终 Handle：@my-agent.awiki.ai'), findsOneWidget);
+      expect(find.text('最终 Handle：@my-agent.awiki.info'), findsOneWidget);
       expect(find.text('这个 Handle 可以使用'), findsOneWidget);
 
       await tester.enterText(fields.at(0), '写作助手');
@@ -743,12 +743,12 @@ void main() {
           expiresAt: expiresAt,
         ),
         command:
-            'curl -fsSL https://awiki.ai/daemon/install.sh | sh -s -- --token fresh-token --base-url https://awiki.ai',
+            'curl -fsSL https://awiki.info/daemon/install.sh | sh -s -- --token fresh-token --base-url https://awiki.info',
         fallbackCommand:
-            'awiki-deamon install --token fresh-token --base-url https://awiki.ai',
-        installerUrl: 'https://awiki.ai/daemon/install.sh',
+            'awiki-deamon install --token fresh-token --base-url https://awiki.info',
+        installerUrl: 'https://awiki.info/daemon/install.sh',
         packageUrlTemplate:
-            'https://awiki.ai/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
+            'https://awiki.info/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
       );
 
     await tester.pumpWidget(

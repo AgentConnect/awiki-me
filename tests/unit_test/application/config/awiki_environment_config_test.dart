@@ -2,6 +2,19 @@ import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('defaults to awiki.info service root', () {
+    final config = AwikiEnvironmentConfig();
+
+    expect(config.baseUrl, 'https://awiki.info');
+    expect(config.userServiceUrl, 'https://awiki.info');
+    expect(config.messageServiceUrl, 'https://awiki.info');
+    expect(config.mailServiceUrl, 'https://awiki.info');
+    expect(config.didDomain, 'awiki.info');
+    expect(config.anpServiceUrl, 'https://awiki.info/anp-im/rpc');
+    expect(config.anpServiceDid, 'did:wba:awiki.info');
+    expect(config.daemonDownloadBaseUrl, 'https://awiki.info/daemon');
+  });
+
   test('base URL derives backend endpoints and daemon download root', () {
     final config = AwikiEnvironmentConfig(baseUrl: 'https://anpclaw.com/');
 

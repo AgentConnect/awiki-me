@@ -10,7 +10,7 @@ import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../test_support.dart';
+import '../../unit_test/test_support.dart';
 
 class FakeAwikiMeAppHarness {
   FakeAwikiMeAppHarness({

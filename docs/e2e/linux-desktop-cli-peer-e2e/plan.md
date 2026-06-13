@@ -17,7 +17,7 @@ Harness：`awiki-harness/`
 
 可以做，但不是只加 `xvfb-run` 就完成。
 
-`xvfb-run -a flutter test integration_test -d linux` 只解决 headless Ubuntu 没有 X Server 的显示问题。完整 E2E 还需要同时满足：
+`xvfb-run -a flutter test tests/integration_test -d linux` 只解决 headless Ubuntu 没有 X Server 的显示问题。完整 E2E 还需要同时满足：
 
 - `test-awiki-me` 有 `linux/` Flutter Desktop runner；
 - `awiki-cli-rs2/packages/awiki_im_core` 声明并打包 Linux native SDK，`AwikiImCore.open` 在 Linux 能加载 `libawiki_im_core.so`；
@@ -32,9 +32,9 @@ Harness：`awiki-harness/`
 
 | 事实 | 证据 | 影响 |
 |---|---|---|
-| `test-awiki-me` 当前没有 Linux runner | `test-awiki-me/linux/` 不存在 | `flutter test integration_test -d linux` 不能作为 gate；必须先加 runner |
-| `integration_test/app_smoke_test.dart` 使用 fake bootstrap | `test-awiki-me/integration_test/app_smoke_test.dart` | 只能证明 Flutter shell / tab / onboarding smoke，不验证真实 native SDK、网络、secure storage 或服务 |
-| `integration_test/im_core_open_smoke_test.dart` 当前 macOS-only skip | `test-awiki-me/integration_test/im_core_open_smoke_test.dart` | Linux native open smoke 要等 SDK Linux 支持 |
+| `test-awiki-me` 当前没有 Linux runner | `test-awiki-me/linux/` 不存在 | `flutter test tests/integration_test -d linux` 不能作为 gate；必须先加 runner |
+| `tests/integration_test/app/app_smoke_test.dart` 使用 fake bootstrap | `test-awiki-me/tests/integration_test/app/app_smoke_test.dart` | 只能证明 Flutter shell / tab / onboarding smoke，不验证真实 native SDK、网络、secure storage 或服务 |
+| `tests/integration_test/native/im_core_open_smoke_test.dart` 当前 macOS-only skip | `test-awiki-me/tests/integration_test/native/im_core_open_smoke_test.dart` | Linux native open smoke 要等 SDK Linux 支持 |
 | `awiki_im_core` plugin 只声明 Android / iOS / macOS | `awiki-cli-rs2/packages/awiki_im_core/pubspec.yaml` | Flutter 不会把 Linux 作为该 FFI plugin 支持平台 |
 | SDK native loader 没有 Linux 分支 | `awiki-cli-rs2/packages/awiki_im_core/lib/src/native_library_loader.dart` | Linux 会抛 `UnsupportedError` |
 | Rust facade 可以产出 `cdylib` | `awiki-cli-rs2/crates/im-core-dart/Cargo.toml` | Linux `.so` 技术上可构建，需补打包和加载策略 |
@@ -52,7 +52,7 @@ Ubuntu headless host
   |
   +-- xvfb-run
   |     |
-  |     +-- flutter test integration_test/linux_cli_peer_e2e_test.dart -d linux
+  |     +-- flutter test tests/e2e_test/scenarios/linux_cli_peer_e2e_test.dart -d linux
   |           |
   |           +-- Flutter Linux Desktop App（客户端 A）
   |           |     |
@@ -103,7 +103,7 @@ Ubuntu headless host
 | 领域 / 仓库 / 模块 | 影响 | 权威文档或代码 |
 |---|---|---|
 | `test-awiki-me` Linux runner | 新增 `linux/` runner，先跑 fake bootstrap smoke，再跑真实 SDK / E2E | `test-awiki-me/AGENTS.md`、`test-awiki-me/docs/testing.md` |
-| `test-awiki-me` integration tests | 新增 Linux native smoke、CLI peer E2E、必要 E2E semantics 和 Dart runner | `test-awiki-me/integration_test/`、`test-awiki-me/tool/e2e_runner.dart` |
+| `test-awiki-me` integration tests | 新增 Linux native smoke、CLI peer E2E、必要 E2E semantics 和 Dart runner | `test-awiki-me/tests/integration_test/`、`test-awiki-me/tool/ wrappers、test-awiki-me/tests/e2e_test/harness/` |
 | `awiki-cli-rs2/packages/awiki_im_core` | 声明 Linux plugin，补 loader，打包 `libawiki_im_core.so` | `awiki-cli-rs2/docs/flutter-sdk/awiki-im-core-flutter-sdk.md` |
 | `awiki-cli-rs2/crates/im-core-dart` | Linux native build target 和 feature 组合 | `awiki-cli-rs2/crates/im-core-dart/Cargo.toml` |
 | `awiki-cli-rs2/crates/awiki-cli` | 作为 peer 客户端，隔离 workspace，执行注册 / 恢复 / 消息命令 | `awiki-cli-rs2/docs/architecture/awiki-command-v2.md`、`awiki-cli-rs2/onboarding.md` |
@@ -176,11 +176,11 @@ Ubuntu headless host
 ### Step 01：Linux runner 与 desktop smoke
 
 - 小 Plan：[steps/01-linux-runner-smoke.md](steps/01-linux-runner-smoke.md)
-- 目标：让 `test-awiki-me` 支持 Linux Desktop runner，并让 `integration_test/app_smoke_test.dart` 在 `xvfb-run` 下通过。
+- 目标：让 `test-awiki-me` 支持 Linux Desktop runner，并让 `tests/integration_test/app/app_smoke_test.dart` 在 `xvfb-run` 下通过。
 - 设计方法：只引入 Linux runner，不触碰 Android / iOS / macOS / web runner。
 - 实现方法：使用 Flutter 工具生成 Linux runner，检查 diff，保留必要 Linux 文件；跑 fake bootstrap smoke。
 - 路径：`test-awiki-me/linux/`、`test-awiki-me/.metadata`、`test-awiki-me/docs/testing.md`。
-- 验证方式：`xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux`。
+- 验证方式：`xvfb-run -a flutter test tests/integration_test/app/app_smoke_test.dart -d linux`。
 - Review 环节：检查 runner diff 是否只限 Linux，确认没有平台签名或其他 runner 元数据漂移。
 - Commit 要求：一个 focused commit。
 - 风险：`flutter create --platforms=linux .` 可能更新 `.metadata` 或插件文件，需要逐项检查。
@@ -191,7 +191,7 @@ Ubuntu headless host
 - 目标：让 Flutter Linux App 能加载 Rust `im-core-dart` 产物。
 - 设计方法：延续现有 Android / Apple native artifact 脚本风格，新增 Linux `.so` build 和 plugin bundling。
 - 实现方法：补 Linux platform declaration、loader、CMake / bundled library、build script、docs 和 native smoke。
-- 路径：`awiki-cli-rs2/packages/awiki_im_core/`、`awiki-cli-rs2/crates/im-core-dart/`、`test-awiki-me/integration_test/im_core_open_smoke_test.dart`。
+- 路径：`awiki-cli-rs2/packages/awiki_im_core/`、`awiki-cli-rs2/crates/im-core-dart/`、`test-awiki-me/tests/integration_test/native/im_core_open_smoke_test.dart`。
 - 验证方式：`cargo build -p im-core-dart --release --target x86_64-unknown-linux-gnu --no-default-features --features blocking,sqlite,http`，再跑 Linux native smoke。
 - Review 环节：检查 ABI、library name、bundle path、loader fallback、安全输出和已有 Android / iOS / macOS 不回归。
 - Commit 要求：SDK 仓一个 focused commit；App smoke 调整如有需要另起 commit。
@@ -203,7 +203,7 @@ Ubuntu headless host
 - 目标：提供可重复的 CLI peer 账号准备、服务配置和本地状态隔离。
 - 设计方法：从 `user-service/.env` 读取 key，不把值写入 repo；CLI 使用独立 `AWIKI_CLI_WORKSPACE_HOME_DIR`。
 - 实现方法：新增 Dart runner / 配置样例，构建 CLI，初始化 workspace，注册或恢复 CLI peer handle。
-- 路径：`test-awiki-me/tool/`、`test-awiki-me/docs/testing.md`、`awiki_e2e.example.yaml` 或新的示例配置。
+- 路径：`test-awiki-me/tool/ wrappers、test-awiki-me/tests/e2e_test/harness/`、`test-awiki-me/docs/testing.md`、`tests/e2e_test/configs/mobile.example.yaml` 或新的示例配置。
 - 验证方式：CLI `id current`、`id status`、`msg inbox --limit 1 --format json` 返回可解析 JSON。
 - Review 环节：检查 secret handling、workspace 清理、账号冲突处理和服务地址一致性。
 - Commit 要求：一个 focused commit。
@@ -214,9 +214,9 @@ Ubuntu headless host
 - 小 Plan：[steps/04-app-cli-peer-e2e.md](steps/04-app-cli-peer-e2e.md)
 - 目标：在 Linux Desktop integration test 中完成 App A 与 CLI B 双向消息验证。
 - 设计方法：真实 `AppBootstrap.create()` + CLI subprocess；第一版使用 polling，不依赖 realtime listener。
-- 实现方法：新增 `integration_test/linux_cli_peer_e2e_test.dart`，补必要 E2E semantics，runner 传入服务配置和 CLI peer 信息。
-- 路径：`test-awiki-me/integration_test/`、`test-awiki-me/lib/src/presentation/`、`test-awiki-me/tool/`。
-- 验证方式：`xvfb-run -a flutter test integration_test/linux_cli_peer_e2e_test.dart -d linux`，并检查 App->CLI、CLI->App 两条唯一消息都被确认。
+- 实现方法：新增 `tests/e2e_test/scenarios/linux_cli_peer_e2e_test.dart`，补必要 E2E semantics，runner 传入服务配置和 CLI peer 信息。
+- 路径：`test-awiki-me/tests/integration_test/`、`test-awiki-me/lib/src/presentation/`、`test-awiki-me/tool/ wrappers、test-awiki-me/tests/e2e_test/harness/`。
+- 验证方式：`xvfb-run -a flutter test tests/e2e_test/scenarios/linux_cli_peer_e2e_test.dart -d linux`，并检查 App->CLI、CLI->App 两条唯一消息都被确认。
 - Review 环节：检查测试确定性、超时、日志脱敏、selectors 稳定性和失败证据。
 - Commit 要求：一个 focused commit。
 - 风险：App 侧登录 UI、收件箱刷新和消息列表 selector 可能需要小范围增强。
@@ -262,7 +262,7 @@ Linux runner smoke：
 
 ```bash
 cd test-awiki-me
-xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux
+xvfb-run -a flutter test tests/integration_test/app/app_smoke_test.dart -d linux
 ```
 
 SDK Linux native build：
@@ -281,7 +281,7 @@ SDK Linux native smoke：
 
 ```bash
 cd test-awiki-me
-xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux
+xvfb-run -a flutter test tests/integration_test/native/im_core_open_smoke_test.dart -d linux
 ```
 
 真实 App + CLI peer E2E，后续 runner 形态建议：
@@ -298,7 +298,7 @@ dart run tool/linux_cli_peer_e2e_runner.dart \
 runner 内部再调用：
 
 ```bash
-xvfb-run -a flutter test integration_test/linux_cli_peer_e2e_test.dart -d linux \
+xvfb-run -a flutter test tests/e2e_test/scenarios/linux_cli_peer_e2e_test.dart -d linux \
   --dart-define=AWIKI_E2E=true \
   --dart-define=AWIKI_SERVICE_BASE_URL=<non-production-base-url> \
   --dart-define=AWIKI_DID_DOMAIN=<test-did-domain>
@@ -319,7 +319,7 @@ xvfb-run -a flutter test integration_test/linux_cli_peer_e2e_test.dart -d linux 
 ## 14. 验收标准
 
 - [ ] `flutter devices` 能看到 `Linux (desktop)`。
-- [ ] `xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过。
+- [ ] `xvfb-run -a flutter test tests/integration_test/app/app_smoke_test.dart -d linux` 通过。
 - [ ] Linux native SDK 构建产物存在并被 Flutter Linux bundle 打包。
 - [ ] `AwikiImCore.open` Linux smoke 通过，不再因 Linux loader 抛 `UnsupportedError`。
 - [ ] CLI peer 能在隔离 workspace 中注册或恢复测试身份，并能执行 `msg inbox`。
@@ -342,10 +342,10 @@ xvfb-run -a flutter test integration_test/linux_cli_peer_e2e_test.dart -d linux 
 |---|---|---|
 | L0 Docs | `git diff --check`；检查 Plan 链接和路径 | 文档无 trailing whitespace，无本机绝对路径，无敏感值 |
 | L1 App | `cd test-awiki-me && dart analyze && flutter test` | App 单元 / widget 现有套件通过 |
-| L1 Linux smoke | `cd test-awiki-me && xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` | Linux runner + Flutter Desktop shell 可启动 |
+| L1 Linux smoke | `cd test-awiki-me && xvfb-run -a flutter test tests/integration_test/app/app_smoke_test.dart -d linux` | Linux runner + Flutter Desktop shell 可启动 |
 | L1 SDK | `cd awiki-cli-rs2 && cargo test -p im-core-dart --locked`、`scripts/flutter/codegen-check.sh` | Rust-Dart facade 和 generated bridge 不回归 |
 | L1 SDK native | `cd awiki-cli-rs2 && scripts/flutter/build-sdk-native.sh --linux-only` | Linux `.so` 生成并复制 / 打包到 plugin 预期位置 |
-| L2 Cross-repo | `cd test-awiki-me && xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` | App 能打开 Linux native SDK |
+| L2 Cross-repo | `cd test-awiki-me && xvfb-run -a flutter test tests/integration_test/native/im_core_open_smoke_test.dart -d linux` | App 能打开 Linux native SDK |
 | L3 E2E | `cd test-awiki-me && dart run tool/linux_cli_peer_e2e_runner.dart ...` | App+CLI peer 双向消息闭环通过，报告脱敏 |
 
 ## 17. 文档更新

@@ -4,7 +4,7 @@
 `lib/` contains the Flutter application. Domain contracts live in
 `lib/src/domain/`, Dart service clients and persistence live in
 `lib/src/data/`, and UI/providers live in `lib/src/presentation/`.
-`test/` contains Dart unit and widget tests. Platform runners live under
+`tests/unit_test/` contains Dart unit/widget/provider tests. `tests/integration_test/` contains Flutter app/native/platform smoke implementations. `tests/e2e_test/` contains end-to-end harnesses, configs, scenarios, and Maestro flows. Root `integration_test/*.dart` files are Flutter-tooling shims only. Platform runners live under
 `android/`, `ios/`, `macos/`, and `web/`. Static assets live in `assets/`.
 
 ## Build, Test, and Development Commands
@@ -14,7 +14,7 @@ Tsinghua pub mirror:
 ```bash
 PUB_HOSTED_URL=https://mirrors.tuna.tsinghua.edu.cn/dart-pub flutter pub get
 dart analyze
-flutter test
+flutter test tests/unit_test
 flutter run
 ```
 
@@ -26,8 +26,7 @@ matches the surrounding code. Keep widgets focused and move reusable business
 logic into `lib/src/data/` or `lib/src/domain/`.
 
 ## Testing Guidelines
-Tests use `flutter_test`. Name test files `*_test.dart` and keep tests close to
-the feature under change. Prefer focused unit tests for account/session storage,
+Tests use `flutter_test`. Name test files `*_test.dart` and keep tests in the correct parallel test domain: `tests/unit_test/` for fast fake-backed tests, `tests/integration_test/` for platform/native smoke tests, and `tests/e2e_test/` for real end-to-end harnesses and scenarios. Prefer focused unit tests for account/session storage,
 ANP wire mapping, and service clients; use widget tests for onboarding,
 settings, and chat flows.
 

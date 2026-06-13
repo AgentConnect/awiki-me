@@ -3,14 +3,14 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../tool/e2e_runner.dart';
+import '../../e2e_test/harness/mobile_e2e_runner.dart';
 
 void main() {
   group('RunnerOptions', () {
     test('uses the local config by default', () {
       final options = RunnerOptions.parse(const <String>[]);
 
-      expect(options.configPath, 'awiki_e2e.local.yaml');
+      expect(options.configPath, 'tests/e2e_test/configs/mobile.local.yaml');
       expect(options.skipBuild, isFalse);
       expect(options.dryRun, isFalse);
       expect(options.help, isFalse);
@@ -19,12 +19,12 @@ void main() {
     test('parses explicit config and dry-run flags', () {
       final options = RunnerOptions.parse(const <String>[
         '--config',
-        'awiki_e2e.example.yaml',
+        'tests/e2e_test/configs/mobile.example.yaml',
         '--skip-build',
         '--dry-run',
       ]);
 
-      expect(options.configPath, 'awiki_e2e.example.yaml');
+      expect(options.configPath, 'tests/e2e_test/configs/mobile.example.yaml');
       expect(options.skipBuild, isTrue);
       expect(options.dryRun, isTrue);
       expect(options.help, isFalse);
@@ -59,12 +59,14 @@ void main() {
 
   group('E2eConfig', () {
     test('loads the example config with platform specific defaults', () {
-      final config = E2eConfig.load(File('awiki_e2e.example.yaml'));
+      final config = E2eConfig.load(
+        File('tests/e2e_test/configs/mobile.example.yaml'),
+      );
 
       expect(config.platform, E2ePlatform.ios);
       expect(config.appId, 'ai.awiki.awikime123');
       expect(config.app.androidId, 'ai.awiki.awikime');
-      expect(config.service.baseUrl, 'https://awiki.ai');
+      expect(config.service.baseUrl, 'https://awiki.info');
       expect(config.device.resetBeforeRun, isTrue);
       expect(config.device.ios.names.a, 'awiki-e2e-ios-a');
       expect(config.device.ios.names.b, 'awiki-e2e-ios-b');
@@ -318,7 +320,7 @@ message: {}
       await runner.run('flutter', const <String>['build', 'apk']);
       final process = await runner.start('maestro', const <String>[
         'test',
-        '.maestro/login.yaml',
+        'tests/e2e_test/mobile/maestro/login.yaml',
       ], label: 'login-a');
       final exitCode = await process.wait();
 
@@ -329,7 +331,7 @@ message: {}
           r'$ which maestro',
           'maestro: dry-run',
           r'$ flutter build apk',
-          r'$ maestro test .maestro/login.yaml',
+          r'$ maestro test tests/e2e_test/mobile/maestro/login.yaml',
         ]),
       );
     });
@@ -495,7 +497,7 @@ Future<File> _writeConfig(String contents) async {
 Set<String> _maestroReferencedIds() {
   final ids = <String>{};
   for (final file in Directory(
-    '.maestro',
+    'tests/e2e_test/mobile/maestro',
   ).listSync().whereType<File>().where((file) => file.path.endsWith('.yaml'))) {
     final contents = file.readAsStringSync();
     for (final match in RegExp(r'id:\s*([^\s]+)').allMatches(contents)) {

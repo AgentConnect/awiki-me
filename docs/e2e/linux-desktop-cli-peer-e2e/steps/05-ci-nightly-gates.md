@@ -52,14 +52,14 @@ Step index：05
      flutter pub get
      dart analyze
      flutter test
-     dart run tool/e2e_runner.dart --config awiki_e2e.example.yaml --dry-run
-     xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux
+     dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run
+     xvfb-run -a flutter test tests/integration_test/app/app_smoke_test.dart -d linux
      ```
 
    - 如果 Step 02 已稳定，PR 或 nightly 可加入：
 
      ```bash
-     xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux
+     xvfb-run -a flutter test tests/integration_test/native/im_core_open_smoke_test.dart -d linux
      ```
 
    - Full E2E nightly / manual：
@@ -119,9 +119,9 @@ Step index：05
 | Docs path | `cd test-awiki-me && test -f docs/e2e/linux-desktop-cli-peer-e2e/plan.md` | Plan 文件存在 |
 | Docs link | `cd test-awiki-me && rg -n "linux-desktop-cli-peer-e2e" docs/testing.md docs/e2e/linux-desktop-cli-peer-e2e/plan.md` | testing doc 链接 Plan |
 | Quick gate | `cd test-awiki-me && dart analyze && flutter test` | App 基础 gate 通过 |
-| Mobile dry-run | `cd test-awiki-me && dart run tool/e2e_runner.dart --config awiki_e2e.example.yaml --dry-run` | 既有 mobile E2E runner dry-run 不回归 |
-| Linux smoke | `cd test-awiki-me && xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` | desktop smoke 通过 |
-| Native smoke | `cd test-awiki-me && xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` | SDK native smoke 通过 |
+| Mobile dry-run | `cd test-awiki-me && dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run` | 既有 mobile E2E runner dry-run 不回归 |
+| Linux smoke | `cd test-awiki-me && xvfb-run -a flutter test tests/integration_test/app/app_smoke_test.dart -d linux` | desktop smoke 通过 |
+| Native smoke | `cd test-awiki-me && xvfb-run -a flutter test tests/integration_test/native/im_core_open_smoke_test.dart -d linux` | SDK native smoke 通过 |
 | Full E2E | `cd test-awiki-me && dart run tool/linux_cli_peer_e2e_runner.dart ...` | nightly / manual 条件下双向消息通过 |
 | Secret scan | 执行项目约定的 secret scan，覆盖本机绝对路径、OTP 赋值、JWT 和私钥 | 无本机绝对路径或敏感值 |
 | Diff hygiene | `cd test-awiki-me && git diff --check` | 无 whitespace / patch 格式问题 |

@@ -1,3 +1,5 @@
+// ignore_for_file: invalid_use_of_visible_for_testing_member
+
 import 'dart:io';
 
 import 'package:awiki_me/src/app/bootstrap.dart';

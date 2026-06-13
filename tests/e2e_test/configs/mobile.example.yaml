@@ -1,5 +1,5 @@
-# Copy this file to awiki_e2e.local.yaml for real E2E runs.
-# Do not commit awiki_e2e.local.yaml, .e2e/reports, real test-account state,
+# Copy this file to tests/e2e_test/configs/mobile.local.yaml for real E2E runs.
+# Do not commit tests/e2e_test/configs/mobile.local.yaml, .e2e/reports, real test-account state,
 # tokens, signing material, or device-specific output.
 
 platform: ios # ios | android
@@ -9,10 +9,10 @@ app:
   iosId: ai.awiki.awikime123
 
 service:
-  baseUrl: https://awiki.ai
-  userServiceUrl: https://awiki.ai
-  messageServiceUrl: https://awiki.ai
-  didDomain: awiki.ai
+  baseUrl: https://awiki.info
+  userServiceUrl: https://awiki.info
+  messageServiceUrl: https://awiki.info
+  didDomain: awiki.info
 
 device:
   # resetBeforeRun clears simulator/device app data before installation.
@@ -21,7 +21,7 @@ device:
   resetBeforeRun: true
   ios:
     # Use two independent iOS simulators. They may be created by name below or
-    # referenced by fixed UDID in awiki_e2e.local.yaml.
+    # referenced by fixed UDID in tests/e2e_test/configs/mobile.local.yaml.
     # Optional. If omitted, the runner picks the latest installed iPhone
     # simulator type and Xcode's default available iOS runtime.
     # deviceType: "iPhone 16 Pro"
@@ -50,7 +50,7 @@ otp:
   timeoutSeconds: 180
 
 accounts:
-  # Replace these placeholders in awiki_e2e.local.yaml with two isolated
+  # Replace these placeholders in tests/e2e_test/configs/mobile.local.yaml with two isolated
   # non-production accounts. The accounts must have different handles and must
   # be safe to reset/re-register during a real E2E run.
   a:

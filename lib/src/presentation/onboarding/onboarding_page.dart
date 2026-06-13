@@ -332,7 +332,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             SizedBox(height: responsive.spacing(56)),
             Center(
               child: Text(
-                'Base on awiki.ai',
+                'Base on awiki.info',
                 style: TextStyle(
                   color: theme.infoAccent,
                   fontSize: responsive.titleLg,

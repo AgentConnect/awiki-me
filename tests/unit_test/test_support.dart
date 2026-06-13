@@ -737,7 +737,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     lastRegisteredNickName = nickName;
     lastRegisteredProfileMarkdown = profileMarkdown;
     loginResult = SessionIdentity(
-      did: 'did:wba:awiki.ai:$handle:e1_registered',
+      did: 'did:wba:awiki.info:$handle:e1_registered',
       credentialName: handle,
       displayName: nickName?.isNotEmpty == true ? nickName! : handle,
       handle: handle,
@@ -758,7 +758,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     lastEmailRegisteredNickName = nickName;
     lastEmailRegisteredProfileMarkdown = profileMarkdown;
     loginResult = SessionIdentity(
-      did: 'did:wba:awiki.ai:$handle:e1_email_registered',
+      did: 'did:wba:awiki.info:$handle:e1_email_registered',
       credentialName: handle,
       displayName: nickName?.isNotEmpty == true ? nickName! : handle,
       handle: handle,
@@ -775,7 +775,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   }) async {
     recoverHandleCalls += 1;
     loginResult = SessionIdentity(
-      did: 'did:wba:awiki.ai:$handle:e1_recovered',
+      did: 'did:wba:awiki.info:$handle:e1_recovered',
       credentialName: handle,
       displayName: handle,
       handle: handle,
@@ -1317,12 +1317,12 @@ class FakeAgentControlService implements AgentControlService {
   InstallCommand nextInstallCommand = const InstallCommand(
     token: AgentRegistrationToken(token: 'daemon-token'),
     command:
-        'curl -fsSL https://awiki.ai/daemon/install.sh | sh -s -- --token daemon-token',
+        'curl -fsSL https://awiki.info/daemon/install.sh | sh -s -- --token daemon-token',
     fallbackCommand:
-        'awiki-deamon install --token daemon-token --base-url https://awiki.ai',
-    installerUrl: 'https://awiki.ai/daemon/install.sh',
+        'awiki-deamon install --token daemon-token --base-url https://awiki.info',
+    installerUrl: 'https://awiki.info/daemon/install.sh',
     packageUrlTemplate:
-        'https://awiki.ai/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
+        'https://awiki.info/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
   );
   String? lastRefreshedDaemonDid;
   String? lastRuntimeCreateDaemonDid;

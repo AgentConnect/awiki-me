@@ -92,9 +92,9 @@ Step index：03
 
 | 仓库 / 模块 / 文件 | 计划变更 | 备注 |
 |---|---|---|
-| `test-awiki-me/tool/linux_cli_peer_e2e_runner.dart` | 新增 Linux CLI peer runner | 与 mobile Maestro runner 分离 |
+| `test-awiki-me/tool/ wrappers、test-awiki-me/tests/e2e_test/harness/linux_cli_peer_e2e_runner.dart` | 新增 Linux CLI peer runner | 与 mobile Maestro runner 分离 |
 | `test-awiki-me/test/tool/` | 新增 runner dry-run / config parsing tests | 不需要真实服务 |
-| `test-awiki-me/awiki_e2e.example.yaml` 或新配置样例 | 可选扩展 Linux desktop 配置 | 不写真实账号值 |
+| `test-awiki-me/tests/e2e_test/configs/mobile.example.yaml` 或新配置样例 | 可选扩展 Linux desktop 配置 | 不写真实账号值 |
 | `test-awiki-me/.gitignore` | 确认 `.e2e/`、local config 已忽略 | 当前 `.e2e/` 已忽略 |
 | `awiki-cli-rs2/config.template.yaml` | 不一定修改 | 只在 CLI 需要新配置能力时更新 |
 | `user-service/.env` | 不修改、不提交 | 只作为本地输入来源 |
@@ -147,7 +147,7 @@ Step index：03
 ## 10. Commit 要求
 
 - Commit 时机：runner、验证、Review 都完成后。
-- Commit 范围：`test-awiki-me/tool/`、`test-awiki-me/test/tool/`、必要 sample config / docs。
+- Commit 范围：`test-awiki-me/tool/ wrappers、test-awiki-me/tests/e2e_test/harness/`、`test-awiki-me/test/tool/`、必要 sample config / docs。
 - Commit 前状态：记录 `git status --short --branch`。
 - 纳入文件：记录本步骤 commit 包含的文件。
 - Commit 后证据：记录 commit hash 和 commit 后 `git status --short --branch`。

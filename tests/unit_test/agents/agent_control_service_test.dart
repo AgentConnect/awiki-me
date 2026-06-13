@@ -109,7 +109,7 @@ void main() {
         daemonAgentDid: 'did:agent:daemon',
         controllerDid: 'did:human:me',
         appInstanceId: 'app_1',
-        userHandle: 'alice.awiki.ai',
+        userHandle: 'alice.awiki.info',
         userSubkeyPackage: const UserSubkeyPackage(
           userDid: 'did:human:me',
           verificationMethod: 'did:human:me#daemon-key-1',
@@ -132,7 +132,7 @@ void main() {
       );
       expect(messages.lastPayload?['controller_did'], 'did:human:me');
       expect(messages.lastPayload?['app_instance_id'], 'app_1');
-      expect(messages.lastPayload?['user_handle'], 'alice.awiki.ai');
+      expect(messages.lastPayload?['user_handle'], 'alice.awiki.info');
       expect(
         messages.lastPayload?.containsKey('private_key_multibase'),
         isFalse,
@@ -288,12 +288,12 @@ void main() {
     expect(command.command, isNot(contains('--base-url')));
     expect(
       command.fallbackCommand,
-      'awiki-deamon install --token daemon-token --base-url https://awiki.ai',
+      'awiki-deamon install --token daemon-token --base-url https://awiki.info',
     );
-    expect(command.installerUrl, 'https://awiki.ai/daemon/install.sh');
+    expect(command.installerUrl, 'https://awiki.info/daemon/install.sh');
     expect(
       command.packageUrlTemplate,
-      'https://awiki.ai/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
+      'https://awiki.info/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
     );
   });
 }

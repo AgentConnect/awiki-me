@@ -30,7 +30,7 @@ jobs:
         run: dart analyze
 
       - name: Flutter test
-        run: flutter test
+        run: flutter test tests/unit_test
 
       - name: E2E runner dry-run
-        run: dart run tool/e2e_runner.dart --config awiki_e2e.example.yaml --dry-run
+        run: dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run

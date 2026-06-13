@@ -31,7 +31,7 @@ Step index：04
 - 设计边界：App 侧使用真实 `AppBootstrap.create()`、真实 Dart SDK 和 Linux native SDK；CLI 侧使用 public command surface。
 - 核心决策：首版用 polling / inbox / history 验证，不依赖 WebSocket realtime；等消息闭环稳定后再扩展 realtime gate。
 - 契约 / API / 数据流：App 不直接拼 message-service wire payload；所有消息能力通过 App application services / SDK adapter。CLI 不直接读写内部 DB。
-- 兼容性：保留 `integration_test/app_smoke_test.dart` 作为 fast smoke；真实 E2E 单独文件，避免后端 flake 影响 smoke。
+- 兼容性：保留 `tests/integration_test/app/app_smoke_test.dart` 作为 fast smoke；真实 E2E 单独文件，避免后端 flake 影响 smoke。
 - 迁移策略：无用户数据迁移；E2E state 用独立目录，每次可清理。
 - 风险控制：所有 selector 使用 `AWIKI_E2E=true` 下的 semantics identifier 或稳定 widget key；消息内容包含 run id，避免误读历史消息。
 
@@ -91,11 +91,11 @@ Step index：04
 
 | 仓库 / 模块 / 文件 | 计划变更 | 备注 |
 |---|---|---|
-| `test-awiki-me/integration_test/linux_cli_peer_e2e_test.dart` | 新增真实 App+CLI peer E2E | 后端依赖测试，不进 quick PR gate |
+| `test-awiki-me/tests/e2e_test/scenarios/linux_cli_peer_e2e_test.dart` | 新增真实 App+CLI peer E2E | 后端依赖测试，不进 quick PR gate |
 | `test-awiki-me/lib/src/app/e2e_semantics.dart` | 可能扩展 message identifier helper | 只做测试选择器，不改变生产 UI 语义 |
 | `test-awiki-me/lib/src/presentation/onboarding/` | 可能补稳定 selector | 已有 phone / otp / handle selectors |
 | `test-awiki-me/lib/src/presentation/chat/` | 可能补收件人、消息、刷新 selector | 保持用户可见行为不变 |
-| `test-awiki-me/tool/linux_cli_peer_e2e_runner.dart` | 调用 Flutter test、管理 CLI subprocess | 来自 Step 03 |
+| `test-awiki-me/tool/ wrappers、test-awiki-me/tests/e2e_test/harness/linux_cli_peer_e2e_runner.dart` | 调用 Flutter test、管理 CLI subprocess | 来自 Step 03 |
 | `test-awiki-me/test/tool/` | 扩展 E2E command dry-run tests | 不依赖真实服务 |
 
 ## 6. 依赖
@@ -113,7 +113,7 @@ Step index：04
 - [ ] CLI B -> App A 消息被 App UI 或 SDK-backed conversation 观察到。
 - [ ] 消息内容包含唯一 run id，断言不会误读历史消息。
 - [ ] 超时、失败、重试策略明确，日志脱敏。
-- [ ] `integration_test/app_smoke_test.dart` 仍然可作为 fast smoke 单独运行。
+- [ ] `tests/integration_test/app/app_smoke_test.dart` 仍然可作为 fast smoke 单独运行。
 - [ ] Review 发现已经修复或明确记录。
 - [ ] 本步骤在进入下一步之前已经创建聚焦 commit。
 
@@ -123,8 +123,8 @@ Step index：04
 |---|---|---|
 | App quick tests | `cd test-awiki-me && flutter test` | unit / widget 不回归 |
 | Runner dry-run | `cd test-awiki-me && dart run tool/linux_cli_peer_e2e_runner.dart --dry-run ...` | 打印将执行命令，不泄露 secret |
-| Linux smoke | `cd test-awiki-me && xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` | fast desktop smoke 通过 |
-| Linux native smoke | `cd test-awiki-me && xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` | SDK open smoke 通过 |
+| Linux smoke | `cd test-awiki-me && xvfb-run -a flutter test tests/integration_test/app/app_smoke_test.dart -d linux` | fast desktop smoke 通过 |
+| Linux native smoke | `cd test-awiki-me && xvfb-run -a flutter test tests/integration_test/native/im_core_open_smoke_test.dart -d linux` | SDK open smoke 通过 |
 | Full E2E | `cd test-awiki-me && dart run tool/linux_cli_peer_e2e_runner.dart ...` | App->CLI 与 CLI->App 都通过 |
 | Diff hygiene | `cd test-awiki-me && git diff --check` | 无 whitespace / patch 格式问题 |
 
@@ -146,7 +146,7 @@ Step index：04
 ## 10. Commit 要求
 
 - Commit 时机：E2E test、runner integration、验证、Review 都完成后。
-- Commit 范围：`test-awiki-me/integration_test/`、必要 App selectors、runner updates、tests。
+- Commit 范围：`test-awiki-me/tests/integration_test/`、必要 App selectors、runner updates、tests。
 - Commit 前状态：记录 `git status --short --branch`。
 - 纳入文件：记录本步骤 commit 包含的文件。
 - Commit 后证据：记录 commit hash 和 commit 后 `git status --short --branch`。
