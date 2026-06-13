@@ -12,7 +12,7 @@ Step index：01
 | Branch | `feature/test-awiki-me` |
 | Started | 2026-06-13 19:48:55 CST |
 | Completed | 2026-06-13 20:22:21 CST |
-| Commit | 待提交 |
+| Commit | `6bfc504` |
 | Review evidence | diff 限于 `test-awiki-me/linux/`、`.metadata`、`integration_test/app_smoke_test.dart` 和 Linux 依赖文档；未修改 Android / iOS / macOS / web runner；`linux/flutter/ephemeral` 确认被 `.gitignore` 排除 |
 | Verification evidence | `flutter doctor` Linux toolchain 通过；`flutter devices` 看到 `Linux (desktop)`；`flutter test` 通过；`xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过；`dart analyze` 通过；`git diff --check` 通过 |
 | Next action | 创建 Step 01 聚焦 commit，然后进入 Step 02 |
@@ -125,7 +125,7 @@ Step index：01
 - Commit 范围：`test-awiki-me/linux/`、必要 `.metadata`、`integration_test/app_smoke_test.dart`、必要 docs。
 - Commit 前状态：`git status --short --branch` 显示 `.metadata`、Linux 依赖文档、`integration_test/app_smoke_test.dart` 和 `linux/` 为本步骤变更。
 - 纳入文件：`test-awiki-me/linux/` 非 ignored runner 文件、`.metadata`、`integration_test/app_smoke_test.dart`、`docs/testing.md`、`docs/e2e/desktop-cli-peer-macos-linux-plan.md`、`docs/e2e/linux-desktop-cli-peer-e2e/plan.md`、本 Step 文档。
-- Commit 后证据：提交后回填 commit hash 和工作区状态。
+- Commit 后证据：`6bfc504`；提交后 `git status --short --branch` 显示无未提交变更。
 - 遗留未提交变更：无计划遗留；ignored `build/`、`.dart_tool/`、`.flutter-plugins-dependencies`、平台 ephemeral 为 Flutter 生成产物，不提交。
 - 建议消息：`test: add linux desktop runner smoke`
 

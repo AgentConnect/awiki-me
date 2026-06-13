@@ -138,7 +138,7 @@ Desktop host
 
 | Step | 状态 | 分支 | 开始时间 | 完成时间 | Commit | Review 证据 | 验证证据 | 下一步 |
 |---|---|---|---|---|---|---|---|---|
-| 01 | done | `feature/test-awiki-me` | 2026-06-13 19:48:55 CST | 2026-06-13 20:22:21 CST | 待提交 | Review：diff 限于 Linux runner、Linux smoke 测试收敛和依赖文档；无无关 Android / iOS / macOS / web runner 变更；`linux/flutter/ephemeral` 被 `.gitignore` 排除 | `flutter doctor` Linux toolchain 通过；`flutter devices` 看到 Linux desktop；`flutter test` 通过；`xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过；`dart analyze` 通过；`git diff --check` 通过 | 提交 Step 01 后启动 Step 02 |
+| 01 | done | `feature/test-awiki-me` | 2026-06-13 19:48:55 CST | 2026-06-13 20:22:21 CST | `6bfc504` | Review：diff 限于 Linux runner、Linux smoke 测试收敛和依赖文档；无无关 Android / iOS / macOS / web runner 变更；`linux/flutter/ephemeral` 被 `.gitignore` 排除 | `flutter doctor` Linux toolchain 通过；`flutter devices` 看到 Linux desktop；`flutter test` 通过；`xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过；`dart analyze` 通过；`git diff --check` 通过 | 启动 Step 02 |
 | 02 | pending | `feature/test-awiki-me` / `awiki-cli-rs2` 当前工作分支 | - | - | - | - | - | 等 Step 01 commit 后启动 SDK 分析 |
 | 03 | pending | `feature/test-awiki-me` | - | - | - | - | - | 等账号策略确认 |
 | 04 | pending | `feature/test-awiki-me` | - | - | - | - | - | 等 Step 01-03 |
