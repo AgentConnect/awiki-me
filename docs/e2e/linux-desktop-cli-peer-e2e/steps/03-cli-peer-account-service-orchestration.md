@@ -8,14 +8,14 @@ Step index：03
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
+| Status | done |
 | Branch | `feature/test-awiki-me` |
-| Started | - |
-| Completed | - |
-| Commit | - |
-| Review evidence | - |
-| Verification evidence | - |
-| Next action | 在用户确认执行后，设计并实现 Desktop E2E runner 的账号 / 服务配置层 |
+| Started | 2026-06-13 20:45:57 CST |
+| Completed | 2026-06-13 21:18:11 CST |
+| Commit | `969a2c3` |
+| Review evidence | diff 限于 Desktop CLI peer runner 和 focused tests；runner 与 mobile `tool/e2e_runner.dart` 分离；dry-run 无副作用；CLI workspace/report 路径、OTP、token/JWT/private key pattern 均脱敏；修正草稿中的错误 `../awiki-cli-rs2/cargo` 命令；调整为 `awiki-cli init` 后结构化写入 `config.yaml` 再 `config show`；没有修改无关平台 runner |
+| Verification evidence | `flutter test test/tool` 通过；`dart analyze` 通过；`git diff --check` 通过；runner Linux dry-run 通过且日志中 `--phone` / `--otp` 与 workspace/report 路径脱敏；`cd awiki-cli-rs2 && cargo build -p awiki-cli --bin awiki-cli --release --locked` 通过；临时 `AWIKI_CLI_WORKSPACE_HOME_DIR` 下 `awiki-cli --format json init` 与 `config show` 输出可解析 JSON。真实 `id recover` / `id status` / `msg inbox` 未运行：需要可访问非生产后端和测试账号策略，且不能把本地 `.env` 真实值写入日志 |
+| Next action | 启动 Step 04，新增最小 macOS / Linux 共用 Desktop App + CLI peer smoke |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -139,20 +139,20 @@ Step index：03
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 执行时填写 | - |
-| 已修复问题 | 执行时填写 | - |
-| 剩余风险 | 执行时填写 | 账号池 / OTP 限制需明确 |
-| 新增或缺失测试 | 执行时填写 | runner dry-run 至少要覆盖 |
-| 已更新或缺失文档 | 执行时填写 | docs/testing 可在 Step 05 汇总 |
+| 发现问题 | 已处理 | 草稿 runner 曾包含无效的 `../awiki-cli-rs2/cargo` 命令；初始 config 写入顺序会在 `awiki-cli init` 前写文件，容易被 init 默认行为覆盖；运行期 CLI workspace/report 路径最初未纳入 redaction；测试 fixture 使用类似真实手机号/OTP 的字面量会增加 secret scan 噪音。 |
+| 已修复问题 | 完成 | 移除错误 cargo 命令；改为需要构建时运行 `cargo build -p awiki-cli --bin awiki-cli --release --locked`；顺序改为 `init` 后结构化写 `config.yaml` 再 `config show`；report/workspace 路径加入运行期 redaction；测试 secret 改为非真实形态并断言日志/report 不泄露。 |
+| 剩余风险 | 已记录 | 真实 `id recover` / `id status` / `msg inbox` 依赖可访问的非生产后端和测试账号策略，本步骤未运行；同一 `DEV_OTP_PHONE` / `DEV_OTP_CODE` 是否能准备 App / CLI 两个身份仍需 Step 04 真实 E2E 验证。 |
+| 新增或缺失测试 | 完成 | 新增 `test/tool/desktop_cli_peer_e2e_runner_test.dart`，覆盖 options parsing、config env fallback、dry-run placeholder、非 dry-run OTP required、handle 冲突、Linux/macOS command generation、secret redaction、timing report redaction、无 CLI binary 时的 cargo build plan。 |
+| 已更新或缺失文档 | 完成 | 主 Plan 和本 Step 回填执行状态、Review、验证证据；`docs/testing.md` 按 Step 05 统一收口。 |
 
 ## 10. Commit 要求
 
 - Commit 时机：runner、验证、Review 都完成后。
 - Commit 范围：`test-awiki-me/tool/`、`test-awiki-me/test/tool/`、必要 sample config / docs。
-- Commit 前状态：记录 `git status --short --branch`。
-- 纳入文件：记录本步骤 commit 包含的文件。
-- Commit 后证据：记录 commit hash 和 commit 后 `git status --short --branch`。
-- 遗留未提交变更：必须记录原因以及为什么安全。
+- Commit 前状态：`git status --short --branch` 显示本 Step runner / tests 为未跟踪文件，Plan 文档为待回填状态。
+- 纳入文件：`test-awiki-me/tool/desktop_cli_peer_e2e_runner.dart`、`test-awiki-me/test/tool/desktop_cli_peer_e2e_runner_test.dart`。
+- Commit 后证据：`969a2c3`；提交后仅剩主 Plan 和本 Step 文档待回填。
+- 遗留未提交变更：主 Plan 和本 Step 文档证据回填作为单独 docs commit；`awiki-cli-rs2` 中既有 daemon 脏改与本步骤无关，未触碰、未纳入。
 - 建议消息：`test: add desktop cli peer e2e runner`
 
 ## 11. Blocked 处理
