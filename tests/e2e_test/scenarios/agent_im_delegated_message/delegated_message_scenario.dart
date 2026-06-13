@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import '../../harness/src/agent_im_config.dart';
+import '../../harness/src/app_probe_adapter.dart';
 import '../../harness/src/cli_peer_adapter.dart';
 import '../../harness/src/redaction_scan.dart';
 import '../../harness/src/remote_adapter.dart';
@@ -8,6 +9,12 @@ import '../../harness/src/secret_redactor.dart';
 import 'app_bootstrap_scenario.dart';
 
 typedef AgentImCliPeerFlow = Future<AgentImCliPeerFlowResult> Function();
+typedef AgentImAppBootstrapFlow =
+    Future<AgentImAppProbeBootstrapResult> Function();
+typedef AgentImAppReturnFlow =
+    Future<AgentImAppProbeReturnResult> Function({
+      required String? sourceMessageId,
+    });
 
 final class AgentImDelegatedMessageScenario {
   AgentImDelegatedMessageScenario({
@@ -31,20 +38,35 @@ final class AgentImDelegatedMessageScenario {
     required Directory cliWorkspaceDir,
     required List<RemoteEvidenceCommand> remoteCommands,
     AgentImCliPeerFlow? cliPeerFlow,
+    AgentImAppBootstrapFlow? appBootstrapFlow,
+    AgentImAppReturnFlow? appReturnFlow,
   }) async {
-    AgentImAppBootstrapScenarioResult? bootstrapResult;
+    AgentImAppProbeBootstrapResult? appBootstrapResult;
+    AgentImAppProbeBootstrapResult? appBootstrapRetryResult;
+    AgentImAppProbeReturnResult? appReturnResult;
     AgentImCliPeerFlowResult? cliResult;
     Object? appError;
+    Object? appRetryError;
     Object? cliError;
+    Object? appReturnError;
 
     if (!dryRun) {
-      try {
-        bootstrapResult = await appBootstrapScenario.run(
-          runId: runId,
-          userHandle: config.accounts.appUser.handle,
+      if (appBootstrapFlow == null) {
+        appError = StateError(
+          'Real App bootstrap flow was not configured. Non dry-run Agent IM '
+          'E2E must not use the fake bootstrap smoke path.',
         );
-      } catch (error) {
-        appError = error;
+      } else {
+        try {
+          appBootstrapResult = await appBootstrapFlow();
+        } catch (error) {
+          appError = error;
+        }
+        try {
+          appBootstrapRetryResult = await appBootstrapFlow();
+        } catch (error) {
+          appRetryError = error;
+        }
       }
       if (cliPeerFlow == null) {
         cliError = StateError('CLI peer flow was not configured.');
@@ -55,6 +77,15 @@ final class AgentImDelegatedMessageScenario {
           cliError = error;
         }
       }
+      if (appError == null && cliError == null && appReturnFlow != null) {
+        try {
+          appReturnResult = await appReturnFlow(
+            sourceMessageId: cliResult?.sendResult.messageId,
+          );
+        } catch (error) {
+          appReturnError = error;
+        }
+      }
     }
 
     final scanResult = scanner.scanReportAndLogs(
@@ -63,10 +94,14 @@ final class AgentImDelegatedMessageScenario {
     );
     final cases = _cases(
       dryRun: dryRun,
-      bootstrapResult: bootstrapResult,
+      appBootstrapResult: appBootstrapResult,
+      appBootstrapRetryResult: appBootstrapRetryResult,
+      appReturnResult: appReturnResult,
       cliResult: cliResult,
       appError: appError,
+      appRetryError: appRetryError,
       cliError: cliError,
+      appReturnError: appReturnError,
       scanResult: scanResult,
       remoteCommands: remoteCommands,
     );
@@ -75,7 +110,9 @@ final class AgentImDelegatedMessageScenario {
       runId: runId,
       platform: platform,
       dryRun: dryRun,
-      appBootstrapReport: bootstrapResult?.report,
+      appBootstrapReport: appBootstrapResult?.toJson(),
+      appBootstrapRetryReport: appBootstrapRetryResult?.toJson(),
+      appReturnReport: appReturnResult?.toJson(),
       cliPeerResult: cliResult?.toJson(),
       remoteCommands: [for (final command in remoteCommands) command.toJson()],
       redactionScan: scanResult,
@@ -86,10 +123,14 @@ final class AgentImDelegatedMessageScenario {
 
   List<AgentImScenarioCaseResult> _cases({
     required bool dryRun,
-    required AgentImAppBootstrapScenarioResult? bootstrapResult,
+    required AgentImAppProbeBootstrapResult? appBootstrapResult,
+    required AgentImAppProbeBootstrapResult? appBootstrapRetryResult,
+    required AgentImAppProbeReturnResult? appReturnResult,
     required AgentImCliPeerFlowResult? cliResult,
     required Object? appError,
+    required Object? appRetryError,
     required Object? cliError,
+    required Object? appReturnError,
     required AgentImRedactionScanResult scanResult,
     required List<RemoteEvidenceCommand> remoteCommands,
   }) {
@@ -113,10 +154,16 @@ final class AgentImDelegatedMessageScenario {
       ]);
     } else {
       final appOk =
-          bootstrapResult?.sentBootstrapPayload == true &&
-          bootstrapResult?.bootstrapHiddenFromChat == true;
+          appBootstrapResult?.sent == true &&
+          appBootstrapResult?.hiddenFromChat == true;
       final cliOk = cliResult != null;
-      if (appError != null || cliError != null) {
+      final returnOk =
+          appReturnResult?.detected == true &&
+          appReturnResult?.hiddenFromChat == true;
+      if (appError != null ||
+          appRetryError != null ||
+          cliError != null ||
+          appReturnError != null) {
         cases.add(
           AgentImScenarioCaseResult.failed(
             id: 'AIM-E2E-001',
@@ -124,25 +171,35 @@ final class AgentImDelegatedMessageScenario {
             title: 'Happy Path 普通消息委托处理',
             reason: _joinReasons(<Object?>[
               if (appError != null) 'App bootstrap failed: $appError',
+              if (appRetryError != null)
+                'App bootstrap retry failed: $appRetryError',
               if (cliError != null) 'CLI peer send failed: $cliError',
+              if (appReturnError != null)
+                'App return evidence failed: $appReturnError',
             ]),
             evidence: <String>[
-              if (bootstrapResult != null) 'app bootstrap payload sent',
+              if (appBootstrapResult != null) 'app-probe-bootstrap.log',
               if (cliResult != null) 'cli-peer-result.json',
+              if (appReturnResult != null) 'app-probe-wait-return.log',
             ],
           ),
         );
-      } else if (appOk && cliOk) {
+      } else if (appOk && cliOk && returnOk) {
+        final matchedReturn = appReturnResult?.matched;
         cases.add(
-          AgentImScenarioCaseResult.skipped(
+          AgentImScenarioCaseResult.passed(
             id: 'AIM-E2E-001',
             priority: 'P0',
             title: 'Happy Path 普通消息委托处理',
-            reason:
-                'App bootstrap smoke 与 CLI ordinary send 已执行；Daemon/Hermes 处理和 App summary/status 远端证据需 Step 06 通过 ssh ali 收口后才能判定 full pass。',
             evidence: <String>[
-              'App bootstrap sent hidden awiki.daemon.bootstrap.v1 payload',
+              'App probe sent hidden awiki.daemon.bootstrap.v1 payload',
               'cli-peer-result.json',
+              'App probe detected returned Agent summary/status payload',
+              'Returned Agent payload is hidden from ordinary chat rendering',
+              if (cliResult.sendResult.messageId != null)
+                'sourceMessageId=${cliResult.sendResult.messageId}',
+              if (matchedReturn != null)
+                'matchedReturnSchema=${matchedReturn['schema']}',
               if (remoteCommands.isNotEmpty) 'remote evidence commands planned',
             ],
           ),
@@ -154,27 +211,51 @@ final class AgentImDelegatedMessageScenario {
             priority: 'P0',
             title: 'Happy Path 普通消息委托处理',
             reason:
-                'App bootstrap or CLI send did not produce the expected local evidence.',
+                'App bootstrap, CLI send, or App summary/status return did not produce the expected real E2E evidence.',
+            evidence: <String>[
+              'appOk=$appOk',
+              'cliOk=$cliOk',
+              'returnOk=$returnOk',
+              'returnHiddenFromChat=${appReturnResult?.hiddenFromChat}',
+            ],
           ),
         );
       }
 
-      final idempotencyKey = bootstrapResult?.sentIdempotencyKey;
+      final idempotencyKey = appBootstrapResult?.idempotencyKey;
+      final retryIdempotencyKey = appBootstrapRetryResult?.idempotencyKey;
+      final retryOk =
+          appBootstrapRetryResult?.sent == true &&
+          appBootstrapRetryResult?.hiddenFromChat == true &&
+          idempotencyKey != null &&
+          retryIdempotencyKey == idempotencyKey;
       cases.add(
-        idempotencyKey == null
+        retryOk
+            ? AgentImScenarioCaseResult.passed(
+                id: 'AIM-E2E-002',
+                priority: 'P0',
+                title: 'Bootstrap 幂等',
+                evidence: <String>[
+                  'idempotencyKey=$idempotencyKey',
+                  'Repeated real App bootstrap reused the same idempotency key and stayed hidden from chat',
+                ],
+              )
+            : idempotencyKey == null
             ? AgentImScenarioCaseResult.failed(
                 id: 'AIM-E2E-002',
                 priority: 'P0',
                 title: 'Bootstrap 幂等',
                 reason: 'App bootstrap did not expose an idempotency key.',
               )
-            : AgentImScenarioCaseResult.skipped(
+            : AgentImScenarioCaseResult.failed(
                 id: 'AIM-E2E-002',
                 priority: 'P0',
                 title: 'Bootstrap 幂等',
                 reason:
-                    'App 侧已生成稳定 message-agent-bootstrap idempotency key；Daemon runtime/message agent 去重证据需 Step 06 远端 agent registry/log 验证。',
-                evidence: <String>['idempotencyKey=$idempotencyKey'],
+                    'Repeated real App bootstrap did not prove stable idempotency. '
+                    'first=$idempotencyKey retry=$retryIdempotencyKey '
+                    'retrySent=${appBootstrapRetryResult?.sent} '
+                    'retryHidden=${appBootstrapRetryResult?.hiddenFromChat}.',
               ),
       );
     }
@@ -239,6 +320,8 @@ final class AgentImDelegatedMessageScenarioResult {
     required this.platform,
     required this.dryRun,
     required this.appBootstrapReport,
+    required this.appBootstrapRetryReport,
+    required this.appReturnReport,
     required this.cliPeerResult,
     required this.remoteCommands,
     required this.redactionScan,
@@ -250,6 +333,8 @@ final class AgentImDelegatedMessageScenarioResult {
   final String platform;
   final bool dryRun;
   final Map<String, Object?>? appBootstrapReport;
+  final Map<String, Object?>? appBootstrapRetryReport;
+  final Map<String, Object?>? appReturnReport;
   final Map<String, Object?>? cliPeerResult;
   final List<Map<String, Object?>> remoteCommands;
   final AgentImRedactionScanResult redactionScan;
@@ -273,6 +358,8 @@ final class AgentImDelegatedMessageScenarioResult {
           'dryRun': dryRun,
           'counts': counts,
           'appBootstrapReport': appBootstrapReport,
+          'appBootstrapRetryReport': appBootstrapRetryReport,
+          'appReturnReport': appReturnReport,
           'cliPeerResult': cliPeerResult,
           'remoteCommands': remoteCommands,
           'redactionScan': redactionScan.toJson(),

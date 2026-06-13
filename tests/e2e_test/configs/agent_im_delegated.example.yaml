@@ -21,10 +21,15 @@ cliPeer:
 app:
   platform: macos
   runMode: integration_test
+  workspaceRoot: .e2e/agent-im/app
+  appInstanceId: macos-e2e-app
 
 agent:
   expectedRuntime: hermes
   delegatedKeyFragment: daemon-key-1
+  # Optional. If omitted, the App probe selects the first active daemon from
+  # User Service agent inventory for the App user's controller DID.
+  daemonDid: ""
 
 accounts:
   appUser:

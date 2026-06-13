@@ -27,6 +27,7 @@ abstract interface class AgentControlService {
     required UserSubkeyPackage userSubkeyPackage,
     String? userHandle,
     String? runtimeRegistrationToken,
+    String? runId,
   });
   Future<void> resetRuntimeSession({
     required String daemonAgentDid,
@@ -173,6 +174,7 @@ class DefaultAgentControlService implements AgentControlService {
     required UserSubkeyPackage userSubkeyPackage,
     String? userHandle,
     String? runtimeRegistrationToken,
+    String? runId,
   }) async {
     final userDid = userSubkeyPackage.userDid;
     final idempotencyKey = messageAgentBootstrapIdempotencyKey(
@@ -200,6 +202,7 @@ class DefaultAgentControlService implements AgentControlService {
       appInstanceId: appInstanceId,
       controllerDid: controllerDid,
       userHandle: userHandle,
+      runId: runId,
       userSubkeyPackage: userSubkeyPackage,
       desiredMessageAgent: DesiredMessageAgent(
         ensureOnceKey: messageAgentEnsureOnceKey(

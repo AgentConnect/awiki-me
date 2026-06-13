@@ -65,6 +65,7 @@ final class AgentImCliPeerAdapter {
       binary: binary.path,
       commands: AgentImCliPeerAdapterPlan.commands(
         config: config,
+        runId: runId,
         targetHandle: targetHandle,
         messageText: messageText,
       ),
@@ -82,6 +83,7 @@ final class AgentImCliPeerAdapter {
     await loginOrRestorePeer();
     commandLabels.add('loginOrRestorePeer');
     final sendResult = await sendOrdinaryMessage(
+      runId: runId,
       targetHandle: targetHandle,
       messageText: messageText,
     );
@@ -195,9 +197,11 @@ final class AgentImCliPeerAdapter {
   }
 
   Future<AgentImCliPeerSendResult> sendOrdinaryMessage({
+    required String runId,
     required String targetHandle,
     required String messageText,
   }) async {
+    final messageId = _messageIdForRun(runId);
     final result = await _run('cli-peer-msg-send', <String>[
       '--format',
       'json',
@@ -209,9 +213,14 @@ final class AgentImCliPeerAdapter {
       targetHandle,
       '--text',
       messageText,
+      '--client-message-id',
+      messageId,
+      '--idempotency-key',
+      messageId,
     ], timeout: config.timeouts.messageProcess);
     return AgentImCliPeerSendResult(
       targetHandle: targetHandle,
+      requestedMessageId: messageId,
       stdoutSummary: _safeJsonSummary(result.stdoutText),
     );
   }
@@ -295,6 +304,7 @@ final class AgentImCliPeerAdapterPlan {
 
   static List<AgentImCliPeerPlannedCommand> commands({
     required AgentImDelegatedConfig config,
+    required String runId,
     required String targetHandle,
     required String messageText,
   }) {
@@ -378,6 +388,10 @@ final class AgentImCliPeerAdapterPlan {
           targetHandle,
           '--text',
           messageText,
+          '--client-message-id',
+          _messageIdForRun(runId),
+          '--idempotency-key',
+          _messageIdForRun(runId),
         ],
         usesEnvVars: const <String>[],
       ),
@@ -460,15 +474,27 @@ final class AgentImCliPeerFlowResult {
 final class AgentImCliPeerSendResult {
   const AgentImCliPeerSendResult({
     required this.targetHandle,
+    required this.requestedMessageId,
     required this.stdoutSummary,
   });
 
   final String targetHandle;
+  final String requestedMessageId;
   final Object? stdoutSummary;
+
+  String? get messageId =>
+      _findStringByKey(stdoutSummary, const <String>{
+        'message_id',
+        'messageId',
+        'id',
+      }) ??
+      requestedMessageId;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'targetHandle': targetHandle,
+    'requestedMessageId': requestedMessageId,
     'stdoutSummary': stdoutSummary,
+    if (messageId != null) 'messageId': messageId,
   };
 }
 
@@ -504,4 +530,39 @@ String _shellQuote(String value) {
     return value;
   }
   return "'${value.replaceAll("'", "'\\''")}'";
+}
+
+String _messageIdForRun(String runId) {
+  final safe = runId
+      .replaceAll(RegExp(r'[^A-Za-z0-9_-]+'), '_')
+      .replaceAll(RegExp(r'_+'), '_')
+      .replaceAll(RegExp(r'^_+|_+$'), '');
+  return 'msg_agent_im_${safe.isEmpty ? 'run' : safe}';
+}
+
+String? _findStringByKey(Object? value, Set<String> keys) {
+  if (value is Map) {
+    for (final entry in value.entries) {
+      final key = entry.key.toString();
+      final entryValue = entry.value;
+      if (keys.contains(key) && entryValue is String && entryValue.isNotEmpty) {
+        return entryValue;
+      }
+    }
+    for (final entry in value.entries) {
+      final found = _findStringByKey(entry.value, keys);
+      if (found != null) {
+        return found;
+      }
+    }
+  }
+  if (value is List) {
+    for (final item in value) {
+      final found = _findStringByKey(item, keys);
+      if (found != null) {
+        return found;
+      }
+    }
+  }
+  return null;
 }

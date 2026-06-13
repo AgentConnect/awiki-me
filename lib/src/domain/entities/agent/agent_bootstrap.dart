@@ -150,6 +150,7 @@ class DaemonBootstrapEnvelope {
     required this.appInstanceId,
     required this.controllerDid,
     this.userHandle,
+    this.runId,
     required this.userSubkeyPackage,
     required this.desiredMessageAgent,
     this.capabilityPolicy = const AppCapabilityPolicy(),
@@ -160,6 +161,7 @@ class DaemonBootstrapEnvelope {
   final String appInstanceId;
   final String controllerDid;
   final String? userHandle;
+  final String? runId;
   final UserSubkeyPackage userSubkeyPackage;
   final DesiredMessageAgent desiredMessageAgent;
   final AppCapabilityPolicy capabilityPolicy;
@@ -200,6 +202,7 @@ class DaemonBootstrapEnvelope {
       'app_instance_id': appInstanceId,
       'controller_did': controllerDid,
       if (_nonEmpty(userHandle) != null) 'user_handle': userHandle!.trim(),
+      if (_nonEmpty(runId) != null) 'run_id': runId!.trim(),
       'user_subkey_package': userSubkeyPackage.toJson(),
       'capability_policy': capabilityPolicy.toJson(),
       'desired_message_agent': desiredMessageAgent.toJson(),

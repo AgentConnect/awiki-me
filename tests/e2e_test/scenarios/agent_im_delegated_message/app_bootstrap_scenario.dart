@@ -54,6 +54,7 @@ final class AgentImAppBootstrapScenario {
       appInstanceId: appInstanceId,
       userSubkeyPackage: package,
       userHandle: userHandle,
+      runId: runId,
     );
 
     final sentPayload = messages.lastPayload;
@@ -163,6 +164,7 @@ final class AgentImAppBootstrapScenario {
             'idempotency_key': payload['idempotency_key'],
             'app_instance_id': payload['app_instance_id'],
             'controller_did': payload['controller_did'],
+            'run_id': payload['run_id'],
             'user_handle': payload['user_handle'],
             'user_subkey_package': '<REDACTED_PRIVATE_PACKAGE>',
             'desired_message_agent': payload['desired_message_agent'],

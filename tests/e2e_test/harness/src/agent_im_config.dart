@@ -163,7 +163,12 @@ final class AgentImCliPeerConfig {
 }
 
 final class AgentImAppConfig {
-  const AgentImAppConfig({required this.platform, required this.runMode});
+  const AgentImAppConfig({
+    required this.platform,
+    required this.runMode,
+    required this.workspaceRoot,
+    required this.appInstanceId,
+  });
 
   factory AgentImAppConfig.fromMap(Map<String, Object?> map) {
     final platform = _string(map, 'platform', 'macos').toLowerCase();
@@ -175,15 +180,21 @@ final class AgentImAppConfig {
     return AgentImAppConfig(
       platform: platform,
       runMode: _string(map, 'runMode', 'integration_test'),
+      workspaceRoot: _string(map, 'workspaceRoot', '.e2e/agent-im/app'),
+      appInstanceId: _string(map, 'appInstanceId', 'macos-e2e-app'),
     );
   }
 
   final String platform;
   final String runMode;
+  final String workspaceRoot;
+  final String appInstanceId;
 
   Map<String, Object?> toReportJson() => <String, Object?>{
     'platform': platform,
     'runMode': runMode,
+    'workspaceRoot': workspaceRoot,
+    'appInstanceId': appInstanceId,
   };
 }
 
@@ -191,6 +202,7 @@ final class AgentImAgentConfig {
   const AgentImAgentConfig({
     required this.expectedRuntime,
     required this.delegatedKeyFragment,
+    this.daemonDid,
   });
 
   factory AgentImAgentConfig.fromMap(Map<String, Object?> map) {
@@ -201,15 +213,18 @@ final class AgentImAgentConfig {
         'delegatedKeyFragment',
         'daemon-key-1',
       ),
+      daemonDid: _optionalString(map, 'daemonDid'),
     );
   }
 
   final String expectedRuntime;
   final String delegatedKeyFragment;
+  final String? daemonDid;
 
   Map<String, Object?> toReportJson() => <String, Object?>{
     'expectedRuntime': expectedRuntime,
     'delegatedKeyFragment': delegatedKeyFragment,
+    if (daemonDid != null) 'daemonDid': daemonDid,
   };
 }
 
@@ -328,6 +343,18 @@ String _requiredString(Map<String, Object?> map, String key) {
     return value.trim();
   }
   throw AgentImConfigFailure('$key must be a non-empty string.');
+}
+
+String? _optionalString(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value == null) {
+    return null;
+  }
+  if (value is String) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+  throw AgentImConfigFailure('$key must be a string when set.');
 }
 
 bool _bool(Map<String, Object?> map, String key, {required bool defaultValue}) {

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../e2e_test/harness/desktop_e2e_runner.dart';
 import '../../e2e_test/harness/src/agent_im_config.dart';
+import '../../e2e_test/harness/src/app_probe_adapter.dart';
 import '../../e2e_test/harness/src/cli_peer_adapter.dart';
 import '../../e2e_test/harness/src/e2e_report.dart';
 import '../../e2e_test/harness/src/redaction_scan.dart';
@@ -144,12 +145,14 @@ phone +8610011110001
                 'phoneEnv': 'DEV_OTP_PHONE',
                 'otpEnv': 'DEV_OTP_CODE',
                 'runtime_token': 'runtime-secret',
+                'privateKeyPem': '-----BEGIN PRIVATE KEY-----secret',
               })
               as Map<Object?, Object?>;
 
       expect(output['phoneEnv'], 'DEV_OTP_PHONE');
       expect(output['otpEnv'], 'DEV_OTP_CODE');
       expect(output['runtime_token'], '<REDACTED_TOKEN>');
+      expect(output['privateKeyPem'], '<REDACTED_PRIVATE_KEY>');
     });
   });
 
@@ -414,9 +417,14 @@ mail_service_url: https://old.example
       expect(registry.supports(agentImDelegatedMessageScenario), isTrue);
       expect(plan.scenario, agentImDelegatedMessageScenario);
       expect(plan.steps, hasLength(5));
-      expect(plan.remoteCommands, hasLength(4));
+      expect(plan.remoteCommands, hasLength(5));
       expect(plan.remoteCommands.first.command, contains('systemctl'));
-      expect(plan.remoteCommands[1].command, contains('journalctl'));
+      expect(plan.remoteCommands[1].command, contains('sqlite3'));
+      expect(
+        plan.remoteCommands[1].command,
+        contains('msg_agent_im_run_test_001'),
+      );
+      expect(plan.remoteCommands[2].command, contains('journalctl'));
       expect(plan.toJson().toString(), contains('run_test_001'));
       expect(plan.toJson().toString(), isNot(contains('987580')));
     });
@@ -447,7 +455,41 @@ mail_service_url: https://old.example
           result.entries.single.stdoutSummary,
           isNot(contains('tok_remote')),
         );
+        expect(result.passed, isFalse);
+        expect(result.missingStages, contains('daemon_bootstrap_received'));
         expect(result.toJson().toString(), contains('remote health summary'));
+      },
+    );
+
+    test(
+      'marks remote evidence passed only when all P0 stages are observed',
+      () async {
+        final dir = await Directory.systemTemp.createTemp(
+          'remote-evidence-stages-',
+        );
+        addTearDown(() => dir.deleteSync(recursive: true));
+        final fakeRunner = _FakeCliRunner(
+          stdoutText: agentImRequiredRemoteStages
+              .map((stage) => 'E2E_STAGE $stage pass')
+              .join('\n'),
+        );
+
+        final result = await const AgentImRemoteEvidenceCollector().collect(
+          commands: const <RemoteEvidenceCommand>[
+            RemoteEvidenceCommand(
+              label: 'daemon sqlite evidence by runId',
+              executable: 'ssh',
+              args: <String>['ali', 'echo stages'],
+            ),
+          ],
+          runner: fakeRunner,
+          workingDirectory: dir,
+          reportDir: dir,
+        );
+
+        expect(result.passed, isTrue);
+        expect(result.missingStages, isEmpty);
+        expect(result.observedStages, contains('summary_return_sent'));
       },
     );
 
@@ -483,6 +525,215 @@ mail_service_url: https://old.example
       },
     );
 
+    test(
+      'fails P0 when App return evidence is missing after CLI send',
+      () async {
+        final config = AgentImDelegatedConfig.load(
+          File('tests/e2e_test/configs/agent_im_delegated.example.yaml'),
+        );
+        final dir = await Directory.systemTemp.createTemp(
+          'agent-im-scenario-missing-return-',
+        );
+        addTearDown(() => dir.deleteSync(recursive: true));
+
+        final result = await AgentImDelegatedMessageScenario(config: config)
+            .run(
+              runId: 'run_missing_return',
+              platform: 'macos',
+              dryRun: false,
+              reportDir: dir,
+              cliWorkspaceDir: Directory('${dir.path}/peer-b'),
+              remoteCommands: const <RemoteEvidenceCommand>[],
+              appBootstrapFlow: () async =>
+                  _appBootstrapResult(runId: 'run_missing_return'),
+              cliPeerFlow: () async => _cliPeerResult(
+                runId: 'run_missing_return',
+                messageId: 'msg_missing_return',
+              ),
+            );
+
+        final happyPath = _caseById(result, 'AIM-E2E-001');
+        expect(result.hasBlockingFailure, isTrue);
+        expect(happyPath.status, 'fail');
+        expect(
+          happyPath.reason,
+          contains('App bootstrap, CLI send, or App summary/status return'),
+        );
+      },
+    );
+
+    test(
+      'fails P0 when real run does not configure App bootstrap flow',
+      () async {
+        final config = AgentImDelegatedConfig.load(
+          File('tests/e2e_test/configs/agent_im_delegated.example.yaml'),
+        );
+        final dir = await Directory.systemTemp.createTemp(
+          'agent-im-scenario-no-app-flow-',
+        );
+        addTearDown(() => dir.deleteSync(recursive: true));
+
+        final result = await AgentImDelegatedMessageScenario(config: config)
+            .run(
+              runId: 'run_no_app_flow',
+              platform: 'macos',
+              dryRun: false,
+              reportDir: dir,
+              cliWorkspaceDir: Directory('${dir.path}/peer-b'),
+              remoteCommands: const <RemoteEvidenceCommand>[],
+              cliPeerFlow: () async => _cliPeerResult(
+                runId: 'run_no_app_flow',
+                messageId: 'msg_no_app_flow',
+              ),
+              appReturnFlow: ({required sourceMessageId}) async =>
+                  _appReturnResult(
+                    runId: 'run_no_app_flow',
+                    sourceMessageId: sourceMessageId,
+                  ),
+            );
+
+        final happyPath = _caseById(result, 'AIM-E2E-001');
+        expect(result.hasBlockingFailure, isTrue);
+        expect(happyPath.status, 'fail');
+        expect(happyPath.reason, contains('Real App bootstrap flow'));
+      },
+    );
+
+    test(
+      'fails P0 when returned Agent payload would render as ordinary chat',
+      () async {
+        final config = AgentImDelegatedConfig.load(
+          File('tests/e2e_test/configs/agent_im_delegated.example.yaml'),
+        );
+        final dir = await Directory.systemTemp.createTemp(
+          'agent-im-scenario-renderable-return-',
+        );
+        addTearDown(() => dir.deleteSync(recursive: true));
+
+        final result = await AgentImDelegatedMessageScenario(config: config)
+            .run(
+              runId: 'run_renderable_return',
+              platform: 'macos',
+              dryRun: false,
+              reportDir: dir,
+              cliWorkspaceDir: Directory('${dir.path}/peer-b'),
+              remoteCommands: const <RemoteEvidenceCommand>[],
+              appBootstrapFlow: () async =>
+                  _appBootstrapResult(runId: 'run_renderable_return'),
+              cliPeerFlow: () async => _cliPeerResult(
+                runId: 'run_renderable_return',
+                messageId: 'msg_renderable_return',
+              ),
+              appReturnFlow: ({required sourceMessageId}) async =>
+                  _appReturnResult(
+                    runId: 'run_renderable_return',
+                    sourceMessageId: sourceMessageId,
+                    hiddenFromChat: false,
+                  ),
+            );
+
+        final happyPath = _caseById(result, 'AIM-E2E-001');
+        expect(result.hasBlockingFailure, isTrue);
+        expect(happyPath.status, 'fail');
+        expect(happyPath.evidence, contains('returnHiddenFromChat=false'));
+      },
+    );
+
+    test(
+      'fails bootstrap idempotency when retry uses a different key',
+      () async {
+        final config = AgentImDelegatedConfig.load(
+          File('tests/e2e_test/configs/agent_im_delegated.example.yaml'),
+        );
+        final dir = await Directory.systemTemp.createTemp(
+          'agent-im-scenario-idempotency-fail-',
+        );
+        addTearDown(() => dir.deleteSync(recursive: true));
+        var attempts = 0;
+
+        final result = await AgentImDelegatedMessageScenario(config: config)
+            .run(
+              runId: 'run_idempotency_fail',
+              platform: 'macos',
+              dryRun: false,
+              reportDir: dir,
+              cliWorkspaceDir: Directory('${dir.path}/peer-b'),
+              remoteCommands: const <RemoteEvidenceCommand>[],
+              appBootstrapFlow: () async {
+                attempts += 1;
+                return _appBootstrapResult(
+                  runId: 'run_idempotency_fail',
+                  idempotencyKey: 'bootstrap-key-$attempts',
+                );
+              },
+              cliPeerFlow: () async => _cliPeerResult(
+                runId: 'run_idempotency_fail',
+                messageId: 'msg_idempotency_fail',
+              ),
+              appReturnFlow: ({required sourceMessageId}) async =>
+                  _appReturnResult(
+                    runId: 'run_idempotency_fail',
+                    sourceMessageId: sourceMessageId,
+                  ),
+            );
+
+        final idempotency = _caseById(result, 'AIM-E2E-002');
+        expect(result.hasBlockingFailure, isTrue);
+        expect(idempotency.status, 'fail');
+        expect(idempotency.reason, contains('stable idempotency'));
+      },
+    );
+
+    test(
+      'passes P0 only with App bootstrap, CLI send and returned summary evidence',
+      () async {
+        final config = AgentImDelegatedConfig.load(
+          File('tests/e2e_test/configs/agent_im_delegated.example.yaml'),
+        );
+        final dir = await Directory.systemTemp.createTemp(
+          'agent-im-scenario-return-',
+        );
+        addTearDown(() => dir.deleteSync(recursive: true));
+
+        final result = await AgentImDelegatedMessageScenario(config: config)
+            .run(
+              runId: 'run_return_ok',
+              platform: 'macos',
+              dryRun: false,
+              reportDir: dir,
+              cliWorkspaceDir: Directory('${dir.path}/peer-b'),
+              remoteCommands: const <RemoteEvidenceCommand>[],
+              appBootstrapFlow: () async =>
+                  _appBootstrapResult(runId: 'run_return_ok'),
+              cliPeerFlow: () async => _cliPeerResult(
+                runId: 'run_return_ok',
+                messageId: 'msg_return_ok',
+              ),
+              appReturnFlow: ({required sourceMessageId}) async {
+                expect(sourceMessageId, 'msg_return_ok');
+                return _appReturnResult(
+                  runId: 'run_return_ok',
+                  sourceMessageId: sourceMessageId,
+                );
+              },
+            );
+
+        final happyPath = _caseById(result, 'AIM-E2E-001');
+        expect(result.hasBlockingFailure, isFalse);
+        expect(happyPath.status, 'pass');
+        expect(
+          happyPath.evidence,
+          contains('App probe detected returned Agent summary/status payload'),
+        );
+        expect(_caseById(result, 'AIM-E2E-002').status, 'pass');
+        expect(
+          result.appBootstrapRetryReport.toString(),
+          contains('run_return_ok'),
+        );
+        expect(result.appReturnReport.toString(), contains('msg_return_ok'));
+      },
+    );
+
     test('writes redacted JSON reports', () async {
       final dir = await Directory.systemTemp.createTemp('awiki-report-test-');
       addTearDown(() => dir.deleteSync(recursive: true));
@@ -505,6 +756,83 @@ mail_service_url: https://old.example
       expect(json['token'], '<REDACTED_TOKEN>');
       expect(json['nested'].toString(), isNot(contains('private-material')));
     });
+  });
+}
+
+AgentImScenarioCaseResult _caseById(
+  AgentImDelegatedMessageScenarioResult result,
+  String id,
+) => result.cases.firstWhere((item) => item.id == id);
+
+AgentImAppProbeBootstrapResult _appBootstrapResult({
+  required String runId,
+  String idempotencyKey = 'message-agent-bootstrap:macos-e2e-app',
+}) {
+  return AgentImAppProbeBootstrapResult.fromJson(<String, Object?>{
+    'runId': runId,
+    'appDid': 'did:wba:awiki.info:e2e-app',
+    'appHandle': 'e2e_app',
+    'daemonDid': 'did:wba:awiki.info:daemon-hermes',
+    'appInstanceId': 'macos-e2e-app',
+    'bootstrap': <String, Object?>{
+      'sent': true,
+      'messageId': 'bootstrap-$runId',
+      'idempotencyKey': idempotencyKey,
+      'payloadSchema': 'awiki.daemon.bootstrap.v1',
+      'payloadRunId': runId,
+      'hiddenFromChat': true,
+    },
+  });
+}
+
+AgentImCliPeerFlowResult _cliPeerResult({
+  required String runId,
+  required String messageId,
+}) {
+  return AgentImCliPeerFlowResult(
+    runId: runId,
+    peerHandle: 'e2e_peer',
+    targetHandle: 'e2e_app',
+    workspace: '/tmp/agent-im-peer',
+    commandLabels: const <String>['msg send'],
+    sendResult: AgentImCliPeerSendResult(
+      targetHandle: 'e2e_app',
+      requestedMessageId: messageId,
+      stdoutSummary: <String, Object?>{
+        'ok': true,
+        'data': <String, Object?>{
+          'message': <String, Object?>{'id': messageId},
+        },
+      },
+    ),
+  );
+}
+
+AgentImAppProbeReturnResult _appReturnResult({
+  required String runId,
+  required String? sourceMessageId,
+  bool hiddenFromChat = true,
+}) {
+  return AgentImAppProbeReturnResult.fromJson(<String, Object?>{
+    'runId': runId,
+    'daemonDid': 'did:wba:awiki.info:daemon-hermes',
+    'sourceMessageId': sourceMessageId,
+    'returnEvidence': <String, Object?>{
+      'detected': true,
+      'attempts': 2,
+      'matched': <String, Object?>{
+        'messageId': 'agent-summary-$runId',
+        'schema': 'awiki.message.sync.v1',
+        'payloadRunId': runId,
+        'payloadSourceMessageId': sourceMessageId,
+        'isControl': hiddenFromChat,
+        'renderable': !hiddenFromChat,
+        'hiddenFromChat': hiddenFromChat,
+        'uiProjection': hiddenFromChat
+            ? 'agent_message_sync_state'
+            : 'ordinary_chat_bubble',
+      },
+    },
   });
 }
 
