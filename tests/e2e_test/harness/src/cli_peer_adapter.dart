@@ -108,23 +108,32 @@ final class AgentImCliPeerAdapter {
   }
 
   Future<void> loginOrRestorePeer() async {
+    if (!dryRun && await _refreshExistingPeerSession()) {
+      return;
+    }
+
     final account = config.accounts.peerUser;
     final phone = _secretFromEnv(account.phoneEnv, 'peer phone');
     final otp = _secretFromEnv(account.otpEnv, 'peer OTP');
-    await _run('cli-peer-id-recover', <String>[
-      '--format',
-      'json',
-      '--identity',
-      account.handle,
-      'id',
-      'recover',
-      '--handle',
-      account.handle,
-      '--phone',
-      phone,
-      '--otp',
-      otp,
-    ], timeout: const Duration(minutes: 3));
+    try {
+      await _recoverPeer(account: account, phone: phone, otp: otp);
+    } on Object {
+      await _registerPeer(account: account, phone: phone, otp: otp);
+    }
+    await _refreshPeerSession();
+  }
+
+  Future<bool> _refreshExistingPeerSession() async {
+    try {
+      await _refreshPeerSession();
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
+  Future<void> _refreshPeerSession() async {
+    final account = config.accounts.peerUser;
     await _run('cli-peer-refresh-token', <String>[
       '--format',
       'json',
@@ -141,6 +150,48 @@ final class AgentImCliPeerAdapter {
       'id',
       'status',
     ], timeout: const Duration(minutes: 2));
+  }
+
+  Future<void> _recoverPeer({
+    required AgentImAccountConfig account,
+    required String phone,
+    required String otp,
+  }) {
+    return _run('cli-peer-id-recover', <String>[
+      '--format',
+      'json',
+      '--identity',
+      account.handle,
+      'id',
+      'recover',
+      '--handle',
+      account.handle,
+      '--phone',
+      phone,
+      '--otp',
+      otp,
+    ], timeout: const Duration(minutes: 3));
+  }
+
+  Future<void> _registerPeer({
+    required AgentImAccountConfig account,
+    required String phone,
+    required String otp,
+  }) {
+    return _run('cli-peer-id-register', <String>[
+      '--format',
+      'json',
+      '--identity',
+      account.handle,
+      'id',
+      'register',
+      '--handle',
+      account.handle,
+      '--phone',
+      phone,
+      '--otp',
+      otp,
+    ], timeout: const Duration(minutes: 3));
   }
 
   Future<AgentImCliPeerSendResult> sendOrdinaryMessage({
@@ -170,12 +221,15 @@ final class AgentImCliPeerAdapter {
     List<String> args, {
     required Duration timeout,
   }) {
+    final homeDir = Directory('${workspace.path}/home')
+      ..createSync(recursive: true);
     return runner.run(
       binary.path,
       args,
       workingDirectory: cliRepo,
       environment: <String, String>{
         'AWIKI_CLI_WORKSPACE_HOME_DIR': workspace.path,
+        'HOME': homeDir.path,
       },
       logFile: File('${reportDir.path}/$label.log'),
       timeout: timeout,
@@ -247,12 +301,36 @@ final class AgentImCliPeerAdapterPlan {
     final account = config.accounts.peerUser;
     return <AgentImCliPeerPlannedCommand>[
       const AgentImCliPeerPlannedCommand(
-        label: 'initialize isolated CLI peer workspace',
+        label: 'initialize configured CLI peer workspace',
         args: <String>['init'],
         usesEnvVars: <String>[],
       ),
       AgentImCliPeerPlannedCommand(
-        label: 'recover CLI peer identity',
+        label: 'refresh existing CLI peer token',
+        args: <String>[
+          '--format',
+          'json',
+          '--identity',
+          account.handle,
+          'id',
+          'refresh-token',
+        ],
+        usesEnvVars: const <String>[],
+      ),
+      AgentImCliPeerPlannedCommand(
+        label: 'verify existing CLI peer identity status',
+        args: <String>[
+          '--format',
+          'json',
+          '--identity',
+          account.handle,
+          'id',
+          'status',
+        ],
+        usesEnvVars: const <String>[],
+      ),
+      AgentImCliPeerPlannedCommand(
+        label: 'recover CLI peer identity when reuse fails',
         args: <String>[
           '--format',
           'json',
@@ -270,16 +348,22 @@ final class AgentImCliPeerAdapterPlan {
         usesEnvVars: <String>[account.phoneEnv, account.otpEnv],
       ),
       AgentImCliPeerPlannedCommand(
-        label: 'refresh CLI peer token',
+        label: 'register CLI peer identity when recover finds no handle',
         args: <String>[
           '--format',
           'json',
           '--identity',
           account.handle,
           'id',
-          'refresh-token',
+          'register',
+          '--handle',
+          account.handle,
+          '--phone',
+          r'$' + account.phoneEnv,
+          '--otp',
+          r'$' + account.otpEnv,
         ],
-        usesEnvVars: const <String>[],
+        usesEnvVars: <String>[account.phoneEnv, account.otpEnv],
       ),
       AgentImCliPeerPlannedCommand(
         label: 'send ordinary non-E2EE runId message',

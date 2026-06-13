@@ -84,7 +84,7 @@ tests/e2e_test/
 ### Desktop E2E
 
 The desktop runner is shared by macOS and Linux. It reuses one architecture for
-service config, CLI build, CLI isolated workspace, timing reports, and App
+service config, CLI build, CLI peer workspace, timing reports, and App
 dart-defines. Only the platform adapter differs:
 
 - macOS: checks `xcrun`, runs `flutter test -d macos`.
@@ -103,7 +103,7 @@ Agent IM delegated-message dry-run uses the same desktop runner and adds a
 scenario/config layer. The checked-in config contains placeholders and
 environment variable names only. The runner writes `scenario-plan.json`,
 `cli-peer-plan.json`, and `agent-im-scenario-result.json`; the CLI plan shows the
-isolated `awiki-cli-rs2` peer workspace, recover/refresh-token commands, and
+configured `awiki-cli-rs2` peer workspace, refresh/status/recover/register commands, and
 ordinary `msg send` command with only environment variable names for phone/OTP:
 
 ```bash
@@ -128,9 +128,15 @@ flutter test integration_test/agent_im_delegated_message_e2e_test.dart -d macos
 
 Copy `tests/e2e_test/configs/agent_im_delegated.example.yaml` to
 `tests/e2e_test/configs/agent_im_delegated.local.yaml` for local real runs.
-Real Agent IM CLI peer runs require the peer account env vars named by that
-local config. Do not commit local configs, generated CLI workspaces, reports,
-OTP values, tokens, private keys, or remote log captures.
+Use a persistent ignored `cliPeer.workspaceRoot` such as
+`.e2e/agent-im/cli-peer` for the peer account. Real Agent IM CLI peer runs first
+reuse that workspace through `id refresh-token` and `id status`; only the first
+bootstrap or a broken workspace requires the peer account env vars named by the
+local config for OTP-based `id recover` or `id register`. The harness also points the CLI
+process `HOME` at `<cliPeer.workspaceRoot>/home` so the latest `awiki-cli-rs2`
+does not inspect or import legacy `awiki-agent-id-message` state from the
+developer's real home directory. Do not commit local configs, generated CLI
+workspaces, reports, OTP values, tokens, private keys, or remote log captures.
 
 When `remote.collectLogs` is enabled in a non-dry-run Agent IM scenario, the
 runner also writes `remote-evidence-result.json` plus `remote-*.log` files with

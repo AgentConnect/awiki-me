@@ -177,7 +177,7 @@ phone +8610011110001
       );
       final json = plan.toJson();
 
-      expect(plan.commands, hasLength(4));
+      expect(plan.commands, hasLength(6));
       expect(json.toString(), contains(r'$AWIKI_E2E_PEER_PHONE'));
       expect(json.toString(), contains('msg send'));
       expect(json.toString(), contains('run_cli_001'));
@@ -185,18 +185,75 @@ phone +8610011110001
       expect(json.toString(), isNot(contains('987580')));
     });
 
+    test('reuses existing CLI peer identity without reading OTP env', () async {
+      final config = AgentImDelegatedConfig.load(
+        File('tests/e2e_test/configs/agent_im_delegated.example.yaml'),
+      );
+      final fakeRunner = _FakeCliRunner();
+      final adapter = AgentImCliPeerAdapter(
+        config: config,
+        cliRepo: Directory('/tmp/awiki-cli-rs2'),
+        binary: File('/tmp/awiki-cli-rs2/target/debug/awiki-cli'),
+        workspace: Directory('/tmp/peer-b'),
+        reportDir: Directory('/tmp/report'),
+        runner: fakeRunner,
+        dryRun: false,
+        envReader: (name) => fail('unexpected env read: $name'),
+      );
+      File('/tmp/peer-b/config.yaml')
+        ..createSync(recursive: true)
+        ..writeAsStringSync("""
+service_base_url: https://old.example
+did_domain: old.example
+anp_service_endpoint: https://old.example/anp-im/rpc
+anp_service_did: did:wba:old.example
+mail_service_url: https://old.example
+""");
+      addTearDown(() {
+        final dir = Directory('/tmp/peer-b');
+        if (dir.existsSync()) {
+          dir.deleteSync(recursive: true);
+        }
+      });
+
+      final result = await adapter.runOrdinaryMessageFlow(
+        runId: 'run_cli_002',
+        targetHandle: config.accounts.appUser.handle,
+        messageText: 'Agent IM E2E ordinary message runId=run_cli_002',
+      );
+
+      expect(fakeRunner.calls, hasLength(4));
+      expect(
+        fakeRunner.calls.first.environment['AWIKI_CLI_WORKSPACE_HOME_DIR'],
+        '/tmp/peer-b',
+      );
+      expect(fakeRunner.calls.first.environment['HOME'], '/tmp/peer-b/home');
+      expect(
+        fakeRunner.calls[1].args,
+        containsAll(<String>['id', 'refresh-token']),
+      );
+      expect(
+        fakeRunner.calls.map((call) => call.args).toString(),
+        isNot(contains('id, recover')),
+      );
+      expect(fakeRunner.calls.last.args, containsAll(<String>['msg', 'send']));
+      expect(result.toJson().toString(), contains('msg-run'));
+      expect(result.toJson().toString(), isNot(contains('+8610011110001')));
+      expect(result.toJson().toString(), isNot(contains('987580')));
+    });
+
     test(
-      'runs CLI peer flow with isolated workspace and redacted result',
+      'recovers CLI peer once when refresh cannot reuse existing identity',
       () async {
         final config = AgentImDelegatedConfig.load(
           File('tests/e2e_test/configs/agent_im_delegated.example.yaml'),
         );
-        final fakeRunner = _FakeCliRunner();
+        final fakeRunner = _FakeCliRunner(failFirstRefresh: true);
         final adapter = AgentImCliPeerAdapter(
           config: config,
           cliRepo: Directory('/tmp/awiki-cli-rs2'),
           binary: File('/tmp/awiki-cli-rs2/target/debug/awiki-cli'),
-          workspace: Directory('/tmp/peer-b'),
+          workspace: Directory('/tmp/peer-b-recover'),
           reportDir: Directory('/tmp/report'),
           runner: fakeRunner,
           dryRun: false,
@@ -206,7 +263,7 @@ phone +8610011110001
             _ => null,
           },
         );
-        File('/tmp/peer-b/config.yaml')
+        File('/tmp/peer-b-recover/config.yaml')
           ..createSync(recursive: true)
           ..writeAsStringSync("""
 service_base_url: https://old.example
@@ -216,35 +273,82 @@ anp_service_did: did:wba:old.example
 mail_service_url: https://old.example
 """);
         addTearDown(() {
-          final dir = Directory('/tmp/peer-b');
+          final dir = Directory('/tmp/peer-b-recover');
           if (dir.existsSync()) {
             dir.deleteSync(recursive: true);
           }
         });
 
-        final result = await adapter.runOrdinaryMessageFlow(
-          runId: 'run_cli_002',
+        await adapter.runOrdinaryMessageFlow(
+          runId: 'run_cli_recover',
           targetHandle: config.accounts.appUser.handle,
-          messageText: 'Agent IM E2E ordinary message runId=run_cli_002',
+          messageText: 'Agent IM E2E ordinary message runId=run_cli_recover',
         );
 
-        expect(fakeRunner.calls, hasLength(5));
+        expect(fakeRunner.calls, hasLength(6));
         expect(
-          fakeRunner.calls.first.environment['AWIKI_CLI_WORKSPACE_HOME_DIR'],
-          '/tmp/peer-b',
-        );
-        expect(
-          fakeRunner.calls[1].args,
+          fakeRunner.calls[2].args,
           containsAll(<String>['id', 'recover']),
         );
-        expect(fakeRunner.calls[1].args, contains('+8610011110001'));
-        expect(
-          fakeRunner.calls.last.args,
-          containsAll(<String>['msg', 'send']),
+        expect(fakeRunner.calls[2].args, contains('+8610011110001'));
+      },
+    );
+
+    test(
+      'registers CLI peer once when recover cannot find the handle',
+      () async {
+        final config = AgentImDelegatedConfig.load(
+          File('tests/e2e_test/configs/agent_im_delegated.example.yaml'),
         );
-        expect(result.toJson().toString(), contains('msg-run'));
-        expect(result.toJson().toString(), isNot(contains('+8610011110001')));
-        expect(result.toJson().toString(), isNot(contains('987580')));
+        final fakeRunner = _FakeCliRunner(
+          failFirstRefresh: true,
+          failRecover: true,
+        );
+        final adapter = AgentImCliPeerAdapter(
+          config: config,
+          cliRepo: Directory('/tmp/awiki-cli-rs2'),
+          binary: File('/tmp/awiki-cli-rs2/target/debug/awiki-cli'),
+          workspace: Directory('/tmp/peer-b-register'),
+          reportDir: Directory('/tmp/report'),
+          runner: fakeRunner,
+          dryRun: false,
+          envReader: (name) => switch (name) {
+            'AWIKI_E2E_PEER_PHONE' => '+8610011110001',
+            'AWIKI_E2E_PEER_OTP' => '987580',
+            _ => null,
+          },
+        );
+        File('/tmp/peer-b-register/config.yaml')
+          ..createSync(recursive: true)
+          ..writeAsStringSync("""
+service_base_url: https://old.example
+did_domain: old.example
+anp_service_endpoint: https://old.example/anp-im/rpc
+anp_service_did: did:wba:old.example
+mail_service_url: https://old.example
+""");
+        addTearDown(() {
+          final dir = Directory('/tmp/peer-b-register');
+          if (dir.existsSync()) {
+            dir.deleteSync(recursive: true);
+          }
+        });
+
+        await adapter.runOrdinaryMessageFlow(
+          runId: 'run_cli_register',
+          targetHandle: config.accounts.appUser.handle,
+          messageText: 'Agent IM E2E ordinary message runId=run_cli_register',
+        );
+
+        expect(fakeRunner.calls, hasLength(7));
+        expect(
+          fakeRunner.calls[2].args,
+          containsAll(<String>['id', 'recover']),
+        );
+        expect(
+          fakeRunner.calls[3].args,
+          containsAll(<String>['id', 'register']),
+        );
       },
     );
 
@@ -258,7 +362,7 @@ mail_service_url: https://old.example
         binary: File('/tmp/awiki-cli-rs2/target/debug/awiki-cli'),
         workspace: Directory('/tmp/peer-b-missing'),
         reportDir: Directory('/tmp/report'),
-        runner: _FakeCliRunner(),
+        runner: _FakeCliRunner(failFirstRefresh: true),
         dryRun: false,
         envReader: (_) => null,
       );
@@ -420,9 +524,14 @@ class _FakeCliRunner implements AgentImCliCommandRunner {
   _FakeCliRunner({
     this.stdoutText =
         '{"ok":true,"data":{"message":{"id":"msg-run","secure":false}}}',
+    this.failFirstRefresh = false,
+    this.failRecover = false,
   });
 
   final String stdoutText;
+  final bool failFirstRefresh;
+  final bool failRecover;
+  bool _didFailRefresh = false;
   final calls = <_FakeCliCall>[];
 
   @override
@@ -444,6 +553,15 @@ class _FakeCliRunner implements AgentImCliCommandRunner {
         timeout: timeout,
       ),
     );
+    if (failFirstRefresh &&
+        !_didFailRefresh &&
+        args.contains('refresh-token')) {
+      _didFailRefresh = true;
+      throw const AgentImCliPeerFailure('refresh failed');
+    }
+    if (failRecover && args.contains('recover')) {
+      throw const AgentImCliPeerFailure('recover failed');
+    }
     return AgentImCliCommandResult(
       exitCode: 0,
       stdoutText: stdoutText,

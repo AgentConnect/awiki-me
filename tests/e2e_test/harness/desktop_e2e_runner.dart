@@ -93,7 +93,7 @@ class DesktopE2eRunner {
     cliWorkspaceDir = Directory(
       '${root.path}/.e2e/${platform.name}/cli-workspaces/$runId',
     )..createSync(recursive: true);
-    agentImCliPeerWorkspaceDir = Directory('${cliWorkspaceDir.path}/peer-b');
+    agentImCliPeerWorkspaceDir = _agentImCliPeerWorkspaceDirectory();
     final totalStopwatch = Stopwatch()..start();
     var succeeded = false;
 
@@ -217,7 +217,9 @@ class DesktopE2eRunner {
     }
     final env = <String, String>{
       'AWIKI_CLI_WORKSPACE_HOME_DIR': cliWorkspaceDir.path,
+      'HOME': '${cliWorkspaceDir.path}/home',
     };
+    Directory(env['HOME']!).createSync(recursive: true);
     await commands.run(
       binary.path,
       const <String>['init'],
@@ -382,6 +384,18 @@ class DesktopE2eRunner {
         '${reportDir.path}/agent-im-scenario-result.json',
       );
     }
+  }
+
+  Directory _agentImCliPeerWorkspaceDirectory() {
+    final workspaceRoot = agentImConfig?.cliPeer.workspaceRoot.trim();
+    if (workspaceRoot == null || workspaceRoot.isEmpty) {
+      return Directory('${cliWorkspaceDir.path}/peer-b');
+    }
+    final configured = Directory(workspaceRoot);
+    if (configured.isAbsolute) {
+      return configured;
+    }
+    return Directory('${root.path}/$workspaceRoot');
   }
 
   AgentImCliPeerAdapter _agentImCliPeerAdapter(
@@ -680,7 +694,7 @@ Builds the shared desktop E2E smoke environment for macOS or Linux:
   1. Checks shared Flutter/Cargo tooling and platform-specific tools.
   2. Optionally runs flutter pub get.
   3. Builds awiki-cli-rs2's awiki-cli binary.
-  4. Creates an isolated awiki-cli workspace under .e2e/<platform>/.
+  4. Creates or reuses the configured awiki-cli-rs2 peer workspace.
   5. Runs the desktop AwikiImCore.open integration smoke against AWIKI base URL.
 
 Options:

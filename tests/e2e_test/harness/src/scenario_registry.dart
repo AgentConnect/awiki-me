@@ -24,9 +24,7 @@ final class E2eScenarioRegistry {
       runId: runId,
       peerHandle: config.accounts.peerUser.handle,
       targetHandle: config.accounts.appUser.handle,
-      workspace:
-          cliPeerWorkspace ??
-          '${config.cliPeer.workspaceRoot}/$platform/$runId/peer-b',
+      workspace: cliPeerWorkspace ?? config.cliPeer.workspaceRoot,
       binary: cliBinaryPath ?? config.cliPeer.binary,
       commands: AgentImCliPeerAdapterPlan.commands(
         config: config,
@@ -42,7 +40,7 @@ final class E2eScenarioRegistry {
       platform: platform,
       steps: <DesktopScenarioStep>[
         DesktopScenarioStep(
-          name: 'prepare isolated CLI peer workspace',
+          name: 'prepare configured CLI peer workspace',
           detail:
               'Use awiki-cli-rs2 with ${config.accounts.peerUser.handle} and workspace ${cliPeerPlan.workspace}.',
         ),

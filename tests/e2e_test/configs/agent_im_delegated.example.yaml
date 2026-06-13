@@ -30,11 +30,11 @@ accounts:
   appUser:
     phoneEnv: DEV_OTP_PHONE
     otpEnv: DEV_OTP_CODE
-    handle: awiki-e2e-agent-app
+    handle: e2e-agent-app
   peerUser:
     phoneEnv: AWIKI_E2E_PEER_PHONE
     otpEnv: AWIKI_E2E_PEER_OTP
-    handle: awiki-e2e-agent-peer
+    handle: e2e-agent-peer
 
 timeouts:
   bootstrapSeconds: 60
