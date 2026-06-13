@@ -8,14 +8,14 @@ Step index：05
 
 | 字段 | 值 |
 |---|---|
-| Status | in_progress |
+| Status | done |
 | Branch | `feature/test-awiki-me` |
 | Started | 2026-06-13 22:38:00 CST |
-| Completed | - |
-| Commit | - |
-| Review evidence | - |
-| Verification evidence | - |
-| Next action | 更新 CI gate 和测试文档，保持真实 App+CLI peer E2E 在 manual / nightly / release gate |
+| Completed | 2026-06-13 23:38:07 CST |
+| Commit | `f11d16f` |
+| Review evidence | CI gate 分层已检查：PR quick gate 只跑 analyze、unit/widget、mobile dry-run、Linux app smoke 和 Linux native smoke；真实后端 + OTP Desktop App+CLI peer E2E 保持 manual/nightly/release；SQLite 预种 source override 只影响 Linux CMake fresh build；未提交 `.e2e/`、App state、CLI workspace、OTP、JWT 或私钥 |
+| Verification evidence | `dart analyze` 通过；`flutter test test/tool/desktop_cli_peer_e2e_runner_test.dart test/tool/e2e_runner_test.dart` 通过；`dart run tool/e2e_runner.dart --config awiki_e2e.example.yaml --dry-run` 通过；`flutter test` 通过，404 tests passed；`git diff --check` 通过；SQLite source 通过续传下载并解包到 `/tmp/awiki-sqlite3`；`AWIKI_SQLITE3_SOURCE_DIR=/tmp/awiki-sqlite3 xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过；`AWIKI_SQLITE3_SOURCE_DIR=/tmp/awiki-sqlite3 xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` 通过；`AWIKI_SQLITE3_SOURCE_DIR=/tmp/awiki-sqlite3 xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` 安全 skip；macOS 未运行：当前 host 是 Linux |
+| Next action | 回填主 Plan 最终全局 Review，创建 docs evidence commit |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -104,15 +104,15 @@ Step index：05
 
 ## 7. 验收标准
 
-- [ ] `docs/testing.md` 清楚说明 Linux smoke、native smoke、Desktop App+CLI peer smoke 的覆盖范围和命令。
-- [ ] `docs/testing.md` 清楚说明 `desktop_cli_peer_smoke_test.dart` 是当前唯一新增或调整的 Desktop App+CLI peer 测试用例。
-- [ ] 本 Plan 链接可从 `docs/testing.md` 找到。
-- [ ] PR quick gate 不依赖真实 OTP 和后端账号状态。
-- [ ] Desktop App+CLI peer smoke gate 只在 secrets 存在且 job 条件满足时运行。
-- [ ] CI artifacts 不包含 secret、本地身份、JWT、私钥或 `.e2e/` 原始 workspace。
-- [ ] 所有步骤执行台账、Review 证据、验证证据已回填。
-- [ ] 最终全局 Review 已完成。
-- [ ] 本步骤在完成后已经创建聚焦 commit。
+- [x] `docs/testing.md` 清楚说明 Linux smoke、native smoke、Desktop App+CLI peer smoke 的覆盖范围和命令。
+- [x] `docs/testing.md` 清楚说明 `desktop_cli_peer_smoke_test.dart` 是当前唯一新增或调整的 Desktop App+CLI peer 测试用例。
+- [x] 本 Plan 链接可从 `docs/testing.md` 找到。
+- [x] PR quick gate 不依赖真实 OTP 和后端账号状态。
+- [x] Desktop App+CLI peer smoke gate 只在 secrets 存在且 job 条件满足时运行。
+- [x] CI artifacts 不包含 secret、本地身份、JWT、私钥或 `.e2e/` 原始 workspace。
+- [x] 所有步骤执行台账、Review 证据、验证证据已回填。
+- [x] 最终全局 Review 已完成。
+- [x] 本步骤在完成后已经创建聚焦 commit。
 
 ## 8. 验证方式
 
@@ -139,11 +139,11 @@ Step index：05
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 执行时填写 | - |
-| 已修复问题 | 执行时填写 | - |
-| 剩余风险 | 执行时填写 | 例如 nightly runner 可用性 |
-| 新增或缺失测试 | 执行时填写 | gate 文档需匹配实际 |
-| 已更新或缺失文档 | 执行时填写 | 本步骤核心是文档收口 |
+| 发现问题 | 已记录 | SQLite 官方下载在本机较慢，两次 120s timeout 后通过续传完成；`sqlite3_flutter_libs` fresh Linux build 需要避免无上限 CMake 下载。远端 CI 依赖 `AWIKI_CLI_RS2_REF` 指向含 Linux SDK 和 CLI endpoint 支持的 ref。当前 host 不是 macOS，macOS Desktop smoke 未运行。 |
+| 已修复问题 | 完成 | CI workflow 增加 sibling SDK checkout、Rust toolchain、Linux desktop deps、Linux native SDK build 和 Linux app/native smoke；`linux/CMakeLists.txt` 增加 `AWIKI_SQLITE3_SOURCE_DIR` 预种 SQLite source；`docs/testing.md` 更新 gate 分层和命令。 |
+| 剩余风险 | 已记录 | 真实后端 + OTP App+CLI peer E2E 仍依赖服务、账号池和 secrets，保持 manual/nightly/release；SQLite 下载建议后续接内部缓存；macOS 需在 macOS runner 上补跑。 |
+| 新增或缺失测试 | 完成 / 已记录 | 本步骤不新增新 E2E 用例；已跑 `dart analyze`、`flutter test`、runner focused tests、mobile dry-run、Linux app/native smoke 和 Desktop CLI peer default skip；真实 Linux E2E 成功证据已在 Step 04 记录。 |
+| 已更新或缺失文档 | 完成 | `docs/testing.md`、主 Plan、Step 05 已更新；本节最终证据回填后另建 docs evidence commit。 |
 
 ## 10. Commit 要求
 
