@@ -49,6 +49,7 @@ class DesktopCliPeerRunner {
   late final String runId;
   late final Directory reportDir;
   late final Directory cliWorkspaceDir;
+  late final Directory cliHomeDir;
   late final Directory appStateRootDir;
   final List<DesktopTimingEntry> _timings = <DesktopTimingEntry>[];
 
@@ -60,14 +61,19 @@ class DesktopCliPeerRunner {
     cliWorkspaceDir = Directory(
       '${root.path}/.e2e/desktop-cli-peer/$runId/cli-peer',
     );
+    cliHomeDir = Directory(
+      '${root.path}/.e2e/desktop-cli-peer/$runId/cli-home',
+    );
     appStateRootDir = Directory(
       '${root.path}/.e2e/desktop-cli-peer/$runId/app',
     );
     _addRuntimeSecret(reportDir.path);
     _addRuntimeSecret(cliWorkspaceDir.path);
+    _addRuntimeSecret(cliHomeDir.path);
     _addRuntimeSecret(appStateRootDir.path);
     if (!options.dryRun) {
       cliWorkspaceDir.createSync(recursive: true);
+      cliHomeDir.createSync(recursive: true);
       appStateRootDir.createSync(recursive: true);
     }
 
@@ -78,6 +84,7 @@ class DesktopCliPeerRunner {
       _line('platform: ${config.platform.name}');
       _line('reports: ${redactor.redact(reportDir.path)}');
       _line('cli workspace: ${redactor.redact(cliWorkspaceDir.path)}');
+      _line('cli home: ${redactor.redact(cliHomeDir.path)}');
       _line('app state: ${redactor.redact(appStateRootDir.path)}');
 
       await _timed('Checking tooling', _checkTooling);
@@ -169,6 +176,10 @@ class DesktopCliPeerRunner {
         : <String, Object?>{};
     final services = _mapAt(configMap, 'services', optional: true);
     services['service_base_url'] = config.serviceBaseUrl;
+    services['user_service_endpoint'] =
+        config.userServiceUrl ?? config.serviceBaseUrl;
+    services['message_service_endpoint'] =
+        config.messageServiceUrl ?? config.serviceBaseUrl;
     services['did_domain'] = config.didDomain;
     if (config.anpServiceUrl != null) {
       services['anp_service_endpoint'] = config.anpServiceUrl;
@@ -182,7 +193,10 @@ class DesktopCliPeerRunner {
     if (options.dryRun) {
       _line(
         'would write CLI config: ${redactor.redact(file.path)} '
-        '(service_base_url=${config.serviceBaseUrl}, did_domain=${config.didDomain})',
+        '(service_base_url=${config.serviceBaseUrl}, '
+        'user_service_endpoint=${config.userServiceUrl ?? config.serviceBaseUrl}, '
+        'message_service_endpoint=${config.messageServiceUrl ?? config.serviceBaseUrl}, '
+        'did_domain=${config.didDomain})',
       );
       return;
     }
@@ -259,6 +273,7 @@ class DesktopCliPeerRunner {
       '--dart-define=DEV_OTP_CODE=${config.otpCode}',
       '--dart-define=AWIKI_CLI_BIN=${config.cliBin}',
       '--dart-define=AWIKI_CLI_WORKSPACE_HOME_DIR=${cliWorkspaceDir.path}',
+      '--dart-define=AWIKI_CLI_HOME_DIR=${cliHomeDir.path}',
       '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
       if (config.userServiceUrl != null)
         '--dart-define=AWIKI_USER_SERVICE_URL=${config.userServiceUrl}',
@@ -287,6 +302,7 @@ class DesktopCliPeerRunner {
       args,
       environment: <String, String>{
         ...environment,
+        'HOME': cliHomeDir.path,
         'AWIKI_CLI_WORKSPACE_HOME_DIR': cliWorkspaceDir.path,
       },
       allowFailure: allowFailure,

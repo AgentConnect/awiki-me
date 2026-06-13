@@ -101,6 +101,9 @@ void main() {
           'AWIKI_DID_DOMAIN': 'example.test',
           'AWIKI_ANP_SERVICE_URL': 'https://service.example.test/anp-im/rpc',
           'AWIKI_ANP_SERVICE_DID': 'did:wba:example.test',
+          'AWIKI_USER_SERVICE_URL': 'https://users.example.test',
+          'AWIKI_MESSAGE_SERVICE_URL': 'https://messages.example.test',
+          'AWIKI_MAIL_SERVICE_URL': 'https://mail.example.test',
           'DEV_OTP_PHONE': 'test-phone-secret',
           'DEV_OTP_CODE': 'test-otp-secret',
           'AWIKI_E2E_APP_HANDLE': 'app-peer',
@@ -111,6 +114,9 @@ void main() {
 
       expect(config.platform, DesktopE2ePlatform.linux);
       expect(config.serviceBaseUrl, 'https://service.example.test');
+      expect(config.userServiceUrl, 'https://users.example.test');
+      expect(config.messageServiceUrl, 'https://messages.example.test');
+      expect(config.mailServiceUrl, 'https://mail.example.test');
       expect(config.didDomain, 'example.test');
       expect(config.anpServiceUrl, 'https://service.example.test/anp-im/rpc');
       expect(config.anpServiceDid, 'did:wba:example.test');
@@ -210,6 +216,7 @@ void main() {
         environment: const <String, String>{
           'DEV_OTP_PHONE': 'test-phone-secret',
           'DEV_OTP_CODE': 'test-otp-secret',
+          'AWIKI_MESSAGE_SERVICE_URL': 'https://messages.example.test',
         },
         commands: DesktopCommandRunner(
           root: root,
@@ -266,6 +273,17 @@ void main() {
       expect(
         log,
         contains('--dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted>'),
+      );
+      expect(log, contains('--dart-define=AWIKI_CLI_HOME_DIR=<redacted>'));
+      expect(
+        log,
+        contains(
+          '--dart-define=AWIKI_MESSAGE_SERVICE_URL=https://messages.example.test',
+        ),
+      );
+      expect(
+        log,
+        contains('message_service_endpoint=https://messages.example.test'),
       );
       expect(log, isNot(contains('test-phone-secret')));
       expect(log, isNot(contains('test-otp-secret')));

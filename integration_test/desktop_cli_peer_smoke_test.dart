@@ -23,6 +23,7 @@ const String _cliBin = String.fromEnvironment('AWIKI_CLI_BIN');
 const String _cliWorkspace = String.fromEnvironment(
   'AWIKI_CLI_WORKSPACE_HOME_DIR',
 );
+const String _cliHome = String.fromEnvironment('AWIKI_CLI_HOME_DIR');
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -210,6 +211,7 @@ Future<_CliResult> _runCli(
     args,
     environment: <String, String>{
       ...Platform.environment,
+      'HOME': config.cliHome,
       'AWIKI_CLI_WORKSPACE_HOME_DIR': config.cliWorkspace,
     },
     runInShell: false,
@@ -262,7 +264,7 @@ String _summarizeCliResult(_CliResult result) {
 
 String _sanitizeDiagnostic(String input) {
   var output = input;
-  for (final secret in <String>[_otpPhone, _otpCode, _cliWorkspace]) {
+  for (final secret in <String>[_otpPhone, _otpCode, _cliWorkspace, _cliHome]) {
     if (secret.trim().isNotEmpty) {
       output = output.replaceAll(secret, '<redacted>');
     }
@@ -291,6 +293,7 @@ class _DesktopCliPeerSmokeConfig {
     required this.otpCode,
     required this.cliBin,
     required this.cliWorkspace,
+    required this.cliHome,
   });
 
   factory _DesktopCliPeerSmokeConfig.fromEnvironment() {
@@ -306,6 +309,7 @@ class _DesktopCliPeerSmokeConfig {
         'AWIKI_CLI_WORKSPACE_HOME_DIR',
         _cliWorkspace,
       ),
+      cliHome: _requiredDefine('AWIKI_CLI_HOME_DIR', _cliHome),
     );
   }
 
@@ -317,6 +321,7 @@ class _DesktopCliPeerSmokeConfig {
   final String otpCode;
   final String cliBin;
   final String cliWorkspace;
+  final String cliHome;
 }
 
 class _AppIdentityAttempt {
