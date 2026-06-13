@@ -13,7 +13,7 @@ proof generation all run through Dart code.
 ```bash
 PUB_HOSTED_URL=https://mirrors.tuna.tsinghua.edu.cn/dart-pub flutter pub get
 dart analyze
-flutter test
+flutter test tests/unit_test
 flutter run
 ```
 
@@ -26,8 +26,9 @@ Recommended local gate:
 ```bash
 PUB_HOSTED_URL=https://mirrors.tuna.tsinghua.edu.cn/dart-pub flutter pub get
 dart analyze
-flutter test
-dart run tool/e2e_runner.dart --config awiki_e2e.example.yaml --dry-run
+flutter test tests/unit_test
+dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run
+dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=macos --dry-run
 ```
 
 ## Backend Environment
@@ -37,10 +38,10 @@ default user-service, message-service, mail-service, DID domain, ANP endpoint,
 and daemon download root from it.
 
 ```bash
-flutter run --dart-define=AWIKI_BASE_URL=https://awiki.ai
+flutter run --dart-define=AWIKI_BASE_URL=https://awiki.info
 ```
 
-Production defaults to `https://awiki.ai`. Future online test builds can switch
+Production defaults to `https://awiki.info`. Future online test builds can switch
 to:
 
 ```bash
@@ -84,7 +85,9 @@ use platform secure storage.
 
 - `lib/`: application, domain, data, and presentation code
 - `assets/`: bundled branding and UI assets
-- `test/`: Dart unit and widget tests
+- `tests/unit_test/`: Dart unit, widget, provider, and harness unit tests
+- `tests/integration_test/`: Flutter app/native/platform smoke tests
+- `tests/e2e_test/`: end-to-end harnesses, configs, scenarios, and Maestro flows
 - `android/`, `ios/`, `macos/`, `web/`: platform runners
 
 ## App Icons

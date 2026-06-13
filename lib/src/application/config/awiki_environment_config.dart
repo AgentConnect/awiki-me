@@ -11,7 +11,7 @@ class AwikiEnvironmentConfig {
   }) {
     final normalizedBase = _normalizeBaseUrl(
       baseUrl ?? const String.fromEnvironment('AWIKI_BASE_URL'),
-      fallback: 'https://awiki.ai',
+      fallback: 'https://awiki.info',
     );
     this.baseUrl = normalizedBase;
     this.userServiceUrl = _normalizeBaseUrl(
@@ -84,7 +84,7 @@ String _firstNonEmpty(String? value, String fallback) {
 String _hostFromUrl(String baseUrl) {
   final host = Uri.tryParse(baseUrl.trim())?.host.trim().toLowerCase();
   if (host == null || host.isEmpty) {
-    return 'awiki.ai';
+    return 'awiki.info';
   }
   return host;
 }

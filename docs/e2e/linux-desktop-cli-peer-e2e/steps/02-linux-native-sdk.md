@@ -22,7 +22,7 @@ Step index：02
 ## 2. 目标
 
 - 结果：`awiki-cli-rs2/packages/awiki_im_core` 支持 Flutter Linux native FFI plugin，`test-awiki-me` 在 Linux Desktop 上能打开真实 `AwikiImCore`。
-- 用户 / 系统可见行为：`integration_test/im_core_open_smoke_test.dart` 可在 Linux 下运行并通过，不再因 Linux unsupported loader 失败。
+- 用户 / 系统可见行为：`tests/integration_test/native/im_core_open_smoke_test.dart` 可在 Linux 下运行并通过，不再因 Linux unsupported loader 失败。
 - 非目标：本步骤不做 App+CLI peer 真实消息 E2E，不改变 SDK public DTO 语义，不重构 Android / iOS / macOS 打包。
 - 完成标准：Linux `.so` 可构建、可被 Flutter Linux bundle 打包、loader 可加载、native open smoke 通过。
 
@@ -75,7 +75,7 @@ Step index：02
 
 7. 更新 App native smoke：
 
-   - 让 `test-awiki-me/integration_test/im_core_open_smoke_test.dart` 在 Linux 可运行；
+   - 让 `test-awiki-me/tests/integration_test/native/im_core_open_smoke_test.dart` 在 Linux 可运行；
    - skip 条件从 macOS-only 改为 macOS 或 Linux；
    - 如果 Linux 与 macOS loader 行为不同，断言保持为 `open` + `validatePaths()` 的最小 smoke。
 
@@ -92,7 +92,7 @@ Step index：02
 | `awiki-cli-rs2/scripts/flutter/build-linux.sh` | 可选新增 | 如果主脚本过长，独立脚本更清晰 |
 | `awiki-cli-rs2/docs/flutter-sdk/awiki-im-core-flutter-sdk.md` | 更新支持平台和命令 | SDK 文档权威 |
 | `awiki-cli-rs2/packages/awiki_im_core/README.md` | 同步 Linux 支持摘要 | 保持简短 |
-| `test-awiki-me/integration_test/im_core_open_smoke_test.dart` | 放开 Linux native smoke | 仍保持最小 smoke |
+| `test-awiki-me/tests/integration_test/native/im_core_open_smoke_test.dart` | 放开 Linux native smoke | 仍保持最小 smoke |
 
 ## 6. 依赖
 
@@ -108,7 +108,7 @@ Step index：02
 - [ ] Flutter Linux plugin bundle 中包含 native `.so` 或能通过运行时搜索路径加载。
 - [ ] `cd awiki-cli-rs2 && cargo test -p im-core-dart --locked` 通过。
 - [ ] `cd awiki-cli-rs2 && scripts/flutter/codegen-check.sh` 通过或明确不受本步骤影响。
-- [ ] `cd test-awiki-me && xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` 通过。
+- [ ] `cd test-awiki-me && xvfb-run -a flutter test tests/integration_test/native/im_core_open_smoke_test.dart -d linux` 通过。
 - [ ] Android / iOS / macOS loader 行为不回归。
 - [ ] Review 发现已经修复或明确记录。
 - [ ] 本步骤在进入下一步之前已经创建聚焦 commit。
@@ -122,7 +122,7 @@ Step index：02
 | Linux build dry-run | `cd awiki-cli-rs2 && scripts/flutter/build-sdk-native.sh --linux-only --dry-run` | 输出 Linux build plan |
 | Linux build | `cd awiki-cli-rs2 && scripts/flutter/build-sdk-native.sh --linux-only` | 生成 Linux `.so` 或按约定打包 |
 | SDK package tests | `cd awiki-cli-rs2/packages/awiki_im_core && flutter test` | Dart package tests 通过 |
-| App native smoke | `cd test-awiki-me && xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` | `AwikiImCore.open` + path validation 通过 |
+| App native smoke | `cd test-awiki-me && xvfb-run -a flutter test tests/integration_test/native/im_core_open_smoke_test.dart -d linux` | `AwikiImCore.open` + path validation 通过 |
 | Diff hygiene | `git diff --check` in changed repos | 无 whitespace / patch 格式问题 |
 
 如果 Linux `.so` 构建通过但 Flutter bundle 找不到，必须记录 loader 错误、bundle 内容和 CMake 配置，不要跳过 native smoke。

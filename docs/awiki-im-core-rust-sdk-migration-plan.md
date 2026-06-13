@@ -157,7 +157,7 @@ dart analyze
 - `AWIKI_DID_DOMAIN`
 - 可选 `AWIKI_ANP_SERVICE_DID`
 
-默认值保持当前 app 行为：`https://awiki.ai` 与 `awiki.ai`。
+默认值保持当前 app 行为：`https://awiki.info` 与 `awiki.info`。
 
 ### 阶段 3：新增 DTO mapper
 

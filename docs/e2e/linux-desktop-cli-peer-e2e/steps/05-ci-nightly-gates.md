@@ -14,7 +14,7 @@ Step index：05
 | Completed | 2026-06-13 23:38:07 CST |
 | Commit | `f11d16f` |
 | Review evidence | CI gate 分层已检查：PR quick gate 只跑 analyze、unit/widget、mobile dry-run、Linux app smoke 和 Linux native smoke；真实后端 + OTP Desktop App+CLI peer E2E 保持 manual/nightly/release；SQLite 预种 source override 只影响 Linux CMake fresh build；未提交 `.e2e/`、App state、CLI workspace、OTP、JWT 或私钥 |
-| Verification evidence | `dart analyze` 通过；`flutter test test/tool/desktop_cli_peer_e2e_runner_test.dart test/tool/e2e_runner_test.dart` 通过；`dart run tool/e2e_runner.dart --config awiki_e2e.example.yaml --dry-run` 通过；`flutter test` 通过，404 tests passed；`git diff --check` 通过；SQLite source 通过续传下载并解包到 `/tmp/awiki-sqlite3`；`AWIKI_SQLITE3_SOURCE_DIR=/tmp/awiki-sqlite3 xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过；`AWIKI_SQLITE3_SOURCE_DIR=/tmp/awiki-sqlite3 xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` 通过；`AWIKI_SQLITE3_SOURCE_DIR=/tmp/awiki-sqlite3 xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` 安全 skip；macOS 未运行：当前 host 是 Linux |
+| Verification evidence | `dart analyze` 通过；`flutter test tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart tests/unit_test/e2e_harness/mobile_e2e_runner_test.dart` 通过；`dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run` 通过；`flutter test tests/unit_test` 通过；`git diff --check` 通过；SQLite source 通过续传下载并解包到 `/tmp/awiki-sqlite3`；`AWIKI_SQLITE3_SOURCE_DIR=/tmp/awiki-sqlite3 xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过；`AWIKI_SQLITE3_SOURCE_DIR=/tmp/awiki-sqlite3 xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` 通过；`AWIKI_SQLITE3_SOURCE_DIR=/tmp/awiki-sqlite3 xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` 安全 skip；macOS 未运行：当前 host 是 Linux |
 | Next action | 回填主 Plan 最终全局 Review，创建 docs evidence commit |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
@@ -52,8 +52,8 @@ Step index：05
      ```bash
      flutter pub get
      dart analyze
-     flutter test
-     dart run tool/e2e_runner.dart --config awiki_e2e.example.yaml --dry-run
+     flutter test tests/unit_test
+     dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run
      xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux
      ```
 
@@ -121,7 +121,7 @@ Step index：05
 | Docs path | `cd test-awiki-me && test -f docs/e2e/linux-desktop-cli-peer-e2e/plan.md` | Plan 文件存在 |
 | Docs link | `cd test-awiki-me && rg -n "linux-desktop-cli-peer-e2e" docs/testing.md docs/e2e/linux-desktop-cli-peer-e2e/plan.md` | testing doc 链接 Plan |
 | Quick gate | `cd test-awiki-me && dart analyze && flutter test` | App 基础 gate 通过 |
-| Mobile dry-run | `cd test-awiki-me && dart run tool/e2e_runner.dart --config awiki_e2e.example.yaml --dry-run` | 既有 mobile E2E runner dry-run 不回归 |
+| Mobile dry-run | `cd test-awiki-me && dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run` | 既有 mobile E2E runner dry-run 不回归 |
 | Linux smoke | `cd test-awiki-me && xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` | desktop smoke 通过 |
 | Native smoke | `cd test-awiki-me && xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` | SDK native smoke 通过 |
 | macOS Desktop smoke | `cd test-awiki-me && flutter test integration_test/desktop_cli_peer_smoke_test.dart -d macos` | macOS 条件下双向消息通过，或在非 macOS host 记录未运行 |

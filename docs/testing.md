@@ -1,55 +1,56 @@
 # Testing AWiki Me
 
-AWiki Me uses Flutter and Dart tooling only. Keep tests close to the feature
-under change, and prefer fast deterministic tests before adding device or
-backend-dependent coverage.
+AWiki Me uses Flutter and Dart tooling only. Tests are organized into three
+parallel domains so unit, integration, and end-to-end concerns do not drift into
+one another:
 
-## Test Layers
-
-### Unit tests
-
-Use unit tests for pure Dart behavior and service boundaries:
-
-- domain entities, formatters, and thread id helpers;
-- application services and Riverpod state controllers;
-- `lib/src/data/im_core/` adapter and mapper behavior;
-- Dart service clients, auth retry, local stores, and error mapping;
-- E2E runner config parsing and dry-run command generation.
-
-Run focused unit tests with:
-
-```bash
-flutter test test/application test/data test/im_core test/agents
+```text
+tests/unit_test/          # fast unit/widget/provider tests with fakes
+tests/integration_test/   # Flutter engine, platform binding, and native smoke tests
+tests/e2e_test/           # real App + CLI peer/backend harnesses, configs, reports
 ```
 
-### Widget tests
+Root files under `integration_test/` are Flutter-tooling shims. Keep the real
+implementation under `tests/integration_test/` unless a test must be a root
+entrypoint for `flutter test -d <device>`.
 
-Use widget tests for user-visible App flows with fake services from
-`test/test_support.dart` or a small helper under `test/support/`.
+## Unit tests
 
-Good widget-test targets are onboarding, settings, chat, conversation lists,
-friends, groups, profiles, agents, responsive layout, empty states, loading
-states, and error states.
+`tests/unit_test/` contains deterministic tests that do not require a real
+device, real backend, or real `awiki-cli` subprocess. This includes pure Dart
+logic, application/data services with fakes, widget/provider tests, and pure E2E
+harness parser/planning tests.
 
-Run all unit and widget tests with:
+Run:
 
 ```bash
-flutter test
+flutter test tests/unit_test
 ```
 
-### Integration tests
+Unit fakes live under `tests/unit_test/support/` and
+`tests/unit_test/test_support.dart`. Integration-only bootstraps live under
+`tests/integration_test/support/`. Keep production code free of test-only mocks.
 
-Flutter integration tests live in `integration_test/`. Keep them as smoke tests
-for Flutter engine, platform binding, bootstrap, native SDK loading, and a few
-high-value App paths. Do not use integration tests to reimplement
-message-service wire validation, WebSocket internals, E2EE internals, or SDK
-native ABI checks that belong in `awiki-cli-rs2` or AWiki system tests.
+## Integration tests
 
-Useful macOS commands:
+`tests/integration_test/` contains Flutter integration smoke test
+implementations. These may run against a desktop target such as macOS or Linux,
+but they should not implement a real multi-client backend E2E flow.
+
+Current groups:
+
+- `tests/integration_test/app/` - App shell smoke with fake bootstrap.
+- `tests/integration_test/native/` - native SDK/plugin smoke such as
+  `AwikiImCore.open`.
+- `tests/integration_test/agent_im/` - Agent IM App bootstrap smoke.
+- `tests/integration_test/support/` - integration-only helpers.
+
+macOS examples using the root shims:
 
 ```bash
-flutter test integration_test
-flutter test integration_test -d macos
+flutter test integration_test/app_smoke_test.dart -d macos
+flutter test integration_test/im_core_open_smoke_test.dart -d macos
+flutter test integration_test/agent_im_delegated_message_e2e_test.dart -d macos
 ```
 
 Linux desktop integration is supported through the `linux/` runner. Ubuntu
@@ -58,7 +59,9 @@ without a real desktop should use `xvfb-run`:
 
 ```bash
 sudo apt update
-sudo apt install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libsecret-1-dev xvfb
+sudo apt install -y \
+  clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
+  libsecret-1-dev xvfb dbus-x11
 flutter config --enable-linux-desktop
 flutter devices
 ```
@@ -71,8 +74,8 @@ xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux
 
 This uses fake App bootstrap and proves the Linux runner, Flutter shell,
 platform binding, App shell, onboarding shell, and basic widget tree can start
-under Xvfb. It does not test real login, real native SDK state, networking,
-secure storage, User Service, Message Service, or CLI peer behavior.
+under Xvfb. It does not test real login, networking, secure storage, User
+Service, Message Service, or CLI peer behavior.
 
 Linux native SDK smoke:
 
@@ -92,12 +95,57 @@ The implementation plan and execution evidence for the Linux Desktop runner,
 Linux native `awiki_im_core` support, and App + CLI peer E2E topology are in
 [e2e/linux-desktop-cli-peer-e2e/plan.md](e2e/linux-desktop-cli-peer-e2e/plan.md).
 
+## End-to-end tests
+
+`tests/e2e_test/` contains end-to-end harnesses, example configs, mobile Maestro
+flows, and desktop scenario planning. E2E may use the real App,
+`awiki-cli-rs2` as a CLI peer, and a reachable non-production backend.
+
+Structure:
+
+```text
+tests/e2e_test/
+  harness/
+    desktop_e2e_runner.dart    # shared desktop runner: macOS/Linux platform arg
+    mobile_e2e_runner.dart     # iOS/Android Maestro runner
+  configs/
+    agent_im_delegated.example.yaml
+    mobile.example.yaml
+  mobile/maestro/
+  scenarios/
+```
+
+### Desktop Agent IM E2E
+
+The desktop runner is shared by macOS and Linux. It reuses one architecture for
+service config, CLI build, CLI peer workspace, timing reports, and App
+dart-defines. Only the platform adapter differs:
+
+- macOS: checks `xcrun`, runs `flutter test -d macos`.
+- Linux: checks Linux desktop tooling and runs through `xvfb-run`.
+
+Agent IM delegated-message dry-run:
+
+```bash
+dart run tests/e2e_test/harness/desktop_e2e_runner.dart \
+  --platform=linux \
+  --scenario=agent-im-delegated-message \
+  --config tests/e2e_test/configs/agent_im_delegated.example.yaml \
+  --dry-run
+```
+
+The checked-in config contains placeholders and environment variable names only.
+The runner writes redacted `scenario-plan.json`, `cli-peer-plan.json`, and
+`agent-im-scenario-result.json` reports. Copy the example config to an ignored
+local config for real runs. Do not commit local configs, generated CLI
+workspaces, reports, OTP values, tokens, private keys, or remote log captures.
+
 ### Desktop App + CLI Peer E2E
 
-`integration_test/desktop_cli_peer_smoke_test.dart` is the one Desktop
-App+CLI peer smoke. It starts the real App bootstrap, prepares or uses a real
-App test identity, uses `awiki-cli-rs2` as the peer client, and checks one
-App -> CLI message plus one CLI -> App message with a unique run id.
+`integration_test/desktop_cli_peer_smoke_test.dart` is the manual/nightly
+Desktop App + CLI peer smoke. It starts the real App bootstrap, prepares or uses
+a real App test identity, uses `awiki-cli-rs2` as the peer client, and checks
+one App -> CLI message plus one CLI -> App message with a unique run id.
 
 The test is skipped unless `AWIKI_E2E=true`, so this command is safe as a
 build/smoke check without backend credentials:
@@ -127,12 +175,6 @@ Use the same test on macOS:
 flutter test integration_test/desktop_cli_peer_smoke_test.dart -d macos
 ```
 
-Use this Linux headless command when the runner starts Flutter:
-
-```bash
-xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux
-```
-
 The real Desktop App+CLI peer E2E requires non-production User Service,
 Message Service, DID domain, OTP credentials, a built `awiki-cli`, and two
 isolated identities. If User Service and Message Service have different base
@@ -145,83 +187,69 @@ and runner environment are stable.
 
 ### Mobile E2E
 
-Mobile E2E is driven by `tool/e2e_runner.dart` and Maestro flows under
-`.maestro/`. It covers the real two-device smoke path:
+Mobile E2E is driven by `tests/e2e_test/harness/mobile_e2e_runner.dart` and
+Maestro flows under `tests/e2e_test/mobile/maestro/`. It covers the real
+two-device smoke path for iOS/Android.
 
-- build the debug app with `AWIKI_E2E=true`;
-- install on two iOS simulators or Android devices/AVDs;
-- log in both accounts;
-- send A -> B and B -> A messages;
-- write a local timing report under `.e2e/reports/`.
-
-Dry-run is the safe CI-friendly check:
+Dry-run:
 
 ```bash
-dart run tool/e2e_runner.dart --config awiki_e2e.example.yaml --dry-run
+dart run tests/e2e_test/harness/mobile_e2e_runner.dart \
+  --config tests/e2e_test/configs/mobile.example.yaml \
+  --dry-run
 ```
 
-Real E2E requires local configuration, two devices or simulators, Maestro, and
-a reachable non-production backend:
+For compatibility, the old wrapper remains available:
 
 ```bash
-# Copy the example first, then edit the local file with two isolated
-# non-production accounts and the device IDs/names for your host.
-cp awiki_e2e.example.yaml awiki_e2e.local.yaml
-dart run tool/e2e_runner.dart --config awiki_e2e.local.yaml
+dart run tool/e2e_runner.dart \
+  --config tests/e2e_test/configs/mobile.example.yaml \
+  --dry-run
 ```
 
-Never commit `awiki_e2e.local.yaml`, `.e2e/`, real credentials, generated local
-state, or device-specific reports. The example config is documentation only.
-The runner writes `timings.json` and Maestro logs under
-`.e2e/reports/<runId>/`; record the path in manual/nightly evidence, but keep
-the files local.
+Real mobile E2E requires a local config, two devices/simulators, Maestro, and a
+reachable non-production backend. Never commit local configs, `.e2e/`, real
+credentials, generated local state, or device-specific reports.
 
-For Android, configure either two already-running `adb` serials under
-`device.android.ids` or two independent AVD names under
-`device.android.avdNames`. For iOS, configure two simulator UDIDs under
-`device.ios.ids` or two simulator names under `device.ios.names`.
-Real-device E2E should remain a manual, nightly, or release gate unless the
-project has stable devices, OTP test accounts, Maestro, and backend isolation.
-
-## Recommended Local Gate
-
-Run this before handing off App changes:
+## Recommended local gate
 
 ```bash
 PUB_HOSTED_URL=https://mirrors.tuna.tsinghua.edu.cn/dart-pub flutter pub get
 dart analyze
-flutter test
-dart run tool/e2e_runner.dart --config awiki_e2e.example.yaml --dry-run
+flutter test tests/unit_test
+dart run tests/e2e_test/harness/mobile_e2e_runner.dart \
+  --config tests/e2e_test/configs/mobile.example.yaml \
+  --dry-run
 xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux
 xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux
 ```
 
-## CI Gate
+## CI gate
 
-The GitHub Actions quick gate mirrors the local required checks:
+The quick CI gate should stay deterministic and not depend on real devices or a
+live backend:
 
 ```bash
 flutter pub get
 dart analyze
-flutter test
-dart run tool/e2e_runner.dart --config awiki_e2e.example.yaml --dry-run
+flutter test tests/unit_test
+dart run tests/e2e_test/harness/mobile_e2e_runner.dart \
+  --config tests/e2e_test/configs/mobile.example.yaml \
+  --dry-run
 xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux
 xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux
 ```
 
 This gate intentionally does not run real backend + OTP Desktop App+CLI peer
 E2E or real-device E2E. Linux desktop app/native smoke is deterministic and can
-run in PR CI after Linux desktop dependencies and the sibling
-`awiki-cli-rs2` SDK repo are available. The workflow checks out
-`awiki-cli-rs2` beside this repo because `pubspec.yaml` uses
-`../awiki-cli-rs2/packages/awiki_im_core`; set `AWIKI_CLI_RS2_REF` when CI must
-use a non-default SDK branch, and set `AWIKI_CI_READ_TOKEN` if the sibling repo
-requires a token. That SDK ref must include Linux native SDK support and the
-Desktop CLI peer endpoint config support used by the manual E2E runner.
+run in PR CI after Linux desktop dependencies and the sibling `awiki-cli-rs2`
+SDK repo are available. The workflow checks out `awiki-cli-rs2` beside this repo
+because `pubspec.yaml` uses `../awiki-cli-rs2/packages/awiki_im_core`; set
+`AWIKI_CLI_RS2_REF` when CI must use a non-default SDK branch, and set
+`AWIKI_CI_READ_TOKEN` if the sibling repo requires a token.
+
 Real Desktop App+CLI peer E2E and real Android/iOS E2E belong in manual,
 nightly, or release gates unless stable devices, Maestro, non-production
-accounts, and backend isolation are available.
-
-Run integration and real-device E2E when the platform and devices are available,
-and record pass/fail evidence plus any report paths in the handoff or release
-notes.
+accounts, and backend isolation are available. Run integration and real-device
+E2E when the platform and devices are available, and record pass/fail evidence
+plus any report paths in the handoff or release notes.

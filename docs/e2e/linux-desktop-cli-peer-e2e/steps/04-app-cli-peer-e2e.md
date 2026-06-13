@@ -14,7 +14,7 @@ Step index：04
 | Completed | 2026-06-13 22:36:19 CST |
 | Commit | `e91682a` |
 | Review evidence | diff 限于 Desktop CLI peer runner、Desktop smoke 和 focused runner tests；CLI peer 同时隔离 workspace 与 `HOME`；runner 写入 User Service / Message Service 独立 endpoint；App smoke 通过 `AWIKI_CLI_HOME_DIR` 继承同一 CLI home；日志和 report 对 OTP、CLI workspace、CLI HOME、App state root 脱敏；未修改 Android / iOS / macOS / web runner |
-| Verification evidence | `flutter test test/tool/desktop_cli_peer_e2e_runner_test.dart` 通过；`dart analyze` 通过；`xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` 在未设置 `AWIKI_E2E=true` 时安全 skip；`git diff --check` 通过；dry-run 证明 Linux 命令包含 `AWIKI_CLI_HOME_DIR=<redacted>`、独立 `AWIKI_MESSAGE_SERVICE_URL` 和 `message_service_endpoint`；真实 Linux runner 通过，run id `step04-real-223516`，使用 `AWIKI_USER_SERVICE_URL=http://127.0.0.1:9891` 与 `AWIKI_MESSAGE_SERVICE_URL=http://127.0.0.1:9900`，timings report 为 success 且 `cliWorkspace` redacted |
+| Verification evidence | `flutter test tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart` 通过；`dart analyze` 通过；`xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` 在未设置 `AWIKI_E2E=true` 时安全 skip；`git diff --check` 通过；dry-run 证明 Linux 命令包含 `AWIKI_CLI_HOME_DIR=<redacted>`、独立 `AWIKI_MESSAGE_SERVICE_URL` 和 `message_service_endpoint`；真实 Linux runner 通过，run id `step04-real-223516`，使用 `AWIKI_USER_SERVICE_URL=http://127.0.0.1:9891` 与 `AWIKI_MESSAGE_SERVICE_URL=http://127.0.0.1:9900`，timings report 为 success 且 `cliWorkspace` redacted |
 | Next action | 启动 Step 05，更新 gate 文档和最终 Review |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
@@ -31,7 +31,7 @@ Step index：04
 - 设计边界：App 侧使用真实 `AppBootstrap.create()`、真实 Dart SDK 和平台 native SDK；CLI 侧使用 public command surface。
 - 核心决策：首版用 polling / inbox / history 验证，不依赖 WebSocket realtime；等消息闭环稳定后再扩展 realtime gate。
 - 契约 / API / 数据流：App 不直接拼 message-service wire payload；所有消息能力通过 App application services / SDK adapter。CLI 不直接读写内部 DB。
-- 兼容性：保留 `integration_test/app_smoke_test.dart` 作为 fast smoke；真实 Desktop smoke 单独文件，避免后端 flake 影响 fast smoke。
+- 兼容性：保留 `tests/integration_test/app/app_smoke_test.dart` 作为 fast smoke，根 `integration_test/app_smoke_test.dart` 只做 Flutter tooling shim；真实 Desktop smoke 单独文件，避免后端 flake 影响 smoke。
 - 迁移策略：无用户数据迁移；E2E state 用独立目录，每次可清理。
 - 风险控制：所有 selector 使用 `AWIKI_E2E=true` 下的 semantics identifier 或稳定 widget key；消息内容包含 run id，避免误读历史消息。
 
@@ -97,7 +97,7 @@ Step index：04
 | `test-awiki-me/lib/src/presentation/onboarding/` | 可能补稳定 selector | 已有 phone / otp / handle selectors |
 | `test-awiki-me/lib/src/presentation/chat/` | 可能补收件人、消息、刷新 selector | 保持用户可见行为不变 |
 | `test-awiki-me/tool/desktop_cli_peer_e2e_runner.dart` | 调用 Flutter test、管理 CLI subprocess | 来自 Step 03，负责 macOS / Linux platform 差异 |
-| `test-awiki-me/test/tool/` | 扩展 E2E command dry-run tests | 不依赖真实服务 |
+| `test-awiki-me/tests/unit_test/e2e_harness/` | 扩展 E2E command dry-run tests | 不依赖真实服务 |
 
 ## 6. 依赖
 
@@ -115,7 +115,7 @@ Step index：04
 - [ ] CLI B -> App A 消息被 App UI 或 SDK-backed conversation 观察到。
 - [ ] 消息内容包含唯一 run id，断言不会误读历史消息。
 - [ ] 超时、失败、重试策略明确，日志脱敏。
-- [ ] `integration_test/app_smoke_test.dart` 仍然可作为 fast smoke 单独运行。
+- [ ] `tests/integration_test/app/app_smoke_test.dart` 仍然可作为 fast smoke 单独运行。
 - [ ] Review 发现已经修复或明确记录。
 - [ ] 本步骤在进入下一步之前已经创建聚焦 commit。
 
@@ -150,7 +150,7 @@ Step index：04
 ## 10. Commit 要求
 
 - Commit 时机：E2E test、runner integration、验证、Review 都完成后。
-- Commit 范围：`test-awiki-me/integration_test/`、必要 App selectors、runner updates、tests。
+- Commit 范围：`test-awiki-me/tests/integration_test/`、必要 App selectors、runner updates、tests。
 - Commit 前状态：记录 `git status --short --branch`。
 - 纳入文件：记录本步骤 commit 包含的文件。
 - Commit 后证据：记录 commit hash 和 commit 后 `git status --short --branch`。
