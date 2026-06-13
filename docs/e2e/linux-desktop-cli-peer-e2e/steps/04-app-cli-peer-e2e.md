@@ -141,11 +141,11 @@ Step index：04
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 执行时填写 | - |
-| 已修复问题 | 执行时填写 | - |
-| 剩余风险 | 执行时填写 | 例如后端 flake 或账号池不足 |
-| 新增或缺失测试 | 执行时填写 | Desktop App+CLI peer smoke 是本步骤核心 |
-| 已更新或缺失文档 | 执行时填写 | Step 05 汇总 gate 文档 |
+| 发现问题 | 已记录 | 首轮真实 E2E 指向 legacy `molt-message` 时 `/im/rpc` 不可用；CLI peer 还会读取默认 `HOME` 下旧状态；App 和 CLI 需要同时支持 User Service / Message Service endpoint 分离。 |
+| 已修复问题 | 完成 | runner 同时隔离 CLI workspace 与 `HOME`；写入 `user_service_endpoint` / `message_service_endpoint`；通过 dart-define 注入 App；App smoke 继承同一 CLI home；改用 v2 message service endpoint 后真实 Linux App+CLI peer E2E 通过。 |
+| 剩余风险 | 已记录 | macOS 未在当前 Linux host 运行；真实后端 E2E 依赖非生产服务、账号和 OTP，保持 manual/nightly/release gate，不进入普通 PR required gate。 |
+| 新增或缺失测试 | 完成 / 已记录 | 新增一个 Desktop App+CLI peer smoke；runner focused tests 覆盖 macOS/Linux、endpoint 分离和 redaction；Linux default skip 与真实 Linux E2E 均已记录。 |
+| 已更新或缺失文档 | 完成 | 主 Plan Step 04 台账和 Step 05 gate 文档已记录真实 Linux E2E 证据、macOS 未运行原因和 gate 分层。 |
 
 ## 10. Commit 要求
 
