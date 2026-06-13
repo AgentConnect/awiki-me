@@ -8,14 +8,14 @@ Step index：04
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
+| Status | done |
 | Branch | `feature/test-awiki-me` |
-| Started | - |
-| Completed | - |
-| Commit | - |
-| Review evidence | - |
-| Verification evidence | - |
-| Next action | 在 Step 01-03 完成后，实现真实 App + CLI peer 双向消息 Desktop smoke |
+| Started | 2026-06-13 22:00:00 CST |
+| Completed | 2026-06-13 22:36:19 CST |
+| Commit | `e91682a` |
+| Review evidence | diff 限于 Desktop CLI peer runner、Desktop smoke 和 focused runner tests；CLI peer 同时隔离 workspace 与 `HOME`；runner 写入 User Service / Message Service 独立 endpoint；App smoke 通过 `AWIKI_CLI_HOME_DIR` 继承同一 CLI home；日志和 report 对 OTP、CLI workspace、CLI HOME、App state root 脱敏；未修改 Android / iOS / macOS / web runner |
+| Verification evidence | `flutter test test/tool/desktop_cli_peer_e2e_runner_test.dart` 通过；`dart analyze` 通过；`xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` 在未设置 `AWIKI_E2E=true` 时安全 skip；`git diff --check` 通过；dry-run 证明 Linux 命令包含 `AWIKI_CLI_HOME_DIR=<redacted>`、独立 `AWIKI_MESSAGE_SERVICE_URL` 和 `message_service_endpoint`；真实 Linux runner 通过，run id `step04-real-223516`，使用 `AWIKI_USER_SERVICE_URL=http://127.0.0.1:9891` 与 `AWIKI_MESSAGE_SERVICE_URL=http://127.0.0.1:9900`，timings report 为 success 且 `cliWorkspace` redacted |
+| Next action | 启动 Step 05，更新 gate 文档和最终 Review |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
