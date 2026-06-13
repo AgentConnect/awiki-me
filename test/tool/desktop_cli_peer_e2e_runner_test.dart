@@ -248,8 +248,25 @@ void main() {
         ),
       );
       expect(log, contains('--dart-define=AWIKI_E2E_RUN_ID=run123'));
+      expect(log, contains('--dart-define=AWIKI_E2E_PLATFORM=linux'));
+      expect(
+        log,
+        contains('--dart-define=AWIKI_BASE_URL=https://service.example.test'),
+      );
+      expect(
+        log,
+        contains(
+          '--dart-define=AWIKI_SERVICE_BASE_URL=https://service.example.test',
+        ),
+      );
       expect(log, contains('--dart-define=AWIKI_E2E_APP_HANDLE=e2e-app'));
       expect(log, contains('--dart-define=AWIKI_E2E_CLI_HANDLE=e2e-cli'));
+      expect(log, contains('--dart-define=DEV_OTP_PHONE=<redacted>'));
+      expect(log, contains('--dart-define=DEV_OTP_CODE=<redacted>'));
+      expect(
+        log,
+        contains('--dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted>'),
+      );
       expect(log, isNot(contains('test-phone-secret')));
       expect(log, isNot(contains('test-otp-secret')));
       expect(log, isNot(contains(root.path)));

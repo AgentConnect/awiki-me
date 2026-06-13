@@ -49,6 +49,7 @@ class DesktopCliPeerRunner {
   late final String runId;
   late final Directory reportDir;
   late final Directory cliWorkspaceDir;
+  late final Directory appStateRootDir;
   final List<DesktopTimingEntry> _timings = <DesktopTimingEntry>[];
 
   Future<void> run() async {
@@ -59,10 +60,15 @@ class DesktopCliPeerRunner {
     cliWorkspaceDir = Directory(
       '${root.path}/.e2e/desktop-cli-peer/$runId/cli-peer',
     );
+    appStateRootDir = Directory(
+      '${root.path}/.e2e/desktop-cli-peer/$runId/app',
+    );
     _addRuntimeSecret(reportDir.path);
     _addRuntimeSecret(cliWorkspaceDir.path);
+    _addRuntimeSecret(appStateRootDir.path);
     if (!options.dryRun) {
       cliWorkspaceDir.createSync(recursive: true);
+      appStateRootDir.createSync(recursive: true);
     }
 
     final totalStopwatch = Stopwatch()..start();
@@ -72,6 +78,7 @@ class DesktopCliPeerRunner {
       _line('platform: ${config.platform.name}');
       _line('reports: ${redactor.redact(reportDir.path)}');
       _line('cli workspace: ${redactor.redact(cliWorkspaceDir.path)}');
+      _line('app state: ${redactor.redact(appStateRootDir.path)}');
 
       await _timed('Checking tooling', _checkTooling);
       await _timed('Preparing CLI workspace', _prepareCliWorkspace);
@@ -241,13 +248,24 @@ class DesktopCliPeerRunner {
       '-d',
       config.platform.name,
       '--dart-define=AWIKI_E2E=true',
+      '--dart-define=AWIKI_E2E_PLATFORM=${config.platform.name}',
+      '--dart-define=AWIKI_BASE_URL=${config.serviceBaseUrl}',
       '--dart-define=AWIKI_SERVICE_BASE_URL=${config.serviceBaseUrl}',
       '--dart-define=AWIKI_DID_DOMAIN=${config.didDomain}',
       '--dart-define=AWIKI_E2E_RUN_ID=$runId',
       '--dart-define=AWIKI_E2E_APP_HANDLE=${config.appHandle}',
       '--dart-define=AWIKI_E2E_CLI_HANDLE=${config.cliHandle}',
+      '--dart-define=DEV_OTP_PHONE=${config.otpPhone}',
+      '--dart-define=DEV_OTP_CODE=${config.otpCode}',
       '--dart-define=AWIKI_CLI_BIN=${config.cliBin}',
       '--dart-define=AWIKI_CLI_WORKSPACE_HOME_DIR=${cliWorkspaceDir.path}',
+      '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
+      if (config.userServiceUrl != null)
+        '--dart-define=AWIKI_USER_SERVICE_URL=${config.userServiceUrl}',
+      if (config.messageServiceUrl != null)
+        '--dart-define=AWIKI_MESSAGE_SERVICE_URL=${config.messageServiceUrl}',
+      if (config.mailServiceUrl != null)
+        '--dart-define=AWIKI_MAIL_SERVICE_URL=${config.mailServiceUrl}',
       if (config.anpServiceUrl != null)
         '--dart-define=AWIKI_ANP_SERVICE_URL=${config.anpServiceUrl}',
       if (config.anpServiceDid != null)
@@ -589,6 +607,9 @@ class DesktopCliPeerConfig {
     required this.appHandle,
     required this.cliHandle,
     required this.cliBin,
+    this.userServiceUrl,
+    this.messageServiceUrl,
+    this.mailServiceUrl,
     this.anpServiceUrl,
     this.anpServiceDid,
   });
@@ -601,6 +622,9 @@ class DesktopCliPeerConfig {
   final String appHandle;
   final String cliHandle;
   final String cliBin;
+  final String? userServiceUrl;
+  final String? messageServiceUrl;
+  final String? mailServiceUrl;
   final String? anpServiceUrl;
   final String? anpServiceDid;
 
@@ -656,6 +680,9 @@ class DesktopCliPeerConfig {
       appHandle: appHandle,
       cliHandle: cliHandle,
       cliBin: cliBin,
+      userServiceUrl: _env(environment, 'AWIKI_USER_SERVICE_URL'),
+      messageServiceUrl: _env(environment, 'AWIKI_MESSAGE_SERVICE_URL'),
+      mailServiceUrl: _env(environment, 'AWIKI_MAIL_SERVICE_URL'),
       anpServiceUrl:
           options.anpServiceUrl ?? _env(environment, 'AWIKI_ANP_SERVICE_URL'),
       anpServiceDid:
@@ -696,6 +723,7 @@ class DesktopSecretRedactor {
       env['AWIKI_JWT'] ?? '',
       env['AWIKI_TOKEN'] ?? '',
       env['AWIKI_CLI_WORKSPACE_HOME_DIR'] ?? '',
+      env['AWIKI_E2E_APP_STATE_ROOT'] ?? '',
     ]);
   }
 
