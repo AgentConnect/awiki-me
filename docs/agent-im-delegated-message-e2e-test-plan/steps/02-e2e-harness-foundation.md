@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)  
 Step index：02  
-状态：draft
+状态：done
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
+| Status | done |
 | Branch | `feature/release-0526/agent-im-hutong` |
-| Started | 待执行 |
-| Completed | 待执行 |
-| Commit | 待填写 |
-| Review evidence | 待填写 |
-| Verification evidence | 待填写 |
-| Next action | 等待 Step 01 完成后扩展 desktop E2E runner |
+| Started | 2026-06-13 20:52:31 +0800 |
+| Completed | 2026-06-13 20:57:55 +0800 |
+| Commit | `test: add agent im e2e harness foundation`；短 hash 以本步骤提交后的 `git log -1` 为准 |
+| Review evidence | Review 完成：确认旧 smoke dry-run 保持兼容；新增 scenario/config 仅在显式参数下启用；example config 只含占位和 env 名；report writer 和 command log 统一 redaction；remote adapter 只生成 dry-run plan，不登录远端。 |
+| Verification evidence | `dart analyze` No issues；`flutter test tests/unit_test/e2e_harness` 22 passed；`flutter test tests/unit_test` 402 passed；Agent IM dry-run PASS 并生成 `scenario-plan.json`；兼容 dry-run PASS；report sensitive scan 通过。 |
+| Next action | 启动 Step 03：CLI peer 与测试账号编排 |
 
 ## 2. 目标
 
@@ -65,13 +65,13 @@ Step index：02
 
 ## 7. 验收标准
 
-- [ ] `desktop_e2e_runner.dart --help` 包含 Agent IM scenario/config 说明。
-- [ ] 无 scenario 参数时原有 smoke/dry-run 行为保持兼容。
-- [ ] `agent_im_delegated.example.yaml` 不含真实手机号、OTP、token、私钥。
-- [ ] redactor 单元测试覆盖 token/JWT/private package/OTP/手机号。
-- [ ] macOS dry-run 能生成 report/timings，且 report 中无敏感值。
-- [ ] Review 发现已经修复或明确记录。
-- [ ] 本步骤在进入下一步之前已经创建聚焦 commit。
+- [x] `desktop_e2e_runner.dart --help` 包含 Agent IM scenario/config 说明。
+- [x] 无 scenario 参数时原有 smoke/dry-run 行为保持兼容。
+- [x] `agent_im_delegated.example.yaml` 不含真实手机号、OTP、token、私钥。
+- [x] redactor 单元测试覆盖 token/JWT/private package/OTP/手机号。
+- [x] macOS dry-run 能生成 report/timings，且 report 中无敏感值。
+- [x] Review 发现已经修复或明确记录。
+- [x] 本步骤在进入下一步之前已经创建聚焦 commit。
 
 ## 8. 验证方式
 
@@ -83,6 +83,19 @@ Step index：02
 | Dry-run | `cd awiki-me && dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=macos --scenario=agent-im-delegated-message --config tests/e2e_test/configs/agent_im_delegated.example.yaml --dry-run` | 输出 planned commands，生成 `.e2e/macos/reports/<runId>/timings.json`。 |
 | 兼容 dry-run | `cd awiki-me && dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=macos --dry-run` | 原 smoke dry-run 不失效。 |
 
+### Step 02 验证记录
+
+| 命令 / 检查 | 结果 | 说明 |
+|---|---|---|
+| `dart run tests/e2e_test/harness/desktop_e2e_runner.dart --help` | 通过 | help 输出包含 `--scenario` 与 `--config`。 |
+| `dart analyze` | 通过 | No issues found。 |
+| `flutter test tests/unit_test/e2e_harness` | 通过 | 22 passed，覆盖 mobile 既有 harness 与新增 desktop Agent IM harness。 |
+| `flutter test tests/unit_test` | 通过 | 402 passed，既有单元测试不回归。 |
+| Agent IM dry-run | 通过 | `--scenario=agent-im-delegated-message --config tests/e2e_test/configs/agent_im_delegated.example.yaml --dry-run` PASS，生成 `scenario-plan.json` 与 `timings.json`。 |
+| 兼容 dry-run | 通过 | 无 scenario 参数的 macOS dry-run PASS。 |
+| Report sensitive scan | 通过 | 扫描 `.e2e/macos/reports`，未发现 private-key、bearer-style、JWT-like、token-value、OTP-value matcher 命中。 |
+| `git diff --check` | 待 commit 前执行 | 作为 commit gate。 |
+
 ## 9. Review 环节
 
 - Review 时机：代码和测试完成后、commit 前。
@@ -90,11 +103,11 @@ Step index：02
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待填写 |  |
-| 已修复问题 | 待填写 |  |
-| 剩余风险 | 待填写 |  |
-| 新增或缺失测试 | 待填写 |  |
-| 已更新或缺失文档 | 待填写 |  |
+| 发现问题 | 有发现 | 初版 redactor 使用 Dart 不支持的 inline case-insensitive regex；JWT placeholder 会被 token rule 二次覆盖；`flutter` 不在当前 shell `PATH`。 |
+| 已修复问题 | 已修复 | 改用 `RegExp(caseSensitive: false)`；token/private rule 避免二次覆盖 `<REDACTED_*>` placeholder；验证时使用本机 Flutter binary，但文档命令仍保持通用 `flutter`。 |
+| 剩余风险 | 已记录 | Agent IM scenario 目前只支持 dry-run plan，真实 App/CLI/Daemon 闭环留给 Step 03-05；runner 仍保留既有本地 Flutter fallback，后续可单独清理。 |
+| 新增或缺失测试 | 已新增 | 新增 `tests/unit_test/e2e_harness/desktop_agent_im_harness_test.dart`，覆盖 option parse、config load/validation、redactor、scenario plan、report writer。缺失真实 E2E，按本步骤非目标。 |
+| 已更新或缺失文档 | 已更新 | 更新 `tests/e2e_test/README.md`、`docs/testing.md`、主 Plan 和本 Step 台账。 |
 
 ## 10. Commit 要求
 
@@ -105,6 +118,15 @@ Step index：02
 - Commit 后证据：记录 commit hash 和 commit 后 `git status`。
 - 遗留未提交变更：必须记录原因以及为什么安全。
 - 建议消息：`test: add agent im e2e harness foundation`
+
+执行记录：
+
+| 项 | 记录 |
+|---|---|
+| Commit 前状态 | `awiki-me` ahead 1；修改本计划 docs、`docs/testing.md`、`tests/e2e_test/README.md`、`desktop_e2e_runner.dart`，新增 Agent IM config/harness src/redactor/report/scenario/remote adapter 与 unit test。 |
+| 纳入文件 | `tests/e2e_test/harness/desktop_e2e_runner.dart`、`tests/e2e_test/harness/src/*.dart`、`tests/e2e_test/configs/agent_im_delegated.example.yaml`、`tests/unit_test/e2e_harness/desktop_agent_im_harness_test.dart`、`tests/e2e_test/README.md`、`docs/testing.md`、本 Plan/Step 台账。 |
+| Commit 后证据 | 待提交后由 `git log -1 --oneline` 确认；短 hash 不写入同一提交正文，避免自引用 hash 无法稳定。 |
+| 遗留未提交变更 | 仅保留其他仓库既有用户变更；Step 02 不修改这些仓库。 |
 
 ## 11. Blocked 处理
 

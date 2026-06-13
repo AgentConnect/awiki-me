@@ -99,6 +99,23 @@ source .e2e/macos.env
   --dry-run
 ```
 
+Agent IM delegated-message dry-run uses the same desktop runner and adds a
+scenario/config layer. The checked-in config contains placeholders and
+environment variable names only:
+
+```bash
+dart run tests/e2e_test/harness/desktop_e2e_runner.dart \
+  --platform=macos \
+  --scenario=agent-im-delegated-message \
+  --config tests/e2e_test/configs/agent_im_delegated.example.yaml \
+  --dry-run
+```
+
+Copy `tests/e2e_test/configs/agent_im_delegated.example.yaml` to
+`tests/e2e_test/configs/agent_im_delegated.local.yaml` for local real runs.
+Do not commit local configs, generated CLI workspaces, reports, OTP values,
+tokens, private keys, or remote log captures.
+
 macOS real smoke:
 
 ```bash

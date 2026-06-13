@@ -1,6 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
+
+import 'src/agent_im_config.dart';
+import 'src/e2e_report.dart';
+import 'src/scenario_registry.dart';
+import 'src/secret_redactor.dart';
 
 Future<void> main(List<String> args) async {
   try {
@@ -11,15 +15,32 @@ Future<void> main(List<String> args) async {
     }
 
     final root = Directory.current;
+    final agentImConfig = options.configPath == null
+        ? null
+        : AgentImDelegatedConfig.load(File(options.configPath!));
     final platform = options.platform ?? DesktopE2ePlatform.fromHost();
-    final config = DesktopE2eConfig.fromEnvironment(root, platform);
+    if (agentImConfig != null && agentImConfig.app.platform != platform.name) {
+      throw DesktopE2eFailure(
+        'Config app.platform (${agentImConfig.app.platform}) must match '
+        '--platform (${platform.name}).',
+      );
+    }
+    final config = DesktopE2eConfig.fromEnvironment(
+      root,
+      platform,
+      agentImConfig: agentImConfig,
+    );
     final runner = DesktopE2eRunner(
       root: root,
       platform: platform,
       config: config,
       options: options,
+      agentImConfig: agentImConfig,
     );
     await runner.run();
+  } on AgentImConfigFailure catch (error) {
+    stderr.writeln('\nDesktop E2E failed: ${error.message}');
+    exitCode = 1;
   } on DesktopE2eFailure catch (error) {
     stderr.writeln('\nDesktop E2E failed: ${error.message}');
     exitCode = 1;
@@ -32,17 +53,23 @@ class DesktopE2eRunner {
     required this.platform,
     required this.config,
     required this.options,
-  }) : commands = DesktopCommandRunner(dryRun: options.dryRun);
+    this.agentImConfig,
+  }) : commands = DesktopCommandRunner(
+         dryRun: options.dryRun,
+         redactor: const SecretRedactor(),
+       );
 
   final Directory root;
   final DesktopE2ePlatform platform;
   final DesktopE2eConfig config;
   final DesktopE2eOptions options;
+  final AgentImDelegatedConfig? agentImConfig;
   final DesktopCommandRunner commands;
 
   late final String runId;
   late final Directory reportDir;
   late final Directory cliWorkspaceDir;
+  late final E2eReportWriter reportWriter;
   final List<DesktopE2eTimingEntry> _timings = <DesktopE2eTimingEntry>[];
 
   Future<void> run() async {
@@ -55,6 +82,7 @@ class DesktopE2eRunner {
     runId = _newRunId();
     reportDir = Directory('${root.path}/.e2e/${platform.name}/reports/$runId')
       ..createSync(recursive: true);
+    reportWriter = E2eReportWriter(directory: reportDir);
     cliWorkspaceDir = Directory(
       '${root.path}/.e2e/${platform.name}/cli-workspaces/$runId',
     )..createSync(recursive: true);
@@ -68,6 +96,10 @@ class DesktopE2eRunner {
       _line('cli repo: ${config.cliRepo.path}');
       _line('base URL: ${config.baseUrl}');
       _line('DID domain: ${config.didDomain}');
+      if (options.scenario != null) {
+        _line('scenario: ${options.scenario}');
+        _line('scenario config: ${options.configPath}');
+      }
       _line('Flutter: ${config.flutterExecutable}');
       _line('OTP: ${config.otpConfigured ? 'configured' : 'not configured'}');
       _line('reports: ${reportDir.path}');
@@ -80,6 +112,9 @@ class DesktopE2eRunner {
         await _timed('Build awiki-cli-rs2 CLI', _buildCli);
       }
       await _timed('CLI isolated workspace smoke', _cliSmoke);
+      if (options.scenario != null) {
+        await _timed('Agent IM scenario plan', _agentImScenarioPlan);
+      }
       if (!options.skipFlutterSmoke) {
         await _timed('Flutter ${platform.label} native smoke', _flutterSmoke);
       }
@@ -245,6 +280,44 @@ class DesktopE2eRunner {
     );
   }
 
+  Future<void> _agentImScenarioPlan() async {
+    final scenario = options.scenario;
+    if (scenario == null) {
+      return;
+    }
+    if (agentImConfig == null) {
+      throw DesktopE2eFailure(
+        '--config is required when --scenario=$scenario is used.',
+      );
+    }
+    const registry = E2eScenarioRegistry();
+    if (!registry.supports(scenario)) {
+      throw DesktopE2eFailure(
+        'Unsupported scenario "$scenario". '
+        'Supported: $agentImDelegatedMessageScenario.',
+      );
+    }
+    if (!options.dryRun) {
+      throw DesktopE2eFailure(
+        'Scenario "$scenario" currently supports --dry-run only. '
+        'Real Agent IM flow is implemented in later steps.',
+      );
+    }
+    final plan = registry.buildAgentImPlan(
+      runId: runId,
+      platform: platform.name,
+      config: agentImConfig!,
+    );
+    reportWriter.writeJson('scenario-plan.json', plan.toJson());
+    for (final step in plan.steps) {
+      _line('[plan] ${step.name}: ${step.detail}');
+    }
+    for (final command in plan.remoteCommands) {
+      _line('[remote-plan] ${command.label}: ${command.command}');
+    }
+    _line('scenario plan: ${reportDir.path}/scenario-plan.json');
+  }
+
   void _rewriteCliConfig() {
     final configFile = File('${cliWorkspaceDir.path}/config.yaml');
     if (!configFile.existsSync()) {
@@ -306,9 +379,7 @@ class DesktopE2eRunner {
       'otpConfigured': config.otpConfigured,
       'steps': _timings.map((entry) => entry.toJson()).toList(),
     };
-    File(
-      '${reportDir.path}/timings.json',
-    ).writeAsStringSync(const JsonEncoder.withIndent('  ').convert(payload));
+    reportWriter.writeJson('timings.json', payload);
   }
 
   void _printTimingSummary({
@@ -340,8 +411,9 @@ class DesktopE2eConfig {
 
   factory DesktopE2eConfig.fromEnvironment(
     Directory root,
-    DesktopE2ePlatform platform,
-  ) {
+    DesktopE2ePlatform platform, {
+    AgentImDelegatedConfig? agentImConfig,
+  }) {
     final env = Platform.environment;
     final prefix = platform == DesktopE2ePlatform.macos
         ? 'AWIKI_MACOS_E2E'
@@ -351,7 +423,12 @@ class DesktopE2eConfig {
     }
 
     final cliRepo = Directory(
-      _resolvePath(root.path, envValue('CLI_REPO') ?? '../awiki-cli-rs2'),
+      _resolvePath(
+        root.path,
+        envValue('CLI_REPO') ??
+            agentImConfig?.cliPeer.repo ??
+            '../awiki-cli-rs2',
+      ),
     );
     final flutterExecutable = _firstNonEmpty(
       envValue('FLUTTER'),
@@ -360,12 +437,18 @@ class DesktopE2eConfig {
     final baseUrl = _normalizeBaseUrl(
       _firstNonEmpty(
         envValue('BASE_URL'),
-        _firstNonEmpty(env['AWIKI_BASE_URL'], 'https://awiki.info'),
+        _firstNonEmpty(
+          env['AWIKI_BASE_URL'],
+          agentImConfig?.service.baseUrl ?? 'https://awiki.info',
+        ),
       ),
     );
     final didDomain = _firstNonEmpty(
       envValue('DID_DOMAIN'),
-      _firstNonEmpty(env['AWIKI_DID_DOMAIN'], Uri.parse(baseUrl).host),
+      _firstNonEmpty(
+        env['AWIKI_DID_DOMAIN'],
+        agentImConfig?.service.didDomain ?? Uri.parse(baseUrl).host,
+      ),
     );
     return DesktopE2eConfig(
       cliRepo: cliRepo,
@@ -400,6 +483,8 @@ class DesktopE2eOptions {
   const DesktopE2eOptions({
     required this.platform,
     required this.dryRun,
+    required this.scenario,
+    required this.configPath,
     required this.skipCliBuild,
     required this.runPubGet,
     required this.skipFlutterSmoke,
@@ -409,6 +494,8 @@ class DesktopE2eOptions {
   factory DesktopE2eOptions.parse(List<String> args) {
     DesktopE2ePlatform? platform;
     var dryRun = false;
+    String? scenario;
+    String? configPath;
     var skipCliBuild = false;
     var runPubGet = false;
     var skipFlutterSmoke = false;
@@ -428,6 +515,30 @@ class DesktopE2eOptions {
         platform = DesktopE2ePlatform.parse(
           arg.substring('--platform='.length),
         );
+        continue;
+      }
+      if (arg == '--scenario') {
+        index += 1;
+        if (index >= args.length) {
+          throw DesktopE2eFailure('--scenario requires a value.');
+        }
+        scenario = args[index].trim();
+        continue;
+      }
+      if (arg.startsWith('--scenario=')) {
+        scenario = arg.substring('--scenario='.length).trim();
+        continue;
+      }
+      if (arg == '--config') {
+        index += 1;
+        if (index >= args.length) {
+          throw DesktopE2eFailure('--config requires a path.');
+        }
+        configPath = args[index].trim();
+        continue;
+      }
+      if (arg.startsWith('--config=')) {
+        configPath = arg.substring('--config='.length).trim();
         continue;
       }
       switch (arg) {
@@ -451,6 +562,8 @@ class DesktopE2eOptions {
     return DesktopE2eOptions(
       platform: platform,
       dryRun: dryRun,
+      scenario: scenario?.isEmpty == true ? null : scenario,
+      configPath: configPath?.isEmpty == true ? null : configPath,
       skipCliBuild: skipCliBuild,
       runPubGet: runPubGet,
       skipFlutterSmoke: skipFlutterSmoke,
@@ -460,6 +573,8 @@ class DesktopE2eOptions {
 
   final DesktopE2ePlatform? platform;
   final bool dryRun;
+  final String? scenario;
+  final String? configPath;
   final bool skipCliBuild;
   final bool runPubGet;
   final bool skipFlutterSmoke;
@@ -478,6 +593,9 @@ Builds the shared desktop E2E smoke environment for macOS or Linux:
 
 Options:
   --platform=<macos|linux> Select desktop platform. Defaults to current host.
+  --scenario=<name>         Run a named E2E scenario plan.
+  --config=<path>           Scenario config path, for example
+                            tests/e2e_test/configs/agent_im_delegated.example.yaml.
   --dry-run                Print commands without executing them.
   --pub-get                Run flutter pub get before validation.
   --skip-pub-get           Compatibility no-op; pub get is skipped by default.
@@ -533,9 +651,13 @@ enum DesktopE2ePlatform {
 }
 
 class DesktopCommandRunner {
-  const DesktopCommandRunner({required this.dryRun});
+  const DesktopCommandRunner({
+    required this.dryRun,
+    this.redactor = const SecretRedactor(),
+  });
 
   final bool dryRun;
+  final SecretRedactor redactor;
 
   Future<DesktopCommandResult> run(
     String executable,
@@ -553,7 +675,7 @@ class DesktopCommandRunner {
     if (dryRun) {
       if (logFile != null) {
         logFile.createSync(recursive: true);
-        logFile.writeAsStringSync('[dry-run] $commandLine\n');
+        logFile.writeAsStringSync(redactor.redact('[dry-run] $commandLine\n'));
       }
       return const DesktopCommandResult(
         exitCode: 0,
@@ -581,25 +703,29 @@ class DesktopCommandRunner {
 
     final stdoutText = result.stdout.toString();
     final stderrText = result.stderr.toString();
+    final redactedStdout = redactor.redact(stdoutText);
+    final redactedStderr = redactor.redact(stderrText);
     if (logFile != null) {
       logFile.createSync(recursive: true);
       logFile.writeAsStringSync(
-        'command: $commandLine\n'
-        'cwd: ${workingDirectory.path}\n'
-        'exitCode: ${result.exitCode}\n\n'
-        '--- stdout ---\n$stdoutText\n'
-        '--- stderr ---\n$stderrText\n',
+        redactor.redact(
+          'command: $commandLine\n'
+          'cwd: ${workingDirectory.path}\n'
+          'exitCode: ${result.exitCode}\n\n'
+          '--- stdout ---\n$stdoutText\n'
+          '--- stderr ---\n$stderrText\n',
+        ),
       );
     }
-    if (stdoutText.trim().isNotEmpty) {
-      stdout.write(stdoutText);
-      if (!stdoutText.endsWith('\n')) {
+    if (redactedStdout.trim().isNotEmpty) {
+      stdout.write(redactedStdout);
+      if (!redactedStdout.endsWith('\n')) {
         stdout.writeln();
       }
     }
-    if (stderrText.trim().isNotEmpty) {
-      stderr.write(stderrText);
-      if (!stderrText.endsWith('\n')) {
+    if (redactedStderr.trim().isNotEmpty) {
+      stderr.write(redactedStderr);
+      if (!redactedStderr.endsWith('\n')) {
         stderr.writeln();
       }
     }
