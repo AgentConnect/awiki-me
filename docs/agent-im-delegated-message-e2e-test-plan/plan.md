@@ -1,10 +1,10 @@
 # Plan：Agent IM 委托消息处理 E2E 测试落地
 
-状态：in_progress  
+状态：done
 DOC：`awiki-me/docs/agent-im-delegated-message-e2e-test-plan/`  
 Harness：`awiki-harness/`  
 创建时间：2026-06-13  
-恢复指针：Step 06 已完成 remote evidence collector 与 `ssh ali` 只读健康探测；下一步从 Step 07 开始最终全局 Review 与整体验证。
+恢复指针：全部 Step 已完成；后续如要证明真实 P0 happy path，需要补充本地 `agent_im_delegated.local.yaml` 与 peer 测试账号 env 后重跑 Agent IM real E2E。
 
 ## 1. 目标
 
@@ -91,7 +91,7 @@ Step 01 基线输出：[context-contract-baseline.md](context-contract-baseline.
 | 04 | App bootstrap 自动化与 integration entry | Step 02 | App 触发 bootstrap、状态观测、根级 integration shim（如必要） | [steps/04-app-bootstrap-automation.md](steps/04-app-bootstrap-automation.md) | 必须 | done |
 | 05 | Agent delegated message E2E 场景 | Step 03, Step 04 | AIM-E2E-001/002/006 首批自动化，003/004 可选扩展 | [steps/05-agent-delegated-message-scenarios.md](steps/05-agent-delegated-message-scenarios.md) | 必须 | done |
 | 06 | `awiki.info` 远端联调与服务侧补强 | Step 05 | SSH 联调脚本/Runbook 验证、服务侧日志/测试缺口修复策略 | [steps/06-remote-awiki-info-integration.md](steps/06-remote-awiki-info-integration.md) | 必须 | done |
-| 07 | 最终全局 Review 与整体验证收口 | Step 01-06 | 全量证据、文档同步、最终状态与风险记录 | [steps/07-final-review-verification.md](steps/07-final-review-verification.md) | 如修改文件则必须 | pending |
+| 07 | 最终全局 Review 与整体验证收口 | Step 01-06 | 全量证据、文档同步、最终状态与风险记录 | [steps/07-final-review-verification.md](steps/07-final-review-verification.md) | 如修改文件则必须 | done |
 
 ## 7. 执行台账
 
@@ -105,7 +105,7 @@ Step 01 基线输出：[context-contract-baseline.md](context-contract-baseline.
 | 04 | done | `feature/release-0526/agent-im-hutong` | 2026-06-13 21:21:18 +0800 | 2026-06-13 21:41:58 +0800 | `test: automate agent im app bootstrap`；短 hash 以本步骤提交后的 `git log -1` 为准 | Review 完成：确认 App bootstrap hook 复用生产 `DefaultAgentControlService` 并只替换端口为 fake；根级 `integration_test/` 只有 shim；report 投影显式替换 private package；system/control payload 保持不可渲染；`message.sync` 与 `app.action.result` 可被 App 识别；本步骤未修改生产 `lib/src`。剩余风险：当前为 fake-port App bootstrap smoke，真实远端 Daemon ack、peer message 处理与 App 回传展示仍由 Step 05/06 覆盖。 | `dart analyze` No issues；`flutter test tests/unit_test` 406 passed；`flutter test tests/unit_test/e2e_scenarios/agent_im_app_bootstrap_scenario_test.dart` 通过；`flutter test integration_test/agent_im_delegated_message_e2e_test.dart -d macos` 1 passed；`flutter test integration_test/im_core_open_smoke_test.dart -d macos` 1 passed；Agent IM dry-run PASS 并生成 scenario/cli peer plans；report sensitive scan 通过；`git diff --check` 通过。macOS integration 构建出现既有 duplicate library / newer macOS object / foreground warning，但 exit code 0 且测试通过。 | 启动 Step 05 |
 | 05 | done | `feature/release-0526/agent-im-hutong` | 2026-06-13 21:43:09 +0800 | 2026-06-13 21:50:20 +0800 | `test: add agent im delegated message e2e scenario`；短 hash 以本步骤提交后的 `git log -1` 为准 | Review 完成：确认 `agent-im-scenario-result.json` 将 AIM-E2E-001/002/006 与 P1 skeleton 统一记录为 pass/fail/skipped；dry-run 不伪造远端通过；真实 Daemon/Hermes/App summary 证据明确留给 Step 06；redaction scanner 只扫 report 与 CLI log，不误扫 CLI credential store；result/report 经过 redaction。 | `dart analyze` No issues；`flutter test tests/unit_test/e2e_harness tests/unit_test/e2e_scenarios` 28 passed；Agent IM dry-run PASS，生成 `agent-im-scenario-result.json`（pass=1/fail=0/skipped=6）；real E2E skipped：`tests/e2e_test/configs/agent_im_delegated.local.yaml` 不存在；report sensitive scan OK；`git diff --check` OK。 | 启动 Step 06 |
 | 06 | done | `feature/release-0526/agent-im-hutong` | 2026-06-13 21:51:32 +0800 | 2026-06-13 22:01:14 +0800 | `test: integrate agent im remote evidence`；短 hash 以本步骤提交后的 `git log -1` 为准 | Review 完成：确认 remote collector 只在非 dry-run 执行 `ssh ali` 只读 `systemctl` / `journalctl` 证据命令；dry-run 仅输出计划；所有 stdout/stderr/report 经 redaction 和摘要截断；runId 过滤覆盖 Daemon/Hermes、Message Service、User Service；对端收发仍只通过 `awiki-cli-rs2` CLI peer；本步骤未修改 `awiki-cli-rs2`、`message-service`、`user-service` 或 `awiki-system-test`。 | `ssh ali` 只读健康探测通过，远端 User Service、Message Service、Daemon/Hermes 等相关服务处于 active/running；`dart analyze` No issues；`flutter test tests/unit_test/e2e_harness tests/unit_test/e2e_scenarios` 29 passed；Agent IM dry-run PASS 并计划 4 条 remote evidence commands；real E2E skipped：`tests/e2e_test/configs/agent_im_delegated.local.yaml` 不存在；report sensitive scan OK；`git diff --check` OK。 | 启动 Step 07 |
-| 07 | pending | `feature/release-0526/agent-im-hutong` | 待执行 | 待执行 | 待填写 | 待填写 | 待填写 | 等待 Step 01-06 |
+| 07 | done | `feature/release-0526/agent-im-hutong` | 2026-06-13 22:03:14 +0800 | 2026-06-13 22:09:34 +0800 | `docs: finalize agent im e2e verification`；短 hash 以本步骤提交后的 `git log -1` 为准 | Review 完成：Step 01-06 均为 done；E2E harness/scenario/config/report/redaction/remote collector 与 `awiki-cli-rs2` CLI peer 约束一致；未使用旧 skill；文档同步补充 `remote-evidence-result.json`；无未处理 P0/P1 框架缺口。真实 P0 happy path 因 local config 缺失未运行，已记录为 skipped，不伪造通过。 | 通过 10 项、失败 0 项、跳过/未运行 5 项：`ssh ali` 只读健康通过；`dart analyze` No issues；`flutter test tests/unit_test` 409 passed；Agent IM bootstrap integration smoke 1 passed；IM core macOS smoke 1 passed；Agent IM desktop dry-run PASS（AIM cases pass=1/fail=0/skipped=6）；legacy desktop dry-run PASS；`cargo build -p awiki-cli --bin awiki-cli` 通过；report sensitive scan OK；plan docs secret scan 与 `git diff --check` OK。real E2E skipped：`tests/e2e_test/configs/agent_im_delegated.local.yaml` 不存在。跨服务测试未运行：本计划未修改对应服务端仓库且存在既有用户 dirty changes。 | 计划收口；配置就绪后重跑真实 Agent IM E2E |
 
 Step 01 观测到的仓库状态详见 [context-contract-baseline.md](context-contract-baseline.md#2-仓库状态基线)：`awiki-me` 仅纳入本计划目录；`awiki-cli-rs2` 与 `message-service` 有既有未提交变更，本步骤不修改；`awiki-system-test` 与 `user-service` 干净。后续每个 Step 前仍必须重新运行并记录相关仓库 `git status --short --branch`。
 
@@ -303,9 +303,19 @@ Step 01 观测到的仓库状态详见 [context-contract-baseline.md](context-co
 - Review 范围：`awiki-me` E2E harness/scenario/config/report、`awiki-cli-rs2` CLI/Daemon/im-core 改动、`message-service`/`user-service` 服务端改动、`awiki-system-test` 覆盖、所有文档和执行台账。
 - 重点关注：跨步骤一致性、回归风险、兼容性、安全 / 隐私、E2EE boundary、文档漂移、未提交变更、每个步骤 Review 发现是否已解决或记录。
 - 整体验证命令 / 检查：按第 11 节执行；无法运行项必须记录原因和替代证据。
-- Review 发现：待执行时填写。
-- 已修复问题：待执行时填写。
-- 剩余风险：待执行时填写。
-- 最终证据：待执行时填写 `evidence-template.md` 对应信息。
-- 最终 `git status`：待执行时填写所有受影响仓库 `git status --short --branch`。
-- 如果本阶段修改文件：记录 Review、验证和最终集成 commit。
+### 17.1 最终验证统计
+
+| 类别 | 数量 | 说明 |
+|---|---:|---|
+| 通过 | 10 | SSH 健康、`dart analyze`、全量 unit、两个 macOS integration smoke、Agent IM dry-run、legacy desktop dry-run、CLI build、report sensitive scan、plan docs/diff scan。 |
+| 失败 | 0 | 本阶段没有失败命令。 |
+| 跳过 / 未运行 | 5 | real Agent IM E2E 缺少 local config；`awiki-cli-rs2` cargo tests、`message-service` tests、`user-service` tests、`awiki-system-test` remote suite 未运行，原因是本计划没有修改这些仓库且相关仓库存在既有用户 dirty changes或缺少真实远端测试配置。 |
+
+### 17.2 最终 Review 结论
+
+- Review 发现：真实 AIM-E2E-001/002 happy path 仍未证明通过，原因是本地 `tests/e2e_test/configs/agent_im_delegated.local.yaml` 不存在；peer 测试账号 env 未配置。本结论记录为 skipped，不作为框架失败处理。
+- 已修复问题：补齐 Step 07 文档同步，`docs/testing.md` 与 `tests/e2e_test/README.md` 已记录 `agent-im-scenario-result.json`、`remote-evidence-result.json`、`remote-*.log` 与 `awiki-cli-rs2` CLI peer 约束。
+- 剩余风险：远端服务版本和当前本地功能分支是否完全一致未被真实 E2E 证明；Daemon/Hermes 摘要回传 App 的 P0 真实链路需要 local config 和 peer env 后重跑。
+- 最终证据：见本节统计、[steps/07-final-review-verification.md](steps/07-final-review-verification.md) 与 `evidence-template.md` 字段说明。
+- 最终 `git status`：`awiki-me` 本步骤提交后预期 ahead 7 且工作区干净；`awiki-cli-rs2` 与 `message-service` 保留既有用户 dirty changes；`user-service`、`awiki-system-test`、`anp/anp` 干净。
+- 如果本阶段修改文件：已记录 Review、验证，并使用 `docs: finalize agent im e2e verification` 创建最终收口 commit。

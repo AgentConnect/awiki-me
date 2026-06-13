@@ -31,8 +31,9 @@ The Agent IM scenario config records environment variable names only. The App bo
 example to `tests/e2e_test/configs/agent_im_delegated.local.yaml` for real local
 runs. Dry-run reports include `cli-peer-plan.json`, which lists the isolated
 `awiki-cli-rs2` peer workspace and ordinary `msg send` command without secret
-values. Local configs, generated CLI workspaces, and `.e2e/` reports remain
-ignored.
+values. Non-dry-run remote evidence collection writes `remote-evidence-result.json`
+and `remote-*.log` files with redacted `ssh ali` summaries filtered by runId.
+Local configs, generated CLI workspaces, and `.e2e/` reports remain ignored.
 
 Mobile dry-run:
 
@@ -46,5 +47,6 @@ dart run tests/e2e_test/harness/mobile_e2e_runner.dart \
 Agent IM scenario dry-run and real runs also write `agent-im-scenario-result.json`.
 That file summarizes AIM-E2E case statuses (`pass` / `fail` / `skipped`),
 records skipped reasons for remote-dependent checks, and includes the local
-redaction scan result. Real `awiki.info` proof still requires the Step 06 remote
-runbook evidence before a full happy-path pass can be claimed.
+redaction scan result. Real `awiki.info` proof requires local config, peer
+account env vars, and the Step 06 remote runbook evidence before a full
+happy-path pass can be claimed.
