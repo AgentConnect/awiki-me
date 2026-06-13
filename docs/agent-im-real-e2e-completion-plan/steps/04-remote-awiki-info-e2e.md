@@ -115,8 +115,8 @@ Step index：04
 |---|---|---|---|---|
 | 远端服务无法部署或重启 | SSH/service/build log | 修复构建、回滚、重启单服务 | 核心目标 | 连续三轮相同 blocker 才标 goal blocked。 |
 | 真实 E2E 失败但本地无法复现 | report + remote evidence | 按链路二分，补远端日志/state query | 当前步骤 | 回到 Step 02/03 修复。 |
-| 新 SSH 连接 banner timeout | `ssh -o BatchMode=yes -o ConnectTimeout=8 ali ...` 返回 `Connection timed out during banner exchange`；本机仍有 3 个既有 `ssh ali` TCP established 会话 | 已重试短命令；本地继续补强 App/remote gate；未擅自结束用户会话 | 远端部署和真实 E2E | 需要恢复 SSH 或经用户确认释放既有会话后重试。 |
-| 本地 E2E secret env 未导出 | `DEV_OTP_PHONE`、`DEV_OTP_CODE`、`AWIKI_E2E_PEER_PHONE`、`AWIKI_E2E_PEER_OTP` 均为 missing | 未在命令行回显秘密；等待用户在 shell/环境中安全导出 | 真实非 dry-run | 导出 env 后才能启动真实 App/CLI 流程。 |
+| 新 SSH 连接 banner timeout | `ssh -o BatchMode=yes -o ConnectTimeout=8 ali ...` 多次返回 `Connection timed out during banner exchange`，最近一次 2026-06-13T17:29:49Z；TCP 可 connect 但无 SSH banner；本机仍有 3 个既有 `ssh ali` TCP established 会话 | 已重试短命令、检查 SSH config、TCP connect 和 ping；本地已完成并推送 gate/daemon 修复；未擅自结束用户会话 | 远端部署和真实 E2E | 需要恢复 SSH 或经用户确认释放既有会话后重试。 |
+| 本地 E2E secret env 未导出 | `DEV_OTP_PHONE`、`DEV_OTP_CODE`、`AWIKI_E2E_PEER_PHONE`、`AWIKI_E2E_PEER_OTP` 均为 missing；2026-06-13T17:29:49Z 复核仍 missing | 未在命令行回显秘密；等待用户在 shell/环境中安全导出 | 真实非 dry-run | 导出 env 后才能启动真实 App/CLI 流程。 |
 
 ## 12. Plan 变更记录
 

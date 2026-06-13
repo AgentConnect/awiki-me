@@ -12,7 +12,7 @@ Step index：02
 | Branch | `feature/release-0526/agent-im-hutong` |
 | Started | 2026-06-14 |
 | Completed | 2026-06-14 |
-| Commit | `awiki-me` 本提交 `test: enforce real agent im e2e gate` |
+| Commit | `awiki-me` `0c72111` `test: enforce real agent im e2e gate` |
 | Review evidence | 已新增真实 Dart App probe、App bootstrap `run_id`、App 回传轮询、P0 缺证据 fail gate 和 secret redaction；非 dry-run 中缺少 App bootstrap / App return evidence 会 fail，不再 skipped；App return evidence 必须证明 control payload 被普通聊天过滤（`hiddenFromChat=true`），否则 P0 fail。 |
 | Verification evidence | `flutter test tests/unit_test/e2e_harness/desktop_agent_im_harness_test.dart` 22 passed；targeted `dart analyze` No issues；example config dry-run PASS。 |
 | Next action | 等真实远端 `awiki.info` E2E 跑通后做最终 Review；如需修正 gate 再追加提交。 |
