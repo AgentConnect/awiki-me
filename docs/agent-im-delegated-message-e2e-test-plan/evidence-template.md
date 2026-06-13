@@ -27,6 +27,7 @@
 | unit |  |  |  |
 | integration smoke |  |  |  |
 | desktop E2E |  |  | `scenario-plan.json` / `cli-peer-plan.json` / `agent-im-scenario-result.json` |
+| remote evidence |  |  | `remote-evidence-result.json` / `remote-*.log` |
 | redaction scan |  |  |  |
 
 ## 3. 远端观测
@@ -37,6 +38,8 @@
 | Message Service | `runId` / conversation |  |  |
 | Daemon | `runId` / delegated identity |  |  |
 | Hermes | `runId` / prompt id |  |  |
+
+远端观测只记录脱敏摘要；不要把远端绝对路径、密钥路径、JWT、OTP、手机号完整值、private package 或未脱敏消息正文复制进证据。
 
 ## 4. 场景结果
 
@@ -62,6 +65,7 @@
 | `appBootstrapReport` | App bootstrap smoke 的脱敏投影；不得包含 raw private package。 |
 | `cliPeerResult` | CLI ordinary send 的脱敏摘要；不得包含 OTP、手机号或 token。 |
 | `remoteCommands` | `ssh ali` 证据命令计划；Step 06 前不代表远端已验证通过。 |
+| `remote-evidence-result.json` | 非 dry-run 时的只读远端证据摘要；包含 command label、脱敏 command、report log 文件和 stdout/stderr summary。 |
 | `redactionScan` | 本地 report / CLI log 扫描结果。 |
 
 ## 5. 安全检查

@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)  
 Step index：06  
-状态：draft
+状态：done
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
+| Status | done |
 | Branch | `feature/release-0526/agent-im-hutong` |
-| Started | 待执行 |
-| Completed | 待执行 |
-| Commit | 待填写 |
-| Review evidence | 待填写 |
-| Verification evidence | 待填写 |
-| Next action | 等待 Step 05 后进行 remote evidence 和服务侧缺口处理 |
+| Started | 2026-06-13 21:51:32 +0800 |
+| Completed | 2026-06-13 22:01:14 +0800 |
+| Commit | `test: integrate agent im remote evidence`；短 hash 以本步骤提交后的 `git log -1` 为准 |
+| Review evidence | remote collector 只在非 dry-run 执行 `ssh ali` 只读 `systemctl` / `journalctl` 证据命令；dry-run 仅输出计划；输出经 redaction 与摘要截断；runId 过滤覆盖 Daemon/Hermes、Message Service、User Service；对端收发保持 `awiki-cli-rs2` CLI peer；本步骤未修改服务端仓库。 |
+| Verification evidence | `ssh ali` 只读健康探测通过；`dart analyze` No issues；`flutter test tests/unit_test/e2e_harness tests/unit_test/e2e_scenarios` 29 passed；Agent IM dry-run PASS 并计划 4 条 remote evidence commands；real E2E skipped：`tests/e2e_test/configs/agent_im_delegated.local.yaml` 不存在；report sensitive scan OK；`git diff --check` OK。 |
+| Next action | 启动 Step 07，执行最终全局 Review 与整体验证；真实 P0 远端通过仍需要本地 `agent_im_delegated.local.yaml` 和 peer 测试账号 env。 |
 
 ## 2. 目标
 
@@ -72,13 +72,13 @@ Step index：06
 
 ## 7. 验收标准
 
-- [ ] `ssh ali` 联调路径验证过，或不可用原因已记录。
-- [ ] 每个真实 E2E run 的本地/远端证据能用 runId 关联。
-- [ ] 远端日志证据已脱敏。
-- [ ] 服务端缺口如存在，已在对应仓库补测试/修复/commit。
-- [ ] 部署版本和回滚方式已记录，未把远端路径/密钥写入仓库。
-- [ ] Review 发现已经修复或明确记录。
-- [ ] 本步骤在进入下一步之前已经创建聚焦 commit。
+- [x] `ssh ali` 联调路径验证过，或不可用原因已记录。
+- [x] 每个真实 E2E run 的本地/远端证据能用 runId 关联。
+- [x] 远端日志证据已脱敏。
+- [x] 服务端缺口如存在，已在对应仓库补测试/修复/commit。当前真实 E2E 因本地 config 缺失未执行，未发现可归因的服务端代码缺口；服务端仓库保持既有工作区状态。
+- [x] 部署版本和回滚方式已记录，未把远端路径/密钥写入仓库。当前只做只读健康探测，未部署，因此无新增回滚命令。
+- [x] Review 发现已经修复或明确记录。
+- [x] 本步骤在进入下一步之前已经创建聚焦 commit。
 
 ## 8. 验证方式
 
@@ -91,6 +91,18 @@ Step index：06
 | System test | `cd awiki-system-test && AWIKI_SYSTEM_TEST_MODE=remote E2E_DID_DOMAIN=awiki.info E2E_USER_SERVICE_URL=https://awiki.info E2E_MESSAGE_SERVICE_URL=https://awiki.info E2E_MESSAGE_SERVICE_WS_URL=wss://awiki.info/im/ws AWIKI_CLI_RUST_REPO=../awiki-cli-rs2 uv run awiki-system-test --show-command` | 如补服务侧契约测试，记录通过/失败/跳过数量。 |
 | E2E rerun | `cd awiki-me && dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=macos --scenario=agent-im-delegated-message --config tests/e2e_test/configs/agent_im_delegated.local.yaml` | 修复后 P0 场景通过或失败原因变化清楚。 |
 
+### 8.1 本步骤实际验证记录
+
+| 检查项 | 实际结果 | 说明 |
+|---|---|---|
+| Remote access | 通过 | `ssh ali` 只读探测成功；远端相关 user/system service 单元可见，包含 Daemon/Hermes、Message Service、User Service 等 active/running 服务。 |
+| `dart analyze` | 通过 | `No issues found!` |
+| Unit tests | 通过 | `flutter test tests/unit_test/e2e_harness tests/unit_test/e2e_scenarios`，29 passed。 |
+| Agent IM dry-run | 通过 | 生成 `scenario-plan.json`、`cli-peer-plan.json`、`agent-im-scenario-result.json`；remote plan 包含 4 条 `ssh ali` 证据命令。 |
+| Real E2E | skipped | `tests/e2e_test/configs/agent_im_delegated.local.yaml` 不存在；未使用真实 peer 账号 env，因此不伪造 P0 通过。 |
+| Report sensitive scan | 通过 | 扫描 `.e2e/macos/reports`，未发现 private key、JWT、token、OTP、手机号或 fixture secret。 |
+| `git diff --check` | 通过 | 未发现 whitespace 错误。 |
+
 ## 9. Review 环节
 
 - Review 时机：远端证据收集和服务侧修复完成后、commit 前；部署前也要 Review。
@@ -98,11 +110,11 @@ Step index：06
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待填写 |  |
-| 已修复问题 | 待填写 |  |
-| 剩余风险 | 待填写 |  |
-| 新增或缺失测试 | 待填写 |  |
-| 已更新或缺失文档 | 待填写 |  |
+| 发现问题 | 真实远端 P0 E2E 未执行 | 缺少本地 `tests/e2e_test/configs/agent_im_delegated.local.yaml`；未配置 peer 测试账号 env。 |
+| 已修复问题 | remote evidence collector 不再停留在 echo stub | 现已计划并可执行只读 `systemctl` / `journalctl` 命令，非 dry-run 生成 `remote-evidence-result.json`。 |
+| 剩余风险 | 远端服务版本与当前本地提交是否完全一致未在本步骤证明 | 本步骤只做只读健康与日志采集能力；真实 P0 pass 留给配置就绪后的 Step 07 / 后续执行。 |
+| 新增或缺失测试 | 新增 unit 覆盖 remote evidence collector redaction；未新增服务端测试 | 本步骤未修改服务端代码。 |
+| 已更新或缺失文档 | 已更新 runbook、evidence template、主 Plan 与本 Step 状态 | 未写入远端绝对路径、密钥或真实账号值。 |
 
 ## 10. Commit 要求
 
@@ -114,11 +126,21 @@ Step index：06
 - 遗留未提交变更：必须记录原因以及为什么安全。
 - 建议消息：`test: integrate agent im remote evidence` 或按具体仓库功能命名。
 
+### 10.1 本步骤提交记录
+
+| 项 | 记录 |
+|---|---|
+| Commit 前状态 | `awiki-me` ahead 5，包含本步骤 remote harness、unit test、runbook、evidence template、scenario matrix、主 Plan 与 Step 06 文档变更；`awiki-cli-rs2` 与 `message-service` 保留既有用户未提交变更；`user-service`、`awiki-system-test`、`anp/anp` 干净。 |
+| 纳入文件 | `docs/agent-im-delegated-message-e2e-test-plan/plan.md`、`docs/agent-im-delegated-message-e2e-test-plan/steps/06-remote-awiki-info-integration.md`、`docs/agent-im-delegated-message-e2e-test-plan/remote-awiki-info-runbook.md`、`docs/agent-im-delegated-message-e2e-test-plan/evidence-template.md`、`docs/agent-im-delegated-message-e2e-test-plan/scenario-matrix.md`、`tests/e2e_test/harness/desktop_e2e_runner.dart`、`tests/e2e_test/harness/src/remote_adapter.dart`、`tests/unit_test/e2e_harness/desktop_agent_im_harness_test.dart`。 |
+| Commit 后状态 | 本步骤提交后以 `git log -1 --oneline` 和 `git status --short --branch` 为准；预期 `awiki-me` 仅显示分支 ahead，工作区干净，其他仓库状态不因本步骤变化。 |
+| 遗留未提交变更 | `awiki-cli-rs2` 与 `message-service` 的既有用户变更不属于本步骤，不纳入提交；本步骤没有修改这些仓库。 |
+
 ## 11. Blocked 处理
 
 | Blocker | 证据 | 已尝试方案 | 影响范围 | 下一步决策 |
 |---|---|---|---|---|
 | `ssh ali` 无权限或不可达 | 待填写 | 本地 dry-run、请求用户确认 SSH | remote gate | 标记 blocked |
+| 真实 E2E local config 缺失 | `tests/e2e_test/configs/agent_im_delegated.local.yaml` 不存在 | 保持 dry-run、unit、SSH 只读探测；记录 skipped reason | 真实 P0 run | Step 07 继续记录为 skipped；配置就绪后重跑 |
 | 不能重启远端 Daemon | 待填写 | 跳过 restart 场景，改本地/独立环境测 | AIM-E2E-003 | 记录 skipped reason |
 | 远端版本不是当前分支 | 待填写 | 记录版本差异，请求部署确认 | 真实 E2E | 等待部署或标记不一致 |
 | 服务端缺口跨仓较大 | 待填写 | 更新 Plan，拆更多步骤 | 整体计划 | 先停在当前 step |

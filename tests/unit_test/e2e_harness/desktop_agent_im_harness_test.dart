@@ -310,10 +310,42 @@ mail_service_url: https://old.example
       expect(registry.supports(agentImDelegatedMessageScenario), isTrue);
       expect(plan.scenario, agentImDelegatedMessageScenario);
       expect(plan.steps, hasLength(5));
-      expect(plan.remoteCommands, hasLength(3));
+      expect(plan.remoteCommands, hasLength(4));
+      expect(plan.remoteCommands.first.command, contains('systemctl'));
+      expect(plan.remoteCommands[1].command, contains('journalctl'));
       expect(plan.toJson().toString(), contains('run_test_001'));
       expect(plan.toJson().toString(), isNot(contains('987580')));
     });
+
+    test(
+      'collects remote evidence through command runner with redacted output',
+      () async {
+        final dir = await Directory.systemTemp.createTemp('remote-evidence-');
+        addTearDown(() => dir.deleteSync(recursive: true));
+        final fakeRunner = _FakeCliRunner(
+          stdoutText: 'remote-health token=tok_remote_secret_value',
+        );
+        final result = await const AgentImRemoteEvidenceCollector().collect(
+          commands: const <RemoteEvidenceCommand>[
+            RemoteEvidenceCommand(
+              label: 'remote health summary',
+              executable: 'ssh',
+              args: <String>['ali', 'echo remote-health'],
+            ),
+          ],
+          runner: fakeRunner,
+          workingDirectory: dir,
+          reportDir: dir,
+        );
+
+        expect(fakeRunner.calls.single.executable, 'ssh');
+        expect(
+          result.entries.single.stdoutSummary,
+          isNot(contains('tok_remote')),
+        );
+        expect(result.toJson().toString(), contains('remote health summary'));
+      },
+    );
 
     test(
       'builds dry-run delegated message scenario result with skipped reasons',
@@ -385,6 +417,12 @@ Future<File> _writeConfig(String content) async {
 }
 
 class _FakeCliRunner implements AgentImCliCommandRunner {
+  _FakeCliRunner({
+    this.stdoutText =
+        '{"ok":true,"data":{"message":{"id":"msg-run","secure":false}}}',
+  });
+
+  final String stdoutText;
   final calls = <_FakeCliCall>[];
 
   @override
@@ -406,10 +444,9 @@ class _FakeCliRunner implements AgentImCliCommandRunner {
         timeout: timeout,
       ),
     );
-    return const AgentImCliCommandResult(
+    return AgentImCliCommandResult(
       exitCode: 0,
-      stdoutText:
-          '{"ok":true,"data":{"message":{"id":"msg-run","secure":false}}}',
+      stdoutText: stdoutText,
       stderrText: '',
     );
   }

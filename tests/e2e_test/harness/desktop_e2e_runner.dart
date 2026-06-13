@@ -4,6 +4,7 @@ import 'dart:io';
 import 'src/agent_im_config.dart';
 import 'src/cli_peer_adapter.dart';
 import 'src/e2e_report.dart';
+import 'src/remote_adapter.dart';
 import 'src/scenario_registry.dart';
 import 'src/secret_redactor.dart';
 import '../scenarios/agent_im_delegated_message/delegated_message_scenario.dart';
@@ -359,6 +360,22 @@ class DesktopE2eRunner {
       'agent im scenario result: '
       '${reportDir.path}/agent-im-scenario-result.json',
     );
+    if (!options.dryRun && plan.remoteCommands.isNotEmpty) {
+      final remoteResult = await const AgentImRemoteEvidenceCollector().collect(
+        commands: plan.remoteCommands,
+        runner: commands,
+        workingDirectory: root,
+        reportDir: reportDir,
+      );
+      reportWriter.writeJson(
+        'remote-evidence-result.json',
+        remoteResult.toJson(),
+      );
+      _line(
+        'remote evidence result: '
+        '${reportDir.path}/remote-evidence-result.json',
+      );
+    }
     if (scenarioResult.hasBlockingFailure) {
       throw DesktopE2eFailure(
         'Agent IM scenario reported blocking failure. See '

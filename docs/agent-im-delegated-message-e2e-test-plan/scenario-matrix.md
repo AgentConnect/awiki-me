@@ -38,12 +38,12 @@
 这样可以先把 App + CLI peer + awiki.info + Daemon/Hermes 的可运行骨架建立起来，再逐步加恢复、安全与异常场景。
 
 
-## 4. 当前自动化落地状态（Step 05）
+## 4. 当前自动化落地状态（Step 06）
 
 | ID | 当前状态 | 自动化入口 | 说明 |
 |---|---|---|---|
-| AIM-E2E-001 | skeleton / dry-run skipped | `agent-im-scenario-result.json` | 已把 App bootstrap、CLI peer ordinary send、remote evidence plan 串到同一 scenario result；真实 Daemon/Hermes/App summary pass 需要 Step 06 远端证据后判定。 |
-| AIM-E2E-002 | skeleton / dry-run skipped | `agent-im-scenario-result.json` | App 侧可观测 message-agent-bootstrap idempotency key；Daemon runtime/message agent 去重证据需要 Step 06 远端 registry/log。 |
+| AIM-E2E-001 | skeleton / real E2E skipped | `agent-im-scenario-result.json` + `remote-evidence-result.json` | 已把 App bootstrap、`awiki-cli-rs2` CLI peer ordinary send、remote evidence plan 串到同一 scenario result；remote collector 可按 runId 采集只读服务日志。真实 Daemon/Hermes/App summary pass 仍需要 local config 与 peer env 后执行。 |
+| AIM-E2E-002 | skeleton / real E2E skipped | `agent-im-scenario-result.json` + `remote-evidence-result.json` | App 侧可观测 message-agent-bootstrap idempotency key；Daemon runtime/message agent 去重证据可通过 Step 06 remote collector 按 runId 采集。真实幂等 pass 仍需要 local config 与 peer env 后执行。 |
 | AIM-E2E-006 | automated | `AgentImRedactionScanner` + `agent-im-scenario-result.json` | dry-run 已扫描 report/log 文件；真实 run 会继续扫描 report 与 CLI peer log 文件，不扫描 credential store 原始私钥。 |
 | AIM-E2E-003 | skipped skeleton | `agent-im-scenario-result.json` | 需要可控 Daemon restart/cursor 观测窗口。 |
 | AIM-E2E-004 | skipped skeleton | `agent-im-scenario-result.json` | MVP 不让 Agent 解密 E2EE；后续只验证 opaque 不进 prompt。 |

@@ -43,6 +43,31 @@ E2E harness 必须生成 `runId`，并把 `runId` 用于：
 | Hermes 处理 | 按 `runId` 查 Hermes/Daemon runtime 日志 | 普通消息进入 untrusted content envelope；E2EE opaque 不进 prompt。 |
 | App sync/action result | 按 `runId` 查 Daemon outbound 或 App event | `awiki.message.sync.v1` / `awiki.app.action.result.v1` 返回 App。 |
 
+## 4.1 已验证的只读探测（Step 06）
+
+Step 06 已通过 `ssh ali` 做过一次只读健康探测，未执行部署、重启、数据库写入或远端文件修改。
+
+可复用的安全观测范围：
+
+- user-level service manager 中可见 Daemon/Hermes 相关 service 单元处于 active/running。
+- system-level service manager 中可见 User Service、Message Service、旧 Molt Message 与 AWiki backend 等相关 service 单元处于 active/running。
+- 本文档只记录服务类别和状态，不记录远端目录、密钥路径、数据库连接或真实日志正文。
+
+如果后续真实 E2E 失败，应先用 runId 二分链路，再决定是否需要服务端代码修复；不要把健康探测通过等同于 AIM-E2E-001/002 通过。
+
+## 4.2 Harness 自动采集命令类别
+
+`awiki-me` E2E harness 在非 dry-run 且启用 remote evidence 时，会按 runId 执行只读命令并把脱敏摘要写入 `remote-evidence-result.json`：
+
+| 类别 | 远端动作 | 目的 |
+|---|---|---|
+| health summary | `systemctl` / `systemctl --user` 只读列出相关 service 单元 | 判断 User Service、Message Service、Daemon/Hermes 是否运行。 |
+| daemon / hermes logs | `journalctl --user` 按 runId 过滤 Daemon 与 Hermes 相关 service 日志 | 判断 bootstrap、delegated identity、cursor、Hermes 处理是否出现。 |
+| message-service logs | `journalctl` 按 runId 过滤 Message Service 日志 | 判断普通消息 fanout / delegated proof 路径是否出现。 |
+| user-service logs | `journalctl` 按 runId 过滤 User Service 日志 | 判断 DID Document / delegated public method / auth 相关路径是否出现。 |
+
+这些命令只用于证据采集：默认 tail 最近匹配行、输出进入 report 前统一 redaction，不应输出 Authorization、JWT、OTP、私钥包或 E2EE 明文。
+
 ## 5. 服务端修改或部署原则
 
 如果 E2E 编写过程中必须修改远端服务代码或部署：
@@ -66,6 +91,15 @@ E2E harness 和人工采集日志都要应用同一类脱敏规则：
 | runtime RPC token | `<REDACTED_RUNTIME_TOKEN>` |
 | OTP | `<REDACTED_OTP>` |
 | 手机号 | `<REDACTED_PHONE>`，或只保留测试账号后缀。 |
+
+自动采集的 `remote-evidence-result.json` 只应保存：
+
+- 命令 label；
+- 脱敏后的 command 字符串；
+- report 内证据文件名；
+- 脱敏并截断的 stdout/stderr summary。
+
+不得保存远端真实目录、密钥路径、完整账号凭证或未脱敏消息正文。
 
 ## 7. Blocker 处理
 
