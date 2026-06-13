@@ -49,7 +49,7 @@ final class E2eScenarioRegistry {
         DesktopScenarioStep(
           name: 'bootstrap App user message agent',
           detail:
-              'Trigger awiki.daemon.bootstrap.v1 for ${config.accounts.appUser.handle}; delegated key fragment ${config.agent.delegatedKeyFragment}; runtime ${config.agent.expectedRuntime}.',
+              'Trigger awiki.daemon.bootstrap.v1 for ${config.accounts.appUser.handle}; delegated key fragment ${config.agent.delegatedKeyFragment}; runtime ${config.agent.expectedRuntime}; integration shim: integration_test/agent_im_delegated_message_e2e_test.dart.',
         ),
         DesktopScenarioStep(
           name: 'send ordinary non-E2EE message from CLI peer',

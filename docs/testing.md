@@ -114,6 +114,18 @@ dart run tests/e2e_test/harness/desktop_e2e_runner.dart \
   --dry-run
 ```
 
+
+Agent IM App bootstrap integration smoke exercises the App-side bootstrap hook
+without a real backend. The implementation lives under `tests/integration_test/`
+and the root `integration_test/` file is only a Flutter tooling shim. The smoke
+uses the production `DefaultAgentControlService` with fake ports, verifies that
+`awiki.daemon.bootstrap.v1` is sent through the App payload path, and writes no
+private package, token, OTP, or raw phone values to report-shaped output:
+
+```bash
+flutter test integration_test/agent_im_delegated_message_e2e_test.dart -d macos
+```
+
 Copy `tests/e2e_test/configs/agent_im_delegated.example.yaml` to
 `tests/e2e_test/configs/agent_im_delegated.local.yaml` for local real runs.
 Real Agent IM CLI peer runs require the peer account env vars named by that

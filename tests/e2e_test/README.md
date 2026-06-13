@@ -9,7 +9,7 @@ Structure:
 - `harness/`: desktop/mobile runners and shared E2E orchestration code.
 - `configs/`: checked-in example configs only; local configs are ignored.
 - `mobile/maestro/`: Maestro flows used by mobile E2E.
-- `scenarios/`: future reusable E2E scenario tests.
+- `scenarios/`: reusable E2E scenario code. Agent IM currently provides an App bootstrap hook used by integration smoke and future full E2E flows.
 
 Desktop dry-run:
 
@@ -27,7 +27,7 @@ dart run tests/e2e_test/harness/desktop_e2e_runner.dart \
   --dry-run
 ```
 
-The Agent IM scenario config records environment variable names only. Copy the
+The Agent IM scenario config records environment variable names only. The App bootstrap scenario hook lives in `tests/e2e_test/scenarios/agent_im_delegated_message/` and is exercised by `integration_test/agent_im_delegated_message_e2e_test.dart`. Copy the
 example to `tests/e2e_test/configs/agent_im_delegated.local.yaml` for real local
 runs. Dry-run reports include `cli-peer-plan.json`, which lists the isolated
 `awiki-cli-rs2` peer workspace and ordinary `msg send` command without secret

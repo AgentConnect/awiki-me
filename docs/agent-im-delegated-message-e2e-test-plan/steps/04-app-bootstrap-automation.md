@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)  
 Step index：04  
-状态：draft
+状态：done
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
+| Status | done |
 | Branch | `feature/release-0526/agent-im-hutong` |
-| Started | 待执行 |
-| Completed | 待执行 |
-| Commit | 待填写 |
-| Review evidence | 待填写 |
-| Verification evidence | 待填写 |
-| Next action | 等待 Step 02 后实现 App bootstrap 自动化入口 |
+| Started | 2026-06-13 21:21:18 +0800 |
+| Completed | 2026-06-13 21:41:58 +0800 |
+| Commit | `test: automate agent im app bootstrap`；短 hash 以本步骤提交后的 `git log -1` 为准 |
+| Review evidence | 复用生产 `DefaultAgentControlService`；fake ports 不触发真实后端；根级 integration file 仅 shim；report 投影不包含 private package / runtime token / OTP / raw phone；system/control payload 不可渲染；真实远端 ack 与 peer message 处理留给 Step 05/06。 |
+| Verification evidence | `dart analyze` No issues；`flutter test tests/unit_test` 406 passed；targeted unit 通过；Agent IM macOS integration 1 passed；native smoke 1 passed；Agent IM dry-run PASS；report sensitive scan OK；`git diff --check` OK。 |
+| Next action | Step 04 已完成；进入 Step 05 前读取 Step 05 小 Plan 并重新检查相关仓库状态。 |
 
 ## 2. 目标
 
@@ -67,13 +67,13 @@ Step index：04
 
 ## 7. 验收标准
 
-- [ ] App 能在 E2E/integration 环境触发 bootstrap。
-- [ ] `awiki.daemon.bootstrap.v1` 不显示为普通聊天。
-- [ ] private package 不进入 log、report、UI、screenshot。
-- [ ] App 能识别并展示 `awiki.message.sync.v1` 或 `awiki.app.action.result.v1` 的目标状态。
-- [ ] 根级 `integration_test/` 只有 shim，不放真实业务逻辑。
-- [ ] Review 发现已经修复或明确记录。
-- [ ] 本步骤在进入下一步之前已经创建聚焦 commit。
+- [x] App 能在 E2E/integration 环境触发 bootstrap。
+- [x] `awiki.daemon.bootstrap.v1` 不显示为普通聊天。
+- [x] private package 不进入 log、report、UI、screenshot。
+- [x] App 能识别并展示 `awiki.message.sync.v1` 或 `awiki.app.action.result.v1` 的目标状态。
+- [x] 根级 `integration_test/` 只有 shim，不放真实业务逻辑。
+- [x] Review 发现已经修复或明确记录。
+- [x] 本步骤在进入下一步之前已经创建聚焦 commit。
 
 ## 8. 验证方式
 
@@ -92,11 +92,11 @@ Step index：04
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待填写 |  |
-| 已修复问题 | 待填写 |  |
-| 剩余风险 | 待填写 |  |
-| 新增或缺失测试 | 待填写 |  |
-| 已更新或缺失文档 | 待填写 |  |
+| 发现问题 | 未发现阻塞问题 | App bootstrap scenario 没有修改生产 `lib/src`，通过 fake `AgentInventoryPort` / `MessagingService` 驱动生产 `DefaultAgentControlService`。 |
+| 已修复问题 | 已处理 lint 与文档同步 | `dart analyze` 无新增问题；docs 补充 integration smoke、scenario hook 与根级 shim 约束。 |
+| 剩余风险 | 真实远端闭环仍待 Step 05/06 | 当前 smoke 验证 App 侧 bootstrap 发送、payload hiding 和 report redaction；Daemon ack、Hermes 处理、CLI peer 真消息与 `awiki.info` 证据不在本步骤伪造。 |
+| 新增或缺失测试 | 新增 unit + macOS integration smoke；无本步骤阻塞缺失 | `tests/unit_test/e2e_scenarios/agent_im_app_bootstrap_scenario_test.dart`、`tests/integration_test/agent_im/agent_im_delegated_message_e2e_test.dart`、根级 shim。 |
+| 已更新或缺失文档 | 已更新 | `docs/testing.md`、`tests/e2e_test/README.md`、`tests/e2e_test/scenarios/README.md`、`tests/integration_test/README.md` 已同步。 |
 
 ## 10. Commit 要求
 
@@ -107,6 +107,9 @@ Step index：04
 - Commit 后证据：记录 commit hash 和 commit 后 `git status`。
 - 遗留未提交变更：必须记录原因以及为什么安全。
 - 建议消息：`test: automate agent im app bootstrap`
+- Commit 前状态：`awiki-me` 仅包含本步骤 App bootstrap scenario、integration shim、unit/integration test 与 docs/plan 变更；`awiki-cli-rs2`、`message-service` 存在既有用户未提交变更，本步骤未修改。
+- 纳入文件：`docs/agent-im-delegated-message-e2e-test-plan/plan.md`、本 Step 文档、`docs/testing.md`、`integration_test/agent_im_delegated_message_e2e_test.dart`、`tests/e2e_test/README.md`、`tests/e2e_test/harness/src/scenario_registry.dart`、`tests/e2e_test/scenarios/README.md`、`tests/e2e_test/scenarios/agent_im_delegated_message/app_bootstrap_scenario.dart`、`tests/integration_test/README.md`、`tests/integration_test/agent_im/agent_im_delegated_message_e2e_test.dart`、`tests/unit_test/e2e_scenarios/agent_im_app_bootstrap_scenario_test.dart`。
+- Commit 后证据：提交后执行 `git log -1 --oneline` 与 `git status --short --branch` 记录；预期 `awiki-me` 只剩 ahead 状态，无本步骤未提交文件。
 
 ## 11. Blocked 处理
 
