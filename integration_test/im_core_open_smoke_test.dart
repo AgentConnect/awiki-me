@@ -8,7 +8,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'AwikiImCore.open macOS native backend smoke',
+    'AwikiImCore.open desktop native backend smoke',
     (_) async {
       final root = await Directory.systemTemp.createTemp(
         'awiki_me_im_core_smoke_',
@@ -47,8 +47,6 @@ void main() {
 
       expect(await imCore.validatePaths(), isA<List<String>>());
     },
-    // awiki_im_core native smoke is currently supported only on macOS in this
-    // repository. Linux has no runner and no native plugin declaration yet.
-    skip: !Platform.isMacOS,
+    skip: !(Platform.isMacOS || Platform.isLinux),
   );
 }

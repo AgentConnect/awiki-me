@@ -8,14 +8,14 @@ Step index：02
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
+| Status | review |
 | Branch | `feature/test-awiki-me` / `awiki-cli-rs2` 当前工作分支 |
-| Started | - |
+| Started | 2026-06-13 20:30:28 CST |
 | Completed | - |
 | Commit | - |
-| Review evidence | - |
-| Verification evidence | - |
-| Next action | 在用户确认执行后，补 Linux native artifact build 与 Flutter plugin 声明 |
+| Review evidence | Linux plugin declaration、CMake bundled library、loader、build script、docs 与 App smoke 变更已检查；默认 native build 保持 Apple/Android，Linux 通过 `--linux-only` 显式构建；生成的 `.so` 被 `.gitignore` 排除；未纳入 `awiki-cli-rs2` 既有 daemon 脏改 |
+| Verification evidence | `scripts/flutter/build-sdk-native.sh --linux-only --dry-run` 通过；`scripts/flutter/build-sdk-native.sh --dry-run` 通过且默认不跑 Linux；`scripts/flutter/codegen-check.sh` 通过；`cargo test -p im-core-dart --locked` 通过；`scripts/flutter/build-sdk-native.sh --linux-only` 通过；`cd packages/awiki_im_core && flutter test` 通过；`xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` 通过；App bundle 含 `build/linux/x64/debug/bundle/lib/libawiki_im_core.so`；`dart analyze` 和 `flutter test` 通过；两个 repo `git diff --check` 通过 |
+| Next action | 创建 Step 02 聚焦 commit，然后进入 Step 03 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -134,20 +134,20 @@ Step index：02
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 执行时填写 | - |
-| 已修复问题 | 执行时填写 | - |
-| 剩余风险 | 执行时填写 | 例如 loader fallback 依赖 runtime 路径 |
-| 新增或缺失测试 | 执行时填写 | 至少要有 Linux native open smoke |
-| 已更新或缺失文档 | 执行时填写 | SDK docs 必须更新 |
+| 发现问题 | 已处理 | 初始 Linux CMake 使用 missing `.so` fatal 会阻断普通 Linux fake smoke；已改为 warning + 空 bundled libraries，让真正调用 `AwikiImCore.open` 的 native smoke 负责失败。初始默认 `build-sdk-native.sh` 包含 Linux 会改变原 Apple/Android 默认行为；已收敛为 `--linux-only` 显式构建。 |
+| 已修复问题 | 完成 | 修正 CMake missing artifact 行为、主 build 脚本默认行为和 SDK 文档表述。 |
+| 剩余风险 | 已记录 | Linux `.so` 是本机构建 artifact，不提交；新 checkout 跑 native smoke 前必须先执行 `scripts/flutter/build-sdk-native.sh --linux-only`。 |
+| 新增或缺失测试 | 完成 | `xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` 通过，证明 Flutter Linux bundle 能加载真实 native backend。 |
+| 已更新或缺失文档 | 完成 | `awiki-cli-rs2/docs/flutter-sdk/awiki-im-core-flutter-sdk.md` 和 `awiki-cli-rs2/packages/awiki_im_core/README.md` 已记录 Linux 支持和构建方式。 |
 
 ## 10. Commit 要求
 
 - Commit 时机：SDK Linux support、验证、Review 都完成后。
 - Commit 范围：优先在 `awiki-cli-rs2` 建一个 SDK focused commit；`test-awiki-me` native smoke skip 调整可单独 commit。
-- Commit 前状态：记录 `git status --short --branch`。
-- 纳入文件：记录本步骤 commit 包含的文件。
-- Commit 后证据：记录 commit hash 和 commit 后 `git status --short --branch`。
-- 遗留未提交变更：必须记录原因以及为什么安全。
+- Commit 前状态：`awiki-cli-rs2` 仍有既有 daemon / `Cargo.lock` 脏改；本步骤只纳入 SDK 相关文件。`test-awiki-me` 只包含 Plan、native smoke 和 Linux generated plugin CMake 变化。
+- 纳入文件：`awiki-cli-rs2/.gitignore`、`awiki-cli-rs2/crates/im-core-dart/Cargo.toml`、`awiki-cli-rs2/docs/flutter-sdk/awiki-im-core-flutter-sdk.md`、`awiki-cli-rs2/packages/awiki_im_core/README.md`、`awiki-cli-rs2/packages/awiki_im_core/lib/src/native_library_loader.dart`、`awiki-cli-rs2/packages/awiki_im_core/pubspec.yaml`、`awiki-cli-rs2/packages/awiki_im_core/linux/`、`awiki-cli-rs2/scripts/flutter/build-linux.sh`、`awiki-cli-rs2/scripts/flutter/build-sdk-native.sh`；`test-awiki-me/integration_test/im_core_open_smoke_test.dart`、`test-awiki-me/linux/flutter/generated_plugins.cmake`、本 Plan 和 Step 文档。
+- Commit 后证据：提交后回填 commit hash 和 commit 后 `git status --short --branch`。
+- 遗留未提交变更：`awiki-cli-rs2` 的 daemon 相关脏改与本步骤无关，保留不动；生成的 `packages/awiki_im_core/linux/lib/libawiki_im_core.so` 被 `.gitignore` 排除。
 - 建议消息：`sdk: add awiki im core linux native support`
 
 ## 11. Blocked 处理
