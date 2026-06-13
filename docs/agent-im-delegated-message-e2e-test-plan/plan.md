@@ -4,7 +4,7 @@
 DOC：`awiki-me/docs/agent-im-delegated-message-e2e-test-plan/`  
 Harness：`awiki-harness/`  
 创建时间：2026-06-13  
-恢复指针：Step 02 已完成 E2E harness 基础扩展；下一步从 Step 03 开始 CLI peer 与测试账号编排。当前未登录远端。
+恢复指针：Step 03 已完成 CLI peer 与测试账号编排；下一步从 Step 04 开始 App bootstrap 自动化与 integration entry。当前未登录远端。
 
 ## 1. 目标
 
@@ -68,7 +68,7 @@ Step 01 基线输出：[context-contract-baseline.md](context-contract-baseline.
 
 - `awiki-me` 已有 `awiki.daemon.bootstrap.v1` / `awiki.daemon.user_subkey_package.v2` domain model、普通 payload 发送服务、`#daemon-key-1` 本地校验、MVP action allowlist 和 system/control payload hiding 单测。
 - `awiki-me/tests/e2e_test/` 目前只有 desktop/mobile smoke harness；缺少 `--scenario`、`--config`、Agent IM scenario registry、structured report、统一 redaction 和 remote adapter。
-- `awiki-cli-rs2` CLI command catalog 已有 `id.register`、`id.refresh-token`、`msg.send`、`msg.inbox`、`msg.history`，但 `awiki-me` harness 尚未封装 CLI peer 账号与普通消息发送。
+- `awiki-cli-rs2` CLI command catalog 已有 `id.register`、`id.recover`、`id.refresh-token`、`msg.send`、`msg.inbox`、`msg.history`，但 `awiki-me` harness 尚未封装 CLI peer 账号与普通消息发送。
 - `awiki-deamon` 已有 bootstrap parser、Hermes `app_message_handler` binding、delegated inbox sync、cursor/processed-message/E2EE opaque ignore 与 `message_sync_outbox` 写入；但本次调研未找到完整 pending sync outbox 投递到 App 的 flusher/mark-sent 路径，Step 05/06 需要先证明或补齐。
 - `message-service` 已记录 delegated local view 契约并有相关单仓测试；`user-service` 已记录 delegated public key public-only 注册、signed DID Document update 撤销和 registry 管理面边界。
 - ANP SDK 依赖边界：本 E2E 主路径应通过 `awiki-cli-rs2` CLI peer 和 App/Daemon 真实路径，不在 `awiki-me` 引入 Python `anp` SDK；若后续依赖本地未发布 ANP 能力，必须在计划中明确 SDK 版本或 local-source gate。
@@ -87,7 +87,7 @@ Step 01 基线输出：[context-contract-baseline.md](context-contract-baseline.
 |---|---|---|---|---|---|---|
 | 01 | 上下文与契约基线核对 | 无 | 确认测试入口、schema、CLI/Daemon/service 能力缺口；更新必要 docs | [steps/01-context-contract-baseline.md](steps/01-context-contract-baseline.md) | 必须 | done |
 | 02 | E2E harness 基础扩展 | Step 01 | scenario registry、agent_im config、report/redaction、remote adapter dry-run | [steps/02-e2e-harness-foundation.md](steps/02-e2e-harness-foundation.md) | 必须 | done |
-| 03 | CLI peer 与测试账号编排 | Step 02 | CLI peer workspace、账号登录/恢复、普通消息发送、可选 E2EE 发送能力 | [steps/03-cli-peer-and-test-accounts.md](steps/03-cli-peer-and-test-accounts.md) | 必须 | pending |
+| 03 | CLI peer 与测试账号编排 | Step 02 | CLI peer workspace、账号登录/恢复、普通消息发送、可选 E2EE 发送能力 | [steps/03-cli-peer-and-test-accounts.md](steps/03-cli-peer-and-test-accounts.md) | 必须 | done |
 | 04 | App bootstrap 自动化与 integration entry | Step 02 | App 触发 bootstrap、状态观测、根级 integration shim（如必要） | [steps/04-app-bootstrap-automation.md](steps/04-app-bootstrap-automation.md) | 必须 | pending |
 | 05 | Agent delegated message E2E 场景 | Step 03, Step 04 | AIM-E2E-001/002/006 首批自动化，003/004 可选扩展 | [steps/05-agent-delegated-message-scenarios.md](steps/05-agent-delegated-message-scenarios.md) | 必须 | pending |
 | 06 | `awiki.info` 远端联调与服务侧补强 | Step 05 | SSH 联调脚本/Runbook 验证、服务侧日志/测试缺口修复策略 | [steps/06-remote-awiki-info-integration.md](steps/06-remote-awiki-info-integration.md) | 必须 | pending |
@@ -101,7 +101,7 @@ Step 01 基线输出：[context-contract-baseline.md](context-contract-baseline.
 |---|---|---|---|---|---|---|---|---|
 | 01 | done | `feature/release-0526/agent-im-hutong` | 2026-06-13 20:44:29 +0800 | 2026-06-13 20:47:00 +0800 | `docs: baseline agent im e2e contracts`；短 hash 以本步骤提交后的 `git log -1` 为准 | Review 完成：确认基线覆盖 App bootstrap、CLI peer、Daemon delegated inbox、Message Service delegated local view、User Service delegated public key、system-test 相邻覆盖、ANP SDK 依赖边界和 P0 缺口；未发现需要修改生产代码的问题。 | 文档路径、相对链接、敏感信息扫描、`git diff --check` 均通过；未运行功能测试，原因是 Step 01 为 docs-only/read-only 基线。 | 启动 Step 02 |
 | 02 | done | `feature/release-0526/agent-im-hutong` | 2026-06-13 20:52:31 +0800 | 2026-06-13 20:57:55 +0800 | `test: add agent im e2e harness foundation`；短 hash 以本步骤提交后的 `git log -1` 为准 | Review 完成：确认旧 smoke dry-run 保持兼容；新增 scenario/config 仅在显式参数下启用；example config 只含占位和 env 名；report writer 和 command log 统一 redaction；remote adapter 只生成 dry-run plan，不登录远端。 | `dart analyze` No issues；`flutter test tests/unit_test/e2e_harness` 22 passed；`flutter test tests/unit_test` 402 passed；Agent IM dry-run PASS；兼容 dry-run PASS；report sensitive scan 通过。 | 启动 Step 03 |
-| 03 | pending | `feature/release-0526/agent-im-hutong` | 待执行 | 待执行 | 待填写 | 待填写 | 待填写 | 启动 Step 03 |
+| 03 | done | `feature/release-0526/agent-im-hutong` | 2026-06-13 21:10:17 +0800 | 2026-06-13 21:13:38 +0800 | `test: add cli peer orchestration`；短 hash 以本步骤提交后的 `git log -1` 为准 | Review 完成：确认 CLI peer adapter 只调用 `awiki-cli-rs2` 命令，不拼 message-service RPC；workspace 按 runId/peer-b 隔离；dry-run 只输出 env 名；command stdout/stderr/report 经过 redaction；未修改 `awiki-cli-rs2`。 | `flutter test tests/unit_test/e2e_harness` 25 passed；`dart analyze` No issues；`cargo build -p awiki-cli --bin awiki-cli` 通过；Agent IM dry-run PASS 并生成 `cli-peer-plan.json`；report sensitive scan 通过。真实 CLI send 未执行，原因是当前未配置 peer 测试账号 env。 | 启动 Step 04 |
 | 04 | pending | `feature/release-0526/agent-im-hutong` | 待执行 | 待执行 | 待填写 | 待填写 | 待填写 | 等待 Step 02 |
 | 05 | pending | `feature/release-0526/agent-im-hutong` | 待执行 | 待执行 | 待填写 | 待填写 | 待填写 | 等待 Step 03/04 |
 | 06 | pending | `feature/release-0526/agent-im-hutong` | 待执行 | 待执行 | 待填写 | 待填写 | 待填写 | 等待 Step 05 |

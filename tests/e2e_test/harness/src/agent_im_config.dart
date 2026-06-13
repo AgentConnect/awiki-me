@@ -137,20 +137,27 @@ final class AgentImRemoteConfig {
 }
 
 final class AgentImCliPeerConfig {
-  const AgentImCliPeerConfig({required this.repo, required this.workspaceRoot});
+  const AgentImCliPeerConfig({
+    required this.repo,
+    required this.binary,
+    required this.workspaceRoot,
+  });
 
   factory AgentImCliPeerConfig.fromMap(Map<String, Object?> map) {
     return AgentImCliPeerConfig(
       repo: _string(map, 'repo', '../awiki-cli-rs2'),
+      binary: _string(map, 'binary', 'target/debug/awiki-cli'),
       workspaceRoot: _string(map, 'workspaceRoot', '.e2e/agent-im/cli-peer'),
     );
   }
 
   final String repo;
+  final String binary;
   final String workspaceRoot;
 
   Map<String, Object?> toReportJson() => <String, Object?>{
     'repo': repo,
+    'binary': binary,
     'workspaceRoot': workspaceRoot,
   };
 }

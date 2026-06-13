@@ -73,6 +73,20 @@ final _rules = <_RedactionRule>[
     ),
     (match) => '${match.group(1)}<REDACTED_OTP>',
   ),
+  _RedactionRule(
+    RegExp(
+      r'(--(?:otp|code|verification-code)\s+)(\d{4,8})',
+      caseSensitive: false,
+    ),
+    (match) => '${match.group(1)}<REDACTED_OTP>',
+  ),
+  _RedactionRule(
+    RegExp(
+      r'(--(?:token|jwt|runtime-token)\s+)([^<\s]{6,})',
+      caseSensitive: false,
+    ),
+    (match) => '${match.group(1)}<REDACTED_TOKEN>',
+  ),
   _RedactionRule(RegExp(r'\+\d{8,15}'), (_) => '<REDACTED_PHONE>'),
 ];
 

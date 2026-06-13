@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'src/agent_im_config.dart';
+import 'src/cli_peer_adapter.dart';
 import 'src/e2e_report.dart';
 import 'src/scenario_registry.dart';
 import 'src/secret_redactor.dart';
@@ -41,6 +42,9 @@ Future<void> main(List<String> args) async {
   } on AgentImConfigFailure catch (error) {
     stderr.writeln('\nDesktop E2E failed: ${error.message}');
     exitCode = 1;
+  } on AgentImCliPeerFailure catch (error) {
+    stderr.writeln('\nDesktop E2E failed: ${error.message}');
+    exitCode = 1;
   } on DesktopE2eFailure catch (error) {
     stderr.writeln('\nDesktop E2E failed: ${error.message}');
     exitCode = 1;
@@ -69,6 +73,7 @@ class DesktopE2eRunner {
   late final String runId;
   late final Directory reportDir;
   late final Directory cliWorkspaceDir;
+  late final Directory agentImCliPeerWorkspaceDir;
   late final E2eReportWriter reportWriter;
   final List<DesktopE2eTimingEntry> _timings = <DesktopE2eTimingEntry>[];
 
@@ -86,6 +91,7 @@ class DesktopE2eRunner {
     cliWorkspaceDir = Directory(
       '${root.path}/.e2e/${platform.name}/cli-workspaces/$runId',
     )..createSync(recursive: true);
+    agentImCliPeerWorkspaceDir = Directory('${cliWorkspaceDir.path}/peer-b');
     final totalStopwatch = Stopwatch()..start();
     var succeeded = false;
 
@@ -297,26 +303,58 @@ class DesktopE2eRunner {
         'Supported: $agentImDelegatedMessageScenario.',
       );
     }
-    if (!options.dryRun) {
-      throw DesktopE2eFailure(
-        'Scenario "$scenario" currently supports --dry-run only. '
-        'Real Agent IM flow is implemented in later steps.',
-      );
-    }
     final plan = registry.buildAgentImPlan(
       runId: runId,
       platform: platform.name,
       config: agentImConfig!,
+      cliBinaryPath: config.cliBinaryPath,
+      cliPeerWorkspace: agentImCliPeerWorkspaceDir.path,
+      ordinaryMessageText: _agentImOrdinaryMessageText(),
     );
     reportWriter.writeJson('scenario-plan.json', plan.toJson());
+    reportWriter.writeJson('cli-peer-plan.json', plan.cliPeerPlan.toJson());
     for (final step in plan.steps) {
       _line('[plan] ${step.name}: ${step.detail}');
+    }
+    for (final command in plan.cliPeerPlan.commands) {
+      _line(
+        '[cli-peer-plan] ${command.label}: '
+        '${command.toJson(plan.cliPeerPlan.binary)['command']}',
+      );
     }
     for (final command in plan.remoteCommands) {
       _line('[remote-plan] ${command.label}: ${command.command}');
     }
     _line('scenario plan: ${reportDir.path}/scenario-plan.json');
+    _line('cli peer plan: ${reportDir.path}/cli-peer-plan.json');
+    if (!options.dryRun) {
+      final adapter = _agentImCliPeerAdapter(agentImConfig!);
+      final result = await adapter.runOrdinaryMessageFlow(
+        runId: runId,
+        targetHandle: agentImConfig!.accounts.appUser.handle,
+        messageText: _agentImOrdinaryMessageText(),
+      );
+      reportWriter.writeJson('cli-peer-result.json', result.toJson());
+      _line('cli peer result: ${reportDir.path}/cli-peer-result.json');
+    }
   }
+
+  AgentImCliPeerAdapter _agentImCliPeerAdapter(
+    AgentImDelegatedConfig scenarioConfig,
+  ) {
+    return AgentImCliPeerAdapter(
+      config: scenarioConfig,
+      cliRepo: config.cliRepo,
+      binary: File(config.cliBinaryPath),
+      workspace: agentImCliPeerWorkspaceDir,
+      reportDir: reportDir,
+      runner: commands,
+      dryRun: options.dryRun,
+    );
+  }
+
+  String _agentImOrdinaryMessageText() =>
+      AgentImCliPeerAdapterPlan.defaultOrdinaryMessageText(runId);
 
   void _rewriteCliConfig() {
     final configFile = File('${cliWorkspaceDir.path}/config.yaml');
@@ -407,6 +445,7 @@ class DesktopE2eConfig {
     required this.didDomain,
     required this.pubHostedUrl,
     required this.otpConfigured,
+    this.agentImConfig,
   });
 
   factory DesktopE2eConfig.fromEnvironment(
@@ -462,6 +501,7 @@ class DesktopE2eConfig {
       otpConfigured:
           _firstNonEmpty(env['DEV_OTP_PHONE'], '').isNotEmpty &&
           _firstNonEmpty(env['DEV_OTP_CODE'], '').isNotEmpty,
+      agentImConfig: agentImConfig,
     );
   }
 
@@ -471,8 +511,15 @@ class DesktopE2eConfig {
   final String didDomain;
   final String pubHostedUrl;
   final bool otpConfigured;
+  final AgentImDelegatedConfig? agentImConfig;
 
-  String get cliBinaryPath => '${cliRepo.path}/target/debug/awiki-cli';
+  String get cliBinaryPath {
+    final binary = agentImConfig?.cliPeer.binary ?? 'target/debug/awiki-cli';
+    if (binary.startsWith('/')) {
+      return File(binary).absolute.path;
+    }
+    return File('${cliRepo.path}/$binary').absolute.path;
+  }
 
   String get anpServiceEndpoint => '$baseUrl/anp-im/rpc';
 
@@ -650,7 +697,7 @@ enum DesktopE2ePlatform {
   };
 }
 
-class DesktopCommandRunner {
+class DesktopCommandRunner implements AgentImCliCommandRunner {
   const DesktopCommandRunner({
     required this.dryRun,
     this.redactor = const SecretRedactor(),
@@ -659,6 +706,7 @@ class DesktopCommandRunner {
   final bool dryRun;
   final SecretRedactor redactor;
 
+  @override
   Future<DesktopCommandResult> run(
     String executable,
     List<String> args, {
@@ -671,7 +719,7 @@ class DesktopCommandRunner {
       executable,
       ...args,
     ].map(_shellQuote).join(' ');
-    _line('\$ $commandLine');
+    _line('\$ ${redactor.redact(commandLine)}');
     if (dryRun) {
       if (logFile != null) {
         logFile.createSync(recursive: true);
@@ -743,16 +791,12 @@ class DesktopCommandRunner {
   }
 }
 
-class DesktopCommandResult {
+class DesktopCommandResult extends AgentImCliCommandResult {
   const DesktopCommandResult({
-    required this.exitCode,
-    required this.stdoutText,
-    required this.stderrText,
+    required super.exitCode,
+    required super.stdoutText,
+    required super.stderrText,
   });
-
-  final int exitCode;
-  final String stdoutText;
-  final String stderrText;
 }
 
 class DesktopE2eTimingEntry {

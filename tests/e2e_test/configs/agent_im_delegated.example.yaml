@@ -15,6 +15,7 @@ remote:
 
 cliPeer:
   repo: ../awiki-cli-rs2
+  binary: target/debug/awiki-cli
   workspaceRoot: .e2e/agent-im/cli-peer
 
 app:

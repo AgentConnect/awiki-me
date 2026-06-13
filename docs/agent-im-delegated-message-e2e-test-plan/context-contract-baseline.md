@@ -61,8 +61,8 @@
 
 | 契约 | 当前证据 | 结论 |
 |---|---|---|
-| CLI command catalog | `awiki-cli-rs2/crates/awiki-cli/src/command_catalog/mod.rs` 暴露 `id.register`、`id.refresh-token`、`msg.send`、`msg.inbox`、`msg.history`。 | CLI 具备作为 peer 的基础命令面。 |
-| CLI parser | `cli_parser/mod.rs` 分发同步/异步 `msg.send`、`msg.inbox`、`msg.history`、`id.register`、`id.refresh-token`。 | Step 03 需要封装非交互式调用和 JSON 输出解析。 |
+| CLI command catalog | `awiki-cli-rs2/crates/awiki-cli/src/command_catalog/mod.rs` 暴露 `id.register`、`id.recover`、`id.refresh-token`、`msg.send`、`msg.inbox`、`msg.history`。 | CLI 具备作为 peer 的基础命令面。 |
+| CLI parser | `cli_parser/mod.rs` 分发同步/异步 `msg.send`、`msg.inbox`、`msg.history`、`id.register`、`id.recover`、`id.refresh-token`。 | Step 03 需要封装非交互式调用和 JSON 输出解析。 |
 | 普通消息发送 | `m_core_cli_adapter/messages.rs` 通过 `send_text_via_im_core*` 调用 im-core；CLI peer 默认 `delegated_signing: None`。 | CLI peer 应代表另一个测试用户，不应绕过 im-core 或伪造 delegated signing。 |
 | im-core delegated signing | `im-core` DTO / direct runtime 已有 `DelegatedSigningOptions`，daemon 可消费。 | E2E 主路径仍由 daemon 使用子 key，CLI peer 不直接使用该能力。 |
 | 账号与 OTP | CLI 有注册/刷新 token 命令，但当前 `awiki-me` harness 没有账号生命周期编排。 | Step 03 的 P0 是隔离 workspace + 账号登录/恢复 + 普通消息发送；OTP/token 必须脱敏。 |

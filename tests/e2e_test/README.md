@@ -29,7 +29,10 @@ dart run tests/e2e_test/harness/desktop_e2e_runner.dart \
 
 The Agent IM scenario config records environment variable names only. Copy the
 example to `tests/e2e_test/configs/agent_im_delegated.local.yaml` for real local
-runs; local configs and `.e2e/` reports remain ignored.
+runs. Dry-run reports include `cli-peer-plan.json`, which lists the isolated
+`awiki-cli-rs2` peer workspace and ordinary `msg send` command without secret
+values. Local configs, generated CLI workspaces, and `.e2e/` reports remain
+ignored.
 
 Mobile dry-run:
 

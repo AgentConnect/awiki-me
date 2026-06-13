@@ -1,4 +1,5 @@
 import 'agent_im_config.dart';
+import 'cli_peer_adapter.dart';
 import 'remote_adapter.dart';
 
 const agentImDelegatedMessageScenario = 'agent-im-delegated-message';
@@ -12,10 +13,29 @@ final class E2eScenarioRegistry {
     required String runId,
     required String platform,
     required AgentImDelegatedConfig config,
+    String? cliBinaryPath,
+    String? cliPeerWorkspace,
+    String? ordinaryMessageText,
   }) {
     final remoteCommands = AgentImRemoteAdapter(
       config,
     ).planEvidenceCommands(runId);
+    final cliPeerPlan = AgentImCliPeerPlan(
+      runId: runId,
+      peerHandle: config.accounts.peerUser.handle,
+      targetHandle: config.accounts.appUser.handle,
+      workspace:
+          cliPeerWorkspace ??
+          '${config.cliPeer.workspaceRoot}/$platform/$runId/peer-b',
+      binary: cliBinaryPath ?? config.cliPeer.binary,
+      commands: AgentImCliPeerAdapterPlan.commands(
+        config: config,
+        targetHandle: config.accounts.appUser.handle,
+        messageText:
+            ordinaryMessageText ??
+            AgentImCliPeerAdapterPlan.defaultOrdinaryMessageText(runId),
+      ),
+    );
     return DesktopScenarioPlan(
       scenario: agentImDelegatedMessageScenario,
       runId: runId,
@@ -24,7 +44,7 @@ final class E2eScenarioRegistry {
         DesktopScenarioStep(
           name: 'prepare isolated CLI peer workspace',
           detail:
-              'Use awiki-cli-rs2 with ${config.accounts.peerUser.handle} and workspace ${config.cliPeer.workspaceRoot}/$runId.',
+              'Use awiki-cli-rs2 with ${config.accounts.peerUser.handle} and workspace ${cliPeerPlan.workspace}.',
         ),
         DesktopScenarioStep(
           name: 'bootstrap App user message agent',
@@ -49,6 +69,7 @@ final class E2eScenarioRegistry {
         ),
       ],
       remoteCommands: remoteCommands,
+      cliPeerPlan: cliPeerPlan,
       config: config.toReportJson(),
     );
   }
@@ -61,6 +82,7 @@ final class DesktopScenarioPlan {
     required this.platform,
     required this.steps,
     required this.remoteCommands,
+    required this.cliPeerPlan,
     required this.config,
   });
 
@@ -69,6 +91,7 @@ final class DesktopScenarioPlan {
   final String platform;
   final List<DesktopScenarioStep> steps;
   final List<RemoteEvidenceCommand> remoteCommands;
+  final AgentImCliPeerPlan cliPeerPlan;
   final Map<String, Object?> config;
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -77,6 +100,7 @@ final class DesktopScenarioPlan {
     'platform': platform,
     'steps': [for (final step in steps) step.toJson()],
     'remoteCommands': [for (final command in remoteCommands) command.toJson()],
+    'cliPeerPlan': cliPeerPlan.toJson(),
     'config': config,
   };
 }

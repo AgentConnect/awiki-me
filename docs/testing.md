@@ -101,7 +101,10 @@ source .e2e/macos.env
 
 Agent IM delegated-message dry-run uses the same desktop runner and adds a
 scenario/config layer. The checked-in config contains placeholders and
-environment variable names only:
+environment variable names only. The runner writes both `scenario-plan.json`
+and `cli-peer-plan.json`; the latter shows the isolated `awiki-cli-rs2` peer
+workspace, recover/refresh-token commands, and ordinary `msg send` command
+with only environment variable names for phone/OTP:
 
 ```bash
 dart run tests/e2e_test/harness/desktop_e2e_runner.dart \
@@ -113,8 +116,9 @@ dart run tests/e2e_test/harness/desktop_e2e_runner.dart \
 
 Copy `tests/e2e_test/configs/agent_im_delegated.example.yaml` to
 `tests/e2e_test/configs/agent_im_delegated.local.yaml` for local real runs.
-Do not commit local configs, generated CLI workspaces, reports, OTP values,
-tokens, private keys, or remote log captures.
+Real Agent IM CLI peer runs require the peer account env vars named by that
+local config. Do not commit local configs, generated CLI workspaces, reports,
+OTP values, tokens, private keys, or remote log captures.
 
 macOS real smoke:
 

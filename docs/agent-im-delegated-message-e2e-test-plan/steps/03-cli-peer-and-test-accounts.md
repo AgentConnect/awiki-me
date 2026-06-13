@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)  
 Step index：03  
-状态：draft
+状态：done
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
+| Status | done |
 | Branch | `feature/release-0526/agent-im-hutong` |
-| Started | 待执行 |
-| Completed | 待执行 |
-| Commit | 待填写 |
-| Review evidence | 待填写 |
-| Verification evidence | 待填写 |
-| Next action | 等待 Step 02 后实现 CLI peer 编排 |
+| Started | 2026-06-13 21:10:17 +0800 |
+| Completed | 2026-06-13 21:13:38 +0800 |
+| Commit | `test: add cli peer orchestration`；短 hash 以本步骤提交后的 `git log -1` 为准 |
+| Review evidence | Review 完成：确认 CLI peer adapter 只调用 `awiki-cli-rs2` 命令，不拼 message-service RPC；workspace 按 runId/peer-b 隔离；dry-run 只输出 env 名；command stdout/stderr/report 经过 redaction；未修改 `awiki-cli-rs2`。 |
+| Verification evidence | `flutter test tests/unit_test/e2e_harness` 25 passed；`dart analyze` No issues；`cargo build -p awiki-cli --bin awiki-cli` 通过；Agent IM dry-run PASS 并生成 `cli-peer-plan.json`；report sensitive scan 通过。真实 CLI send 未执行，原因是当前未配置 peer 测试账号 env。 |
+| Next action | 启动 Step 04：App bootstrap 自动化与 integration entry |
 
 ## 2. 目标
 
@@ -65,13 +65,13 @@ Step index：03
 
 ## 7. 验收标准
 
-- [ ] CLI peer workspace 按 runId 隔离。
-- [ ] harness 不输出 OTP、token、private key 或 raw config。
-- [ ] CLI peer ordinary send 支持带 runId 的测试消息。
-- [ ] 如果新增 CLI 命令，命令走 im-core，不直接拼 message-service wire。
-- [ ] dry-run 能显示 CLI 编排计划；真实模式能收集 CLI send result。
-- [ ] Review 发现已经修复或明确记录。
-- [ ] 本步骤在进入下一步之前已经创建聚焦 commit。
+- [x] CLI peer workspace 按 runId 隔离。
+- [x] harness 不输出 OTP、token、private key 或 raw config。
+- [x] CLI peer ordinary send 支持带 runId 的测试消息。
+- [x] 如果新增 CLI 命令，命令走 im-core，不直接拼 message-service wire。
+- [x] dry-run 能显示 CLI 编排计划；真实模式能收集 CLI send result。
+- [x] Review 发现已经修复或明确记录。
+- [x] 本步骤在进入下一步之前已经创建聚焦 commit。
 
 ## 8. 验证方式
 
@@ -84,6 +84,17 @@ Step index：03
 | im-core tests | `cd awiki-cli-rs2 && cargo test -p im-core --locked` | 如改 im-core，相关 tests 通过。 |
 | Harness dry-run | `cd awiki-me && dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=macos --scenario=agent-im-delegated-message --config tests/e2e_test/configs/agent_im_delegated.example.yaml --dry-run` | CLI peer steps 出现在计划中。 |
 
+### Step 03 验证记录
+
+| 命令 / 检查 | 结果 | 说明 |
+|---|---|---|
+| `flutter test tests/unit_test/e2e_harness` | 通过 | 25 passed，覆盖 CLI peer adapter fake runner、dry-run plan、missing env、redaction。 |
+| `dart analyze` | 通过 | No issues found。 |
+| `cargo build -p awiki-cli --bin awiki-cli` | 通过 | 未修改 CLI 仓库；验证现有 CLI binary 可构建。 |
+| Agent IM dry-run | 通过 | 输出 `cli-peer-plan`，生成 `scenario-plan.json`、`cli-peer-plan.json`、`timings.json`。 |
+| Report sensitive scan | 通过 | 扫描 `.e2e/macos/reports`，未发现 private key、bearer/JWT、raw phone、raw OTP matcher 命中。 |
+| 真实 CLI peer send | 跳过 | 当前未配置 `AWIKI_E2E_PEER_PHONE` / `AWIKI_E2E_PEER_OTP`；真实链路留给 Step 05/06 local config/remote run。 |
+
 ## 9. Review 环节
 
 - Review 时机：CLI adapter 和必要 CLI 改动完成后、commit 前。
@@ -91,11 +102,11 @@ Step index：03
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待填写 |  |
-| 已修复问题 | 待填写 |  |
-| 剩余风险 | 待填写 |  |
-| 新增或缺失测试 | 待填写 |  |
-| 已更新或缺失文档 | 待填写 |  |
+| 发现问题 | 有发现 | 初版 command line 打印未统一 redaction，CLI flag 形式 `--otp <code>` 未覆盖；已在本步骤修复。 |
+| 已修复问题 | 已修复 | `DesktopCommandRunner` 打印前 redaction；`SecretRedactor` 增加 CLI flag token/OTP 规则；CLI peer report 仅记录 env 名和脱敏 JSON。 |
+| 剩余风险 | 已记录 | 当前未配置 peer 测试账号 env，因此未执行真实远端 `msg send`；Step 05/06 需要用 local config 或远端账号完成真实链路。 |
+| 新增或缺失测试 | 已新增 | 新增 fake command runner 单测，覆盖 dry-run plan、真实 flow command 编排、missing env 失败、redaction。缺少真实 CLI peer send，按账号 env 未配置记录为跳过。 |
+| 已更新或缺失文档 | 已更新 | 更新 `docs/testing.md`、`tests/e2e_test/README.md`、example config、主 Plan 和本 Step 台账。 |
 
 ## 10. Commit 要求
 
@@ -107,13 +118,22 @@ Step index：03
 - 遗留未提交变更：必须记录原因以及为什么安全。
 - 建议消息：`test: add cli peer orchestration`
 
+执行记录：
+
+| 项 | 记录 |
+|---|---|
+| Commit 前状态 | `awiki-me` ahead 2；本步骤只修改 `awiki-me` harness/config/tests/docs；`awiki-cli-rs2` 与 `message-service` 保留既有用户变更。 |
+| 纳入文件 | `tests/e2e_test/harness/src/cli_peer_adapter.dart`、`desktop_e2e_runner.dart`、`agent_im_config.dart`、`scenario_registry.dart`、`secret_redactor.dart`、`agent_im_delegated.example.yaml`、`desktop_agent_im_harness_test.dart`、`tests/e2e_test/README.md`、`docs/testing.md`、本 Plan/Step 台账。 |
+| Commit 后证据 | 待提交后由 `git log -1 --oneline` 确认；短 hash 不写入同一提交正文，避免自引用 hash 无法稳定。 |
+| 遗留未提交变更 | 仅保留其他仓库既有用户变更；Step 03 不修改这些仓库。 |
+
 ## 11. Blocked 处理
 
 | Blocker | 证据 | 已尝试方案 | 影响范围 | 下一步决策 |
 |---|---|---|---|---|
 | CLI 登录流程需要交互输入 | 待填写 | 支持 env/test config 非交互模式 | 当前步骤 | 补 CLI test mode 或标记 blocker |
 | CLI 无普通消息发送能力 | 待填写 | 在 awiki-cli-rs2 补薄壳命令 | 当前步骤 | 更新 Plan scope 后实现 |
-| 测试账号不可用 | 待填写 | 换 non-production 账号或跳过真实 run | 真实 E2E | 继续 dry-run，等待账号配置 |
+| 测试账号不可用 | 当前未配置 `AWIKI_E2E_PEER_PHONE` / `AWIKI_E2E_PEER_OTP` | fake runner 覆盖真实 command 编排；dry-run 输出 CLI peer plan；不执行远端 send | 真实 CLI peer send | Step 05/06 使用 local config 或远端账号执行真实 run |
 
 ## 12. Plan 变更记录
 
