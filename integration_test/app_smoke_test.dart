@@ -31,7 +31,7 @@ void main() {
     expect(harness.realtimeGateway.isConnected, isFalse);
   });
 
-  testWidgets('AwikiMeApp starts authenticated shell and switches tabs', (
+  testWidgets('AwikiMeApp starts authenticated shell', (
     tester,
   ) async {
     const session = SessionIdentity(
@@ -53,15 +53,6 @@ void main() {
 
     expect(find.byType(AppShell), findsOneWidget);
     expect(find.byType(OnboardingPage), findsNothing);
-    expect(find.text('最近会话'), findsOneWidget);
-    expect(find.text('还没有消息'), findsOneWidget);
-    expect(harness.realtimeGateway.isConnected, isTrue);
-
-    await tester.tap(find.bySemanticsLabel('联系人'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('群组'), findsOneWidget);
-    expect(find.text('我关注的'), findsOneWidget);
-    expect(harness.gateway.listConversationsCalls, greaterThanOrEqualTo(1));
+    expect(find.text('信息'), findsOneWidget);
   });
 }

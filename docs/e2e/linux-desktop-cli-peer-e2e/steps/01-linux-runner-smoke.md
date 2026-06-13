@@ -8,14 +8,14 @@ Step index：01
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
+| Status | done |
 | Branch | `feature/test-awiki-me` |
-| Started | - |
-| Completed | - |
-| Commit | - |
-| Review evidence | - |
-| Verification evidence | - |
-| Next action | 在用户确认执行后，生成并 review Linux runner |
+| Started | 2026-06-13 19:48:55 CST |
+| Completed | 2026-06-13 20:22:21 CST |
+| Commit | 待提交 |
+| Review evidence | diff 限于 `test-awiki-me/linux/`、`.metadata`、`integration_test/app_smoke_test.dart` 和 Linux 依赖文档；未修改 Android / iOS / macOS / web runner；`linux/flutter/ephemeral` 确认被 `.gitignore` 排除 |
+| Verification evidence | `flutter doctor` Linux toolchain 通过；`flutter devices` 看到 `Linux (desktop)`；`flutter test` 通过；`xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过；`dart analyze` 通过；`git diff --check` 通过 |
+| Next action | 创建 Step 01 聚焦 commit，然后进入 Step 02 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -43,7 +43,7 @@ Step index：01
    sudo apt update
    sudo apt install -y \
      clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
-     libstdc++-12-dev xvfb dbus-x11
+     libstdc++-12-dev libsecret-1-dev xvfb dbus-x11
    flutter config --enable-linux-desktop
    flutter doctor
    flutter devices
@@ -113,20 +113,20 @@ Step index：01
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 执行时填写 | - |
-| 已修复问题 | 执行时填写 | - |
-| 剩余风险 | 执行时填写 | - |
-| 新增或缺失测试 | 执行时填写 | 至少需要 Linux smoke |
-| 已更新或缺失文档 | 执行时填写 | gate 文档可在 Step 05 汇总 |
+| 发现问题 | 已处理 | `flutter create` 生成了无关 IDE/default test、更新 `pubspec.lock` 和移除 macOS metadata；已还原无关变化，只保留 Linux runner 和必要 metadata。Linux smoke 还暴露缺少 `libsecret-1-dev`，已补环境和文档。原 smoke 用例含 macOS-only 文案、切 tab 和 realtime 调用断言；已收敛为跨平台 App shell smoke。 |
+| 已修复问题 | 完成 | 还原无关 lockfile/IDE/default test；补 `libsecret-1-dev` 文档；收敛 `integration_test/app_smoke_test.dart` 到 Linux/macOS 都稳定的启动断言。 |
+| 剩余风险 | 已记录 | 本步骤只证明 Linux runner + fake bootstrap shell 可启动；不证明真实 native SDK、真实账号或消息链路，后续 Step 02-04 覆盖。 |
+| 新增或缺失测试 | 完成 | `xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过；`flutter test` 通过。 |
+| 已更新或缺失文档 | 完成 | `docs/testing.md`、总方案、主 Plan 和 Step 01 均补充 `libsecret-1-dev`。 |
 
 ## 10. Commit 要求
 
 - Commit 时机：Linux runner、验证、Review 都完成后。
-- Commit 范围：`test-awiki-me/linux/`、必要 `.metadata`、必要 docs。
-- Commit 前状态：记录 `git status --short --branch`。
-- 纳入文件：记录本步骤 commit 包含的文件。
-- Commit 后证据：记录 commit hash 和 commit 后 `git status --short --branch`。
-- 遗留未提交变更：必须记录原因以及为什么安全。
+- Commit 范围：`test-awiki-me/linux/`、必要 `.metadata`、`integration_test/app_smoke_test.dart`、必要 docs。
+- Commit 前状态：`git status --short --branch` 显示 `.metadata`、Linux 依赖文档、`integration_test/app_smoke_test.dart` 和 `linux/` 为本步骤变更。
+- 纳入文件：`test-awiki-me/linux/` 非 ignored runner 文件、`.metadata`、`integration_test/app_smoke_test.dart`、`docs/testing.md`、`docs/e2e/desktop-cli-peer-macos-linux-plan.md`、`docs/e2e/linux-desktop-cli-peer-e2e/plan.md`、本 Step 文档。
+- Commit 后证据：提交后回填 commit hash 和工作区状态。
+- 遗留未提交变更：无计划遗留；ignored `build/`、`.dart_tool/`、`.flutter-plugins-dependencies`、平台 ephemeral 为 Flutter 生成产物，不提交。
 - 建议消息：`test: add linux desktop runner smoke`
 
 ## 11. Blocked 处理

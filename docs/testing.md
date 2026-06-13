@@ -63,7 +63,7 @@ Linux desktop prerequisites and an X server:
 
 ```bash
 sudo apt update
-sudo apt install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev xvfb
+sudo apt install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libsecret-1-dev xvfb
 flutter config --enable-linux-desktop
 flutter devices
 xvfb-run -a flutter test integration_test -d linux
