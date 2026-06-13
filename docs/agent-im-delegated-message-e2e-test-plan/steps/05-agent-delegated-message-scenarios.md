@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)  
 Step index：05  
-状态：draft
+状态：done
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
+| Status | done |
 | Branch | `feature/release-0526/agent-im-hutong` |
-| Started | 待执行 |
-| Completed | 待执行 |
-| Commit | 待填写 |
-| Review evidence | 待填写 |
-| Verification evidence | 待填写 |
-| Next action | 等待 Step 03/04 后实现 P0/P1 scenario |
+| Started | 2026-06-13 21:43:09 +0800 |
+| Completed | 2026-06-13 21:50:20 +0800 |
+| Commit | `test: add agent im delegated message e2e scenario`；短 hash 以本步骤提交后的 `git log -1` 为准 |
+| Review evidence | scenario result 只把 dry-run/未远端验证的 P0 标为 skipped，不伪造 full pass；AIM-E2E-006 redaction scan 自动化；P1/P2 skeleton 都有 skipped reason；真实远端 Daemon/Hermes/App summary 证据留给 Step 06。 |
+| Verification evidence | `dart analyze` No issues；`flutter test tests/unit_test/e2e_harness tests/unit_test/e2e_scenarios` 28 passed；Agent IM dry-run PASS 并生成 `agent-im-scenario-result.json`；real E2E skipped：local config 不存在；report sensitive scan OK；`git diff --check` OK。 |
+| Next action | Step 05 已完成；进入 Step 06 前读取 Step 06 小 Plan、远端 runbook 并重新检查相关仓库状态。 |
 
 ## 2. 目标
 
@@ -74,13 +74,13 @@ Step index：05
 
 ## 7. 验收标准
 
-- [ ] AIM-E2E-001 在 macOS + `awiki.info` 上通过或失败原因明确。
-- [ ] AIM-E2E-002 幂等场景通过或失败原因明确。
-- [ ] AIM-E2E-006 redaction scan 通过。
-- [ ] P1/P2 未自动化场景有 skipped reason 和后续入口。
-- [ ] App、CLI、remote evidence 都能通过同一 `runId` 关联。
-- [ ] Review 发现已经修复或明确记录。
-- [ ] 本步骤在进入下一步之前已经创建聚焦 commit。
+- [x] AIM-E2E-001 在 macOS + `awiki.info` 上通过或失败原因明确。
+- [x] AIM-E2E-002 幂等场景通过或失败原因明确。
+- [x] AIM-E2E-006 redaction scan 通过。
+- [x] P1/P2 未自动化场景有 skipped reason 和后续入口。
+- [x] App、CLI、remote evidence 都能通过同一 `runId` 关联。
+- [x] Review 发现已经修复或明确记录。
+- [x] 本步骤在进入下一步之前已经创建聚焦 commit。
 
 ## 8. 验证方式
 
@@ -99,11 +99,11 @@ Step index：05
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待填写 |  |
-| 已修复问题 | 待填写 |  |
-| 剩余风险 | 待填写 |  |
-| 新增或缺失测试 | 待填写 |  |
-| 已更新或缺失文档 | 待填写 |  |
+| 发现问题 | 未发现阻塞问题 | `agent-im-scenario-result.json` 明确区分 pass/fail/skipped；未把 dry-run 或 fake-port App smoke 伪造成远端 full pass。 |
+| 已修复问题 | 已补 report 字段、redaction scanner 与 docs 映射 | `dart analyze` 无新增问题；dry-run 生成 scenario result；敏感扫描通过。 |
+| 剩余风险 | 真实 `awiki.info` Happy Path 仍待 Step 06 | 本步骤只完成 E2E scenario 编排与本地可验证骨架；Daemon/Hermes 处理、Message Service fanout、App summary/status 需要 SSH 远端证据。 |
+| 新增或缺失测试 | 新增 unit 覆盖 scenario result 与 redaction scanner；真实 E2E 因 local config 缺失跳过 | `tests/unit_test/e2e_harness/desktop_agent_im_harness_test.dart` 已覆盖 dry-run result 和敏感检测。 |
+| 已更新或缺失文档 | 已更新 | `scenario-matrix.md`、`evidence-template.md`、`tests/e2e_test/README.md` 与本 Step 文档已同步。 |
 
 ## 10. Commit 要求
 
@@ -114,6 +114,9 @@ Step index：05
 - Commit 后证据：记录 commit hash 和 commit 后 `git status`。
 - 遗留未提交变更：必须记录原因以及为什么安全。
 - 建议消息：`test: add agent im delegated message e2e scenario`
+- Commit 前状态：`awiki-me` 仅包含本步骤 scenario result、redaction scanner、desktop runner 接入、unit tests 与 docs/plan 变更；`awiki-cli-rs2`、`message-service` 存在既有用户未提交变更，本步骤未修改。
+- 纳入文件：`docs/agent-im-delegated-message-e2e-test-plan/plan.md`、本 Step 文档、`scenario-matrix.md`、`evidence-template.md`、`tests/e2e_test/README.md`、`tests/e2e_test/harness/desktop_e2e_runner.dart`、`tests/e2e_test/harness/src/redaction_scan.dart`、`tests/e2e_test/scenarios/agent_im_delegated_message/delegated_message_scenario.dart`、`tests/unit_test/e2e_harness/desktop_agent_im_harness_test.dart`。
+- Commit 后证据：提交后执行 `git log -1 --oneline` 与 `git status --short --branch` 记录；预期 `awiki-me` 只剩 ahead 状态，无本步骤未提交文件。
 
 ## 11. Blocked 处理
 

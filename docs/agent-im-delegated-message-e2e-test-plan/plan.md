@@ -4,7 +4,7 @@
 DOC：`awiki-me/docs/agent-im-delegated-message-e2e-test-plan/`  
 Harness：`awiki-harness/`  
 创建时间：2026-06-13  
-恢复指针：Step 04 已完成 App bootstrap 自动化与 integration entry；下一步从 Step 05 开始 Agent delegated message E2E 场景。当前未登录远端。
+恢复指针：Step 05 已完成 Agent delegated message E2E 场景骨架与 redaction scan；下一步从 Step 06 开始 `awiki.info` 远端联调与服务侧补强。当前未登录远端。
 
 ## 1. 目标
 
@@ -89,7 +89,7 @@ Step 01 基线输出：[context-contract-baseline.md](context-contract-baseline.
 | 02 | E2E harness 基础扩展 | Step 01 | scenario registry、agent_im config、report/redaction、remote adapter dry-run | [steps/02-e2e-harness-foundation.md](steps/02-e2e-harness-foundation.md) | 必须 | done |
 | 03 | CLI peer 与测试账号编排 | Step 02 | CLI peer workspace、账号登录/恢复、普通消息发送、可选 E2EE 发送能力 | [steps/03-cli-peer-and-test-accounts.md](steps/03-cli-peer-and-test-accounts.md) | 必须 | done |
 | 04 | App bootstrap 自动化与 integration entry | Step 02 | App 触发 bootstrap、状态观测、根级 integration shim（如必要） | [steps/04-app-bootstrap-automation.md](steps/04-app-bootstrap-automation.md) | 必须 | done |
-| 05 | Agent delegated message E2E 场景 | Step 03, Step 04 | AIM-E2E-001/002/006 首批自动化，003/004 可选扩展 | [steps/05-agent-delegated-message-scenarios.md](steps/05-agent-delegated-message-scenarios.md) | 必须 | pending |
+| 05 | Agent delegated message E2E 场景 | Step 03, Step 04 | AIM-E2E-001/002/006 首批自动化，003/004 可选扩展 | [steps/05-agent-delegated-message-scenarios.md](steps/05-agent-delegated-message-scenarios.md) | 必须 | done |
 | 06 | `awiki.info` 远端联调与服务侧补强 | Step 05 | SSH 联调脚本/Runbook 验证、服务侧日志/测试缺口修复策略 | [steps/06-remote-awiki-info-integration.md](steps/06-remote-awiki-info-integration.md) | 必须 | pending |
 | 07 | 最终全局 Review 与整体验证收口 | Step 01-06 | 全量证据、文档同步、最终状态与风险记录 | [steps/07-final-review-verification.md](steps/07-final-review-verification.md) | 如修改文件则必须 | pending |
 
@@ -103,7 +103,7 @@ Step 01 基线输出：[context-contract-baseline.md](context-contract-baseline.
 | 02 | done | `feature/release-0526/agent-im-hutong` | 2026-06-13 20:52:31 +0800 | 2026-06-13 20:57:55 +0800 | `test: add agent im e2e harness foundation`；短 hash 以本步骤提交后的 `git log -1` 为准 | Review 完成：确认旧 smoke dry-run 保持兼容；新增 scenario/config 仅在显式参数下启用；example config 只含占位和 env 名；report writer 和 command log 统一 redaction；remote adapter 只生成 dry-run plan，不登录远端。 | `dart analyze` No issues；`flutter test tests/unit_test/e2e_harness` 22 passed；`flutter test tests/unit_test` 402 passed；Agent IM dry-run PASS；兼容 dry-run PASS；report sensitive scan 通过。 | 启动 Step 03 |
 | 03 | done | `feature/release-0526/agent-im-hutong` | 2026-06-13 21:10:17 +0800 | 2026-06-13 21:13:38 +0800 | `test: add cli peer orchestration`；短 hash 以本步骤提交后的 `git log -1` 为准 | Review 完成：确认 CLI peer adapter 只调用 `awiki-cli-rs2` 命令，不拼 message-service RPC；workspace 按 runId/peer-b 隔离；dry-run 只输出 env 名；command stdout/stderr/report 经过 redaction；未修改 `awiki-cli-rs2`。 | `flutter test tests/unit_test/e2e_harness` 25 passed；`dart analyze` No issues；`cargo build -p awiki-cli --bin awiki-cli` 通过；Agent IM dry-run PASS 并生成 `cli-peer-plan.json`；report sensitive scan 通过。真实 CLI send 未执行，原因是当前未配置 peer 测试账号 env。 | 启动 Step 04 |
 | 04 | done | `feature/release-0526/agent-im-hutong` | 2026-06-13 21:21:18 +0800 | 2026-06-13 21:41:58 +0800 | `test: automate agent im app bootstrap`；短 hash 以本步骤提交后的 `git log -1` 为准 | Review 完成：确认 App bootstrap hook 复用生产 `DefaultAgentControlService` 并只替换端口为 fake；根级 `integration_test/` 只有 shim；report 投影显式替换 private package；system/control payload 保持不可渲染；`message.sync` 与 `app.action.result` 可被 App 识别；本步骤未修改生产 `lib/src`。剩余风险：当前为 fake-port App bootstrap smoke，真实远端 Daemon ack、peer message 处理与 App 回传展示仍由 Step 05/06 覆盖。 | `dart analyze` No issues；`flutter test tests/unit_test` 406 passed；`flutter test tests/unit_test/e2e_scenarios/agent_im_app_bootstrap_scenario_test.dart` 通过；`flutter test integration_test/agent_im_delegated_message_e2e_test.dart -d macos` 1 passed；`flutter test integration_test/im_core_open_smoke_test.dart -d macos` 1 passed；Agent IM dry-run PASS 并生成 scenario/cli peer plans；report sensitive scan 通过；`git diff --check` 通过。macOS integration 构建出现既有 duplicate library / newer macOS object / foreground warning，但 exit code 0 且测试通过。 | 启动 Step 05 |
-| 05 | pending | `feature/release-0526/agent-im-hutong` | 待执行 | 待执行 | 待填写 | 待填写 | 待填写 | 等待 Step 03/04 |
+| 05 | done | `feature/release-0526/agent-im-hutong` | 2026-06-13 21:43:09 +0800 | 2026-06-13 21:50:20 +0800 | `test: add agent im delegated message e2e scenario`；短 hash 以本步骤提交后的 `git log -1` 为准 | Review 完成：确认 `agent-im-scenario-result.json` 将 AIM-E2E-001/002/006 与 P1 skeleton 统一记录为 pass/fail/skipped；dry-run 不伪造远端通过；真实 Daemon/Hermes/App summary 证据明确留给 Step 06；redaction scanner 只扫 report 与 CLI log，不误扫 CLI credential store；result/report 经过 redaction。 | `dart analyze` No issues；`flutter test tests/unit_test/e2e_harness tests/unit_test/e2e_scenarios` 28 passed；Agent IM dry-run PASS，生成 `agent-im-scenario-result.json`（pass=1/fail=0/skipped=6）；real E2E skipped：`tests/e2e_test/configs/agent_im_delegated.local.yaml` 不存在；report sensitive scan OK；`git diff --check` OK。 | 启动 Step 06 |
 | 06 | pending | `feature/release-0526/agent-im-hutong` | 待执行 | 待执行 | 待填写 | 待填写 | 待填写 | 等待 Step 05 |
 | 07 | pending | `feature/release-0526/agent-im-hutong` | 待执行 | 待执行 | 待填写 | 待填写 | 待填写 | 等待 Step 01-06 |
 

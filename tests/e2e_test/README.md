@@ -41,3 +41,10 @@ dart run tests/e2e_test/harness/mobile_e2e_runner.dart \
   --config tests/e2e_test/configs/mobile.example.yaml \
   --dry-run
 ```
+
+
+Agent IM scenario dry-run and real runs also write `agent-im-scenario-result.json`.
+That file summarizes AIM-E2E case statuses (`pass` / `fail` / `skipped`),
+records skipped reasons for remote-dependent checks, and includes the local
+redaction scan result. Real `awiki.info` proof still requires the Step 06 remote
+runbook evidence before a full happy-path pass can be claimed.

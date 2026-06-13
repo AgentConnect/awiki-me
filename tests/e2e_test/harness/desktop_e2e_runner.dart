@@ -6,6 +6,7 @@ import 'src/cli_peer_adapter.dart';
 import 'src/e2e_report.dart';
 import 'src/scenario_registry.dart';
 import 'src/secret_redactor.dart';
+import '../scenarios/agent_im_delegated_message/delegated_message_scenario.dart';
 
 Future<void> main(List<String> args) async {
   try {
@@ -327,15 +328,42 @@ class DesktopE2eRunner {
     }
     _line('scenario plan: ${reportDir.path}/scenario-plan.json');
     _line('cli peer plan: ${reportDir.path}/cli-peer-plan.json');
-    if (!options.dryRun) {
-      final adapter = _agentImCliPeerAdapter(agentImConfig!);
-      final result = await adapter.runOrdinaryMessageFlow(
-        runId: runId,
-        targetHandle: agentImConfig!.accounts.appUser.handle,
-        messageText: _agentImOrdinaryMessageText(),
+    final adapter = _agentImCliPeerAdapter(agentImConfig!);
+    final scenarioResult =
+        await AgentImDelegatedMessageScenario(config: agentImConfig!).run(
+          runId: runId,
+          platform: platform.name,
+          dryRun: options.dryRun,
+          reportDir: reportDir,
+          cliWorkspaceDir: agentImCliPeerWorkspaceDir,
+          remoteCommands: plan.remoteCommands,
+          cliPeerFlow: options.dryRun
+              ? null
+              : () => adapter.runOrdinaryMessageFlow(
+                  runId: runId,
+                  targetHandle: agentImConfig!.accounts.appUser.handle,
+                  messageText: _agentImOrdinaryMessageText(),
+                ),
+        );
+    reportWriter.writeJson(
+      'agent-im-scenario-result.json',
+      scenarioResult.toJson(),
+    );
+    for (final item in scenarioResult.cases) {
+      _line(
+        '[scenario] ${item.id} ${item.status}: '
+        '${item.reason ?? item.evidence.join('; ')}',
       );
-      reportWriter.writeJson('cli-peer-result.json', result.toJson());
-      _line('cli peer result: ${reportDir.path}/cli-peer-result.json');
+    }
+    _line(
+      'agent im scenario result: '
+      '${reportDir.path}/agent-im-scenario-result.json',
+    );
+    if (scenarioResult.hasBlockingFailure) {
+      throw DesktopE2eFailure(
+        'Agent IM scenario reported blocking failure. See '
+        '${reportDir.path}/agent-im-scenario-result.json',
+      );
     }
   }
 

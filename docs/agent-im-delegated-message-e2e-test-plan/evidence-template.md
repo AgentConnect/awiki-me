@@ -26,7 +26,7 @@
 | analyze |  |  |  |
 | unit |  |  |  |
 | integration smoke |  |  |  |
-| desktop E2E |  |  |  |
+| desktop E2E |  |  | `scenario-plan.json` / `cli-peer-plan.json` / `agent-im-scenario-result.json` |
 | redaction scan |  |  |  |
 
 ## 3. 远端观测
@@ -50,9 +50,23 @@
 | AIM-E2E-006 | pass / fail / skipped |  |  |
 | AIM-E2E-007 | pass / fail / skipped |  |  |
 
+## 4.1 自动生成 report 字段映射
+
+`agent-im-scenario-result.json` 应至少包含：
+
+| 字段 | 说明 |
+|---|---|
+| `runId` / `platform` / `dryRun` | 与本地 run 关联。 |
+| `counts.pass/fail/skipped` | 汇总场景结果数量。 |
+| `cases[].id/status/evidence/reason` | 映射上表 AIM-E2E-001..007。 |
+| `appBootstrapReport` | App bootstrap smoke 的脱敏投影；不得包含 raw private package。 |
+| `cliPeerResult` | CLI ordinary send 的脱敏摘要；不得包含 OTP、手机号或 token。 |
+| `remoteCommands` | `ssh ali` 证据命令计划；Step 06 前不代表远端已验证通过。 |
+| `redactionScan` | 本地 report / CLI log 扫描结果。 |
+
 ## 5. 安全检查
 
-- [ ] 本地 report 无 JWT / token / OTP / private key。
+- [ ] 本地 report 无 JWT / token / OTP / private key（记录 `agent-im-scenario-result.json.redactionScan` 或等效扫描命令）。
 - [ ] CLI workspace 无 private package 明文泄漏到日志。
 - [ ] App log 无 raw private package。
 - [ ] 远端日志证据已脱敏。

@@ -7,8 +7,11 @@ import '../../e2e_test/harness/desktop_e2e_runner.dart';
 import '../../e2e_test/harness/src/agent_im_config.dart';
 import '../../e2e_test/harness/src/cli_peer_adapter.dart';
 import '../../e2e_test/harness/src/e2e_report.dart';
+import '../../e2e_test/harness/src/redaction_scan.dart';
+import '../../e2e_test/harness/src/remote_adapter.dart';
 import '../../e2e_test/harness/src/scenario_registry.dart';
 import '../../e2e_test/harness/src/secret_redactor.dart';
+import '../../e2e_test/scenarios/agent_im_delegated_message/delegated_message_scenario.dart';
 
 void main() {
   group('DesktopE2eOptions Agent IM parsing', () {
@@ -273,6 +276,25 @@ mail_service_url: https://old.example
     });
   });
 
+  test('scans report files for sensitive values', () async {
+    final dir = await Directory.systemTemp.createTemp('awiki-scan-test-');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    File('${dir.path}/safe.json').writeAsStringSync(
+      '{"token":"<REDACTED_TOKEN>","phoneEnv":"DEV_OTP_PHONE"}',
+    );
+    File(
+      '${dir.path}/unsafe.log',
+    ).writeAsStringSync('Authorization: Bearer verySecretBearerToken12345');
+
+    final result = const AgentImRedactionScanner().scanReportAndLogs(
+      reportDir: dir,
+    );
+
+    expect(result.passed, isFalse);
+    expect(result.findings.single.type, 'bearer-token');
+    expect(result.toJson().toString(), contains('unsafe.log'));
+  });
+
   group('Agent IM scenario plan and report', () {
     test('builds a dry-run plan with remote evidence commands', () async {
       final config = AgentImDelegatedConfig.load(
@@ -292,6 +314,38 @@ mail_service_url: https://old.example
       expect(plan.toJson().toString(), contains('run_test_001'));
       expect(plan.toJson().toString(), isNot(contains('987580')));
     });
+
+    test(
+      'builds dry-run delegated message scenario result with skipped reasons',
+      () async {
+        final config = AgentImDelegatedConfig.load(
+          File('tests/e2e_test/configs/agent_im_delegated.example.yaml'),
+        );
+        final dir = await Directory.systemTemp.createTemp('agent-im-scenario-');
+        addTearDown(() => dir.deleteSync(recursive: true));
+        File(
+          '${dir.path}/scenario-plan.json',
+        ).writeAsStringSync('{"runId":"run_scenario_001"}');
+
+        final result = await AgentImDelegatedMessageScenario(config: config)
+            .run(
+              runId: 'run_scenario_001',
+              platform: 'macos',
+              dryRun: true,
+              reportDir: dir,
+              cliWorkspaceDir: Directory('${dir.path}/peer-b'),
+              remoteCommands: const <RemoteEvidenceCommand>[],
+            );
+        final json = result.toJson();
+
+        expect(result.hasBlockingFailure, isFalse);
+        expect(result.counts['pass'], 1);
+        expect(result.counts['skipped'], greaterThanOrEqualTo(6));
+        expect(json.toString(), contains('AIM-E2E-001'));
+        expect(json.toString(), contains('dry-run'));
+        expect(json.toString(), isNot(contains('fixture-runtime-token')));
+      },
+    );
 
     test('writes redacted JSON reports', () async {
       final dir = await Directory.systemTemp.createTemp('awiki-report-test-');
