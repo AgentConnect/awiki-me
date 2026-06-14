@@ -1,6 +1,6 @@
 # Plan：Agent IM 真实端到端闭环验证与修复
 
-状态：in_progress
+状态：done
 DOC：`awiki-me/docs/agent-im-real-e2e-completion-plan/`
 Harness：`awiki-harness/`
 创建时间：2026-06-14
@@ -91,9 +91,9 @@ Harness：`awiki-harness/`
 |---|---|---|---|---|---|---|
 | 01 | 基线审计与远端可观测点确认 | 无 | 当前实现缺口、远端状态路径、真实验收证据清单 | [steps/01-baseline-observability.md](steps/01-baseline-observability.md) | 必须 | review |
 | 02 | App 真实 bootstrap probe 与 P0 gate 改造 | Step 01 | App 使用真实 SDK/服务发送 bootstrap；`AIM-E2E-001/002` 不再假 pass/skipped | [steps/02-real-app-bootstrap-gate.md](steps/02-real-app-bootstrap-gate.md) | 必须 | committed |
-| 03 | Daemon/Hermes 回传闭环修复 | Step 01、Step 02 初跑结果 | 修复 delegated inbox、Hermes、message sync outbox 或 App 接收链路中的真实缺口 | [steps/03-daemon-hermes-return-loop.md](steps/03-daemon-hermes-return-loop.md) | 必须 | committed |
-| 04 | 远端 `awiki.info` 部署联调与真实 E2E 执行 | Step 02、Step 03 | 远端服务部署/重启记录，真实 E2E 通过报告，失败则修复后重跑 | [steps/04-remote-awiki-info-e2e.md](steps/04-remote-awiki-info-e2e.md) | 必须 | blocked |
-| 05 | 最终 Review、文档同步与跨仓验证 | Step 01-04 | 全局 Review、验证矩阵、提交和最终证据 | [steps/05-final-review-verification.md](steps/05-final-review-verification.md) | 必须 | pending |
+| 03 | Daemon/Hermes 回传闭环修复 | Step 01、Step 02 初跑结果 | 修复 delegated inbox、Hermes、message sync outbox、稳定 App message agent 复用或 App 接收链路中的真实缺口 | [steps/03-daemon-hermes-return-loop.md](steps/03-daemon-hermes-return-loop.md) | 必须 | committed |
+| 04 | 远端 `awiki.info` 部署联调与真实 E2E 执行 | Step 02、Step 03 | 远端服务部署/重启记录，真实 E2E 通过报告，失败则修复后重跑 | [steps/04-remote-awiki-info-e2e.md](steps/04-remote-awiki-info-e2e.md) | 必须 | done |
+| 05 | 最终 Review、文档同步与跨仓验证 | Step 01-04 | 全局 Review、验证矩阵、提交和最终证据 | [steps/05-final-review-verification.md](steps/05-final-review-verification.md) | 必须 | done |
 
 ## 7. 执行台账
 
@@ -103,9 +103,9 @@ Harness：`awiki-harness/`
 |---|---|---|---|---|---|---|---|---|
 | 01 | review | `feature/release-0526/agent-im-hutong` | 2026-06-14 | - | - | 已读 Harness、目标仓库入口、当前 `awiki-me` E2E skeleton、`awiki-cli-rs2/docs/agent-im` 相关设计；确认旧逻辑把核心链路缺证据标为 skipped 是测试门禁缺陷。 | `git status` 已复核；本地 dry-run 可生成计划；后续远端查询受 SSH banner timeout 阻塞。 | 等远端 SSH 恢复后补齐远端 state/log 路径证据。 |
 | 02 | committed | `feature/release-0526/agent-im-hutong` | 2026-06-14 | 2026-06-14 | `awiki-me` `0c72111` | 已新增真实 App probe、bootstrap runId、App return wait、P0 缺证据 fail gate、secret redaction；App return 必须是 control payload 且 `hiddenFromChat=true`，否则 P0 fail；非 dry-run 不再允许核心缺证据 skipped。 | `flutter test tests/unit_test/e2e_harness/desktop_agent_im_harness_test.dart` 22 passed；targeted `dart analyze` No issues；E2E dry-run PASS。 | 等真实远端 E2E 验证后最终 Review/commit。 |
-| 03 | committed | `feature/release-0526/agent-im-hutong` | 2026-06-14 | 2026-06-14 | `awiki-cli-rs2` `fab900a` | 已实现 CLI 可指定 client message/idempotency、im-core 透传 deterministic message id、daemon message_sync outbox flush/retry/sent、runtime final source fields、Hermes gateway stdout noise 修复。 | `cargo test -p awiki-cli send_message_request_accepts_client_message_id_and_idempotency_key --locked` 通过；`cargo test -p awiki-deamon user_delegated --locked` 10 passed；此前 `cargo test -p im-core --locked`、`cargo test -p awiki-deamon --locked -j1`、`cargo build -p awiki-cli --bin awiki-cli --locked` 均通过。 | 等部署到 `ssh ali` 后跑真实 App↔Daemon/Hermes E2E。 |
-| 04 | blocked | `feature/release-0526/agent-im-hutong` | 2026-06-14 | - | - | 尚未取得真实远端 App↔Daemon/Hermes 回传证据；runner 已增加 remote evidence gate，必须看到 `daemon_bootstrap_received`、`delegated_key_imported`、`hermes_agent_ready`、`cli_message_received`、`hermes_runtime_finished`、`summary_return_sent` 六个阶段才算远端通过。 | 新 `ssh ali` 连接返回 `Connection timed out during banner exchange`；本地 shell 未导出 E2E OTP/peer env，无法安全启动真实 run；本地 dry-run 已生成包含 SQLite evidence 查询的 SSH 计划。 | 需要恢复/释放 SSH 会话并导出测试账号 env 后，部署远端并运行真实 E2E。 |
-| 05 | pending | `feature/release-0526/agent-im-hutong` | - | - | - | - | - | 等全部实现和远端 E2E 完成。 |
+| 03 | committed | `feature/release-0526/agent-im-hutong` | 2026-06-14 | 2026-06-14 | `awiki-cli-rs2` `a5cd420`；`awiki-me` `236acbb` | 已修复 delegated inbox 身份、active binding revocation、稳定 App instance / run-scoped bootstrap attempt、Hermes cold init timeout；同一 App message agent 可复用，runId 只用于本次 bootstrap attempt 和证据收口。 | `cargo test -p awiki-deamon default_session_create_timeout_allows_cold_agent_initialization --locked` 通过；`cargo test -p awiki-deamon user_delegated --locked` 11 passed；`dart analyze` targeted No issues；`flutter test tests/unit_test/agents/agent_control_service_test.dart tests/unit_test/e2e_harness/desktop_agent_im_harness_test.dart` 36 passed。 | 进入远端真实 E2E 验证。 |
+| 04 | done | `feature/release-0526/agent-im-hutong` | 2026-06-14 | 2026-06-14 | 纯远端部署和本地 report，不单独代码 commit | 已将 `awiki-deamon` 修复部署到 `ssh ali`，远端 `awiki-deamon.service` active；真实 gate 要求的六个 `E2E_STAGE ... pass` 均已在 runId `20260614T024413341Z` 收口。 | 真实 E2E PASS：`AIM-E2E-001/002/006` pass；App 收到 hidden `awiki.message.sync.v1` `runtime_final`，`payloadRuntimeSourceMessageId=msg_agent_im_20260614T024413341Z`；远端 `remote-evidence-result.json` passed，覆盖 `daemon_bootstrap_received`、`delegated_key_imported`、`hermes_agent_ready`、`cli_message_received`、`hermes_runtime_finished`、`summary_return_sent`。 | 最终 Review、文档同步、commit/push。 |
+| 05 | done | `feature/release-0526/agent-im-hutong` | 2026-06-14 | 2026-06-14 | 本文档提交；功能代码见 `awiki-cli-rs2` `a5cd420`、`awiki-me` `236acbb` | P0 核心目标已通过，最终 docs、README 和 Agent IM 设计文档已同步；P1/P2 follow-up 保持 skipped 并明确不作为本轮 P0。 | `git diff --check` 通过；敏感扫描覆盖改动文件和本次 report，未发现 OTP/phone/PEM/JWT literal；真实 E2E run `20260614T024413341Z` PASS。 | 已完成。 |
 
 ## 8. Codex Goal 执行协议
 
@@ -252,6 +252,8 @@ Harness：`awiki-harness/`
 | 2026-06-14 | 创建真实 Agent IM E2E completion Plan | 用户要求按 `awiki-cli-rs2/docs/agent-im` 真正验证并修复，不再 skipped | 全部 | 是 |
 | 2026-06-14 | 回填当前执行状态：Step 02/03 本地实现和验证进入 Review，Step 04 因 SSH/env 阻塞 | 回应“核心能力为什么 skipped”质疑，明确 CLI 对端跑通不等于 App↔Daemon/Hermes 完整回传通过 | 01-04 | 是 |
 | 2026-06-14 | 补强 App 侧和远端证据 gate | 用户目标要求 App 收到 summary/status 后进入正确状态、不进入普通聊天，并且远端必须按 runId 证明 Daemon/Hermes 全链路阶段 | 02、04 | 是 |
+| 2026-06-14 | 远端 SSH 恢复后复盘最新失败证据，调整 Step 03/04：稳定 App instance、run-scoped bootstrap attempt、复用既有 Hermes message agent | 真实 run `20260614T022608576Z` 证明外围链路已通，但新建 Hermes runtime 冷启动失败；核心目标需要复用已配置的 App message agent 并继续按 runId 收集证据 | 03、04 | 是 |
+| 2026-06-14 | 真实 Agent IM P0 E2E 通过并记录证据 | run `20260614T024413341Z` 中 App bootstrap、CLI peer send、Daemon/Hermes processing、runtime status/final 回传和 App hidden sync payload 全部收口；P1/P2 follow-up 仍作为后续增强 | 03-05 | 是 |
 
 ## 16. 风险与回滚
 

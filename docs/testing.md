@@ -142,6 +142,25 @@ When `remote.collectLogs` is enabled in a non-dry-run Agent IM scenario, the
 runner also writes `remote-evidence-result.json` plus `remote-*.log` files with
 redacted `ssh ali` health/log summaries filtered by runId.
 
+Real Agent IM delegated-message runs are a P0 gate for the App ↔ remote
+Daemon/Hermes loop. A pass requires both local App evidence and remote daemon
+evidence:
+
+- the App sends `awiki.daemon.bootstrap.v1` through the real IM payload path;
+- the CLI peer from `awiki-cli-rs2` sends an ordinary message to the App user;
+- remote evidence observes `daemon_bootstrap_received`,
+  `delegated_key_imported`, `hermes_agent_ready`, `cli_message_received`,
+  `hermes_runtime_finished`, and `summary_return_sent`;
+- the App receives hidden, non-renderable `awiki.message.sync.v1`
+  `runtime_status` / `runtime_final` payloads instead of normal chat bubbles.
+
+Latest verified P0 run on `awiki.info`: `20260614T024413341Z`, message
+`msg_agent_im_20260614T024413341Z`, with `AIM-E2E-001`, `AIM-E2E-002`, and
+`AIM-E2E-006` passing. Follow-up scenarios for daemon restart/cursor recovery,
+E2EE opaque boundaries, delegated DID revoke behavior, and unknown payload
+negative injection remain P1/P2 and must not be described as completed by this
+P0 gate.
+
 macOS real smoke:
 
 ```bash

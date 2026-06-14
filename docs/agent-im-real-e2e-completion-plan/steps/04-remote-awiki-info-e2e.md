@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)
 Step index：04
-状态：blocked
+状态：done
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | blocked |
+| Status | done |
 | Branch | `feature/release-0526/agent-im-hutong` |
 | Started | 2026-06-14 |
-| Completed | - |
-| Commit | - |
-| Review evidence | 尚未部署本地修复到远端，也尚未取得 App↔Daemon/Hermes “完整处理摘要回传”证据；因此不能声明 Agent IM 文档描述的功能已完全测试通过。当前 runner 已增加 remote evidence gate，远端必须输出六个 `E2E_STAGE ... pass` 阶段：`daemon_bootstrap_received`、`delegated_key_imported`、`hermes_agent_ready`、`cli_message_received`、`hermes_runtime_finished`、`summary_return_sent`。 |
-| Verification evidence | 新 `ssh ali` 连接返回 `Connection timed out during banner exchange`；本地 shell 未导出真实 E2E 所需 OTP/peer env，不能安全启动非 dry-run；example config dry-run 已生成 SQLite evidence 查询计划。 |
-| Next action | 恢复/释放 SSH 连接并导出测试账号 env 后，部署远端、重启服务、运行真实 E2E 并按 runId/message ID 收集证据。 |
+| Completed | 2026-06-14 |
+| Commit | 纯远端部署和本地 report；功能代码见 `awiki-cli-rs2` `a5cd420`、`awiki-me` `236acbb` |
+| Review evidence | 远端 SSH 已恢复并完成部署；真实 run `20260614T024413341Z` 已取得 App↔Daemon/Hermes “完整处理摘要回传”证据。runner 的 remote evidence gate 输出六个 `E2E_STAGE ... pass`：`daemon_bootstrap_received`、`delegated_key_imported`、`hermes_agent_ready`、`cli_message_received`、`hermes_runtime_finished`、`summary_return_sent`。 |
+| Verification evidence | `ssh ali` 可访问，远端 `awiki-deamon.service` active；真实 E2E runner result PASS，runId `20260614T024413341Z`，messageId `msg_agent_im_20260614T024413341Z`；`agent-im-scenario-result.json` 中 `AIM-E2E-001/002/006` pass；`remote-evidence-result.json` passed，missingStages 为空。 |
+| Next action | 进入最终 Review、文档同步、commit/push；P1/P2 skipped 场景另行计划。 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -68,13 +68,13 @@ Step index：04
 
 ## 7. 验收标准
 
-- [ ] 远端部署版本/commit 已记录。
-- [ ] 服务 health 通过。
-- [ ] 真实 E2E report 中 `AIM-E2E-001/002/006` pass。
-- [ ] 远端证据按 runId/message ID 覆盖 bootstrap、identity、message agent、Hermes processing、message sync delivery。
-- [ ] App 侧证据证明收到回传且不显示为普通聊天。
-- [ ] Review 发现已经修复或明确记录。
-- [ ] 本步骤在进入下一步之前已经创建聚焦 commit，或记录纯远端部署无需 commit 的原因。
+- [x] 远端部署版本/commit 已记录。
+- [x] 服务 health 通过。
+- [x] 真实 E2E report 中 `AIM-E2E-001/002/006` pass。
+- [x] 远端证据按 runId/message ID 覆盖 bootstrap、identity、message agent、Hermes processing、message sync delivery。
+- [x] App 侧证据证明收到回传且不显示为普通聊天。
+- [x] Review 发现已经修复或明确记录。
+- [x] 本步骤在进入下一步之前已经创建聚焦 commit，或记录纯远端部署无需 commit 的原因。
 
 ## 8. 验证方式
 
@@ -93,11 +93,11 @@ Step index：04
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待回填 | - |
-| 已修复问题 | 待回填 | - |
-| 剩余风险 | 待回填 | - |
-| 新增或缺失测试 | 待回填 | - |
-| 已更新或缺失文档 | 待回填 | - |
+| 发现问题 | 已修复 | 上一轮 run `20260614T022608576Z` 缺 `hermes_runtime_finished`/`summary_return_sent`，根因是新 App instance 触发 Hermes cold init timeout。 |
+| 已修复问题 | 已修复 | 稳定 App instance、run-scoped bootstrap attempt、Hermes timeout 调整并重启远端 daemon。 |
+| 剩余风险 | 已记录 | 本轮只声明 P0 核心闭环通过；P1/P2 follow-up 继续 skipped。 |
+| 新增或缺失测试 | 已覆盖 P0 | 真实 E2E + remote evidence gate 覆盖核心链路；daemon restart/E2EE/revoke/negative payload 后续补。 |
+| 已更新或缺失文档 | 已更新 | 本 Step、主 Plan、测试文档和 Agent IM 设计文档同步 runId 证据。 |
 
 ## 10. Commit 要求
 
@@ -116,13 +116,15 @@ Step index：04
 | 远端服务无法部署或重启 | SSH/service/build log | 修复构建、回滚、重启单服务 | 核心目标 | 连续三轮相同 blocker 才标 goal blocked。 |
 | 真实 E2E 失败但本地无法复现 | report + remote evidence | 按链路二分，补远端日志/state query | 当前步骤 | 回到 Step 02/03 修复。 |
 | 新 SSH 连接 banner timeout | `ssh -o BatchMode=yes -o ConnectTimeout=8 ali ...` 多次返回 `Connection timed out during banner exchange`，最近一次 2026-06-13T17:29:49Z；TCP 可 connect 但无 SSH banner；本机仍有 3 个既有 `ssh ali` TCP established 会话 | 已重试短命令、检查 SSH config、TCP connect 和 ping；本地已完成并推送 gate/daemon 修复；未擅自结束用户会话 | 远端部署和真实 E2E | 需要恢复 SSH 或经用户确认释放既有会话后重试。 |
-| 本地 E2E secret env 未导出 | `DEV_OTP_PHONE`、`DEV_OTP_CODE`、`AWIKI_E2E_PEER_PHONE`、`AWIKI_E2E_PEER_OTP` 均为 missing；2026-06-13T17:29:49Z 复核仍 missing | 未在命令行回显秘密；等待用户在 shell/环境中安全导出 | 真实非 dry-run | 导出 env 后才能启动真实 App/CLI 流程。 |
+| 本地 E2E secret env 未导出 | 若 `.e2e/macos.env` 不存在或缺少账号 env，probe 会 fail | 不在日志回显秘密；使用本机私有 env 文件加载 | 真实非 dry-run | 运行前从本机私有 env 加载，不提交。 |
 
 ## 12. Plan 变更记录
 
 | 日期 | 变更 | 原因 | 主 Plan 变更记录链接 |
 |---|---|---|---|
 | 2026-06-14 | 创建 Step 04 | 真实远端验证必须单独执行和记录 | [../plan.md#15-plan-变更记录](../plan.md#15-plan-变更记录) |
+| 2026-06-14 | Step 04 从 SSH blocked 转为 in_progress，并记录最新真实失败 run | SSH 已恢复；当前 blocker 已变为 Hermes runtime 冷启动 / App message agent 复用策略问题 | [../plan.md#15-plan-变更记录](../plan.md#15-plan-变更记录) |
+| 2026-06-14 | Step 04 done：真实远端 E2E PASS | run `20260614T024413341Z` 覆盖 App bootstrap、CLI peer send、Daemon/Hermes processing、message sync return 和 App hidden payload | [../plan.md#15-plan-变更记录](../plan.md#15-plan-变更记录) |
 
 ## 13. 风险、回滚与后续文档
 

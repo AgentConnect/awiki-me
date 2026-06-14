@@ -12,10 +12,10 @@ Step index：03
 | Branch | `feature/release-0526/agent-im-hutong` |
 | Started | 2026-06-14 |
 | Completed | 2026-06-14 |
-| Commit | `awiki-cli-rs2` `fab900a fix: complete agent im delegated return loop` |
-| Review evidence | 已实现 CLI deterministic message id / idempotency 参数、im-core direct send 透传、daemon `message_sync_outbox` due/sending/sent/retry/stale recovery/failed terminal、foreground flush、runtime final source fields 和 Hermes gateway stdout noise 修复。 |
-| Verification evidence | `cargo test -p awiki-cli send_message_request_accepts_client_message_id_and_idempotency_key --locked` 通过；`cargo test -p awiki-deamon user_delegated --locked` 10 passed；此前 `cargo build -p awiki-cli --bin awiki-cli --locked`、`cargo test -p im-core --locked`、`cargo test -p awiki-deamon --locked -j1` 均通过；真实远端 E2E 仍待 Step 04。 |
-| Next action | 等 SSH 恢复后部署 `fab900a` 到 `ssh ali`，再用真实 App↔Daemon/Hermes E2E 验证回传链路。 |
+| Commit | `awiki-cli-rs2` `a5cd420 fix: stabilize agent im delegated runtime`；`awiki-me` `236acbb test: complete agent im delegated message e2e` |
+| Review evidence | 已实现 CLI deterministic message id / idempotency 参数、im-core direct send 透传、daemon `message_sync_outbox` due/sending/sent/retry/stale recovery/failed terminal、foreground flush、runtime final source fields、Hermes gateway stdout noise、delegated inbox 身份修复、active binding revocation、Hermes cold init timeout 放宽，以及稳定 App instance + run-scoped bootstrap attempt。 |
+| Verification evidence | `cargo test -p awiki-deamon default_session_create_timeout_allows_cold_agent_initialization --locked` 通过；`cargo test -p awiki-deamon user_delegated --locked` 11 passed；远端真实 run `20260614T024413341Z` 已收口 `hermes_runtime_finished` 和 `summary_return_sent`。 |
+| Next action | 进入 Step 04/05 远端真实 E2E 证据回填和最终文档同步。 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -38,15 +38,19 @@ Step index：03
 ## 4. 实现方法
 
 1. 用 Step 02 初跑和远端 state/log 定位失败阶段。
-2. 若 `message_sync_outbox` pending：
+2. 若真实 run 因每次新建 App message agent / Hermes runtime 导致冷启动失败：
+   - App probe 不再把 `runId` 拼入 `appInstanceId`；
+   - `DefaultAgentControlService.ensureMessageAgentBootstrap(runId: ...)` 仅让本次 bootstrap attempt 的 `bootstrap_id` / `idempotency_key` 带 runId，`ensure_once_key` 继续基于稳定 appInstance；
+   - 同一 run 重试仍使用相同 attempt idempotency key，Daemon 侧复用 active binding，不重复创建 runtime。
+3. 若 `message_sync_outbox` pending：
    - 在 `DaemonState` 增加 list_due / mark_sending / mark_sent / mark_retry / recover_stale / failed_terminal 方法；
    - 在 daemon foreground loop 调用 `flush_message_sync_outbox`；
    - 通过 `ImCoreAgentOutbox::send_payload` 由 daemon agent 发给 `owner_did`；
    - 增加 tests 覆盖 sent/retry/idempotency/no plaintext。
-3. 若 Hermes gateway 启动/输出异常：修复 stdio adapter 或 gateway 配置，补 `hermes_gateway` tests。
-4. 若 delegated inbox proof/fanout 失败：在 `message-service` 补 focused tests/修复；只使用 published ANP crate。
-5. 若 DID Document / public method 失败：在 `user-service` 或 App subkey registration 路径修复，并补 tests/docs。
-6. 更新相关 docs 和本 Plan 台账。
+4. 若 Hermes gateway 启动/输出异常：修复 stdio adapter 或 gateway 配置，补 `hermes_gateway` tests。
+5. 若 delegated inbox proof/fanout 失败：在 `message-service` 补 focused tests/修复；只使用 published ANP crate。
+6. 若 DID Document / public method 失败：在 `user-service` 或 App subkey registration 路径修复，并补 tests/docs。
+7. 更新相关 docs 和本 Plan 台账。
 
 ## 5. 路径
 
@@ -59,6 +63,10 @@ Step index：03
 | `awiki-cli-rs2/crates/awiki-deamon/tests/*` | focused tests | 必须覆盖修复。 |
 | `message-service/`、`user-service/` | 只在真实失败要求时修改 | 修改则各自验证和提交。 |
 | `awiki-cli-rs2/docs/agent-im/` | 更新实现/剩余风险 | 若行为改变。 |
+| `awiki-me/lib/src/application/agent/agent_control_service.dart` | 让 runId 只影响 bootstrap attempt id / idempotency，不影响 `ensure_once_key` | 支持稳定 App instance 复用。 |
+| `awiki-me/lib/src/domain/entities/agent/agent_bootstrap.dart` | 增加 run-scoped bootstrap attempt helper | 保持默认生产语义不变。 |
+| `awiki-me/tool/agent_im_real_e2e_probe.dart` | 不再把 runId 拼到 `appInstanceId` | 仍在 payload 中携带 runId 供远端证据收口。 |
+| `awiki-me/tests/unit_test/agents/agent_control_service_test.dart` | 补同 run 幂等 / 稳定 ensure_once 测试 | 防止回归到每 run 新建 runtime。 |
 
 ## 6. 依赖
 
@@ -93,11 +101,11 @@ Step index：03
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待回填 | - |
-| 已修复问题 | 待回填 | - |
-| 剩余风险 | 待回填 | - |
-| 新增或缺失测试 | 待回填 | - |
-| 已更新或缺失文档 | 待回填 | - |
+| 发现问题 | 已修复 | 每次 E2E 用 runId 派生新 `appInstanceId` 会新建 Hermes runtime；Hermes cold init 30s 超时。 |
+| 已修复问题 | 已修复 | App instance 稳定复用，bootstrap attempt 按 runId 区分；Hermes session create timeout 提升到 120s；服务端 delegated inbox / message sync return loop 保持幂等。 |
+| 剩余风险 | 已记录 | P1/P2 的 daemon restart cursor、E2EE opaque、DID revoke、unknown payload negative 仍是后续增强，不阻塞本轮 P0。 |
+| 新增或缺失测试 | 已覆盖 P0 | focused daemon tests、App control service tests、E2E harness tests 和真实远端 E2E 均通过；P1/P2 后续另补。 |
+| 已更新或缺失文档 | 已更新 | 本 Step、主 Plan、E2E README/testing 文档和 Agent IM 设计文档记录真实证据与剩余边界。 |
 
 ## 10. Commit 要求
 
@@ -115,12 +123,15 @@ Step index：03
 |---|---|---|---|---|
 | 远端 Hermes 依赖缺失无法安装 | gateway/service log | 修复 stdout noise、安装依赖、配置 gateway command | 核心目标 | 未连续三轮不标 blocked；继续可本地修复部分。 |
 | message-service delegated proof 与 docs 不一致 | E2E/服务测试失败 | 补服务测试和修复 | 核心目标 | 修改 message-service 并验证。 |
+| 新 run 每次新建 Hermes runtime 导致冷启动 timeout | 真实 run `20260614T022608576Z`：bootstrap/CLI 收口，但 `runtime_run.status=failed`、`last_error_summary=agent initialization timed out` | 稳定 `appInstanceId`、run-scoped bootstrap attempt、复用 active binding；必要时再查 Hermes gateway 日志 | 核心目标 | 本步骤继续修复并重跑真实 E2E。 |
 
 ## 12. Plan 变更记录
 
 | 日期 | 变更 | 原因 | 主 Plan 变更记录链接 |
 |---|---|---|---|
 | 2026-06-14 | 创建 Step 03 | 服务侧真实闭环修复需要单独 Review 和 commit | [../plan.md#15-plan-变更记录](../plan.md#15-plan-变更记录) |
+| 2026-06-14 | Step 03 进入第二轮修复：稳定 App instance，按 runId 区分 bootstrap attempt | 远端最新失败证明新建 Hermes runtime 冷启动不是完整功能通过证据 | [../plan.md#15-plan-变更记录](../plan.md#15-plan-变更记录) |
+| 2026-06-14 | Step 03 committed | focused tests 和真实远端 E2E 证明 Daemon/Hermes return loop 可完成 `runtime_status` / `runtime_final` 回传 | [../plan.md#15-plan-变更记录](../plan.md#15-plan-变更记录) |
 
 ## 13. 风险、回滚与后续文档
 

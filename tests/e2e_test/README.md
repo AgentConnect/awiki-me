@@ -9,7 +9,8 @@ Structure:
 - `harness/`: desktop/mobile runners and shared E2E orchestration code.
 - `configs/`: checked-in example configs only; local configs are ignored.
 - `mobile/maestro/`: Maestro flows used by mobile E2E.
-- `scenarios/`: reusable E2E scenario code. Agent IM currently provides an App bootstrap hook used by integration smoke and future full E2E flows.
+- `scenarios/`: reusable E2E scenario code. Agent IM provides the delegated-message
+  App bootstrap, CLI peer send, App return wait, and remote evidence gate.
 
 Desktop dry-run:
 
@@ -37,8 +38,12 @@ such as `.e2e/agent-im/cli-peer`: the harness first tries `id refresh-token` and
 `id recover` / `id register` when the reusable identity is not available. The CLI subprocess uses
 `<cliPeer.workspaceRoot>/home` as `HOME`, which prevents the latest
 `awiki-cli-rs2` from importing legacy `awiki-agent-id-message` state from the
-developer's real home directory. Non-dry-run remote evidence collection writes `remote-evidence-result.json`
-and `remote-*.log` files with redacted `ssh ali` summaries filtered by runId.
+developer's real home directory. Non-dry-run remote evidence collection writes
+`remote-evidence-result.json` and `remote-*.log` files with redacted `ssh ali`
+summaries filtered by runId. For the P0 Agent IM gate,
+`remote-evidence-result.json` must pass all required stages:
+`daemon_bootstrap_received`, `delegated_key_imported`, `hermes_agent_ready`,
+`cli_message_received`, `hermes_runtime_finished`, and `summary_return_sent`.
 Local configs, generated CLI workspaces, and `.e2e/` reports remain ignored.
 
 Mobile dry-run:
@@ -52,7 +57,10 @@ dart run tests/e2e_test/harness/mobile_e2e_runner.dart \
 
 Agent IM scenario dry-run and real runs also write `agent-im-scenario-result.json`.
 That file summarizes AIM-E2E case statuses (`pass` / `fail` / `skipped`),
-records skipped reasons for remote-dependent checks, and includes the local
-redaction scan result. Real `awiki.info` proof requires local config, peer
-account env vars, and the Step 06 remote runbook evidence before a full
-happy-path pass can be claimed.
+records skipped reasons for non-P0 follow-ups, and includes the local redaction
+scan result. The current P0 happy path was verified on `awiki.info` with runId
+`20260614T024413341Z`: `AIM-E2E-001`, `AIM-E2E-002`, and `AIM-E2E-006` passed;
+the App received hidden `awiki.message.sync.v1` `runtime_final` evidence for the
+CLI peer message. Daemon restart/cursor recovery, E2EE opaque boundaries,
+delegated DID revoke behavior, and unknown payload negative injection are still
+P1/P2 follow-ups and may remain `skipped` without invalidating the P0 gate.

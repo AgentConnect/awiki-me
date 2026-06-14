@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)
 Step index：05
-状态：pending
+状态：done
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
+| Status | done |
 | Branch | `feature/release-0526/agent-im-hutong` |
-| Started | - |
-| Completed | - |
-| Commit | - |
-| Review evidence | - |
-| Verification evidence | - |
-| Next action | 等 Step 01-04 完成后执行最终全局 Review。 |
+| Started | 2026-06-14 |
+| Completed | 2026-06-14 |
+| Commit | 本文档提交；功能代码见 `awiki-cli-rs2` `a5cd420`、`awiki-me` `236acbb` |
+| Review evidence | P0 核心链路已逐项核对：真实 App/IM bootstrap、CLI peer、Daemon delegated key、Hermes agent ready、Hermes processing、message sync return、App hidden state 均有 runId/messageId 证据；P1/P2 skipped 不计入本轮 P0。 |
+| Verification evidence | Real E2E PASS runId `20260614T024413341Z`；`AIM-E2E-001/002/006` pass；remote required stages all pass；targeted `dart analyze`、focused Flutter tests、daemon focused Cargo tests、`git diff --check` 和敏感扫描通过。 |
+| Next action | 已完成；最终报告说明 P0 与 P1/P2 边界。 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -68,12 +68,12 @@ Step index：05
 
 ## 7. 验收标准
 
-- [ ] 每个显式要求都有强证据。
-- [ ] 所有 P0 E2E case pass；没有 P0 skipped。
-- [ ] 文档和配置 example 与代码一致。
-- [ ] 每个改动仓库完成验证、commit、push 或明确记录未推送原因。
-- [ ] 最终报告包含运行命令、通过/失败/跳过、未运行项、剩余风险。
-- [ ] Review 发现已经修复或明确记录。
+- [x] 每个显式要求都有强证据。
+- [x] 所有 P0 E2E case pass；没有 P0 skipped。
+- [x] 文档和配置 example 与代码一致。
+- [x] 每个改动仓库完成验证、commit、push 或明确记录未推送原因。
+- [x] 最终报告包含运行命令、通过/失败/跳过、未运行项、剩余风险。
+- [x] Review 发现已经修复或明确记录。
 
 ## 8. 验证方式
 
@@ -94,11 +94,11 @@ Step index：05
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待回填 | - |
-| 已修复问题 | 待回填 | - |
-| 剩余风险 | 待回填 | - |
-| 新增或缺失测试 | 待回填 | - |
-| 已更新或缺失文档 | 待回填 | - |
+| 发现问题 | 已修复 | 早期把核心回传证据标 skipped 是错误门禁；已改为 P0 fail/pass gate。 |
+| 已修复问题 | 已修复 | P0 gate、真实 App probe、remote evidence parser、stable App instance、Hermes timeout 和 delegated return loop。 |
+| 剩余风险 | 已记录 | P1/P2：daemon restart/cursor、E2EE opaque、DID revoke/delegated proof negative、unknown payload injection 尚未作为本轮通过项。 |
+| 新增或缺失测试 | 已覆盖 P0 | 新增/更新 harness unit tests、AgentControlService tests、daemon focused tests 和真实 awiki.info E2E；后续补 P1/P2。 |
+| 已更新或缺失文档 | 已更新 | 主 Plan、Step 03/04/05、`docs/testing.md`、`tests/e2e_test/README.md`、`awiki-cli-rs2/docs/agent-im/agent_im_core_design.md`。 |
 
 ## 10. Commit 要求
 
@@ -121,6 +121,7 @@ Step index：05
 | 日期 | 变更 | 原因 | 主 Plan 变更记录链接 |
 |---|---|---|---|
 | 2026-06-14 | 创建 Step 05 | 最终完成审计需要单独 gate | [../plan.md#15-plan-变更记录](../plan.md#15-plan-变更记录) |
+| 2026-06-14 | Step 05 done | P0 真实 E2E、远端 evidence、文档同步和最终 Review 已完成；P1/P2 明确为后续 | [../plan.md#15-plan-变更记录](../plan.md#15-plan-变更记录) |
 
 ## 13. 风险、回滚与后续文档
 
