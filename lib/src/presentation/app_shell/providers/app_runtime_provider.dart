@@ -218,14 +218,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     try {
       await _refreshAuthenticatedData().timeout(_requestTimeout);
     } on TimeoutException {
-      if (!mounted ||
-          _isLoggingOut ||
-          ref.read(sessionProvider).session == null) {
-        return;
-      }
-      ref
-          .read(uiFeedbackProvider.notifier)
-          .showError(AppMessage.requestTimeoutRetry());
+      return;
     } catch (error) {
       if (!mounted) {
         return;
@@ -234,8 +227,8 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         return;
       }
       final message = AppMessage.fromError(error);
-      ref.read(uiFeedbackProvider.notifier).showError(message);
       if (message == AppMessage.sessionExpiredRelogin()) {
+        ref.read(uiFeedbackProvider.notifier).showError(message);
         await logout();
       }
     }
@@ -356,7 +349,12 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (!shouldShow) {
       return;
     }
-    ref.read(chatThreadsProvider.notifier).applyRealtimeUpdate(message);
+    ref
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(message, conversation: conversation);
+    ref
+        .read(conversationListProvider.notifier)
+        .restoreConversationBestEffort(conversation);
     ref
         .read(conversationListProvider.notifier)
         .upsertConversation(conversation);

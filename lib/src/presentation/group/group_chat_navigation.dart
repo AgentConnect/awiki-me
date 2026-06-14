@@ -30,6 +30,9 @@ Future<void> openGroupChat(
     avatarSeed: group.groupId,
   );
 
+  ref
+      .read(conversationListProvider.notifier)
+      .restoreConversationBestEffort(conversation);
   ref.read(conversationListProvider.notifier).upsertConversation(conversation);
   await ref.read(chatThreadsProvider.notifier).openConversation(conversation);
   if (!context.mounted) {

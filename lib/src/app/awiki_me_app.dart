@@ -112,6 +112,10 @@ class AwikiMeApp extends StatelessWidget {
             }
             return control;
           }),
+        if (bootstrap.agentControlStatusStore != null)
+          agentControlStatusStoreProvider.overrideWithValue(
+            bootstrap.agentControlStatusStore!,
+          ),
         if (bootstrap.groupApplicationService != null)
           groupApplicationServiceProvider.overrideWithValue(
             bootstrap.groupApplicationService!,

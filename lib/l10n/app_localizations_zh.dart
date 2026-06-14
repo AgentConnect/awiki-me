@@ -200,7 +200,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get conversationsEmptyTitle => '还没有消息';
 
   @override
-  String get conversationsEmptySubtitle => '去添加好友、关注联系人，或者先加入一个群聊吧。';
+  String get conversationsEmptySubtitle => '去关注联系人，或者先加入一个群聊吧。';
 
   @override
   String get friendsTitle => '朋友';
@@ -366,19 +366,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get quickActionJoinGroup => '加入群聊';
 
   @override
-  String get quickActionAddFriend => '添加朋友';
+  String get quickActionFollowContact => '关注联系人';
 
   @override
-  String get addFriendTitle => '添加朋友';
+  String get followContactTitle => '关注联系人';
 
   @override
-  String get addFriendPlaceholder => '输入 Handle 或 DID';
+  String get followContactPlaceholder => '输入 Handle 或 DID';
 
   @override
-  String get addFriendAlreadyExists => '已经添加或正在申请中';
+  String get followContactAlreadyFollowing => '已关注';
 
   @override
-  String get addFriendFollowed => '已关注';
+  String get followContactSucceeded => '已关注';
 
   @override
   String get groupListTitle => '群聊列表';
@@ -557,6 +557,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get updateInstallFailed => '更新失败，请前往 GitHub 下载。';
+
+  @override
+  String get daemonUpgradeStarted => '已开始升级代理。';
 
   @override
   String get requestTimeoutRetry => '请求超时，请检查网络后重试。';

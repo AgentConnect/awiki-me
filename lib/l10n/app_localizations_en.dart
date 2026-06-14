@@ -210,7 +210,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get conversationsEmptySubtitle =>
-      'Add friends, follow contacts, or join a group chat to get started.';
+      'Follow a contact or join a group chat to get started.';
 
   @override
   String get friendsTitle => 'Friends';
@@ -385,19 +385,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quickActionJoinGroup => 'Join group chat';
 
   @override
-  String get quickActionAddFriend => 'Add friend';
+  String get quickActionFollowContact => 'Follow contact';
 
   @override
-  String get addFriendTitle => 'Add friend';
+  String get followContactTitle => 'Follow contact';
 
   @override
-  String get addFriendPlaceholder => 'Enter Handle or DID';
+  String get followContactPlaceholder => 'Enter Handle or DID';
 
   @override
-  String get addFriendAlreadyExists => 'Already added or pending approval';
+  String get followContactAlreadyFollowing => 'Already following';
 
   @override
-  String get addFriendFollowed => 'Followed';
+  String get followContactSucceeded => 'Followed';
 
   @override
   String get groupListTitle => 'Group chats';
@@ -584,6 +584,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get updateInstallFailed =>
       'Update failed. Please download it from GitHub.';
+
+  @override
+  String get daemonUpgradeStarted => 'Daemon upgrade started.';
 
   @override
   String get requestTimeoutRetry =>

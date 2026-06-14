@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../application/agent/agent_control_service.dart';
+import '../application/agent/agent_control_status_store.dart';
 import '../application/app_session_service.dart';
 import '../application/conversation_service.dart';
 import '../application/directory_application_service.dart';
@@ -22,6 +23,7 @@ import '../data/compat/compat_awiki_gateway.dart';
 import '../data/compat/compat_realtime_gateway.dart';
 import '../data/agent/user_service_agent_inventory_adapter.dart';
 import '../data/im_core/awiki_im_core_auth_adapter.dart';
+import '../data/im_core/awiki_im_core_agent_control_status_store.dart';
 import '../data/im_core/awiki_im_core_config.dart';
 import '../data/im_core/awiki_im_core_conversation_adapter.dart';
 import '../data/im_core/awiki_im_core_directory_adapter.dart';
@@ -65,6 +67,7 @@ class AppBootstrap {
     this.conversationService,
     this.agentInventoryPort,
     this.agentControlService,
+    this.agentControlStatusStore,
     this.groupApplicationService,
     this.profileApplicationService,
     this.directoryApplicationService,
@@ -89,6 +92,7 @@ class AppBootstrap {
   final ConversationService? conversationService;
   final AgentInventoryPort? agentInventoryPort;
   final AgentControlService? agentControlService;
+  final AgentControlStatusStore? agentControlStatusStore;
   final GroupApplicationService? groupApplicationService;
   final ProfileApplicationService? profileApplicationService;
   final DirectoryApplicationService? directoryApplicationService;
@@ -130,6 +134,9 @@ class AppBootstrap {
     final agentControlService = DefaultAgentControlService(
       inventory: agentInventoryPort,
       messages: messagingService,
+    );
+    final agentControlStatusStore = AwikiImCoreAgentControlStatusStore(
+      sqlitePath: runtime.paths.sqlitePath,
     );
     final groupApplicationService = ImCoreGroupApplicationService(
       groups: groupAdapter,
@@ -201,6 +208,7 @@ class AppBootstrap {
       conversationService: conversationService,
       agentInventoryPort: agentInventoryPort,
       agentControlService: agentControlService,
+      agentControlStatusStore: agentControlStatusStore,
       groupApplicationService: groupApplicationService,
       profileApplicationService: profileApplicationService,
       directoryApplicationService: directoryApplicationService,

@@ -1,6 +1,7 @@
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/agent/agent_control_status_store.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/presentation/agents/agent_inbox_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,6 +33,8 @@ void main() {
         <String, Object?>{
           'schema': AgentControlPayloads.statusSchema,
           'status_scope': 'runtime_inbox',
+          'daemon_agent_did': 'did:agent:daemon',
+          'runtime_agent_did': 'did:agent:runtime',
           'request_id': 'old_request',
           'state': 'succeeded',
           'result': <String, Object?>{
@@ -50,6 +53,8 @@ void main() {
         <String, Object?>{
           'schema': AgentControlPayloads.statusSchema,
           'status_scope': 'runtime_inbox',
+          'daemon_agent_did': 'did:agent:daemon',
+          'runtime_agent_did': 'did:agent:runtime',
           'request_id': 'cmd_inbox_current',
           'state': 'succeeded',
           'result': <String, Object?>{
@@ -105,6 +110,8 @@ void main() {
       <String, Object?>{
         'schema': AgentControlPayloads.statusSchema,
         'status_scope': 'runtime_inbox_thread',
+        'daemon_agent_did': 'did:agent:daemon',
+        'runtime_agent_did': 'did:agent:runtime',
         'request_id': 'cmd_thread_current',
         'state': 'succeeded',
         'result': <String, Object?>{
@@ -155,6 +162,57 @@ void main() {
     expect(thread.messages.last.attachments.first.filename, '未命名附件');
   });
 
+  test('opening inbox thread clears local unread count immediately', () async {
+    final control = FakeAgentControlService()
+      ..nextInboxRequestId = 'cmd_inbox_current'
+      ..nextInboxThreadRequestId = 'cmd_thread_current';
+    final container = _container(control);
+    addTearDown(container.dispose);
+
+    await container
+        .read(agentInboxProvider.notifier)
+        .queryInbox(
+          daemonAgentDid: 'did:agent:daemon',
+          runtimeAgentDid: 'did:agent:runtime',
+        );
+    container.read(agentInboxProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'status_scope': 'runtime_inbox',
+        'daemon_agent_did': 'did:agent:daemon',
+        'runtime_agent_did': 'did:agent:runtime',
+        'request_id': 'cmd_inbox_current',
+        'state': 'succeeded',
+        'result': <String, Object?>{
+          'items': <Object?>[
+            <String, Object?>{
+              'thread_id': 'dm:peer-scope:v1:bob',
+              'kind': 'direct',
+              'title': 'bob.anpclaw.com',
+              'peer_handle': 'bob.anpclaw.com',
+              'peer_user_id': 'user-bob',
+              'last_message_preview': 'hello',
+              'unread_count': 3,
+            },
+          ],
+        },
+      },
+    );
+
+    final item = container.read(agentInboxProvider).items.single;
+    expect(item.unreadCount, 3);
+
+    await container
+        .read(agentInboxProvider.notifier)
+        .queryThread(
+          daemonAgentDid: 'did:agent:daemon',
+          runtimeAgentDid: 'did:agent:runtime',
+          item: item,
+        );
+
+    expect(container.read(agentInboxProvider).items.single.unreadCount, 0);
+  });
+
   test(
     'attachment content type without attachment payload stays plain message',
     () {
@@ -190,6 +248,8 @@ void main() {
       <String, Object?>{
         'schema': AgentControlPayloads.statusSchema,
         'status_scope': 'runtime_inbox',
+        'daemon_agent_did': 'did:agent:daemon',
+        'runtime_agent_did': 'did:agent:runtime',
         'request_id': 'cmd_inbox_first',
         'state': 'succeeded',
         'result': <String, Object?>{
@@ -214,6 +274,8 @@ void main() {
       <String, Object?>{
         'schema': AgentControlPayloads.statusSchema,
         'status_scope': 'runtime_inbox',
+        'daemon_agent_did': 'did:agent:daemon',
+        'runtime_agent_did': 'did:agent:runtime',
         'request_id': 'cmd_inbox_page_2',
         'state': 'succeeded',
         'result': <String, Object?>{
@@ -262,6 +324,8 @@ void main() {
         <String, Object?>{
           'schema': AgentControlPayloads.statusSchema,
           'status_scope': 'runtime_inbox',
+          'daemon_agent_did': 'did:agent:daemon',
+          'runtime_agent_did': 'did:agent:runtime',
           'request_id': 'cmd_inbox_current',
           'state': 'succeeded',
           'result': <String, Object?>{
@@ -327,6 +391,8 @@ void main() {
       <String, Object?>{
         'schema': AgentControlPayloads.statusSchema,
         'status_scope': 'runtime_inbox_thread',
+        'daemon_agent_did': 'did:agent:daemon',
+        'runtime_agent_did': 'did:agent:runtime',
         'request_id': 'cmd_thread_first',
         'state': 'succeeded',
         'result': <String, Object?>{
@@ -348,6 +414,8 @@ void main() {
       <String, Object?>{
         'schema': AgentControlPayloads.statusSchema,
         'status_scope': 'runtime_inbox_thread',
+        'daemon_agent_did': 'did:agent:daemon',
+        'runtime_agent_did': 'did:agent:runtime',
         'request_id': 'cmd_thread_page_2',
         'state': 'succeeded',
         'result': <String, Object?>{
@@ -399,6 +467,8 @@ void main() {
         <String, Object?>{
           'schema': AgentControlPayloads.statusSchema,
           'status_scope': 'runtime_inbox',
+          'daemon_agent_did': 'did:agent:daemon',
+          'runtime_agent_did': 'did:agent:runtime',
           'request_id': 'cmd_inbox_initial',
           'state': 'succeeded',
           'result': <String, Object?>{
@@ -431,12 +501,154 @@ void main() {
       expect(state.hasListTimeout, isTrue);
     },
   );
+
+  test(
+    'queryInbox applies status payload from local store when realtime is missed',
+    () async {
+      AgentInboxController.statusPollInterval = const Duration(milliseconds: 1);
+      addTearDown(() {
+        AgentInboxController.statusPollInterval = const Duration(
+          milliseconds: 700,
+        );
+      });
+      final control = FakeAgentControlService()
+        ..nextInboxRequestId = 'cmd_inbox_local';
+      final store = _FakeAgentControlStatusStore();
+      final container = _container(control, statusStore: store);
+      addTearDown(container.dispose);
+
+      store.payloads['cmd_inbox_local'] = <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'status_scope': 'runtime_inbox',
+        'request_id': 'cmd_inbox_local',
+        'state': 'succeeded',
+        'daemon_agent_did': 'did:agent:daemon',
+        'runtime_agent_did': 'did:agent:runtime',
+        'result': <String, Object?>{
+          'items': <Object?>[
+            <String, Object?>{
+              'thread_id': 'dm:peer-scope:v1:alice',
+              'kind': 'direct',
+              'title': 'alice.anpclaw.com',
+              'peer_handle': 'alice.anpclaw.com',
+              'peer_user_id': 'user-alice',
+              'last_message_preview': 'hello from local status',
+            },
+          ],
+        },
+      };
+
+      await container
+          .read(agentInboxProvider.notifier)
+          .queryInbox(
+            daemonAgentDid: 'did:agent:daemon',
+            runtimeAgentDid: 'did:agent:runtime',
+          );
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      final state = container.read(agentInboxProvider);
+      expect(state.items, hasLength(1));
+      expect(state.items.single.title, 'alice.anpclaw.com');
+      expect(state.items.single.lastMessagePreview, 'hello from local status');
+      expect(state.isLoading, isFalse);
+      expect(state.error, isNull);
+    },
+  );
+
+  test(
+    'queryThread applies status payload from local store when realtime is missed',
+    () async {
+      AgentInboxController.statusPollInterval = const Duration(milliseconds: 1);
+      addTearDown(() {
+        AgentInboxController.statusPollInterval = const Duration(
+          milliseconds: 700,
+        );
+      });
+      final control = FakeAgentControlService()
+        ..nextInboxThreadRequestId = 'cmd_thread_local';
+      final store = _FakeAgentControlStatusStore();
+      final container = _container(control, statusStore: store);
+      addTearDown(container.dispose);
+      const item = AgentInboxItem(
+        threadId: 'dm:peer-scope:v1:alice',
+        kind: 'direct',
+        title: 'alice.anpclaw.com',
+        lastMessagePreview: '',
+        unreadCount: 0,
+        hasAttachments: false,
+        lastContentType: 'text',
+      );
+      store.payloads['cmd_thread_local'] = <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'status_scope': 'runtime_inbox_thread',
+        'request_id': 'cmd_thread_local',
+        'state': 'succeeded',
+        'daemon_agent_did': 'did:agent:daemon',
+        'runtime_agent_did': 'did:agent:runtime',
+        'result': <String, Object?>{
+          'title': 'alice.anpclaw.com',
+          'messages': <Object?>[
+            <String, Object?>{
+              'message_id': 'msg-local',
+              'sender_did': 'did:alice',
+              'sender_handle': 'alice.anpclaw.com',
+              'direction': 'incoming',
+              'text': 'thread from local status',
+            },
+          ],
+        },
+      };
+
+      await container
+          .read(agentInboxProvider.notifier)
+          .queryThread(
+            daemonAgentDid: 'did:agent:daemon',
+            runtimeAgentDid: 'did:agent:runtime',
+            item: item,
+          );
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      final thread = container.read(agentInboxProvider).thread;
+      expect(thread.messages, hasLength(1));
+      expect(thread.messages.single.text, 'thread from local status');
+      expect(thread.isLoading, isFalse);
+      expect(thread.error, isNull);
+    },
+  );
 }
 
-ProviderContainer _container(FakeAgentControlService control) {
+ProviderContainer _container(
+  FakeAgentControlService control, {
+  AgentControlStatusStore? statusStore,
+}) {
   return ProviderContainer(
     overrides: <Override>[
       agentControlServiceProvider.overrideWithValue(control),
+      if (statusStore != null)
+        agentControlStatusStoreProvider.overrideWithValue(statusStore),
     ],
   );
+}
+
+class _FakeAgentControlStatusStore implements AgentControlStatusStore {
+  final payloads = <String, Map<String, Object?>>{};
+
+  @override
+  Future<Map<String, Object?>?> findStatusPayload({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    required String requestId,
+    required String statusScope,
+  }) async {
+    final payload = payloads[requestId];
+    if (payload == null) {
+      return null;
+    }
+    if (payload['daemon_agent_did'] != daemonAgentDid ||
+        payload['runtime_agent_did'] != runtimeAgentDid ||
+        payload['status_scope'] != statusScope) {
+      return null;
+    }
+    return payload;
+  }
 }

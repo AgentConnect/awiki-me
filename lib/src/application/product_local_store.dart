@@ -20,6 +20,13 @@ abstract interface class ProductLocalStore {
     required DateTime updatedAt,
   });
 
+  Future<void> setConversationHidden({
+    required String ownerDid,
+    required String conversationKey,
+    required bool hidden,
+    required DateTime updatedAt,
+  });
+
   Future<void> deleteConversationOverlay({
     required String ownerDid,
     required String threadId,

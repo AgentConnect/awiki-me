@@ -7,7 +7,6 @@ import '../shared/awiki_me_feedback.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
-import 'agent_display_name.dart';
 import 'agent_inbox_provider.dart';
 import 'agents_provider.dart';
 
@@ -111,7 +110,6 @@ class _AgentInboxPanelState extends ConsumerState<AgentInboxPanel> {
               },
             )
           : _AgentInboxListView(
-              runtimeLabel: AgentDisplayName.title(runtime),
               state: state,
               onScopeChanged: (scope) {
                 ref
@@ -211,7 +209,6 @@ class _AgentInboxPanelState extends ConsumerState<AgentInboxPanel> {
 
 class _AgentInboxListView extends StatelessWidget {
   const _AgentInboxListView({
-    required this.runtimeLabel,
     required this.state,
     required this.onScopeChanged,
     required this.onRefresh,
@@ -219,7 +216,6 @@ class _AgentInboxListView extends StatelessWidget {
     required this.onOpenItem,
   });
 
-  final String runtimeLabel;
   final AgentInboxState state;
   final ValueChanged<AgentInboxScope> onScopeChanged;
   final VoidCallback onRefresh;
@@ -236,36 +232,22 @@ class _AgentInboxListView extends StatelessWidget {
     return Column(
       children: <Widget>[
         Padding(
-          padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 10),
+          child: Row(
             children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      runtimeLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF5A6478),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                  _AgentInboxIconButton(
-                    key: const Key('mac-agent-inbox-refresh-button'),
-                    semanticLabel: '刷新 Agent 收件箱',
-                    icon: CupertinoIcons.refresh,
-                    isLoading: state.isRefreshing,
-                    onTap: state.isRefreshing ? null : onRefresh,
-                  ),
-                ],
+              Expanded(
+                child: _AgentInboxScopeControl(
+                  scope: state.scope,
+                  onChanged: onScopeChanged,
+                ),
               ),
-              const SizedBox(height: 12),
-              _AgentInboxScopeControl(
-                scope: state.scope,
-                onChanged: onScopeChanged,
+              const SizedBox(width: 12),
+              _AgentInboxIconButton(
+                key: const Key('mac-agent-inbox-refresh-button'),
+                semanticLabel: '刷新 Agent 收件箱',
+                icon: CupertinoIcons.refresh,
+                isLoading: state.isRefreshing,
+                onTap: state.isRefreshing ? null : onRefresh,
               ),
             ],
           ),

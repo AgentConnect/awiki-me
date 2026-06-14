@@ -405,6 +405,7 @@ class AppPressableTile extends StatelessWidget {
     super.key,
     required this.child,
     this.onTap,
+    this.onLongPress,
     this.semanticLabel,
     this.semanticsIdentifier,
     this.selected = false,
@@ -418,6 +419,7 @@ class AppPressableTile extends StatelessWidget {
 
   final Widget child;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final String? semanticLabel;
   final String? semanticsIdentifier;
   final bool selected;
@@ -435,6 +437,7 @@ class AppPressableTile extends StatelessWidget {
     final radius = borderRadius ?? BorderRadius.circular(responsive.radius(12));
     return AppPressable(
       onTap: onTap,
+      onLongPress: onLongPress,
       enabled: onTap != null,
       selected: selected,
       semanticLabel: semanticLabel,

@@ -278,6 +278,24 @@ class _FakeConversations implements ConversationService {
   }) async {
     hiddenThreads.add('$ownerDid/$threadId/$hidden');
   }
+
+  @override
+  Future<void> hideConversationFromRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+    DateTime? updatedAt,
+  }) async {
+    hiddenThreads.add('$ownerDid/${conversation.visibilityKey}/true');
+  }
+
+  @override
+  Future<void> restoreConversationToRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+    DateTime? updatedAt,
+  }) async {
+    hiddenThreads.add('$ownerDid/${conversation.visibilityKey}/false');
+  }
 }
 
 class _FakeMessages implements MessagingService {

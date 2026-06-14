@@ -11,7 +11,7 @@ import 'widgets/app_widgets.dart';
 Future<void> showCommonQuickActionsMenu(
   BuildContext context,
   WidgetRef ref, {
-  bool includeAddFriend = true,
+  bool includeFollowContact = true,
 }) async {
   final l10n = context.l10n;
   final rootContext = context;
@@ -42,12 +42,12 @@ Future<void> showCommonQuickActionsMenu(
             AppNavigator.push(rootContext, (_) => const GroupListPage());
           },
         ),
-        if (includeAddFriend)
+        if (includeFollowContact)
           AppDropMenuItem(
-            label: l10n.quickActionAddFriend,
+            label: l10n.quickActionFollowContact,
             icon: CupertinoIcons.person_badge_plus,
             onTap: () {
-              showAddIdentityDialog(rootContext, ref);
+              showFollowIdentityDialog(rootContext, ref);
             },
           ),
       ],
@@ -55,6 +55,6 @@ Future<void> showCommonQuickActionsMenu(
   );
 }
 
-void showAddFriendDialog(BuildContext context, WidgetRef ref) {
-  showAddIdentityDialog(context, ref);
+void showFollowContactDialog(BuildContext context, WidgetRef ref) {
+  showFollowIdentityDialog(context, ref);
 }

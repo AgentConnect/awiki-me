@@ -46,6 +46,9 @@ class AppMessage {
   factory AppMessage.updateInstallFailed() =>
       const AppMessage._('updateInstallFailed');
 
+  factory AppMessage.daemonUpgradeStarted() =>
+      const AppMessage._('daemonUpgradeStarted');
+
   factory AppMessage.requestTimeoutRetry() =>
       const AppMessage._('requestTimeoutRetry');
 
@@ -141,14 +144,17 @@ class AppMessage {
   factory AppMessage.groupNameRequired() =>
       const AppMessage._('groupNameRequired');
 
-  factory AppMessage.addFriendAlreadyExists() =>
-      const AppMessage._('addFriendAlreadyExists');
+  factory AppMessage.followContactAlreadyFollowing() =>
+      const AppMessage._('followContactAlreadyFollowing');
 
-  factory AppMessage.addFriendFollowed() =>
-      const AppMessage._('addFriendFollowed');
+  factory AppMessage.followContactSucceeded() =>
+      const AppMessage._('followContactSucceeded');
 
   factory AppMessage.peerProfileThreadDeleted() =>
       const AppMessage._('peerProfileThreadDeleted');
+
+  factory AppMessage.conversationRemovedFromRecents() =>
+      const AppMessage._('conversationRemovedFromRecents');
 
   factory AppMessage.fromError(Object error) {
     final raw = _normalize(error);
@@ -282,6 +288,8 @@ class AppMessage {
         return l10n.updatePermissionRequired;
       case 'updateInstallFailed':
         return l10n.updateInstallFailed;
+      case 'daemonUpgradeStarted':
+        return l10n.daemonUpgradeStarted;
       case 'requestTimeoutRetry':
         return l10n.requestTimeoutRetry;
       case 'networkUnavailableRetry':
@@ -348,12 +356,14 @@ class AppMessage {
             : l10n.linkOpenFailedWithDetail(detail!);
       case 'groupNameRequired':
         return l10n.groupNameRequired;
-      case 'addFriendAlreadyExists':
-        return l10n.addFriendAlreadyExists;
-      case 'addFriendFollowed':
-        return l10n.addFriendFollowed;
+      case 'followContactAlreadyFollowing':
+        return l10n.followContactAlreadyFollowing;
+      case 'followContactSucceeded':
+        return l10n.followContactSucceeded;
       case 'peerProfileThreadDeleted':
         return l10n.peerProfileThreadDeleted;
+      case 'conversationRemovedFromRecents':
+        return '已从最近会话移除';
       case 'raw':
         return detail ?? l10n.operationFailedRetry;
       default:
@@ -367,6 +377,8 @@ class AppMessage {
         return 'You received a new message';
       case 'requestTimeoutRetry':
         return 'The request timed out. Please check your network and try again.';
+      case 'daemonUpgradeStarted':
+        return 'Daemon upgrade started.';
       case 'networkUnavailableRetry':
         return 'Network connection is temporarily unavailable. Please check your network and try again.';
       case 'operationFailedRetry':
@@ -381,6 +393,8 @@ class AppMessage {
         return 'This handle is already registered. Email currently supports new registration only.';
       case 'didNotFoundOrRevoked':
         return 'This DID does not exist or has been revoked. Check the DID and try again, or switch to a valid identity.';
+      case 'conversationRemovedFromRecents':
+        return 'Conversation removed from recents.';
       case 'raw':
         return detail ?? 'The operation failed. Please try again later.';
       default:

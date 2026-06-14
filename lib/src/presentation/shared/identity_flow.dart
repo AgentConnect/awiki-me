@@ -24,14 +24,12 @@ import 'formatters/display_formatters.dart';
 import 'responsive_layout.dart';
 import 'widgets/app_widgets.dart';
 
-enum IdentityFlowMode { startConversation, addContact }
+enum IdentityFlowMode { startConversation, followContact }
 
 class IdentityFlowResult {
-  const IdentityFlowResult({required this.profile, this.reason, this.note});
+  const IdentityFlowResult({required this.profile});
 
   final UserProfile profile;
-  final String? reason;
-  final String? note;
 }
 
 String normalizeDidOrHandleInput(String rawValue) {
@@ -122,6 +120,9 @@ Future<void> openDirectConversationForDid(
           avatarSeed: avatarSeed ?? peer,
         );
 
+  ref
+      .read(conversationListProvider.notifier)
+      .restoreConversationBestEffort(conversation);
   ref.read(conversationListProvider.notifier).upsertConversation(conversation);
   await ref.read(chatThreadsProvider.notifier).openConversation(conversation);
   if (!context.mounted) {
@@ -200,10 +201,13 @@ Future<void> showStartConversationDialog(
   await openDirectConversationForProfile(context, ref, result.profile);
 }
 
-Future<void> showAddIdentityDialog(BuildContext context, WidgetRef ref) async {
+Future<void> showFollowIdentityDialog(
+  BuildContext context,
+  WidgetRef ref,
+) async {
   final result = await AppNavigator.showDialog<IdentityFlowResult>(
     context,
-    (_) => const IdentityLookupDialog(mode: IdentityFlowMode.addContact),
+    (_) => const IdentityLookupDialog(mode: IdentityFlowMode.followContact),
   );
   if (result == null) {
     return;
@@ -214,7 +218,7 @@ Future<void> showAddIdentityDialog(BuildContext context, WidgetRef ref) async {
     await ref.read(friendsProvider.notifier).refresh();
     ref
         .read(uiFeedbackProvider.notifier)
-        .showInfo(AppMessage.addFriendFollowed());
+        .showInfo(AppMessage.followContactSucceeded());
   } catch (error) {
     ref
         .read(uiFeedbackProvider.notifier)
@@ -234,20 +238,16 @@ class IdentityLookupDialog extends ConsumerStatefulWidget {
 
 class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
   final _queryController = TextEditingController();
-  final _reasonController = TextEditingController();
-  final _noteController = TextEditingController();
   bool _isResolving = false;
   UserProfile? _profile;
   RelationshipSummary? _relationship;
   String? _errorText;
 
-  bool get _isAddContact => widget.mode == IdentityFlowMode.addContact;
+  bool get _isFollowContact => widget.mode == IdentityFlowMode.followContact;
 
   @override
   void dispose() {
     _queryController.dispose();
-    _reasonController.dispose();
-    _noteController.dispose();
     super.dispose();
   }
 
@@ -268,7 +268,7 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
           .read(profileApplicationServiceProvider)
           .loadPublicProfile(query);
       RelationshipSummary? relationship;
-      if (_isAddContact) {
+      if (_isFollowContact) {
         try {
           relationship = await ref
               .read(relationshipApplicationServiceProvider)
@@ -301,36 +301,26 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
     if (profile == null) {
       return;
     }
-    if (_isAddContact) {
+    if (_isFollowContact) {
       final relationship = _relationship?.relationship.trim() ?? 'none';
       if (relationship.isNotEmpty && relationship != 'none') {
         ref
             .read(uiFeedbackProvider.notifier)
-            .showInfo(AppMessage.addFriendAlreadyExists());
+            .showInfo(AppMessage.followContactAlreadyFollowing());
         Navigator.of(context).pop();
         return;
       }
-      if (_reasonController.text.trim().isEmpty) {
-        setState(() => _errorText = '请填写添加理由。');
-        return;
-      }
     }
-    Navigator.of(context).pop(
-      IdentityFlowResult(
-        profile: profile,
-        reason: _reasonController.text.trim(),
-        note: _noteController.text.trim(),
-      ),
-    );
+    Navigator.of(context).pop(IdentityFlowResult(profile: profile));
   }
 
   @override
   Widget build(BuildContext context) {
-    final title = _isAddContact ? '添加联系人 / Agent' : '发起新消息';
-    final subtitle = _isAddContact
-        ? '输入 handle 或 DID，确认身份后发送连接请求。'
+    final title = _isFollowContact ? '关注联系人 / Agent' : '发起新消息';
+    final subtitle = _isFollowContact
+        ? '输入 handle 或 DID，确认身份后关注该身份。'
         : '输入 handle、DID 或 Agent 地址，确认身份后开始可信会话。';
-    final actionLabel = _isAddContact ? '发送请求' : '开始聊天';
+    final actionLabel = _isFollowContact ? '关注' : '开始聊天';
     final responsive = context.awikiResponsive;
     final maxWidth = responsive.isPhone ? double.infinity : 560.0;
     return CupertinoPopupSurface(
@@ -432,22 +422,6 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                       const _InlineNotice(
                         text: '消息将通过已验证 DID 连接发送；首次联系外部身份请谨慎确认。',
                       ),
-                      if (_isAddContact) ...<Widget>[
-                        const SizedBox(height: 16),
-                        AppTextField(
-                          key: const Key('identity-add-reason-field'),
-                          controller: _reasonController,
-                          label: '添加理由（必填）',
-                          placeholder: '说明你希望建立连接的原因',
-                          multiline: true,
-                        ),
-                        const SizedBox(height: 12),
-                        AppTextField(
-                          controller: _noteController,
-                          label: '备注（可选）',
-                          placeholder: '例如：融资协作 Agent',
-                        ),
-                      ],
                     ],
                     const SizedBox(height: 22),
                     Row(
@@ -462,12 +436,12 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                         Expanded(
                           child: AppPrimaryButton(
                             key: Key(
-                              _isAddContact
+                              _isFollowContact
                                   ? 'identity-add-contact-button'
                                   : 'identity-start-chat-button',
                             ),
                             label: actionLabel,
-                            semanticsIdentifier: _isAddContact
+                            semanticsIdentifier: _isFollowContact
                                 ? 'e2e-identity-add-contact-button'
                                 : 'e2e-identity-start-chat-button',
                             onPressed: _profile == null ? null : _submit,

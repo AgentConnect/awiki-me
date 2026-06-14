@@ -45,6 +45,21 @@ void main() {
     expect(status.kind, AgentVisualStatusKind.processing);
   });
 
+  test('pending daemon upgrade takes precedence over needs-upgrade latest', () {
+    const agent = AgentSummary(
+      agentDid: 'did:agent:daemon',
+      kind: AgentKind.daemon,
+      displayName: '代理 1',
+      activeState: 'active',
+      latest: AgentLatestStatus(status: 'needs_upgrade', needsUpgrade: true),
+    );
+
+    final status = AgentVisualStatus.fromAgent(agent, isPendingUpgrade: true);
+
+    expect(status.kind, AgentVisualStatusKind.processing);
+    expect(status.rawStatus, 'upgrading');
+  });
+
   test(
     'inactive agent state is not overridden by stale processing signals',
     () {

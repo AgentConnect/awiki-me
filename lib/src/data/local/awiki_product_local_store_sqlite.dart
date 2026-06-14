@@ -135,15 +135,30 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
     required bool hidden,
     required DateTime updatedAt,
   }) async {
+    await setConversationHidden(
+      ownerDid: ownerDid,
+      conversationKey: threadId,
+      hidden: hidden,
+      updatedAt: updatedAt,
+    );
+  }
+
+  @override
+  Future<void> setConversationHidden({
+    required String ownerDid,
+    required String conversationKey,
+    required bool hidden,
+    required DateTime updatedAt,
+  }) async {
     final existing = await loadConversationOverlay(
       ownerDid: ownerDid,
-      threadId: threadId,
+      threadId: conversationKey,
     );
     await upsertConversationOverlay(
       (existing ??
               ProductConversationOverlay(
                 ownerDid: ownerDid,
-                threadId: threadId,
+                threadId: conversationKey,
                 updatedAt: updatedAt,
               ))
           .copyWith(hidden: hidden, updatedAt: updatedAt),

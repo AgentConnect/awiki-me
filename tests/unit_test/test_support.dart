@@ -342,6 +342,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int fetchDmHistoryCalls = 0;
   int fetchGroupHistoryCalls = 0;
   int markReadCalls = 0;
+  String? lastMarkReadThreadId;
   int listConversationsCalls = 0;
   int sendOtpCalls = 0;
   int sendEmailVerificationCalls = 0;
@@ -352,6 +353,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int registerHandleWithEmailCalls = 0;
   int recoverHandleCalls = 0;
   int logoutCalls = 0;
+  int deleteLocalThreadCalls = 0;
+  String? lastDeletedLocalThreadId;
   int deleteLocalCredentialCalls = 0;
   Completer<void>? logoutCompleter;
   Completer<void>? deleteLocalCredentialCompleter;
@@ -386,7 +389,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   }
 
   @override
-  Future<void> deleteLocalThread(String threadId) async {}
+  Future<void> deleteLocalThread(String threadId) async {
+    deleteLocalThreadCalls += 1;
+    lastDeletedLocalThreadId = threadId;
+  }
 
   @override
   Future<String?> exportCurrentCredentialAsZip() async {
@@ -722,6 +728,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   @override
   Future<void> markRead(String threadId) async {
     markReadCalls += 1;
+    lastMarkReadThreadId = threadId;
   }
 
   @override
@@ -1114,6 +1121,24 @@ class FakeConversationService implements ConversationService {
   }) {
     return gateway.deleteLocalThread(threadId);
   }
+
+  @override
+  Future<void> hideConversationFromRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+    DateTime? updatedAt,
+  }) {
+    return gateway.deleteLocalThread(conversation.visibilityKey);
+  }
+
+  @override
+  Future<void> restoreConversationToRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+    DateTime? updatedAt,
+  }) async {
+    // Test gateway-backed service has no persistent overlay store.
+  }
 }
 
 class FakeMessagingService implements MessagingService {
@@ -1143,13 +1168,18 @@ class FakeMessagingService implements MessagingService {
     int limit = 100,
     String? cursor,
   }) {
-    return switch (thread) {
+    final history = switch (thread) {
       AppDirectThreadRef(:final peerDidOrHandle) => gateway.fetchDmHistory(
         peerDidOrHandle,
       ),
       AppGroupThreadRef(:final groupDid) => gateway.fetchGroupHistory(groupDid),
       AppMessageThreadRef(:final threadId) => _loadThreadHistory(threadId),
     };
+    return history.then(
+      (messages) => messages
+          .where((message) => message.hasRenderableContent)
+          .toList(growable: false),
+    );
   }
 
   @override
@@ -1621,7 +1651,33 @@ class FakeProductLocalStore implements ProductLocalStore {
     required String threadId,
     required bool hidden,
     required DateTime updatedAt,
-  }) async {}
+  }) {
+    return setConversationHidden(
+      ownerDid: ownerDid,
+      conversationKey: threadId,
+      hidden: hidden,
+      updatedAt: updatedAt,
+    );
+  }
+
+  @override
+  Future<void> setConversationHidden({
+    required String ownerDid,
+    required String conversationKey,
+    required bool hidden,
+    required DateTime updatedAt,
+  }) async {
+    final key = _key(ownerDid, conversationKey);
+    final existing = overlays[key];
+    overlays[key] =
+        (existing ??
+                ProductConversationOverlay(
+                  ownerDid: ownerDid,
+                  threadId: conversationKey,
+                  updatedAt: updatedAt,
+                ))
+            .copyWith(hidden: hidden, updatedAt: updatedAt);
+  }
 
   @override
   Future<void> upsertConversationOverlay(

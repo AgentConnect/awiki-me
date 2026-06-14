@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../application/attachment_picker_service.dart';
 import '../application/app_session_service.dart';
 import '../application/agent/agent_control_service.dart';
+import '../application/agent/agent_control_status_store.dart';
 import '../application/config/awiki_environment_config.dart';
 import '../application/conversation_service.dart';
 import '../application/directory_application_service.dart';
@@ -96,6 +97,10 @@ final agentControlServiceProvider = Provider<AgentControlService>(
   (ref) => throw UnimplementedError(
     'agentControlServiceProvider must be overridden',
   ),
+);
+
+final agentControlStatusStoreProvider = Provider<AgentControlStatusStore>(
+  (ref) => const NoopAgentControlStatusStore(),
 );
 
 final groupApplicationServiceProvider = Provider<GroupApplicationService>(

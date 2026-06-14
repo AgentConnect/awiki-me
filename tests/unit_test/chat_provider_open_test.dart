@@ -7,6 +7,7 @@ import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
@@ -293,6 +294,54 @@ void main() {
     expect(thread.agentPendingTurns, isEmpty);
   });
 
+  test('发送给智能体时必须等消息投递成功后才进入处理中状态', () async {
+    gateway.sendDelay = const Duration(milliseconds: 50);
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    final sendFuture = sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendMessage(
+          conversation: conversation,
+          content: '总结一下',
+          expectedAgentReplyDid: 'did:peer',
+        );
+    await Future<void>.delayed(Duration.zero);
+
+    var thread = sendContainer.read(chatThreadProvider(conversation.threadId));
+    expect(thread.messages.single.sendState, MessageSendState.sending);
+    expect(thread.agentPendingTurns, isEmpty);
+
+    await sendFuture;
+
+    thread = sendContainer.read(chatThreadProvider(conversation.threadId));
+    expect(thread.messages.single.sendState, MessageSendState.sent);
+    expect(thread.isAgentProcessing, isTrue);
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(
+      thread.pendingAgentTurnForMessage(thread.messages.single),
+      isNotNull,
+    );
+  });
+
   test('发送给智能体成功后显示处理中，收到智能体回复后清除', () async {
     final sendContainer = ProviderContainer(
       overrides: <Override>[
@@ -354,6 +403,96 @@ void main() {
     expect(
       thread.messages.map((message) => message.content),
       contains('已经总结完成。'),
+    );
+  });
+
+  test('智能体实时回复使用刷新后的线程标识时仍合并到当前打开会话', () async {
+    const agentDid = 'did:agent:runtime';
+    const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
+    final openedConversation = ConversationSummary(
+      threadId: 'dm:did:me:$agentDid',
+      displayName: 'Hermes',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 5, 8, 10),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentDid,
+    );
+    final realtimeConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:zhuocheng-test-hermes',
+      displayName: 'Hermes',
+      lastMessagePreview: '我在。',
+      lastMessageAt: DateTime(2026, 5, 8, 10, 2),
+      unreadCount: 1,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentHandle,
+    );
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendMessage(
+          conversation: openedConversation,
+          content: '在吗？',
+          expectedAgentReplyDid: agentDid,
+        );
+
+    var openedThread = sendContainer.read(
+      chatThreadProvider(openedConversation.threadId),
+    );
+    expect(openedThread.isAgentProcessing, isTrue);
+
+    sendContainer
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(
+          ChatMessage(
+            localId: 'agent-reply-canonical',
+            remoteId: 'agent-reply-canonical',
+            threadId: realtimeConversation.threadId,
+            senderDid: agentDid,
+            receiverDid: 'did:me',
+            content: '我在。',
+            createdAt: realtimeConversation.lastMessageAt,
+            isMine: false,
+            sendState: MessageSendState.sent,
+          ),
+          conversation: realtimeConversation,
+        );
+
+    openedThread = sendContainer.read(
+      chatThreadProvider(openedConversation.threadId),
+    );
+    expect(openedThread.agentPendingTurns, isEmpty);
+    expect(
+      openedThread.messages.map((message) => message.content),
+      contains('我在。'),
+    );
+    expect(
+      sendContainer
+          .read(chatThreadProvider(realtimeConversation.threadId))
+          .messages,
+      isEmpty,
     );
   });
 
@@ -1240,6 +1379,35 @@ void main() {
     expect(refreshed.unreadCount, 1);
   });
 
+  test('删除最近会话只移出列表并清空当前选中会话', () async {
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:me',
+            credentialName: 'me.json',
+            displayName: 'Me',
+            handle: 'me',
+          ),
+        );
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(conversation);
+    container
+        .read(selectedConversationProvider.notifier)
+        .selectConversation(conversation);
+
+    await container
+        .read(conversationListProvider.notifier)
+        .deleteFromRecents(conversation);
+
+    expect(container.read(conversationListProvider).conversations, isEmpty);
+    expect(container.read(selectedConversationProvider), isNull);
+    expect(notificationFacade.lastBadgeCount, 0);
+    expect(gateway.deleteLocalThreadCalls, 1);
+    expect(gateway.lastDeletedLocalThreadId, 'direct:did:peer');
+  });
+
   test('本地 DID 会话和刷新的 full handle 会话会合并为同一个智能体会话', () async {
     const agentDid = 'did:agent:runtime';
     const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
@@ -1290,6 +1458,67 @@ void main() {
     expect(conversations.single.targetDid, agentDid);
     expect(conversations.single.targetPeer, agentHandle);
     expect(conversations.single.displayName, '改名后的智能体');
+  });
+
+  test('已读的同一目标会话刷新为 canonical thread 后不会重新变未读', () async {
+    const agentDid = 'did:agent:runtime';
+    const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
+    final readConversation = ConversationSummary(
+      threadId: 'dm:did:human:$agentDid',
+      displayName: 'Hermes',
+      lastMessagePreview: '我在。',
+      lastMessageAt: DateTime(2026, 5, 8, 10),
+      unreadCount: 1,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentDid,
+    );
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:human',
+            credentialName: 'human.json',
+            displayName: 'Me',
+            handle: 'zhuocheng',
+          ),
+        );
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(readConversation);
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(readConversation);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      container.read(conversationListProvider).conversations.single.unreadCount,
+      0,
+    );
+    expect(gateway.lastMarkReadThreadId, 'dm:$agentDid');
+
+    gateway.conversations = <ConversationSummary>[
+      ConversationSummary(
+        threadId: 'dm:peer-scope:v1:zhuocheng-test-hermes',
+        displayName: 'Hermes',
+        lastMessagePreview: '我在。',
+        lastMessageAt: readConversation.lastMessageAt,
+        unreadCount: 1,
+        isGroup: false,
+        targetDid: agentDid,
+        targetPeer: agentHandle,
+      ),
+    ];
+
+    await container.read(conversationListProvider.notifier).refresh();
+
+    final refreshed = container
+        .read(conversationListProvider)
+        .conversations
+        .single;
+    expect(refreshed.threadId, 'dm:peer-scope:v1:zhuocheng-test-hermes');
+    expect(refreshed.unreadCount, 0);
   });
 }
 

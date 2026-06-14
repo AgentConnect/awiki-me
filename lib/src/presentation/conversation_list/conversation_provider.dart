@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
 import '../../core/group_display_name.dart';
 import '../../domain/entities/agent/agent_display_name.dart';
+import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_summary.dart';
 import '../../domain/services/notification_facade.dart';
+import '../app_shell/providers/selected_conversation_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 
 class ConversationListState {
@@ -68,8 +72,11 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       state.conversations,
       conversation,
     );
-    final mergedConversation = _mergeConversationTitle(
-      refreshed: conversation,
+    final mergedConversation = _mergeConversationReadState(
+      refreshed: _mergeConversationTitle(
+        refreshed: conversation,
+        local: existing,
+      ),
       local: existing,
     );
     final byThread = <String, ConversationSummary>{
@@ -81,6 +88,45 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       ..sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
     state = state.copyWith(conversations: merged);
     _notification.updateBadgeCount(state.unreadCount);
+  }
+
+  Future<void> restoreConversation(ConversationSummary conversation) async {
+    final session = ref.read(sessionProvider).session;
+    if (session == null) {
+      return;
+    }
+    await ref
+        .read(conversationServiceProvider)
+        .restoreConversationToRecents(
+          ownerDid: session.did,
+          conversation: conversation,
+        );
+  }
+
+  void restoreConversationBestEffort(ConversationSummary conversation) {
+    unawaited(restoreConversation(conversation).catchError((_) {}));
+  }
+
+  Future<void> deleteFromRecents(ConversationSummary conversation) async {
+    final session = ref.read(sessionProvider).session;
+    if (session == null) {
+      throw StateError('No active awiki session. Please sign in first.');
+    }
+    await ref
+        .read(conversationServiceProvider)
+        .hideConversationFromRecents(
+          ownerDid: session.did,
+          conversation: conversation,
+        );
+    final next = state.conversations
+        .where((item) => !sameConversationTarget(item, conversation))
+        .toList(growable: false);
+    state = state.copyWith(conversations: next);
+    final selected = ref.read(selectedConversationProvider);
+    if (selected != null && sameConversationTarget(selected, conversation)) {
+      ref.read(selectedConversationProvider.notifier).clearSelection();
+    }
+    await _notification.updateBadgeCount(state.unreadCount);
   }
 
   void applyGroupNames(List<GroupSummary> groups) {
@@ -128,6 +174,18 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     _notification.updateBadgeCount(state.unreadCount);
   }
 
+  void markConversationReadLocal(ConversationSummary conversation) {
+    final next = state.conversations.map((item) {
+      if (item.unreadCount == 0 ||
+          !sameConversationTarget(item, conversation)) {
+        return item;
+      }
+      return item.copyWith(unreadCount: 0);
+    }).toList();
+    state = state.copyWith(conversations: next);
+    _notification.updateBadgeCount(state.unreadCount);
+  }
+
   Future<void> clear() async {
     state = const ConversationListState();
     await _notification.updateBadgeCount(0);
@@ -147,8 +205,11 @@ List<ConversationSummary> _mergeConversationRefresh({
     if (matchedLocal != null) {
       consumedLocalThreadIds.add(matchedLocal.threadId);
     }
-    return _mergeConversationTitle(
-      refreshed: conversation,
+    return _mergeConversationReadState(
+      refreshed: _mergeConversationTitle(
+        refreshed: conversation,
+        local: matchedLocal,
+      ),
       local: matchedLocal,
     );
   }).toList();
@@ -183,7 +244,7 @@ ConversationSummary? _matchingConversationForUpsert(
     return null;
   }
   for (final item in conversations) {
-    if (!item.isGroup && _sameDirectConversationTarget(item, incoming)) {
+    if (!item.isGroup && sameDirectConversationTarget(item, incoming)) {
       return item;
     }
   }
@@ -219,11 +280,24 @@ ConversationSummary _mergeConversationTitle({
   );
 }
 
+ConversationSummary _mergeConversationReadState({
+  required ConversationSummary refreshed,
+  required ConversationSummary? local,
+}) {
+  if (local == null ||
+      local.unreadCount != 0 ||
+      refreshed.unreadCount == 0 ||
+      refreshed.lastMessageAt.isAfter(local.lastMessageAt)) {
+    return refreshed;
+  }
+  return refreshed.copyWith(unreadCount: 0);
+}
+
 ConversationSummary _mergeDirectConversationTitle({
   required ConversationSummary refreshed,
   required ConversationSummary local,
 }) {
-  if (local.isGroup || !_sameDirectConversationTarget(local, refreshed)) {
+  if (local.isGroup || !sameDirectConversationTarget(local, refreshed)) {
     return refreshed;
   }
   final localName = local.displayName.trim();
@@ -246,35 +320,6 @@ bool _isBetterDirectConversationTitle(String localName, String refreshedName) {
   }
   return AgentDisplayName.isUserVisibleName(localName) &&
       !AgentDisplayName.isUserVisibleName(refreshedName);
-}
-
-bool _sameDirectConversationTarget(
-  ConversationSummary first,
-  ConversationSummary second,
-) {
-  final firstDid = first.targetDid?.trim();
-  final secondDid = second.targetDid?.trim();
-  if (firstDid != null &&
-      firstDid.isNotEmpty &&
-      secondDid != null &&
-      secondDid.isNotEmpty &&
-      firstDid == secondDid) {
-    return true;
-  }
-  final firstPeer = _normalizedDirectPeer(first.targetPeer);
-  final secondPeer = _normalizedDirectPeer(second.targetPeer);
-  if (firstPeer != null && secondPeer != null) {
-    return firstPeer == secondPeer;
-  }
-  return false;
-}
-
-String? _normalizedDirectPeer(String? value) {
-  final peer = value?.trim();
-  if (peer == null || peer.isEmpty) {
-    return null;
-  }
-  return peer.startsWith('did:') ? peer : peer.toLowerCase();
 }
 
 final conversationListProvider =

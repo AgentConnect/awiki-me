@@ -27,6 +27,7 @@ class AgentsState {
     this.installCommand,
     this.error,
     this.pendingStatusQueryAtByDaemon = const <String, DateTime>{},
+    this.pendingDaemonUpgrades = const <String>{},
     this.seenControlEventIds = const <String>{},
   });
 
@@ -37,6 +38,7 @@ class AgentsState {
   final InstallCommand? installCommand;
   final String? error;
   final Map<String, DateTime> pendingStatusQueryAtByDaemon;
+  final Set<String> pendingDaemonUpgrades;
   final Set<String> seenControlEventIds;
 
   AgentSummary? get selectedAgent {
@@ -81,6 +83,10 @@ class AgentsState {
     return pendingStatusQueryAtByDaemon.containsKey(daemonDid);
   }
 
+  bool isDaemonUpgradePending(String daemonDid) {
+    return pendingDaemonUpgrades.contains(daemonDid);
+  }
+
   AgentsState copyWith({
     List<AgentSummary>? agents,
     String? selectedAgentDid,
@@ -92,6 +98,7 @@ class AgentsState {
     String? error,
     bool clearError = false,
     Map<String, DateTime>? pendingStatusQueryAtByDaemon,
+    Set<String>? pendingDaemonUpgrades,
     Set<String>? seenControlEventIds,
   }) {
     return AgentsState(
@@ -107,6 +114,8 @@ class AgentsState {
       error: clearError ? null : (error ?? this.error),
       pendingStatusQueryAtByDaemon:
           pendingStatusQueryAtByDaemon ?? this.pendingStatusQueryAtByDaemon,
+      pendingDaemonUpgrades:
+          pendingDaemonUpgrades ?? this.pendingDaemonUpgrades,
       seenControlEventIds: seenControlEventIds ?? this.seenControlEventIds,
     );
   }
@@ -301,10 +310,33 @@ class AgentsController extends StateNotifier<AgentsState> {
     });
   }
 
-  Future<void> upgradeDaemon(String daemonDid) async {
-    await _act(() {
-      return ref.read(agentControlServiceProvider).upgradeDaemon(daemonDid);
-    });
+  Future<bool> upgradeDaemon(String daemonDid) async {
+    if (state.isDaemonUpgradePending(daemonDid)) {
+      return false;
+    }
+    state = state.copyWith(
+      pendingDaemonUpgrades: <String>{
+        ...state.pendingDaemonUpgrades,
+        daemonDid,
+      },
+      isActing: true,
+      clearError: true,
+    );
+    try {
+      await ref.read(agentControlServiceProvider).upgradeDaemon(daemonDid);
+      state = state.copyWith(isActing: false, clearError: true);
+      return true;
+    } catch (error) {
+      state = state.copyWith(
+        isActing: false,
+        pendingDaemonUpgrades: _withoutSetValue(
+          state.pendingDaemonUpgrades,
+          daemonDid,
+        ),
+        error: _agentErrorMessage(error),
+      );
+      return false;
+    }
   }
 
   Future<void> unbindSelected() async {
@@ -381,6 +413,11 @@ class AgentsController extends StateNotifier<AgentsState> {
         _string(payload['daemon_agent_did']) ??
         _string(_readMap(payload['daemon'])['agent_did']);
     final nextPending = _pendingAfterStatusPayload(daemonDid);
+    final nextPendingDaemonUpgrades = _pendingDaemonUpgradesAfterPayload(
+      payload,
+      daemonDid,
+      merged,
+    );
     if (daemonDid != null) {
       _statusQueryTimeouts.remove(daemonDid)?.cancel();
     }
@@ -388,6 +425,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       agents: merged,
       selectedAgentDid: _nextSelection(merged),
       pendingStatusQueryAtByDaemon: nextPending,
+      pendingDaemonUpgrades: nextPendingDaemonUpgrades,
       seenControlEventIds: eventId == null
           ? state.seenControlEventIds
           : _rememberControlEventId(state.seenControlEventIds, eventId),
@@ -444,6 +482,43 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     _statusQueryClearTimers.remove(daemonDid)?.cancel();
     return _withoutKey(state.pendingStatusQueryAtByDaemon, daemonDid);
+  }
+
+  Set<String> _pendingDaemonUpgradesAfterPayload(
+    Map<String, Object?> payload,
+    String? daemonDid,
+    List<AgentSummary> merged,
+  ) {
+    if (daemonDid == null || !state.pendingDaemonUpgrades.contains(daemonDid)) {
+      return state.pendingDaemonUpgrades;
+    }
+    final result = _readMap(payload['result']);
+    final command = _string(result['command']);
+    final payloadState = _string(payload['state'])?.toLowerCase();
+    final resultStatus = _string(result['status'])?.toLowerCase();
+    if (command == 'daemon.upgrade' &&
+        (payloadState == 'failed' ||
+            payloadState == 'ready' ||
+            payloadState == 'succeeded' ||
+            resultStatus == 'failed' ||
+            resultStatus == 'ready' ||
+            resultStatus == 'succeeded' ||
+            result['error_code'] != null)) {
+      return _withoutSetValue(state.pendingDaemonUpgrades, daemonDid);
+    }
+    final daemon = merged.where((agent) => agent.agentDid == daemonDid);
+    if (daemon.isEmpty) {
+      return _withoutSetValue(state.pendingDaemonUpgrades, daemonDid);
+    }
+    final latest = daemon.first.latest;
+    final latestStatus = latest.status.trim().toLowerCase();
+    if (latestStatus == 'failed' ||
+        latestStatus == 'error' ||
+        latestStatus == 'gateway_error' ||
+        (!latest.needsUpgrade && latestStatus != 'upgrading')) {
+      return _withoutSetValue(state.pendingDaemonUpgrades, daemonDid);
+    }
+    return state.pendingDaemonUpgrades;
   }
 
   void _scheduleStatusQueryClear(
@@ -657,6 +732,11 @@ class AgentsController extends StateNotifier<AgentsState> {
             ...result,
             'agent_did': daemonDid,
             'status': _string(payload['state']) ?? _string(result['status']),
+            if ((_string(payload['state']) ?? _string(result['status']))
+                    ?.trim()
+                    .toLowerCase() ==
+                'ready')
+              'needs_upgrade': false,
           },
           fallbackStatus: _string(payload['state']),
           fallbackEventAt: eventAt,
@@ -920,6 +1000,16 @@ Map<String, DateTime> _withoutKey(Map<String, DateTime> input, String key) {
   return <String, DateTime>{
     for (final entry in input.entries)
       if (entry.key != key) entry.key: entry.value,
+  };
+}
+
+Set<String> _withoutSetValue(Set<String> input, String value) {
+  if (!input.contains(value)) {
+    return input;
+  }
+  return <String>{
+    for (final item in input)
+      if (item != value) item,
   };
 }
 

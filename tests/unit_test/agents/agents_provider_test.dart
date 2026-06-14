@@ -274,6 +274,54 @@ void main() {
     expect(runtime.latest.status, 'ready');
   });
 
+  test('upgradeDaemon shows pending until upgrade result arrives', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'needs_upgrade',
+            needsUpgrade: true,
+          ),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+
+    final started = await container
+        .read(agentsProvider.notifier)
+        .upgradeDaemon('did:agent:daemon');
+
+    expect(started, isTrue);
+    expect(control.lastUpgradeDaemonDid, 'did:agent:daemon');
+    expect(
+      container.read(agentsProvider).pendingDaemonUpgrades,
+      contains('did:agent:daemon'),
+    );
+
+    container.read(agentsProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'state': 'ready',
+        'daemon_agent_did': 'did:agent:daemon',
+        'result': <String, Object?>{
+          'command': 'daemon.upgrade',
+          'daemon_agent_did': 'did:agent:daemon',
+          'status': 'ready',
+        },
+      },
+    );
+
+    final state = container.read(agentsProvider);
+    expect(state.pendingDaemonUpgrades, isEmpty);
+    expect(state.agents.single.latest.status, 'ready');
+    expect(state.agents.single.latest.needsUpgrade, isFalse);
+  });
+
   test('deleteSelected sends runtime delete through owning daemon', () async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
