@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)
 Step index：03
-状态：draft
+状态：done
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
-| Branch | 待定 |
-| Started | 待执行 |
-| Completed | 待执行 |
-| Commit | 待记录 |
-| Review evidence | 待记录 |
-| Verification evidence | 待记录 |
-| Next action | 实现 P9 mention payload 的 App 发送、接收投影和高亮展示 |
+| Status | done |
+| Branch | `awiki-me-group:feauture/release-0526/group` |
+| Started | 2026-06-14T20:44:11+08:00 |
+| Completed | 2026-06-14T21:18:37+08:00 |
+| Commit | `awiki-me-group:ab5fd16 feat(app): send and render group mentions` |
+| Review evidence | 手工 Review 通过：确认 App 发送的 P9 payload 仅包含 `text` 与 `mentions`，不新增 sender/proof/profile/专用 content type；群聊有合法 draft mention 时走 `sendMentionText`/SDK payload，普通文本仍走旧 `sendText`；mapper 将合法 P9 payload 投影为 `ChatMessage.content + mentions`，invalid range/target 只显示文本不高亮；`_MessageTextContent` 仅在 valid mentions 存在时使用纯文本 RichText，高亮范围不走 Markdown，普通 Markdown/附件 caption 路径保持原行为；retry、fake service、E2E probe stub 均补齐 mention payload 接口，避免重发丢 payload。修复项：补齐 `MessagingService.sendMentionText` 所有测试/工具实现、补 `notificationFacadeProvider` 测试 override、修正 highlight widget test 的 payload 可渲染条件。 |
+| Verification evidence | 通过：`cd awiki-me-group && flutter test tests/unit_test --name "mention payload"`（2 passed）；`cd awiki-me-group && flutter test tests/unit_test --name "mention highlight"`（1 passed）；`cd awiki-me-group && flutter test tests/unit_test --name "send mention"`（1 passed）；`cd awiki-me-group && flutter test tests/unit_test --name "chat mention"`（3 passed）；`cd awiki-me-group && flutter test tests/unit_test/chat_page_test.dart --name "macOS 聊天输入条保持发送能力"`（1 passed）；`cd awiki-me-group && dart analyze`（No issues）；`cd awiki-me-group && git diff --check`（通过）。未做真实后端/手动移动端发送，原因：Step 03 只覆盖 App 发送分支、mapper 投影和 UI 高亮，端到端真实后端验证留到 Step 05。 |
+| Next action | Step 03 已完成；下一步执行 Step 04 Daemon mention 命中与 prompt 注入 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -102,11 +102,11 @@ Step index：03
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待执行 |  |
-| 已修复问题 | 待执行 |  |
-| 剩余风险 | 待执行 |  |
-| 新增或缺失测试 | 待执行 |  |
-| 已更新或缺失文档 | 待执行 |  |
+| 发现问题 | 已发现并修复 | `MessagingService` 新增接口后部分 test/tool stub 缺少实现；`send mention` 测试缺少 notification facade override；highlight widget test 初始消息未携带 `payloadJson` 导致 `application/json` 消息被视为不可渲染。 |
+| 已修复问题 | 已修复 | 补齐所有 `sendMentionText` stub；测试容器增加 `notificationFacadeProvider` fake；highlight test 使用合法 P9 `payloadJson` 并通过 provider state + RichText span 断言。 |
+| 剩余风险 | 已记录 | 本步骤未做真实后端/手动移动端发送；真实 App + SDK + Daemon 链路留到 Step 05。 |
+| 新增或缺失测试 | 已新增 | 新增/扩展 mapper payload、send mention、highlight widget、chat mention 回归测试；无已知缺失的 Step 03 必需单元/widget gate。 |
+| 已更新或缺失文档 | 已更新 | `awiki-me-group/docs/testing.md` 增加 mention payload/highlight/send focused gate；主 Plan 和本 Step 已回填执行证据。 |
 
 ## 10. Commit 要求
 
@@ -116,6 +116,15 @@ Step index：03
 - 纳入文件：记录本步骤 commit 包含的文件。
 - Commit 后证据：记录 commit hash 和 commit 后 `git status`。
 - 建议消息：`feat(app): send and render group mentions`
+
+### 10.1 Commit 记录
+
+| 项 | 记录 |
+|---|---|
+| Commit 前状态 | `awiki-me-group` 已暂存 Step 03 App sending / mapper / render / tests / docs/testing 改动；主 Plan 与本 Step 台账文件未暂存，留待证据回填提交。 |
+| 纳入文件 | `docs/testing.md`、`lib/src/application/messaging_service.dart`、`lib/src/data/im_core/awiki_im_core_mappers.dart`、`lib/src/data/im_core/awiki_im_core_message_adapter.dart`、`lib/src/domain/entities/chat_mention.dart`、`lib/src/domain/entities/chat_message.dart`、`lib/src/presentation/chat/chat_page.dart`、`lib/src/presentation/chat/chat_provider.dart`、`tests/e2e_test/scenarios/agent_im_delegated_message/app_bootstrap_scenario.dart`、`tests/unit_test/agents/agent_control_service_test.dart`、`tests/unit_test/chat_mention_composer_test.dart`、`tests/unit_test/chat_mention_send_test.dart`、`tests/unit_test/data/compat/compat_awiki_gateway_test.dart`、`tests/unit_test/data/im_core/awiki_im_core_payload_mapper_test.dart`、`tests/unit_test/test_support.dart`、`tool/agent_im_real_e2e_probe.dart`。 |
+| Commit | `ab5fd16 feat(app): send and render group mentions` |
+| Commit 后状态 | `awiki-me-group` 当前仅剩 `docs/message-mention-extension-implementation-plan/plan.md` 与 `docs/message-mention-extension-implementation-plan/steps/03-app-send-render-mention.md` 台账回填未提交；分支 ahead 5。 |
 
 ## 11. Blocked 处理
 
