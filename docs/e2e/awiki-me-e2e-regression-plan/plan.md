@@ -4,7 +4,7 @@
 DOC：`test-awiki-me/docs/e2e/awiki-me-e2e-regression-plan/`  
 Harness：`awiki-harness/`  
 创建时间：2026-06-14  
-恢复指针：Step 03 已完成；下一次从 Step 04 开始，先读取 [steps/04-desktop-deterministic-smoke.md](steps/04-desktop-deterministic-smoke.md)。
+恢复指针：Step 04 已完成；下一次从 Step 05 开始，先读取 [steps/05-desktop-app-cli-peer-e2e.md](steps/05-desktop-app-cli-peer-e2e.md)。
 
 ## 1. 目标
 
@@ -207,6 +207,15 @@ Harness：`awiki-harness/`
 - User Service 和 Message Service URL 必须可分离配置；当两者使用同一域名时，也要在 report 中记录逻辑字段，避免误连 legacy message 服务时无法定位。
 - 如果缺少账号池、OTP env、Linux runner、移动设备池或服务 URL，只能 dry-run、manual skipped 或记录 blocker；不能提交真实 secret，也不能用静态测试数据伪造 real E2E pass。
 
+### 8.3 Step 04 Desktop deterministic smoke 基线
+
+| Smoke | 覆盖 | 后端依赖 | Linux 证据 | macOS 证据 |
+|---|---|---|---|---|
+| `APP-SMOKE-001` | fake bootstrap、onboarding shell、authenticated shell、profile/settings 基础页面。 | 无真实后端、无 OTP。 | `xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过。 | 当前 host 非 macOS，保留 runner 命令由 macOS runner 验证。 |
+| `SDK-SMOKE-001` | `AwikiImCore.open` native backend、isolated SDK paths、native library 加载。 | 无真实后端、无 OTP。 | `xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` 通过。 | 当前 host 非 macOS，保留 runner 命令由 macOS runner 验证。 |
+
+Step 04 只扩展 deterministic App smoke，不引入真实账号、真实消息、CLI peer 或 mobile 设备；root `integration_test/` 继续只作为 Flutter tooling shim，真实实现仍在 `tests/integration_test/`。
+
 ## 9. 任务拆分
 
 | Step | 标题 | 依赖 | 产出 | 小 Plan 文档 | Commit gate | 状态 |
@@ -214,7 +223,7 @@ Harness：`awiki-harness/`
 | 01 | E2E 基线盘点与覆盖地图 | 无 | 当前测试入口、功能覆盖和缺口清单 | [steps/01-baseline-inventory.md](steps/01-baseline-inventory.md) | 必须 | done |
 | 02 | 场景矩阵与标签/gate 契约 | Step 01 | `feature/regression/smoke/nightly/release` 标记和准入标准 | [steps/02-scenario-matrix-tags.md](steps/02-scenario-matrix-tags.md) | 必须 | done |
 | 03 | 测试环境、账号和数据隔离契约 | Step 01 | macOS/Linux/mobile/backend/env/account/report 契约 | [steps/03-environment-data-contract.md](steps/03-environment-data-contract.md) | 必须 | done |
-| 04 | Desktop 确定性 smoke 与回归基线 | Step 02, Step 03 | macOS/Linux no-backend smoke gate 和基础回归 | [steps/04-desktop-deterministic-smoke.md](steps/04-desktop-deterministic-smoke.md) | 必须 | pending |
+| 04 | Desktop 确定性 smoke 与回归基线 | Step 02, Step 03 | macOS/Linux no-backend smoke gate 和基础回归 | [steps/04-desktop-deterministic-smoke.md](steps/04-desktop-deterministic-smoke.md) | 必须 | done |
 | 05 | Desktop App + CLI peer 真实 E2E | Step 03, Step 04 | App/CLI 双向消息和账号闭环场景 | [steps/05-desktop-app-cli-peer-e2e.md](steps/05-desktop-app-cli-peer-e2e.md) | 必须 | pending |
 | 06 | 群组与附件基础回归 E2E | Step 03, Step 05 | 群组消息、附件发送/接收、基础错误回归方案 | [steps/06-group-attachment-basic-regression.md](steps/06-group-attachment-basic-regression.md) | 必须 | pending |
 | 07 | Mobile 双设备 E2E | Step 03 | iOS/Android 双设备消息互通和设备池策略 | [steps/07-mobile-two-device-e2e.md](steps/07-mobile-two-device-e2e.md) | 必须 | pending |
@@ -228,8 +237,8 @@ Harness：`awiki-harness/`
 |---|---|---|---|---|---|---|---|---|
 | 01 | done | `feature/test-awiki-me` | 2026-06-14 12:52 CST | 2026-06-14 13:02 CST | 本步骤提交，短 hash 以 `git log -1` 为准 | Review 完成：覆盖地图基于 `docs/testing.md`、`tests/e2e_test/README.md`、`tests/integration_test/README.md`、root integration shims、desktop/mobile runners、unit/widget 测试和 source search；确认 Agent 和 E2EE 保留为 skipped，不进入本轮 gate。 | `find docs/e2e/awiki-me-e2e-regression-plan -type f -name '*.md' -print` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描通过，无真实 secret。 | 启动 Step 02 |
 | 02 | done | `feature/test-awiki-me` | 2026-06-14 12:58 CST | 2026-06-14 13:02 CST | `cacfde6` | Review 完成：确认标签、gate、case 字段、晋级/降级规则覆盖新功能验证和既有功能回归；真实后端/OTP/App+CLI 互通未进入 PR required；Agent 和 E2EE 保持 skipped，不实现、不运行、不进任何 gate。 | `awk ... uniq -d` 检查矩阵 Case ID 无重复；`find docs/e2e/awiki-me-e2e-regression-plan -type f -name '*.md' -print | sort` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描仅命中 Step 05 的 env 变量名示例，无真实 secret。 | 启动 Step 03 |
-| 03 | done | `feature/test-awiki-me` | 2026-06-14 13:06 CST | 2026-06-14 13:09 CST | 本步骤提交，短 hash 以 `git log -1` 为准 | Review 完成：确认 shared service env、desktop/macOS/Linux 前提、mobile local config、账号池、runId 隔离和 secret/report 规则与现有 runner 一致；真实账号、OTP 和 local config 均不提交。 | `dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run` 通过；`dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=linux --dry-run --skip-cli-build --skip-flutter-smoke` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描仅命中 Step 05 env 变量名示例，无真实 secret；`.e2e/` 为 ignored 运行产物。 | 启动 Step 04 |
-| 04 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 02/03 完成 |
+| 03 | done | `feature/test-awiki-me` | 2026-06-14 13:06 CST | 2026-06-14 13:09 CST | `a2defaa` | Review 完成：确认 shared service env、desktop/macOS/Linux 前提、mobile local config、账号池、runId 隔离和 secret/report 规则与现有 runner 一致；真实账号、OTP 和 local config 均不提交。 | `dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run` 通过；`dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=linux --dry-run --skip-cli-build --skip-flutter-smoke` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描仅命中 Step 05 env 变量名示例，无真实 secret；`.e2e/` 为 ignored 运行产物。 | 启动 Step 04 |
+| 04 | done | `feature/test-awiki-me` | 2026-06-14 13:24 CST | 2026-06-14 13:28 CST | 本步骤提交，短 hash 以 `git log -1` 为准 | Review 完成：新增 profile/settings smoke 只使用 fake bootstrap、fake profile provider 和 fake homepage loader；root `integration_test/` 仍为 shim；未接入真实账号、OTP、User Service、Message Service、CLI peer 或 mobile 设备。 | `dart analyze` 通过；`flutter test tests/unit_test/profile_page_test.dart tests/unit_test/settings_page_test.dart tests/unit_test/conversation_workspace_test.dart` 通过，41 tests；`xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过，3 tests；`xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` 通过，1 test；当前 host 为 Linux，macOS smoke 未运行；`git diff --check` 通过；敏感扫描仅命中 env 变量名示例。 | 启动 Step 05 |
 | 05 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 03/04 完成 |
 | 06 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 03/05 完成 |
 | 07 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 03 完成 |

@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)  
 Step index：04  
-状态：draft
+状态：done
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
-| Branch | 待执行时记录 |
-| Started | 待记录 |
-| Completed | 待记录 |
-| Commit | 待记录 |
-| Review evidence | 待记录 |
-| Verification evidence | 待记录 |
-| Next action | 固化 macOS/Linux no-backend desktop smoke 和最小回归基线 |
+| Status | done |
+| Branch | `feature/test-awiki-me` |
+| Started | 2026-06-14 13:24 CST |
+| Completed | 2026-06-14 13:28 CST |
+| Commit | 本步骤提交后回填短 hash，以 `git log -1` 为准 |
+| Review evidence | Review 完成：新增 profile/settings smoke 只使用 fake bootstrap、fake profile provider 和 fake homepage loader；未接真实后端、OTP、CLI peer 或 mobile 设备；root `integration_test/` 仍为 shim。 |
+| Verification evidence | `dart analyze` 通过；`flutter test tests/unit_test/profile_page_test.dart tests/unit_test/settings_page_test.dart tests/unit_test/conversation_workspace_test.dart` 通过，41 tests；`xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过，3 tests；`xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` 通过，1 test；当前 host 为 Linux，macOS smoke 未运行；`git diff --check` 通过；敏感扫描仅命中 env 变量名示例。 |
+| Next action | 启动 Step 05：Desktop App + CLI peer 真实 E2E |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -49,6 +49,13 @@ Step index：04
    - profile/settings 基础页面 smoke。
 4. 如当前功能需要，补一个最小 profile/settings smoke，但必须保持无后端依赖。
 
+### 4.1 本步骤实现记录
+
+- 扩展 `tests/integration_test/app/app_smoke_test.dart`，在已有 fake bootstrap 和 authenticated shell smoke 基础上，新增 `profile/settings` 基础回归断言。
+- `profile/settings` smoke 使用 fake session、fake gateway、fake profile provider 和 fake homepage loader；不访问真实 User Service、Message Service、HTTP homepage、OTP 或 CLI peer。
+- 更新 `tests/integration_test/support/fake_app_bootstrap.dart`，让 integration fake bootstrap 默认注入 `homepageMarkdownLoaderProvider` 和初始 `profileProvider`，避免 deterministic smoke 被真实网络或后台 refresh 影响。
+- root `integration_test/app_smoke_test.dart` 仍只是 shim，没有迁移实现逻辑。
+
 ## 5. 路径
 
 | 仓库 / 模块 / 文件 | 计划变更 | 备注 |
@@ -66,12 +73,12 @@ Step index：04
 
 ## 7. 验收标准
 
-- [ ] desktop smoke 明确不依赖真实后端或 OTP。
-- [ ] macOS/Linux 命令和跳过条件清楚。
-- [ ] native SDK smoke 失败能定位到 native library 或 SDK open 问题。
-- [ ] profile/settings smoke 不依赖真实后端或真实账号。
-- [ ] Review 发现已经修复或明确记录。
-- [ ] 本步骤在进入下一步之前已经创建聚焦 commit。
+- [x] desktop smoke 明确不依赖真实后端或 OTP。
+- [x] macOS/Linux 命令和跳过条件清楚。
+- [x] native SDK smoke 失败能定位到 native library 或 SDK open 问题。
+- [x] profile/settings smoke 不依赖真实后端或真实账号。
+- [x] Review 发现已经修复或明确记录。
+- [x] 本步骤在进入下一步之前已经创建聚焦 commit。
 
 ## 8. 验证方式
 
@@ -91,11 +98,11 @@ Step index：04
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待记录 |  |
-| 已修复问题 | 待记录 |  |
-| 剩余风险 | 待记录 |  |
-| 新增或缺失测试 | 待记录 |  |
-| 已更新或缺失文档 | 待记录 |  |
+| 发现问题 | 初版新增断言等待 profile 异步刷新，且 `pumpAndSettle` 在 integration smoke 中可能被后台动画/任务拖住 | 已改为 fake profile 初值和有限 `pump`，避免真实网络和无限 settle。 |
+| 已修复问题 | 已修复 | `tests/integration_test/support/fake_app_bootstrap.dart` 注入 `homepageMarkdownLoaderProvider` 和初始 `profileProvider`；新增用例改用 `_pumpSmokeFrame`。 |
+| 剩余风险 | macOS smoke 未在当前 host 运行 | `flutter devices` 仅发现 Linux desktop；macOS smoke 需由 macOS runner 验证。Flutter desktop smoke 不应并行跑同一 build 目录，否则可能竞争 `build/linux`。 |
+| 新增或缺失测试 | 已新增 deterministic App smoke | profile/settings 基础回归进入 `integration_test/app_smoke_test.dart`。 |
+| 已更新或缺失文档 | 已更新 | `docs/testing.md`、`tests/integration_test/README.md`、主 Plan 和本 Step。 |
 
 ## 10. Commit 要求
 
@@ -105,6 +112,9 @@ Step index：04
 - 纳入文件：记录本步骤 commit 包含的文件。
 - Commit 后证据：记录 commit hash 和 commit 后 `git status`。
 - 建议消息：`test: stabilize desktop smoke gates`
+- Commit 前状态：`git status --short --branch` 显示本步骤相关测试/文档修改，另有无关未跟踪旧草稿目录；`.e2e/` 为 ignored 运行产物。
+- 纳入文件：`docs/e2e/awiki-me-e2e-regression-plan/plan.md`、本文件、`docs/testing.md`、`tests/integration_test/README.md`、`tests/integration_test/app/app_smoke_test.dart`、`tests/integration_test/support/fake_app_bootstrap.dart`。
+- Commit 后状态：本步骤提交后用 `git status --short --branch` 复核；预期仅保留无关未跟踪旧草稿目录。
 
 ## 11. Blocked 处理
 

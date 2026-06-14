@@ -73,9 +73,9 @@ xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux
 ```
 
 This uses fake App bootstrap and proves the Linux runner, Flutter shell,
-platform binding, App shell, onboarding shell, and basic widget tree can start
-under Xvfb. It does not test real login, networking, secure storage, User
-Service, Message Service, or CLI peer behavior.
+platform binding, App shell, onboarding shell, authenticated shell, and basic
+profile/settings navigation can start under Xvfb. It does not test real login,
+networking, secure storage, User Service, Message Service, or CLI peer behavior.
 
 Linux native SDK smoke:
 
