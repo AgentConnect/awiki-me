@@ -290,7 +290,7 @@ class DesktopCliPeerRunner {
   Future<void> _planFlutterDesktopSmoke() async {
     final flutterArgs = <String>[
       'test',
-      'integration_test/desktop_cli_peer_smoke_test.dart',
+      config.e2eCase.testFile,
       '-d',
       config.platform.name,
       '--dart-define=AWIKI_E2E=true',
@@ -772,6 +772,15 @@ enum DesktopCliPeerE2eCase {
   const DesktopCliPeerE2eCase(this.caseIds);
 
   final List<String> caseIds;
+
+  String get testFile {
+    return switch (this) {
+      DesktopCliPeerE2eCase.full =>
+        'integration_test/desktop_cli_peer_smoke_test.dart',
+      DesktopCliPeerE2eCase.group =>
+        'integration_test/desktop_cli_peer_group_test.dart',
+    };
+  }
 
   static DesktopCliPeerE2eCase parse(String value) {
     return switch (value.trim().toLowerCase()) {

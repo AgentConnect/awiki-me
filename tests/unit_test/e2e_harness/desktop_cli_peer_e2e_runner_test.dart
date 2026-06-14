@@ -390,6 +390,12 @@ void main() {
       await runner.run();
 
       final log = lines.join('\n');
+      expect(
+        log,
+        contains(
+          r'$ flutter test integration_test/desktop_cli_peer_group_test.dart -d macos',
+        ),
+      );
       expect(log, contains('--dart-define=AWIKI_E2E_CASE=group'));
       final timings = File(
         '${root.path}/.e2e/desktop-cli-peer/run-group/reports/timings.json',

@@ -30,8 +30,10 @@ dart run tool/desktop_cli_peer_e2e_runner.dart \
 
 Use `--case group` when validating group chat regressions without paying the
 direct-message and attachment portions of the full desktop smoke. The runner
-still uses the real App integration test shim and `awiki-cli-rs2` peer against
-the configured backend.
+maps this to `integration_test/desktop_cli_peer_group_test.dart`; `--case full`
+continues to use `integration_test/desktop_cli_peer_smoke_test.dart`. Both
+shims run the real App integration test and `awiki-cli-rs2` peer against the
+configured backend.
 
 Deferred Agent IM delegated-message dry-run:
 
