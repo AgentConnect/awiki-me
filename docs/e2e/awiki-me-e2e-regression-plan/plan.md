@@ -4,7 +4,7 @@
 DOC：`test-awiki-me/docs/e2e/awiki-me-e2e-regression-plan/`  
 Harness：`awiki-harness/`  
 创建时间：2026-06-14  
-恢复指针：Step 02 已完成；下一次从 Step 03 开始，先读取 [steps/03-environment-data-contract.md](steps/03-environment-data-contract.md)。
+恢复指针：Step 03 已完成；下一次从 Step 04 开始，先读取 [steps/04-desktop-deterministic-smoke.md](steps/04-desktop-deterministic-smoke.md)。
 
 ## 1. 目标
 
@@ -184,13 +184,36 @@ Harness：`awiki-harness/`
 | `AGENT-SKIP-001` | Deferred | Agent 作为 IM App 处理者 | `skipped` | macOS/Linux | Agent/Daemon + App | 本轮不要求 | Skipped | 既有 `agent_im_delegated_message` 框架 | 保留记录但不实现、不运行、不加入任何 gate、不要求验证证据。 |
 | `E2EE-SKIP-001` | Deferred | 端到端加密 E2E | `skipped` | CLI/System/App 辅助 | deferred | 本轮不要求 | Skipped | 既有系统测试方向 | 保留记录但不实现、不运行、不加入任何 gate、不要求验证证据。 |
 
+### 8.1 Step 03 环境、账号和数据契约
+
+| 领域 | 契约 | 当前入口 |
+|---|---|---|
+| Shared service env | 真实 E2E 通过 env 或 ignored local config 注入 `AWIKI_SERVICE_BASE_URL` / `AWIKI_BASE_URL`、`AWIKI_USER_SERVICE_URL`、`AWIKI_MESSAGE_SERVICE_URL`、`AWIKI_MESSAGE_SERVICE_WS_URL`、`AWIKI_DID_DOMAIN`、`AWIKI_ANP_SERVICE_URL`、`AWIKI_ANP_SERVICE_DID`；只记录 env 名，不记录值。 | `tool/desktop_cli_peer_e2e_runner.dart`、`tests/e2e_test/configs/mobile.example.yaml`、`tests/e2e_test/configs/agent_im_delegated.example.yaml` |
+| Desktop runner env | 通用 desktop harness 使用 `AWIKI_DESKTOP_E2E_*`，并允许 `AWIKI_MACOS_E2E_*` / `AWIKI_LINUX_E2E_*` 覆盖 `FLUTTER`、`CLI_REPO`、`BASE_URL`、`DID_DOMAIN`。 | `tests/e2e_test/harness/desktop_e2e_runner.dart` |
+| Desktop App + CLI peer env | 真实 App/CLI peer 使用 `DEV_OTP_PHONE`、`DEV_OTP_CODE`、`AWIKI_E2E_APP_HANDLE`、`AWIKI_E2E_CLI_HANDLE`、`AWIKI_CLI_BIN` 和 service env；App handle 与 CLI handle 必须不同。 | `tool/desktop_cli_peer_e2e_runner.dart` |
+| Mobile local config | 移动真实 E2E 使用 ignored `tests/e2e_test/configs/mobile.local.yaml`，包含 platform、service URLs、两个设备、两个账号、OTP timeout 和 message timeout。 | `tests/e2e_test/configs/mobile.example.yaml` |
+| Linux headless | Linux desktop smoke 和真实 desktop E2E 必须使用 `xvfb-run`；runner 还要求 `clang`、`cmake`、`ninja`、`pkg-config` 等工具可用；`AWIKI_SQLITE3_SOURCE_DIR` 可作为 native SDK 构建稳定性前提。 | `tests/e2e_test/harness/desktop_e2e_runner.dart`、`docs/testing.md` |
+| macOS desktop | macOS 需要 Xcode command line tools 和 `flutter test -d macos`；与 Linux 共享 scenario，只在 platform adapter 和命令包装层分叉。 | `tests/e2e_test/harness/desktop_e2e_runner.dart` |
+| 数据隔离 | 每次真实 run 必须使用 runId 隔离报告、CLI workspace、CLI HOME、App state 和移动设备状态；`.e2e/`、`*.local.yaml`、`*.local.env` 已在 `.gitignore` 中排除。 | `.gitignore`、`tool/desktop_cli_peer_e2e_runner.dart`、`tests/e2e_test/harness/mobile_e2e_runner.dart` |
+| Secret handling | 报告允许记录 runId、脱敏路径、env 名、service host 和 handle；禁止提交 OTP 值、JWT、private key、CLI workspace、App local state、真实 local config 或 `.e2e/` report。 | `.gitignore`、`DesktopSecretRedactor`、`SecretRedactor` |
+
+### 8.2 账号池和状态隔离规则
+
+- Desktop App + CLI peer 至少需要两个不同 handle：App 账号和 CLI peer 账号；手机号/OTP 来源只能通过本地 env 注入，不能写入文档、config 或 report。
+- Mobile E2E 至少需要两个不同账号：device A 和 device B；`mobile.example.yaml` 只保留占位示例，真实 phone/handle 写入 ignored `mobile.local.yaml` 或 CI secret 注入。
+- 账号准备优先复用稳定非生产账号；只有账号缺失、handle 不存在或明确需要重置时才执行 register，避免耗尽 OTP 或污染共享账号。
+- 所有消息文本、群组名和附件 fixture 名必须包含 runId 或可追踪前缀，便于 history/inbox 去重和报告定位。
+- 真实 run 的本地状态必须按场景隔离：desktop App + CLI peer 使用 `.e2e/desktop-cli-peer/<runId>/reports`、`cli-peer`、`cli-home`、`app`；desktop harness 使用 `.e2e/<platform>/reports/<runId>` 和 `.e2e/<platform>/cli-workspaces/<runId>`；mobile 使用 `.e2e/reports/<runId>` 并根据配置重置设备 App data。
+- User Service 和 Message Service URL 必须可分离配置；当两者使用同一域名时，也要在 report 中记录逻辑字段，避免误连 legacy message 服务时无法定位。
+- 如果缺少账号池、OTP env、Linux runner、移动设备池或服务 URL，只能 dry-run、manual skipped 或记录 blocker；不能提交真实 secret，也不能用静态测试数据伪造 real E2E pass。
+
 ## 9. 任务拆分
 
 | Step | 标题 | 依赖 | 产出 | 小 Plan 文档 | Commit gate | 状态 |
 |---|---|---|---|---|---|---|
 | 01 | E2E 基线盘点与覆盖地图 | 无 | 当前测试入口、功能覆盖和缺口清单 | [steps/01-baseline-inventory.md](steps/01-baseline-inventory.md) | 必须 | done |
 | 02 | 场景矩阵与标签/gate 契约 | Step 01 | `feature/regression/smoke/nightly/release` 标记和准入标准 | [steps/02-scenario-matrix-tags.md](steps/02-scenario-matrix-tags.md) | 必须 | done |
-| 03 | 测试环境、账号和数据隔离契约 | Step 01 | macOS/Linux/mobile/backend/env/account/report 契约 | [steps/03-environment-data-contract.md](steps/03-environment-data-contract.md) | 必须 | pending |
+| 03 | 测试环境、账号和数据隔离契约 | Step 01 | macOS/Linux/mobile/backend/env/account/report 契约 | [steps/03-environment-data-contract.md](steps/03-environment-data-contract.md) | 必须 | done |
 | 04 | Desktop 确定性 smoke 与回归基线 | Step 02, Step 03 | macOS/Linux no-backend smoke gate 和基础回归 | [steps/04-desktop-deterministic-smoke.md](steps/04-desktop-deterministic-smoke.md) | 必须 | pending |
 | 05 | Desktop App + CLI peer 真实 E2E | Step 03, Step 04 | App/CLI 双向消息和账号闭环场景 | [steps/05-desktop-app-cli-peer-e2e.md](steps/05-desktop-app-cli-peer-e2e.md) | 必须 | pending |
 | 06 | 群组与附件基础回归 E2E | Step 03, Step 05 | 群组消息、附件发送/接收、基础错误回归方案 | [steps/06-group-attachment-basic-regression.md](steps/06-group-attachment-basic-regression.md) | 必须 | pending |
@@ -204,8 +227,8 @@ Harness：`awiki-harness/`
 | Step | 状态 | 分支 | 开始时间 | 完成时间 | Commit | Review 证据 | 验证证据 | 下一步 |
 |---|---|---|---|---|---|---|---|---|
 | 01 | done | `feature/test-awiki-me` | 2026-06-14 12:52 CST | 2026-06-14 13:02 CST | 本步骤提交，短 hash 以 `git log -1` 为准 | Review 完成：覆盖地图基于 `docs/testing.md`、`tests/e2e_test/README.md`、`tests/integration_test/README.md`、root integration shims、desktop/mobile runners、unit/widget 测试和 source search；确认 Agent 和 E2EE 保留为 skipped，不进入本轮 gate。 | `find docs/e2e/awiki-me-e2e-regression-plan -type f -name '*.md' -print` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描通过，无真实 secret。 | 启动 Step 02 |
-| 02 | done | `feature/test-awiki-me` | 2026-06-14 12:58 CST | 2026-06-14 13:02 CST | 本步骤提交，短 hash 以 `git log -1` 为准 | Review 完成：确认标签、gate、case 字段、晋级/降级规则覆盖新功能验证和既有功能回归；真实后端/OTP/App+CLI 互通未进入 PR required；Agent 和 E2EE 保持 skipped，不实现、不运行、不进任何 gate。 | `awk ... uniq -d` 检查矩阵 Case ID 无重复；`find docs/e2e/awiki-me-e2e-regression-plan -type f -name '*.md' -print | sort` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描仅命中 Step 05 的 env 变量名示例，无真实 secret。 | 启动 Step 03 |
-| 03 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 01 完成 |
+| 02 | done | `feature/test-awiki-me` | 2026-06-14 12:58 CST | 2026-06-14 13:02 CST | `cacfde6` | Review 完成：确认标签、gate、case 字段、晋级/降级规则覆盖新功能验证和既有功能回归；真实后端/OTP/App+CLI 互通未进入 PR required；Agent 和 E2EE 保持 skipped，不实现、不运行、不进任何 gate。 | `awk ... uniq -d` 检查矩阵 Case ID 无重复；`find docs/e2e/awiki-me-e2e-regression-plan -type f -name '*.md' -print | sort` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描仅命中 Step 05 的 env 变量名示例，无真实 secret。 | 启动 Step 03 |
+| 03 | done | `feature/test-awiki-me` | 2026-06-14 13:06 CST | 2026-06-14 13:09 CST | 本步骤提交，短 hash 以 `git log -1` 为准 | Review 完成：确认 shared service env、desktop/macOS/Linux 前提、mobile local config、账号池、runId 隔离和 secret/report 规则与现有 runner 一致；真实账号、OTP 和 local config 均不提交。 | `dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run` 通过；`dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=linux --dry-run --skip-cli-build --skip-flutter-smoke` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描仅命中 Step 05 env 变量名示例，无真实 secret；`.e2e/` 为 ignored 运行产物。 | 启动 Step 04 |
 | 04 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 02/03 完成 |
 | 05 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 03/04 完成 |
 | 06 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 03/05 完成 |

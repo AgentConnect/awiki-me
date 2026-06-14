@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)  
 Step index：03  
-状态：draft
+状态：done
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
-| Branch | 待执行时记录 |
-| Started | 待记录 |
-| Completed | 待记录 |
-| Commit | 待记录 |
-| Review evidence | 待记录 |
-| Verification evidence | 待记录 |
-| Next action | 定义 macOS/Linux/mobile/backend/account/report 契约 |
+| Status | done |
+| Branch | `feature/test-awiki-me` |
+| Started | 2026-06-14 13:06 CST |
+| Completed | 2026-06-14 13:09 CST |
+| Commit | 本步骤提交后回填短 hash，以 `git log -1` 为准 |
+| Review evidence | Review 完成：环境契约与 `desktop_e2e_runner.dart`、`mobile_e2e_runner.dart`、`desktop_cli_peer_e2e_runner.dart`、example config 和 `.gitignore` 一致；未引入真实 secret。 |
+| Verification evidence | `dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run` 通过；`dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=linux --dry-run --skip-cli-build --skip-flutter-smoke` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描仅命中 Step 05 env 变量名示例，无真实 secret；`.e2e/` 为 ignored 运行产物。 |
+| Next action | 启动 Step 04：Desktop 确定性 smoke 与回归基线 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -67,6 +67,88 @@ Step index：03
    - App state：`.e2e/<scenario>/<runId>/app`。
    - Reports：`.e2e/<scenario>/<runId>/reports`。
 
+### 4.1 Shared service env 契约
+
+| Env / 字段 | 用途 | 来源 | 提交规则 |
+|---|---|---|---|
+| `AWIKI_SERVICE_BASE_URL` / `AWIKI_BASE_URL` | App、CLI 和 harness 的默认服务域名。 | CI secret、本地 shell 或 runner 参数。 | 只记录 env 名；真实值不写入文档。 |
+| `AWIKI_USER_SERVICE_URL` | User Service endpoint，可与 message service 分离。 | CI secret、本地 shell、`mobile.local.yaml`。 | 可在 example 中用公开非生产默认域；真实 local config 不提交。 |
+| `AWIKI_MESSAGE_SERVICE_URL` | Message Service v2 endpoint。 | CI secret、本地 shell、`mobile.local.yaml`。 | 必须可独立覆盖，避免误连 legacy 服务。 |
+| `AWIKI_MESSAGE_SERVICE_WS_URL` | WebSocket endpoint，Agent/未来场景可能需要。 | ignored local config 或 CI secret。 | 只记录字段名和默认形态。 |
+| `AWIKI_DID_DOMAIN` | DID-WBA domain。 | env、runner 参数或 config。 | 不含 secret，可记录域名；真实环境仍由 env/config 控制。 |
+| `AWIKI_ANP_SERVICE_URL` / `AWIKI_ANP_SERVICE_DID` | ANP service override。 | env、runner 参数或 config。 | 可选字段；缺省时由 base URL / DID domain 推导。 |
+| `PUB_HOSTED_URL` | Flutter pub mirror。 | 本地 shell 或 CI。 | 推荐 Tsinghua mirror；不含 secret。 |
+
+### 4.2 Desktop 契约
+
+| 分类 | macOS | Linux |
+|---|---|---|
+| Flutter device | `macos` | `linux` |
+| Runner wrapper | 直接运行 `flutter test -d macos` | 使用 `xvfb-run -a flutter test -d linux` |
+| Tooling 前提 | Xcode command line tools、Flutter desktop enabled、Cargo/CLI repo | `clang`、`cmake`、`ninja`、`pkg-config`、GTK desktop deps、`xvfb-run`、Flutter Linux desktop enabled、Cargo/CLI repo |
+| Native SDK 前提 | 可加载本地 native library | 可选预置 `AWIKI_SQLITE3_SOURCE_DIR`，降低 native build 下载波动 |
+| Env 前缀 | `AWIKI_MACOS_E2E_*` 覆盖通用 desktop env | `AWIKI_LINUX_E2E_*` 覆盖通用 desktop env |
+
+通用 desktop harness 已支持：
+
+- `AWIKI_DESKTOP_E2E_FLUTTER`：Flutter 可执行文件路径。
+- `AWIKI_DESKTOP_E2E_CLI_REPO`：`awiki-cli-rs2` 仓库路径，默认 `../awiki-cli-rs2`。
+- `AWIKI_DESKTOP_E2E_BASE_URL`：服务 base URL。
+- `AWIKI_DESKTOP_E2E_DID_DOMAIN`：DID domain。
+- `AWIKI_MACOS_E2E_*` / `AWIKI_LINUX_E2E_*`：按平台覆盖同名 suffix。
+
+Desktop App + CLI peer runner 使用：
+
+- `DEV_OTP_PHONE`、`DEV_OTP_CODE`：本地非生产 OTP 凭证，只从 env 读，不写文档真实值。
+- `AWIKI_E2E_APP_HANDLE`、`AWIKI_E2E_CLI_HANDLE`：两个不同 handle。
+- `AWIKI_CLI_BIN`：已有 CLI binary；未设置时 runner 可构建 `awiki-cli`。
+- `AWIKI_CLI_WORKSPACE_HOME_DIR`、`AWIKI_CLI_HOME_DIR`、`AWIKI_E2E_APP_STATE_ROOT`：由 runner 按 runId 注入给 Flutter test。
+
+### 4.3 Mobile 契约
+
+| 字段 | 要求 |
+|---|---|
+| `platform` | `ios` 或 `android`；桌面不走 mobile runner。 |
+| `service.*` | `baseUrl`、`userServiceUrl`、`messageServiceUrl`、`didDomain` 必填；`anpServiceUrl` / `anpServiceDid` 可选。 |
+| `device.resetBeforeRun` | nightly/release 默认为 true；本地排障复用登录态时才允许 false。 |
+| `device.ios` | 两个独立 simulator 名称或 UDID；A/B 不能相同。 |
+| `device.android` | 两个独立 AVD 名称或 device serial；不能使用同一个 AVD 的只读多开状态。 |
+| `accounts.a` / `accounts.b` | 两个不同 handle 的非生产账号；真实手机号写入 ignored local config 或 CI secret。 |
+| `otp` / `message` | OTP 和消息等待 timeout 必须显式可调，避免通过无限等待掩盖失败。 |
+
+`tests/e2e_test/configs/mobile.example.yaml` 只作为字段样例；真实运行复制为 `tests/e2e_test/configs/mobile.local.yaml` 或由 CI 生成。`.gitignore` 已排除 `tests/e2e_test/configs/*.local.yaml`、`*.local.yml`、`*.local.env`。
+
+### 4.4 账号池和 runId 规则
+
+| 角色 | 最小数量 | 用途 | 隔离要求 |
+|---|---|---|---|
+| Desktop App user | 1 | App 侧注册/恢复、发送/接收 direct/group/attachment。 | 与 CLI peer handle 不同；App state 放在 runId 目录。 |
+| CLI peer user | 1 | 对端 direct/group/attachment 发送接收。 | CLI workspace 和 HOME 放在 runId 目录；优先复用稳定非生产账号。 |
+| Mobile user A/B | 2 | 两设备互发消息。 | 两个不同 handle；设备数据 nightly 默认 reset。 |
+
+- runId 是真实 E2E 的主关联键，必须进入消息文本、群组名或附件 fixture 标识。
+- 账号准备优先 recover/refresh；只有缺失或明确需要时才 register。
+- 缺少账号池或 OTP 时，真实 E2E 必须 skipped/blocker，不能用 fixture 声称通过。
+
+### 4.5 本地状态和报告目录
+
+| Runner | Reports | CLI workspace / HOME | App / device state |
+|---|---|---|---|
+| Desktop harness | `.e2e/<platform>/reports/<runId>` | `.e2e/<platform>/cli-workspaces/<runId>` | 仅 deterministic smoke，不保存真实 App state。 |
+| Desktop App + CLI peer | `.e2e/desktop-cli-peer/<runId>/reports` | `.e2e/desktop-cli-peer/<runId>/cli-peer`、`.e2e/desktop-cli-peer/<runId>/cli-home` | `.e2e/desktop-cli-peer/<runId>/app` |
+| Agent IM legacy scenario | `.e2e/agent-im/...` | `.e2e/agent-im/cli-peer` | 本轮 skipped，不作为基础 E2E gate。 |
+| Mobile runner | `.e2e/reports/<runId>` | 不使用 CLI workspace | iOS/Android 设备按 config reset 或复用。 |
+
+`.e2e/` 和 local config 已在 `.gitignore` 中排除；任何 report、workspace、device dump、token cache、private key 或 App local state 都不得提交。
+
+### 4.6 Secret 和报告脱敏契约
+
+- 允许记录：runId、case id、platform、scenario、service host、DID domain、handle、fixture 名、timing、pass/fail/skipped、脱敏后的 report 路径。
+- 禁止记录或提交：OTP 值、JWT、private key、seed、DID secret、raw authorization header、CLI workspace、App local state、真实 local config、`.env`。
+- 报告中的绝对本机路径只可作为本地未提交 artifact；提交文档必须使用 workspace-relative path。
+- Redaction scan 必须覆盖 docs、example config、scenario report 和 command logs；命中 env 变量名不算泄漏，命中真实值必须阻断提交并轮换凭证。
+- 远端日志只允许按 runId 过滤后收集，并在报告中记录脱敏摘要；不得提交原始远端日志。
+
 ## 5. 路径
 
 | 仓库 / 模块 / 文件 | 计划变更 | 备注 |
@@ -79,18 +161,18 @@ Step index：03
 
 ## 6. 依赖
 
-- 前置步骤：Step 01；Step 02 可并行提供场景标签。
+- 前置步骤：Step 01、Step 02。
 - 外部文档或决策：账号池、服务 URL、nightly runner。
 - 环境前提：后续真实运行需要 macOS/Linux/mobile 目标环境。
 
 ## 7. 验收标准
 
-- [ ] 所有真实 E2E 配置都有 env/local config 注入方式。
-- [ ] example config 不包含真实 OTP、JWT、私钥、账号 secret。
-- [ ] App 用户、CLI peer 用户、mobile A/B 用户的状态隔离清楚。
-- [ ] User Service 和 Message Service URL 可分离，避免误连 legacy 服务。
-- [ ] Review 发现已经修复或明确记录。
-- [ ] 本步骤在进入下一步之前已经创建聚焦 commit。
+- [x] 所有真实 E2E 配置都有 env/local config 注入方式。
+- [x] example config 不包含真实 OTP、JWT、私钥、账号 secret。
+- [x] App 用户、CLI peer 用户、mobile A/B 用户的状态隔离清楚。
+- [x] User Service 和 Message Service URL 可分离，避免误连 legacy 服务。
+- [x] Review 发现已经修复或明确记录。
+- [x] 本步骤在进入下一步之前已经创建聚焦 commit。
 
 ## 8. 验证方式
 
@@ -109,11 +191,11 @@ Step index：03
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待记录 |  |
-| 已修复问题 | 待记录 |  |
-| 剩余风险 | 待记录 |  |
-| 新增或缺失测试 | 待记录 |  |
-| 已更新或缺失文档 | 待记录 |  |
+| 发现问题 | 无阻断问题 | 契约与现有 runner/config/.gitignore 对齐，未发现需要修改实现的缺口。 |
+| 已修复问题 | 已补齐文档缺口 | 补充 shared service env、desktop/macOS/Linux 前提、mobile local config、账号池、runId 目录和 secret/report 脱敏规则。 |
+| 剩余风险 | 真实账号池和设备池仍需外部环境提供 | Step 05/07 执行真实 E2E 时需要账号、OTP、后端和设备池；本步骤只定义契约和 dry-run 验证。 |
+| 新增或缺失测试 | 未新增测试 | 本步骤为文档/契约步骤；执行了 desktop/mobile dry-run。 |
+| 已更新或缺失文档 | 已更新主 Plan 和当前 Step | 后续若改变 runner 参数，应同步 `docs/testing.md` 和 `tests/e2e_test/README.md`。 |
 
 ## 10. Commit 要求
 
@@ -123,6 +205,9 @@ Step index：03
 - 纳入文件：记录本步骤 commit 包含的文件。
 - Commit 后证据：记录 commit hash 和 commit 后 `git status`。
 - 建议消息：`test: define e2e environment contract`
+- Commit 前状态：`git status --short --branch --ignored=matching .e2e docs/e2e/awiki-me-e2e-regression-plan` 显示两个计划文档修改，`.e2e/` 为 ignored 运行产物。
+- 纳入文件：`docs/e2e/awiki-me-e2e-regression-plan/plan.md`、`docs/e2e/awiki-me-e2e-regression-plan/steps/03-environment-data-contract.md`。
+- Commit 后状态：本步骤提交后用 `git status --short --branch` 复核；预期仅保留无关未跟踪旧草稿目录，`.e2e/` 仍被忽略。
 
 ## 11. Blocked 处理
 
