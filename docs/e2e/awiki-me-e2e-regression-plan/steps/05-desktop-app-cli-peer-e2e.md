@@ -12,7 +12,7 @@ Step index：05
 | Branch | `feature/test-awiki-me` |
 | Started | 2026-06-14 13:35 CST |
 | Completed | 2026-06-14 13:47 CST |
-| Commit | 本步骤提交后回填短 hash，以 `git log -1` 为准 |
+| Commit | `5c1c268` |
 | Review evidence | Review 完成：新增断言只通过 App `MessagingService` / `ConversationService` 和 CLI `msg history` / `msg inbox` / `msg send` 高层命令，不直接访问 message-service raw RPC、WebSocket、SQLite 或测试 fixture；`runId + nonce` 避免调试重跑误命中历史。 |
 | Verification evidence | `dart analyze` 通过；`flutter test tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart` 通过，11 tests；`xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` 在 `AWIKI_E2E` 未开启时安全 skip；`git diff --check` 通过；敏感信息扫描仅命中 env 变量名、测试用假 secret 字符串和会被 redactor 脱敏的 runner 字段，无真实 secret。 |
 | Next action | 启动 Step 06：群组与附件基础回归 E2E |

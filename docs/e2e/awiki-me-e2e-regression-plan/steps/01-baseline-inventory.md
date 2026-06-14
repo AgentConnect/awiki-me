@@ -12,7 +12,7 @@ Step index：01
 | Branch | `feature/test-awiki-me` |
 | Started | 2026-06-14 12:52 CST |
 | Completed | 2026-06-14 13:02 CST |
-| Commit | 本步骤提交，短 hash 以 `git log -1` 为准 |
+| Commit | `f477653` |
 | Review evidence | 覆盖地图已按当前代码和文档核对；Agent 和 E2EE 明确保留为 skipped；未把 dry-run/skipped smoke 误记为真实 E2E。 |
 | Verification evidence | `find docs/e2e/awiki-me-e2e-regression-plan -type f -name '*.md' -print` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描通过。 |
 | Next action | 启动 Step 02：场景矩阵与标签/gate 契约 |

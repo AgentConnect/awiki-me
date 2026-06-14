@@ -12,7 +12,7 @@ Step index：03
 | Branch | `feature/test-awiki-me` |
 | Started | 2026-06-14 13:06 CST |
 | Completed | 2026-06-14 13:09 CST |
-| Commit | 本步骤提交后回填短 hash，以 `git log -1` 为准 |
+| Commit | `a2defaa` |
 | Review evidence | Review 完成：环境契约与 `desktop_e2e_runner.dart`、`mobile_e2e_runner.dart`、`desktop_cli_peer_e2e_runner.dart`、example config 和 `.gitignore` 一致；未引入真实 secret。 |
 | Verification evidence | `dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run` 通过；`dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=linux --dry-run --skip-cli-build --skip-flutter-smoke` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描仅命中 Step 05 env 变量名示例，无真实 secret；`.e2e/` 为 ignored 运行产物。 |
 | Next action | 启动 Step 04：Desktop 确定性 smoke 与回归基线 |

@@ -12,7 +12,7 @@ Step index：04
 | Branch | `feature/test-awiki-me` |
 | Started | 2026-06-14 13:24 CST |
 | Completed | 2026-06-14 13:28 CST |
-| Commit | 本步骤提交后回填短 hash，以 `git log -1` 为准 |
+| Commit | `4edb631` |
 | Review evidence | Review 完成：新增 profile/settings smoke 只使用 fake bootstrap、fake profile provider 和 fake homepage loader；未接真实后端、OTP、CLI peer 或 mobile 设备；root `integration_test/` 仍为 shim。 |
 | Verification evidence | `dart analyze` 通过；`flutter test tests/unit_test/profile_page_test.dart tests/unit_test/settings_page_test.dart tests/unit_test/conversation_workspace_test.dart` 通过，41 tests；`xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过，3 tests；`xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` 通过，1 test；当前 host 为 Linux，macOS smoke 未运行；`git diff --check` 通过；敏感扫描仅命中 env 变量名示例。 |
 | Next action | 启动 Step 05：Desktop App + CLI peer 真实 E2E |

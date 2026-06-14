@@ -9,8 +9,8 @@ Structure:
 - `harness/`: desktop/mobile runners and shared E2E orchestration code.
 - `configs/`: checked-in example configs only; local configs are ignored.
 - `mobile/maestro/`: Maestro flows used by mobile E2E.
-- `scenarios/`: reusable E2E scenario code. Agent IM provides the delegated-message
-  App bootstrap, CLI peer send, App return wait, and remote evidence gate.
+- `scenarios/`: reusable E2E scenario code. Agent IM delegated-message code is
+  retained as deferred scenario infrastructure, not as a current baseline gate.
 
 Desktop dry-run:
 
@@ -18,7 +18,7 @@ Desktop dry-run:
 dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=macos --dry-run
 ```
 
-Agent IM delegated-message dry-run:
+Deferred Agent IM delegated-message dry-run:
 
 ```bash
 dart run tests/e2e_test/harness/desktop_e2e_runner.dart \
@@ -28,23 +28,14 @@ dart run tests/e2e_test/harness/desktop_e2e_runner.dart \
   --dry-run
 ```
 
-The Agent IM scenario config records environment variable names only. The App bootstrap scenario hook lives in `tests/e2e_test/scenarios/agent_im_delegated_message/` and is exercised by `integration_test/agent_im_delegated_message_e2e_test.dart`. Copy the
-example to `tests/e2e_test/configs/agent_im_delegated.local.yaml` for real local
-runs. Dry-run reports include `cli-peer-plan.json`, which lists the configured
-`awiki-cli-rs2` peer workspace and ordinary `msg send` command without secret
-values. For real runs, keep `cliPeer.workspaceRoot` on a persistent ignored path
-such as `.e2e/agent-im/cli-peer`: the harness first tries `id refresh-token` and
-`id status` for that existing peer identity, and only falls back to OTP-based
-`id recover` / `id register` when the reusable identity is not available. The CLI subprocess uses
-`<cliPeer.workspaceRoot>/home` as `HOME`, which prevents the latest
-`awiki-cli-rs2` from importing legacy `awiki-agent-id-message` state from the
-developer's real home directory. Non-dry-run remote evidence collection writes
-`remote-evidence-result.json` and `remote-*.log` files with redacted `ssh ali`
-summaries filtered by runId. For the P0 Agent IM gate,
-`remote-evidence-result.json` must pass all required stages:
-`daemon_bootstrap_received`, `delegated_key_imported`, `hermes_agent_ready`,
-`cli_message_received`, `hermes_runtime_finished`, and `summary_return_sent`.
-Local configs, generated CLI workspaces, and `.e2e/` reports remain ignored.
+The Agent IM scenario config records environment variable names only. The App
+bootstrap scenario hook lives in
+`tests/e2e_test/scenarios/agent_im_delegated_message/` and is exercised by
+`integration_test/agent_im_delegated_message_e2e_test.dart`. This scenario is
+tracked as `AGENT-SKIP-001` in the current AWiki Me basic E2E baseline: keep the
+entry and implementation available for a future standalone Agent IM plan, but do
+not run it or add it to PR/nightly/release gates while it is skipped. Local
+configs, generated CLI workspaces, and `.e2e/` reports remain ignored.
 
 Mobile dry-run:
 
@@ -81,12 +72,10 @@ deployment issue, runner/device issue, or unknown before changing timeouts.
 `AGENT-SKIP-001` and `E2EE-SKIP-001` remain skipped in this baseline: do not
 implement them, run them, or add them to PR/nightly/release gates.
 
-Agent IM scenario dry-run and real runs also write `agent-im-scenario-result.json`.
-That file summarizes AIM-E2E case statuses (`pass` / `fail` / `skipped`),
-records skipped reasons for non-P0 follow-ups, and includes the local redaction
-scan result. The current P0 happy path was verified on `awiki.info` with runId
-`20260614T024413341Z`: `AIM-E2E-001`, `AIM-E2E-002`, and `AIM-E2E-006` passed;
-the App received hidden `awiki.message.sync.v1` `runtime_final` evidence for the
-CLI peer message. Daemon restart/cursor recovery, E2EE opaque boundaries,
-delegated DID revoke behavior, and unknown payload negative injection are still
-P1/P2 follow-ups and may remain `skipped` without invalidating the P0 gate.
+Historical Agent IM reports write `agent-im-scenario-result.json`, which
+summarizes AIM-E2E case statuses (`pass` / `fail` / `skipped`), skipped reasons,
+and redaction scan results. The prior P0 happy path was verified on `awiki.info`
+with runId `20260614T024413341Z`: `AIM-E2E-001`, `AIM-E2E-002`, and
+`AIM-E2E-006` passed; the App received hidden `awiki.message.sync.v1`
+`runtime_final` evidence for the CLI peer message. Treat that as historical
+evidence only; it does not reactivate Agent IM in the current basic baseline.

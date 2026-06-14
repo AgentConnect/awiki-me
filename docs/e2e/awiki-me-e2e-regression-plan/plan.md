@@ -1,10 +1,10 @@
 # Plan：AWiki Me E2E 自动化与回归测试体系完善方案
 
-状态：in_progress  
-DOC：`test-awiki-me/docs/e2e/awiki-me-e2e-regression-plan/`  
-Harness：`awiki-harness/`  
-创建时间：2026-06-14  
-恢复指针：Step 08 已完成；下一次执行最终全局 Review 与整体验证，记录第 19 节最终证据。
+状态：done
+DOC：`test-awiki-me/docs/e2e/awiki-me-e2e-regression-plan/`
+Harness：`awiki-harness/`
+创建时间：2026-06-14
+恢复指针：Step 01-08 和最终全局 Review 均已完成；后续仅在用户扩大范围或新增场景时更新本 Plan。
 
 ## 1. 目标
 
@@ -172,14 +172,14 @@ Harness：`awiki-harness/`
 | `AUTH-E2E-001` | Auth | App 注册/恢复测试账号 | `feature`, `nightly`, `manual` | macOS/Linux | App + CLI peer 前置 | real non-production backend；OTP env 名；账号池角色 | Nightly desktop / Manual | `desktop_cli_peer_smoke_test.dart` 内已有准备逻辑 | App session、DID/Handle、CLI peer 身份准备成功；缺账号池或 OTP 时记录 skipped/blocker。 |
 | `MSG-E2E-001` | Direct Message | App -> CLI direct message | `regression`, `nightly`, `release` | macOS/Linux | App + CLI peer | real non-production backend；runId | Nightly desktop / Release | `desktop_cli_peer_smoke_test.dart` | App 正常发送，CLI `history/inbox` 能按 runId 查到；报告脱敏。 |
 | `MSG-E2E-002` | Direct Message | CLI -> App direct message | `regression`, `nightly`, `release` | macOS/Linux | App + CLI peer | real non-production backend；runId | Nightly desktop / Release | `desktop_cli_peer_smoke_test.dart` | CLI 正常发送，App 通过 service/UI boundary 读取到；不得直接查 SQLite。 |
-| `MSG-REG-001` | Conversation | 会话 history / inbox / 去重 / 刷新 | `feature`, `regression`, `nightly` | macOS/Linux | App + CLI peer | real non-production backend；多条 runId 消息 | Nightly desktop | 待补 | history、inbox、refresh 后无重复，既有会话不被新消息破坏；UI 不稳定时先用 App service boundary。 |
-| `GROUP-E2E-001` | Group | 创建群组并添加成员 | `feature`, `nightly`, `release` | macOS/Linux | App + CLI peer 或第二账号 | real non-production backend；两人群账号池 | Nightly desktop / Release | 待补 | App 创建最小两人群，成员和群资料可见；CLI/SDK 无高层群组能力时记录 blocker。 |
-| `GROUP-E2E-002` | Group | 群组消息互通 | `feature`, `nightly`, `release` | macOS/Linux | App + CLI peer 或第二账号 | real non-production backend；群 runId | Nightly desktop / Release | 待补 | App 和 peer 在同一群 history 中互见文本消息；不得绕过群组服务契约。 |
+| `MSG-REG-001` | Conversation | 会话 history / inbox / 去重 / 刷新 | `feature`, `regression`, `nightly` | macOS/Linux | App + CLI peer | real non-production backend；多条 runId 消息 | Nightly desktop | `desktop_cli_peer_smoke_test.dart` 真实 `AWIKI_E2E=true` 路径已覆盖 history、inbox、refresh 和重复刷新去重；当前 Linux host 只验证 skip smoke。 | history、inbox、refresh 后无重复，既有会话不被新消息破坏；UI 不稳定时先用 App service boundary。 |
+| `GROUP-E2E-001` | Group | 创建群组并添加成员 | `feature`, `nightly`, `release` | macOS/Linux | App + CLI peer 或第二账号 | real non-production backend；两人群账号池 | Nightly desktop / Release | `desktop_cli_peer_smoke_test.dart` 真实 `AWIKI_E2E=true` 路径已使用 `GroupApplicationService` 创建群并添加 CLI member；当前 Linux host 未运行 real backend。 | App 创建最小两人群，成员和群资料可见；CLI/SDK 无高层群组能力时记录 blocker。 |
+| `GROUP-E2E-002` | Group | 群组消息互通 | `feature`, `nightly`, `release` | macOS/Linux | App + CLI peer 或第二账号 | real non-production backend；群 runId | Nightly desktop / Release | `desktop_cli_peer_smoke_test.dart` 真实 `AWIKI_E2E=true` 路径已覆盖 App->peer 与 peer->App 群文本；当前 Linux host 未运行 real backend。 | App 和 peer 在同一群 history 中互见文本消息；不得绕过群组服务契约。 |
 | `GROUP-REG-001` | Group | 群组基础回归 | `feature`, `regression`, `nightly` | macOS/Linux/mobile | App + peer | real non-production backend；最小群资料 | Nightly desktop/mobile | unit/widget 有部分基础 | 群名/基础资料/成员列表不被消息流破坏；首版不覆盖复杂群管理。 |
-| `ATTACH-E2E-001` | Attachment | App -> peer 小附件发送 | `feature`, `nightly`, `release` | macOS/Linux | App + CLI peer | real non-production backend；小型 fixture；hash/metadata | Nightly desktop / Release | 待补 | peer 可见附件 metadata，文件名、大小、hash 或内容摘要匹配；CLI/SDK 无附件命令时记录 blocker。 |
-| `ATTACH-E2E-002` | Attachment | peer -> App 小附件接收 | `feature`, `nightly`, `release` | macOS/Linux | App + CLI peer | real non-production backend；小型 fixture；download 状态 | Nightly desktop / Release | 待补 | App 可见附件并完成基础下载/状态断言；首版不做大文件、批量或断点续传。 |
-| `ATTACH-REG-001` | Attachment | 附件错误与回归 | `feature`, `regression`, `nightly` | macOS/Linux | App + CLI peer | 可控失败 fixture；real backend 或 local system-test backend | Nightly desktop | 待补 | 附件缺失/失败不破坏会话，重复发送不产生错误状态；不依赖真实网络抖动。 |
-| `PROFILE-REG-001` | Profile/Settings | profile/settings 回归 | `smoke`, `regression`, `pr-optional`, `nightly` | macOS/Linux/mobile | no-peer 或 authenticated App | no-backend fake session；nightly 可复用真实 session | PR optional desktop / Nightly | unit/widget 已有基础 | 设置页、profile、session 状态在消息/账号流后仍可访问；避免截图式脆弱断言。 |
+| `ATTACH-E2E-001` | Attachment | App -> peer 小附件发送 | `feature`, `nightly`, `release` | macOS/Linux | App + CLI peer | real non-production backend；小型 fixture；hash/metadata | Nightly desktop / Release | `desktop_cli_peer_smoke_test.dart` 真实 `AWIKI_E2E=true` 路径已覆盖 App 发送小文本附件、CLI history 可见、CLI download 内容匹配；当前 Linux host 未运行 real backend。 | peer 可见附件 metadata，文件名、大小、hash 或内容摘要匹配；CLI/SDK 无附件命令时记录 blocker。 |
+| `ATTACH-E2E-002` | Attachment | peer -> App 小附件接收 | `feature`, `nightly`, `release` | macOS/Linux | App + CLI peer | real non-production backend；小型 fixture；download 状态 | Nightly desktop / Release | `desktop_cli_peer_smoke_test.dart` 真实 `AWIKI_E2E=true` 路径已覆盖 CLI 发送小文本附件、App metadata 与 download 内容匹配；当前 Linux host 未运行 real backend。 | App 可见附件并完成基础下载/状态断言；首版不做大文件、批量或断点续传。 |
+| `ATTACH-REG-001` | Attachment | 附件错误与回归 | `feature`, `regression`, `nightly` | macOS/Linux | App + CLI peer | 可控失败 fixture；real backend 或 local system-test backend | Nightly desktop | 小附件 metadata、download 和重复历史刷新基础路径已补；缺失附件、失败注入、重复发送错误矩阵仍待后续扩展。 | 附件缺失/失败不破坏会话，重复发送不产生错误状态；不依赖真实网络抖动。 |
+| `PROFILE-REG-001` | Profile/Settings | profile/settings 回归 | `smoke`, `regression`, `pr-optional`, `nightly` | macOS/Linux/mobile | no-peer 或 authenticated App | no-backend fake session；nightly 可复用真实 session | PR optional desktop / Nightly | unit/widget 与 `app_smoke_test.dart` 已覆盖基础 profile/settings 进入路径。 | 设置页、profile、session 状态在消息/账号流后仍可访问；避免截图式脆弱断言。 |
 | `MOBILE-E2E-001` | Mobile | 两设备 direct message 互通 | `feature`, `regression`, `nightly`, `release` | iOS/Android | two mobile devices | real non-production backend；设备池；账号池 | Nightly mobile / Release | `mobile_e2e_runner.dart`、Maestro flows | 设备 A/B 双向发送接收通过；缺设备池时只允许 dry-run 或 manual skipped。 |
 | `AGENT-SKIP-001` | Deferred | Agent 作为 IM App 处理者 | `skipped` | macOS/Linux | Agent/Daemon + App | 本轮不要求 | Skipped | 既有 `agent_im_delegated_message` 框架 | 保留记录但不实现、不运行、不加入任何 gate、不要求验证证据。 |
 | `E2EE-SKIP-001` | Deferred | 端到端加密 E2E | `skipped` | CLI/System/App 辅助 | deferred | 本轮不要求 | Skipped | 既有系统测试方向 | 保留记录但不实现、不运行、不加入任何 gate、不要求验证证据。 |
@@ -244,14 +244,14 @@ Step 07 不把 dry-run success 解释为真实两设备通过；在真实 iOS/An
 
 | Step | 状态 | 分支 | 开始时间 | 完成时间 | Commit | Review 证据 | 验证证据 | 下一步 |
 |---|---|---|---|---|---|---|---|---|
-| 01 | done | `feature/test-awiki-me` | 2026-06-14 12:52 CST | 2026-06-14 13:02 CST | 本步骤提交，短 hash 以 `git log -1` 为准 | Review 完成：覆盖地图基于 `docs/testing.md`、`tests/e2e_test/README.md`、`tests/integration_test/README.md`、root integration shims、desktop/mobile runners、unit/widget 测试和 source search；确认 Agent 和 E2EE 保留为 skipped，不进入本轮 gate。 | `find docs/e2e/awiki-me-e2e-regression-plan -type f -name '*.md' -print` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描通过，无真实 secret。 | 启动 Step 02 |
+| 01 | done | `feature/test-awiki-me` | 2026-06-14 12:52 CST | 2026-06-14 13:02 CST | `f477653` | Review 完成：覆盖地图基于 `docs/testing.md`、`tests/e2e_test/README.md`、`tests/integration_test/README.md`、root integration shims、desktop/mobile runners、unit/widget 测试和 source search；确认 Agent 和 E2EE 保留为 skipped，不进入本轮 gate。 | `find docs/e2e/awiki-me-e2e-regression-plan -type f -name '*.md' -print` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描通过，无真实 secret。 | 启动 Step 02 |
 | 02 | done | `feature/test-awiki-me` | 2026-06-14 12:58 CST | 2026-06-14 13:02 CST | `cacfde6` | Review 完成：确认标签、gate、case 字段、晋级/降级规则覆盖新功能验证和既有功能回归；真实后端/OTP/App+CLI 互通未进入 PR required；Agent 和 E2EE 保持 skipped，不实现、不运行、不进任何 gate。 | `awk ... uniq -d` 检查矩阵 Case ID 无重复；`find docs/e2e/awiki-me-e2e-regression-plan -type f -name '*.md' -print | sort` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描仅命中 Step 05 的 env 变量名示例，无真实 secret。 | 启动 Step 03 |
 | 03 | done | `feature/test-awiki-me` | 2026-06-14 13:06 CST | 2026-06-14 13:09 CST | `a2defaa` | Review 完成：确认 shared service env、desktop/macOS/Linux 前提、mobile local config、账号池、runId 隔离和 secret/report 规则与现有 runner 一致；真实账号、OTP 和 local config 均不提交。 | `dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run` 通过；`dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=linux --dry-run --skip-cli-build --skip-flutter-smoke` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描仅命中 Step 05 env 变量名示例，无真实 secret；`.e2e/` 为 ignored 运行产物。 | 启动 Step 04 |
-| 04 | done | `feature/test-awiki-me` | 2026-06-14 13:24 CST | 2026-06-14 13:28 CST | 本步骤提交，短 hash 以 `git log -1` 为准 | Review 完成：新增 profile/settings smoke 只使用 fake bootstrap、fake profile provider 和 fake homepage loader；root `integration_test/` 仍为 shim；未接入真实账号、OTP、User Service、Message Service、CLI peer 或 mobile 设备。 | `dart analyze` 通过；`flutter test tests/unit_test/profile_page_test.dart tests/unit_test/settings_page_test.dart tests/unit_test/conversation_workspace_test.dart` 通过，41 tests；`xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过，3 tests；`xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` 通过，1 test；当前 host 为 Linux，macOS smoke 未运行；`git diff --check` 通过；敏感扫描仅命中 env 变量名示例。 | 启动 Step 05 |
-| 05 | done | `feature/test-awiki-me` | 2026-06-14 13:35 CST | 2026-06-14 13:47 CST | 本步骤提交后回填短 hash，以 `git log -1` 为准 | Review 完成：新增断言只通过 App `MessagingService` / `ConversationService` 和 CLI 高层命令，不直接访问 raw RPC、WebSocket、SQLite 或测试 fixture；real E2E 未在当前 host 运行。 | `dart analyze` 通过；`flutter test tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart` 通过，11 tests；`xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` 在 `AWIKI_E2E` 未开启时安全 skip；`git diff --check` 通过；敏感扫描无真实 secret。 | 启动 Step 06 |
-| 06 | done | `feature/test-awiki-me` | 2026-06-14 13:51 CST | 2026-06-14 14:03 CST | 本步骤提交后回填短 hash，以 `git log -1` 为准 | Review 完成：App 使用 `GroupApplicationService` / `MessagingService`，CLI 使用 `group messages`、`msg send --group`、`msg send --file`、`msg attachment download` 高层命令；未直接访问 raw RPC、WebSocket、SQLite、附件内部存储或 `ModMessage` fixture。 | `dart analyze` 通过；`flutter test tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart` 通过，11 tests；`xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` 在 `AWIKI_E2E` 未开启时安全 skip；`git diff --check` 通过；敏感扫描无真实 secret；real group/attachment E2E 当前 host 未运行。 | 启动 Step 07 |
+| 04 | done | `feature/test-awiki-me` | 2026-06-14 13:24 CST | 2026-06-14 13:28 CST | `4edb631` | Review 完成：新增 profile/settings smoke 只使用 fake bootstrap、fake profile provider 和 fake homepage loader；root `integration_test/` 仍为 shim；未接入真实账号、OTP、User Service、Message Service、CLI peer 或 mobile 设备。 | `dart analyze` 通过；`flutter test tests/unit_test/profile_page_test.dart tests/unit_test/settings_page_test.dart tests/unit_test/conversation_workspace_test.dart` 通过，41 tests；`xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过，3 tests；`xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` 通过，1 test；当前 host 为 Linux，macOS smoke 未运行；`git diff --check` 通过；敏感扫描仅命中 env 变量名示例。 | 启动 Step 05 |
+| 05 | done | `feature/test-awiki-me` | 2026-06-14 13:35 CST | 2026-06-14 13:47 CST | `5c1c268` | Review 完成：新增断言只通过 App `MessagingService` / `ConversationService` 和 CLI 高层命令，不直接访问 raw RPC、WebSocket、SQLite 或测试 fixture；real E2E 未在当前 host 运行。 | `dart analyze` 通过；`flutter test tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart` 通过，11 tests；`xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` 在 `AWIKI_E2E` 未开启时安全 skip；`git diff --check` 通过；敏感扫描无真实 secret。 | 启动 Step 06 |
+| 06 | done | `feature/test-awiki-me` | 2026-06-14 13:51 CST | 2026-06-14 14:03 CST | `bc17b19` | Review 完成：App 使用 `GroupApplicationService` / `MessagingService`，CLI 使用 `group messages`、`msg send --group`、`msg send --file`、`msg attachment download` 高层命令；未直接访问 raw RPC、WebSocket、SQLite、附件内部存储或 `ModMessage` fixture。 | `dart analyze` 通过；`flutter test tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart` 通过，11 tests；`xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` 在 `AWIKI_E2E` 未开启时安全 skip；`git diff --check` 通过；敏感扫描无真实 secret；real group/attachment E2E 当前 host 未运行。 | 启动 Step 07 |
 | 07 | done | `feature/test-awiki-me` | 2026-06-14 14:13 CST | 2026-06-14 14:18 CST | `83c1438` | Review 完成：mobile runner 真实 flow 仍走 Maestro/App UI，不绕过 App/SDK/服务；dry-run report 只作为计划证据，caseStatus 保持 `skipped`；命令日志和 report 对手机号、OTP、token/JWT query、device id、绝对路径做脱敏。 | `dart analyze` 通过；`flutter test tests/unit_test/e2e_harness/mobile_e2e_runner_test.dart` 通过，15 tests；`dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run` 通过，runId `20260614061538-0ef4ka`，report 记录 `mobile-two-device` / `MOBILE-E2E-001` 且 caseStatus 为 `skipped`；`git diff --check` 通过；敏感扫描仅命中 env 名、示例占位手机号、测试用假 secret 和既有 redaction 测试数据，无真实 secret；真实 iOS/Android 两设备未运行，当前 Linux host 未配置设备池、Maestro real run 和 `mobile.local.yaml`。 | 启动 Step 08 |
-| 08 | done | `feature/test-awiki-me` | 2026-06-14 14:22 CST | 2026-06-14 14:30 CST | `a9298f2` | Review 完成：CI required 只包含 deterministic analyze/unit/dry-run/Linux smoke，不加入真实 OTP、后端、SSH 或移动设备；nightly/release/manual runbook 明确 secret/local config 前提、report 字段和 skipped 规则；`AGENT-SKIP-001` 与 `E2EE-SKIP-001` 未加入任何 gate。 | `dart analyze` 通过；`flutter test tests/unit_test` 通过，431 tests；harness focused tests 通过，26 tests；mobile dry-run 通过，runId `20260614062415-8ycc6f`；desktop dry-run 通过，runId `20260614T062415431Z`；串行 Linux app smoke 通过，3 tests；串行 Linux native smoke 通过，1 test；`git diff --check` 通过；敏感扫描仅命中 env 名、测试假值和既有 redaction fixture，无真实 secret；真实 nightly/release E2E 当前 host 未运行。 | 执行最终全局 Review 与整体验证 |
+| 08 | done | `feature/test-awiki-me` | 2026-06-14 14:22 CST | 2026-06-14 14:30 CST | `a9298f2`；证据补记 `274b60d` | Review 完成：CI required 只包含 deterministic analyze/unit/dry-run/Linux smoke，不加入真实 OTP、后端、SSH 或移动设备；nightly/release/manual runbook 明确 secret/local config 前提、report 字段和 skipped 规则；`AGENT-SKIP-001` 与 `E2EE-SKIP-001` 未加入任何 gate。 | `dart analyze` 通过；`flutter test tests/unit_test` 通过，431 tests；harness focused tests 通过，26 tests；mobile dry-run 通过，runId `20260614062415-8ycc6f`；desktop dry-run 通过，runId `20260614T062415431Z`；串行 Linux app smoke 通过，3 tests；串行 Linux native smoke 通过，1 test；`git diff --check` 通过；敏感扫描仅命中 env 名、测试假值和既有 redaction fixture，无真实 secret；真实 nightly/release E2E 当前 host 未运行。 | 执行最终全局 Review 与整体验证 |
 
 ## 11. Codex Goal 执行协议
 
@@ -341,6 +341,7 @@ Step 07 不把 dry-run success 解释为真实两设备通过；在真实 iOS/An
 | 日期 | 变更 | 原因 | 影响步骤 | 是否需要 Review |
 |---|---|---|---|---|
 | 2026-06-14 | 创建 AWiki Me E2E 自动化与回归测试体系完善方案 | 用户要求先出方案文档，暂不实现 | 全部 | 是 |
+| 2026-06-14 | 最终收口时统一 Agent IM 为 `AGENT-SKIP-001` deferred/skipped，并回填矩阵当前基础和提交证据 | 用户明确要求本轮基础 E2E 不执行 Agent 作为 IM App 处理者互通；最终 Review 发现 `docs/testing.md` 和 `tests/e2e_test/README.md` 仍有历史 P0 gate 表述 | Step 02、Step 05、Step 06、Step 08、最终 Review | 是 |
 
 ## 18. 风险与回滚
 
@@ -359,9 +360,31 @@ Step 07 不把 dry-run success 解释为真实两设备通过；在真实 iOS/An
 - Review 范围：`test-awiki-me` 测试框架、integration shims、E2E harness、desktop/mobile configs、CI/nightly/release gate、`awiki-cli-rs2` 相关 SDK/CLI/Daemon 改动、服务侧/system-test 证据、全部文档和执行台账。
 - 重点关注：跨步骤一致性、回归风险、兼容性、安全/隐私、群组/附件场景边界、文档漂移、未提交变更、每个步骤 Review 发现是否已解决或记录。
 - 整体验证命令/检查：按第 12 节执行；无法运行项必须记录原因、影响和替代证据。
-- Review 发现：待执行后记录。
-- 已修复问题：待执行后记录。
-- 剩余风险：待执行后记录。
-- 最终证据：待执行后记录。
-- 最终 `git status`：待执行后记录。
-- 如果本阶段修改文件：记录 Review、验证和最终集成 commit。
+- Review 发现：
+  - Step 01-08 均已完成、Review、验证并提交；执行台账与小 Plan 状态一致。
+  - 发现文档漂移：`docs/testing.md` 和 `tests/e2e_test/README.md` 前半部分仍把 Agent IM 描述为当前 P0 gate，而主 Plan 已要求 `AGENT-SKIP-001` 在本轮基础 E2E 中 skipped/deferred。
+  - 发现执行台账和 Step 01-06 的 commit 字段仍有占位；场景矩阵中 `MSG-REG-001`、`GROUP-*`、`ATTACH-*` 的当前基础仍保留过时 `待补`。
+  - CI required gate 审计通过：`.github/workflows/ci.yml` 只包含 `dart analyze`、`flutter test tests/unit_test`、mobile dry-run、desktop dry-run、Linux App smoke、Linux native SDK smoke，不包含真实 OTP、真实服务账号、SSH、真实 App/CLI peer、Agent IM 或移动设备。
+  - 契约 Review 通过：`desktop_cli_peer_smoke_test.dart` 的真实路径使用 App `MessagingService` / `ConversationService` / `GroupApplicationService` 和 CLI `msg` / `group` / `attachment` 高层命令；未直接拼 message-service RPC、WebSocket frame、SQLite、群组/附件内部存储对象或 `ModMessage` fixture。
+- 已修复问题：
+  - 将 Agent IM 文档统一为历史/延期场景：保留 `agent_im_delegated_message` 框架和历史 runId，但本轮基础 baseline 中 `AGENT-SKIP-001` 不实现、不运行、不加入 PR/nightly/release gate、不要求验证证据。
+  - 回填主 Plan 和 Step 01-06 的 commit hash，Step 08 补记证据提交 `274b60d`。
+  - 更新场景矩阵当前基础：direct message、history/inbox/refresh/去重、群组基础消息、附件小文件 metadata/download 已在真实 `AWIKI_E2E=true` 路径实现；当前 Linux host 仅验证 skip/dry-run，不声称真实后端通过。
+- 剩余风险：
+  - 当前 Linux host 未注入真实非生产后端、OTP、稳定账号池和可用 release CLI binary，未运行 Desktop App + CLI peer 真实 E2E、群组真实 E2E、附件真实 E2E。
+  - 当前 host 非 macOS，未运行 macOS desktop smoke；macOS 仍需对应 runner 验证。
+  - 当前 host 未配置 iOS/Android 设备池、Maestro real run 和 `tests/e2e_test/configs/mobile.local.yaml`，`MOBILE-E2E-001` 只完成 dry-run，caseStatus 保持 `skipped`。
+  - 附件第一版只覆盖小文本附件 metadata/download 基础路径；缺失附件、失败注入、重复发送错误矩阵仍是后续扩展。
+  - 宽泛敏感扫描会命中 env 变量名、单测假值、redaction fixture 以及既有 harness 本地路径模板；Review 已确认未发现真实 secret、local config、`.e2e/` report 或 CLI workspace 被提交。
+- 最终证据：
+  - `dart analyze` 通过。
+  - `flutter test tests/unit_test` 通过，431 tests。
+  - `dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run` 通过，runId `20260614063811-msga8t`，`timings.json` 记录 `scenario: mobile-two-device`、`caseIds: [MOBILE-E2E-001]`、`caseStatus: skipped`。
+  - `dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=linux --dry-run --skip-cli-build --skip-flutter-smoke` 通过，runId `20260614T063811975Z`，CLI isolated workspace smoke 计划通过，OTP 未配置。
+  - `AWIKI_SQLITE3_SOURCE_DIR=/tmp/awiki-sqlite3 xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过，3 tests。
+  - `AWIKI_SQLITE3_SOURCE_DIR=/tmp/awiki-sqlite3 xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` 通过，1 test。
+  - `find docs/e2e/awiki-me-e2e-regression-plan -type f -name '*.md' -print | sort` 通过，主 Plan 和 8 个 Step 文档存在。
+  - `git diff --check` 通过；场景矩阵 Case ID 人工审计无重复定义，重复扫描命中来自矩阵外证据段引用。
+  - 敏感信息扫描仅命中 env 名、测试假值、redaction fixture 和既有 harness 路径模板；未发现真实 OTP、JWT、私钥、local config、`.e2e/` report 或 CLI workspace 被纳入 Git。
+- 最终 `git status`：提交前仅包含本次文档收口修改；提交后复核仅剩既有无关未跟踪目录 `docs/e2e/desktop-cli-peer-macos-linux-execution/`，以及 ignored 运行产物 `.e2e/`、`build/`、`.dart_tool/` 等。
+- 本阶段修改文件：`docs/e2e/awiki-me-e2e-regression-plan/plan.md`、`docs/e2e/awiki-me-e2e-regression-plan/steps/01-baseline-inventory.md`、`docs/e2e/awiki-me-e2e-regression-plan/steps/02-scenario-matrix-tags.md`、`docs/e2e/awiki-me-e2e-regression-plan/steps/03-environment-data-contract.md`、`docs/e2e/awiki-me-e2e-regression-plan/steps/04-desktop-deterministic-smoke.md`、`docs/e2e/awiki-me-e2e-regression-plan/steps/05-desktop-app-cli-peer-e2e.md`、`docs/e2e/awiki-me-e2e-regression-plan/steps/06-group-attachment-basic-regression.md`、`docs/testing.md`、`tests/e2e_test/README.md`；最终文档收口提交以 `git log -1` 为准。

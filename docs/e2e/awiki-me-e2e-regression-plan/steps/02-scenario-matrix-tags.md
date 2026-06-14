@@ -12,7 +12,7 @@ Step index：02
 | Branch | `feature/test-awiki-me` |
 | Started | 2026-06-14 12:58 CST |
 | Completed | 2026-06-14 13:02 CST |
-| Commit | 本步骤提交后回填短 hash，以 `git log -1` 为准 |
+| Commit | `cacfde6` |
 | Review evidence | Review 完成：标签、gate、case 字段、晋级/降级规则覆盖基础 E2E 和回归保护；真实后端和 App/CLI peer 未进入 PR required；`AGENT-SKIP-001` 与 `E2EE-SKIP-001` 保持 skipped。 |
 | Verification evidence | `awk ... uniq -d` 检查矩阵 Case ID 无重复；`find docs/e2e/awiki-me-e2e-regression-plan -type f -name '*.md' -print | sort` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描仅命中 Step 05 的 env 变量名示例，无真实 secret。 |
 | Next action | 启动 Step 03：测试环境、账号和数据隔离契约 |

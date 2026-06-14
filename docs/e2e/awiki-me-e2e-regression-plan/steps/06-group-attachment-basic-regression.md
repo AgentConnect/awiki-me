@@ -12,7 +12,7 @@ Step index：06
 | Branch | `feature/test-awiki-me` |
 | Started | 2026-06-14 13:51 CST |
 | Completed | 2026-06-14 14:03 CST |
-| Commit | 本步骤提交后回填短 hash，以 `git log -1` 为准 |
+| Commit | `bc17b19` |
 | Review evidence | Review 完成：已确认 App 侧使用 `GroupApplicationService` / `MessagingService`，CLI 侧使用 `group messages`、`msg send --group`、`msg send --file`、`msg attachment download` 高层命令；未直接访问 raw RPC、WebSocket、SQLite、附件内部存储对象或 `ModMessage` fixture。 |
 | Verification evidence | `dart analyze` 通过；`flutter test tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart` 通过，11 tests；`xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` 在 `AWIKI_E2E` 未开启时安全 skip；real group/attachment E2E 当前 host 未注入真实后端、OTP 和可用 CLI binary，未运行。 |
 | Next action | 启动 Step 07：Mobile 双设备 E2E |
@@ -108,10 +108,8 @@ Step index：06
 
 | 检查项 | 命令 / 方法 | 预期证据 |
 |---|---|---|
-| Group dry-run | `cd test-awiki-me && dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=linux --scenario=group-message --dry-run` | group scenario 计划可生成；如果尚未实现，记录为待补。 |
-| Attachment dry-run | `cd test-awiki-me && dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=linux --scenario=attachment-message --dry-run` | attachment scenario 计划可生成；如果尚未实现，记录为待补。 |
-| Group real run | `cd test-awiki-me && dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=linux --scenario=group-message --config tests/e2e_test/configs/group.local.yaml` | App/peer 群内双向消息通过或有明确 skipped/blocker。 |
-| Attachment real run | `cd test-awiki-me && dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=linux --scenario=attachment-message --config tests/e2e_test/configs/attachment.local.yaml` | App/peer 附件双向发送/接收通过或有明确 skipped/blocker。 |
+| Safe skip smoke | `cd test-awiki-me && xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` | `AWIKI_E2E` 未开启时安全 skip，证明 shim、编译和 skip gate 不阻塞 PR。 |
+| Group/attachment real run | `cd test-awiki-me && AWIKI_E2E=true DEV_OTP_PHONE="$DEV_OTP_PHONE" DEV_OTP_CODE="$DEV_OTP_CODE" AWIKI_CLI_BIN="$AWIKI_CLI_BIN" AWIKI_USER_SERVICE_URL="$AWIKI_USER_SERVICE_URL" AWIKI_MESSAGE_SERVICE_URL="$AWIKI_MESSAGE_SERVICE_URL" xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` | 同一真实 App + CLI peer 路径覆盖 direct、history/inbox、群组基础文本和小附件双向发送/下载；缺真实后端、OTP、CLI binary 或账号池时记录 skipped/blocker，不伪造通过。 |
 | System evidence | `cd awiki-system-test && make local-test-message-v2` 或 group/attachment focused suite | 服务侧群组/附件契约不回归；如果无 focused suite，记录缺口。 |
 
 ## 9. Review 环节
