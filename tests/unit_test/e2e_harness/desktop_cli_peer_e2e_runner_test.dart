@@ -312,6 +312,12 @@ void main() {
         'MSG-E2E-001',
         'MSG-E2E-002',
         'MSG-REG-001',
+        'GROUP-E2E-001',
+        'GROUP-E2E-002',
+        'GROUP-REG-001',
+        'ATTACH-E2E-001',
+        'ATTACH-E2E-002',
+        'ATTACH-REG-001',
       ]);
       expect(decoded['runId'], 'run123');
       expect(decoded['platform'], 'linux');

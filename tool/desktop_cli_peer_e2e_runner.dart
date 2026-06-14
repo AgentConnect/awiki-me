@@ -10,6 +10,12 @@ const List<String> _desktopCliPeerCaseIds = <String>[
   'MSG-E2E-001',
   'MSG-E2E-002',
   'MSG-REG-001',
+  'GROUP-E2E-001',
+  'GROUP-E2E-002',
+  'GROUP-REG-001',
+  'ATTACH-E2E-001',
+  'ATTACH-E2E-002',
+  'ATTACH-REG-001',
 ];
 
 Future<void> main(List<String> args) async {

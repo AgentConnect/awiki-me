@@ -1,10 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
+import 'package:awiki_me/src/application/group_application_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
+import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
@@ -30,7 +33,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'Desktop App and CLI peer exchange one direct message each',
+    'Desktop App and CLI peer cover direct, group, and attachment basics',
     (tester) async {
       final config = _DesktopCliPeerSmokeConfig.fromEnvironment();
       final bootstrap = await AppBootstrap.create();
@@ -52,6 +55,7 @@ void main() {
 
       final messaging = bootstrap.messagingService!;
       final conversations = bootstrap.conversationService!;
+      final groups = bootstrap.groupApplicationService!;
       final thread = AppThreadRef.direct(config.cliHandle);
       final messageNonce = _messageNonce();
       final appToCliText = 'e2e app to cli ${config.runId} $messageNonce';
@@ -104,9 +108,21 @@ void main() {
         ownerDid: session.did,
         expectedText: cliToAppText,
       );
+      await _verifyGroupTextRegression(
+        groups: groups,
+        messaging: messaging,
+        config: config,
+        nonce: messageNonce,
+      );
+      await _verifyAttachmentRegression(
+        messaging: messaging,
+        thread: thread,
+        config: config,
+        nonce: messageNonce,
+      );
     },
     skip: !_e2eEnabled,
-    timeout: const Timeout(Duration(minutes: 6)),
+    timeout: const Timeout(Duration(minutes: 12)),
   );
 }
 
@@ -183,6 +199,32 @@ Future<void> _waitForCliHistory({
   );
 }
 
+Future<void> _waitForCliGroupMessages({
+  required _DesktopCliPeerSmokeConfig config,
+  required String groupDid,
+  required String expectedText,
+}) async {
+  await _poll(
+    description: 'CLI group messages contain "$expectedText"',
+    action: () async {
+      final result = await _runCli(config, <String>[
+        '--format',
+        'json',
+        'group',
+        'messages',
+        '--group',
+        groupDid,
+        '--limit',
+        '20',
+      ]);
+      if (result.exitCode != 0) {
+        return false;
+      }
+      return _jsonContainsText(result.stdout, expectedText);
+    },
+  );
+}
+
 Future<void> _waitForCliInbox({
   required _DesktopCliPeerSmokeConfig config,
   required String expectedText,
@@ -206,6 +248,20 @@ Future<void> _waitForCliInbox({
   );
 }
 
+Future<void> _waitForGroupMessages({
+  required GroupApplicationService groups,
+  required String groupDid,
+  required String expectedText,
+}) async {
+  await _poll(
+    description: 'App group messages contain "$expectedText"',
+    action: () async {
+      final messages = await groups.listMessages(groupDid, limit: 20);
+      return messages.any((message) => message._matchesText(expectedText));
+    },
+  );
+}
+
 Future<void> _waitForAppHistory({
   required MessagingService messaging,
   required AppThreadRef thread,
@@ -218,6 +274,35 @@ Future<void> _waitForAppHistory({
       return messages.any((message) => message._matchesText(expectedText));
     },
   );
+}
+
+Future<ChatMessage> _waitForAppAttachment({
+  required MessagingService messaging,
+  required AppThreadRef thread,
+  required String expectedCaption,
+  required String expectedFilename,
+}) async {
+  ChatMessage? matched;
+  await _poll(
+    description:
+        'App history contains attachment "$expectedFilename" with caption "$expectedCaption"',
+    action: () async {
+      final messages = await messaging.loadHistory(thread, limit: 50);
+      for (final message in messages) {
+        final attachment = message.attachment;
+        if (attachment == null) {
+          continue;
+        }
+        if (message.content == expectedCaption &&
+            attachment.filename == expectedFilename) {
+          matched = message;
+          return true;
+        }
+      }
+      return false;
+    },
+  );
+  return matched!;
 }
 
 Future<void> _expectAppHistoryContainsExactlyOnce({
@@ -263,6 +348,226 @@ Future<void> _waitForAppConversationRefresh({
   );
 }
 
+Future<void> _verifyGroupTextRegression({
+  required GroupApplicationService groups,
+  required MessagingService messaging,
+  required _DesktopCliPeerSmokeConfig config,
+  required String nonce,
+}) async {
+  final groupName = 'AWiki E2E ${config.runId} $nonce';
+  final group = await groups.createGroup(
+    name: groupName,
+    slug: _groupSlug(config.runId, nonce),
+    description: 'AWiki Me desktop E2E group ${config.runId}',
+    goal: 'Verify basic App and CLI peer group messaging.',
+    rules: 'Only automated non-production E2E messages.',
+  );
+  expect(group.groupId.trim(), isNotEmpty);
+  expect(group.displayName, isNotEmpty);
+
+  await groups.addMember(groupDid: group.groupId, memberRef: config.cliHandle);
+  await _waitForGroupMember(
+    groups: groups,
+    groupDid: group.groupId,
+    memberRef: config.cliHandle,
+  );
+
+  final appGroupText = 'e2e app group ${config.runId} $nonce';
+  final cliGroupText = 'e2e cli group ${config.runId} $nonce';
+  final groupThread = AppThreadRef.group(group.groupId);
+
+  final appGroupMessage = await messaging.sendText(
+    thread: groupThread,
+    content: appGroupText,
+  );
+  expect(appGroupMessage.content, appGroupText);
+
+  await _waitForGroupMessages(
+    groups: groups,
+    groupDid: group.groupId,
+    expectedText: appGroupText,
+  );
+  await _waitForCliGroupMessages(
+    config: config,
+    groupDid: group.groupId,
+    expectedText: appGroupText,
+  );
+
+  final cliGroupSend = await _runCli(config, <String>[
+    '--format',
+    'json',
+    'msg',
+    'send',
+    '--group',
+    group.groupId,
+    '--text',
+    cliGroupText,
+  ]);
+  if (cliGroupSend.exitCode != 0) {
+    fail('CLI group msg send failed: ${_summarizeCliResult(cliGroupSend)}');
+  }
+
+  await _waitForGroupMessages(
+    groups: groups,
+    groupDid: group.groupId,
+    expectedText: cliGroupText,
+  );
+  await _expectAppHistoryContainsExactlyOnce(
+    messaging: messaging,
+    thread: groupThread,
+    expectedTexts: <String>[appGroupText, cliGroupText],
+  );
+}
+
+Future<void> _waitForGroupMember({
+  required GroupApplicationService groups,
+  required String groupDid,
+  required String memberRef,
+}) async {
+  await _poll(
+    description: 'Group members contain "$memberRef"',
+    action: () async {
+      final members = await groups.listMembers(groupDid, limit: 20);
+      final normalizedRef = _normalizeIdentityRef(memberRef);
+      return members.any((member) {
+        final fields = <String>[
+          member.did,
+          member.handle,
+          member.userId,
+        ].map(_normalizeIdentityRef).where((field) => field.isNotEmpty);
+        return fields.any(
+          (field) =>
+              field == normalizedRef ||
+              field.contains(normalizedRef) ||
+              normalizedRef.contains(field),
+        );
+      });
+    },
+  );
+}
+
+Future<void> _verifyAttachmentRegression({
+  required MessagingService messaging,
+  required AppThreadRef thread,
+  required _DesktopCliPeerSmokeConfig config,
+  required String nonce,
+}) async {
+  final fixtureDir = Directory('${config.cliWorkspace}/fixtures')
+    ..createSync(recursive: true);
+  final downloadDir = Directory('${config.cliWorkspace}/downloads')
+    ..createSync(recursive: true);
+
+  final appAttachmentText = 'AWiki E2E app attachment ${config.runId} $nonce\n';
+  final appAttachmentFilename = 'awiki-e2e-app-$nonce.txt';
+  final appAttachmentCaption = 'e2e app attachment ${config.runId} $nonce';
+  final appAttachmentBytes = Uint8List.fromList(utf8.encode(appAttachmentText));
+
+  final appAttachmentMessage = await messaging.sendAttachment(
+    thread: thread,
+    attachment: AttachmentDraft(
+      filename: appAttachmentFilename,
+      mimeType: 'text/plain',
+      bytes: appAttachmentBytes,
+      sizeBytes: appAttachmentBytes.length,
+    ),
+    caption: appAttachmentCaption,
+    idempotencyKey: 'app-attachment-${config.runId}-$nonce',
+  );
+  final appAttachment = appAttachmentMessage.attachment;
+  expect(appAttachment, isNotNull);
+  expect(appAttachment!.filename, appAttachmentFilename);
+  expect(appAttachment.mimeType, 'text/plain');
+  expect(appAttachment.sizeBytes, appAttachmentBytes.length);
+  expect(appAttachmentMessage.content, appAttachmentCaption);
+
+  await _waitForCliHistory(
+    config: config,
+    peerHandle: config.appHandle,
+    expectedText: appAttachmentCaption,
+  );
+
+  final cliDownload = File('${downloadDir.path}/from-app-$nonce.txt');
+  final cliDownloadResult = await _runCli(config, <String>[
+    '--format',
+    'json',
+    'msg',
+    'attachment',
+    'download',
+    '--with',
+    config.appHandle,
+    '--message-id',
+    appAttachmentMessage.remoteId ?? appAttachmentMessage.localId,
+    '--attachment-id',
+    appAttachment.attachmentId,
+    '--output',
+    cliDownload.path,
+  ], timeout: const Duration(minutes: 2));
+  if (cliDownloadResult.exitCode != 0) {
+    fail(
+      'CLI attachment download failed: '
+      '${_summarizeCliResult(cliDownloadResult)}',
+    );
+  }
+  expect(await cliDownload.readAsString(), appAttachmentText);
+
+  final cliAttachmentFilename = 'awiki-e2e-cli-$nonce.txt';
+  final cliAttachmentText = 'AWiki E2E CLI attachment ${config.runId} $nonce\n';
+  final cliAttachmentFile = File('${fixtureDir.path}/$cliAttachmentFilename')
+    ..writeAsStringSync(cliAttachmentText);
+  final cliAttachmentCaption = 'e2e cli attachment ${config.runId} $nonce';
+  final cliAttachmentSend = await _runCli(config, <String>[
+    '--format',
+    'json',
+    'msg',
+    'send',
+    '--to',
+    config.appHandle,
+    '--text',
+    cliAttachmentCaption,
+    '--file',
+    cliAttachmentFile.path,
+    '--mime-type',
+    'text/plain',
+  ], timeout: const Duration(minutes: 2));
+  if (cliAttachmentSend.exitCode != 0) {
+    fail(
+      'CLI attachment send failed: ${_summarizeCliResult(cliAttachmentSend)}',
+    );
+  }
+  final cliSentMessageId = _jsonStringAt(
+    cliAttachmentSend.stdout,
+    const <Object>['data', 'message', 'id'],
+  );
+  final cliSentAttachmentId = _jsonStringAt(
+    cliAttachmentSend.stdout,
+    const <Object>['data', 'attachment', 'attachment_id'],
+  );
+  expect(cliSentMessageId, isNotNull);
+  expect(cliSentAttachmentId, isNotNull);
+
+  final cliAttachmentMessage = await _waitForAppAttachment(
+    messaging: messaging,
+    thread: thread,
+    expectedCaption: cliAttachmentCaption,
+    expectedFilename: cliAttachmentFilename,
+  );
+  final receivedAttachment = cliAttachmentMessage.attachment!;
+  expect(receivedAttachment.mimeType, 'text/plain');
+  expect(receivedAttachment.sizeBytes, utf8.encode(cliAttachmentText).length);
+
+  final appDownload = File('${downloadDir.path}/from-cli-$nonce.txt');
+  final downloadResult = await messaging.downloadAttachment(
+    thread: thread,
+    messageId: cliSentMessageId!,
+    attachmentId: cliSentAttachmentId!,
+    localPath: appDownload.path,
+  );
+  expect(downloadResult.filename, cliAttachmentFilename);
+  expect(downloadResult.mimeType, 'text/plain');
+  expect(downloadResult.sizeBytes, utf8.encode(cliAttachmentText).length);
+  expect(await appDownload.readAsString(), cliAttachmentText);
+}
+
 Future<void> _poll({
   required String description,
   required Future<bool> Function() action,
@@ -289,8 +594,9 @@ Future<void> _poll({
 
 Future<_CliResult> _runCli(
   _DesktopCliPeerSmokeConfig config,
-  List<String> args,
-) async {
+  List<String> args, {
+  Duration timeout = const Duration(seconds: 45),
+}) async {
   final result = await Process.run(
     config.cliBin,
     args,
@@ -300,7 +606,7 @@ Future<_CliResult> _runCli(
       'AWIKI_CLI_WORKSPACE_HOME_DIR': config.cliWorkspace,
     },
     runInShell: false,
-  ).timeout(const Duration(seconds: 45));
+  ).timeout(timeout);
   return _CliResult(
     exitCode: result.exitCode,
     stdout: ((result.stdout as String?) ?? '').trim(),
@@ -329,9 +635,59 @@ bool _valueContainsText(Object? value, String expectedText) {
   return false;
 }
 
+String? _jsonStringAt(String output, List<Object> path) {
+  Object? value;
+  try {
+    value = jsonDecode(output);
+  } on Object {
+    return null;
+  }
+  for (final segment in path) {
+    if (value is Map) {
+      value = value[segment];
+      continue;
+    }
+    if (value is List && segment is int) {
+      if (segment < 0 || segment >= value.length) {
+        return null;
+      }
+      value = value[segment];
+      continue;
+    }
+    return null;
+  }
+  if (value is String && value.trim().isNotEmpty) {
+    return value;
+  }
+  if (value is num) {
+    return value.toString();
+  }
+  return null;
+}
+
 String _messageNonce() {
   final micros = DateTime.now().toUtc().microsecondsSinceEpoch;
   return micros.toRadixString(36);
+}
+
+String _groupSlug(String runId, String nonce) {
+  final raw = 'awiki-e2e-$runId-$nonce'.toLowerCase();
+  final slug = raw
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-')
+      .replaceAll(RegExp(r'^-|-$'), '');
+  if (slug.length <= 48) {
+    return slug;
+  }
+  return slug.substring(0, 48).replaceAll(RegExp(r'-$'), '');
+}
+
+String _normalizeIdentityRef(String value) {
+  final normalized = value.trim().toLowerCase();
+  if (normalized.endsWith('.awiki.ai')) {
+    return normalized.substring(0, normalized.length - '.awiki.ai'.length);
+  }
+  return normalized;
 }
 
 bool _looksRecoverableForRegister(String output) {
