@@ -227,6 +227,19 @@ debugging and release triage do not have to run the full suite:
 | Group message only | `integration_test/desktop_cli_peer_group_test.dart` | `--case group` |
 | Direct attachment only | `integration_test/desktop_cli_peer_attachment_test.dart` | `--case attachment` |
 
+The group case also sends one ANP P9 schema-less mention payload from the App
+with `@agents`, then verifies both App history and CLI group history contain the
+projected `payload.text`. This proves the App → SDK → message-service → history
+path preserves the mention payload without adding a fake `schema`. It does not
+prove daemon prompt execution; daemon prompt evidence remains part of the
+dedicated Agent IM / daemon integration gate.
+
+The P9 slice is reported as `GROUP-P9-001` by the runner. When validating
+against a sibling SDK worktree whose directory name is not `../awiki-cli-rs2`,
+use a local, uncommitted `pubspec_overrides.yaml` to point `awiki_im_core` to
+that worktree and rebuild its native macOS framework before running the desktop
+E2E; do not commit that override.
+
 The test is skipped unless `AWIKI_E2E=true`, so this command is safe as a
 build/smoke check without backend credentials:
 

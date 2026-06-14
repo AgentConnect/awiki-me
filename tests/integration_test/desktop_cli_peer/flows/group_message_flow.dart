@@ -25,6 +25,8 @@ Future<void> _verifyGroupTextRegression({
   );
 
   final appGroupText = 'e2e app group ${config.runId} $nonce';
+  final appGroupMentionText =
+      '@agents e2e app group mention ${config.runId} $nonce';
   final cliGroupText = 'e2e cli group ${config.runId} $nonce';
   final groupThread = AppThreadRef.group(group.groupId);
 
@@ -43,6 +45,40 @@ Future<void> _verifyGroupTextRegression({
     config: config,
     groupDid: group.groupId,
     expectedText: appGroupText,
+  );
+
+  final mentionMessage = await messaging.sendMentionText(
+    thread: groupThread,
+    text: appGroupMentionText,
+    mentions: const <ChatMentionDraft>[
+      ChatMentionDraft(
+        localId: 'men_agents_e2e',
+        surface: '@agents',
+        start: 0,
+        end: 7,
+        target: ChatMentionTargetDraft.groupSelector(
+          ChatMentionSelector.agents,
+        ),
+      ),
+    ],
+    idempotencyKey: 'app-group-mention-${config.runId}-$nonce',
+  );
+  expect(mentionMessage.content, appGroupMentionText);
+  expect(mentionMessage.mentions, hasLength(1));
+  expect(
+    mentionMessage.payloadJson,
+    allOf(contains('"mentions"'), isNot(contains('"schema"'))),
+  );
+
+  await _waitForGroupMessages(
+    groups: groups,
+    groupDid: group.groupId,
+    expectedText: appGroupMentionText,
+  );
+  await _waitForCliGroupMessages(
+    config: config,
+    groupDid: group.groupId,
+    expectedText: appGroupMentionText,
   );
 
   final cliGroupSend = await _runCli(config, <String>[
@@ -67,7 +103,7 @@ Future<void> _verifyGroupTextRegression({
   await _expectAppHistoryContainsExactlyOnce(
     messaging: messaging,
     thread: groupThread,
-    expectedTexts: <String>[appGroupText, cliGroupText],
+    expectedTexts: <String>[appGroupText, appGroupMentionText, cliGroupText],
   );
 }
 

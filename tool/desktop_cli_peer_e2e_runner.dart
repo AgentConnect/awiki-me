@@ -12,6 +12,7 @@ const List<String> _desktopCliPeerCaseIds = <String>[
   'MSG-REG-001',
   'GROUP-E2E-001',
   'GROUP-E2E-002',
+  'GROUP-P9-001',
   'GROUP-REG-001',
   'ATTACH-E2E-001',
   'ATTACH-E2E-002',
@@ -21,6 +22,7 @@ const List<String> _desktopCliPeerGroupCaseIds = <String>[
   'AUTH-E2E-001',
   'GROUP-E2E-001',
   'GROUP-E2E-002',
+  'GROUP-P9-001',
   'GROUP-REG-001',
 ];
 const List<String> _desktopCliPeerDirectCaseIds = <String>[
