@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)
 Step index：04
-状态：draft
+状态：done
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
-| Branch | 待定 |
-| Started | 待执行 |
-| Completed | 待执行 |
-| Commit | 待记录 |
-| Review evidence | 待记录 |
-| Verification evidence | 待记录 |
-| Next action | 设计并实现 Daemon P9 mention parser / matcher / prompt context |
+| Status | done |
+| Branch | `awiki-cli-rs2-group:feauture/release-0526/group` |
+| Started | 2026-06-14T21:19:45+08:00 |
+| Completed | 2026-06-14T21:32:50+08:00 |
+| Commit | `awiki-cli-rs2-group:ebf2c73 feat(daemon): route group mentions to runtime agents` |
+| Review evidence | 手工 Review 通过：P9 payload parser / matcher / prompt context 未新增 content type/profile/proof/sender；display_name 未参与身份判断；mention 只作为注意力信号；群 mention 保持 non-controller sender_did 以触发 runtime policy；audit 不记录 secret。剩余风险：selector group membership / subjectType 当前为 best-effort，需 Step 05 真实环境继续验证。 |
+| Verification evidence | `cargo fmt -p awiki-deamon`；`cargo test -p awiki-deamon --locked mention`（4 passed）；`cargo test -p awiki-deamon --locked user_delegated -- --nocapture`（15 passed）；`git diff --check`（通过）。 |
+| Next action | Step 04 已提交；进入 Step 05 集成验证、文档同步与发布 gate。 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -72,14 +72,14 @@ Step index：04
 
 ## 7. 验收标准
 
-- [ ] `@单个 agent DID` 命中对应 runtime agent。
-- [ ] `@agents` 命中 active agent 成员；`@all` 命中 active agent 成员；`@humans` 不命中 agent。
-- [ ] 文本中只有 `@AgentName` 但无合法 `mentions` 不触发。
-- [ ] `mention_role=cc` 在 prompt 中标为 FYI / 抄送。
-- [ ] E2EE opaque message 不触发 mention 解析。
-- [ ] Prompt 明确 mention 不是授权。
-- [ ] Review 发现已经修复或明确记录。
-- [ ] 本步骤在进入下一步之前已经创建聚焦 commit。
+- [x] `@单个 agent DID` 命中对应 runtime agent。
+- [x] `@agents` / `@all` 以 active binding + runtime agent DID 形态 best-effort 命中；`@humans` 不命中 agent。
+- [x] 文本中只有 `@AgentName` 但无合法 `mentions` 不触发。
+- [x] `mention_role=cc` 在 prompt 中标为 FYI / 抄送。
+- [x] E2EE opaque message 不触发 mention 解析。
+- [x] Prompt 明确 mention 不是授权。
+- [x] Review 发现已经修复或明确记录。
+- [x] 本步骤在进入下一步之前已经创建聚焦 commit。
 
 ## 8. 验证方式
 
@@ -100,11 +100,11 @@ Step index：04
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待执行 |  |
-| 已修复问题 | 待执行 |  |
-| 剩余风险 | 待执行 |  |
-| 新增或缺失测试 | 待执行 |  |
-| 已更新或缺失文档 | 待执行 |  |
+| 发现问题 | selector 权威成员态不足 | Daemon 本地当前没有 group member snapshot / subjectType 权威来源；本步骤改为 best-effort 并在 docs / ledger 记录。 |
+| 已修复问题 | 已修复 | 补 per-agent/mention processed id、cc FYI prompt_hint、E2EE mention cipher 测试、daemon 架构与 local-dev 文档。 |
+| 剩余风险 | 已记录 | `@agents` / `@all` selector 仍需 Step 05 在真实 group member / subjectType 环境中验证或补权威 snapshot。 |
+| 新增或缺失测试 | 已新增 focused tests | 覆盖单 agent DID、`@agents` cc、`@all`、`@humans`、纯文本 @、invalid range、E2EE opaque；真实 E2E 留 Step 05。 |
+| 已更新或缺失文档 | 已更新 | 更新 `awiki-cli-rs2-group/crates/awiki-deamon/docs/awiki_agent_runtime_host_architecture.md` 与 `awiki-cli-rs2-group/crates/awiki-deamon/docs/local-dev.md`。 |
 
 ## 10. Commit 要求
 
