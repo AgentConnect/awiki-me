@@ -228,6 +228,7 @@ class AwikiImCoreMappers {
       did: did,
       handle: handle,
       role: member.role ?? 'member',
+      membershipStatus: GroupMemberMembershipStatus.parse(member.status),
     );
   }
 

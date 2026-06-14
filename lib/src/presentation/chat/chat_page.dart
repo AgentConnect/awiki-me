@@ -12,6 +12,7 @@ import '../../app/app_services.dart';
 import '../../application/models/attachment_models.dart';
 import '../../core/group_display_name.dart';
 import '../../domain/entities/agent/agent_summary.dart';
+import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
@@ -389,6 +390,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
             ),
           ),
           _Composer(
+            conversation: currentConversation,
             embedded: widget.embedded,
             macStyle: macStyle,
             controller: textController,
@@ -2445,8 +2447,9 @@ String _formatFileSize(int bytes) {
   return '${value.toStringAsFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}';
 }
 
-class _Composer extends StatefulWidget {
+class _Composer extends ConsumerStatefulWidget {
   const _Composer({
+    required this.conversation,
     required this.embedded,
     required this.macStyle,
     required this.controller,
@@ -2458,6 +2461,7 @@ class _Composer extends StatefulWidget {
     required this.onRemoveAttachment,
   });
 
+  final ConversationSummary conversation;
   final bool embedded;
   final bool macStyle;
   final TextEditingController controller;
@@ -2469,12 +2473,18 @@ class _Composer extends StatefulWidget {
   final VoidCallback onRemoveAttachment;
 
   @override
-  State<_Composer> createState() => _ComposerState();
+  ConsumerState<_Composer> createState() => _ComposerState();
 }
 
-class _ComposerState extends State<_Composer> {
+class _ComposerState extends ConsumerState<_Composer> {
   final FocusNode _inputFocusNode = FocusNode();
   bool _isSending = false;
+  ChatMentionTrigger? _activeMentionTrigger;
+  List<ChatMentionCandidate> _mentionCandidates =
+      const <ChatMentionCandidate>[];
+  bool _mentionCandidatesLoading = false;
+  int _selectedMentionIndex = 0;
+  int _mentionCandidateRequestSerial = 0;
 
   @override
   void initState() {
@@ -2489,6 +2499,11 @@ class _ComposerState extends State<_Composer> {
       oldWidget.controller.removeListener(_handleTextChanged);
       widget.controller.addListener(_handleTextChanged);
     }
+    if (!sameConversationTarget(oldWidget.conversation, widget.conversation)) {
+      _clearMentionTrigger();
+    } else {
+      _syncMentionTrigger();
+    }
   }
 
   @override
@@ -2502,6 +2517,174 @@ class _ComposerState extends State<_Composer> {
     if (mounted) {
       setState(() {});
     }
+    _syncMentionTrigger();
+  }
+
+  bool get _mentionEnabled {
+    final groupDid = _mentionGroupDid;
+    return widget.enabled && widget.conversation.isGroup && groupDid != null;
+  }
+
+  String? get _mentionGroupDid {
+    final groupId = widget.conversation.groupId?.trim();
+    if (groupId != null && groupId.isNotEmpty) {
+      return groupId;
+    }
+    if (widget.conversation.isGroup) {
+      final thread = widget.conversation.threadId.trim();
+      if (thread.isNotEmpty) {
+        return thread.startsWith('group:')
+            ? thread.substring('group:'.length)
+            : thread;
+      }
+    }
+    return null;
+  }
+
+  void _syncMentionTrigger() {
+    if (!mounted) {
+      return;
+    }
+    final value = widget.controller.value;
+    final trigger = ChatMentionTrigger.detect(
+      text: value.text,
+      selectionBaseOffset: value.selection.baseOffset,
+      selectionExtentOffset: value.selection.extentOffset,
+      composingStart: value.composing.start,
+      composingEnd: value.composing.end,
+      isGroup: _mentionEnabled,
+    );
+    if (trigger == _activeMentionTrigger) {
+      return;
+    }
+    if (trigger == null) {
+      _clearMentionTrigger();
+      return;
+    }
+    setState(() {
+      _activeMentionTrigger = trigger;
+      _mentionCandidates = const <ChatMentionCandidate>[];
+      _mentionCandidatesLoading = true;
+      _selectedMentionIndex = 0;
+    });
+    unawaited(_loadMentionCandidates(trigger));
+  }
+
+  void _clearMentionTrigger() {
+    _mentionCandidateRequestSerial += 1;
+    if (!mounted) {
+      return;
+    }
+    if (_activeMentionTrigger == null &&
+        _mentionCandidates.isEmpty &&
+        !_mentionCandidatesLoading) {
+      return;
+    }
+    setState(() {
+      _activeMentionTrigger = null;
+      _mentionCandidates = const <ChatMentionCandidate>[];
+      _mentionCandidatesLoading = false;
+      _selectedMentionIndex = 0;
+    });
+  }
+
+  Future<void> _loadMentionCandidates(ChatMentionTrigger trigger) async {
+    final groupDid = _mentionGroupDid;
+    if (groupDid == null) {
+      _clearMentionTrigger();
+      return;
+    }
+    final requestSerial = ++_mentionCandidateRequestSerial;
+    try {
+      final members = await ref
+          .read(groupApplicationServiceProvider)
+          .listMembers(groupDid, limit: 100);
+      if (!mounted ||
+          requestSerial != _mentionCandidateRequestSerial ||
+          trigger != _activeMentionTrigger) {
+        return;
+      }
+      final candidates = ChatMentionCandidate.forGroupMembers(
+        members,
+        query: trigger.query,
+      );
+      setState(() {
+        _mentionCandidates = candidates;
+        _mentionCandidatesLoading = false;
+        _selectedMentionIndex = candidates.isEmpty
+            ? 0
+            : _selectedMentionIndex.clamp(0, candidates.length - 1);
+      });
+    } catch (_) {
+      if (!mounted ||
+          requestSerial != _mentionCandidateRequestSerial ||
+          trigger != _activeMentionTrigger) {
+        return;
+      }
+      setState(() {
+        _mentionCandidates = ChatMentionCandidate.forGroupMembers(
+          const <Never>[],
+          query: trigger.query,
+        );
+        _mentionCandidatesLoading = false;
+        _selectedMentionIndex = 0;
+      });
+    }
+  }
+
+  bool get _hasMentionPanel =>
+      _activeMentionTrigger != null &&
+      (_mentionCandidatesLoading || _mentionCandidates.isNotEmpty);
+
+  void _selectMentionCandidate(ChatMentionCandidate candidate) {
+    if (!candidate.enabled) {
+      return;
+    }
+    final trigger = _activeMentionTrigger;
+    if (trigger == null) {
+      return;
+    }
+    final originalValue = widget.controller.value;
+    final insertion = trigger.insert(candidate).applyTo(originalValue.text);
+    final nextValue = originalValue.copyWith(
+      text: insertion.text,
+      selection: TextSelection.collapsed(offset: insertion.selectionOffset),
+      composing: TextRange.empty,
+    );
+    widget.controller.value = nextValue;
+
+    final drafts = ref.read(chatComposerDraftsProvider.notifier);
+    final currentDraft = drafts.draftFor(widget.conversation);
+    drafts.setDraft(
+      widget.conversation,
+      currentDraft.copyWith(
+        text: insertion.text,
+        mentions: ChatMentionDraft.mergeReplacingOverlap(
+          currentDraft.mentions,
+          insertion.mention,
+          insertion.text,
+        ),
+      ),
+    );
+    _clearMentionTrigger();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.enabled) {
+        _inputFocusNode.requestFocus();
+      }
+    });
+  }
+
+  void _moveMentionSelection(int delta) {
+    if (_mentionCandidates.isEmpty) {
+      return;
+    }
+    setState(() {
+      _selectedMentionIndex =
+          (_selectedMentionIndex + delta) % _mentionCandidates.length;
+      if (_selectedMentionIndex < 0) {
+        _selectedMentionIndex += _mentionCandidates.length;
+      }
+    });
   }
 
   bool get _canSubmit {
@@ -2556,6 +2739,27 @@ class _ComposerState extends State<_Composer> {
       return KeyEventResult.ignored;
     }
     final key = event.logicalKey;
+    if (_hasMentionPanel) {
+      if (key == LogicalKeyboardKey.arrowDown) {
+        _moveMentionSelection(1);
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.arrowUp) {
+        _moveMentionSelection(-1);
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.escape) {
+        _clearMentionTrigger();
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.enter ||
+          key == LogicalKeyboardKey.numpadEnter) {
+        if (_mentionCandidates.isNotEmpty) {
+          _selectMentionCandidate(_mentionCandidates[_selectedMentionIndex]);
+          return KeyEventResult.handled;
+        }
+      }
+    }
     if (key != LogicalKeyboardKey.enter &&
         key != LogicalKeyboardKey.numpadEnter) {
       return KeyEventResult.ignored;
@@ -2637,6 +2841,16 @@ class _ComposerState extends State<_Composer> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
+                    if (_hasMentionPanel) ...<Widget>[
+                      _MentionCandidatePanel(
+                        candidates: _mentionCandidates,
+                        loading: _mentionCandidatesLoading,
+                        selectedIndex: _selectedMentionIndex,
+                        macStyle: true,
+                        onSelected: _selectMentionCandidate,
+                      ),
+                      SizedBox(height: responsive.displayScaled(8)),
+                    ],
                     if (!widget.enabled)
                       _DisabledComposerNotice(
                         message: disabledReason,
@@ -2790,6 +3004,16 @@ class _ComposerState extends State<_Composer> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
+              if (_hasMentionPanel) ...<Widget>[
+                _MentionCandidatePanel(
+                  candidates: _mentionCandidates,
+                  loading: _mentionCandidatesLoading,
+                  selectedIndex: _selectedMentionIndex,
+                  macStyle: false,
+                  onSelected: _selectMentionCandidate,
+                ),
+                SizedBox(height: responsive.spacing(8)),
+              ],
               if (!widget.enabled)
                 _DisabledComposerNotice(
                   message: disabledReason,
@@ -2923,6 +3147,225 @@ class _ComposerTextField extends StatelessWidget {
           padding: padding,
           style: textStyle,
           placeholderStyle: placeholderStyle,
+        ),
+      ),
+    );
+  }
+}
+
+class _MentionCandidatePanel extends StatelessWidget {
+  const _MentionCandidatePanel({
+    required this.candidates,
+    required this.loading,
+    required this.selectedIndex,
+    required this.macStyle,
+    required this.onSelected,
+  });
+
+  final List<ChatMentionCandidate> candidates;
+  final bool loading;
+  final int selectedIndex;
+  final bool macStyle;
+  final ValueChanged<ChatMentionCandidate> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final borderRadius = BorderRadius.circular(
+      macStyle ? responsive.displayScaled(10) : responsive.radius(14),
+    );
+    final panel = Container(
+      key: const Key('chat-mention-candidate-panel'),
+      constraints: BoxConstraints(
+        maxHeight: macStyle
+            ? responsive.displayScaled(228)
+            : responsive.displayScaled(260),
+      ),
+      decoration: BoxDecoration(
+        color: CupertinoColors.white,
+        borderRadius: borderRadius,
+        border: Border.all(color: const Color(0xFFDDE5F0)),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x140B1F3A),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: loading && candidates.isEmpty
+          ? Padding(
+              padding: EdgeInsets.all(
+                macStyle
+                    ? responsive.displayScaled(14)
+                    : responsive.spacing(14),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  CupertinoActivityIndicator(radius: 8),
+                  SizedBox(width: 10),
+                  Text('正在加载 mention 候选…'),
+                ],
+              ),
+            )
+          : ListView.builder(
+              shrinkWrap: true,
+              padding: EdgeInsets.symmetric(
+                vertical: macStyle
+                    ? responsive.displayScaled(6)
+                    : responsive.spacing(6),
+              ),
+              itemCount: candidates.length,
+              itemBuilder: (context, index) {
+                final candidate = candidates[index];
+                return _MentionCandidateTile(
+                  candidate: candidate,
+                  selected: index == selectedIndex,
+                  macStyle: macStyle,
+                  onTap: () => onSelected(candidate),
+                );
+              },
+            ),
+    );
+    return ClipRRect(borderRadius: borderRadius, child: panel);
+  }
+}
+
+class _MentionCandidateTile extends StatelessWidget {
+  const _MentionCandidateTile({
+    required this.candidate,
+    required this.selected,
+    required this.macStyle,
+    required this.onTap,
+  });
+
+  final ChatMentionCandidate candidate;
+  final bool selected;
+  final bool macStyle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final enabled = candidate.enabled;
+    final background = selected
+        ? const Color(0xFFEAF2FF)
+        : CupertinoColors.transparent;
+    final titleColor = enabled
+        ? const Color(0xFF17213A)
+        : const Color(0xFF8A96AA);
+    final subtitle = enabled
+        ? candidate.subtitle
+        : candidate.disabledReason ?? candidate.subtitle;
+    return CupertinoButton(
+      key: Key('chat-mention-candidate-${candidate.id}'),
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: enabled ? onTap : null,
+      child: Container(
+        color: background,
+        padding: EdgeInsets.symmetric(
+          horizontal: macStyle
+              ? responsive.displayScaled(12)
+              : responsive.spacing(12),
+          vertical: macStyle
+              ? responsive.displayScaled(8)
+              : responsive.spacing(9),
+        ),
+        child: Opacity(
+          opacity: enabled ? 1 : 0.62,
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: macStyle
+                    ? responsive.displayScaled(28)
+                    : responsive.displayScaled(32),
+                height: macStyle
+                    ? responsive.displayScaled(28)
+                    : responsive.displayScaled(32),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE4ECF7),
+                  borderRadius: BorderRadius.circular(
+                    macStyle
+                        ? responsive.displayScaled(8)
+                        : responsive.radius(10),
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  '@',
+                  style: TextStyle(
+                    color: const Color(0xFF0B65F8),
+                    fontSize: macStyle
+                        ? responsive.displayScaled(15)
+                        : responsive.bodyMd,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: macStyle
+                    ? responsive.displayScaled(10)
+                    : responsive.spacing(10),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      candidate.surface,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: titleColor,
+                        fontSize: macStyle
+                            ? responsive.displayScaled(13)
+                            : responsive.bodyMd,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    SizedBox(height: responsive.displayScaled(2)),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: const Color(0xFF6C7890),
+                        fontSize: macStyle
+                            ? responsive.displayScaled(11)
+                            : responsive.bodySm,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: responsive.displayScaled(8)),
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: responsive.displayScaled(7),
+                  vertical: responsive.displayScaled(3),
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF2F5FA),
+                  borderRadius: BorderRadius.circular(
+                    responsive.displayScaled(999),
+                  ),
+                ),
+                child: Text(
+                  candidate.badge,
+                  style: TextStyle(
+                    color: const Color(0xFF44506A),
+                    fontSize: macStyle
+                        ? responsive.displayScaled(10)
+                        : responsive.displayScaled(11),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

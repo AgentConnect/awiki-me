@@ -27,6 +27,18 @@ Run:
 flutter test tests/unit_test
 ```
 
+Focused group mention composer checks:
+
+```bash
+flutter test tests/unit_test --name mention
+flutter test tests/unit_test --name "chat mention"
+```
+
+These cover the group-only `@` trigger, fixed selector/member candidates,
+displayName/handle/DID search, unknown `subjectType` disabling for single-member
+targets, draft range invalidation, and Unicode code point offsets needed by ANP
+P9 payloads.
+
 Unit fakes live under `tests/unit_test/support/` and
 `tests/unit_test/test_support.dart`. Integration-only bootstraps live under
 `tests/integration_test/support/`. Keep production code free of test-only mocks.

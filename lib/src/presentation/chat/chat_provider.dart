@@ -6,6 +6,7 @@ import '../../app/app_services.dart';
 import '../../application/models/attachment_models.dart';
 import '../../application/models/app_thread_ref.dart';
 import '../../domain/entities/chat_attachment.dart';
+import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
@@ -99,22 +100,42 @@ class AgentPendingTurn {
 }
 
 class ChatComposerDraft {
-  const ChatComposerDraft({this.text = '', this.pendingAttachment});
+  const ChatComposerDraft({
+    this.text = '',
+    this.pendingAttachment,
+    this.mentions = const <ChatMentionDraft>[],
+  });
 
   final String text;
   final AttachmentDraft? pendingAttachment;
+  final List<ChatMentionDraft> mentions;
 
-  bool get isEmpty => text.isEmpty && pendingAttachment == null;
+  bool get isEmpty =>
+      text.isEmpty && pendingAttachment == null && mentions.isEmpty;
+
+  List<ChatMentionDraft> get validMentions => mentions
+      .where(
+        (mention) => mention.rangeMatches(text) && mention.target.isP9Sendable,
+      )
+      .toList();
+
+  List<Map<String, Object?>> p9MentionJsonForSend() {
+    return <Map<String, Object?>>[
+      for (final mention in validMentions) mention.toP9Json(text),
+    ];
+  }
 
   ChatComposerDraft copyWith({
     String? text,
     Object? pendingAttachment = _chatComposerDraftUnset,
+    List<ChatMentionDraft>? mentions,
   }) {
     return ChatComposerDraft(
       text: text ?? this.text,
       pendingAttachment: identical(pendingAttachment, _chatComposerDraftUnset)
           ? this.pendingAttachment
           : pendingAttachment as AttachmentDraft?,
+      mentions: mentions ?? this.mentions,
     );
   }
 }
@@ -136,7 +157,18 @@ class ChatComposerDraftsController
   }
 
   void setText(ConversationSummary conversation, String text) {
-    _upsertDraft(conversation, draftFor(conversation).copyWith(text: text));
+    final current = draftFor(conversation);
+    _upsertDraft(
+      conversation,
+      current.copyWith(
+        text: text,
+        mentions: ChatMentionDraft.transformMentions(
+          oldText: current.text,
+          newText: text,
+          oldMentions: current.mentions,
+        ),
+      ),
+    );
   }
 
   void setAttachment(
