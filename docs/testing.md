@@ -140,6 +140,44 @@ The runner writes redacted `scenario-plan.json`, `cli-peer-plan.json`, and
 local config for real runs. Do not commit local configs, generated CLI
 workspaces, reports, OTP values, tokens, private keys, or remote log captures.
 
+Real Agent IM delegated-message runs are a P0 gate for the App ↔ remote
+Daemon/Hermes loop. A pass requires both local App evidence and remote daemon
+evidence:
+
+- the App sends `awiki.daemon.bootstrap.v1` through the real IM payload path;
+- the CLI peer from `awiki-cli-rs2` sends an ordinary message to the App user;
+- remote evidence observes `daemon_bootstrap_received`,
+  `delegated_key_imported`, `hermes_agent_ready`, `cli_message_received`,
+  `hermes_runtime_finished`, and `summary_return_sent`;
+- the App receives hidden, non-renderable `awiki.message.sync.v1`
+  `runtime_status` / `runtime_final` payloads instead of normal chat bubbles.
+
+Latest verified P0 run on `awiki.info`: `20260614T024413341Z`, message
+`msg_agent_im_20260614T024413341Z`, with `AIM-E2E-001`, `AIM-E2E-002`, and
+`AIM-E2E-006` passing. Follow-up scenarios for daemon restart/cursor recovery,
+E2EE opaque boundaries, delegated DID revoke behavior, and unknown payload
+negative injection remain P1/P2 and must not be described as completed by this
+P0 gate.
+
+macOS real smoke:
+
+```bash
+dart run tests/e2e_test/harness/desktop_e2e_runner.dart \
+  --platform=macos \
+  --scenario=agent-im-delegated-message \
+  --config tests/e2e_test/configs/agent_im_delegated.local.yaml
+```
+
+For compatibility, the old wrapper remains available:
+
+```bash
+dart run tool/macos_e2e_runner.dart --dry-run
+```
+
+Reports are written under `.e2e/<platform>/reports/<runId>/`. The OTP variables
+are detected for later live auth flows but are not printed or persisted by the
+runner.
+
 ### Desktop App + CLI Peer E2E
 
 `integration_test/desktop_cli_peer_smoke_test.dart` is the manual/nightly

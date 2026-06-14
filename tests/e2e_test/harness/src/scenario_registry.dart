@@ -28,6 +28,7 @@ final class E2eScenarioRegistry {
       binary: cliBinaryPath ?? config.cliPeer.binary,
       commands: AgentImCliPeerAdapterPlan.commands(
         config: config,
+        runId: runId,
         targetHandle: config.accounts.appUser.handle,
         messageText:
             ordinaryMessageText ??

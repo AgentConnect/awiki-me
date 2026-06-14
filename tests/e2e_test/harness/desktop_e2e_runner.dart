@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'src/agent_im_config.dart';
+import 'src/app_probe_adapter.dart';
 import 'src/cli_peer_adapter.dart';
 import 'src/e2e_report.dart';
 import 'src/remote_adapter.dart';
@@ -45,6 +46,9 @@ Future<void> main(List<String> args) async {
     stderr.writeln('\nDesktop E2E failed: ${error.message}');
     exitCode = 1;
   } on AgentImCliPeerFailure catch (error) {
+    stderr.writeln('\nDesktop E2E failed: ${error.message}');
+    exitCode = 1;
+  } on AgentImAppProbeFailure catch (error) {
     stderr.writeln('\nDesktop E2E failed: ${error.message}');
     exitCode = 1;
   } on DesktopE2eFailure catch (error) {
@@ -206,6 +210,15 @@ class DesktopE2eRunner {
       logFile: File('${reportDir.path}/cli-build.log'),
       timeout: const Duration(minutes: 30),
     );
+    if (options.scenario == agentImDelegatedMessageScenario) {
+      await commands.run(
+        'cargo',
+        const <String>['build', '-p', 'im-core-dart', '--release'],
+        workingDirectory: config.cliRepo,
+        logFile: File('${reportDir.path}/im-core-dart-build.log'),
+        timeout: const Duration(minutes: 30),
+      );
+    }
   }
 
   Future<void> _cliSmoke() async {
@@ -331,7 +344,8 @@ class DesktopE2eRunner {
     }
     _line('scenario plan: ${reportDir.path}/scenario-plan.json');
     _line('cli peer plan: ${reportDir.path}/cli-peer-plan.json');
-    final adapter = _agentImCliPeerAdapter(agentImConfig!);
+    final cliAdapter = _agentImCliPeerAdapter(agentImConfig!);
+    final appProbeAdapter = _agentImAppProbeAdapter(agentImConfig!);
     final scenarioResult =
         await AgentImDelegatedMessageScenario(config: agentImConfig!).run(
           runId: runId,
@@ -342,10 +356,22 @@ class DesktopE2eRunner {
           remoteCommands: plan.remoteCommands,
           cliPeerFlow: options.dryRun
               ? null
-              : () => adapter.runOrdinaryMessageFlow(
+              : () async {
+                  await _waitForAgentImBootstrapReady();
+                  return cliAdapter.runOrdinaryMessageFlow(
+                    runId: runId,
+                    targetHandle: agentImConfig!.accounts.appUser.handle,
+                    messageText: _agentImOrdinaryMessageText(),
+                  );
+                },
+          appBootstrapFlow: options.dryRun
+              ? null
+              : () => appProbeAdapter.bootstrap(runId: runId),
+          appReturnFlow: options.dryRun
+              ? null
+              : ({required sourceMessageId}) => appProbeAdapter.waitForReturn(
                   runId: runId,
-                  targetHandle: agentImConfig!.accounts.appUser.handle,
-                  messageText: _agentImOrdinaryMessageText(),
+                  sourceMessageId: sourceMessageId,
                 ),
         );
     reportWriter.writeJson(
@@ -362,6 +388,12 @@ class DesktopE2eRunner {
       'agent im scenario result: '
       '${reportDir.path}/agent-im-scenario-result.json',
     );
+    if (!options.dryRun && plan.remoteCommands.isEmpty) {
+      throw DesktopE2eFailure(
+        'Agent IM remote evidence commands are disabled. Non dry-run must '
+        'collect Daemon/Hermes evidence for the P0 gate.',
+      );
+    }
     if (!options.dryRun && plan.remoteCommands.isNotEmpty) {
       final remoteResult = await const AgentImRemoteEvidenceCollector().collect(
         commands: plan.remoteCommands,
@@ -377,6 +409,13 @@ class DesktopE2eRunner {
         'remote evidence result: '
         '${reportDir.path}/remote-evidence-result.json',
       );
+      if (!remoteResult.passed) {
+        throw DesktopE2eFailure(
+          'Agent IM remote evidence is incomplete. Missing stages: '
+          '${remoteResult.missingStages.join(', ')}. See '
+          '${reportDir.path}/remote-evidence-result.json',
+        );
+      }
     }
     if (scenarioResult.hasBlockingFailure) {
       throw DesktopE2eFailure(
@@ -384,6 +423,29 @@ class DesktopE2eRunner {
         '${reportDir.path}/agent-im-scenario-result.json',
       );
     }
+  }
+
+  Future<void> _waitForAgentImBootstrapReady() async {
+    final scenarioConfig = agentImConfig;
+    if (scenarioConfig == null || !scenarioConfig.remote.collectLogs) {
+      return;
+    }
+    final command = RemoteEvidenceCommand(
+      label: 'wait daemon bootstrap ready',
+      executable: 'ssh',
+      args: <String>[
+        scenarioConfig.remote.sshAlias,
+        agentImBootstrapReadyWaitScript(runId),
+      ],
+    );
+    _line('[remote-wait] ${command.label}: ${command.command}');
+    await commands.run(
+      command.executable,
+      command.args,
+      workingDirectory: root,
+      logFile: File('${reportDir.path}/remote-wait-bootstrap-ready.log'),
+      timeout: const Duration(minutes: 3),
+    );
   }
 
   Directory _agentImCliPeerWorkspaceDirectory() {
@@ -406,6 +468,23 @@ class DesktopE2eRunner {
       cliRepo: config.cliRepo,
       binary: File(config.cliBinaryPath),
       workspace: agentImCliPeerWorkspaceDir,
+      reportDir: reportDir,
+      runner: commands,
+      dryRun: options.dryRun,
+    );
+  }
+
+  AgentImAppProbeAdapter _agentImAppProbeAdapter(
+    AgentImDelegatedConfig scenarioConfig,
+  ) {
+    final configPath = options.configPath;
+    if (configPath == null || configPath.trim().isEmpty) {
+      throw DesktopE2eFailure('App probe requires --config.');
+    }
+    return AgentImAppProbeAdapter(
+      config: scenarioConfig,
+      configFile: File(configPath),
+      appRepo: root,
       reportDir: reportDir,
       runner: commands,
       dryRun: options.dryRun,

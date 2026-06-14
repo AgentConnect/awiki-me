@@ -93,13 +93,18 @@ final _rules = <_RedactionRule>[
 bool _sensitiveJsonKey(String key) {
   final normalized = key.toLowerCase();
   return normalized.contains('private_key') ||
+      normalized.contains('privatekey') ||
+      normalized.contains('private') ||
       normalized.contains('subkey_private') ||
       normalized == 'token' ||
       normalized.endsWith('_token') ||
+      normalized.endsWith('token') ||
       normalized == 'jwt' ||
       normalized == 'otp' ||
       normalized == 'otp_code' ||
+      normalized == 'otpcode' ||
       normalized == 'verification_code' ||
+      normalized == 'verificationcode' ||
       normalized == 'phone';
 }
 

@@ -150,6 +150,7 @@ class DaemonBootstrapEnvelope {
     required this.appInstanceId,
     required this.controllerDid,
     this.userHandle,
+    this.runId,
     required this.userSubkeyPackage,
     required this.desiredMessageAgent,
     this.capabilityPolicy = const AppCapabilityPolicy(),
@@ -160,6 +161,7 @@ class DaemonBootstrapEnvelope {
   final String appInstanceId;
   final String controllerDid;
   final String? userHandle;
+  final String? runId;
   final UserSubkeyPackage userSubkeyPackage;
   final DesiredMessageAgent desiredMessageAgent;
   final AppCapabilityPolicy capabilityPolicy;
@@ -200,6 +202,7 @@ class DaemonBootstrapEnvelope {
       'app_instance_id': appInstanceId,
       'controller_did': controllerDid,
       if (_nonEmpty(userHandle) != null) 'user_handle': userHandle!.trim(),
+      if (_nonEmpty(runId) != null) 'run_id': runId!.trim(),
       'user_subkey_package': userSubkeyPackage.toJson(),
       'capability_policy': capabilityPolicy.toJson(),
       'desired_message_agent': desiredMessageAgent.toJson(),
@@ -221,6 +224,32 @@ String messageAgentBootstrapIdempotencyKey({
   required String userDid,
   required String appInstanceId,
 }) => 'message-agent-bootstrap:$userDid:$appInstanceId';
+
+String messageAgentBootstrapAttemptId({
+  required String userDid,
+  required String appInstanceId,
+  String? runId,
+}) {
+  final base = messageAgentBootstrapId(
+    userDid: userDid,
+    appInstanceId: appInstanceId,
+  );
+  final suffix = _bootstrapAttemptSuffix(runId);
+  return suffix == null ? base : '${base}_$suffix';
+}
+
+String messageAgentBootstrapAttemptIdempotencyKey({
+  required String userDid,
+  required String appInstanceId,
+  String? runId,
+}) {
+  final base = messageAgentBootstrapIdempotencyKey(
+    userDid: userDid,
+    appInstanceId: appInstanceId,
+  );
+  final suffix = _bootstrapAttemptSuffix(runId);
+  return suffix == null ? base : '$base:attempt:$suffix';
+}
 
 String messageAgentEnsureOnceKey({
   required String userDid,
@@ -258,4 +287,17 @@ String _stableBootstrapSuffix(String userDid, String appInstanceId) {
 String? _nonEmpty(String? value) {
   final trimmed = value?.trim();
   return trimmed == null || trimmed.isEmpty ? null : trimmed;
+}
+
+String? _bootstrapAttemptSuffix(String? runId) {
+  final value = _nonEmpty(runId);
+  if (value == null) {
+    return null;
+  }
+  final normalized = value.replaceAll(RegExp(r'[^A-Za-z0-9_.:-]+'), '-');
+  if (normalized.length <= 64) {
+    return normalized;
+  }
+  final digest = sha256.convert(utf8.encode(normalized)).toString();
+  return '${normalized.substring(0, 48)}-${digest.substring(0, 12)}';
 }

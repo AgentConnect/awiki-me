@@ -1383,6 +1383,7 @@ class FakeAgentControlService implements AgentControlService {
     required UserSubkeyPackage userSubkeyPackage,
     String? userHandle,
     String? runtimeRegistrationToken,
+    String? runId,
   }) async {
     lastBootstrapDaemonDid = daemonAgentDid;
     lastBootstrapControllerDid = controllerDid;

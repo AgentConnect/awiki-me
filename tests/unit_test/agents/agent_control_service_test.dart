@@ -119,6 +119,7 @@ void main() {
       );
 
       expect(inventory.runtimeTokenDaemonDid, 'did:agent:daemon');
+      expect(inventory.runtimeTokenHandle, 'hermes-msg-app-1-334c10a06052');
       expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
       expect(messages.lastSecure, isFalse);
       expect(
@@ -155,6 +156,56 @@ void main() {
       );
       expect(desired['runtime_registration_token'], 'runtime-token');
       expect(desired['allowed_actions'], defaultMessageAgentActions);
+    },
+  );
+
+  test(
+    'ensureMessageAgentBootstrap keeps app instance stable while run scopes attempt idempotency',
+    () async {
+      final inventory = _InventoryStub();
+      final messages = _MessagesStub();
+      final service = DefaultAgentControlService(
+        inventory: inventory,
+        messages: messages,
+      );
+
+      Future<Map<String, Object?>> send(String runId) async {
+        await service.ensureMessageAgentBootstrap(
+          daemonAgentDid: 'did:agent:daemon',
+          controllerDid: 'did:human:me',
+          appInstanceId: 'macos-e2e-app',
+          userHandle: 'alice.awiki.info',
+          userSubkeyPackage: const UserSubkeyPackage(
+            userDid: 'did:human:me',
+            verificationMethod: 'did:human:me#daemon-key-1',
+            publicKeyMultibase: 'zPublic',
+            privateKeyMultibase: 'zPrivate',
+          ),
+          runId: runId,
+        );
+        return Map<String, Object?>.from(messages.lastPayload!);
+      }
+
+      final first = await send('run-001');
+      final retry = await send('run-001');
+      final secondRun = await send('run-002');
+
+      expect(first['app_instance_id'], 'macos-e2e-app');
+      expect(messages.lastIdempotencyKey, endsWith(':attempt:run-002'));
+      expect(first['idempotency_key'], retry['idempotency_key']);
+      expect(first['bootstrap_id'], retry['bootstrap_id']);
+      expect(first['idempotency_key'], isNot(secondRun['idempotency_key']));
+      expect(first['bootstrap_id'], isNot(secondRun['bootstrap_id']));
+
+      final desired = first['desired_message_agent'] as Map<String, Object?>;
+      expect(
+        desired['ensure_once_key'],
+        'app-message-agent:did:human:me:macos-e2e-app',
+      );
+      expect(
+        inventory.runtimeTokenHandle,
+        'hermes-msg-macos-e2e-app-7fe1fc2b5661',
+      );
     },
   );
 
