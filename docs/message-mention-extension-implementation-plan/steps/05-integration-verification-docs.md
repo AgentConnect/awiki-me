@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)
 Step index：05
-状态：draft
+状态：done
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
-| Branch | 待定 |
-| Started | 待执行 |
-| Completed | 待执行 |
-| Commit | 待记录 |
-| Review evidence | 待记录 |
-| Verification evidence | 待记录 |
-| Next action | 补齐跨 repo 测试、文档和最终 Review gate |
+| Status | done |
+| Branch | `awiki-me-group:feauture/release-0526/group`; `awiki-cli-rs2-group:feauture/release-0526/group` |
+| Started | 2026-06-14T21:34:03+08:00 |
+| Completed | 2026-06-14T22:40:23+08:00 |
+| Commit | `awiki-cli-rs2-group:1da1710 docs: document group mention integration gates`; `awiki-me-group:d373d48 test: add group mention e2e coverage` |
+| Review evidence | 手工 Review 通过：P9 payload 仍 schema-less；App E2E 断言无 `schema`；docs 与 SDK / Daemon 行为一致；真实 E2E 使用 fresh handles 通过；真实 daemon live prompt 留后续专项 gate。 |
+| Verification evidence | App analyze / mention tests / macOS build-smoke 通过；SDK / Daemon focused tests、Dart SDK payload tests、codegen、CLI release build、macOS SDK native build 通过；`mention-p9-20260614g` 远端 App+CLI group E2E success；workspace cargo live identity 失败为本地依赖未启动。 |
+| Next action | Step 05 完成；后续如需完整 live prompt 证据，在 awiki-system-test / daemon live gate 中补 runtime agent 端到端用例 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -72,14 +72,16 @@ Step index：05
 
 ## 7. 验收标准
 
-- [ ] 所有相关 unit/widget/focused Rust tests 通过或有明确 blocked 记录。
-- [ ] E2E 覆盖 `@agents` / 单 agent 至少一种真实 agent prompt 命中。
-- [ ] `@humans` 不触发 runtime agent。
-- [ ] invalid mention 不触发。
-- [ ] 相关 docs 与代码行为一致。
-- [ ] 最终 `git status` 在各受影响仓库清晰可解释。
-- [ ] Review 发现已经修复或明确记录。
-- [ ] 本步骤在进入下一步之前已经创建聚焦 commit。
+- [x] 所有相关 unit/widget/focused Rust tests 通过或有明确 blocked 记录。
+- [x] E2E 覆盖 `@agents`：`mention-p9-20260614g` 真实 awiki.info App+CLI group case success，验证 schema-less P9 payload 可从 App 发出并被 CLI 历史读回。
+- [x] `@humans` 不触发 runtime agent：由 `cargo test -p awiki-deamon --locked mention` focused tests 覆盖。
+- [x] invalid mention 不触发：由 `cargo test -p awiki-deamon --locked mention` focused tests 覆盖。
+- [x] 相关 docs 与代码行为一致。
+- [x] 最终 `git status` 在各受影响仓库清晰可解释。
+- [x] Review 发现已经修复或明确记录。
+- [x] 本步骤在进入下一步之前已经创建聚焦 commit。
+
+说明：本轮真实 E2E 覆盖 App/SDK/message-service/CLI group history，不覆盖 awiki.info 上真实 runtime agent live prompt；Daemon prompt、`@humans`、invalid range 和 E2EE opaque 由 focused daemon tests 覆盖，live prompt 留后续专项 gate。
 
 ## 8. 验证方式
 
@@ -102,11 +104,11 @@ Step index：05
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待执行 |  |
-| 已修复问题 | 待执行 |  |
-| 剩余风险 | 待执行 |  |
-| 新增或缺失测试 | 待执行 |  |
-| 已更新或缺失文档 | 待执行 |  |
+| 发现问题 | 已记录 | 本地 `-group` worktree 默认误用旧 SDK 会触发 schema 校验；受限 / 污染 handle 会导致远端 E2E 注册失败；真实 daemon live prompt 未在 awiki.info 上跑。 |
+| 已修复问题 | 已修复 / 已规避 | 用未提交 `pubspec_overrides.yaml` 指向 `awiki-cli-rs2-group` 并构建 macOS native framework 后验证；换 fresh handles `p9g14app01` / `p9g14cli01` 跑通远端 E2E；补 `GROUP-P9-001` 与文档说明。 |
+| 剩余风险 | 已明确 | Daemon live prompt、selector authoritative membership、Group E2EE 明文 agent 触发留后续专项 gate。 |
+| 新增或缺失测试 | 已补充 / 已记录 | 新增 App+CLI group P9 E2E slice；daemon focused tests 覆盖 @humans / invalid / E2EE opaque；未新增第三方仓库 awiki-system-test 用例，因本目标限制只修改两个 worktree。 |
+| 已更新或缺失文档 | 已更新 | 更新 `awiki-me/docs/testing.md`、SDK API docs、Flutter SDK docs、本 Plan 与 Step05 ledger。 |
 
 ## 10. Commit 要求
 
@@ -130,7 +132,22 @@ Step index：05
 |---|---|---|---|
 | 2026-06-14 | 创建 Step 05 | 初始设计 | `../plan.md#16-plan-变更记录` |
 
-## 13. 风险、回滚与后续文档
+## 13. 实际验证记录
+
+- `cd awiki-me-group && PATH=/Users/cs/development/flutter/bin:$PATH dart analyze`：No issues found。
+- `cd awiki-me-group && PATH=/Users/cs/development/flutter/bin:$PATH flutter test tests/unit_test --name mention`：14 passed。
+- `cd awiki-me-group && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/desktop_cli_peer_group_test.dart -d macos --dart-define=AWIKI_E2E=false`：macOS build 通过，All tests skipped。
+- `cd awiki-cli-rs2-group && cargo test -p im-core --locked mention`：5 passed。
+- `cd awiki-cli-rs2-group && cargo test -p awiki-deamon --locked mention`：4 passed。
+- `cd awiki-cli-rs2-group/packages/awiki_im_core && flutter test test/message_payload_api_test.dart`：9 passed。
+- `cd awiki-cli-rs2-group && scripts/flutter/codegen-check.sh`：Done。
+- `cd awiki-cli-rs2-group && cargo build -p awiki-cli --bin awiki-cli --release --locked`：Done。
+- `cd awiki-cli-rs2-group && scripts/flutter/build-apple.sh --macos`：Done，生成本地 macOS `AwikiImCore.xcframework` 用于 worktree E2E。
+- 真实远端 E2E：`cd awiki-me-group && DEV_OTP_PHONE=... DEV_OTP_CODE=... AWIKI_CLI_BIN=../awiki-cli-rs2-group/target/release/awiki-cli dart run tool/desktop_cli_peer_e2e_runner.dart --platform macos --case group --service-base-url https://awiki.info --did-domain awiki.info --app-handle p9g14app01 --cli-handle p9g14cli01 --run-id mention-p9-20260614g`：success，2m10s。
+- `cd awiki-cli-rs2-group && cargo test --workspace --locked`：运行到 `awiki-cli --test identity_live_contract` 时 11 个 live tests 因本地 `127.0.0.1:* /user-service/did-auth/rpc` transport_unavailable 失败，非 P9 回归；focused tests 已覆盖本功能。
+- `git diff --check`：两仓库通过。
+
+## 14. 风险、回滚与后续文档
 
 - 风险：跨 repo 变更多，E2E 环境不稳定。
 - 回滚 / 回退：保留 App 显示解析，关闭发送和 Daemon 触发 feature flag；普通消息链路不受影响。
