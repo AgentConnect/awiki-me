@@ -208,10 +208,20 @@ remains skipped.
 
 ### Desktop App + CLI Peer E2E
 
-`integration_test/desktop_cli_peer_smoke_test.dart` is the manual/nightly
+`integration_test/desktop_cli_peer_smoke_test.dart` is the full manual/nightly
 Desktop App + CLI peer smoke. It starts the real App bootstrap, prepares or uses
-a real App test identity, uses `awiki-cli-rs2` as the peer client, and checks
-one App -> CLI message plus one CLI -> App message with a unique run id.
+a real App test identity, uses `awiki-cli-rs2` as the peer client, and runs the
+direct message, group message, and attachment flows with a unique run id.
+
+The same implementation is split into focused scenario entrypoints so local
+debugging and release triage do not have to run the full suite:
+
+| Scenario | Flutter entrypoint | Runner case |
+| --- | --- | --- |
+| Full regression | `integration_test/desktop_cli_peer_smoke_test.dart` | `--case full` |
+| Direct message only | `integration_test/desktop_cli_peer_direct_test.dart` | `--case direct` |
+| Group message only | `integration_test/desktop_cli_peer_group_test.dart` | `--case group` |
+| Direct attachment only | `integration_test/desktop_cli_peer_attachment_test.dart` | `--case attachment` |
 
 The test is skipped unless `AWIKI_E2E=true`, so this command is safe as a
 build/smoke check without backend credentials:
@@ -234,6 +244,10 @@ dart run tool/desktop_cli_peer_e2e_runner.dart \
   --service-base-url "$AWIKI_SERVICE_BASE_URL" \
   --did-domain "$AWIKI_DID_DOMAIN"
 ```
+
+To run a smaller slice, add `--case direct`, `--case group`, or
+`--case attachment`. Without `--case`, the runner keeps using the full
+regression entrypoint for compatibility.
 
 Use the same test on macOS:
 

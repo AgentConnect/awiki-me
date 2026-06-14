@@ -1,13 +1,13 @@
 part of '../desktop_cli_peer_e2e.dart';
 
-Future<void> _verifyDirectMessageRegression({
+Future<void> _verifyDirectTextRegression({
   required MessagingService messaging,
   required ConversationService conversations,
+  required AppThreadRef thread,
   required String ownerDid,
   required _DesktopCliPeerSmokeConfig config,
   required String nonce,
 }) async {
-  final thread = AppThreadRef.direct(config.cliHandle);
   final appToCliText = 'e2e app to cli ${config.runId} $nonce';
   final cliToAppText = 'e2e cli to app ${config.runId} $nonce';
 
@@ -57,11 +57,5 @@ Future<void> _verifyDirectMessageRegression({
     conversations: conversations,
     ownerDid: ownerDid,
     expectedText: cliToAppText,
-  );
-  await _verifyAttachmentRegression(
-    messaging: messaging,
-    thread: thread,
-    config: config,
-    nonce: nonce,
   );
 }

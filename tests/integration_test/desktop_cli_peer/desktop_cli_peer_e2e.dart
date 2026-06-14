@@ -44,26 +44,44 @@ const String _cliHome = String.fromEnvironment('AWIKI_CLI_HOME_DIR');
 
 enum DesktopCliPeerIntegrationCase {
   full,
-  group;
+  direct,
+  group,
+  attachment;
 
   static DesktopCliPeerIntegrationCase parse(String value) {
     return switch (value.trim().toLowerCase()) {
       '' || 'full' => DesktopCliPeerIntegrationCase.full,
+      'direct' ||
+      'dm' ||
+      'message' ||
+      'messages' ||
+      'direct-only' => DesktopCliPeerIntegrationCase.direct,
       'group' ||
       'groups' ||
       'group-only' => DesktopCliPeerIntegrationCase.group,
+      'attachment' ||
+      'attachments' ||
+      'file' ||
+      'files' ||
+      'attachment-only' => DesktopCliPeerIntegrationCase.attachment,
       _ => throw StateError(
-        'Unsupported AWIKI_E2E_CASE "$value". Use full or group.',
+        'Unsupported AWIKI_E2E_CASE "$value". '
+        'Use full, direct, group, or attachment.',
       ),
     };
   }
 
-  bool get runsDirectAndAttachment =>
-      this == DesktopCliPeerIntegrationCase.full;
+  bool get runsDirectText =>
+      this == DesktopCliPeerIntegrationCase.full ||
+      this == DesktopCliPeerIntegrationCase.direct;
 
   bool get runsGroup =>
       this == DesktopCliPeerIntegrationCase.full ||
       this == DesktopCliPeerIntegrationCase.group;
+
+  bool get runsAttachment =>
+      this == DesktopCliPeerIntegrationCase.full ||
+      this == DesktopCliPeerIntegrationCase.attachment;
 }
 
 DesktopCliPeerIntegrationCase desktopCliPeerCaseFromEnvironment() =>
@@ -98,14 +116,15 @@ void runDesktopCliPeerE2e({
       await tester.pumpAndSettle();
 
       final messaging = bootstrap.messagingService!;
-      final conversations = bootstrap.conversationService!;
-      final groups = bootstrap.groupApplicationService!;
       final messageNonce = _messageNonce();
+      final directThread = AppThreadRef.direct(config.cliHandle);
 
-      if (selectedCase.runsDirectAndAttachment) {
-        await _verifyDirectMessageRegression(
+      if (selectedCase.runsDirectText) {
+        final conversations = bootstrap.conversationService!;
+        await _verifyDirectTextRegression(
           messaging: messaging,
           conversations: conversations,
+          thread: directThread,
           ownerDid: session.did,
           config: config,
           nonce: messageNonce,
@@ -113,9 +132,19 @@ void runDesktopCliPeerE2e({
       }
 
       if (selectedCase.runsGroup) {
+        final groups = bootstrap.groupApplicationService!;
         await _verifyGroupTextRegression(
           groups: groups,
           messaging: messaging,
+          config: config,
+          nonce: messageNonce,
+        );
+      }
+
+      if (selectedCase.runsAttachment) {
+        await _verifyAttachmentRegression(
+          messaging: messaging,
+          thread: directThread,
           config: config,
           nonce: messageNonce,
         );

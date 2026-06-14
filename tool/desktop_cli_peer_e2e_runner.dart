@@ -23,6 +23,18 @@ const List<String> _desktopCliPeerGroupCaseIds = <String>[
   'GROUP-E2E-002',
   'GROUP-REG-001',
 ];
+const List<String> _desktopCliPeerDirectCaseIds = <String>[
+  'AUTH-E2E-001',
+  'MSG-E2E-001',
+  'MSG-E2E-002',
+  'MSG-REG-001',
+];
+const List<String> _desktopCliPeerAttachmentCaseIds = <String>[
+  'AUTH-E2E-001',
+  'ATTACH-E2E-001',
+  'ATTACH-E2E-002',
+  'ATTACH-REG-001',
+];
 
 Future<void> main(List<String> args) async {
   try {
@@ -661,7 +673,8 @@ Options:
   --cli-handle HANDLE          CLI peer test handle.
   --cli-bin PATH               Existing awiki-cli binary.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case full|group            Select full smoke or group-only App+CLI flow.
+  --case full|direct|group|attachment
+                               Select one App+CLI flow, or all flows.
   --prepare-only               Prepare CLI peer but do not start Flutter test.
   --dry-run                    Print planned commands without side effects.
 ''');
@@ -767,7 +780,9 @@ class DesktopCliPeerConfig {
 
 enum DesktopCliPeerE2eCase {
   full(_desktopCliPeerCaseIds),
-  group(_desktopCliPeerGroupCaseIds);
+  direct(_desktopCliPeerDirectCaseIds),
+  group(_desktopCliPeerGroupCaseIds),
+  attachment(_desktopCliPeerAttachmentCaseIds);
 
   const DesktopCliPeerE2eCase(this.caseIds);
 
@@ -777,17 +792,32 @@ enum DesktopCliPeerE2eCase {
     return switch (this) {
       DesktopCliPeerE2eCase.full =>
         'integration_test/desktop_cli_peer_smoke_test.dart',
+      DesktopCliPeerE2eCase.direct =>
+        'integration_test/desktop_cli_peer_direct_test.dart',
       DesktopCliPeerE2eCase.group =>
         'integration_test/desktop_cli_peer_group_test.dart',
+      DesktopCliPeerE2eCase.attachment =>
+        'integration_test/desktop_cli_peer_attachment_test.dart',
     };
   }
 
   static DesktopCliPeerE2eCase parse(String value) {
     return switch (value.trim().toLowerCase()) {
       '' || 'full' => DesktopCliPeerE2eCase.full,
+      'direct' ||
+      'dm' ||
+      'message' ||
+      'messages' ||
+      'direct-only' => DesktopCliPeerE2eCase.direct,
       'group' || 'groups' || 'group-only' => DesktopCliPeerE2eCase.group,
+      'attachment' ||
+      'attachments' ||
+      'file' ||
+      'files' ||
+      'attachment-only' => DesktopCliPeerE2eCase.attachment,
       _ => throw DesktopCliPeerFailure(
-        'Unsupported E2E case "$value". Use full or group.',
+        'Unsupported E2E case "$value". '
+        'Use full, direct, group, or attachment.',
       ),
     };
   }

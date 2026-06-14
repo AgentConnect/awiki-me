@@ -61,6 +61,45 @@ void main() {
       expect(options.e2eCase, DesktopCliPeerE2eCase.group);
     });
 
+    test('parses direct and attachment cases', () {
+      final direct = DesktopCliPeerOptions.parse(const <String>[
+        '--platform',
+        'macos',
+        '--case',
+        'direct',
+        '--dry-run',
+      ]);
+      final attachment = DesktopCliPeerOptions.parse(const <String>[
+        '--platform',
+        'macos',
+        '--case',
+        'attachment',
+        '--dry-run',
+      ]);
+
+      expect(direct.e2eCase, DesktopCliPeerE2eCase.direct);
+      expect(attachment.e2eCase, DesktopCliPeerE2eCase.attachment);
+    });
+
+    test('rejects unsupported case', () {
+      expect(
+        () => DesktopCliPeerOptions.parse(const <String>[
+          '--platform',
+          'macos',
+          '--case',
+          'unknown',
+        ]),
+        throwsA(
+          isA<DesktopCliPeerFailure>().having(
+            (error) => error.message,
+            'message',
+            'Unsupported E2E case "unknown". '
+                'Use full, direct, group, or attachment.',
+          ),
+        ),
+      );
+    });
+
     test('rejects unsupported platform', () {
       expect(
         () => DesktopCliPeerOptions.parse(const <String>[
@@ -408,6 +447,130 @@ void main() {
         'GROUP-E2E-001',
         'GROUP-E2E-002',
         'GROUP-REG-001',
+      ]);
+    });
+
+    test('generates direct-only Flutter command and report case IDs', () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_desktop_cli_peer_runner_direct_test_',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final lines = <String>[];
+      final runner = DesktopCliPeerRunner(
+        root: root,
+        options: DesktopCliPeerOptions.parse(const <String>[
+          '--platform',
+          'linux',
+          '--dry-run',
+          '--case',
+          'direct',
+          '--run-id',
+          'run-direct',
+          '--cli-bin',
+          '/tmp/fake-awiki-cli',
+        ]),
+        environment: const <String, String>{
+          'DEV_OTP_PHONE': 'test-phone-secret',
+          'DEV_OTP_CODE': 'test-otp-secret',
+        },
+        commands: DesktopCommandRunner(
+          root: root,
+          dryRun: true,
+          redactor: DesktopSecretRedactor(const <String>[
+            'test-phone-secret',
+            'test-otp-secret',
+          ]),
+          logLine: lines.add,
+        ),
+      );
+
+      await runner.run();
+
+      final log = lines.join('\n');
+      expect(
+        log,
+        contains(
+          r'$ xvfb-run -a flutter test integration_test/desktop_cli_peer_direct_test.dart -d linux',
+        ),
+      );
+      expect(log, contains('--dart-define=AWIKI_E2E_CASE=direct'));
+      final timings = File(
+        '${root.path}/.e2e/desktop-cli-peer/run-direct/reports/timings.json',
+      );
+      final decoded =
+          jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
+      expect(decoded['case'], 'direct');
+      expect(decoded['caseIds'], <dynamic>[
+        'AUTH-E2E-001',
+        'MSG-E2E-001',
+        'MSG-E2E-002',
+        'MSG-REG-001',
+      ]);
+    });
+
+    test('generates attachment-only Flutter command and report case IDs', () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_desktop_cli_peer_runner_attachment_test_',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final lines = <String>[];
+      final runner = DesktopCliPeerRunner(
+        root: root,
+        options: DesktopCliPeerOptions.parse(const <String>[
+          '--platform',
+          'macos',
+          '--dry-run',
+          '--case',
+          'attachment',
+          '--run-id',
+          'run-attachment',
+          '--cli-bin',
+          '/tmp/fake-awiki-cli',
+        ]),
+        environment: const <String, String>{
+          'DEV_OTP_PHONE': 'test-phone-secret',
+          'DEV_OTP_CODE': 'test-otp-secret',
+        },
+        commands: DesktopCommandRunner(
+          root: root,
+          dryRun: true,
+          redactor: DesktopSecretRedactor(const <String>[
+            'test-phone-secret',
+            'test-otp-secret',
+          ]),
+          logLine: lines.add,
+        ),
+      );
+
+      await runner.run();
+
+      final log = lines.join('\n');
+      expect(
+        log,
+        contains(
+          r'$ flutter test integration_test/desktop_cli_peer_attachment_test.dart -d macos',
+        ),
+      );
+      expect(log, contains('--dart-define=AWIKI_E2E_CASE=attachment'));
+      final timings = File(
+        '${root.path}/.e2e/desktop-cli-peer/run-attachment/reports/timings.json',
+      );
+      final decoded =
+          jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
+      expect(decoded['case'], 'attachment');
+      expect(decoded['caseIds'], <dynamic>[
+        'AUTH-E2E-001',
+        'ATTACH-E2E-001',
+        'ATTACH-E2E-002',
+        'ATTACH-REG-001',
       ]);
     });
 
