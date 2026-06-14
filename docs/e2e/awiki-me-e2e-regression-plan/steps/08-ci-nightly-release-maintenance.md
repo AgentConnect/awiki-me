@@ -12,10 +12,10 @@ Step index：08
 | Branch | `feature/test-awiki-me` |
 | Started | 2026-06-14 14:22 CST |
 | Completed | 2026-06-14 14:30 CST |
-| Commit | 待记录 |
+| Commit | `a9298f2` |
 | Review evidence | Review 完成：CI required 只包含 deterministic analyze/unit/dry-run/Linux smoke，不加入真实 OTP、后端、SSH 或移动设备；nightly/release/manual runbook 明确 secret/local config 前提、report 字段和 skipped 规则；`AGENT-SKIP-001` 与 `E2EE-SKIP-001` 未加入任何 gate。 |
 | Verification evidence | `dart analyze` 通过；`flutter test tests/unit_test` 通过，431 tests；`flutter test tests/unit_test/e2e_harness/mobile_e2e_runner_test.dart tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart` 通过，26 tests；mobile dry-run 通过，runId `20260614062415-8ycc6f`；desktop dry-run 通过，runId `20260614T062415431Z`; 串行 `AWIKI_SQLITE3_SOURCE_DIR=/tmp/awiki-sqlite3 xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过，3 tests；串行 `AWIKI_SQLITE3_SOURCE_DIR=/tmp/awiki-sqlite3 xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` 通过，1 test；`git diff --check` 通过；敏感扫描仅命中 env 名、测试假值和既有 redaction fixture，无真实 secret。 |
-| Next action | 创建 Step 08 聚焦 commit，然后执行最终全局 Review 和整体验证 |
+| Next action | 执行最终全局 Review 和整体验证 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -135,7 +135,7 @@ Step index：08
 - 建议消息：`ci: wire e2e regression gates`
 - Commit 前状态：`git status --short --branch` 显示本步骤相关 CI/docs 修改，另有无关未跟踪旧草稿目录 `docs/e2e/desktop-cli-peer-macos-linux-execution/` 和 ignored `.e2e/` / `build/` / `.dart_tool/` 运行产物。
 - 纳入文件：`.github/workflows/ci.yml`、`docs/e2e/awiki-me-e2e-regression-plan/plan.md`、本文件、`docs/testing.md`、`tests/e2e_test/README.md`。
-- Commit 后证据：提交后回填 commit hash 和 post-commit status。
+- Commit 后证据：`a9298f2`；提交后 `git status --short --branch` 仅剩无关未跟踪旧草稿目录 `docs/e2e/desktop-cli-peer-macos-linux-execution/`。
 
 ## 11. Blocked 处理
 
