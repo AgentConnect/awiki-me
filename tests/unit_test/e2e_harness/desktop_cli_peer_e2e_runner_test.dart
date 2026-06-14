@@ -36,6 +36,7 @@ void main() {
       expect(options.cliHandle, 'cli-smoke');
       expect(options.cliBin, '../awiki-cli-rs2/target/release/awiki-cli');
       expect(options.runId, 'run123');
+      expect(options.e2eCase, DesktopCliPeerE2eCase.full);
     });
 
     test('supports macOS platform', () {
@@ -46,6 +47,18 @@ void main() {
       ]);
 
       expect(options.platform, DesktopE2ePlatform.macos);
+    });
+
+    test('parses group-only case', () {
+      final options = DesktopCliPeerOptions.parse(const <String>[
+        '--platform',
+        'macos',
+        '--case',
+        'group',
+        '--dry-run',
+      ]);
+
+      expect(options.e2eCase, DesktopCliPeerE2eCase.group);
     });
 
     test('rejects unsupported platform', () {
@@ -125,6 +138,7 @@ void main() {
       expect(config.appHandle, 'app-peer');
       expect(config.cliHandle, 'cli-peer');
       expect(config.cliBin, '/tmp/awiki-cli');
+      expect(config.e2eCase, DesktopCliPeerE2eCase.full);
     });
 
     test('allows placeholder OTP values only in dry-run', () {
@@ -256,6 +270,7 @@ void main() {
       );
       expect(log, contains('--dart-define=AWIKI_E2E_RUN_ID=run123'));
       expect(log, contains('--dart-define=AWIKI_E2E_PLATFORM=linux'));
+      expect(log, contains('--dart-define=AWIKI_E2E_CASE=full'));
       expect(log, contains('--dart-define=AWIKI_E2E=true'));
       expect(
         log,
@@ -307,6 +322,7 @@ void main() {
       final decoded = jsonDecode(timingText) as Map<String, dynamic>;
       expect(decoded['status'], 'success');
       expect(decoded['scenario'], 'desktop-app-cli-peer');
+      expect(decoded['case'], 'full');
       expect(decoded['caseIds'], <dynamic>[
         'AUTH-E2E-001',
         'MSG-E2E-001',
@@ -331,6 +347,62 @@ void main() {
       expect(decoded['cliWorkspace'], '<redacted-workspace>');
       expect(decoded['cliHome'], '<redacted-home>');
       expect(decoded['appStateRoot'], '<redacted-app-state>');
+    });
+
+    test('generates group-only Flutter command and report case IDs', () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_desktop_cli_peer_runner_group_test_',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final lines = <String>[];
+      final runner = DesktopCliPeerRunner(
+        root: root,
+        options: DesktopCliPeerOptions.parse(const <String>[
+          '--platform',
+          'macos',
+          '--dry-run',
+          '--case',
+          'group',
+          '--run-id',
+          'run-group',
+          '--cli-bin',
+          '/tmp/fake-awiki-cli',
+        ]),
+        environment: const <String, String>{
+          'DEV_OTP_PHONE': 'test-phone-secret',
+          'DEV_OTP_CODE': 'test-otp-secret',
+        },
+        commands: DesktopCommandRunner(
+          root: root,
+          dryRun: true,
+          redactor: DesktopSecretRedactor(const <String>[
+            'test-phone-secret',
+            'test-otp-secret',
+          ]),
+          logLine: lines.add,
+        ),
+      );
+
+      await runner.run();
+
+      final log = lines.join('\n');
+      expect(log, contains('--dart-define=AWIKI_E2E_CASE=group'));
+      final timings = File(
+        '${root.path}/.e2e/desktop-cli-peer/run-group/reports/timings.json',
+      );
+      final decoded =
+          jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
+      expect(decoded['case'], 'group');
+      expect(decoded['caseIds'], <dynamic>[
+        'AUTH-E2E-001',
+        'GROUP-E2E-001',
+        'GROUP-E2E-002',
+        'GROUP-REG-001',
+      ]);
     });
 
     test('generates macOS Flutter command without Xvfb', () async {

@@ -19,6 +19,10 @@ import 'package:integration_test/integration_test.dart';
 const bool _e2eEnabled = bool.fromEnvironment('AWIKI_E2E');
 const String _runId = String.fromEnvironment('AWIKI_E2E_RUN_ID');
 const String _platform = String.fromEnvironment('AWIKI_E2E_PLATFORM');
+const String _caseName = String.fromEnvironment(
+  'AWIKI_E2E_CASE',
+  defaultValue: 'full',
+);
 const String _appHandle = String.fromEnvironment('AWIKI_E2E_APP_HANDLE');
 const String _cliHandle = String.fromEnvironment('AWIKI_E2E_CLI_HANDLE');
 const String _otpPhone = String.fromEnvironment('DEV_OTP_PHONE');
@@ -36,6 +40,7 @@ void main() {
     'Desktop App and CLI peer cover direct, group, and attachment basics',
     (tester) async {
       final config = _DesktopCliPeerSmokeConfig.fromEnvironment();
+      final selectedCase = _DesktopCliPeerSmokeCase.parse(_caseName);
       final bootstrap = await AppBootstrap.create();
       addTearDown(() async {
         await bootstrap.appSessionService?.logout();
@@ -56,74 +61,101 @@ void main() {
       final messaging = bootstrap.messagingService!;
       final conversations = bootstrap.conversationService!;
       final groups = bootstrap.groupApplicationService!;
-      final thread = AppThreadRef.direct(config.cliHandle);
       final messageNonce = _messageNonce();
-      final appToCliText = 'e2e app to cli ${config.runId} $messageNonce';
-      final cliToAppText = 'e2e cli to app ${config.runId} $messageNonce';
 
-      final appMessage = await messaging.sendText(
-        thread: thread,
-        content: appToCliText,
-      );
-      expect(appMessage.content, appToCliText);
+      if (selectedCase.runsDirectAndAttachment) {
+        final thread = AppThreadRef.direct(config.cliHandle);
+        final appToCliText = 'e2e app to cli ${config.runId} $messageNonce';
+        final cliToAppText = 'e2e cli to app ${config.runId} $messageNonce';
 
-      await _waitForAppHistory(
-        messaging: messaging,
-        thread: thread,
-        expectedText: appToCliText,
-      );
-      await _waitForCliInbox(config: config, expectedText: appToCliText);
-      await _waitForCliHistory(
-        config: config,
-        peerHandle: config.appHandle,
-        expectedText: appToCliText,
-      );
+        final appMessage = await messaging.sendText(
+          thread: thread,
+          content: appToCliText,
+        );
+        expect(appMessage.content, appToCliText);
 
-      final cliSend = await _runCli(config, <String>[
-        '--format',
-        'json',
-        'msg',
-        'send',
-        '--to',
-        config.appHandle,
-        '--text',
-        cliToAppText,
-      ]);
-      if (cliSend.exitCode != 0) {
-        fail('CLI msg send failed: ${_summarizeCliResult(cliSend)}');
+        await _waitForAppHistory(
+          messaging: messaging,
+          thread: thread,
+          expectedText: appToCliText,
+        );
+        await _waitForCliInbox(config: config, expectedText: appToCliText);
+        await _waitForCliHistory(
+          config: config,
+          peerHandle: config.appHandle,
+          expectedText: appToCliText,
+        );
+
+        final cliSend = await _runCli(config, <String>[
+          '--format',
+          'json',
+          'msg',
+          'send',
+          '--to',
+          config.appHandle,
+          '--text',
+          cliToAppText,
+        ]);
+        if (cliSend.exitCode != 0) {
+          fail('CLI msg send failed: ${_summarizeCliResult(cliSend)}');
+        }
+
+        await _waitForAppHistory(
+          messaging: messaging,
+          thread: thread,
+          expectedText: cliToAppText,
+        );
+        await _expectAppHistoryContainsExactlyOnce(
+          messaging: messaging,
+          thread: thread,
+          expectedTexts: <String>[appToCliText, cliToAppText],
+        );
+        await _waitForAppConversationRefresh(
+          conversations: conversations,
+          ownerDid: session.did,
+          expectedText: cliToAppText,
+        );
+        await _verifyAttachmentRegression(
+          messaging: messaging,
+          thread: thread,
+          config: config,
+          nonce: messageNonce,
+        );
       }
 
-      await _waitForAppHistory(
-        messaging: messaging,
-        thread: thread,
-        expectedText: cliToAppText,
-      );
-      await _expectAppHistoryContainsExactlyOnce(
-        messaging: messaging,
-        thread: thread,
-        expectedTexts: <String>[appToCliText, cliToAppText],
-      );
-      await _waitForAppConversationRefresh(
-        conversations: conversations,
-        ownerDid: session.did,
-        expectedText: cliToAppText,
-      );
-      await _verifyGroupTextRegression(
-        groups: groups,
-        messaging: messaging,
-        config: config,
-        nonce: messageNonce,
-      );
-      await _verifyAttachmentRegression(
-        messaging: messaging,
-        thread: thread,
-        config: config,
-        nonce: messageNonce,
-      );
+      if (selectedCase.runsGroup) {
+        await _verifyGroupTextRegression(
+          groups: groups,
+          messaging: messaging,
+          config: config,
+          nonce: messageNonce,
+        );
+      }
     },
     skip: !_e2eEnabled,
     timeout: const Timeout(Duration(minutes: 12)),
   );
+}
+
+enum _DesktopCliPeerSmokeCase {
+  full,
+  group;
+
+  static _DesktopCliPeerSmokeCase parse(String value) {
+    return switch (value.trim().toLowerCase()) {
+      '' || 'full' => _DesktopCliPeerSmokeCase.full,
+      'group' || 'groups' || 'group-only' => _DesktopCliPeerSmokeCase.group,
+      _ => throw StateError(
+        'Unsupported AWIKI_E2E_CASE "$value". Use full or group.',
+      ),
+    };
+  }
+
+  bool get runsDirectAndAttachment => this == _DesktopCliPeerSmokeCase.full;
+
+  bool get runsGroup =>
+      this == _DesktopCliPeerSmokeCase.full ||
+      this == _DesktopCliPeerSmokeCase.group;
 }
 
 Future<AppSession> _prepareAppIdentity(

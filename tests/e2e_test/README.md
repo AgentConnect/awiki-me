@@ -18,6 +18,21 @@ Desktop dry-run:
 dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=macos --dry-run
 ```
 
+Group-only App + CLI peer desktop E2E:
+
+```bash
+dart run tool/desktop_cli_peer_e2e_runner.dart \
+  --platform macos \
+  --case group \
+  --service-base-url https://awiki.info \
+  --did-domain awiki.info
+```
+
+Use `--case group` when validating group chat regressions without paying the
+direct-message and attachment portions of the full desktop smoke. The runner
+still uses the real App integration test shim and `awiki-cli-rs2` peer against
+the configured backend.
+
 Deferred Agent IM delegated-message dry-run:
 
 ```bash
