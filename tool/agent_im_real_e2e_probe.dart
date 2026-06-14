@@ -109,6 +109,7 @@ Future<Map<String, Object?>> _bootstrap(Map<String, String> options) async {
       inventory: inventory,
       messages: messages,
       environment: context.environment,
+      agentImEnabled: true,
     );
     await service.ensureMessageAgentBootstrap(
       daemonAgentDid: daemon.agentDid,

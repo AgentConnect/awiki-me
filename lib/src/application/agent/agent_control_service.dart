@@ -80,11 +80,13 @@ class DefaultAgentControlService implements AgentControlService {
     required MessagingService messages,
     String? downloadBaseUrl,
     AwikiEnvironmentConfig? environment,
+    bool? agentImEnabled,
   }) : this._(
          inventory: inventory,
          messages: messages,
          environment: environment ?? AwikiEnvironmentConfig.fromEnvironment(),
          downloadBaseUrl: downloadBaseUrl,
+         agentImEnabled: agentImEnabled,
        );
 
   DefaultAgentControlService._({
@@ -92,9 +94,11 @@ class DefaultAgentControlService implements AgentControlService {
     required MessagingService messages,
     required AwikiEnvironmentConfig environment,
     String? downloadBaseUrl,
+    bool? agentImEnabled,
   }) : _inventory = inventory,
        _messages = messages,
        _environment = environment,
+       _agentImEnabled = agentImEnabled ?? environment.agentImEnabled,
        downloadBaseUrl =
            _normalizeDownloadBaseUrl(downloadBaseUrl) ??
            environment.daemonDownloadBaseUrl;
@@ -102,6 +106,7 @@ class DefaultAgentControlService implements AgentControlService {
   final AgentInventoryPort _inventory;
   final MessagingService _messages;
   final AwikiEnvironmentConfig _environment;
+  final bool _agentImEnabled;
   final String downloadBaseUrl;
 
   @override
@@ -180,6 +185,9 @@ class DefaultAgentControlService implements AgentControlService {
     String? runtimeRegistrationToken,
     String? runId,
   }) async {
+    if (!_agentImEnabled) {
+      return;
+    }
     final userDid = userSubkeyPackage.userDid;
     final idempotencyKey = messageAgentBootstrapAttemptIdempotencyKey(
       userDid: userDid,

@@ -18,6 +18,7 @@ void main() {
       final service = DefaultAgentControlService(
         inventory: inventory,
         messages: messages,
+        agentImEnabled: true,
       );
 
       await service.createHermesRuntime(
@@ -103,6 +104,7 @@ void main() {
       final service = DefaultAgentControlService(
         inventory: inventory,
         messages: messages,
+        agentImEnabled: true,
       );
 
       await service.ensureMessageAgentBootstrap(
@@ -160,6 +162,34 @@ void main() {
   );
 
   test(
+    'ensureMessageAgentBootstrap is disabled unless Agent IM flag is enabled',
+    () async {
+      final inventory = _InventoryStub();
+      final messages = _MessagesStub();
+      final service = DefaultAgentControlService(
+        inventory: inventory,
+        messages: messages,
+      );
+
+      await service.ensureMessageAgentBootstrap(
+        daemonAgentDid: 'did:agent:daemon',
+        controllerDid: 'did:human:me',
+        appInstanceId: 'app_1',
+        userHandle: 'alice.awiki.info',
+        userSubkeyPackage: const UserSubkeyPackage(
+          userDid: 'did:human:me',
+          verificationMethod: 'did:human:me#daemon-key-1',
+          publicKeyMultibase: 'zPublic',
+          privateKeyMultibase: 'zPrivate',
+        ),
+      );
+
+      expect(inventory.runtimeTokenDaemonDid, isNull);
+      expect(messages.lastPayload, isNull);
+    },
+  );
+
+  test(
     'ensureMessageAgentBootstrap keeps app instance stable while run scopes attempt idempotency',
     () async {
       final inventory = _InventoryStub();
@@ -167,6 +197,7 @@ void main() {
       final service = DefaultAgentControlService(
         inventory: inventory,
         messages: messages,
+        agentImEnabled: true,
       );
 
       Future<Map<String, Object?>> send(String runId) async {

@@ -8,6 +8,7 @@ class AwikiEnvironmentConfig {
     String? anpServiceUrl,
     String? anpServiceDid,
     String? daemonDownloadBaseUrl,
+    bool? agentImEnabled,
   }) {
     final normalizedBase = _normalizeBaseUrl(
       baseUrl ?? const String.fromEnvironment('AWIKI_BASE_URL'),
@@ -39,6 +40,7 @@ class AwikiEnvironmentConfig {
       daemonDownloadBaseUrl,
       fallback: _joinUrl(normalizedBase, '/daemon'),
     );
+    this.agentImEnabled = agentImEnabled ?? false;
   }
 
   factory AwikiEnvironmentConfig.fromEnvironment() {
@@ -55,6 +57,7 @@ class AwikiEnvironmentConfig {
       daemonDownloadBaseUrl: const String.fromEnvironment(
         'AWIKI_DAEMON_DOWNLOAD_BASE_URL',
       ),
+      agentImEnabled: const bool.fromEnvironment('AWIKI_AGENT_IM_ENABLED'),
     );
   }
 
@@ -66,6 +69,7 @@ class AwikiEnvironmentConfig {
   late final String anpServiceUrl;
   late final String anpServiceDid;
   late final String daemonDownloadBaseUrl;
+  late final bool agentImEnabled;
 }
 
 String _normalizeBaseUrl(String? value, {required String fallback}) {

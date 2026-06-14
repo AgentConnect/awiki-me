@@ -13,6 +13,7 @@ void main() {
     expect(config.anpServiceUrl, 'https://awiki.info/anp-im/rpc');
     expect(config.anpServiceDid, 'did:wba:awiki.info');
     expect(config.daemonDownloadBaseUrl, 'https://awiki.info/daemon');
+    expect(config.agentImEnabled, isFalse);
   });
 
   test('base URL derives backend endpoints and daemon download root', () {
@@ -38,6 +39,7 @@ void main() {
       anpServiceUrl: 'https://anp.example.test/rpc/',
       anpServiceDid: 'did:wba:anp.example.test',
       daemonDownloadBaseUrl: 'https://static.example.test/daemon/',
+      agentImEnabled: true,
     );
 
     expect(config.baseUrl, 'https://anpclaw.com');
@@ -48,5 +50,6 @@ void main() {
     expect(config.anpServiceUrl, 'https://anp.example.test/rpc');
     expect(config.anpServiceDid, 'did:wba:anp.example.test');
     expect(config.daemonDownloadBaseUrl, 'https://static.example.test/daemon');
+    expect(config.agentImEnabled, isTrue);
   });
 }

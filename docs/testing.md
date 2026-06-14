@@ -161,6 +161,14 @@ E2EE opaque boundaries, delegated DID revoke behavior, and unknown payload
 negative injection remain P1/P2 and must not be described as completed by this
 P0 gate.
 
+Agent IM bootstrap is intentionally behind a temporary App-side feature flag.
+Normal App builds default to disabled (`AWIKI_AGENT_IM_ENABLED=false`), so
+`DefaultAgentControlService.ensureMessageAgentBootstrap` becomes a no-op and the
+App does not send delegated-key bootstrap payloads. To reopen the feature for
+manual App testing, build/run with `--dart-define=AWIKI_AGENT_IM_ENABLED=true`.
+The dedicated E2E probe/scenario enables the flag explicitly so the P0 gate can
+still be run without deleting or reworking Agent IM code.
+
 macOS real smoke:
 
 ```bash

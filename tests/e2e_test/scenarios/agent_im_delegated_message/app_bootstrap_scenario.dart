@@ -39,6 +39,7 @@ final class AgentImAppBootstrapScenario {
       inventory: inventory,
       messages: messages,
       environment: environment,
+      agentImEnabled: true,
     );
     final package = UserSubkeyPackage(
       userDid: controllerDid,
