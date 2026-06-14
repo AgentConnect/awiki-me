@@ -12,7 +12,7 @@ Step index：07
 | Branch | `feature/test-awiki-me` |
 | Started | 2026-06-14 14:13 CST |
 | Completed | 2026-06-14 14:18 CST |
-| Commit | 本步骤提交后回填短 hash，以 `git log -1` 为准 |
+| Commit | `83c1438` |
 | Review evidence | Review 完成：确认 mobile runner 的真实路径仍通过 Maestro flows 和 App UI 完成登录/发收消息，不直接访问 service raw RPC、SQLite 或内部消息数据；dry-run report 明确 `caseStatus: skipped`，不把计划通过伪装为真实两设备通过；命令日志和 report 已脱敏手机号、OTP、token/JWT query、device id 和绝对路径。 |
 | Verification evidence | `dart analyze` 通过；`flutter test tests/unit_test/e2e_harness/mobile_e2e_runner_test.dart` 通过，15 tests；`dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run` 通过，runId `20260614061538-0ef4ka`，`timings.json` 记录 `scenario: mobile-two-device`、`caseIds: [MOBILE-E2E-001]`、`caseStatus: skipped`、平台/账号/设备/消息计划和脱敏 report 路径；`git diff --check` 通过；敏感扫描仅命中 env 名、示例占位手机号、测试用假 secret 和既有 redaction 测试数据，无真实 secret。 |
 | Next action | 启动 Step 08：CI/nightly/release gate 与维护机制 |
@@ -130,7 +130,7 @@ Step index：07
 - 建议消息：`test: add mobile two device e2e`
 - Commit 前状态：`git status --short --branch` 显示本步骤相关 runner、unit test、docs 修改，另有无关未跟踪旧草稿目录 `docs/e2e/desktop-cli-peer-macos-linux-execution/` 和 ignored `.e2e/` dry-run 产物。
 - 纳入文件：`docs/e2e/awiki-me-e2e-regression-plan/plan.md`、本文件、`docs/testing.md`、`tests/e2e_test/README.md`、`tests/e2e_test/harness/mobile_e2e_runner.dart`、`tests/unit_test/e2e_harness/mobile_e2e_runner_test.dart`。
-- Commit 后证据：提交后回填 commit hash 和 post-commit status。
+- Commit 后证据：`83c1438`；提交后 `git status --short --branch` 仅剩无关未跟踪旧草稿目录 `docs/e2e/desktop-cli-peer-macos-linux-execution/`。
 
 ## 11. Blocked 处理
 
