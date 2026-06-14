@@ -4,7 +4,7 @@
 DOC：`test-awiki-me/docs/e2e/awiki-me-e2e-regression-plan/`  
 Harness：`awiki-harness/`  
 创建时间：2026-06-14  
-恢复指针：Step 01 已完成；下一次从 Step 02 开始，先读取 [steps/02-scenario-matrix-tags.md](steps/02-scenario-matrix-tags.md)。
+恢复指针：Step 02 已完成；下一次从 Step 03 开始，先读取 [steps/03-environment-data-contract.md](steps/03-environment-data-contract.md)。
 
 ## 1. 目标
 
@@ -114,33 +114,82 @@ Harness：`awiki-harness/`
 | L5 | Mobile two-device E2E | nightly/release | iOS/Android 双设备登录、发消息、收消息、基础回归。 | 是 |
 | Skipped | Deferred scenarios | 本轮不运行 | Agent 作为 IM App 处理者、端到端加密。 | 不要求 |
 
+### 7.1 标签契约
+
+| 标签 | 含义 | 允许的依赖 | 使用规则 |
+|---|---|---|---|
+| `smoke` | 验证 App、runner、SDK 或 harness 的最小启动面。 | 本地 Flutter/Dart/native SDK；不能依赖真实 OTP 或远端账号。 | 可以进入 PR optional 或 self-hosted gate；失败通常阻断后续 E2E。 |
+| `feature` | 新功能对应的首版真实或半真实场景。 | 允许依赖 feature branch、manual config 或临时账号池。 | 初始不进入 required gate；稳定后按晋级规则提升为 `regression`。 |
+| `regression` | 已稳定的核心能力回归保护。 | 依 gate 而定；PR required 只能无后端，nightly/release 可依真实后端。 | 新功能完成后至少选择一个核心路径升级为 regression。 |
+| `pr-required` | 每个 PR 必跑的确定性测试。 | 无真实后端、无 OTP、无设备池、无远端 SSH。 | 只能包含 unit/widget、runner parser、dry-run 和可重复的本地检查。 |
+| `pr-optional` | PR 可选或 self-hosted runner 上跑的确定性桌面 smoke。 | 允许 Linux/macOS desktop runner、native SDK、`xvfb-run`。 | 不能因为远端服务或账号不可用而失败。 |
+| `nightly` | 每夜或定时运行的真实集成闭环。 | 可依非生产后端、账号池、OTP、App/CLI peer、移动设备池。 | 失败必须产出脱敏 report 和环境证据。 |
+| `release` | 发布前必须通过或显式豁免的核心 E2E。 | 可依真实非生产环境和 release 设备池。 | 只放 P0/P1 用户路径；跳过或失败必须记录豁免原因。 |
+| `manual` | 需要人工准备环境、账号或设备的运行。 | 可依本地服务、临时账号、人工设备。 | 不作为自动 gate 成功条件，但结果可作为排障或发布辅助证据。 |
+| `skipped` | 本轮保留记录但明确不实现、不运行。 | 不要求环境、不要求验证证据。 | 只能用于显式延期场景；不能进入 PR、nightly 或 release gate。 |
+
+### 7.2 Gate 契约
+
+| Gate | 运行条件 | 可包含标签 | 不允许包含 | 通过证据 |
+|---|---|---|---|---|
+| PR required | 普通开发 PR，默认 CI。 | `pr-required`、部分 `smoke`、dry-run。 | 真实后端、OTP、远端账号、移动设备池、真实 App/CLI peer E2E。 | `dart analyze`、unit/widget、harness dry-run、docs/secret scan 通过。 |
+| PR optional desktop | 有 Linux/macOS desktop runner 的 PR job 或本地开发机。 | `pr-optional`、`smoke`。 | 账号注册/恢复、真实消息发送、真实群组/附件、移动设备。 | Flutter desktop smoke、native SDK open smoke 通过；Linux 使用 `xvfb-run`。 |
+| Nightly desktop | 定时任务或手动触发，具备非生产后端和测试账号池。 | `nightly`、稳定后的 `feature`、`regression`。 | `skipped`、未脱敏报告、绕过 SDK/CLI 的测试数据。 | App/CLI 双向 direct message、history/inbox、群组/附件基础路径和脱敏 report。 |
+| Nightly mobile | 具备 iOS/Android 设备池、Maestro 和测试账号池。 | `nightly`、mobile `regression`。 | 桌面专属 runner、无设备证据的伪通过。 | 两设备互通 flow、设备日志、脱敏 report。 |
+| Release | 发布候选版本冻结后。 | P0/P1 `regression`、必要 `smoke`。 | 未稳定 `feature`、`manual`、`skipped`。 | release 环境 report、失败/跳过豁免、最终 Review 记录。 |
+| Manual | 开发者或 QA 手动触发。 | `manual`、`feature`、排障用 `nightly`。 | 被声称为自动 gate 的结果。 | 命令、环境、账号池来源、脱敏日志和人工结论。 |
+
+### 7.3 Case 字段契约
+
+每个 E2E case 在实现或维护时必须能追踪以下字段：
+
+| 字段 | 要求 |
+|---|---|
+| Case ID | 全局唯一，使用领域前缀，例如 `APP-*`、`AUTH-*`、`MSG-*`、`GROUP-*`、`ATTACH-*`、`MOBILE-*`、`*-SKIP-*`。 |
+| Owner domain | 归属能力域，例如 App shell、Auth、Direct Message、Group、Attachment、Profile/Settings、Mobile、Deferred。 |
+| Platform | 标明 `macOS`、`Linux`、`iOS`、`Android` 或组合；macOS/Linux 桌面默认共享 scenario。 |
+| Peer topology | 标明 no-peer、App + CLI peer、App + mobile peer、two mobile devices、system-only 或 deferred。 |
+| Backend dependency | 标明 no-backend、dry-run、real non-production backend、local system-test backend。 |
+| Data / secret requirement | 只允许记录 env 名、账号池角色和 fixture 名；禁止记录 OTP 值、JWT、私钥或真实 local config。 |
+| Gate | 标明 PR required、PR optional desktop、nightly desktop、nightly mobile、release、manual 或 skipped。 |
+| Pass evidence | 标明测试命令、runId、history/inbox evidence、UI/service assertion、report 和 redaction scan。 |
+| Skip / blocker rule | 标明缺少 CLI/SDK 高层能力、账号池、设备池、Linux runner 或后端时的处理方式。 |
+
+### 7.4 晋级、降级和隔离规则
+
+- `feature` case 连续在目标 nightly 环境中稳定通过至少三次，并且 Review 确认可维护、可脱敏、失败可诊断后，才能升级为 `regression`。
+- `regression` case 如果连续失败且证据指向测试不稳定或环境不确定，应先降级为 quarantine/manual，并在 Plan 变更记录中说明原因；不能通过扩大 timeout 掩盖问题。
+- `pr-required` 只能接收确定性、无真实后端、无真实账号、无设备池的检查；任何需要 OTP、远端服务、真实 App/CLI 互通的 case 必须留在 nightly/manual/release。
+- `skipped` case 只能在用户显式扩大本轮范围后才允许转为 `feature`；本轮 `AGENT-SKIP-001` 和 `E2EE-SKIP-001` 保持 skipped。
+- 如果 CLI/SDK 暂缺群组或附件高层命令，对应 case 标记为 blocker 或补最小高层能力；不得直接操作 SQLite、WebSocket frame、message-service wire payload 或内部存储对象伪造通过。
+
 ## 8. 场景矩阵
 
-| Case ID | 场景 | 目标 | 平台 | Gate | 当前基础 | 后续重点 |
-|---|---|---|---|---|---|---|
-| `APP-SMOKE-001` | App shell 启动 | 验证 App bootstrap、Shell、基础页面可启动。 | macOS/Linux | PR optional | `app_smoke_test.dart` | 保持确定性，不接真实后端。 |
-| `SDK-SMOKE-001` | Native SDK open | 验证 `AwikiImCore.open` 和 native library 加载。 | macOS/Linux | PR optional | `im_core_open_smoke_test.dart` | Linux 下继续固定 `AWIKI_SQLITE3_SOURCE_DIR` 约束。 |
-| `AUTH-E2E-001` | App 注册/恢复测试账号 | 验证 User Service、OTP、DID/Handle、App session。 | macOS/Linux | Nightly | `desktop_cli_peer_smoke_test.dart` 内已有准备逻辑 | 拆成可复用账号准备步骤，失败证据脱敏。 |
-| `MSG-E2E-001` | App -> CLI direct message | 验证 App 发送真实消息，CLI peer 能查到 history/inbox。 | macOS/Linux | Nightly/Release | `desktop_cli_peer_smoke_test.dart` | 增加 runId、重试、去重和报告字段。 |
-| `MSG-E2E-002` | CLI -> App direct message | 验证 CLI peer 发送真实消息，App 能通过正常消息服务读到。 | macOS/Linux | Nightly/Release | `desktop_cli_peer_smoke_test.dart` | 扩展到 UI 可见断言或稳定 service-level 断言。 |
-| `MSG-REG-001` | 会话回归 | 验证 history、刷新、无重复、既有会话不被新消息破坏。 | macOS/Linux | Nightly | 待补 | 先用 App service boundary，UI 稳定后提升为 UI E2E。 |
-| `GROUP-E2E-001` | 创建群组并添加成员 | 验证 App 创建群组、邀请/添加 CLI peer 或第二账号、群资料可见。 | macOS/Linux | Nightly/Release | 待补 | 先覆盖最小两人群，避免一次做复杂群管理矩阵。 |
-| `GROUP-E2E-002` | 群组消息互通 | 验证 App 在群内发送消息，peer 能看到；peer 在群内发送消息，App 能看到。 | macOS/Linux | Nightly/Release | 待补 | 使用 runId，断言成员视角和 history 一致。 |
-| `GROUP-REG-001` | 群组基础回归 | 验证群名/头像或基础资料、成员列表、退出/解散前的只读回归。 | macOS/Linux/mobile | Nightly | unit/widget 有部分基础 | 首批只做最小关键路径，避免脆弱 UI 全量覆盖。 |
-| `ATTACH-E2E-001` | App -> peer 附件发送 | 验证 App 发送小文件/图片附件后，peer 能通过 CLI 或服务侧 history 看到附件 metadata 并下载/读取。 | macOS/Linux | Nightly/Release | 待补 | 使用小型测试 fixture，校验文件名、大小、hash 或内容摘要。 |
-| `ATTACH-E2E-002` | peer -> App 附件接收 | 验证 CLI peer 发送附件后，App 能在会话中看到附件并完成基础打开/下载状态断言。 | macOS/Linux | Nightly/Release | 待补 | 先做小文件，后续再扩展图片、失败重试和大文件。 |
-| `ATTACH-REG-001` | 附件错误与回归 | 验证附件缺失、上传失败、下载失败、重复发送不会破坏会话。 | macOS/Linux | Nightly | 待补 | 先做可控错误，不依赖真实网络抖动。 |
-| `PROFILE-REG-001` | profile/settings 回归 | 验证设置页、profile、session 状态不被消息/账号改动破坏。 | macOS/Linux/mobile | PR optional/Nightly | unit/widget 已有基础 | 只补关键路径，不做全页面截图式脆弱测试。 |
-| `MOBILE-E2E-001` | 两设备消息互通 | 验证设备 A 登录发送、设备 B 登录接收，再反向发送。 | iOS/Android | Nightly/Release | `mobile_e2e_runner.dart`、Maestro flows | 建立设备池、账号池、失败报告。 |
-| `AGENT-SKIP-001` | Agent 作为 IM App 处理者 | Agent/Daemon 接收 App bootstrap，作为 IM App 的处理者消费普通消息并回传摘要。 | macOS/Linux | Skipped | 既有 `agent_im_delegated_message` 框架 | 本轮保留记录但不补齐、不运行、不作为回归 gate；后续单独方案处理。 |
-| `E2EE-SKIP-001` | 端到端加密 E2E | Direct/group E2EE 明文、opaque 边界、密钥和协议验证。 | CLI/System/App 辅助 | Skipped | 既有系统测试方向 | 本轮不实现、不运行、不要求证据；后续单独方案处理。 |
+| Case ID | Owner domain | 场景 | Tags | 平台 | Peer topology | Backend / data 依赖 | Gate | 当前基础 | 验收证据 / blocker 规则 |
+|---|---|---|---|---|---|---|---|---|---|
+| `APP-SMOKE-001` | App shell | App shell 启动 | `smoke`, `pr-optional`, `regression` | macOS/Linux | no-peer | no-backend；fake bootstrap | PR optional desktop | `app_smoke_test.dart` | Shell/onboarding/authenticated shell 可启动；Linux 用 `xvfb-run`；不得接真实后端。 |
+| `SDK-SMOKE-001` | Native SDK | Native SDK open | `smoke`, `pr-optional`, `regression` | macOS/Linux | no-peer | no-backend；临时目录；Linux 需 `AWIKI_SQLITE3_SOURCE_DIR` | PR optional desktop | `im_core_open_smoke_test.dart` | `AwikiImCore.open` 成功并清理临时状态；native library 失败时阻断 L3+。 |
+| `AUTH-E2E-001` | Auth | App 注册/恢复测试账号 | `feature`, `nightly`, `manual` | macOS/Linux | App + CLI peer 前置 | real non-production backend；OTP env 名；账号池角色 | Nightly desktop / Manual | `desktop_cli_peer_smoke_test.dart` 内已有准备逻辑 | App session、DID/Handle、CLI peer 身份准备成功；缺账号池或 OTP 时记录 skipped/blocker。 |
+| `MSG-E2E-001` | Direct Message | App -> CLI direct message | `regression`, `nightly`, `release` | macOS/Linux | App + CLI peer | real non-production backend；runId | Nightly desktop / Release | `desktop_cli_peer_smoke_test.dart` | App 正常发送，CLI `history/inbox` 能按 runId 查到；报告脱敏。 |
+| `MSG-E2E-002` | Direct Message | CLI -> App direct message | `regression`, `nightly`, `release` | macOS/Linux | App + CLI peer | real non-production backend；runId | Nightly desktop / Release | `desktop_cli_peer_smoke_test.dart` | CLI 正常发送，App 通过 service/UI boundary 读取到；不得直接查 SQLite。 |
+| `MSG-REG-001` | Conversation | 会话 history / inbox / 去重 / 刷新 | `feature`, `regression`, `nightly` | macOS/Linux | App + CLI peer | real non-production backend；多条 runId 消息 | Nightly desktop | 待补 | history、inbox、refresh 后无重复，既有会话不被新消息破坏；UI 不稳定时先用 App service boundary。 |
+| `GROUP-E2E-001` | Group | 创建群组并添加成员 | `feature`, `nightly`, `release` | macOS/Linux | App + CLI peer 或第二账号 | real non-production backend；两人群账号池 | Nightly desktop / Release | 待补 | App 创建最小两人群，成员和群资料可见；CLI/SDK 无高层群组能力时记录 blocker。 |
+| `GROUP-E2E-002` | Group | 群组消息互通 | `feature`, `nightly`, `release` | macOS/Linux | App + CLI peer 或第二账号 | real non-production backend；群 runId | Nightly desktop / Release | 待补 | App 和 peer 在同一群 history 中互见文本消息；不得绕过群组服务契约。 |
+| `GROUP-REG-001` | Group | 群组基础回归 | `feature`, `regression`, `nightly` | macOS/Linux/mobile | App + peer | real non-production backend；最小群资料 | Nightly desktop/mobile | unit/widget 有部分基础 | 群名/基础资料/成员列表不被消息流破坏；首版不覆盖复杂群管理。 |
+| `ATTACH-E2E-001` | Attachment | App -> peer 小附件发送 | `feature`, `nightly`, `release` | macOS/Linux | App + CLI peer | real non-production backend；小型 fixture；hash/metadata | Nightly desktop / Release | 待补 | peer 可见附件 metadata，文件名、大小、hash 或内容摘要匹配；CLI/SDK 无附件命令时记录 blocker。 |
+| `ATTACH-E2E-002` | Attachment | peer -> App 小附件接收 | `feature`, `nightly`, `release` | macOS/Linux | App + CLI peer | real non-production backend；小型 fixture；download 状态 | Nightly desktop / Release | 待补 | App 可见附件并完成基础下载/状态断言；首版不做大文件、批量或断点续传。 |
+| `ATTACH-REG-001` | Attachment | 附件错误与回归 | `feature`, `regression`, `nightly` | macOS/Linux | App + CLI peer | 可控失败 fixture；real backend 或 local system-test backend | Nightly desktop | 待补 | 附件缺失/失败不破坏会话，重复发送不产生错误状态；不依赖真实网络抖动。 |
+| `PROFILE-REG-001` | Profile/Settings | profile/settings 回归 | `smoke`, `regression`, `pr-optional`, `nightly` | macOS/Linux/mobile | no-peer 或 authenticated App | no-backend fake session；nightly 可复用真实 session | PR optional desktop / Nightly | unit/widget 已有基础 | 设置页、profile、session 状态在消息/账号流后仍可访问；避免截图式脆弱断言。 |
+| `MOBILE-E2E-001` | Mobile | 两设备 direct message 互通 | `feature`, `regression`, `nightly`, `release` | iOS/Android | two mobile devices | real non-production backend；设备池；账号池 | Nightly mobile / Release | `mobile_e2e_runner.dart`、Maestro flows | 设备 A/B 双向发送接收通过；缺设备池时只允许 dry-run 或 manual skipped。 |
+| `AGENT-SKIP-001` | Deferred | Agent 作为 IM App 处理者 | `skipped` | macOS/Linux | Agent/Daemon + App | 本轮不要求 | Skipped | 既有 `agent_im_delegated_message` 框架 | 保留记录但不实现、不运行、不加入任何 gate、不要求验证证据。 |
+| `E2EE-SKIP-001` | Deferred | 端到端加密 E2E | `skipped` | CLI/System/App 辅助 | deferred | 本轮不要求 | Skipped | 既有系统测试方向 | 保留记录但不实现、不运行、不加入任何 gate、不要求验证证据。 |
 
 ## 9. 任务拆分
 
 | Step | 标题 | 依赖 | 产出 | 小 Plan 文档 | Commit gate | 状态 |
 |---|---|---|---|---|---|---|
 | 01 | E2E 基线盘点与覆盖地图 | 无 | 当前测试入口、功能覆盖和缺口清单 | [steps/01-baseline-inventory.md](steps/01-baseline-inventory.md) | 必须 | done |
-| 02 | 场景矩阵与标签/gate 契约 | Step 01 | `feature/regression/smoke/nightly/release` 标记和准入标准 | [steps/02-scenario-matrix-tags.md](steps/02-scenario-matrix-tags.md) | 必须 | pending |
+| 02 | 场景矩阵与标签/gate 契约 | Step 01 | `feature/regression/smoke/nightly/release` 标记和准入标准 | [steps/02-scenario-matrix-tags.md](steps/02-scenario-matrix-tags.md) | 必须 | done |
 | 03 | 测试环境、账号和数据隔离契约 | Step 01 | macOS/Linux/mobile/backend/env/account/report 契约 | [steps/03-environment-data-contract.md](steps/03-environment-data-contract.md) | 必须 | pending |
 | 04 | Desktop 确定性 smoke 与回归基线 | Step 02, Step 03 | macOS/Linux no-backend smoke gate 和基础回归 | [steps/04-desktop-deterministic-smoke.md](steps/04-desktop-deterministic-smoke.md) | 必须 | pending |
 | 05 | Desktop App + CLI peer 真实 E2E | Step 03, Step 04 | App/CLI 双向消息和账号闭环场景 | [steps/05-desktop-app-cli-peer-e2e.md](steps/05-desktop-app-cli-peer-e2e.md) | 必须 | pending |
@@ -155,7 +204,7 @@ Harness：`awiki-harness/`
 | Step | 状态 | 分支 | 开始时间 | 完成时间 | Commit | Review 证据 | 验证证据 | 下一步 |
 |---|---|---|---|---|---|---|---|---|
 | 01 | done | `feature/test-awiki-me` | 2026-06-14 12:52 CST | 2026-06-14 13:02 CST | 本步骤提交，短 hash 以 `git log -1` 为准 | Review 完成：覆盖地图基于 `docs/testing.md`、`tests/e2e_test/README.md`、`tests/integration_test/README.md`、root integration shims、desktop/mobile runners、unit/widget 测试和 source search；确认 Agent 和 E2EE 保留为 skipped，不进入本轮 gate。 | `find docs/e2e/awiki-me-e2e-regression-plan -type f -name '*.md' -print` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描通过，无真实 secret。 | 启动 Step 02 |
-| 02 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 01 完成 |
+| 02 | done | `feature/test-awiki-me` | 2026-06-14 12:58 CST | 2026-06-14 13:02 CST | 本步骤提交，短 hash 以 `git log -1` 为准 | Review 完成：确认标签、gate、case 字段、晋级/降级规则覆盖新功能验证和既有功能回归；真实后端/OTP/App+CLI 互通未进入 PR required；Agent 和 E2EE 保持 skipped，不实现、不运行、不进任何 gate。 | `awk ... uniq -d` 检查矩阵 Case ID 无重复；`find docs/e2e/awiki-me-e2e-regression-plan -type f -name '*.md' -print | sort` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描仅命中 Step 05 的 env 变量名示例，无真实 secret。 | 启动 Step 03 |
 | 03 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 01 完成 |
 | 04 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 02/03 完成 |
 | 05 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 03/04 完成 |
@@ -172,7 +221,7 @@ Harness：`awiki-harness/`
 - 每个步骤依次执行：标记 `in_progress`、实现、验证、Review、修复或记录 Review 发现、提交、记录证据、标记 `done`。
 - 上一个依赖步骤的完成工作未提交前，不要开始下一个依赖步骤。
 - 改变范围、顺序、验收标准、公开契约、数据模型或验证策略前，先更新本 Plan 的变更记录。
-- 当前用户要求是先出方案；只有用户明确要求执行后，才修改测试实现、runner、CI 或跨仓代码。
+- 当前 Goal 已进入执行阶段；每个步骤只能修改其小 Plan 允许的文件和必要实现，超出范围前必须先更新 Plan 变更记录。
 
 ## 11.1 Codex Goal 提示词
 
