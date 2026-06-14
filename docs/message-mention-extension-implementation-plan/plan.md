@@ -1,6 +1,6 @@
 # Plan：ANP P9 消息 Mention 扩展落地方案
 
-状态：in_progress（执行中，Step 01 已完成，等待 Step 02）
+状态：in_progress（执行中，Step 02 已完成，等待 Step 03）
 DOC：`awiki-me-group/docs/message-mention-extension-implementation-plan/`
 Harness：`awiki-harness/`
 创建时间：2026-06-14
@@ -247,7 +247,7 @@ Daemon 在收到或拉取消息后，针对 `MessageBodyView::Payload` 执行 P9
 | Step | 标题 | 依赖 | 产出 | 小 Plan 文档 | Commit gate | 状态 |
 |---|---|---|---|---|---|---|
 | 01 | 协议 DTO 与 SDK payload 能力 | 无 | P9 typed DTO、validator、schema-less payload 或 typed send API、Dart/Rust 测试 | [steps/01-sdk-protocol-mention-dto.md](steps/01-sdk-protocol-mention-dto.md) | 必须 | done |
-| 02 | App composer 候选与 draft range | Step 01 API 决策 | `@` 触发列表、候选数据、draft mention 状态、range 更新 | [steps/02-app-composer-mention-ux.md](steps/02-app-composer-mention-ux.md) | 必须 | pending |
+| 02 | App composer 候选与 draft range | Step 01 API 决策 | `@` 触发列表、候选数据、draft mention 状态、range 更新 | [steps/02-app-composer-mention-ux.md](steps/02-app-composer-mention-ux.md) | 必须 | done |
 | 03 | App 发送、接收和高亮展示 | Step 01、02 | 发送 P9 payload、mapper 投影、valid mention highlight、非法 mention fallback | [steps/03-app-send-render-mention.md](steps/03-app-send-render-mention.md) | 必须 | pending |
 | 04 | Daemon mention 命中与 prompt 注入 | Step 01 | Daemon 解析 P9 payload、匹配 agent / selector、prompt context、去重和 audit | [steps/04-daemon-mention-routing.md](steps/04-daemon-mention-routing.md) | 必须 | pending |
 | 05 | 集成验证、文档同步与发布 gate | Step 01-04 | App / SDK / Daemon / E2E 测试证据、docs 更新、残余风险 | [steps/05-integration-verification-docs.md](steps/05-integration-verification-docs.md) | 必须 | pending |
@@ -259,7 +259,7 @@ Daemon 在收到或拉取消息后，针对 `MessageBodyView::Payload` 执行 P9
 | Step | 状态 | 分支 | 开始时间 | 完成时间 | Commit | Review 证据 | 验证证据 | 下一步 |
 |---|---|---|---|---|---|---|---|---|
 | 01 | done | `awiki-cli-rs2-group:feauture/release-0526/group`; `awiki-me-group:feauture/release-0526/group` | 2026-06-14T19:55:38+08:00 | 2026-06-14T20:17:46+08:00 | `awiki-cli-rs2-group:3bf3557 feat(im-core): support ANP P9 mention payloads` | 手工 Review 通过：确认 P9 未新增 content type/profile/proof/sender；selector 保持 all/agents/humans 不展开；display_name 仅展示快照；Dart payload 校验不再强制 schema；Group E2EE mention payload 只进入 inner plaintext。修复项：移除 Dart analyze 新增 const 提示，并顺手修复已触发的 null-aware lint。 | 通过：`cd awiki-cli-rs2-group && cargo test -p im-core --locked mention`（5 passed）；`cd awiki-cli-rs2-group && cargo test -p im-core --locked --features group-e2ee,blocking mention_group_e2ee_application_body_places_payload_in_inner_plaintext`（1 passed）；`cd awiki-cli-rs2-group && PATH=/Users/cs/development/flutter/bin:$PATH scripts/flutter/codegen-check.sh`（Done）；`cd awiki-cli-rs2-group/packages/awiki_im_core && dart analyze lib test/message_payload_api_test.dart`（No issues）；`cd awiki-cli-rs2-group/packages/awiki_im_core && flutter test test/message_payload_api_test.dart`（9 passed）；`git diff --check`（通过）。部分失败：`cd awiki-cli-rs2-group && cargo test --workspace --locked` 运行到 `awiki-cli --test identity_live_contract` 时 9 个 live contract 因本地 `http://127.0.0.1:* /user-service/did-auth/rpc` transport_unavailable 失败，属于本地 live 依赖未启动，不是 P9 改动失败。 | 启动 Step 02 |
-| 02 | pending | 待定 | 待执行 | 待执行 | 待记录 | 待记录 | 待记录 | 等 Step 01 API 决策 |
+| 02 | done | `awiki-me-group:feauture/release-0526/group` | 2026-06-14T20:30:43+08:00 | 2026-06-14T20:43:02+08:00 | `awiki-me-group:075a0c0 feat(app): add group mention composer UX` | 手工 Review 通过：确认 composer 仅在群聊启用 mention；候选固定 selector 置顶且 selector 保持 all/agents/humans；单人 target 使用 DID 和 subjectType，不使用 displayName 作为身份；unknown subjectType 候选可见但不可选择；候选加载只调用 `GroupApplicationService.listMembers`，不逐项远程拉 profile；IME composing 时不弹；普通发送回归通过。修复项：trigger detector 最初把 `@` 误判为 query break，已修复并补测试。 | 通过：`cd awiki-me-group && dart analyze`（No issues）；`cd awiki-me-group && flutter test tests/unit_test --name mention`（8 passed）；`cd awiki-me-group && flutter test tests/unit_test --name "chat mention"`（2 passed）；`cd awiki-me-group && flutter test tests/unit_test/chat_page_test.dart --name "macOS 聊天输入条保持发送能力"`（1 passed）；`cd awiki-me-group && git diff --check`（通过）。未做真机/手动移动端输入；当前 Step 02 以 widget test 覆盖群聊/私聊、点击选择和 draft range。 | 启动 Step 03 |
 | 03 | pending | 待定 | 待执行 | 待执行 | 待记录 | 待记录 | 待记录 | 等 Step 01、02 |
 | 04 | pending | 待定 | 待执行 | 待执行 | 待记录 | 待记录 | 待记录 | 等 Step 01 validator |
 | 05 | pending | 待定 | 待执行 | 待执行 | 待记录 | 待记录 | 待记录 | 等 Step 01-04 |
