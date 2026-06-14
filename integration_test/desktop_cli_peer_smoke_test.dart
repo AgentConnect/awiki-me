@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
+import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
@@ -50,9 +51,11 @@ void main() {
       await tester.pumpAndSettle();
 
       final messaging = bootstrap.messagingService!;
+      final conversations = bootstrap.conversationService!;
       final thread = AppThreadRef.direct(config.cliHandle);
-      final appToCliText = 'e2e app to cli ${config.runId}';
-      final cliToAppText = 'e2e cli to app ${config.runId}';
+      final messageNonce = _messageNonce();
+      final appToCliText = 'e2e app to cli ${config.runId} $messageNonce';
+      final cliToAppText = 'e2e cli to app ${config.runId} $messageNonce';
 
       final appMessage = await messaging.sendText(
         thread: thread,
@@ -60,6 +63,12 @@ void main() {
       );
       expect(appMessage.content, appToCliText);
 
+      await _waitForAppHistory(
+        messaging: messaging,
+        thread: thread,
+        expectedText: appToCliText,
+      );
+      await _waitForCliInbox(config: config, expectedText: appToCliText);
       await _waitForCliHistory(
         config: config,
         peerHandle: config.appHandle,
@@ -83,6 +92,16 @@ void main() {
       await _waitForAppHistory(
         messaging: messaging,
         thread: thread,
+        expectedText: cliToAppText,
+      );
+      await _expectAppHistoryContainsExactlyOnce(
+        messaging: messaging,
+        thread: thread,
+        expectedTexts: <String>[appToCliText, cliToAppText],
+      );
+      await _waitForAppConversationRefresh(
+        conversations: conversations,
+        ownerDid: session.did,
         expectedText: cliToAppText,
       );
     },
@@ -164,6 +183,29 @@ Future<void> _waitForCliHistory({
   );
 }
 
+Future<void> _waitForCliInbox({
+  required _DesktopCliPeerSmokeConfig config,
+  required String expectedText,
+}) async {
+  await _poll(
+    description: 'CLI inbox contains "$expectedText"',
+    action: () async {
+      final result = await _runCli(config, const <String>[
+        '--format',
+        'json',
+        'msg',
+        'inbox',
+        '--limit',
+        '20',
+      ]);
+      if (result.exitCode != 0) {
+        return false;
+      }
+      return _jsonContainsText(result.stdout, expectedText);
+    },
+  );
+}
+
 Future<void> _waitForAppHistory({
   required MessagingService messaging,
   required AppThreadRef thread,
@@ -174,6 +216,49 @@ Future<void> _waitForAppHistory({
     action: () async {
       final messages = await messaging.loadHistory(thread, limit: 20);
       return messages.any((message) => message._matchesText(expectedText));
+    },
+  );
+}
+
+Future<void> _expectAppHistoryContainsExactlyOnce({
+  required MessagingService messaging,
+  required AppThreadRef thread,
+  required List<String> expectedTexts,
+}) async {
+  final first = await messaging.loadHistory(thread, limit: 50);
+  final second = await messaging.loadHistory(thread, limit: 50);
+  for (final text in expectedTexts) {
+    final firstMatches = first.where((message) => message._matchesText(text));
+    final secondMatches = second.where((message) => message._matchesText(text));
+    expect(
+      firstMatches,
+      hasLength(1),
+      reason: 'App history should contain exactly one "$text" message.',
+    );
+    expect(
+      secondMatches,
+      hasLength(1),
+      reason: 'A second App history refresh should not duplicate "$text".',
+    );
+  }
+}
+
+Future<void> _waitForAppConversationRefresh({
+  required ConversationService conversations,
+  required String ownerDid,
+  required String expectedText,
+}) async {
+  await _poll(
+    description: 'App conversation refresh contains "$expectedText"',
+    action: () async {
+      final items = await conversations.listConversations(
+        ownerDid: ownerDid,
+        limit: 20,
+      );
+      return items.any(
+        (conversation) =>
+            conversation.lastMessagePreview.contains(expectedText),
+      );
     },
   );
 }
@@ -233,7 +318,7 @@ bool _jsonContainsText(String output, String expectedText) {
 
 bool _valueContainsText(Object? value, String expectedText) {
   if (value is String) {
-    return value == expectedText;
+    return value.contains(expectedText);
   }
   if (value is List) {
     return value.any((entry) => _valueContainsText(entry, expectedText));
@@ -242,6 +327,11 @@ bool _valueContainsText(Object? value, String expectedText) {
     return value.values.any((entry) => _valueContainsText(entry, expectedText));
   }
   return false;
+}
+
+String _messageNonce() {
+  final micros = DateTime.now().toUtc().microsecondsSinceEpoch;
+  return micros.toRadixString(36);
 }
 
 bool _looksRecoverableForRegister(String output) {

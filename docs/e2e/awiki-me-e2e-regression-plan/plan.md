@@ -4,7 +4,7 @@
 DOC：`test-awiki-me/docs/e2e/awiki-me-e2e-regression-plan/`  
 Harness：`awiki-harness/`  
 创建时间：2026-06-14  
-恢复指针：Step 04 已完成；下一次从 Step 05 开始，先读取 [steps/05-desktop-app-cli-peer-e2e.md](steps/05-desktop-app-cli-peer-e2e.md)。
+恢复指针：Step 05 已完成；下一次从 Step 06 开始，先读取 [steps/06-group-attachment-basic-regression.md](steps/06-group-attachment-basic-regression.md)。
 
 ## 1. 目标
 
@@ -239,7 +239,7 @@ Step 04 只扩展 deterministic App smoke，不引入真实账号、真实消息
 | 02 | done | `feature/test-awiki-me` | 2026-06-14 12:58 CST | 2026-06-14 13:02 CST | `cacfde6` | Review 完成：确认标签、gate、case 字段、晋级/降级规则覆盖新功能验证和既有功能回归；真实后端/OTP/App+CLI 互通未进入 PR required；Agent 和 E2EE 保持 skipped，不实现、不运行、不进任何 gate。 | `awk ... uniq -d` 检查矩阵 Case ID 无重复；`find docs/e2e/awiki-me-e2e-regression-plan -type f -name '*.md' -print | sort` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描仅命中 Step 05 的 env 变量名示例，无真实 secret。 | 启动 Step 03 |
 | 03 | done | `feature/test-awiki-me` | 2026-06-14 13:06 CST | 2026-06-14 13:09 CST | `a2defaa` | Review 完成：确认 shared service env、desktop/macOS/Linux 前提、mobile local config、账号池、runId 隔离和 secret/report 规则与现有 runner 一致；真实账号、OTP 和 local config 均不提交。 | `dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run` 通过；`dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=linux --dry-run --skip-cli-build --skip-flutter-smoke` 通过；`git diff --check -- docs/e2e/awiki-me-e2e-regression-plan` 通过；敏感信息/绝对路径扫描仅命中 Step 05 env 变量名示例，无真实 secret；`.e2e/` 为 ignored 运行产物。 | 启动 Step 04 |
 | 04 | done | `feature/test-awiki-me` | 2026-06-14 13:24 CST | 2026-06-14 13:28 CST | 本步骤提交，短 hash 以 `git log -1` 为准 | Review 完成：新增 profile/settings smoke 只使用 fake bootstrap、fake profile provider 和 fake homepage loader；root `integration_test/` 仍为 shim；未接入真实账号、OTP、User Service、Message Service、CLI peer 或 mobile 设备。 | `dart analyze` 通过；`flutter test tests/unit_test/profile_page_test.dart tests/unit_test/settings_page_test.dart tests/unit_test/conversation_workspace_test.dart` 通过，41 tests；`xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过，3 tests；`xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` 通过，1 test；当前 host 为 Linux，macOS smoke 未运行；`git diff --check` 通过；敏感扫描仅命中 env 变量名示例。 | 启动 Step 05 |
-| 05 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 03/04 完成 |
+| 05 | done | `feature/test-awiki-me` | 2026-06-14 13:35 CST | 2026-06-14 13:47 CST | 本步骤提交后回填短 hash，以 `git log -1` 为准 | Review 完成：新增断言只通过 App `MessagingService` / `ConversationService` 和 CLI 高层命令，不直接访问 raw RPC、WebSocket、SQLite 或测试 fixture；real E2E 未在当前 host 运行。 | `dart analyze` 通过；`flutter test tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart` 通过，11 tests；`xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` 在 `AWIKI_E2E` 未开启时安全 skip；`git diff --check` 通过；敏感扫描无真实 secret。 | 启动 Step 06 |
 | 06 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 03/05 完成 |
 | 07 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 03 完成 |
 | 08 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 04-07 完成 |

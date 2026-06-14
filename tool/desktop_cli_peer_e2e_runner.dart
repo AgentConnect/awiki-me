@@ -4,6 +4,14 @@ import 'dart:io';
 
 import 'package:yaml/yaml.dart';
 
+const String _desktopCliPeerScenario = 'desktop-app-cli-peer';
+const List<String> _desktopCliPeerCaseIds = <String>[
+  'AUTH-E2E-001',
+  'MSG-E2E-001',
+  'MSG-E2E-002',
+  'MSG-REG-001',
+];
+
 Future<void> main(List<String> args) async {
   try {
     final options = DesktopCliPeerOptions.parse(args);
@@ -86,6 +94,14 @@ class DesktopCliPeerRunner {
       _line('cli workspace: ${redactor.redact(cliWorkspaceDir.path)}');
       _line('cli home: ${redactor.redact(cliHomeDir.path)}');
       _line('app state: ${redactor.redact(appStateRootDir.path)}');
+      _line('app handle: ${config.appHandle}');
+      _line('cli handle: ${config.cliHandle}');
+      _line('service base: ${config.serviceBaseUrl}');
+      _line('user service: ${config.userServiceUrl ?? config.serviceBaseUrl}');
+      _line(
+        'message service: '
+        '${config.messageServiceUrl ?? config.serviceBaseUrl}',
+      );
 
       await _timed('Checking tooling', _checkTooling);
       await _timed('Preparing CLI workspace', _prepareCliWorkspace);
@@ -326,13 +342,24 @@ class DesktopCliPeerRunner {
     file.writeAsStringSync(
       encoder.convert(<String, Object?>{
         'status': succeeded ? 'success' : 'failed',
+        'scenario': _desktopCliPeerScenario,
+        'caseIds': _desktopCliPeerCaseIds,
         'runId': runId,
         'platform': config.platform.name,
+        'dryRun': options.dryRun,
+        'prepareOnly': options.prepareOnly,
         'serviceBaseUrl': config.serviceBaseUrl,
+        'userServiceUrl': config.userServiceUrl ?? config.serviceBaseUrl,
+        'messageServiceUrl': config.messageServiceUrl ?? config.serviceBaseUrl,
+        'mailServiceUrl': config.mailServiceUrl,
+        'anpServiceUrl': config.anpServiceUrl,
+        'anpServiceDid': config.anpServiceDid,
         'didDomain': config.didDomain,
         'appHandle': config.appHandle,
         'cliHandle': config.cliHandle,
         'cliWorkspace': '<redacted-workspace>',
+        'cliHome': '<redacted-home>',
+        'appStateRoot': '<redacted-app-state>',
         'totalMs': totalElapsed.inMilliseconds,
         'steps': [
           for (final entry in _timings)

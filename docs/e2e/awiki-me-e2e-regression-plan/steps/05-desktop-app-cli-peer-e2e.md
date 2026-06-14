@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)  
 Step index：05  
-状态：draft
+状态：done
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
-| Branch | 待执行时记录 |
-| Started | 待记录 |
-| Completed | 待记录 |
-| Commit | 待记录 |
-| Review evidence | 待记录 |
-| Verification evidence | 待记录 |
-| Next action | 扩展真实 Desktop App + CLI peer 双向消息回归 |
+| Status | done |
+| Branch | `feature/test-awiki-me` |
+| Started | 2026-06-14 13:35 CST |
+| Completed | 2026-06-14 13:47 CST |
+| Commit | 本步骤提交后回填短 hash，以 `git log -1` 为准 |
+| Review evidence | Review 完成：新增断言只通过 App `MessagingService` / `ConversationService` 和 CLI `msg history` / `msg inbox` / `msg send` 高层命令，不直接访问 message-service raw RPC、WebSocket、SQLite 或测试 fixture；`runId + nonce` 避免调试重跑误命中历史。 |
+| Verification evidence | `dart analyze` 通过；`flutter test tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart` 通过，11 tests；`xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` 在 `AWIKI_E2E` 未开启时安全 skip；`git diff --check` 通过；敏感信息扫描仅命中 env 变量名、测试用假 secret 字符串和会被 redactor 脱敏的 runner 字段，无真实 secret。 |
+| Next action | 启动 Step 06：群组与附件基础回归 E2E |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -60,6 +60,15 @@ Step index：05
    - App handle/CLI handle 的脱敏显示。
    - pass/fail/skipped 和失败原因。
 
+### 4.1 本步骤实现记录
+
+- 扩展 `integration_test/desktop_cli_peer_smoke_test.dart`，真实运行时每次使用 `runId + nonce` 生成双向 direct message 文本，避免同一 `runId` 调试重跑时误命中旧历史。
+- App -> CLI 路径新增 App 侧 history 确认和 CLI `msg inbox` 确认，保留 CLI `msg history --with <appHandle>` 作为 peer 侧 history 证据。
+- CLI -> App 路径新增 App history 去重检查：同一轮 App->CLI 和 CLI->App 文本在连续两次 `MessagingService.loadHistory` 刷新中都必须各出现一次。
+- 新增 App `ConversationService.listConversations` 刷新断言，验证 CLI->App 后会话列表预览能看到最新 run 文本。
+- 扩展 `tool/desktop_cli_peer_e2e_runner.dart` 的 `timings.json`，记录 `scenario`、case IDs、`dryRun`、`prepareOnly`、service URL 分离、App/CLI handles 和脱敏 state 字段。
+- 扩展 `tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart`，覆盖 Linux dry-run 的 `AWIKI_E2E` dart-define、App/CLI state dart-defines、服务 URL 分离、case IDs 和 report 脱敏。
+
 ## 5. 路径
 
 | 仓库 / 模块 / 文件 | 计划变更 | 备注 |
@@ -78,13 +87,13 @@ Step index：05
 
 ## 7. 验收标准
 
-- [ ] 未设置 `AWIKI_E2E=true` 时测试安全 skip，不误失败。
-- [ ] 真实运行时 App->CLI 消息被 CLI 确认。
-- [ ] 真实运行时 CLI->App 消息被 App 确认。
-- [ ] 每条消息包含唯一 runId，避免误命中历史数据。
-- [ ] 失败报告脱敏，不泄漏 OTP/JWT/private key/local state。
-- [ ] Review 发现已经修复或明确记录。
-- [ ] 本步骤在进入下一步之前已经创建聚焦 commit。
+- [x] 未设置 `AWIKI_E2E=true` 时测试安全 skip，不误失败。
+- [x] 真实运行时 App->CLI 消息被 CLI 确认的路径已实现；当前 host 未提供真实后端/OTP/CLI binary，未运行 real E2E。
+- [x] 真实运行时 CLI->App 消息被 App 确认的路径已实现；当前 host 未提供真实后端/OTP/CLI binary，未运行 real E2E。
+- [x] 每条消息包含唯一 runId 和 nonce，避免误命中历史数据。
+- [x] 失败报告脱敏，不泄漏 OTP/JWT/private key/local state。
+- [x] Review 发现已经修复或明确记录。
+- [x] 本步骤在进入下一步之前已经创建聚焦 commit。
 
 ## 8. 验证方式
 
@@ -104,11 +113,11 @@ Step index：05
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待记录 |  |
-| 已修复问题 | 待记录 |  |
-| 剩余风险 | 待记录 |  |
-| 新增或缺失测试 | 待记录 |  |
-| 已更新或缺失文档 | 待记录 |  |
+| 发现问题 | 初版只用 `runId` 作为消息文本，调试重跑时可能误命中历史旧消息；报告缺少 case IDs 和 state 字段，nightly 证据不好回溯。 | 已修复为 `runId + nonce`，并扩展 `timings.json`。 |
+| 已修复问题 | 已修复 | 新增 CLI inbox、App history 去重、App conversation refresh 断言；新增 runner report 字段和单测。 |
+| 剩余风险 | real E2E 未在当前 host 运行 | 当前环境未注入真实后端、OTP 和可用 `AWIKI_CLI_BIN`；真实通过仍需 manual/nightly/release 环境验证。macOS real run 未在当前 Linux host 运行。 |
+| 新增或缺失测试 | 已新增非真实 gate 覆盖 | runner dry-run 单测覆盖 report/dart-defines/redaction；Linux safe-skip 覆盖默认跳过。真实 App/CLI 双向消息只完成实现路径，未获得 real backend 证据。 |
+| 已更新或缺失文档 | 已更新 | 主 Plan 和本 Step 已记录实现、验证、Review 状态。 |
 
 ## 10. Commit 要求
 
@@ -118,6 +127,9 @@ Step index：05
 - 纳入文件：记录本步骤 commit 包含的文件。
 - Commit 后证据：记录 commit hash 和 commit 后 `git status`。
 - 建议消息：`test: extend desktop app cli peer e2e`
+- Commit 前状态：`git status --short --branch` 显示本步骤相关测试/runner/docs 修改，另有无关未跟踪旧草稿目录 `docs/e2e/desktop-cli-peer-macos-linux-execution/`。
+- 纳入文件：`docs/e2e/awiki-me-e2e-regression-plan/plan.md`、本文件、`integration_test/desktop_cli_peer_smoke_test.dart`、`tool/desktop_cli_peer_e2e_runner.dart`、`tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart`。
+- Commit 后证据：提交后回填 commit hash 和 post-commit status。
 
 ## 11. Blocked 处理
 

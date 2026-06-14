@@ -256,6 +256,7 @@ void main() {
       );
       expect(log, contains('--dart-define=AWIKI_E2E_RUN_ID=run123'));
       expect(log, contains('--dart-define=AWIKI_E2E_PLATFORM=linux'));
+      expect(log, contains('--dart-define=AWIKI_E2E=true'));
       expect(
         log,
         contains('--dart-define=AWIKI_BASE_URL=https://service.example.test'),
@@ -275,6 +276,10 @@ void main() {
         contains('--dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted>'),
       );
       expect(log, contains('--dart-define=AWIKI_CLI_HOME_DIR=<redacted>'));
+      expect(
+        log,
+        contains('--dart-define=AWIKI_CLI_WORKSPACE_HOME_DIR=<redacted>'),
+      );
       expect(
         log,
         contains(
@@ -301,9 +306,25 @@ void main() {
       expect(timingText, isNot(contains(root.path)));
       final decoded = jsonDecode(timingText) as Map<String, dynamic>;
       expect(decoded['status'], 'success');
+      expect(decoded['scenario'], 'desktop-app-cli-peer');
+      expect(decoded['caseIds'], <dynamic>[
+        'AUTH-E2E-001',
+        'MSG-E2E-001',
+        'MSG-E2E-002',
+        'MSG-REG-001',
+      ]);
       expect(decoded['runId'], 'run123');
       expect(decoded['platform'], 'linux');
+      expect(decoded['dryRun'], isTrue);
+      expect(decoded['prepareOnly'], isFalse);
+      expect(decoded['appHandle'], 'e2e-app');
+      expect(decoded['cliHandle'], 'e2e-cli');
+      expect(decoded['serviceBaseUrl'], 'https://service.example.test');
+      expect(decoded['userServiceUrl'], 'https://service.example.test');
+      expect(decoded['messageServiceUrl'], 'https://messages.example.test');
       expect(decoded['cliWorkspace'], '<redacted-workspace>');
+      expect(decoded['cliHome'], '<redacted-home>');
+      expect(decoded['appStateRoot'], '<redacted-app-state>');
     });
 
     test('generates macOS Flutter command without Xvfb', () async {
