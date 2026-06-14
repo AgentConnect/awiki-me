@@ -4,7 +4,7 @@
 DOC：`test-awiki-me/docs/e2e/awiki-me-e2e-regression-plan/`  
 Harness：`awiki-harness/`  
 创建时间：2026-06-14  
-恢复指针：Step 07 已完成；下一次从 Step 08 开始，先读取 [steps/08-ci-nightly-release-maintenance.md](steps/08-ci-nightly-release-maintenance.md)。
+恢复指针：Step 08 已完成；下一次执行最终全局 Review 与整体验证，记录第 19 节最终证据。
 
 ## 1. 目标
 
@@ -236,7 +236,7 @@ Step 07 不把 dry-run success 解释为真实两设备通过；在真实 iOS/An
 | 05 | Desktop App + CLI peer 真实 E2E | Step 03, Step 04 | App/CLI 双向消息和账号闭环场景 | [steps/05-desktop-app-cli-peer-e2e.md](steps/05-desktop-app-cli-peer-e2e.md) | 必须 | done |
 | 06 | 群组与附件基础回归 E2E | Step 03, Step 05 | 群组消息、附件发送/接收、基础错误回归方案 | [steps/06-group-attachment-basic-regression.md](steps/06-group-attachment-basic-regression.md) | 必须 | done |
 | 07 | Mobile 双设备 E2E | Step 03 | iOS/Android 双设备消息互通和设备池策略 | [steps/07-mobile-two-device-e2e.md](steps/07-mobile-two-device-e2e.md) | 必须 | done |
-| 08 | CI/nightly/release gate 与维护机制 | Step 04-07 | 自动化 gate、报告、flake 处理、最终文档收口 | [steps/08-ci-nightly-release-maintenance.md](steps/08-ci-nightly-release-maintenance.md) | 必须 | pending |
+| 08 | CI/nightly/release gate 与维护机制 | Step 04-07 | 自动化 gate、报告、flake 处理、最终文档收口 | [steps/08-ci-nightly-release-maintenance.md](steps/08-ci-nightly-release-maintenance.md) | 必须 | done |
 
 ## 10. 执行台账
 
@@ -251,7 +251,7 @@ Step 07 不把 dry-run success 解释为真实两设备通过；在真实 iOS/An
 | 05 | done | `feature/test-awiki-me` | 2026-06-14 13:35 CST | 2026-06-14 13:47 CST | 本步骤提交后回填短 hash，以 `git log -1` 为准 | Review 完成：新增断言只通过 App `MessagingService` / `ConversationService` 和 CLI 高层命令，不直接访问 raw RPC、WebSocket、SQLite 或测试 fixture；real E2E 未在当前 host 运行。 | `dart analyze` 通过；`flutter test tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart` 通过，11 tests；`xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` 在 `AWIKI_E2E` 未开启时安全 skip；`git diff --check` 通过；敏感扫描无真实 secret。 | 启动 Step 06 |
 | 06 | done | `feature/test-awiki-me` | 2026-06-14 13:51 CST | 2026-06-14 14:03 CST | 本步骤提交后回填短 hash，以 `git log -1` 为准 | Review 完成：App 使用 `GroupApplicationService` / `MessagingService`，CLI 使用 `group messages`、`msg send --group`、`msg send --file`、`msg attachment download` 高层命令；未直接访问 raw RPC、WebSocket、SQLite、附件内部存储或 `ModMessage` fixture。 | `dart analyze` 通过；`flutter test tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart` 通过，11 tests；`xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` 在 `AWIKI_E2E` 未开启时安全 skip；`git diff --check` 通过；敏感扫描无真实 secret；real group/attachment E2E 当前 host 未运行。 | 启动 Step 07 |
 | 07 | done | `feature/test-awiki-me` | 2026-06-14 14:13 CST | 2026-06-14 14:18 CST | `83c1438` | Review 完成：mobile runner 真实 flow 仍走 Maestro/App UI，不绕过 App/SDK/服务；dry-run report 只作为计划证据，caseStatus 保持 `skipped`；命令日志和 report 对手机号、OTP、token/JWT query、device id、绝对路径做脱敏。 | `dart analyze` 通过；`flutter test tests/unit_test/e2e_harness/mobile_e2e_runner_test.dart` 通过，15 tests；`dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run` 通过，runId `20260614061538-0ef4ka`，report 记录 `mobile-two-device` / `MOBILE-E2E-001` 且 caseStatus 为 `skipped`；`git diff --check` 通过；敏感扫描仅命中 env 名、示例占位手机号、测试用假 secret 和既有 redaction 测试数据，无真实 secret；真实 iOS/Android 两设备未运行，当前 Linux host 未配置设备池、Maestro real run 和 `mobile.local.yaml`。 | 启动 Step 08 |
-| 08 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 04-07 完成 |
+| 08 | done | `feature/test-awiki-me` | 2026-06-14 14:22 CST | 2026-06-14 14:30 CST | 本步骤提交后回填短 hash，以 `git log -1` 为准 | Review 完成：CI required 只包含 deterministic analyze/unit/dry-run/Linux smoke，不加入真实 OTP、后端、SSH 或移动设备；nightly/release/manual runbook 明确 secret/local config 前提、report 字段和 skipped 规则；`AGENT-SKIP-001` 与 `E2EE-SKIP-001` 未加入任何 gate。 | `dart analyze` 通过；`flutter test tests/unit_test` 通过，431 tests；harness focused tests 通过，26 tests；mobile dry-run 通过，runId `20260614062415-8ycc6f`；desktop dry-run 通过，runId `20260614T062415431Z`；串行 Linux app smoke 通过，3 tests；串行 Linux native smoke 通过，1 test；`git diff --check` 通过；敏感扫描仅命中 env 名、测试假值和既有 redaction fixture，无真实 secret；真实 nightly/release E2E 当前 host 未运行。 | 执行最终全局 Review 与整体验证 |
 
 ## 11. Codex Goal 执行协议
 

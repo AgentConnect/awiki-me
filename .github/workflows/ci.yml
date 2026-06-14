@@ -84,6 +84,10 @@ jobs:
         working-directory: test-awiki-me
         run: dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run
 
+      - name: Desktop E2E runner dry-run
+        working-directory: test-awiki-me
+        run: dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=linux --dry-run --skip-cli-build --skip-flutter-smoke
+
       - name: Linux desktop app smoke
         working-directory: test-awiki-me
         env:

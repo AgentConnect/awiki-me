@@ -60,6 +60,27 @@ reason, configured devices, account handles, planned message IDs, and redacted
 service/report paths. A dry-run `success` only proves the runner plan; the case
 status remains `skipped` until a real iOS or Android two-device run completes.
 
+Gate usage:
+
+- PR required: runner dry-runs only. Use mobile dry-run and desktop dry-run with
+  `--skip-cli-build --skip-flutter-smoke`; do not require OTP, real devices, or
+  a live backend.
+- PR optional desktop: Linux/macOS App/native smoke only. Linux must run through
+  `xvfb-run`.
+- Nightly desktop: real Desktop App+CLI peer direct/group/attachment basics with
+  isolated `.e2e/<platform>/` state and private redacted reports.
+- Nightly mobile: real `MOBILE-E2E-001` with two independent iOS or Android
+  devices and an ignored `tests/e2e_test/configs/mobile.local.yaml`.
+- Release: stable P0/P1 regression subset only; new feature cases need nightly
+  stability before promotion.
+
+Every real run should record runId, platform, scenario, case IDs,
+pass/fail/skipped status, skipped reason, report path, and redaction result.
+Classify failures as product regression, test bug, account/OTP issue, backend
+deployment issue, runner/device issue, or unknown before changing timeouts.
+`AGENT-SKIP-001` and `E2EE-SKIP-001` remain skipped in this baseline: do not
+implement them, run them, or add them to PR/nightly/release gates.
+
 Agent IM scenario dry-run and real runs also write `agent-im-scenario-result.json`.
 That file summarizes AIM-E2E case statuses (`pass` / `fail` / `skipped`),
 records skipped reasons for non-P0 follow-ups, and includes the local redaction

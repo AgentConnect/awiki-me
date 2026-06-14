@@ -267,14 +267,19 @@ flutter test tests/unit_test
 dart run tests/e2e_test/harness/mobile_e2e_runner.dart \
   --config tests/e2e_test/configs/mobile.example.yaml \
   --dry-run
+dart run tests/e2e_test/harness/desktop_e2e_runner.dart \
+  --platform=linux \
+  --dry-run \
+  --skip-cli-build \
+  --skip-flutter-smoke
 xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux
 xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux
 ```
 
 ## CI gate
 
-The quick CI gate should stay deterministic and not depend on real devices or a
-live backend:
+The quick CI gate should stay deterministic and not depend on real devices,
+OTP, SSH, or a live backend:
 
 ```bash
 flutter pub get
@@ -283,20 +288,84 @@ flutter test tests/unit_test
 dart run tests/e2e_test/harness/mobile_e2e_runner.dart \
   --config tests/e2e_test/configs/mobile.example.yaml \
   --dry-run
+dart run tests/e2e_test/harness/desktop_e2e_runner.dart \
+  --platform=linux \
+  --dry-run \
+  --skip-cli-build \
+  --skip-flutter-smoke
 xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux
 xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux
 ```
 
-This gate intentionally does not run real backend + OTP Desktop App+CLI peer
-E2E or real-device E2E. Linux desktop app/native smoke is deterministic and can
-run in PR CI after Linux desktop dependencies and the sibling `awiki-cli-rs2`
-SDK repo are available. The workflow checks out `awiki-cli-rs2` beside this repo
-because `pubspec.yaml` uses `../awiki-cli-rs2/packages/awiki_im_core`; set
-`AWIKI_CLI_RS2_REF` when CI must use a non-default SDK branch, and set
-`AWIKI_CI_READ_TOKEN` if the sibling repo requires a token.
+The checked-in GitHub Actions workflow runs this shape on Ubuntu. It checks out
+`awiki-cli-rs2` beside this repo because `pubspec.yaml` uses
+`../awiki-cli-rs2/packages/awiki_im_core`; set `AWIKI_CLI_RS2_REF` when CI must
+use a non-default SDK branch, and set `AWIKI_CI_READ_TOKEN` if the sibling repo
+requires a token. Linux desktop app/native smoke is deterministic after Linux
+desktop dependencies, Xvfb, SQLite source, and the sibling native SDK build are
+available.
 
-Real Desktop App+CLI peer E2E and real Android/iOS E2E belong in manual,
-nightly, or release gates unless stable devices, Maestro, non-production
-accounts, and backend isolation are available. Run integration and real-device
-E2E when the platform and devices are available, and record pass/fail evidence
-plus any report paths in the handoff or release notes.
+This gate intentionally does not run real backend + OTP Desktop App+CLI peer
+E2E, real Agent IM scenarios, or real-device mobile E2E.
+
+## E2E gate policy
+
+| Gate | Default trigger | Required environment | Must run | Must not run |
+|---|---|---|---|---|
+| PR required | Every pull request and push to `main` | Ubuntu CI, Flutter, Rust, Linux desktop deps, sibling `awiki-cli-rs2` checkout. | `dart analyze`, `flutter test tests/unit_test`, mobile dry-run, desktop dry-run, Linux app smoke, Linux native SDK smoke. | Real OTP, real service accounts, Desktop App+CLI real E2E, Agent IM real E2E, mobile devices, SSH remote evidence. |
+| PR optional desktop | Developer or self-hosted runner with desktop support | macOS or Linux desktop runner; Linux uses `xvfb-run`. | `integration_test/app_smoke_test.dart` and `integration_test/im_core_open_smoke_test.dart` on the available desktop platform. | Any test that needs a non-production account pool or real message service. |
+| Nightly desktop | Scheduled or manual workflow on a prepared runner | Non-production User Service/Message Service/DID domain, OTP env, built `awiki-cli`, isolated App and CLI state. | Desktop App+CLI peer direct message, history/inbox/refresh, group text, small attachment send/receive, report redaction scan. | `AGENT-SKIP-001`, `E2EE-SKIP-001`, and any scenario without a maintained owner. |
+| Nightly mobile | Scheduled or manual workflow on a device runner | iOS or Android device pair, Maestro, `mobile.local.yaml` from CI secrets, non-production account pool. | `MOBILE-E2E-001` real two-device direct message with logs/screenshots/report retained as private artifacts. | Desktop-only scenarios and any mobile run without two independent devices. |
+| Release | Release candidate validation | Stable nightly environment plus release owner review. | P0/P1 regression subset: desktop smoke, native SDK smoke, Desktop App+CLI direct/group/attachment basics, mobile two-device when device pool is available. | New `feature` cases that have not been promoted, skipped Agent-as-IM-handler and E2EE专项 cases. |
+| Manual | Developer or QA runbook | Local or remote environment prepared by the runner. | Any focused case needed for debugging or release evidence, with command, runId, platform, service endpoints, and report path recorded. | Manual results presented as automatic PR gate evidence. |
+
+Real E2E reports must record `runId`, platform, scenario, case IDs,
+pass/fail/skipped status, skipped reason when applicable, and a redaction scan
+result. Keep `.e2e/`, `*.local.yaml`, OTP values, JWTs, private keys, CLI
+workspaces, App state roots, remote logs, screenshots, and device state out of
+Git.
+
+## Nightly and release runbook
+
+Desktop nightly, Linux example:
+
+```bash
+DEV_OTP_PHONE="$DEV_OTP_PHONE" \
+DEV_OTP_CODE="$DEV_OTP_CODE" \
+AWIKI_CLI_BIN="../awiki-cli-rs2/target/release/awiki-cli" \
+AWIKI_USER_SERVICE_URL="$AWIKI_USER_SERVICE_URL" \
+AWIKI_MESSAGE_SERVICE_URL="$AWIKI_MESSAGE_SERVICE_URL" \
+dart run tool/desktop_cli_peer_e2e_runner.dart \
+  --platform linux \
+  --service-base-url "$AWIKI_SERVICE_BASE_URL" \
+  --did-domain "$AWIKI_DID_DOMAIN"
+```
+
+Mobile nightly:
+
+```bash
+dart run tests/e2e_test/harness/mobile_e2e_runner.dart \
+  --config tests/e2e_test/configs/mobile.local.yaml
+```
+
+Before release, collect the private report paths from the desktop and mobile
+runs, confirm `AGENT-SKIP-001` and `E2EE-SKIP-001` remain skipped with no gate
+requirement, and record any release-owner waiver for unavailable devices,
+accounts, or backend incidents.
+
+## Flake and maintenance policy
+
+- A failed real E2E must be classified as product regression, test bug,
+  account/OTP problem, backend deployment problem, runner/device problem, or
+  unknown. Do not hide a failure by only increasing timeout.
+- A `feature` case may become `regression` after it passes in the target
+  nightly environment three consecutive times and has stable redacted evidence.
+- A `regression` case that repeatedly flakes must be fixed, quarantined to
+  manual/nightly with a tracking issue, or explicitly waived by the release
+  owner. It must not remain a silent required gate.
+- Each new user-facing messaging, group, attachment, profile/settings, or
+  onboarding feature should add or update one unit/widget test and decide
+  whether an existing E2E case needs a new assertion or a new `feature` case.
+- Keep skipped scenarios in the matrix. `AGENT-SKIP-001` and `E2EE-SKIP-001`
+  are not implemented, not run, not added to PR/nightly/release gates, and do
+  not require validation evidence in this E2E baseline.
