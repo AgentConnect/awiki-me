@@ -1,8 +1,8 @@
 # Step 01 契约与缺口基线
 
-状态：Step 01 输出草案，随 Step 01 commit 固化  
-日期：2026-06-13  
-关联主 Plan：[plan.md](plan.md)  
+状态：Step 01 输出草案，随 Step 01 commit 固化
+日期：2026-06-13
+关联主 Plan：[plan.md](plan.md)
 关联 Step：[steps/01-context-contract-baseline.md](steps/01-context-contract-baseline.md)
 
 ## 1. 范围与方法

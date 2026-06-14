@@ -1,7 +1,7 @@
 # Step 02：E2E harness 基础扩展
 
-主 Plan：[../plan.md](../plan.md)  
-Step index：02  
+主 Plan：[../plan.md](../plan.md)
+Step index：02
 状态：done
 
 ## 1. 执行状态

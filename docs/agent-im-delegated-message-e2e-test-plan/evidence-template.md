@@ -1,6 +1,6 @@
 # Agent IM E2E 证据模板
 
-状态：draft  
+状态：draft
 主方案：[README.md](README.md)
 
 > 复制本模板到本地 report 或执行台账中使用。提交仓库前必须确认已脱敏。

@@ -1,7 +1,7 @@
 # Step 04：App bootstrap 自动化与 integration entry
 
-主 Plan：[../plan.md](../plan.md)  
-Step index：04  
+主 Plan：[../plan.md](../plan.md)
+Step index：04
 状态：done
 
 ## 1. 执行状态

@@ -1,7 +1,7 @@
 # AWiki Me 测试框架方案与当前落地状态
 
-状态：baseline implemented  
-日期：2026-06-13  
+状态：baseline implemented
+日期：2026-06-13
 范围：AWiki Me / Avatar Me 的测试代码组织、桌面 E2E 复用架构、当前迁移边界。
 
 ## 1. 目标

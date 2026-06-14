@@ -349,8 +349,16 @@ message: {}
       await configFile.writeAsString('''
 platform: android
 app: {}
-service: {}
-device: {}
+service:
+  baseUrl: https://example.test/api?token=secret
+  userServiceUrl: https://user.example.test/users?jwt=secret
+  messageServiceUrl: https://message.example.test/im?jwt=secret
+  didDomain: example.test
+device:
+  android:
+    ids:
+      a: emulator-5554
+      b: emulator-5556
 otp: {}
 accounts:
   a:
@@ -381,9 +389,66 @@ message: {}
       expect(reports, hasLength(1));
       final timings = File('${reports.single.path}/timings.json');
       expect(timings.existsSync(), isTrue);
-      final decoded =
-          jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
+      final reportText = await timings.readAsString();
+      expect(reportText, isNot(contains('+8610011110001')));
+      expect(reportText, isNot(contains('+8610011110002')));
+      expect(reportText, isNot(contains('token=secret')));
+      expect(reportText, isNot(contains('jwt=secret')));
+      expect(reportText, isNot(contains('emulator-5554')));
+      expect(reportText, isNot(contains('emulator-5556')));
+
+      final decoded = jsonDecode(reportText) as Map<String, dynamic>;
+      expect(decoded['scenario'], 'mobile-two-device');
+      expect(decoded['caseIds'], contains('MOBILE-E2E-001'));
+      expect(decoded['runId'], isA<String>());
+      expect(decoded['runId'] as String, isNotEmpty);
       expect(decoded['status'], 'success');
+      expect(decoded['caseStatus'], 'skipped');
+      expect(
+        decoded['skippedReason'],
+        'dry-run: device preparation, installation, and Maestro flows skipped',
+      );
+      expect(decoded['dryRun'], isTrue);
+      expect(decoded['skipBuild'], isFalse);
+      expect(decoded['platform'], 'android');
+      expect(decoded['appId'], 'ai.awiki.awikime');
+      expect(decoded['configPath'], '<repo>/e2e.yaml');
+      expect(decoded['reportDir'], startsWith('<repo>/.e2e/reports/'));
+
+      final service = decoded['service'] as Map<String, dynamic>;
+      expect(service['baseUrl'], 'https://example.test/api');
+      expect(service['userServiceUrl'], 'https://user.example.test/users');
+      expect(service['messageServiceUrl'], 'https://message.example.test/im');
+      expect(service['didDomain'], 'example.test');
+
+      final accounts = decoded['accounts'] as Map<String, dynamic>;
+      expect((accounts['a'] as Map<String, dynamic>)['handle'], 'alice');
+      expect((accounts['b'] as Map<String, dynamic>)['handle'], 'bob');
+
+      final devices = decoded['devices'] as Map<String, dynamic>;
+      expect(devices['resetBeforeRun'], isTrue);
+      final configured = (devices['configured'] as Map<String, dynamic>);
+      expect(configured['type'], 'android-emulator-or-device');
+      expect((configured['a'] as Map<String, dynamic>)['configuredBy'], 'id');
+      expect(
+        (configured['a'] as Map<String, dynamic>)['id'],
+        startsWith('<redacted:'),
+      );
+
+      final messages = decoded['messages'] as Map<String, dynamic>;
+      final aToB = messages['aToB'] as Map<String, dynamic>;
+      final bToA = messages['bToA'] as Map<String, dynamic>;
+      expect(aToB['label'], 'A_TO_B');
+      expect(aToB['sender'], 'a');
+      expect(aToB['receiver'], 'b');
+      expect(aToB['text'], contains(decoded['runId'] as String));
+      expect(aToB['messageId'], startsWith('e2e-message-awiki-e2e-'));
+      expect(bToA['label'], 'B_TO_A');
+      expect(bToA['sender'], 'b');
+      expect(bToA['receiver'], 'a');
+      expect(bToA['text'], contains(decoded['runId'] as String));
+      expect(bToA['messageId'], startsWith('e2e-message-awiki-e2e-'));
+
       expect(
         decoded['steps'],
         contains(
@@ -400,6 +465,49 @@ message: {}
               .having((step) => step['status'], 'status', 'success'),
         ),
       );
+    });
+
+    test('redacts secret command arguments in dry-run logs', () async {
+      final lines = <String>[];
+      final runner = CommandRunner(
+        root: Directory.current,
+        dryRun: true,
+        logLine: lines.add,
+      );
+
+      await runner.run('flutter', const <String>[
+        'build',
+        'apk',
+        '--dart-define=AWIKI_SERVICE_BASE_URL=https://example.test/api?token=secret',
+        '--dart-define=DEV_OTP_PHONE=+8610011110001',
+        '--dart-define=DEV_OTP_CODE=987580',
+      ]);
+      await runner.start('maestro', const <String>[
+        '--env',
+        'PHONE=+8610011110001',
+        '--env',
+        'OTP_CODE=987580',
+        '--env',
+        'PEER_HANDLE=alice',
+        'test',
+        'tests/e2e_test/mobile/maestro/login.yaml',
+      ], label: 'login-a');
+
+      final log = lines.join('\n');
+      expect(log, isNot(contains('+8610011110001')));
+      expect(log, isNot(contains('987580')));
+      expect(log, isNot(contains('token=secret')));
+      expect(
+        log,
+        contains(
+          '--dart-define=AWIKI_SERVICE_BASE_URL=https://example.test/api',
+        ),
+      );
+      expect(log, contains('--dart-define=DEV_OTP_PHONE=<redacted>'));
+      expect(log, contains('--dart-define=DEV_OTP_CODE=<redacted>'));
+      expect(log, contains('PHONE=<redacted>'));
+      expect(log, contains('OTP_CODE=<redacted>'));
+      expect(log, contains('PEER_HANDLE=alice'));
     });
 
     test('reports process log file on non-zero exit', () async {

@@ -1,7 +1,7 @@
 # Step 06：`awiki.info` 远端联调与服务侧补强
 
-主 Plan：[../plan.md](../plan.md)  
-Step index：06  
+主 Plan：[../plan.md](../plan.md)
+Step index：06
 状态：done
 
 ## 1. 执行状态

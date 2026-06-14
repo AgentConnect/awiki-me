@@ -5,6 +5,10 @@ import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:path_provider/path_provider.dart';
 
 const int identityOwnedLocalStateSchemaVersion = 17;
+const bool _awikiE2eEnabled = bool.fromEnvironment('AWIKI_E2E');
+const String _awikiE2eAppStateRoot = String.fromEnvironment(
+  'AWIKI_E2E_APP_STATE_ROOT',
+);
 const String _sqliteHeader = 'SQLite format 3\u0000';
 const List<String> _sqliteSidecarSuffixes = <String>[
   '-wal',
@@ -48,6 +52,14 @@ class AwikiImCorePathLayout {
   }
 
   static Future<AwikiImCorePathLayout> fromPlatform() async {
+    final e2eRoot = _e2eAppStateRoot();
+    if (e2eRoot != null) {
+      return AwikiImCorePathLayout.fromRoots(
+        appSupportRoot: _joinAll(<String>[e2eRoot, 'support']),
+        cacheRoot: _joinAll(<String>[e2eRoot, 'cache']),
+        tempRoot: _joinAll(<String>[e2eRoot, 'tmp']),
+      );
+    }
     final appSupport = await getApplicationSupportDirectory();
     final cache = await getApplicationCacheDirectory();
     final temp = await getTemporaryDirectory();
@@ -141,6 +153,16 @@ class AwikiImCorePathLayout {
       tempDir: tempDir,
     );
   }
+}
+
+String? awikiE2eAppStateRoot() => _e2eAppStateRoot();
+
+String? _e2eAppStateRoot() {
+  if (!_awikiE2eEnabled) {
+    return null;
+  }
+  final root = _awikiE2eAppStateRoot.trim();
+  return root.isEmpty ? null : root;
 }
 
 class ArchivedLocalState {

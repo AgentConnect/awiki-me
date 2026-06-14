@@ -1,7 +1,7 @@
 # Step 01：上下文与契约基线核对
 
-主 Plan：[../plan.md](../plan.md)  
-Step index：01  
+主 Plan：[../plan.md](../plan.md)
+Step index：01
 状态：done
 
 ## 1. 执行状态

@@ -8,6 +8,7 @@ import 'package:awiki_me/src/application/profile_homepage_resolver.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../unit_test/test_support.dart';
@@ -83,6 +84,7 @@ FakeAwikiMeAppHarness createFakeAwikiMeAppHarness({
           environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
         ),
       ),
+      homepageMarkdownLoaderProvider.overrideWithValue((_) async => null),
       attachmentPickerServiceProvider.overrideWithValue(
         FakeAttachmentPickerService(),
       ),
@@ -94,6 +96,12 @@ FakeAwikiMeAppHarness createFakeAwikiMeAppHarness({
             ..setLocalCredentials(<SessionIdentity>[session]);
           return controller;
         }),
+      profileProvider.overrideWith((ref) {
+        return TestProfileController(
+          ref,
+          initialProfile: gateway.myProfile,
+        );
+      }),
     ],
   );
 }

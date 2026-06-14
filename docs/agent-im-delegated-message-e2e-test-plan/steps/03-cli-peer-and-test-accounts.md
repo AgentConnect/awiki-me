@@ -1,7 +1,7 @@
 # Step 03：CLI peer 与测试账号编排
 
-主 Plan：[../plan.md](../plan.md)  
-Step index：03  
+主 Plan：[../plan.md](../plan.md)
+Step index：03
 状态：done
 
 ## 1. 执行状态

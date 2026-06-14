@@ -1,9 +1,9 @@
 # Plan：Agent IM 委托消息处理 E2E 测试落地
 
 状态：done
-DOC：`awiki-me/docs/agent-im-delegated-message-e2e-test-plan/`  
-Harness：`awiki-harness/`  
-创建时间：2026-06-13  
+DOC：`awiki-me/docs/agent-im-delegated-message-e2e-test-plan/`
+Harness：`awiki-harness/`
+创建时间：2026-06-13
 恢复指针：全部 Step 已完成；后续如要证明真实 P0 happy path，需要补充本地 `agent_im_delegated.local.yaml` 与 peer 测试账号 env 后重跑 Agent IM real E2E。
 
 ## 1. 目标

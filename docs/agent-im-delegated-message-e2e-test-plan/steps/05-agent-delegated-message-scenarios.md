@@ -1,7 +1,7 @@
 # Step 05：Agent delegated message E2E 场景
 
-主 Plan：[../plan.md](../plan.md)  
-Step index：05  
+主 Plan：[../plan.md](../plan.md)
+Step index：05
 状态：done
 
 ## 1. 执行状态

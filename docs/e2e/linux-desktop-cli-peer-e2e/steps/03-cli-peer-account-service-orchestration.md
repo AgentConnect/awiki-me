@@ -1,4 +1,4 @@
-# Step 03：CLI peer 账号与服务编排
+# Step 03：Desktop CLI peer 账号与服务编排
 
 主 Plan：[../plan.md](../plan.md)  
 Step index：03  
@@ -8,20 +8,20 @@ Step index：03
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
+| Status | done |
 | Branch | `feature/test-awiki-me` |
-| Started | - |
-| Completed | - |
-| Commit | - |
-| Review evidence | - |
-| Verification evidence | - |
-| Next action | 在用户确认执行后，设计并实现 E2E runner 的账号 / 服务配置层 |
+| Started | 2026-06-13 20:45:57 CST |
+| Completed | 2026-06-13 21:18:11 CST |
+| Commit | `969a2c3` |
+| Review evidence | diff 限于 Desktop CLI peer runner 和 focused tests；runner 与 mobile `tool/e2e_runner.dart` 分离；dry-run 无副作用；CLI workspace/report 路径、OTP、token/JWT/private key pattern 均脱敏；修正草稿中的错误 `../awiki-cli-rs2/cargo` 命令；调整为 `awiki-cli init` 后结构化写入 `config.yaml` 再 `config show`；没有修改无关平台 runner |
+| Verification evidence | `flutter test tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart` 通过；`dart analyze` 通过；`git diff --check` 通过；runner Linux dry-run 通过且日志中 `--phone` / `--otp` 与 workspace/report 路径脱敏；`cd awiki-cli-rs2 && cargo build -p awiki-cli --bin awiki-cli --release --locked` 通过；临时 `AWIKI_CLI_WORKSPACE_HOME_DIR` 下 `awiki-cli --format json init` 与 `config show` 输出可解析 JSON。真实 `id recover` / `id status` / `msg inbox` 未运行：需要可访问非生产后端和测试账号策略，且不能把本地 `.env` 真实值写入日志 |
+| Next action | 启动 Step 04，新增最小 macOS / Linux 共用 Desktop App + CLI peer smoke |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
 ## 2. 目标
 
-- 结果：提供一个可重复、可清理、可脱敏的 CLI peer 准备流程。
+- 结果：提供一个 macOS / Linux 共用、可重复、可清理、可脱敏的 CLI peer 准备流程。
 - 用户 / 系统可见行为：runner 能构建或定位 `awiki-cli`，创建隔离 workspace，读取非生产测试 OTP，注册或恢复 CLI peer 身份，并确认 CLI 可以访问同一测试服务。
 - 非目标：不在本步骤驱动 Flutter UI，不验证 App 收发消息，不把 `.env` 或真实账号状态提交到 repo。
 - 完成标准：CLI peer 在隔离 workspace 中完成 `id current` / `id status` / `msg inbox --limit 1 --format json` 的可解析检查。
@@ -31,15 +31,16 @@ Step index：03
 - 设计边界：CLI peer 是真实第二客户端，但它的状态和配置必须完全隔离于开发者默认 `~/.awiki-cli/`。
 - 核心决策：从 `user-service/.env` 或调用环境读取 key 名；runner 不记录值。测试账号先支持 register / recover 两种路径，以适配 handle 是否已存在。
 - 契约 / API / 数据流：CLI 只通过 `awiki-cli` public command surface 操作，不直接读写 CLI 内部 SQLite 或身份私钥。
-- 兼容性：保留既有 mobile `tool/e2e_runner.dart`，Linux CLI peer runner 可以是新文件，避免把 mobile Maestro 逻辑混入 desktop。
+- 兼容性：保留既有 mobile `tool/e2e_runner.dart`，Desktop CLI peer runner 可以是新文件，避免把 mobile Maestro 逻辑混入 desktop。
 - 迁移策略：无用户数据迁移；本地 `.e2e/` 可删除重建。
 - 风险控制：所有 child process stdout / stderr 进入 report 前脱敏，至少过滤 OTP、JWT、private key、workspace secret、完整 `.env` 行。
 
 ## 4. 实现方法
 
-1. 定义 Linux CLI peer runner 的输入：
+1. 定义 Desktop CLI peer runner 的输入：
 
    - `AWIKI_CLI_BIN`：已构建的 `awiki-cli` 二进制，或 runner 自动使用 `cargo build -p awiki-cli --bin awiki-cli --release --locked`；
+   - `--platform macos|linux`：选择 Flutter device 和是否使用 `xvfb-run -a`；
    - `DEV_OTP_PHONE` / `DEV_OTP_CODE`：从调用环境读取；
    - `AWIKI_SERVICE_BASE_URL` / `AWIKI_BASE_URL`；
    - `AWIKI_DID_DOMAIN`；
@@ -49,7 +50,7 @@ Step index：03
 2. 初始化 CLI peer workspace：
 
    ```bash
-   export AWIKI_CLI_WORKSPACE_HOME_DIR=".e2e/linux-cli-peer/<run-id>"
+   export AWIKI_CLI_WORKSPACE_HOME_DIR=".e2e/desktop-cli-peer/<run-id>/cli-peer"
    awiki-cli init
    ```
 
@@ -92,8 +93,8 @@ Step index：03
 
 | 仓库 / 模块 / 文件 | 计划变更 | 备注 |
 |---|---|---|
-| `test-awiki-me/tool/ wrappers、test-awiki-me/tests/e2e_test/harness/linux_cli_peer_e2e_runner.dart` | 新增 Linux CLI peer runner | 与 mobile Maestro runner 分离 |
-| `test-awiki-me/test/tool/` | 新增 runner dry-run / config parsing tests | 不需要真实服务 |
+| `test-awiki-me/tool/desktop_cli_peer_e2e_runner.dart` | 新增 Desktop CLI peer runner | 与 mobile Maestro runner 分离，支持 `macos` / `linux` |
+| `test-awiki-me/tests/unit_test/e2e_harness/` | 新增 runner dry-run / config parsing tests | 不需要真实服务 |
 | `test-awiki-me/tests/e2e_test/configs/mobile.example.yaml` 或新配置样例 | 可选扩展 Linux desktop 配置 | 不写真实账号值 |
 | `test-awiki-me/.gitignore` | 确认 `.e2e/`、local config 已忽略 | 当前 `.e2e/` 已忽略 |
 | `awiki-cli-rs2/config.template.yaml` | 不一定修改 | 只在 CLI 需要新配置能力时更新 |
@@ -101,7 +102,7 @@ Step index：03
 
 ## 6. 依赖
 
-- 前置步骤：Step 02 的 SDK 配置结论；完整 E2E 依赖 Step 01-02，但本步骤 runner dry-run 可独立完成。
+- 前置步骤：Step 02 的 SDK 配置结论；完整 E2E 依赖 Step 01-02，但本步骤 runner dry-run 可独立完成。macOS 可先复用已有 native SDK，Linux 完整执行依赖 Step 02。
 - 外部文档或决策：确认 `user-service/.env` 测试 OTP 是否允许两个 handle；确认测试环境 service base URL / DID domain。
 - 环境前提：`awiki-cli-rs2` 可构建 CLI，非生产服务可访问。
 
@@ -121,9 +122,9 @@ Step index：03
 
 | 检查项 | 命令 / 方法 | 预期证据 |
 |---|---|---|
-| Runner unit | `cd test-awiki-me && flutter test test/tool` | dry-run、config parse、secret redaction tests 通过 |
+| Runner unit | `cd test-awiki-me && flutter test tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart` | dry-run、config parse、secret redaction tests 通过 |
 | CLI build | `cd awiki-cli-rs2 && cargo build -p awiki-cli --bin awiki-cli --release --locked` | 生成 CLI binary |
-| CLI workspace | `AWIKI_CLI_WORKSPACE_HOME_DIR=.e2e/linux-cli-peer/<run-id> awiki-cli init` | 隔离 workspace 初始化成功 |
+| CLI workspace | `AWIKI_CLI_WORKSPACE_HOME_DIR=.e2e/desktop-cli-peer/<run-id>/cli-peer awiki-cli init` | 隔离 workspace 初始化成功 |
 | CLI identity | `awiki-cli id current --format json` / `awiki-cli id status --format json` | 当前身份可解析且 handle 匹配 |
 | CLI inbox | `awiki-cli msg inbox --limit 1 --format json` | 命令成功，输出可解析 |
 | Secret scan | 执行项目约定的 secret scan，覆盖 OTP 赋值、JWT、私钥和完整 `.env` 行 | repo docs / tracked files 不包含敏感值；`.e2e/` 只本地检查 |
@@ -138,21 +139,21 @@ Step index：03
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 执行时填写 | - |
-| 已修复问题 | 执行时填写 | - |
-| 剩余风险 | 执行时填写 | 账号池 / OTP 限制需明确 |
-| 新增或缺失测试 | 执行时填写 | runner dry-run 至少要覆盖 |
-| 已更新或缺失文档 | 执行时填写 | docs/testing 可在 Step 05 汇总 |
+| 发现问题 | 已处理 | 草稿 runner 曾包含无效的 `../awiki-cli-rs2/cargo` 命令；初始 config 写入顺序会在 `awiki-cli init` 前写文件，容易被 init 默认行为覆盖；运行期 CLI workspace/report 路径最初未纳入 redaction；测试 fixture 使用类似真实手机号/OTP 的字面量会增加 secret scan 噪音。 |
+| 已修复问题 | 完成 | 移除错误 cargo 命令；改为需要构建时运行 `cargo build -p awiki-cli --bin awiki-cli --release --locked`；顺序改为 `init` 后结构化写 `config.yaml` 再 `config show`；report/workspace 路径加入运行期 redaction；测试 secret 改为非真实形态并断言日志/report 不泄露。 |
+| 剩余风险 | 已记录 | 真实 `id recover` / `id status` / `msg inbox` 依赖可访问的非生产后端和测试账号策略，本步骤未运行；同一 `DEV_OTP_PHONE` / `DEV_OTP_CODE` 是否能准备 App / CLI 两个身份仍需 Step 04 真实 E2E 验证。 |
+| 新增或缺失测试 | 完成 | 新增 `tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart`，覆盖 options parsing、config env fallback、dry-run placeholder、非 dry-run OTP required、handle 冲突、Linux/macOS command generation、secret redaction、timing report redaction、无 CLI binary 时的 cargo build plan。 |
+| 已更新或缺失文档 | 完成 | 主 Plan 和本 Step 回填执行状态、Review、验证证据；`docs/testing.md` 按 Step 05 统一收口。 |
 
 ## 10. Commit 要求
 
 - Commit 时机：runner、验证、Review 都完成后。
-- Commit 范围：`test-awiki-me/tool/ wrappers、test-awiki-me/tests/e2e_test/harness/`、`test-awiki-me/test/tool/`、必要 sample config / docs。
-- Commit 前状态：记录 `git status --short --branch`。
-- 纳入文件：记录本步骤 commit 包含的文件。
-- Commit 后证据：记录 commit hash 和 commit 后 `git status --short --branch`。
-- 遗留未提交变更：必须记录原因以及为什么安全。
-- 建议消息：`test: add linux cli peer e2e runner`
+- Commit 范围：`test-awiki-me/tool/`、`test-awiki-me/tests/unit_test/e2e_harness/`、必要 sample config / docs。
+- Commit 前状态：`git status --short --branch` 显示本 Step runner / tests 为未跟踪文件，Plan 文档为待回填状态。
+- 纳入文件：`test-awiki-me/tool/desktop_cli_peer_e2e_runner.dart`、`test-awiki-me/tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart`。
+- Commit 后证据：`969a2c3`；提交后仅剩主 Plan 和本 Step 文档待回填。
+- 遗留未提交变更：主 Plan 和本 Step 文档证据回填作为单独 docs commit；`awiki-cli-rs2` 中既有 daemon 脏改与本步骤无关，未触碰、未纳入。
+- 建议消息：`test: add desktop cli peer e2e runner`
 
 ## 11. Blocked 处理
 

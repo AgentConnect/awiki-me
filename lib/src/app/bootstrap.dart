@@ -225,6 +225,9 @@ class AppBootstrap {
   }
 
   static Future<AppKeyValueStore> _buildAccountStore() async {
+    if (awikiE2eAppStateRoot() != null) {
+      return FileAppKeyValueStore.create(fileName: 'awiki_me_credentials.json');
+    }
     if (Platform.isMacOS && !kReleaseMode) {
       // Local macOS debug/profile builds are usually ad-hoc signed, and
       // Keychain writes can fail after a successful backend registration.
@@ -234,6 +237,9 @@ class AppBootstrap {
   }
 
   static Future<AppKeyValueStore> _buildPreferenceStore() async {
+    if (awikiE2eAppStateRoot() != null) {
+      return FileAppKeyValueStore.create();
+    }
     if (Platform.isMacOS) {
       // macOS debug builds are not consistently signed for Keychain access.
       return FileAppKeyValueStore.create();

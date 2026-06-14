@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../im_core/awiki_im_core_paths.dart';
+
 abstract class AppKeyValueStore {
   Future<String?> read({required String key});
 
@@ -47,8 +49,11 @@ class FileAppKeyValueStore implements AppKeyValueStore {
   static Future<FileAppKeyValueStore> create({
     String fileName = 'awiki_me_state.json',
   }) async {
-    final supportDirectory = await getApplicationSupportDirectory();
-    final file = File('${supportDirectory.path}/$fileName');
+    final e2eRoot = awikiE2eAppStateRoot();
+    final supportPath = e2eRoot == null
+        ? (await getApplicationSupportDirectory()).path
+        : '$e2eRoot/support';
+    final file = File('$supportPath/$fileName');
     return FileAppKeyValueStore._(file);
   }
 

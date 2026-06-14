@@ -1,6 +1,6 @@
 # Agent IM 委托消息处理场景矩阵
 
-状态：draft  
+状态：draft
 主方案：[README.md](README.md)
 
 ## 1. 优先级定义

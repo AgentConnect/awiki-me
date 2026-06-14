@@ -4,6 +4,11 @@ import 'dart:io';
 
 import 'package:yaml/yaml.dart';
 
+const _mobileScenario = 'mobile-two-device';
+const _mobileCaseIds = <String>['MOBILE-E2E-001'];
+const _mobileDryRunSkippedReason =
+    'dry-run: device preparation, installation, and Maestro flows skipped';
+
 Future<void> main(List<String> args) async {
   try {
     final options = RunnerOptions.parse(args);
@@ -33,16 +38,20 @@ class E2eRunner {
 
   late final Directory reportDir;
   final List<E2eTimingEntry> _timings = <E2eTimingEntry>[];
+  late final String _runId;
+  late final Map<String, Object?> _messagePlan;
+  DevicePair? _preparedDevices;
 
   Future<void> run() async {
     final totalStopwatch = Stopwatch()..start();
     var succeeded = false;
-    final runId = _newRunId();
-    reportDir = Directory('${root.path}/.e2e/reports/$runId')
+    _runId = _newRunId();
+    reportDir = Directory('${root.path}/.e2e/reports/$_runId')
       ..createSync(recursive: true);
+    _messagePlan = _buildMessagePlan(_runId);
 
     try {
-      _section('AWiki Me E2E $runId');
+      _section('AWiki Me E2E $_runId');
       _line('platform: ${config.platform.name}');
       _line('reports: ${reportDir.path}');
 
@@ -52,14 +61,13 @@ class E2eRunner {
       }
       if (options.dryRun) {
         _section('Dry run completed');
-        _line(
-          'Device preparation, installation, and Maestro flows were skipped.',
-        );
+        _line(_mobileDryRunSkippedReason);
         succeeded = true;
         return;
       }
 
       final devices = await _timed('Preparing devices', _prepareDevices);
+      _preparedDevices = devices;
       await _timed('Installing app', () => _installApp(devices));
 
       await _timed('Logging in ${devices.a.label}', () {
@@ -69,8 +77,10 @@ class E2eRunner {
         return _login(devices.b, config.accounts.b);
       });
 
-      final messageAB = 'awiki e2e $runId A_TO_B';
-      final messageBA = 'awiki e2e $runId B_TO_A';
+      final messageAB =
+          (_messagePlan['aToB'] as Map<String, Object?>)['text']! as String;
+      final messageBA =
+          (_messagePlan['bToA'] as Map<String, Object?>)['text']! as String;
 
       await _timed('Messaging A_TO_B', () {
         return _assertMessageDirection(
@@ -94,7 +104,7 @@ class E2eRunner {
       });
 
       _section('E2E completed');
-      _line('runId: $runId');
+      _line('runId: $_runId');
       _line('A -> B: $messageAB');
       _line('B -> A: $messageBA');
       succeeded = true;
@@ -161,7 +171,26 @@ class E2eRunner {
     const encoder = JsonEncoder.withIndent('  ');
     file.writeAsStringSync(
       encoder.convert(<String, Object?>{
+        'scenario': _mobileScenario,
+        'caseIds': _mobileCaseIds,
+        'runId': _runId,
         'status': succeeded ? 'success' : 'failed',
+        'caseStatus': options.dryRun
+            ? 'skipped'
+            : succeeded
+            ? 'pass'
+            : 'fail',
+        'skippedReason': options.dryRun ? _mobileDryRunSkippedReason : null,
+        'dryRun': options.dryRun,
+        'skipBuild': options.skipBuild,
+        'platform': config.platform.name,
+        'appId': config.appId,
+        'configPath': _redactPath(options.configPath),
+        'reportDir': _redactPath(reportDir.path),
+        'service': _serviceReport(),
+        'accounts': _accountsReport(),
+        'devices': _devicesReport(),
+        'messages': _messagePlan,
         'totalMs': totalElapsed.inMilliseconds,
         'total': _formatDuration(totalElapsed),
         'steps': [
@@ -175,6 +204,126 @@ class E2eRunner {
         ],
       }),
     );
+  }
+
+  Map<String, Object?> _serviceReport() {
+    return <String, Object?>{
+      'baseUrl': _redactUrl(config.service.baseUrl),
+      'userServiceUrl': _redactUrl(config.service.userServiceUrl),
+      'messageServiceUrl': _redactUrl(config.service.messageServiceUrl),
+      'didDomain': config.service.didDomain,
+      if (config.service.anpServiceUrl != null)
+        'anpServiceUrl': _redactUrl(config.service.anpServiceUrl!),
+      if (config.service.anpServiceDid != null)
+        'anpServiceDid': _redactIdentifier(config.service.anpServiceDid!),
+    };
+  }
+
+  Map<String, Object?> _accountsReport() {
+    return <String, Object?>{
+      'a': <String, Object?>{'label': 'a', 'handle': config.accounts.a.handle},
+      'b': <String, Object?>{'label': 'b', 'handle': config.accounts.b.handle},
+    };
+  }
+
+  Map<String, Object?> _devicesReport() {
+    final prepared = _preparedDevices;
+    return <String, Object?>{
+      'resetBeforeRun': config.device.resetBeforeRun,
+      'configured': _configuredDevicesReport(),
+      if (prepared != null)
+        'prepared': <String, Object?>{
+          'a': <String, Object?>{
+            'label': prepared.a.label,
+            'id': _redactIdentifier(prepared.a.id),
+          },
+          'b': <String, Object?>{
+            'label': prepared.b.label,
+            'id': _redactIdentifier(prepared.b.id),
+          },
+        },
+    };
+  }
+
+  Map<String, Object?> _configuredDevicesReport() {
+    return switch (config.platform) {
+      E2ePlatform.ios => <String, Object?>{
+        'type': 'ios-simulator',
+        'deviceType': config.device.ios.deviceType,
+        'runtime': config.device.ios.runtime,
+        'a': _slotReport(
+          label: 'a',
+          name: config.device.ios.names.a,
+          id: config.device.ios.ids.a,
+        ),
+        'b': _slotReport(
+          label: 'b',
+          name: config.device.ios.names.b,
+          id: config.device.ios.ids.b,
+        ),
+      },
+      E2ePlatform.android => <String, Object?>{
+        'type': 'android-emulator-or-device',
+        'a': _slotReport(
+          label: 'a',
+          name: config.device.android.avdNames.a,
+          id: config.device.android.ids.a,
+        ),
+        'b': _slotReport(
+          label: 'b',
+          name: config.device.android.avdNames.b,
+          id: config.device.android.ids.b,
+        ),
+      },
+    };
+  }
+
+  Map<String, Object?> _slotReport({
+    required String label,
+    required String? name,
+    required String? id,
+  }) {
+    return <String, Object?>{
+      'label': label,
+      'configuredBy': id == null ? 'name' : 'id',
+      if (name != null) 'name': name,
+      if (id != null) 'id': _redactIdentifier(id),
+    };
+  }
+
+  Map<String, Object?> _buildMessagePlan(String runId) {
+    final messageAB = 'awiki e2e $runId A_TO_B';
+    final messageBA = 'awiki e2e $runId B_TO_A';
+    return <String, Object?>{
+      'aToB': <String, Object?>{
+        'label': 'A_TO_B',
+        'sender': 'a',
+        'receiver': 'b',
+        'text': messageAB,
+        'messageId': _messageIdentifier(messageAB),
+      },
+      'bToA': <String, Object?>{
+        'label': 'B_TO_A',
+        'sender': 'b',
+        'receiver': 'a',
+        'text': messageBA,
+        'messageId': _messageIdentifier(messageBA),
+      },
+    };
+  }
+
+  String _redactPath(String path) {
+    final rootPath = root.path;
+    if (path == rootPath) {
+      return '<repo>';
+    }
+    if (path.startsWith('$rootPath${Platform.pathSeparator}')) {
+      return '<repo>${path.substring(rootPath.length)}';
+    }
+    if (!path.startsWith('/') && !RegExp(r'^[A-Za-z]:[\\/]').hasMatch(path)) {
+      return path;
+    }
+    return '<redacted-path>';
   }
 
   Future<void> _checkTooling() async {
@@ -1394,12 +1543,85 @@ String _messageIdentifier(String content) {
   return 'e2e-message-${normalized.isEmpty ? 'empty' : normalized}';
 }
 
+String _redactUrl(String value) {
+  final uri = Uri.tryParse(value);
+  if (uri == null || uri.host.isEmpty) {
+    return '<redacted-url>';
+  }
+  final port = uri.hasPort ? ':${uri.port}' : '';
+  final path = uri.path.isEmpty ? '' : uri.path;
+  return '${uri.scheme}://${uri.host}$port$path';
+}
+
+String _redactIdentifier(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return '<redacted-empty>';
+  }
+  var hash = 0;
+  for (final codeUnit in trimmed.codeUnits) {
+    hash = (hash * 31 + codeUnit) & 0x3fffffff;
+  }
+  return '<redacted:${hash.toRadixString(36)}>';
+}
+
 String _quoteCommandArg(String arg) {
   if (arg.isEmpty) {
     return "''";
   }
-  if (!RegExp(r'''[\s'"$`\\]''').hasMatch(arg)) {
-    return arg;
+  final redacted = _redactCommandArg(arg);
+  if (!RegExp(r'''[\s'"$`\\]''').hasMatch(redacted)) {
+    return redacted;
   }
-  return "'${arg.replaceAll("'", r"'\''")}'";
+  return "'${redacted.replaceAll("'", r"'\''")}'";
+}
+
+String _redactCommandArg(String arg) {
+  if (arg.startsWith('--dart-define=')) {
+    final define = arg.substring('--dart-define='.length);
+    final separator = define.indexOf('=');
+    if (separator <= 0) {
+      return arg;
+    }
+    final key = define.substring(0, separator);
+    final value = define.substring(separator + 1);
+    return '--dart-define=$key=${_redactCommandValue(key, value)}';
+  }
+  final separator = arg.indexOf('=');
+  if (separator > 0) {
+    final key = arg.substring(0, separator);
+    final value = arg.substring(separator + 1);
+    if (_isSensitiveCommandKey(key)) {
+      return '$key=<redacted>';
+    }
+    if (key.toUpperCase().endsWith('_URL')) {
+      return '$key=${_redactUrl(value)}';
+    }
+  }
+  return arg;
+}
+
+String _redactCommandValue(String key, String value) {
+  if (_isSensitiveCommandKey(key)) {
+    return '<redacted>';
+  }
+  final upper = key.toUpperCase();
+  if (upper.endsWith('_URL') || upper.endsWith('_BASE_URL')) {
+    return _redactUrl(value);
+  }
+  return value;
+}
+
+bool _isSensitiveCommandKey(String key) {
+  final upper = key.toUpperCase();
+  if (upper.contains('OTP_TIMEOUT')) {
+    return false;
+  }
+  return upper.contains('PHONE') ||
+      upper.contains('OTP_CODE') ||
+      upper == 'OTP' ||
+      upper.contains('TOKEN') ||
+      upper.contains('JWT') ||
+      upper.contains('PRIVATE') ||
+      upper.contains('SECRET');
 }

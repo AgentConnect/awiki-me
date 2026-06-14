@@ -1,8 +1,8 @@
 # Agent IM 委托消息处理 E2E 测试方案
 
-状态：draft  
-日期：2026-06-13  
-归属仓库：`awiki-me`  
+状态：draft
+日期：2026-06-13
+归属仓库：`awiki-me`
 关联计划：[plan.md](plan.md)
 
 ## 1. 背景与目标

@@ -1,6 +1,6 @@
 # awiki.info 服务端联调 Runbook
 
-状态：draft  
+状态：draft
 主方案：[README.md](README.md)
 
 ## 1. 目的

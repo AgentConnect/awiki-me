@@ -1,7 +1,7 @@
 # Step 07：最终全局 Review 与整体验证收口
 
-主 Plan：[../plan.md](../plan.md)  
-Step index：07  
+主 Plan：[../plan.md](../plan.md)
+Step index：07
 状态：done
 
 ## 1. 执行状态

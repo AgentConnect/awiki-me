@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:sqflite/sqflite.dart';
 
 import '../../application/models/product_local_models.dart';
 import '../../application/product_local_store.dart';
+import '../im_core/awiki_im_core_paths.dart';
 
 class AwikiProductLocalStoreSqlite implements ProductLocalStore {
   AwikiProductLocalStoreSqlite({Database? database}) : _database = database;
@@ -16,7 +19,13 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
     if (existing != null) {
       return existing;
     }
-    final base = await getDatabasesPath();
+    final e2eRoot = awikiE2eAppStateRoot();
+    final base = e2eRoot == null
+        ? await getDatabasesPath()
+        : '$e2eRoot/support';
+    if (e2eRoot != null) {
+      await Directory(base).create(recursive: true);
+    }
     _database = await openDatabase(
       '$base/$databaseName',
       version: databaseVersion,
