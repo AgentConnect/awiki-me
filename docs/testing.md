@@ -237,6 +237,15 @@ dart run tests/e2e_test/harness/mobile_e2e_runner.dart \
   --dry-run
 ```
 
+The dry-run writes `.e2e/reports/<runId>/timings.json` with the
+`mobile-two-device` scenario, `MOBILE-E2E-001`, platform/app metadata, account
+handles, configured device summary, planned A_TO_B / B_TO_A messages, and
+`caseStatus: skipped`. This means the harness and command plan are valid, but
+real device preparation, installation, login, and Maestro flows were not run.
+Report paths and device IDs are redacted, service URLs are stored without query
+strings, and command logs redact phone, OTP, token, JWT, private, and secret
+values.
+
 For compatibility, the old wrapper remains available:
 
 ```bash

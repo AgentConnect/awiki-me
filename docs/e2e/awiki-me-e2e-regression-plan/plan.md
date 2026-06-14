@@ -4,7 +4,7 @@
 DOC：`test-awiki-me/docs/e2e/awiki-me-e2e-regression-plan/`  
 Harness：`awiki-harness/`  
 创建时间：2026-06-14  
-恢复指针：Step 06 已完成；下一次从 Step 07 开始，先读取 [steps/07-mobile-two-device-e2e.md](steps/07-mobile-two-device-e2e.md)。
+恢复指针：Step 07 已完成；下一次从 Step 08 开始，先读取 [steps/08-ci-nightly-release-maintenance.md](steps/08-ci-nightly-release-maintenance.md)。
 
 ## 1. 目标
 
@@ -216,6 +216,15 @@ Harness：`awiki-harness/`
 
 Step 04 只扩展 deterministic App smoke，不引入真实账号、真实消息、CLI peer 或 mobile 设备；root `integration_test/` 继续只作为 Flutter tooling shim，真实实现仍在 `tests/integration_test/`。
 
+### 8.4 Step 07 Mobile 双设备 E2E dry-run 与报告基线
+
+| 能力 | 覆盖 | 后端 / 设备依赖 | 当前证据 | 真实运行条件 |
+|---|---|---|---|---|
+| `MOBILE-E2E-001` dry-run | `mobile-two-device` 场景、iOS/Android 平台计划、账号 handle、设备配置摘要、A_TO_B / B_TO_A 消息计划、report redaction。 | 无真实后端、无真实设备；dry-run caseStatus 为 `skipped`。 | `dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run` 通过，`timings.json` 记录 `scenario`、`caseIds`、`runId`、`platform`、`dryRun`、`skippedReason`、脱敏路径和计划消息。 | `tests/e2e_test/configs/mobile.local.yaml`、两台 iOS simulator 或 Android emulator/device、Maestro、非生产账号池和可达后端。 |
+| Mobile command/report redaction | dry-run 命令日志、report service URL、device ID、路径和账号摘要。 | 不需要真实设备；使用 runner 单测验证。 | `flutter test tests/unit_test/e2e_harness/mobile_e2e_runner_test.dart` 覆盖手机号、OTP、token/JWT query、device id 不进入 report/log。 | real run 仍需对实际 Maestro logs、screenshots 和 `.e2e/reports/<runId>/` 做发布前敏感扫描。 |
+
+Step 07 不把 dry-run success 解释为真实两设备通过；在真实 iOS/Android 设备池、Maestro、非生产账号和后端可用前，`MOBILE-E2E-001` 真实 case 仍只进入 nightly/release/manual，不进入 PR required。
+
 ## 9. 任务拆分
 
 | Step | 标题 | 依赖 | 产出 | 小 Plan 文档 | Commit gate | 状态 |
@@ -224,9 +233,9 @@ Step 04 只扩展 deterministic App smoke，不引入真实账号、真实消息
 | 02 | 场景矩阵与标签/gate 契约 | Step 01 | `feature/regression/smoke/nightly/release` 标记和准入标准 | [steps/02-scenario-matrix-tags.md](steps/02-scenario-matrix-tags.md) | 必须 | done |
 | 03 | 测试环境、账号和数据隔离契约 | Step 01 | macOS/Linux/mobile/backend/env/account/report 契约 | [steps/03-environment-data-contract.md](steps/03-environment-data-contract.md) | 必须 | done |
 | 04 | Desktop 确定性 smoke 与回归基线 | Step 02, Step 03 | macOS/Linux no-backend smoke gate 和基础回归 | [steps/04-desktop-deterministic-smoke.md](steps/04-desktop-deterministic-smoke.md) | 必须 | done |
-| 05 | Desktop App + CLI peer 真实 E2E | Step 03, Step 04 | App/CLI 双向消息和账号闭环场景 | [steps/05-desktop-app-cli-peer-e2e.md](steps/05-desktop-app-cli-peer-e2e.md) | 必须 | pending |
-| 06 | 群组与附件基础回归 E2E | Step 03, Step 05 | 群组消息、附件发送/接收、基础错误回归方案 | [steps/06-group-attachment-basic-regression.md](steps/06-group-attachment-basic-regression.md) | 必须 | pending |
-| 07 | Mobile 双设备 E2E | Step 03 | iOS/Android 双设备消息互通和设备池策略 | [steps/07-mobile-two-device-e2e.md](steps/07-mobile-two-device-e2e.md) | 必须 | pending |
+| 05 | Desktop App + CLI peer 真实 E2E | Step 03, Step 04 | App/CLI 双向消息和账号闭环场景 | [steps/05-desktop-app-cli-peer-e2e.md](steps/05-desktop-app-cli-peer-e2e.md) | 必须 | done |
+| 06 | 群组与附件基础回归 E2E | Step 03, Step 05 | 群组消息、附件发送/接收、基础错误回归方案 | [steps/06-group-attachment-basic-regression.md](steps/06-group-attachment-basic-regression.md) | 必须 | done |
+| 07 | Mobile 双设备 E2E | Step 03 | iOS/Android 双设备消息互通和设备池策略 | [steps/07-mobile-two-device-e2e.md](steps/07-mobile-two-device-e2e.md) | 必须 | done |
 | 08 | CI/nightly/release gate 与维护机制 | Step 04-07 | 自动化 gate、报告、flake 处理、最终文档收口 | [steps/08-ci-nightly-release-maintenance.md](steps/08-ci-nightly-release-maintenance.md) | 必须 | pending |
 
 ## 10. 执行台账
@@ -241,7 +250,7 @@ Step 04 只扩展 deterministic App smoke，不引入真实账号、真实消息
 | 04 | done | `feature/test-awiki-me` | 2026-06-14 13:24 CST | 2026-06-14 13:28 CST | 本步骤提交，短 hash 以 `git log -1` 为准 | Review 完成：新增 profile/settings smoke 只使用 fake bootstrap、fake profile provider 和 fake homepage loader；root `integration_test/` 仍为 shim；未接入真实账号、OTP、User Service、Message Service、CLI peer 或 mobile 设备。 | `dart analyze` 通过；`flutter test tests/unit_test/profile_page_test.dart tests/unit_test/settings_page_test.dart tests/unit_test/conversation_workspace_test.dart` 通过，41 tests；`xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux` 通过，3 tests；`xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux` 通过，1 test；当前 host 为 Linux，macOS smoke 未运行；`git diff --check` 通过；敏感扫描仅命中 env 变量名示例。 | 启动 Step 05 |
 | 05 | done | `feature/test-awiki-me` | 2026-06-14 13:35 CST | 2026-06-14 13:47 CST | 本步骤提交后回填短 hash，以 `git log -1` 为准 | Review 完成：新增断言只通过 App `MessagingService` / `ConversationService` 和 CLI 高层命令，不直接访问 raw RPC、WebSocket、SQLite 或测试 fixture；real E2E 未在当前 host 运行。 | `dart analyze` 通过；`flutter test tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart` 通过，11 tests；`xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` 在 `AWIKI_E2E` 未开启时安全 skip；`git diff --check` 通过；敏感扫描无真实 secret。 | 启动 Step 06 |
 | 06 | done | `feature/test-awiki-me` | 2026-06-14 13:51 CST | 2026-06-14 14:03 CST | 本步骤提交后回填短 hash，以 `git log -1` 为准 | Review 完成：App 使用 `GroupApplicationService` / `MessagingService`，CLI 使用 `group messages`、`msg send --group`、`msg send --file`、`msg attachment download` 高层命令；未直接访问 raw RPC、WebSocket、SQLite、附件内部存储或 `ModMessage` fixture。 | `dart analyze` 通过；`flutter test tests/unit_test/e2e_harness/desktop_cli_peer_e2e_runner_test.dart` 通过，11 tests；`xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux` 在 `AWIKI_E2E` 未开启时安全 skip；`git diff --check` 通过；敏感扫描无真实 secret；real group/attachment E2E 当前 host 未运行。 | 启动 Step 07 |
-| 07 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 03 完成 |
+| 07 | done | `feature/test-awiki-me` | 2026-06-14 14:13 CST | 2026-06-14 14:18 CST | 本步骤提交后回填短 hash，以 `git log -1` 为准 | Review 完成：mobile runner 真实 flow 仍走 Maestro/App UI，不绕过 App/SDK/服务；dry-run report 只作为计划证据，caseStatus 保持 `skipped`；命令日志和 report 对手机号、OTP、token/JWT query、device id、绝对路径做脱敏。 | `dart analyze` 通过；`flutter test tests/unit_test/e2e_harness/mobile_e2e_runner_test.dart` 通过，15 tests；`dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run` 通过，runId `20260614061538-0ef4ka`，report 记录 `mobile-two-device` / `MOBILE-E2E-001` 且 caseStatus 为 `skipped`；`git diff --check` 通过；敏感扫描仅命中 env 名、示例占位手机号、测试用假 secret 和既有 redaction 测试数据，无真实 secret；真实 iOS/Android 两设备未运行，当前 Linux host 未配置设备池、Maestro real run 和 `mobile.local.yaml`。 | 启动 Step 08 |
 | 08 | pending | 待执行时记录 | 待记录 | 待记录 | 待记录 | 待记录 | 待记录 | 等 Step 04-07 完成 |
 
 ## 11. Codex Goal 执行协议

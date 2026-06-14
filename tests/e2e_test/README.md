@@ -54,6 +54,11 @@ dart run tests/e2e_test/harness/mobile_e2e_runner.dart \
   --dry-run
 ```
 
+Mobile dry-run reports are written under `.e2e/reports/<runId>/timings.json`.
+They record scenario `mobile-two-device`, case `MOBILE-E2E-001`, dry-run skip
+reason, configured devices, account handles, planned message IDs, and redacted
+service/report paths. A dry-run `success` only proves the runner plan; the case
+status remains `skipped` until a real iOS or Android two-device run completes.
 
 Agent IM scenario dry-run and real runs also write `agent-im-scenario-result.json`.
 That file summarizes AIM-E2E case statuses (`pass` / `fail` / `skipped`),
