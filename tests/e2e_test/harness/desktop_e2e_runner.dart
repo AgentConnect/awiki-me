@@ -210,6 +210,15 @@ class DesktopE2eRunner {
       logFile: File('${reportDir.path}/cli-build.log'),
       timeout: const Duration(minutes: 30),
     );
+    if (options.scenario == agentImDelegatedMessageScenario) {
+      await commands.run(
+        'cargo',
+        const <String>['build', '-p', 'im-core-dart', '--release'],
+        workingDirectory: config.cliRepo,
+        logFile: File('${reportDir.path}/im-core-dart-build.log'),
+        timeout: const Duration(minutes: 30),
+      );
+    }
   }
 
   Future<void> _cliSmoke() async {
@@ -347,11 +356,14 @@ class DesktopE2eRunner {
           remoteCommands: plan.remoteCommands,
           cliPeerFlow: options.dryRun
               ? null
-              : () => cliAdapter.runOrdinaryMessageFlow(
-                  runId: runId,
-                  targetHandle: agentImConfig!.accounts.appUser.handle,
-                  messageText: _agentImOrdinaryMessageText(),
-                ),
+              : () async {
+                  await _waitForAgentImBootstrapReady();
+                  return cliAdapter.runOrdinaryMessageFlow(
+                    runId: runId,
+                    targetHandle: agentImConfig!.accounts.appUser.handle,
+                    messageText: _agentImOrdinaryMessageText(),
+                  );
+                },
           appBootstrapFlow: options.dryRun
               ? null
               : () => appProbeAdapter.bootstrap(runId: runId),
@@ -411,6 +423,29 @@ class DesktopE2eRunner {
         '${reportDir.path}/agent-im-scenario-result.json',
       );
     }
+  }
+
+  Future<void> _waitForAgentImBootstrapReady() async {
+    final scenarioConfig = agentImConfig;
+    if (scenarioConfig == null || !scenarioConfig.remote.collectLogs) {
+      return;
+    }
+    final command = RemoteEvidenceCommand(
+      label: 'wait daemon bootstrap ready',
+      executable: 'ssh',
+      args: <String>[
+        scenarioConfig.remote.sshAlias,
+        agentImBootstrapReadyWaitScript(runId),
+      ],
+    );
+    _line('[remote-wait] ${command.label}: ${command.command}');
+    await commands.run(
+      command.executable,
+      command.args,
+      workingDirectory: root,
+      logFile: File('${reportDir.path}/remote-wait-bootstrap-ready.log'),
+      timeout: const Duration(minutes: 3),
+    );
   }
 
   Directory _agentImCliPeerWorkspaceDirectory() {

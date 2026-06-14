@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart' as crypto;
+
 import '../config/awiki_environment_config.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/agent/agent_command.dart';
@@ -177,9 +181,10 @@ class DefaultAgentControlService implements AgentControlService {
     String? runId,
   }) async {
     final userDid = userSubkeyPackage.userDid;
-    final idempotencyKey = messageAgentBootstrapIdempotencyKey(
+    final idempotencyKey = messageAgentBootstrapAttemptIdempotencyKey(
       userDid: userDid,
       appInstanceId: appInstanceId,
+      runId: runId,
     );
     final runtimeToken =
         runtimeRegistrationToken ??
@@ -194,9 +199,10 @@ class DefaultAgentControlService implements AgentControlService {
           displayName: 'Hermes Message Agent',
         )).token;
     final envelope = DaemonBootstrapEnvelope(
-      bootstrapId: messageAgentBootstrapId(
+      bootstrapId: messageAgentBootstrapAttemptId(
         userDid: userDid,
         appInstanceId: appInstanceId,
+        runId: runId,
       ),
       idempotencyKey: idempotencyKey,
       appInstanceId: appInstanceId,
@@ -386,16 +392,32 @@ String _messageAgentRuntimeHandle({
   required String userDid,
   required String appInstanceId,
 }) {
-  final source = '${userDid.trim()}-${appInstanceId.trim()}'
+  const prefix = 'hermes-msg';
+  final seed = '${userDid.trim()}|${appInstanceId.trim()}';
+  final hash = crypto.sha256
+      .convert(utf8.encode(seed))
+      .toString()
+      .substring(0, 12);
+  final appPart = _safeHandleComponent(appInstanceId);
+  const maxHandleLength = 48;
+  final maxAppLength = maxHandleLength - prefix.length - hash.length - 2;
+  final appTail =
+      (appPart.length > maxAppLength
+              ? appPart.substring(appPart.length - maxAppLength)
+              : appPart)
+          .replaceAll(RegExp(r'^-+|-+$'), '');
+  final handle = '$prefix-${appTail.isEmpty ? 'agent' : appTail}-$hash';
+  return handle.length > maxHandleLength
+      ? handle.substring(0, maxHandleLength).replaceAll(RegExp(r'^-+|-+$'), '')
+      : handle;
+}
+
+String _safeHandleComponent(String value) {
+  final normalized = value
+      .trim()
       .toLowerCase()
       .replaceAll(RegExp(r'[^a-z0-9-]+'), '-')
       .replaceAll(RegExp(r'-+'), '-')
       .replaceAll(RegExp(r'^-+|-+$'), '');
-  if (source.isEmpty) {
-    return 'hermes-message-agent';
-  }
-  final suffix = source.length > 48
-      ? source.substring(source.length - 48)
-      : source;
-  return 'hermes-$suffix';
+  return normalized.isEmpty ? 'agent' : normalized;
 }

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:awiki_me/src/application/agent/agent_control_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
@@ -41,6 +42,7 @@ Future<Map<String, Object?>> _run(List<String> args) async {
   final command = args.first;
   final options = _parseOptions(args.skip(1).toList(growable: false));
   return switch (command) {
+    'issue-daemon-token' => _issueDaemonToken(options),
     'bootstrap' => _bootstrap(options),
     'wait-return' => _waitReturn(options),
     'bootstrap-and-wait' => _bootstrapAndWait(options),
@@ -48,13 +50,53 @@ Future<Map<String, Object?>> _run(List<String> args) async {
   };
 }
 
+Future<Map<String, Object?>> _issueDaemonToken(
+  Map<String, String> options,
+) async {
+  final context = await _ProbeContext.open(options);
+  try {
+    final session = await context.ensureAppSession();
+    final handle =
+        _optional(options, 'daemon-handle') ??
+        context.defaultDaemonHandle(session.handle);
+    final token = await context.inventory.issueDaemonToken(
+      controllerDid: session.did,
+      clientPlatform: context.config.app.platform,
+    );
+    final tokenFile = await context.writeDaemonRegistrationToken(
+      token: token.token,
+      daemonHandle: handle,
+    );
+    return <String, Object?>{
+      'command': 'issue-daemon-token',
+      'runId': context.runId,
+      'appHandle': context.config.accounts.appUser.handle,
+      'appDid': session.did,
+      'daemonHandle': handle,
+      'tokenFile': tokenFile.path,
+      if (token.tokenId != null) 'tokenId': token.tokenId,
+      if (token.expiresAt != null)
+        'expiresAt': token.expiresAt!.toUtc().toIso8601String(),
+    };
+  } finally {
+    await context.dispose();
+  }
+}
+
 Future<Map<String, Object?>> _bootstrap(Map<String, String> options) async {
   final context = await _ProbeContext.open(options);
   try {
     final session = await context.ensureAppSession();
     final daemon = await context.selectDaemon();
+    final appInstanceId = context.effectiveAppInstanceId;
     final subkey = await context.ensureDaemonSubkeyPackage(
       handle: context.config.accounts.appUser.handle,
+    );
+    final runtimeToken = await context.bootstrapRuntimeRegistrationToken(
+      controllerDid: session.did,
+      daemonDid: daemon.agentDid,
+      userDid: subkey.userDid,
+      appInstanceId: appInstanceId,
     );
     final inventory = context.inventory;
     final messages = _RecordingRealMessagingService(
@@ -71,9 +113,10 @@ Future<Map<String, Object?>> _bootstrap(Map<String, String> options) async {
     await service.ensureMessageAgentBootstrap(
       daemonAgentDid: daemon.agentDid,
       controllerDid: session.did,
-      appInstanceId: context.config.app.appInstanceId,
+      appInstanceId: appInstanceId,
       userSubkeyPackage: subkey,
       userHandle: session.handle,
+      runtimeRegistrationToken: runtimeToken,
       runId: context.runId,
     );
     final sent = messages.lastMessage;
@@ -84,7 +127,7 @@ Future<Map<String, Object?>> _bootstrap(Map<String, String> options) async {
       'appDid': session.did,
       'daemonDid': daemon.agentDid,
       'daemonDisplayName': daemon.displayName,
-      'appInstanceId': context.config.app.appInstanceId,
+      'appInstanceId': appInstanceId,
       'bootstrap': <String, Object?>{
         'sent': sent != null,
         'messageId': sent?.localId,
@@ -204,6 +247,42 @@ final class _ProbeContext {
   final void Function(String token) _captureBearerToken;
   core.AwikiImClient? _currentClient;
 
+  String get effectiveAppInstanceId {
+    final base = config.app.appInstanceId.trim().isEmpty
+        ? 'macos-e2e-app'
+        : config.app.appInstanceId.trim();
+    return base;
+  }
+
+  String defaultDaemonHandle(String appHandle) {
+    final normalizedHandle = _safeHandleComponent(appHandle);
+    final normalizedRunId = _safeHandleComponent(runId);
+    final suffix = normalizedRunId.length > 18
+        ? normalizedRunId.substring(normalizedRunId.length - 18)
+        : normalizedRunId;
+    return 'e2e-$normalizedHandle-daemon-$suffix';
+  }
+
+  Future<File> writeDaemonRegistrationToken({
+    required String token,
+    required String daemonHandle,
+  }) async {
+    final value = token.trim();
+    if (value.isEmpty) {
+      throw StateError('Daemon registration token was empty.');
+    }
+    final file = File(
+      _joinPath(<String>[
+        workspace,
+        'secrets',
+        'daemon-registration-${_safeFileComponent(daemonHandle)}-$runId.txt',
+      ]),
+    );
+    await file.parent.create(recursive: true);
+    file.writeAsStringSync(value);
+    return file;
+  }
+
   core.AwikiImClient get currentClient {
     final client = _currentClient;
     if (client == null) {
@@ -214,6 +293,10 @@ final class _ProbeContext {
 
   Future<_AppSessionView> ensureAppSession() async {
     final account = config.accounts.appUser;
+    final existing = await _tryExistingAppSession(account.handle);
+    if (existing != null) {
+      return existing;
+    }
     final phone = _secretFromEnv(account.phoneEnv, 'app phone');
     final otp = _secretFromEnv(account.otpEnv, 'app OTP');
     try {
@@ -232,9 +315,23 @@ final class _ProbeContext {
         makeDefault: true,
       );
     }
+    return _openAppSession(account.handle);
+  }
+
+  Future<_AppSessionView?> _tryExistingAppSession(String handle) async {
+    try {
+      return await _openAppSession(handle);
+    } on Object {
+      await _currentClient?.dispose();
+      _currentClient = null;
+      return null;
+    }
+  }
+
+  Future<_AppSessionView> _openAppSession(String handle) async {
     await _currentClient?.dispose();
     final client = await coreInstance.client(
-      core.IdentitySelector.localAlias(account.handle),
+      core.IdentitySelector.localAlias(handle),
     );
     _currentClient = client;
     final session = await client.auth.ensureSession(core.AuthScope.messaging);
@@ -245,7 +342,7 @@ final class _ProbeContext {
     final current = await client.identity.current();
     return _AppSessionView(
       did: current.did,
-      handle: current.handle ?? account.handle,
+      handle: current.handle ?? handle,
       bearerTokenPresent: session.bearerToken?.trim().isNotEmpty == true,
     );
   }
@@ -299,6 +396,48 @@ final class _ProbeContext {
       keyAlgorithm: package.keyAlgorithm,
       privateKeyEncoding: package.privateKeyEncoding,
     );
+  }
+
+  Future<String> bootstrapRuntimeRegistrationToken({
+    required String controllerDid,
+    required String daemonDid,
+    required String userDid,
+    required String appInstanceId,
+  }) async {
+    final idempotencyKey = messageAgentBootstrapIdempotencyKey(
+      userDid: userDid,
+      appInstanceId: appInstanceId,
+    );
+    final tokenFile = File(
+      _joinPath(<String>[
+        workspace,
+        'secrets',
+        'bootstrap-runtime-token-${_safeFileComponent(idempotencyKey)}.txt',
+      ]),
+    );
+    if (tokenFile.existsSync()) {
+      final existing = tokenFile.readAsStringSync().trim();
+      if (existing.isNotEmpty) {
+        return existing;
+      }
+    }
+    await tokenFile.parent.create(recursive: true);
+    final token = await inventory.issueRuntimeToken(
+      controllerDid: controllerDid,
+      daemonAgentDid: daemonDid,
+      runtime: appMessageHandlerRuntime,
+      handle: _messageAgentRuntimeHandle(
+        userDid: userDid,
+        appInstanceId: appInstanceId,
+      ),
+      displayName: 'Hermes Message Agent',
+    );
+    final value = token.token.trim();
+    if (value.isEmpty) {
+      throw StateError('Runtime registration token was empty.');
+    }
+    tokenFile.writeAsStringSync(value);
+    return value;
   }
 
   Future<_ReturnEvidence> waitForReturnPayload({
@@ -745,6 +884,49 @@ String _joinPath(List<String> parts) {
       .join('/');
 }
 
+String _safeFileComponent(String value) {
+  return value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9._-]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
+}
+
+String _safeHandleComponent(String value) {
+  final normalized = value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9-]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
+  return normalized.isEmpty ? 'agent' : normalized;
+}
+
+String _messageAgentRuntimeHandle({
+  required String userDid,
+  required String appInstanceId,
+}) {
+  const prefix = 'hermes-msg';
+  final seed = '${userDid.trim()}|${appInstanceId.trim()}';
+  final hash = crypto.sha256
+      .convert(utf8.encode(seed))
+      .toString()
+      .substring(0, 12);
+  final appPart = _safeHandleComponent(appInstanceId);
+  const maxHandleLength = 48;
+  final maxAppLength = maxHandleLength - prefix.length - hash.length - 2;
+  final appTail =
+      (appPart.length > maxAppLength
+              ? appPart.substring(appPart.length - maxAppLength)
+              : appPart)
+          .replaceAll(RegExp(r'^-+|-+$'), '');
+  final handle = '$prefix-${appTail.isEmpty ? 'agent' : appTail}-$hash';
+  return handle.length > maxHandleLength
+      ? handle.substring(0, maxHandleLength).replaceAll(RegExp(r'^-+|-+$'), '')
+      : handle;
+}
+
 String _dirname(String path) {
   final index = path.lastIndexOf('/');
   if (index <= 0) {
@@ -794,6 +976,7 @@ const _usageLines = <String>[
   'agent_im_real_e2e_probe.dart <command> [options]',
   '',
   'Commands:',
+  '  issue-daemon-token --config PATH --run-id RUN_ID [--daemon-handle HANDLE]',
   '  bootstrap --config PATH --run-id RUN_ID',
   '  wait-return --config PATH --run-id RUN_ID [--source-message-id ID]',
   '  bootstrap-and-wait --config PATH --run-id RUN_ID [--source-message-id ID]',

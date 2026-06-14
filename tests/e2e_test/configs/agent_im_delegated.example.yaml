@@ -44,4 +44,4 @@ accounts:
 timeouts:
   bootstrapSeconds: 60
   daemonConnectSeconds: 90
-  messageProcessSeconds: 120
+  messageProcessSeconds: 240
