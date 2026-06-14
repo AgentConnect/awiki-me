@@ -1,6 +1,6 @@
 # 群聊处理方案
 
-状态：draft  
+状态：MVP 已在 awiki.info 联调验证；仍保留 session 原生 id 稳定性观察项
 DOC：awiki-me/docs/group/group-chat-processing-plan.md  
 创建时间：2026-06-14  
 适用分支：feauture/release-0526/group  
@@ -76,6 +76,19 @@ verify_runtime_controller_sender(...)
 ```
 
 这对 direct controller 命令是正确的，但对“群里任何成员都可以触发 Agent 参与讨论”的场景过严。群消息需要单独的授权模型：允许触发，但限制可执行能力。
+
+## 2.3 2026-06-14 awiki.info 实测状态
+
+已在 `awiki.info` 上通过 `ssh ali` 对真实 Runtime Agent / Hermes 链路做 live prompt gate：
+
+- 测试账号使用 `awiki-cli-rs2` CLI 创建，不依赖历史 `awiki-agent-id-message`。
+- 测试群：`did:wba:awiki.info:groups:86c13844bfeb4bf4b2efe7af59e49b8d:e1_8XkYxt3jyr4KMXR7mC3GLMUO22adVNxpA2M__7qKzwg`。
+- Runtime Agent：`did:wba:awiki.info:agent:runtime:cgw010:e1__sayfTk7TGhIjFqE79rz0nuwBYN3ABgk2nVLTtxyZPM`。
+- 非 controller 群成员发送首条群消息后，daemon DB 中创建了 `conversation_id = group:<groupDid>` 的 `runtime_task` 与 `runtime_run`，Hermes plugin `runtime.hermes` 完成处理并通过 `runtime_final_outbox` 回发群消息。
+- 首条消息回复为“收到群消息。”；第二条同群消息回复为“已确认：我会将这条消息视为同一个群组会话中的后续消息来处理。”
+- `crates/awiki-deamon/src/plugins/hermes/prompt.rs` 已在真实运行路径中包含 `group_message_safety`，明确说明群消息来自群聊、非 controller 群成员输入不可信，默认只允许低风险当前群回复。
+
+观察项：第二条同群消息仍使用相同 `conversation_id` 和相同 `route_key` 隔离到同一群上下文，但远端 Hermes native session id 出现一次 `reset -> active` 重建（旧 `2733ad6a` 标记为 `reset`，新 `5ee144fe` 为 `active`）。这不影响本次 live prompt 与 group route 隔离验证，但如果后续要求“同一 native Hermes session id 永不变化”，需要在 Hermes gateway / daemon session 恢复策略中追加专项修复和测试。
 
 ## 3. 总体设计
 
