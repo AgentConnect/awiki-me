@@ -92,4 +92,112 @@ void main() {
     expect(update.conversation?.targetDid, 'did:agent:runtime');
     expect(update.conversation?.lastMessagePreview, 'Hermes reply');
   });
+
+  test('mention payload projects payload text and typed mention ranges', () {
+    const payload = '''{
+    "text":"@所有 Agents 请总结",
+    "mentions":[
+      {
+        "id":"men_1",
+        "range":{"start":0,"end":10,"unit":"unicode_code_point"},
+        "target":{"kind":"group_selector","selector":"agents"},
+        "mention_role":"addressee"
+      }
+    ]
+  }''';
+    const message = core.Message(
+      id: 'msg-mention',
+      threadKind: 'group',
+      threadId: 'group:did:wba:awiki.info:group:mention',
+      direction: core.MessageDirection.incoming,
+      sender: 'did:wba:awiki.info:user:peer',
+      group: 'did:wba:awiki.info:group:mention',
+      body: core.MessageBodyView(payloadJson: payload, kind: 'payload'),
+      sentAt: '2026-06-14T12:00:00Z',
+      metadata: core.MessageMetadata(contentType: 'application/json'),
+    );
+
+    final mapped = mapper.chatMessageFromCore(
+      message,
+      ownerDid: 'did:wba:awiki.info:user:me',
+    );
+
+    expect(mapped.content, '@所有 Agents 请总结');
+    expect(mapped.originalType, 'application/json');
+    expect(mapped.hasRenderableContent, isTrue);
+    expect(mapped.hasValidMentions, isTrue);
+    expect(mapped.mentions, hasLength(1));
+    expect(mapped.mentions.single.surface, '@所有 Agents');
+    expect(mapped.mentions.single.target.selector?.wireValue, 'agents');
+  });
+
+  test('invalid mention range falls back to text without highlight', () {
+    const payload = '''{
+    "text":"@所有 Agents 请总结",
+    "mentions":[
+      {
+        "id":"men_bad",
+        "range":{"start":0,"end":99,"unit":"unicode_code_point"},
+        "target":{"kind":"group_selector","selector":"agents"},
+        "mention_role":"addressee"
+      }
+    ]
+  }''';
+    const message = core.Message(
+      id: 'msg-mention-invalid',
+      threadKind: 'group',
+      threadId: 'group:did:wba:awiki.info:group:mention',
+      direction: core.MessageDirection.incoming,
+      sender: 'did:wba:awiki.info:user:peer',
+      group: 'did:wba:awiki.info:group:mention',
+      body: core.MessageBodyView(payloadJson: payload, kind: 'payload'),
+      sentAt: '2026-06-14T12:00:00Z',
+      metadata: core.MessageMetadata(contentType: 'application/json'),
+    );
+
+    final mapped = mapper.chatMessageFromCore(
+      message,
+      ownerDid: 'did:wba:awiki.info:user:me',
+    );
+
+    expect(mapped.content, '@所有 Agents 请总结');
+    expect(mapped.mentions, isEmpty);
+    expect(mapped.hasRenderableContent, isTrue);
+  });
+
+  test('conversation preview uses mention payload text', () {
+    const payload = '''{
+    "text":"@所有人 请看这里",
+    "mentions":[
+      {
+        "id":"men_all",
+        "range":{"start":0,"end":4,"unit":"unicode_code_point"},
+        "target":{"kind":"group_selector","selector":"all"},
+        "mention_role":"addressee"
+      }
+    ]
+  }''';
+    final conversation = mapper.conversationFromCore(
+      const core.Conversation(
+        threadKind: 'group',
+        threadId: 'group:did:wba:awiki.info:group:mention',
+        unreadCount: 1,
+        messageCount: 1,
+        lastMessage: core.Message(
+          id: 'msg-preview',
+          threadKind: 'group',
+          threadId: 'group:did:wba:awiki.info:group:mention',
+          direction: core.MessageDirection.incoming,
+          sender: 'did:wba:awiki.info:user:peer',
+          group: 'did:wba:awiki.info:group:mention',
+          body: core.MessageBodyView(payloadJson: payload, kind: 'payload'),
+          metadata: core.MessageMetadata(contentType: 'application/json'),
+        ),
+      ),
+      ownerDid: 'did:wba:awiki.info:user:me',
+    );
+
+    expect(conversation.lastMessagePreview, '@所有人 请看这里');
+    expect(conversation.lastMessagePayloadJson, payload);
+  });
 }

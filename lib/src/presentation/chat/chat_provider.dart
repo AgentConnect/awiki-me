@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -315,12 +316,28 @@ class ChatThreadsController
   Future<void> sendMessage({
     required ConversationSummary conversation,
     required String content,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? expectedAgentReplyDid,
   }) async {
     final session = ref.read(sessionProvider).session;
     if (session == null || content.trim().isEmpty) {
       return;
     }
+    final validMentionDrafts = conversation.isGroup
+        ? mentions
+              .where(
+                (mention) =>
+                    mention.rangeMatches(content) &&
+                    mention.target.isP9Sendable,
+              )
+              .toList()
+        : const <ChatMentionDraft>[];
+    final mentionPayload = validMentionDrafts.isEmpty
+        ? null
+        : ChatMentionPayload.toP9Json(
+            text: content,
+            draftMentions: validMentionDrafts,
+          );
     final pending = ChatMessage(
       localId: 'pending-${DateTime.now().microsecondsSinceEpoch}',
       threadId: conversation.threadId,
@@ -328,10 +345,16 @@ class ChatThreadsController
       senderName: session.handle ?? session.displayName,
       receiverDid: conversation.targetDid,
       groupId: conversation.groupId,
-      content: content.trim(),
+      content: validMentionDrafts.isEmpty ? content.trim() : content,
+      originalType: validMentionDrafts.isEmpty ? 'text' : 'application/json',
       createdAt: DateTime.now(),
       isMine: true,
       sendState: MessageSendState.sending,
+      payloadJson: mentionPayload == null ? null : jsonEncode(mentionPayload),
+      mentions: <ChatMessageMention>[
+        for (final mention in validMentionDrafts)
+          ChatMessageMention.fromDraft(mention),
+      ],
     );
     final current = List<ChatMessage>.from(
       thread(conversation.threadId).messages,
@@ -346,13 +369,22 @@ class ChatThreadsController
         .upsertConversation(pendingConversation);
     var latestConversation = pendingConversation;
     try {
-      final sent = await ref
-          .read(messagingServiceProvider)
-          .sendText(
-            thread: _sendThreadRefFor(conversation),
-            content: content.trim(),
-          )
-          .timeout(_sendTimeout);
+      final messaging = ref.read(messagingServiceProvider);
+      final sent = validMentionDrafts.isEmpty
+          ? await messaging
+                .sendText(
+                  thread: _sendThreadRefFor(conversation),
+                  content: content.trim(),
+                )
+                .timeout(_sendTimeout)
+          : await messaging
+                .sendMentionText(
+                  thread: _sendThreadRefFor(conversation),
+                  text: content,
+                  mentions: validMentionDrafts,
+                  idempotencyKey: pending.localId,
+                )
+                .timeout(_sendTimeout);
       final sentInThread = _withThreadId(sent, conversation.threadId);
       _replaceMessage(conversation.threadId, pending.localId, sentInThread);
       _startAgentProcessingForDeliveredMessage(
@@ -1037,7 +1069,8 @@ ConversationSummary _withConversationPreview(
     lastMessagePreview: message.previewText,
     lastMessageAt: message.createdAt,
     unreadCount: message.isMine ? 0 : conversation.unreadCount,
-    lastMessagePayloadJson: conversation.lastMessagePayloadJson,
+    lastMessagePayloadJson:
+        message.payloadJson ?? conversation.lastMessagePayloadJson,
   );
 }
 
@@ -1116,6 +1149,8 @@ ChatMessage _withThreadId(ChatMessage message, String threadId) {
     serverSequence: message.serverSequence,
     isEncrypted: message.isEncrypted,
     attachment: message.attachment,
+    payloadJson: message.payloadJson,
+    mentions: message.mentions,
   );
 }
 

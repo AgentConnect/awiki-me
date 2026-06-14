@@ -6,6 +6,7 @@ import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
+import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -450,6 +451,21 @@ class _MessagesStub implements MessagingService {
       isMine: true,
       sendState: MessageSendState.sent,
       payloadJson: '{}',
+    );
+  }
+
+  @override
+  Future<ChatMessage> sendMentionText({
+    required AppThreadRef thread,
+    required String text,
+    required List<ChatMentionDraft> mentions,
+    String? idempotencyKey,
+  }) {
+    return sendPayload(
+      thread: thread,
+      payload: ChatMentionPayload.toP9Json(text: text, draftMentions: mentions),
+      secure: false,
+      idempotencyKey: idempotencyKey,
     );
   }
 

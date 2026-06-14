@@ -497,10 +497,18 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return;
     }
     final attachment = _pendingAttachment;
-    final content = textController.text.trim();
+    final rawContent = textController.text;
+    final content = rawContent.trim();
     if (attachment == null && content.isEmpty) {
       return;
     }
+    final draft = ref
+        .read(chatComposerDraftsProvider.notifier)
+        .draftFor(conversation);
+    final validMentionDrafts = attachment == null && conversation.isGroup
+        ? draft.validMentions
+        : const <ChatMentionDraft>[];
+    final messageContent = validMentionDrafts.isEmpty ? content : rawContent;
     textController.clear();
     ref.read(chatComposerDraftsProvider.notifier).clearDraft(conversation);
     if (attachment != null) {
@@ -527,7 +535,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
         .read(chatThreadsProvider.notifier)
         .sendMessage(
           conversation: conversation,
-          content: content,
+          content: messageContent,
+          mentions: validMentionDrafts,
           expectedAgentReplyDid: expectedAgentReplyDid,
         );
   }
@@ -1814,6 +1823,7 @@ class _MessageBubble extends StatelessWidget {
     final child = message.attachment == null
         ? _MessageTextContent(
             text: message.content,
+            mentions: message.mentions,
             style: textStyle,
             renderMarkdown: !isMine,
           )
@@ -2002,6 +2012,7 @@ class _MessageBubble extends StatelessWidget {
                           child: message.attachment == null
                               ? _MessageTextContent(
                                   text: message.content,
+                                  mentions: message.mentions,
                                   style: textStyle,
                                   renderMarkdown: !isMine,
                                 )
@@ -2137,6 +2148,7 @@ class _AttachmentContent extends StatelessWidget {
           if (caption != null && caption.isNotEmpty) ...<Widget>[
             _MessageTextContent(
               text: caption,
+              mentions: const <ChatMessageMention>[],
               style: TextStyle(
                 color: macStyle ? const Color(0xFF17213A) : theme.title,
                 fontSize: macStyle
@@ -2241,16 +2253,29 @@ class _AttachmentContent extends StatelessWidget {
 class _MessageTextContent extends StatelessWidget {
   const _MessageTextContent({
     required this.text,
+    required this.mentions,
     required this.style,
     required this.renderMarkdown,
   });
 
   final String text;
+  final List<ChatMessageMention> mentions;
   final TextStyle style;
   final bool renderMarkdown;
 
   @override
   Widget build(BuildContext context) {
+    final validMentions =
+        mentions.where((mention) => mention.rangeMatches(text)).toList()
+          ..sort((a, b) => a.start.compareTo(b.start));
+    if (validMentions.isNotEmpty) {
+      return Text.rich(
+        TextSpan(
+          style: style,
+          children: _mentionTextSpans(context, validMentions),
+        ),
+      );
+    }
     if (!renderMarkdown) {
       return _MessagePlainText(text: text, style: style);
     }
@@ -2260,6 +2285,39 @@ class _MessageTextContent extends StatelessWidget {
       shrinkWrap: true,
       styleSheet: _chatMarkdownStyleSheet(context, style),
     );
+  }
+
+  List<InlineSpan> _mentionTextSpans(
+    BuildContext context,
+    List<ChatMessageMention> validMentions,
+  ) {
+    final theme = context.awikiTheme;
+    final spans = <InlineSpan>[];
+    var cursor = 0;
+    final mentionStyle = style.copyWith(
+      color: theme.primary,
+      fontWeight: FontWeight.w700,
+      backgroundColor: theme.primary.withValues(alpha: 0.10),
+    );
+    for (final mention in validMentions) {
+      if (mention.start < cursor || mention.end > text.length) {
+        continue;
+      }
+      if (mention.start > cursor) {
+        spans.add(TextSpan(text: text.substring(cursor, mention.start)));
+      }
+      spans.add(
+        TextSpan(
+          text: text.substring(mention.start, mention.end),
+          style: mentionStyle,
+        ),
+      );
+      cursor = mention.end;
+    }
+    if (cursor < text.length) {
+      spans.add(TextSpan(text: text.substring(cursor)));
+    }
+    return spans;
   }
 }
 

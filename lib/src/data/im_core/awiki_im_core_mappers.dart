@@ -7,6 +7,7 @@ import '../../application/models/app_thread_ref.dart';
 import '../../application/models/product_local_models.dart';
 import '../../application/ports/relationship_core_port.dart';
 import '../../application/thread_id_utils.dart';
+import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/chat_attachment.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
@@ -91,6 +92,9 @@ class AwikiImCoreMappers {
     required String ownerDid,
   }) {
     final attachment = _attachmentFromCoreMessage(message);
+    final mentionPayload = ChatMentionPayload.tryParsePayloadJson(
+      message.body.payloadJson,
+    );
     final bodyText = message.body.text ?? '';
     final isMine =
         message.direction == core.MessageDirection.outgoing ||
@@ -119,8 +123,10 @@ class AwikiImCoreMappers {
           _attribute(message.metadata, 'sender_name'),
       receiverDid: _nonEmpty(message.receiver),
       groupId: groupId,
-      content: attachment?.caption ?? bodyText,
-      originalType: message.body.kind ?? message.metadata.contentType ?? 'text',
+      content: attachment?.caption ?? mentionPayload?.text ?? bodyText,
+      originalType: mentionPayload == null
+          ? message.body.kind ?? message.metadata.contentType ?? 'text'
+          : 'application/json',
       createdAt: _parseDateTime(message.sentAt ?? message.receivedAt),
       isMine: isMine,
       sendState: _sendStateFromCore(message.metadata, isMine: isMine),
@@ -128,6 +134,7 @@ class AwikiImCoreMappers {
       isEncrypted: _isEncrypted(message.metadata.contentType),
       attachment: attachment,
       payloadJson: message.body.payloadJson,
+      mentions: mentionPayload?.mentions ?? const <ChatMessageMention>[],
     );
   }
 
@@ -540,6 +547,12 @@ String _messagePreview(core.Message message) {
       return caption;
     }
     return '[附件] ${attachment.displayName}';
+  }
+  final mentionPayload = ChatMentionPayload.tryParsePayloadJson(
+    message.body.payloadJson,
+  );
+  if (mentionPayload != null) {
+    return mentionPayload.text;
   }
   return message.body.text ??
       message.body.unsupportedContentType ??

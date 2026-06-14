@@ -1,4 +1,5 @@
 import '../domain/entities/chat_message.dart';
+import '../domain/entities/chat_mention.dart';
 import 'models/attachment_models.dart';
 import 'models/app_thread_ref.dart';
 import 'ports/message_core_port.dart';
@@ -20,6 +21,13 @@ abstract interface class MessagingService {
     required AppThreadRef thread,
     required Map<String, Object?> payload,
     bool secure = true,
+    String? idempotencyKey,
+  });
+
+  Future<ChatMessage> sendMentionText({
+    required AppThreadRef thread,
+    required String text,
+    required List<ChatMentionDraft> mentions,
     String? idempotencyKey,
   });
 
@@ -79,6 +87,21 @@ class ImCoreMessagingService implements MessagingService {
       thread: thread,
       payload: payload,
       secure: secure,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  @override
+  Future<ChatMessage> sendMentionText({
+    required AppThreadRef thread,
+    required String text,
+    required List<ChatMentionDraft> mentions,
+    String? idempotencyKey,
+  }) {
+    return _messages.sendPayload(
+      thread: thread,
+      payload: ChatMentionPayload.toP9Json(text: text, draftMentions: mentions),
+      secure: false,
       idempotencyKey: idempotencyKey,
     );
   }

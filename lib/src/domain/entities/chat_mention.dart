@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'group_member_summary.dart';
 
 enum ChatMentionSelector {
@@ -380,6 +382,168 @@ class ChatMentionWireRange {
   };
 }
 
+class ChatMessageMention {
+  const ChatMessageMention({
+    required this.id,
+    required this.surface,
+    required this.start,
+    required this.end,
+    required this.target,
+    this.role = ChatMentionRole.addressee,
+  });
+
+  final String id;
+  final String surface;
+  final int start;
+  final int end;
+  final ChatMentionTargetDraft target;
+  final ChatMentionRole role;
+
+  factory ChatMessageMention.fromDraft(ChatMentionDraft draft) {
+    return ChatMessageMention(
+      id: draft.localId,
+      surface: draft.surface,
+      start: draft.start,
+      end: draft.end,
+      target: draft.target,
+      role: draft.role,
+    );
+  }
+
+  bool rangeMatches(String text) {
+    return start >= 0 &&
+        end >= start &&
+        end <= text.length &&
+        text.substring(start, end) == surface;
+  }
+
+  ChatMentionWireRange toWireRange(String text) {
+    if (!rangeMatches(text)) {
+      throw StateError('mention range no longer matches message text.');
+    }
+    return ChatMentionWireRange(
+      start: codePointOffsetForCodeUnit(text, start),
+      end: codePointOffsetForCodeUnit(text, end),
+    );
+  }
+
+  static ChatMessageMention? tryParseP9({
+    required String text,
+    required Map<String, Object?> json,
+    required Set<String> seenIds,
+  }) {
+    if (_containsForbiddenMentionField(json)) {
+      return null;
+    }
+    final id = (json['id'] as String?)?.trim();
+    if (id == null || id.isEmpty || !seenIds.add(id)) {
+      return null;
+    }
+    final range = json['range'];
+    final target = json['target'];
+    if (range is! Map || target is! Map) {
+      return null;
+    }
+    final unit = (range['unit'] as String?)?.trim().toLowerCase();
+    final start = range['start'];
+    final end = range['end'];
+    if (unit != 'unicode_code_point' || start is! int || end is! int) {
+      return null;
+    }
+    if (start < 0 || end <= start) {
+      return null;
+    }
+    late final int startCodeUnit;
+    late final int endCodeUnit;
+    try {
+      startCodeUnit = codeUnitOffsetForCodePoint(text, start);
+      endCodeUnit = codeUnitOffsetForCodePoint(text, end);
+    } on RangeError {
+      return null;
+    }
+    if (endCodeUnit <= startCodeUnit || endCodeUnit > text.length) {
+      return null;
+    }
+    final parsedTarget = _parseP9Target(target.cast<String, Object?>());
+    if (parsedTarget == null) {
+      return null;
+    }
+    final parsedRole = _parseP9Role(json['mention_role']);
+    if (parsedRole == null) {
+      return null;
+    }
+    return ChatMessageMention(
+      id: id,
+      surface: text.substring(startCodeUnit, endCodeUnit),
+      start: startCodeUnit,
+      end: endCodeUnit,
+      target: parsedTarget,
+      role: parsedRole,
+    );
+  }
+}
+
+class ChatMentionPayload {
+  const ChatMentionPayload({required this.text, required this.mentions});
+
+  final String text;
+  final List<ChatMessageMention> mentions;
+
+  bool get hasValidMentions => mentions.isNotEmpty;
+
+  static ChatMentionPayload? tryParsePayloadJson(String? payloadJson) {
+    final raw = payloadJson?.trim();
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    Object? decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } on Object {
+      return null;
+    }
+    if (decoded is! Map) {
+      return null;
+    }
+    final object = decoded.cast<String, Object?>();
+    final text = object['text'];
+    final mentions = object['mentions'];
+    if (text is! String || mentions is! List) {
+      return null;
+    }
+    final seenIds = <String>{};
+    final parsedMentions = <ChatMessageMention>[];
+    for (final item in mentions) {
+      if (item is! Map) {
+        continue;
+      }
+      final parsed = ChatMessageMention.tryParseP9(
+        text: text,
+        json: item.cast<String, Object?>(),
+        seenIds: seenIds,
+      );
+      if (parsed != null) {
+        parsedMentions.add(parsed);
+      }
+    }
+    return ChatMentionPayload(text: text, mentions: parsedMentions);
+  }
+
+  static Map<String, Object?> toP9Json({
+    required String text,
+    required Iterable<ChatMentionDraft> draftMentions,
+  }) {
+    return <String, Object?>{
+      'text': text,
+      'mentions': <Map<String, Object?>>[
+        for (final mention in draftMentions)
+          if (mention.rangeMatches(text) && mention.target.isP9Sendable)
+            mention.toP9Json(text),
+      ],
+    };
+  }
+}
+
 class ChatMentionTrigger {
   const ChatMentionTrigger({
     required this.start,
@@ -515,6 +679,87 @@ int codePointOffsetForCodeUnit(String text, int codeUnitOffset) {
     codePoints += 1;
   }
   return codePoints;
+}
+
+int codeUnitOffsetForCodePoint(String text, int codePointOffset) {
+  if (codePointOffset < 0) {
+    throw RangeError.value(codePointOffset, 'codePointOffset');
+  }
+  var codeUnits = 0;
+  var codePoints = 0;
+  for (final rune in text.runes) {
+    if (codePoints >= codePointOffset) {
+      break;
+    }
+    codeUnits += rune > 0xFFFF ? 2 : 1;
+    codePoints += 1;
+  }
+  if (codePointOffset > codePoints) {
+    throw RangeError.range(codePointOffset, 0, codePoints, 'codePointOffset');
+  }
+  return codeUnits;
+}
+
+ChatMentionTargetDraft? _parseP9Target(Map<String, Object?> target) {
+  final kind = (target['kind'] as String?)?.trim().toLowerCase();
+  return switch (kind) {
+    'group_selector' => _parseP9GroupSelectorTarget(target),
+    'agent' => _parseP9MemberTarget(ChatMentionTargetKind.agent, target),
+    'human' => _parseP9MemberTarget(ChatMentionTargetKind.human, target),
+    _ => null,
+  };
+}
+
+ChatMentionTargetDraft? _parseP9GroupSelectorTarget(
+  Map<String, Object?> target,
+) {
+  final selector = switch ((target['selector'] as String?)
+      ?.trim()
+      .toLowerCase()) {
+    'all' => ChatMentionSelector.all,
+    'agents' => ChatMentionSelector.agents,
+    'humans' => ChatMentionSelector.humans,
+    _ => null,
+  };
+  if (selector == null) {
+    return null;
+  }
+  return ChatMentionTargetDraft.groupSelector(selector);
+}
+
+ChatMentionTargetDraft? _parseP9MemberTarget(
+  ChatMentionTargetKind kind,
+  Map<String, Object?> target,
+) {
+  final did = (target['did'] as String?)?.trim();
+  if (did == null || did.isEmpty) {
+    return null;
+  }
+  return ChatMentionTargetDraft.member(kind: kind, did: did);
+}
+
+ChatMentionRole? _parseP9Role(Object? value) {
+  final role = (value as String?)?.trim().toLowerCase();
+  return switch (role == null || role.isEmpty ? 'addressee' : role) {
+    'addressee' => ChatMentionRole.addressee,
+    'cc' => ChatMentionRole.cc,
+    _ => null,
+  };
+}
+
+bool _containsForbiddenMentionField(Map<String, Object?> mention) {
+  const forbidden = <String>{
+    'sender',
+    'sender_did',
+    'from',
+    'actor_did',
+    'auth',
+    'proof',
+    'signature',
+  };
+  return mention.keys
+      .map((key) => key.trim().toLowerCase())
+      .any(forbidden.contains);
 }
 
 bool _hasMentionBoundaryBefore(String text, int atIndex) {
