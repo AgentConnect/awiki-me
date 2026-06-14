@@ -12,7 +12,27 @@ const List<String> _desktopCliPeerCaseIds = <String>[
   'MSG-REG-001',
   'GROUP-E2E-001',
   'GROUP-E2E-002',
+  'GROUP-P9-001',
   'GROUP-REG-001',
+  'ATTACH-E2E-001',
+  'ATTACH-E2E-002',
+  'ATTACH-REG-001',
+];
+const List<String> _desktopCliPeerGroupCaseIds = <String>[
+  'AUTH-E2E-001',
+  'GROUP-E2E-001',
+  'GROUP-E2E-002',
+  'GROUP-P9-001',
+  'GROUP-REG-001',
+];
+const List<String> _desktopCliPeerDirectCaseIds = <String>[
+  'AUTH-E2E-001',
+  'MSG-E2E-001',
+  'MSG-E2E-002',
+  'MSG-REG-001',
+];
+const List<String> _desktopCliPeerAttachmentCaseIds = <String>[
+  'AUTH-E2E-001',
   'ATTACH-E2E-001',
   'ATTACH-E2E-002',
   'ATTACH-REG-001',
@@ -102,6 +122,7 @@ class DesktopCliPeerRunner {
       _line('app state: ${redactor.redact(appStateRootDir.path)}');
       _line('app handle: ${config.appHandle}');
       _line('cli handle: ${config.cliHandle}');
+      _line('case: ${config.e2eCase.name}');
       _line('service base: ${config.serviceBaseUrl}');
       _line('user service: ${config.userServiceUrl ?? config.serviceBaseUrl}');
       _line(
@@ -203,12 +224,12 @@ class DesktopCliPeerRunner {
     services['message_service_endpoint'] =
         config.messageServiceUrl ?? config.serviceBaseUrl;
     services['did_domain'] = config.didDomain;
-    if (config.anpServiceUrl != null) {
-      services['anp_service_endpoint'] = config.anpServiceUrl;
-    }
-    if (config.anpServiceDid != null) {
-      services['anp_service_did'] = config.anpServiceDid;
-    }
+    services['anp_service_endpoint'] =
+        config.anpServiceUrl ?? '${config.serviceBaseUrl}/anp-im/rpc';
+    services['anp_service_did'] =
+        config.anpServiceDid ?? 'did:wba:${config.didDomain}';
+    services['mail_service_url'] =
+        config.mailServiceUrl ?? config.serviceBaseUrl;
     configMap['schema_version'] = 1;
     configMap['services'] = services;
 
@@ -218,7 +239,10 @@ class DesktopCliPeerRunner {
         '(service_base_url=${config.serviceBaseUrl}, '
         'user_service_endpoint=${config.userServiceUrl ?? config.serviceBaseUrl}, '
         'message_service_endpoint=${config.messageServiceUrl ?? config.serviceBaseUrl}, '
-        'did_domain=${config.didDomain})',
+        'did_domain=${config.didDomain}, '
+        'anp_service_endpoint=${services['anp_service_endpoint']}, '
+        'anp_service_did=${services['anp_service_did']}, '
+        'mail_service_url=${services['mail_service_url']})',
       );
       return;
     }
@@ -280,11 +304,12 @@ class DesktopCliPeerRunner {
   Future<void> _planFlutterDesktopSmoke() async {
     final flutterArgs = <String>[
       'test',
-      'integration_test/desktop_cli_peer_smoke_test.dart',
+      config.e2eCase.testFile,
       '-d',
       config.platform.name,
       '--dart-define=AWIKI_E2E=true',
       '--dart-define=AWIKI_E2E_PLATFORM=${config.platform.name}',
+      '--dart-define=AWIKI_E2E_CASE=${config.e2eCase.name}',
       '--dart-define=AWIKI_BASE_URL=${config.serviceBaseUrl}',
       '--dart-define=AWIKI_SERVICE_BASE_URL=${config.serviceBaseUrl}',
       '--dart-define=AWIKI_DID_DOMAIN=${config.didDomain}',
@@ -349,9 +374,10 @@ class DesktopCliPeerRunner {
       encoder.convert(<String, Object?>{
         'status': succeeded ? 'success' : 'failed',
         'scenario': _desktopCliPeerScenario,
-        'caseIds': _desktopCliPeerCaseIds,
+        'caseIds': config.e2eCase.caseIds,
         'runId': runId,
         'platform': config.platform.name,
+        'case': config.e2eCase.name,
         'dryRun': options.dryRun,
         'prepareOnly': options.prepareOnly,
         'serviceBaseUrl': config.serviceBaseUrl,
@@ -531,6 +557,7 @@ class DesktopCliPeerOptions {
     this.cliHandle,
     this.cliBin,
     this.runId,
+    this.e2eCase = DesktopCliPeerE2eCase.full,
   });
 
   final DesktopE2ePlatform? platform;
@@ -545,6 +572,7 @@ class DesktopCliPeerOptions {
   final String? cliHandle;
   final String? cliBin;
   final String? runId;
+  final DesktopCliPeerE2eCase e2eCase;
 
   static DesktopCliPeerOptions parse(List<String> args) {
     DesktopE2ePlatform? platform;
@@ -559,6 +587,7 @@ class DesktopCliPeerOptions {
     String? cliHandle;
     String? cliBin;
     String? runId;
+    var e2eCase = DesktopCliPeerE2eCase.full;
 
     for (var index = 0; index < args.length; index += 1) {
       final arg = args[index];
@@ -594,6 +623,11 @@ class DesktopCliPeerOptions {
         case '--run-id':
           runId = _takeValue(args, ++index, '--run-id');
           break;
+        case '--case':
+          e2eCase = DesktopCliPeerE2eCase.parse(
+            _takeValue(args, ++index, '--case'),
+          );
+          break;
         case '--dry-run':
           dryRun = true;
           break;
@@ -622,6 +656,7 @@ class DesktopCliPeerOptions {
       cliHandle: cliHandle,
       cliBin: cliBin,
       runId: runId,
+      e2eCase: e2eCase,
     );
   }
 
@@ -640,6 +675,8 @@ Options:
   --cli-handle HANDLE          CLI peer test handle.
   --cli-bin PATH               Existing awiki-cli binary.
   --run-id ID                  Stable run id for repeatable local debugging.
+  --case full|direct|group|attachment
+                               Select one App+CLI flow, or all flows.
   --prepare-only               Prepare CLI peer but do not start Flutter test.
   --dry-run                    Print planned commands without side effects.
 ''');
@@ -656,6 +693,7 @@ class DesktopCliPeerConfig {
     required this.appHandle,
     required this.cliHandle,
     required this.cliBin,
+    required this.e2eCase,
     this.userServiceUrl,
     this.messageServiceUrl,
     this.mailServiceUrl,
@@ -671,6 +709,7 @@ class DesktopCliPeerConfig {
   final String appHandle;
   final String cliHandle;
   final String cliBin;
+  final DesktopCliPeerE2eCase e2eCase;
   final String? userServiceUrl;
   final String? messageServiceUrl;
   final String? mailServiceUrl;
@@ -729,6 +768,7 @@ class DesktopCliPeerConfig {
       appHandle: appHandle,
       cliHandle: cliHandle,
       cliBin: cliBin,
+      e2eCase: options.e2eCase,
       userServiceUrl: _env(environment, 'AWIKI_USER_SERVICE_URL'),
       messageServiceUrl: _env(environment, 'AWIKI_MESSAGE_SERVICE_URL'),
       mailServiceUrl: _env(environment, 'AWIKI_MAIL_SERVICE_URL'),
@@ -737,6 +777,51 @@ class DesktopCliPeerConfig {
       anpServiceDid:
           options.anpServiceDid ?? _env(environment, 'AWIKI_ANP_SERVICE_DID'),
     );
+  }
+}
+
+enum DesktopCliPeerE2eCase {
+  full(_desktopCliPeerCaseIds),
+  direct(_desktopCliPeerDirectCaseIds),
+  group(_desktopCliPeerGroupCaseIds),
+  attachment(_desktopCliPeerAttachmentCaseIds);
+
+  const DesktopCliPeerE2eCase(this.caseIds);
+
+  final List<String> caseIds;
+
+  String get testFile {
+    return switch (this) {
+      DesktopCliPeerE2eCase.full =>
+        'integration_test/desktop_cli_peer_smoke_test.dart',
+      DesktopCliPeerE2eCase.direct =>
+        'integration_test/desktop_cli_peer_direct_test.dart',
+      DesktopCliPeerE2eCase.group =>
+        'integration_test/desktop_cli_peer_group_test.dart',
+      DesktopCliPeerE2eCase.attachment =>
+        'integration_test/desktop_cli_peer_attachment_test.dart',
+    };
+  }
+
+  static DesktopCliPeerE2eCase parse(String value) {
+    return switch (value.trim().toLowerCase()) {
+      '' || 'full' => DesktopCliPeerE2eCase.full,
+      'direct' ||
+      'dm' ||
+      'message' ||
+      'messages' ||
+      'direct-only' => DesktopCliPeerE2eCase.direct,
+      'group' || 'groups' || 'group-only' => DesktopCliPeerE2eCase.group,
+      'attachment' ||
+      'attachments' ||
+      'file' ||
+      'files' ||
+      'attachment-only' => DesktopCliPeerE2eCase.attachment,
+      _ => throw DesktopCliPeerFailure(
+        'Unsupported E2E case "$value". '
+        'Use full, direct, group, or attachment.',
+      ),
+    };
   }
 }
 

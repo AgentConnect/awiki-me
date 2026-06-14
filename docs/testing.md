@@ -27,6 +27,22 @@ Run:
 flutter test tests/unit_test
 ```
 
+Focused group mention composer checks:
+
+```bash
+flutter test tests/unit_test --name mention
+flutter test tests/unit_test --name "chat mention"
+flutter test tests/unit_test --name "mention payload"
+flutter test tests/unit_test --name "mention highlight"
+flutter test tests/unit_test --name "send mention"
+```
+
+These cover the group-only `@` trigger, fixed selector/member candidates,
+displayName/handle/DID search, unknown `subjectType` disabling for single-member
+targets, draft range invalidation, ANP P9 payload projection, send-path
+selection, render-time highlight spans, and Unicode code point offsets needed by
+ANP P9 payloads.
+
 Unit fakes live under `tests/unit_test/support/` and
 `tests/unit_test/test_support.dart`. Integration-only bootstraps live under
 `tests/integration_test/support/`. Keep production code free of test-only mocks.
@@ -196,10 +212,33 @@ remains skipped.
 
 ### Desktop App + CLI Peer E2E
 
-`integration_test/desktop_cli_peer_smoke_test.dart` is the manual/nightly
+`integration_test/desktop_cli_peer_smoke_test.dart` is the full manual/nightly
 Desktop App + CLI peer smoke. It starts the real App bootstrap, prepares or uses
-a real App test identity, uses `awiki-cli-rs2` as the peer client, and checks
-one App -> CLI message plus one CLI -> App message with a unique run id.
+a real App test identity, uses `awiki-cli-rs2` as the peer client, and runs the
+direct message, group message, and attachment flows with a unique run id.
+
+The same implementation is split into focused scenario entrypoints so local
+debugging and release triage do not have to run the full suite:
+
+| Scenario | Flutter entrypoint | Runner case |
+| --- | --- | --- |
+| Full regression | `integration_test/desktop_cli_peer_smoke_test.dart` | `--case full` |
+| Direct message only | `integration_test/desktop_cli_peer_direct_test.dart` | `--case direct` |
+| Group message only | `integration_test/desktop_cli_peer_group_test.dart` | `--case group` |
+| Direct attachment only | `integration_test/desktop_cli_peer_attachment_test.dart` | `--case attachment` |
+
+The group case also sends one ANP P9 schema-less mention payload from the App
+with `@agents`, then verifies both App history and CLI group history contain the
+projected `payload.text`. This proves the App → SDK → message-service → history
+path preserves the mention payload without adding a fake `schema`. It does not
+prove daemon prompt execution; daemon prompt evidence remains part of the
+dedicated Agent IM / daemon integration gate.
+
+The P9 slice is reported as `GROUP-P9-001` by the runner. When validating
+against a sibling SDK worktree whose directory name is not `../awiki-cli-rs2`,
+use a local, uncommitted `pubspec_overrides.yaml` to point `awiki_im_core` to
+that worktree and rebuild its native macOS framework before running the desktop
+E2E; do not commit that override.
 
 The test is skipped unless `AWIKI_E2E=true`, so this command is safe as a
 build/smoke check without backend credentials:
@@ -222,6 +261,10 @@ dart run tool/desktop_cli_peer_e2e_runner.dart \
   --service-base-url "$AWIKI_SERVICE_BASE_URL" \
   --did-domain "$AWIKI_DID_DOMAIN"
 ```
+
+To run a smaller slice, add `--case direct`, `--case group`, or
+`--case attachment`. Without `--case`, the runner keeps using the full
+regression entrypoint for compatibility.
 
 Use the same test on macOS:
 

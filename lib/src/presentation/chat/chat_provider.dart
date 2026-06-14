@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +7,7 @@ import '../../app/app_services.dart';
 import '../../application/models/attachment_models.dart';
 import '../../application/models/app_thread_ref.dart';
 import '../../domain/entities/chat_attachment.dart';
+import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
@@ -99,22 +101,42 @@ class AgentPendingTurn {
 }
 
 class ChatComposerDraft {
-  const ChatComposerDraft({this.text = '', this.pendingAttachment});
+  const ChatComposerDraft({
+    this.text = '',
+    this.pendingAttachment,
+    this.mentions = const <ChatMentionDraft>[],
+  });
 
   final String text;
   final AttachmentDraft? pendingAttachment;
+  final List<ChatMentionDraft> mentions;
 
-  bool get isEmpty => text.isEmpty && pendingAttachment == null;
+  bool get isEmpty =>
+      text.isEmpty && pendingAttachment == null && mentions.isEmpty;
+
+  List<ChatMentionDraft> get validMentions => mentions
+      .where(
+        (mention) => mention.rangeMatches(text) && mention.target.isP9Sendable,
+      )
+      .toList();
+
+  List<Map<String, Object?>> p9MentionJsonForSend() {
+    return <Map<String, Object?>>[
+      for (final mention in validMentions) mention.toP9Json(text),
+    ];
+  }
 
   ChatComposerDraft copyWith({
     String? text,
     Object? pendingAttachment = _chatComposerDraftUnset,
+    List<ChatMentionDraft>? mentions,
   }) {
     return ChatComposerDraft(
       text: text ?? this.text,
       pendingAttachment: identical(pendingAttachment, _chatComposerDraftUnset)
           ? this.pendingAttachment
           : pendingAttachment as AttachmentDraft?,
+      mentions: mentions ?? this.mentions,
     );
   }
 }
@@ -136,7 +158,18 @@ class ChatComposerDraftsController
   }
 
   void setText(ConversationSummary conversation, String text) {
-    _upsertDraft(conversation, draftFor(conversation).copyWith(text: text));
+    final current = draftFor(conversation);
+    _upsertDraft(
+      conversation,
+      current.copyWith(
+        text: text,
+        mentions: ChatMentionDraft.transformMentions(
+          oldText: current.text,
+          newText: text,
+          oldMentions: current.mentions,
+        ),
+      ),
+    );
   }
 
   void setAttachment(
@@ -283,12 +316,28 @@ class ChatThreadsController
   Future<void> sendMessage({
     required ConversationSummary conversation,
     required String content,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? expectedAgentReplyDid,
   }) async {
     final session = ref.read(sessionProvider).session;
     if (session == null || content.trim().isEmpty) {
       return;
     }
+    final validMentionDrafts = conversation.isGroup
+        ? mentions
+              .where(
+                (mention) =>
+                    mention.rangeMatches(content) &&
+                    mention.target.isP9Sendable,
+              )
+              .toList()
+        : const <ChatMentionDraft>[];
+    final mentionPayload = validMentionDrafts.isEmpty
+        ? null
+        : ChatMentionPayload.toP9Json(
+            text: content,
+            draftMentions: validMentionDrafts,
+          );
     final pending = ChatMessage(
       localId: 'pending-${DateTime.now().microsecondsSinceEpoch}',
       threadId: conversation.threadId,
@@ -296,10 +345,16 @@ class ChatThreadsController
       senderName: session.handle ?? session.displayName,
       receiverDid: conversation.targetDid,
       groupId: conversation.groupId,
-      content: content.trim(),
+      content: validMentionDrafts.isEmpty ? content.trim() : content,
+      originalType: validMentionDrafts.isEmpty ? 'text' : 'application/json',
       createdAt: DateTime.now(),
       isMine: true,
       sendState: MessageSendState.sending,
+      payloadJson: mentionPayload == null ? null : jsonEncode(mentionPayload),
+      mentions: <ChatMessageMention>[
+        for (final mention in validMentionDrafts)
+          ChatMessageMention.fromDraft(mention),
+      ],
     );
     final current = List<ChatMessage>.from(
       thread(conversation.threadId).messages,
@@ -314,13 +369,22 @@ class ChatThreadsController
         .upsertConversation(pendingConversation);
     var latestConversation = pendingConversation;
     try {
-      final sent = await ref
-          .read(messagingServiceProvider)
-          .sendText(
-            thread: _sendThreadRefFor(conversation),
-            content: content.trim(),
-          )
-          .timeout(_sendTimeout);
+      final messaging = ref.read(messagingServiceProvider);
+      final sent = validMentionDrafts.isEmpty
+          ? await messaging
+                .sendText(
+                  thread: _sendThreadRefFor(conversation),
+                  content: content.trim(),
+                )
+                .timeout(_sendTimeout)
+          : await messaging
+                .sendMentionText(
+                  thread: _sendThreadRefFor(conversation),
+                  text: content,
+                  mentions: validMentionDrafts,
+                  idempotencyKey: pending.localId,
+                )
+                .timeout(_sendTimeout);
       final sentInThread = _withThreadId(sent, conversation.threadId);
       _replaceMessage(conversation.threadId, pending.localId, sentInThread);
       _startAgentProcessingForDeliveredMessage(
@@ -1005,7 +1069,8 @@ ConversationSummary _withConversationPreview(
     lastMessagePreview: message.previewText,
     lastMessageAt: message.createdAt,
     unreadCount: message.isMine ? 0 : conversation.unreadCount,
-    lastMessagePayloadJson: conversation.lastMessagePayloadJson,
+    lastMessagePayloadJson:
+        message.payloadJson ?? conversation.lastMessagePayloadJson,
   );
 }
 
@@ -1084,6 +1149,8 @@ ChatMessage _withThreadId(ChatMessage message, String threadId) {
     serverSequence: message.serverSequence,
     isEncrypted: message.isEncrypted,
     attachment: message.attachment,
+    payloadJson: message.payloadJson,
+    mentions: message.mentions,
   );
 }
 

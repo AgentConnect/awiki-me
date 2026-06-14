@@ -1,4 +1,5 @@
 import 'chat_attachment.dart';
+import 'chat_mention.dart';
 import 'agent/agent_control_payloads.dart';
 
 enum MessageSendState { sending, sent, failed }
@@ -21,6 +22,7 @@ class ChatMessage {
     this.originalType = 'text',
     this.attachment,
     this.payloadJson,
+    this.mentions = const <ChatMessageMention>[],
   });
 
   final String localId;
@@ -39,8 +41,16 @@ class ChatMessage {
   final MessageSendState sendState;
   final ChatAttachment? attachment;
   final String? payloadJson;
+  final List<ChatMessageMention> mentions;
 
-  bool get hasDisplayableText => content.trim().isNotEmpty && isTextMessage;
+  bool get hasValidMentions =>
+      mentions.any((mention) => mention.rangeMatches(content));
+
+  bool get isMentionPayload =>
+      payloadJson != null && originalType.trim().toLowerCase().contains('json');
+
+  bool get hasDisplayableText =>
+      content.trim().isNotEmpty && (isTextMessage || isMentionPayload);
 
   bool get isAgentControlPayload => AgentControlPayloads.isControl(payloadJson);
 
@@ -83,6 +93,7 @@ class ChatMessage {
     String? senderName,
     ChatAttachment? attachment,
     String? payloadJson,
+    List<ChatMessageMention>? mentions,
   }) {
     return ChatMessage(
       localId: localId,
@@ -101,6 +112,7 @@ class ChatMessage {
       originalType: originalType,
       attachment: attachment ?? this.attachment,
       payloadJson: payloadJson ?? this.payloadJson,
+      mentions: mentions ?? this.mentions,
     );
   }
 }

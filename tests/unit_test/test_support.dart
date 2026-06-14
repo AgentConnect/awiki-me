@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/agent/agent_control_service.dart';
@@ -24,6 +26,7 @@ import 'package:awiki_me/src/application/relationship_application_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/domain/entities/bridge_capabilities.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
+import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
@@ -878,6 +881,9 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     String? peerDid,
     String? groupId,
     required String content,
+    String originalType = 'text',
+    String? payloadJson,
+    List<ChatMessageMention> mentions = const <ChatMessageMention>[],
   }) async {
     lastSentThreadId = threadId;
     lastSentPeerDid = peerDid;
@@ -902,9 +908,12 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       receiverDid: peerDid,
       groupId: groupId,
       content: content,
+      originalType: originalType,
       createdAt: DateTime.now(),
       isMine: true,
       sendState: MessageSendState.sent,
+      payloadJson: payloadJson,
+      mentions: mentions,
     );
   }
 
@@ -1184,6 +1193,29 @@ class FakeMessagingService implements MessagingService {
 
   @override
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed) {
+    final mentionPayload = ChatMentionPayload.tryParsePayloadJson(
+      failed.payloadJson,
+    );
+    if (mentionPayload != null && mentionPayload.hasValidMentions) {
+      return sendPayload(
+        thread: failed.groupId?.trim().isNotEmpty == true
+            ? AppThreadRef.group(failed.groupId!)
+            : AppThreadRef.direct(failed.receiverDid ?? failed.senderDid),
+        payload: ChatMentionPayload.toP9Json(
+          text: mentionPayload.text,
+          draftMentions: failed.mentions.map(
+            (mention) => ChatMentionDraft(
+              localId: mention.id,
+              surface: mention.surface,
+              start: mention.start,
+              end: mention.end,
+              target: mention.target,
+              role: mention.role,
+            ),
+          ),
+        ),
+      );
+    }
     final groupId = failed.groupId?.trim();
     if (groupId != null && groupId.isNotEmpty) {
       return sendText(
@@ -1238,7 +1270,45 @@ class FakeMessagingService implements MessagingService {
     if (thread case AppDirectThreadRef(:final peerDidOrHandle)) {
       gateway.lastSentPayloadPeerDid = peerDidOrHandle;
     }
-    return sendText(thread: thread, content: '');
+    final payloadJson = jsonEncode(payload);
+    final mentionPayload = ChatMentionPayload.tryParsePayloadJson(payloadJson);
+    final content = mentionPayload?.text ?? '';
+    return switch (thread) {
+      AppDirectThreadRef(:final peerDidOrHandle) => gateway.sendTextMessage(
+        threadId: _directThreadId(peerDidOrHandle),
+        peerDid: peerDidOrHandle,
+        content: content,
+        payloadJson: payloadJson,
+        mentions: mentionPayload?.mentions ?? const <ChatMessageMention>[],
+        originalType: 'application/json',
+      ),
+      AppGroupThreadRef(:final groupDid) => gateway.sendTextMessage(
+        threadId: _groupThreadId(groupDid),
+        groupId: groupDid,
+        content: content,
+        payloadJson: payloadJson,
+        mentions: mentionPayload?.mentions ?? const <ChatMessageMention>[],
+        originalType: 'application/json',
+      ),
+      AppMessageThreadRef(:final threadId) => throw StateError(
+        'Cannot send through test IM Core without peerDid or groupId: $threadId',
+      ),
+    };
+  }
+
+  @override
+  Future<ChatMessage> sendMentionText({
+    required AppThreadRef thread,
+    required String text,
+    required List<ChatMentionDraft> mentions,
+    String? idempotencyKey,
+  }) {
+    return sendPayload(
+      thread: thread,
+      payload: ChatMentionPayload.toP9Json(text: text, draftMentions: mentions),
+      secure: false,
+      idempotencyKey: idempotencyKey,
+    );
   }
 
   @override

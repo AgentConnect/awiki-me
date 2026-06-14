@@ -6,6 +6,7 @@ import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import '../../application/models/attachment_models.dart';
 import '../../application/models/app_thread_ref.dart';
 import '../../application/ports/message_core_port.dart';
+import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
 import 'awiki_im_core_mappers.dart';
 import 'awiki_im_core_runtime.dart';
@@ -150,6 +151,18 @@ class AwikiImCoreMessageAdapter implements MessageCorePort {
 
   @override
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed) {
+    final mentionPayload = ChatMentionPayload.tryParsePayloadJson(
+      failed.payloadJson,
+    );
+    if (mentionPayload != null && mentionPayload.hasValidMentions) {
+      final decoded = jsonDecode(failed.payloadJson!) as Map;
+      return sendPayload(
+        thread: _threadFromFailedMessage(failed),
+        payload: decoded.cast<String, Object?>(),
+        secure: false,
+        idempotencyKey: failed.localId,
+      );
+    }
     return sendText(
       thread: _threadFromFailedMessage(failed),
       content: failed.content,

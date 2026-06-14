@@ -13,6 +13,7 @@ import 'package:awiki_me/src/application/relationship_application_service.dart';
 import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
 import 'package:awiki_me/src/data/compat/compat_awiki_gateway.dart';
 import 'package:awiki_me/src/data/compat/compat_realtime_gateway.dart';
+import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
@@ -342,6 +343,21 @@ class _FakeMessages implements MessagingService {
   }) async {
     sentThreads.add(thread);
     return _message('');
+  }
+
+  @override
+  Future<ChatMessage> sendMentionText({
+    required AppThreadRef thread,
+    required String text,
+    required List<ChatMentionDraft> mentions,
+    String? idempotencyKey,
+  }) {
+    return sendPayload(
+      thread: thread,
+      payload: ChatMentionPayload.toP9Json(text: text, draftMentions: mentions),
+      secure: false,
+      idempotencyKey: idempotencyKey,
+    );
   }
 
   @override
