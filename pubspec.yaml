@@ -30,6 +30,7 @@ dependencies:
   flutter_riverpod: ^2.6.1
   sqlite3_flutter_libs: ^0.5.42
   url_launcher: ^6.3.1
+  sqflite_common_ffi: 2.4.0
 
 dev_dependencies:
   flutter_test:

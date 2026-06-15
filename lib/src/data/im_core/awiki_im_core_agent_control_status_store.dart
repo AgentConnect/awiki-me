@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 
 import '../../application/agent/agent_control_status_store.dart';
+import '../local/sqflite_desktop_init.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
 
 class AwikiImCoreAgentControlStatusStore implements AgentControlStatusStore {
@@ -19,6 +20,7 @@ class AwikiImCoreAgentControlStatusStore implements AgentControlStatusStore {
   }) async {
     Database? db;
     try {
+      ensureSqfliteDesktopInitialized();
       db = await openReadOnlyDatabase(sqlitePath);
       final rows = await db.query(
         'messages',
