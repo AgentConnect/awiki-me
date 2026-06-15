@@ -61,7 +61,7 @@ void main() {
       expect(options.e2eCase, DesktopCliPeerE2eCase.group);
     });
 
-    test('parses direct and attachment cases', () {
+    test('parses direct attachment and contacts cases', () {
       final direct = DesktopCliPeerOptions.parse(const <String>[
         '--platform',
         'macos',
@@ -76,9 +76,17 @@ void main() {
         'attachment',
         '--dry-run',
       ]);
+      final contacts = DesktopCliPeerOptions.parse(const <String>[
+        '--platform',
+        'macos',
+        '--case',
+        'contacts',
+        '--dry-run',
+      ]);
 
       expect(direct.e2eCase, DesktopCliPeerE2eCase.direct);
       expect(attachment.e2eCase, DesktopCliPeerE2eCase.attachment);
+      expect(contacts.e2eCase, DesktopCliPeerE2eCase.contacts);
     });
 
     test('rejects unsupported case', () {
@@ -94,7 +102,7 @@ void main() {
             (error) => error.message,
             'message',
             'Unsupported E2E case "unknown". '
-                'Use full, direct, group, or attachment.',
+                'Use full, direct, group, attachment, or contacts.',
           ),
         ),
       );
@@ -369,7 +377,12 @@ void main() {
         'MSG-REG-001',
         'GROUP-E2E-001',
         'GROUP-E2E-002',
+        'GROUP-P9-001',
+        'GROUP-P9-002',
         'GROUP-REG-001',
+        'CONTACT-E2E-001',
+        'CONTACT-E2E-002',
+        'CONTACT-REG-001',
         'ATTACH-E2E-001',
         'ATTACH-E2E-002',
         'ATTACH-REG-001',
@@ -446,6 +459,8 @@ void main() {
         'AUTH-E2E-001',
         'GROUP-E2E-001',
         'GROUP-E2E-002',
+        'GROUP-P9-001',
+        'GROUP-P9-002',
         'GROUP-REG-001',
       ]);
     });
@@ -571,6 +586,68 @@ void main() {
         'ATTACH-E2E-001',
         'ATTACH-E2E-002',
         'ATTACH-REG-001',
+      ]);
+    });
+
+    test('generates contacts-only Flutter command and report case IDs', () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_desktop_cli_peer_runner_contacts_test_',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final lines = <String>[];
+      final runner = DesktopCliPeerRunner(
+        root: root,
+        options: DesktopCliPeerOptions.parse(const <String>[
+          '--platform',
+          'linux',
+          '--dry-run',
+          '--case',
+          'contacts',
+          '--run-id',
+          'run-contacts',
+          '--cli-bin',
+          '/tmp/fake-awiki-cli',
+        ]),
+        environment: const <String, String>{
+          'DEV_OTP_PHONE': 'test-phone-secret',
+          'DEV_OTP_CODE': 'test-otp-secret',
+        },
+        commands: DesktopCommandRunner(
+          root: root,
+          dryRun: true,
+          redactor: DesktopSecretRedactor(const <String>[
+            'test-phone-secret',
+            'test-otp-secret',
+          ]),
+          logLine: lines.add,
+        ),
+      );
+
+      await runner.run();
+
+      final log = lines.join('\n');
+      expect(
+        log,
+        contains(
+          r'$ xvfb-run -a flutter test integration_test/desktop_cli_peer_contacts_test.dart -d linux',
+        ),
+      );
+      expect(log, contains('--dart-define=AWIKI_E2E_CASE=contacts'));
+      final timings = File(
+        '${root.path}/.e2e/desktop-cli-peer/run-contacts/reports/timings.json',
+      );
+      final decoded =
+          jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
+      expect(decoded['case'], 'contacts');
+      expect(decoded['caseIds'], <dynamic>[
+        'AUTH-E2E-001',
+        'CONTACT-E2E-001',
+        'CONTACT-E2E-002',
+        'CONTACT-REG-001',
       ]);
     });
 

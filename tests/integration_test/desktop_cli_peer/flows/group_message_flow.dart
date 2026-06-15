@@ -27,6 +27,8 @@ Future<void> _verifyGroupTextRegression({
   final appGroupText = 'e2e app group ${config.runId} $nonce';
   final appGroupMentionText =
       '@agents e2e app group mention ${config.runId} $nonce';
+  final appGroupMemberMentionText =
+      '@${config.cliHandle} e2e app group member mention ${config.runId} $nonce';
   final cliGroupText = 'e2e cli group ${config.runId} $nonce';
   final groupThread = AppThreadRef.group(group.groupId);
 
@@ -81,6 +83,52 @@ Future<void> _verifyGroupTextRegression({
     expectedText: appGroupMentionText,
   );
 
+  final cliMember = await _findGroupMember(
+    groups: groups,
+    groupDid: group.groupId,
+    memberRef: config.cliHandle,
+  );
+  final memberMentionMessage = await messaging.sendMentionText(
+    thread: groupThread,
+    text: appGroupMemberMentionText,
+    mentions: <ChatMentionDraft>[
+      ChatMentionDraft(
+        localId: 'men_cli_member_e2e',
+        surface: '@${config.cliHandle}',
+        start: 0,
+        end: '@${config.cliHandle}'.length,
+        target: ChatMentionTargetDraft.member(
+          kind: _mentionTargetKindForMember(cliMember),
+          did: cliMember.did,
+          handle: cliMember.handle.isEmpty ? null : cliMember.handle,
+          displayName: cliMember.displayName,
+        ),
+      ),
+    ],
+    idempotencyKey: 'app-group-member-mention-${config.runId}-$nonce',
+  );
+  expect(memberMentionMessage.content, appGroupMemberMentionText);
+  expect(memberMentionMessage.mentions, hasLength(1));
+  expect(
+    memberMentionMessage.payloadJson,
+    allOf(
+      contains('"mentions"'),
+      contains('"did"'),
+      isNot(contains('"schema"')),
+    ),
+  );
+
+  await _waitForGroupMessages(
+    groups: groups,
+    groupDid: group.groupId,
+    expectedText: appGroupMemberMentionText,
+  );
+  await _waitForCliGroupMessages(
+    config: config,
+    groupDid: group.groupId,
+    expectedText: appGroupMemberMentionText,
+  );
+
   final cliGroupSend = await _runCli(config, <String>[
     '--format',
     'json',
@@ -103,7 +151,12 @@ Future<void> _verifyGroupTextRegression({
   await _expectAppHistoryContainsExactlyOnce(
     messaging: messaging,
     thread: groupThread,
-    expectedTexts: <String>[appGroupText, appGroupMentionText, cliGroupText],
+    expectedTexts: <String>[
+      appGroupText,
+      appGroupMentionText,
+      appGroupMemberMentionText,
+      cliGroupText,
+    ],
   );
 }
 
@@ -132,4 +185,46 @@ Future<void> _waitForGroupMember({
       });
     },
   );
+}
+
+Future<GroupMemberSummary> _findGroupMember({
+  required GroupApplicationService groups,
+  required String groupDid,
+  required String memberRef,
+}) async {
+  GroupMemberSummary? matched;
+  await _poll(
+    description: 'Group member "$memberRef" can be loaded',
+    action: () async {
+      final members = await groups.listMembers(groupDid, limit: 20);
+      final normalizedRef = _normalizeIdentityRef(memberRef);
+      for (final member in members) {
+        final fields = <String>[
+          member.did,
+          member.handle,
+          member.userId,
+        ].map(_normalizeIdentityRef).where((field) => field.isNotEmpty);
+        final matches = fields.any(
+          (field) =>
+              field == normalizedRef ||
+              field.contains(normalizedRef) ||
+              normalizedRef.contains(field),
+        );
+        if (matches && member.did.trim().isNotEmpty) {
+          matched = member;
+          return true;
+        }
+      }
+      return false;
+    },
+  );
+  return matched!;
+}
+
+ChatMentionTargetKind _mentionTargetKindForMember(GroupMemberSummary member) {
+  return switch (member.subjectType) {
+    GroupMemberSubjectType.agent => ChatMentionTargetKind.agent,
+    GroupMemberSubjectType.human ||
+    GroupMemberSubjectType.unknown => ChatMentionTargetKind.human,
+  };
 }

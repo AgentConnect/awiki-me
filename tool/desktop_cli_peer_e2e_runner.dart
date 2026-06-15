@@ -13,7 +13,11 @@ const List<String> _desktopCliPeerCaseIds = <String>[
   'GROUP-E2E-001',
   'GROUP-E2E-002',
   'GROUP-P9-001',
+  'GROUP-P9-002',
   'GROUP-REG-001',
+  'CONTACT-E2E-001',
+  'CONTACT-E2E-002',
+  'CONTACT-REG-001',
   'ATTACH-E2E-001',
   'ATTACH-E2E-002',
   'ATTACH-REG-001',
@@ -23,6 +27,7 @@ const List<String> _desktopCliPeerGroupCaseIds = <String>[
   'GROUP-E2E-001',
   'GROUP-E2E-002',
   'GROUP-P9-001',
+  'GROUP-P9-002',
   'GROUP-REG-001',
 ];
 const List<String> _desktopCliPeerDirectCaseIds = <String>[
@@ -36,6 +41,12 @@ const List<String> _desktopCliPeerAttachmentCaseIds = <String>[
   'ATTACH-E2E-001',
   'ATTACH-E2E-002',
   'ATTACH-REG-001',
+];
+const List<String> _desktopCliPeerContactsCaseIds = <String>[
+  'AUTH-E2E-001',
+  'CONTACT-E2E-001',
+  'CONTACT-E2E-002',
+  'CONTACT-REG-001',
 ];
 
 Future<void> main(List<String> args) async {
@@ -675,7 +686,7 @@ Options:
   --cli-handle HANDLE          CLI peer test handle.
   --cli-bin PATH               Existing awiki-cli binary.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case full|direct|group|attachment
+  --case full|direct|group|attachment|contacts
                                Select one App+CLI flow, or all flows.
   --prepare-only               Prepare CLI peer but do not start Flutter test.
   --dry-run                    Print planned commands without side effects.
@@ -784,7 +795,8 @@ enum DesktopCliPeerE2eCase {
   full(_desktopCliPeerCaseIds),
   direct(_desktopCliPeerDirectCaseIds),
   group(_desktopCliPeerGroupCaseIds),
-  attachment(_desktopCliPeerAttachmentCaseIds);
+  attachment(_desktopCliPeerAttachmentCaseIds),
+  contacts(_desktopCliPeerContactsCaseIds);
 
   const DesktopCliPeerE2eCase(this.caseIds);
 
@@ -800,6 +812,8 @@ enum DesktopCliPeerE2eCase {
         'integration_test/desktop_cli_peer_group_test.dart',
       DesktopCliPeerE2eCase.attachment =>
         'integration_test/desktop_cli_peer_attachment_test.dart',
+      DesktopCliPeerE2eCase.contacts =>
+        'integration_test/desktop_cli_peer_contacts_test.dart',
     };
   }
 
@@ -817,9 +831,14 @@ enum DesktopCliPeerE2eCase {
       'file' ||
       'files' ||
       'attachment-only' => DesktopCliPeerE2eCase.attachment,
+      'contact' ||
+      'contacts' ||
+      'people' ||
+      'follow' ||
+      'contact-only' => DesktopCliPeerE2eCase.contacts,
       _ => throw DesktopCliPeerFailure(
         'Unsupported E2E case "$value". '
-        'Use full, direct, group, or attachment.',
+        'Use full, direct, group, attachment, or contacts.',
       ),
     };
   }

@@ -13,13 +13,18 @@ import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
+import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
+import 'package:awiki_me/src/application/relationship_application_service.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
+import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
+import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 part 'flows/attachment_flow.dart';
+part 'flows/contact_flow.dart';
 part 'flows/direct_message_flow.dart';
 part 'flows/group_message_flow.dart';
 part 'support/cli_peer_process.dart';
@@ -47,7 +52,8 @@ enum DesktopCliPeerIntegrationCase {
   full,
   direct,
   group,
-  attachment;
+  attachment,
+  contacts;
 
   static DesktopCliPeerIntegrationCase parse(String value) {
     return switch (value.trim().toLowerCase()) {
@@ -65,9 +71,14 @@ enum DesktopCliPeerIntegrationCase {
       'file' ||
       'files' ||
       'attachment-only' => DesktopCliPeerIntegrationCase.attachment,
+      'contact' ||
+      'contacts' ||
+      'people' ||
+      'follow' ||
+      'contact-only' => DesktopCliPeerIntegrationCase.contacts,
       _ => throw StateError(
         'Unsupported AWIKI_E2E_CASE "$value". '
-        'Use full, direct, group, or attachment.',
+        'Use full, direct, group, attachment, or contacts.',
       ),
     };
   }
@@ -83,6 +94,10 @@ enum DesktopCliPeerIntegrationCase {
   bool get runsAttachment =>
       this == DesktopCliPeerIntegrationCase.full ||
       this == DesktopCliPeerIntegrationCase.attachment;
+
+  bool get runsContacts =>
+      this == DesktopCliPeerIntegrationCase.full ||
+      this == DesktopCliPeerIntegrationCase.contacts;
 }
 
 DesktopCliPeerIntegrationCase desktopCliPeerCaseFromEnvironment() =>
@@ -129,6 +144,14 @@ void runDesktopCliPeerE2e({
           ownerDid: session.did,
           config: config,
           nonce: messageNonce,
+        );
+      }
+
+      if (selectedCase.runsContacts) {
+        final relationships = bootstrap.relationshipApplicationService!;
+        await _verifyContactRegression(
+          relationships: relationships,
+          config: config,
         );
       }
 

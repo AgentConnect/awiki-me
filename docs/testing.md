@@ -254,7 +254,8 @@ remains skipped.
 `integration_test/desktop_cli_peer_smoke_test.dart` is the full manual/nightly
 Desktop App + CLI peer smoke. It starts the real App bootstrap, prepares or uses
 a real App test identity, uses `awiki-cli-rs2` as the peer client, and runs the
-direct message, group message, and attachment flows with a unique run id.
+direct message, contact relationship, group message, and attachment flows with
+a unique run id.
 
 The same implementation is split into focused scenario entrypoints so local
 debugging and release triage do not have to run the full suite:
@@ -265,15 +266,23 @@ debugging and release triage do not have to run the full suite:
 | Direct message only | `integration_test/desktop_cli_peer_direct_test.dart` | `--case direct` |
 | Group message only | `integration_test/desktop_cli_peer_group_test.dart` | `--case group` |
 | Direct attachment only | `integration_test/desktop_cli_peer_attachment_test.dart` | `--case attachment` |
+| Contact relationship only | `integration_test/desktop_cli_peer_contacts_test.dart` | `--case contacts` |
 
-The group case also sends one ANP P9 schema-less mention payload from the App
-with `@agents`, then verifies both App history and CLI group history contain the
-projected `payload.text`. This proves the App → SDK → message-service → history
-path preserves the mention payload without adding a fake `schema`. It does not
-prove daemon prompt execution; daemon prompt evidence remains part of the
-dedicated Agent IM / daemon integration gate.
+The contact case uses the real App relationship service and CLI `people`
+commands to verify App follow/status/following, CLI followers/status, CLI
+follow/following, App followers/status, and App unfollow projection against the
+same non-production backend.
 
-The P9 slice is reported as `GROUP-P9-001` by the runner. When validating
+The group case also sends ANP P9 schema-less mention payloads from the App:
+one `@agents` selector mention and one direct member mention for the CLI peer.
+It then verifies both App history and CLI group history contain the projected
+`payload.text`. This proves the App → SDK → message-service → history path
+preserves selector and member mention payloads without adding a fake `schema`.
+It does not prove daemon prompt execution; daemon prompt evidence remains part
+of the dedicated Agent IM / daemon integration gate.
+
+The P9 slices are reported as `GROUP-P9-001` and `GROUP-P9-002` by the runner.
+When validating
 against a sibling SDK worktree whose directory name is not `../awiki-cli-rs2`,
 use a local, uncommitted `pubspec_overrides.yaml` to point `awiki_im_core` to
 that worktree and rebuild its native macOS framework before running the desktop
@@ -301,9 +310,9 @@ dart run tool/desktop_cli_peer_e2e_runner.dart \
   --did-domain "$AWIKI_DID_DOMAIN"
 ```
 
-To run a smaller slice, add `--case direct`, `--case group`, or
-`--case attachment`. Without `--case`, the runner keeps using the full
-regression entrypoint for compatibility.
+To run a smaller slice, add `--case direct`, `--case group`,
+`--case attachment`, or `--case contacts`. Without `--case`, the runner keeps
+using the full regression entrypoint for compatibility.
 
 Use the same test on macOS:
 
@@ -412,9 +421,9 @@ E2E, real Agent IM scenarios, or real-device mobile E2E.
 |---|---|---|---|---|
 | PR required | Every pull request and push to `main` | Ubuntu CI, Flutter, Rust, Linux desktop deps, sibling `awiki-cli-rs2` checkout. | `dart analyze`, `flutter test tests/unit_test`, mobile dry-run, desktop dry-run, Linux app smoke, Linux native SDK smoke. | Real OTP, real service accounts, Desktop App+CLI real E2E, Agent IM real E2E, mobile devices, SSH remote evidence. |
 | PR optional desktop | Developer or self-hosted runner with desktop support | macOS or Linux desktop runner; Linux uses `xvfb-run`. | `integration_test/app_smoke_test.dart` and `integration_test/im_core_open_smoke_test.dart` on the available desktop platform. | Any test that needs a non-production account pool or real message service. |
-| Nightly desktop | Scheduled or manual workflow on a prepared runner | Non-production User Service/Message Service/DID domain, OTP env, built `awiki-cli`, isolated App and CLI state. | Desktop App+CLI peer direct message, history/inbox/refresh, group text, small attachment send/receive, report redaction scan. | `AGENT-SKIP-001`, `E2EE-SKIP-001`, and any scenario without a maintained owner. |
+| Nightly desktop | Scheduled or manual workflow on a prepared runner | Non-production User Service/Message Service/DID domain, OTP env, built `awiki-cli`, isolated App and CLI state. | Desktop App+CLI peer direct message, contacts/follow relationship, history/inbox/refresh, group text and mention, small attachment send/receive, report redaction scan. | `AGENT-SKIP-001`, `E2EE-SKIP-001`, and any scenario without a maintained owner. |
 | Nightly mobile | Scheduled or manual workflow on a device runner | iOS or Android device pair, Maestro, `mobile.local.yaml` from CI secrets, non-production account pool. | `MOBILE-E2E-001` real two-device direct message with logs/screenshots/report retained as private artifacts. | Desktop-only scenarios and any mobile run without two independent devices. |
-| Release | Release candidate validation | Stable nightly environment plus release owner review. | P0/P1 regression subset: desktop smoke, native SDK smoke, Desktop App+CLI direct/group/attachment basics, mobile two-device when device pool is available. | New `feature` cases that have not been promoted, skipped Agent-as-IM-handler and E2EE专项 cases. |
+| Release | Release candidate validation | Stable nightly environment plus release owner review. | P0/P1 regression subset: desktop smoke, native SDK smoke, Desktop App+CLI direct/contacts/group/attachment basics, mobile two-device when device pool is available. | New `feature` cases that have not been promoted, skipped Agent-as-IM-handler and E2EE专项 cases. |
 | Manual | Developer or QA runbook | Local or remote environment prepared by the runner. | Any focused case needed for debugging or release evidence, with command, runId, platform, service endpoints, and report path recorded. | Manual results presented as automatic PR gate evidence. |
 
 Real E2E reports must record `runId`, platform, scenario, case IDs,
