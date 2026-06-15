@@ -224,6 +224,7 @@ void main() {
     expect(threadArgs['thread_id'], 'group:did:group:team');
     expect(threadArgs['kind'], 'group');
     expect(threadArgs['group_did'], 'did:group:team');
+    expect(threadArgs['limit'], 20);
 
     final directThreadPayload = runtimeInboxThreadQueryPayload(
       runtimeAgentDid: 'did:agent:runtime',
@@ -238,6 +239,7 @@ void main() {
     expect(directThreadArgs['thread_id'], 'dm:peer-scope:v1:bob');
     expect(directThreadArgs['peer_did'], 'did:human:bob-current');
     expect(directThreadArgs['peer_handle'], 'bob.anpclaw.com');
+    expect(directThreadArgs['limit'], 20);
   });
 
   test('agent inventory summary maps daemon install inventory fields', () {

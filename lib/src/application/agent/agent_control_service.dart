@@ -47,7 +47,7 @@ abstract interface class AgentControlService {
     required String daemonAgentDid,
     required String runtimeAgentDid,
     String scope = 'all',
-    int limit = 30,
+    int limit = 20,
     String? cursor,
   });
   Future<String> queryRuntimeInboxThread({
@@ -58,7 +58,7 @@ abstract interface class AgentControlService {
     String? peerDid,
     String? peerHandle,
     String? groupDid,
-    int limit = 50,
+    int limit = 20,
     String? cursor,
   });
   Future<void> upgradeDaemon(String daemonAgentDid);
@@ -265,7 +265,7 @@ class DefaultAgentControlService implements AgentControlService {
     required String daemonAgentDid,
     required String runtimeAgentDid,
     String scope = 'all',
-    int limit = 30,
+    int limit = 20,
     String? cursor,
   }) async {
     final commandId = agentCommandId('cmd_runtime_inbox');
@@ -292,7 +292,7 @@ class DefaultAgentControlService implements AgentControlService {
     String? peerDid,
     String? peerHandle,
     String? groupDid,
-    int limit = 50,
+    int limit = 20,
     String? cursor,
   }) async {
     final commandId = agentCommandId('cmd_runtime_inbox_thread');

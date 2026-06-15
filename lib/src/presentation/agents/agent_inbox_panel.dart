@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/entities/agent/agent_summary.dart';
@@ -388,6 +389,7 @@ class _AgentInboxRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isGroup = item.kind == 'group';
+    final timeLabel = _formatInboxTimestamp(item.lastMessageAtMs);
     return AppPressableTile(
       onTap: onTap,
       semanticLabel: item.title,
@@ -421,15 +423,34 @@ class _AgentInboxRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(
-                    item.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF17213A),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          item.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF17213A),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      if (timeLabel != null) ...<Widget>[
+                        const SizedBox(width: 8),
+                        Text(
+                          timeLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF8A94A8),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Row(
@@ -445,8 +466,8 @@ class _AgentInboxRow extends StatelessWidget {
                       Expanded(
                         child: Text(
                           item.lastMessagePreview.isEmpty
-                              ? (item.hasAttachments ? '附件' : '无预览')
-                              : item.lastMessagePreview,
+                              ? (item.hasAttachments ? '最新：附件' : '最新：无预览')
+                              : '最新：${item.lastMessagePreview}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -585,6 +606,7 @@ class _AgentInboxMessageRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final outgoing = message.direction == 'outgoing';
     final visibleAttachments = message.attachments;
+    final timeLabel = _formatInboxTimestamp(message.sentAtMs);
     return Align(
       alignment: outgoing ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -598,18 +620,37 @@ class _AgentInboxMessageRow extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              outgoing
-                  ? 'Agent'
-                  : message.senderHandle ??
-                        DidDisplayFormatter.compactDid(message.senderDid),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xFF5A6478),
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    outgoing
+                        ? 'Agent'
+                        : message.senderHandle ??
+                              DidDisplayFormatter.compactDid(message.senderDid),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF5A6478),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (timeLabel != null) ...<Widget>[
+                  const SizedBox(width: 8),
+                  Text(
+                    timeLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF8A94A8),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ],
             ),
             if (message.text.trim().isNotEmpty) ...<Widget>[
               const SizedBox(height: 6),
@@ -872,7 +913,7 @@ class _AgentInboxShell extends StatelessWidget {
                 ],
               ),
             ),
-            Expanded(child: child),
+            Expanded(child: SelectionArea(child: child)),
           ],
         ),
       ),
@@ -922,6 +963,28 @@ String _attachmentSubtitle(AgentInboxAttachment attachment) {
     return attachment.mimeType;
   }
   return '${attachment.mimeType} · $sizeText';
+}
+
+String? _formatInboxTimestamp(int? epochMs) {
+  if (epochMs == null || epochMs <= 0) {
+    return null;
+  }
+  final date = DateTime.fromMillisecondsSinceEpoch(
+    epochMs,
+    isUtc: true,
+  ).toLocal();
+  final now = DateTime.now();
+  final hour = date.hour.toString().padLeft(2, '0');
+  final minute = date.minute.toString().padLeft(2, '0');
+  if (date.year == now.year && date.month == now.month && date.day == now.day) {
+    return '$hour:$minute';
+  }
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  if (date.year == now.year) {
+    return '$month-$day $hour:$minute';
+  }
+  return '${date.year}-$month-$day $hour:$minute';
 }
 
 String _formatBytes(int bytes) {

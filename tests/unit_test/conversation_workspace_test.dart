@@ -90,7 +90,7 @@ void main() {
     ),
   ];
 
-  testWidgets('macOS 宽度下使用三栏消息工作区与身份卡', (tester) async {
+  testWidgets('macOS 宽度下消息工作区默认关闭会话信息', (tester) async {
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[conversation]
       ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
@@ -122,13 +122,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ChatView), findsOneWidget);
-    expect(find.text('会话信息'), findsOneWidget);
-    expect(find.text('did:peer'), findsOneWidget);
+    expect(find.text('会话信息'), findsNothing);
+    expect(find.text('did:peer'), findsNothing);
     expect(find.text('安全协作中'), findsOneWidget);
     expect(
       find.byKey(const Key('chat-conversation-info-button')),
       findsOneWidget,
     );
+    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
+    await tester.pump();
+
+    expect(find.text('会话信息'), findsOneWidget);
+    expect(find.text('did:peer'), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -204,6 +209,15 @@ void main() {
       ..conversations = <ConversationSummary>[runtimeConversation]
       ..dmHistoryByPeerDid = const <String, List<ChatMessage>>{
         'did:agent:runtime': <ChatMessage>[],
+      }
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        'did:agent:runtime': UserProfile(
+          did: 'did:agent:runtime',
+          nickName: 'Hermes',
+          bio: 'Runtime Agent',
+          tags: <String>['agent'],
+          profileMarkdown: 'Hermes profile',
+        ),
       };
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
@@ -245,8 +259,12 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.bySemanticsLabel('Agent 收件箱'), findsOneWidget);
-    await tester.tap(find.bySemanticsLabel('Agent 收件箱'));
+    expect(find.bySemanticsLabel('Agent 收件箱'), findsNothing);
+    await tester.tap(find.bySemanticsLabel('打开我的智能体信息'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('智能体信息'), findsOneWidget);
+    await tester.tap(find.text('Agent 收件箱'));
     await tester.pump();
     await tester.pump();
 
@@ -311,6 +329,8 @@ void main() {
 
     await tester.tap(find.text('Marcus Chen'));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
+    await tester.pump();
 
     final didFinder = find.byKey(const Key('mac-conversation-did-value'));
     expect(didFinder, findsOneWidget);
@@ -372,6 +392,8 @@ void main() {
 
     await tester.tap(find.text('Marcus Chen'));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
+    await tester.pump();
 
     final dotRect = tester.getRect(
       find.byKey(const Key('mac-conversation-preview-status-dot')),
@@ -449,6 +471,8 @@ void main() {
 
     await tester.tap(find.text('普通用户'));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
+    await tester.pump();
 
     expect(find.text('类型:'), findsOneWidget);
     expect(find.text('用户'), findsOneWidget);
@@ -456,6 +480,8 @@ void main() {
 
     await tester.tap(find.text('远端智能体'));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
+    await tester.pump();
 
     expect(find.text('智能体'), findsWidgets);
 
@@ -650,7 +676,7 @@ void main() {
     expect(find.text('智能体已删除，无法继续发送消息'), findsOneWidget);
   });
 
-  testWidgets('macOS 身份卡在右侧栏替换会话信息并支持关闭', (tester) async {
+  testWidgets('macOS 点击身份卡入口打开用户信息弹窗', (tester) async {
     const peerProfile = UserProfile(
       did: 'did:peer',
       nickName: 'Marcus Chen',
@@ -687,125 +713,26 @@ void main() {
 
     await tester.tap(find.text('Marcus Chen').first);
     await tester.pumpAndSettle();
-    expect(find.text('会话信息'), findsOneWidget);
-    var conversationInfoIcon = tester.widget<Icon>(
-      find.descendant(
-        of: find.byKey(const Key('chat-conversation-info-button')),
-        matching: find.byIcon(CupertinoIcons.sidebar_right),
-      ),
-    );
-    var identityLabel = tester.widget<Text>(find.text('身份卡'));
-    var conversationInfoDecoration =
-        tester
-                .widget<Container>(
-                  find
-                      .descendant(
-                        of: find.byKey(
-                          const Key('chat-conversation-info-button'),
-                        ),
-                        matching: find.byType(Container),
-                      )
-                      .first,
-                )
-                .decoration
-            as BoxDecoration;
-    expect(conversationInfoDecoration.color, const Color(0xFFE4ECF7));
-    expect(conversationInfoIcon.weight, 900);
-    expect(identityLabel.style?.fontWeight, FontWeight.w400);
-    final conversationInfoWidth = tester
-        .getSize(find.byKey(const Key('mac-side-panel')))
-        .width;
-
-    await tester.tap(find.text('身份卡'));
-    await tester.pumpAndSettle();
-
-    final identityCardWidth = tester
-        .getSize(find.byKey(const Key('mac-side-panel')))
-        .width;
-    expect(identityCardWidth, greaterThan(conversationInfoWidth));
-    expect(find.text('Marcus Chen 的身份卡'), findsOneWidget);
-    expect(find.text('会话信息'), findsNothing);
-    expect(find.text('负责融资协作。'), findsOneWidget);
-    expect(find.text('@marcus'), findsOneWidget);
-    identityLabel = tester.widget<Text>(find.text('身份卡'));
-    conversationInfoIcon = tester.widget<Icon>(
-      find.descendant(
-        of: find.byKey(const Key('chat-conversation-info-button')),
-        matching: find.byIcon(CupertinoIcons.sidebar_right),
-      ),
-    );
-    final identityButtonDecoration =
-        tester
-                .widget<Container>(
-                  find
-                      .descendant(
-                        of: find.byKey(const Key('chat-identity-card-button')),
-                        matching: find.byType(Container),
-                      )
-                      .first,
-                )
-                .decoration
-            as BoxDecoration;
-    expect(identityButtonDecoration.color, const Color(0xFFE4ECF7));
-    expect(identityLabel.style?.fontWeight, FontWeight.w600);
-    expect(conversationInfoIcon.weight, 500);
-
-    await tester.tap(find.text('身份卡'));
-    await tester.pumpAndSettle();
-
     expect(find.byKey(const Key('mac-side-panel')), findsNothing);
     expect(find.text('会话信息'), findsNothing);
-    expect(find.text('Marcus Chen 的身份卡'), findsNothing);
-
-    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
-    await tester.pumpAndSettle();
-    expect(find.text('会话信息'), findsOneWidget);
-    conversationInfoIcon = tester.widget<Icon>(
-      find.descendant(
-        of: find.byKey(const Key('chat-conversation-info-button')),
-        matching: find.byIcon(CupertinoIcons.sidebar_right),
-      ),
-    );
-    identityLabel = tester.widget<Text>(find.text('身份卡'));
-    conversationInfoDecoration =
-        tester
-                .widget<Container>(
-                  find
-                      .descendant(
-                        of: find.byKey(
-                          const Key('chat-conversation-info-button'),
-                        ),
-                        matching: find.byType(Container),
-                      )
-                      .first,
-                )
-                .decoration
-            as BoxDecoration;
-    expect(conversationInfoDecoration.color, const Color(0xFFE4ECF7));
-    expect(conversationInfoIcon.weight, 900);
-    expect(identityLabel.style?.fontWeight, FontWeight.w400);
 
     await tester.tap(find.text('身份卡'));
     await tester.pumpAndSettle();
-    final beforeResize = tester
-        .getSize(find.byKey(const Key('mac-side-panel')))
-        .width;
-    await tester.drag(
-      find.byKey(const Key('mac-side-panel-resize-divider')),
-      const Offset(-80, 0),
-    );
+
+    expect(find.text('用户信息'), findsOneWidget);
+    expect(find.text('身份卡'), findsWidgets);
+    expect(find.text('负责融资协作。'), findsOneWidget);
+    expect(find.text('@marcus'), findsOneWidget);
+    expect(find.byKey(const Key('peer-info-dialog-did-value')), findsOneWidget);
+    expect(find.text('关注'), findsOneWidget);
+
+    await tester.tap(find.bySemanticsLabel('关闭信息弹窗'));
     await tester.pumpAndSettle();
-    final afterResize = tester
-        .getSize(find.byKey(const Key('mac-side-panel')))
-        .width;
+    expect(find.text('用户信息'), findsNothing);
 
-    expect(afterResize, greaterThan(beforeResize));
-
-    await tester.tap(find.byKey(const Key('mac-side-panel-close-button')));
-    await tester.pumpAndSettle();
-
+    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
+    await tester.pump();
     expect(find.text('会话信息'), findsOneWidget);
-    expect(find.text('Marcus Chen 的身份卡'), findsNothing);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -871,7 +798,7 @@ void main() {
 
     await tester.tap(find.text('融资协作群').first);
     await tester.pumpAndSettle();
-    expect(find.text('会话信息'), findsOneWidget);
+    expect(find.text('会话信息'), findsNothing);
     expect(find.text('群聊信息'), findsOneWidget);
     expect(find.text('身份卡'), findsNothing);
 
@@ -1093,17 +1020,17 @@ void main() {
     await tester.tap(find.text('身份卡'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(ChatView), findsNothing);
-    expect(find.byKey(const Key('mac-inline-side-panel')), findsOneWidget);
+    expect(find.byType(ChatView), findsOneWidget);
+    expect(find.text('用户信息'), findsOneWidget);
     expect(find.byKey(const Key('mac-side-panel')), findsNothing);
-    expect(find.text('Marcus Chen 的身份卡'), findsOneWidget);
+    expect(find.byKey(const Key('mac-inline-side-panel')), findsNothing);
     expect(find.text('负责融资协作。'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('mac-compact-panel-back-button')));
+    await tester.tap(find.bySemanticsLabel('关闭信息弹窗'));
     await tester.pumpAndSettle();
 
     expect(find.byType(ChatView), findsOneWidget);
-    expect(find.text('Marcus Chen 的身份卡'), findsNothing);
+    expect(find.text('用户信息'), findsNothing);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -1389,15 +1316,15 @@ void main() {
 
     await tester.tap(find.text('Marcus Chen'));
     await tester.pumpAndSettle();
-    expect(find.text('会话信息'), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
-    await tester.pumpAndSettle();
     expect(find.text('会话信息'), findsNothing);
 
     await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
     await tester.pumpAndSettle();
     expect(find.text('会话信息'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('会话信息'), findsNothing);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

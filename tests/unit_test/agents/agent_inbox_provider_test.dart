@@ -29,6 +29,7 @@ void main() {
       expect(control.lastInboxDaemonDid, 'did:agent:daemon');
       expect(control.lastInboxRuntimeDid, 'did:agent:runtime');
       expect(control.lastInboxScope, 'group');
+      expect(control.lastInboxLimit, agentInboxPageSize);
       container.read(agentInboxProvider.notifier).applyControlPayload(
         <String, Object?>{
           'schema': AgentControlPayloads.statusSchema,
@@ -80,6 +81,101 @@ void main() {
     },
   );
 
+  test(
+    'inbox list sorts latest message first and thread messages by time',
+    () async {
+      final control = FakeAgentControlService()
+        ..nextInboxRequestId = 'cmd_inbox_current'
+        ..nextInboxThreadRequestId = 'cmd_thread_current';
+      final container = _container(control);
+      addTearDown(container.dispose);
+
+      await container
+          .read(agentInboxProvider.notifier)
+          .queryInbox(
+            daemonAgentDid: 'did:agent:daemon',
+            runtimeAgentDid: 'did:agent:runtime',
+          );
+      container.read(agentInboxProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'runtime_inbox',
+          'daemon_agent_did': 'did:agent:daemon',
+          'runtime_agent_did': 'did:agent:runtime',
+          'request_id': 'cmd_inbox_current',
+          'state': 'succeeded',
+          'result': <String, Object?>{
+            'items': <Object?>[
+              <String, Object?>{
+                'thread_id': 'dm:old',
+                'kind': 'direct',
+                'title': 'Old',
+                'last_message_preview': 'old',
+                'last_message_at_ms': 100,
+              },
+              <String, Object?>{
+                'thread_id': 'dm:new',
+                'kind': 'direct',
+                'title': 'New',
+                'last_message_preview': 'new',
+                'last_message_at_ms': 300,
+              },
+            ],
+          },
+        },
+      );
+
+      expect(
+        container.read(agentInboxProvider).items.map((item) => item.threadId),
+        <String>['dm:new', 'dm:old'],
+      );
+
+      await container
+          .read(agentInboxProvider.notifier)
+          .queryThread(
+            daemonAgentDid: 'did:agent:daemon',
+            runtimeAgentDid: 'did:agent:runtime',
+            item: container.read(agentInboxProvider).items.first,
+          );
+      expect(control.lastInboxThreadLimit, agentInboxPageSize);
+      container.read(agentInboxProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'runtime_inbox_thread',
+          'daemon_agent_did': 'did:agent:daemon',
+          'runtime_agent_did': 'did:agent:runtime',
+          'request_id': 'cmd_thread_current',
+          'state': 'succeeded',
+          'result': <String, Object?>{
+            'messages': <Object?>[
+              <String, Object?>{
+                'message_id': 'msg-late',
+                'sender_did': 'did:human:bob',
+                'text': 'late',
+                'sent_at_ms': 300,
+              },
+              <String, Object?>{
+                'message_id': 'msg-early',
+                'sender_did': 'did:human:bob',
+                'text': 'early',
+                'sent_at_ms': 100,
+              },
+            ],
+          },
+        },
+      );
+
+      expect(
+        container
+            .read(agentInboxProvider)
+            .thread
+            .messages
+            .map((message) => message.messageId),
+        <String>['msg-early', 'msg-late'],
+      );
+    },
+  );
+
   test('thread status payload parses attachment metadata', () async {
     final control = FakeAgentControlService()
       ..nextInboxThreadRequestId = 'cmd_thread_current';
@@ -106,6 +202,7 @@ void main() {
           item: item,
         );
     expect(control.lastInboxThreadPeerHandle, 'bob.anpclaw.com');
+    expect(control.lastInboxThreadLimit, agentInboxPageSize);
     container.read(agentInboxProvider.notifier).applyControlPayload(
       <String, Object?>{
         'schema': AgentControlPayloads.statusSchema,
@@ -270,6 +367,8 @@ void main() {
     control.nextInboxRequestId = 'cmd_inbox_page_2';
     await container.read(agentInboxProvider.notifier).loadMoreInbox();
     expect(control.lastInboxScope, 'all');
+    expect(control.lastInboxLimit, agentInboxPageSize);
+    expect(control.lastInboxCursor, '1');
     container.read(agentInboxProvider.notifier).applyControlPayload(
       <String, Object?>{
         'schema': AgentControlPayloads.statusSchema,
@@ -410,6 +509,8 @@ void main() {
 
     control.nextInboxThreadRequestId = 'cmd_thread_page_2';
     await container.read(agentInboxProvider.notifier).loadMoreThread();
+    expect(control.lastInboxThreadLimit, agentInboxPageSize);
+    expect(control.lastInboxThreadCursor, '1');
     container.read(agentInboxProvider.notifier).applyControlPayload(
       <String, Object?>{
         'schema': AgentControlPayloads.statusSchema,

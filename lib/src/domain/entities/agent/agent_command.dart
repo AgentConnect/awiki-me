@@ -101,7 +101,7 @@ Map<String, Object?> runtimeRunRetryPayload({
 Map<String, Object?> runtimeInboxQueryPayload({
   required String runtimeAgentDid,
   String scope = 'all',
-  int limit = 30,
+  int limit = 20,
   String? cursor,
   String? commandId,
 }) {
@@ -126,7 +126,7 @@ Map<String, Object?> runtimeInboxThreadQueryPayload({
   String? peerDid,
   String? peerHandle,
   String? groupDid,
-  int limit = 50,
+  int limit = 20,
   String? cursor,
   String? commandId,
 }) {
