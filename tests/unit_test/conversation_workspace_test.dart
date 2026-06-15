@@ -90,6 +90,41 @@ void main() {
     ),
   ];
 
+  testWidgets('最近会话显示未读 @ 我提示', (tester) async {
+    final mentionConversation = ConversationSummary(
+      threadId: 'group:did:group:mentions',
+      displayName: '项目群',
+      lastMessagePreview: '@Marcus 请看这里',
+      lastMessageAt: DateTime(2026, 3, 28, 10, 30),
+      unreadCount: 2,
+      unreadMentionCount: 1,
+      firstUnreadMentionMessageId: 'msg-mention-1',
+      isGroup: true,
+      groupId: 'did:group:mentions',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[mentionConversation];
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('项目群'), findsOneWidget);
+    expect(find.text('有人@我'), findsOneWidget);
+  });
+
   testWidgets('macOS 宽度下消息工作区默认关闭会话信息', (tester) async {
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[conversation]

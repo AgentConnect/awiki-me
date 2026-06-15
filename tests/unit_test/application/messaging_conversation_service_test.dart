@@ -7,6 +7,7 @@ import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/conversation_core_port.dart';
 import 'package:awiki_me/src/application/ports/message_core_port.dart';
 import 'package:awiki_me/src/data/local/awiki_product_local_store.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
@@ -626,6 +627,21 @@ class _FakeAgentInventory implements AgentInventoryPort {
   @override
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
     return agents;
+  }
+
+  @override
+  Future<AgentInvocationPolicy> getInvocationPolicy({
+    required String agentDid,
+  }) async {
+    return const AgentInvocationPolicy();
+  }
+
+  @override
+  Future<AgentInvocationPolicy> updateInvocationPolicy({
+    required String agentDid,
+    required AgentInvocationPolicy policy,
+  }) async {
+    return policy;
   }
 
   @override

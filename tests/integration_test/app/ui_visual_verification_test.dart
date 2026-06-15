@@ -125,11 +125,11 @@ void main() {
     await _pumpVisualApp(tester, agentsHarness);
     _appContainer(tester).read(shellTabProvider.notifier).setTab(1);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('创建 Hermes').first);
+    await tester.tap(find.text('创建 Agent').first);
     await tester.pumpAndSettle();
     expect(find.text('Agent 类型'), findsOneWidget);
     expect(find.text('当前仅支持 Hermes Runtime Agent'), findsOneWidget);
-    await _captureScreenshot(tester, '07-agent-create-hermes-type');
+    await _captureScreenshot(tester, '07-agent-create-agent-type');
   });
 }
 
@@ -341,13 +341,7 @@ Map<String, Object?> _threadPayload() {
           'direction': 'incoming',
           'content_type': 'text',
           'text': 'Can you summarize the roadmap?',
-          'sent_at_ms': DateTime(
-            2026,
-            6,
-            15,
-            10,
-            34,
-          ).millisecondsSinceEpoch,
+          'sent_at_ms': DateTime(2026, 6, 15, 10, 34).millisecondsSinceEpoch,
         },
         <String, Object?>{
           'message_id': 'msg-agent-1',
@@ -356,13 +350,7 @@ Map<String, Object?> _threadPayload() {
           'direction': 'outgoing',
           'content_type': 'text',
           'text': 'I will review the roadmap and reply with the top risks.',
-          'sent_at_ms': DateTime(
-            2026,
-            6,
-            15,
-            10,
-            35,
-          ).millisecondsSinceEpoch,
+          'sent_at_ms': DateTime(2026, 6, 15, 10, 35).millisecondsSinceEpoch,
         },
       ],
       'next_cursor': 'older-thread-20',
@@ -393,7 +381,6 @@ Future<void> _captureScreenshot(WidgetTester tester, String name) async {
   final image = await boundary.toImage(pixelRatio: 1);
   final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
   final bytes = byteData!.buffer.asUint8List();
-  await File('$_screenshotsDir/$name.png')
-      .writeAsBytes(bytes, flush: true);
+  await File('$_screenshotsDir/$name.png').writeAsBytes(bytes, flush: true);
   image.dispose();
 }

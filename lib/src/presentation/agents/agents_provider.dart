@@ -8,6 +8,7 @@ import '../../application/models/product_local_models.dart';
 import '../../data/agent/user_service_agent_inventory_adapter.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
+import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/install_command.dart';
@@ -29,6 +30,10 @@ class AgentsState {
     this.pendingStatusQueryAtByDaemon = const <String, DateTime>{},
     this.pendingDaemonUpgrades = const <String>{},
     this.seenControlEventIds = const <String>{},
+    this.invocationPolicies = const <String, AgentInvocationPolicy>{},
+    this.loadingInvocationPolicies = const <String>{},
+    this.savingInvocationPolicies = const <String>{},
+    this.invocationPolicyErrors = const <String, String>{},
   });
 
   final List<AgentSummary> agents;
@@ -40,6 +45,10 @@ class AgentsState {
   final Map<String, DateTime> pendingStatusQueryAtByDaemon;
   final Set<String> pendingDaemonUpgrades;
   final Set<String> seenControlEventIds;
+  final Map<String, AgentInvocationPolicy> invocationPolicies;
+  final Set<String> loadingInvocationPolicies;
+  final Set<String> savingInvocationPolicies;
+  final Map<String, String> invocationPolicyErrors;
 
   AgentSummary? get selectedAgent {
     final selectedDid = selectedAgentDid;
@@ -100,6 +109,10 @@ class AgentsState {
     Map<String, DateTime>? pendingStatusQueryAtByDaemon,
     Set<String>? pendingDaemonUpgrades,
     Set<String>? seenControlEventIds,
+    Map<String, AgentInvocationPolicy>? invocationPolicies,
+    Set<String>? loadingInvocationPolicies,
+    Set<String>? savingInvocationPolicies,
+    Map<String, String>? invocationPolicyErrors,
   }) {
     return AgentsState(
       agents: agents ?? this.agents,
@@ -117,6 +130,13 @@ class AgentsState {
       pendingDaemonUpgrades:
           pendingDaemonUpgrades ?? this.pendingDaemonUpgrades,
       seenControlEventIds: seenControlEventIds ?? this.seenControlEventIds,
+      invocationPolicies: invocationPolicies ?? this.invocationPolicies,
+      loadingInvocationPolicies:
+          loadingInvocationPolicies ?? this.loadingInvocationPolicies,
+      savingInvocationPolicies:
+          savingInvocationPolicies ?? this.savingInvocationPolicies,
+      invocationPolicyErrors:
+          invocationPolicyErrors ?? this.invocationPolicyErrors,
     );
   }
 }
@@ -148,6 +168,10 @@ class AgentsController extends StateNotifier<AgentsState> {
         isLoading: false,
         clearError: true,
       );
+      final selectedDid = state.selectedAgent?.agentDid;
+      if (selectedDid != null) {
+        unawaited(loadInvocationPolicy(selectedDid));
+      }
       for (final daemon in agents.where((agent) => agent.isDaemon)) {
         if (_shouldAutoRefresh(daemon)) {
           await refreshDaemonStatus(daemon.agentDid, fromAutoLoad: true);
@@ -163,6 +187,7 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   void select(String agentDid) {
     state = state.copyWith(selectedAgentDid: agentDid);
+    unawaited(loadInvocationPolicy(agentDid));
   }
 
   void clearSelection() {
@@ -394,6 +419,97 @@ class AgentsController extends StateNotifier<AgentsState> {
           );
       await load();
     });
+  }
+
+  Future<void> loadInvocationPolicy(String agentDid) async {
+    final normalized = agentDid.trim();
+    if (normalized.isEmpty ||
+        state.invocationPolicies.containsKey(normalized) ||
+        state.loadingInvocationPolicies.contains(normalized)) {
+      return;
+    }
+    state = state.copyWith(
+      loadingInvocationPolicies: <String>{
+        ...state.loadingInvocationPolicies,
+        normalized,
+      },
+      invocationPolicyErrors: _withoutStringKey(
+        state.invocationPolicyErrors,
+        normalized,
+      ),
+    );
+    try {
+      final policy = await ref
+          .read(agentControlServiceProvider)
+          .getInvocationPolicy(normalized);
+      state = state.copyWith(
+        invocationPolicies: <String, AgentInvocationPolicy>{
+          ...state.invocationPolicies,
+          normalized: policy,
+        },
+        loadingInvocationPolicies: _withoutSetValue(
+          state.loadingInvocationPolicies,
+          normalized,
+        ),
+      );
+    } catch (error) {
+      state = state.copyWith(
+        loadingInvocationPolicies: _withoutSetValue(
+          state.loadingInvocationPolicies,
+          normalized,
+        ),
+        invocationPolicyErrors: <String, String>{
+          ...state.invocationPolicyErrors,
+          normalized: _agentErrorMessage(error),
+        },
+      );
+    }
+  }
+
+  Future<void> saveInvocationPolicy(
+    String agentDid,
+    AgentInvocationPolicy policy,
+  ) async {
+    final normalized = agentDid.trim();
+    if (normalized.isEmpty || state.savingInvocationPolicies.contains(normalized)) {
+      return;
+    }
+    state = state.copyWith(
+      savingInvocationPolicies: <String>{
+        ...state.savingInvocationPolicies,
+        normalized,
+      },
+      invocationPolicyErrors: _withoutStringKey(
+        state.invocationPolicyErrors,
+        normalized,
+      ),
+    );
+    try {
+      final saved = await ref
+          .read(agentControlServiceProvider)
+          .updateInvocationPolicy(agentDid: normalized, policy: policy);
+      state = state.copyWith(
+        invocationPolicies: <String, AgentInvocationPolicy>{
+          ...state.invocationPolicies,
+          normalized: saved,
+        },
+        savingInvocationPolicies: _withoutSetValue(
+          state.savingInvocationPolicies,
+          normalized,
+        ),
+      );
+    } catch (error) {
+      state = state.copyWith(
+        savingInvocationPolicies: _withoutSetValue(
+          state.savingInvocationPolicies,
+          normalized,
+        ),
+        invocationPolicyErrors: <String, String>{
+          ...state.invocationPolicyErrors,
+          normalized: _agentErrorMessage(error),
+        },
+      );
+    }
   }
 
   void clearInstallCommand() {
@@ -998,6 +1114,16 @@ Map<String, DateTime> _withoutKey(Map<String, DateTime> input, String key) {
     return input;
   }
   return <String, DateTime>{
+    for (final entry in input.entries)
+      if (entry.key != key) entry.key: entry.value,
+  };
+}
+
+Map<String, String> _withoutStringKey(Map<String, String> input, String key) {
+  if (!input.containsKey(key)) {
+    return input;
+  }
+  return <String, String>{
     for (final entry in input.entries)
       if (entry.key != key) entry.key: entry.value,
   };

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/agent/agent_control_service.dart';
+import 'package:awiki_me/src/application/attachment_cache_service.dart';
 import 'package:awiki_me/src/application/attachment_picker_service.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
@@ -29,6 +30,7 @@ import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
@@ -69,6 +71,7 @@ Widget buildLocalizedTestApp({
   FakeE2eeFacade? e2eeFacade,
   FakeLocalePreferenceService? localePreferenceService,
   FakeUpdateService? updateService,
+  AttachmentCacheService? attachmentCacheService,
   SessionIdentity? session,
   UserProfile? profile,
   AppLocaleMode localeMode = AppLocaleMode.system,
@@ -104,6 +107,7 @@ Widget buildLocalizedTestApp({
       ...fakeApplicationServiceOverrides(
         resolvedGateway,
         realtimeGateway: resolvedRealtime,
+        attachmentCacheService: attachmentCacheService,
       ),
       appLocaleModeProvider.overrideWith((ref) => localeMode),
       sessionProvider.overrideWith((ref) {
@@ -143,6 +147,7 @@ Widget buildLocalizedTestApp({
 List<Override> fakeApplicationServiceOverrides(
   FakeAwikiGateway gateway, {
   FakeRealtimeGateway? realtimeGateway,
+  AttachmentCacheService? attachmentCacheService,
 }) {
   final resolvedRealtime = realtimeGateway ?? FakeRealtimeGateway();
   return <Override>[
@@ -156,6 +161,9 @@ List<Override> fakeApplicationServiceOverrides(
       FakeConversationService(gateway),
     ),
     messagingServiceProvider.overrideWithValue(FakeMessagingService(gateway)),
+    attachmentCacheServiceProvider.overrideWithValue(
+      attachmentCacheService ?? FakeAttachmentCacheService(),
+    ),
     productLocalStoreProvider.overrideWithValue(FakeProductLocalStore()),
     agentInventoryPortProvider.overrideWithValue(FakeAgentInventoryPort()),
     agentControlServiceProvider.overrideWithValue(FakeAgentControlService()),
@@ -268,6 +276,71 @@ class FakeAttachmentPickerService implements AttachmentPickerService {
   }
 }
 
+class FakeAttachmentCacheService implements AttachmentCacheService {
+  final Map<String, String> pathsByKey = <String, String>{};
+  final Map<String, Uint8List> bytesByKey = <String, Uint8List>{};
+  int cacheLocalSourceCalls = 0;
+  int cacheDownloadedBytesCalls = 0;
+  int lookupCalls = 0;
+  String? lastMessageId;
+  String? lastAttachmentId;
+  String? lastFilename;
+  String? lastMimeType;
+  String? lastSourcePath;
+
+  @override
+  Future<String?> cacheLocalSource({
+    required String messageId,
+    required String attachmentId,
+    required String filename,
+    required String mimeType,
+    required String sourcePath,
+  }) async {
+    cacheLocalSourceCalls += 1;
+    lastMessageId = messageId;
+    lastAttachmentId = attachmentId;
+    lastFilename = filename;
+    lastMimeType = mimeType;
+    lastSourcePath = sourcePath;
+    final path = '/tmp/awiki-test-cache/$messageId/$attachmentId/$filename';
+    pathsByKey[_key(messageId, attachmentId)] = path;
+    return path;
+  }
+
+  @override
+  Future<String> cacheDownloadedBytes({
+    required String messageId,
+    required String attachmentId,
+    required String filename,
+    required String mimeType,
+    required Uint8List bytes,
+  }) async {
+    cacheDownloadedBytesCalls += 1;
+    lastMessageId = messageId;
+    lastAttachmentId = attachmentId;
+    lastFilename = filename;
+    lastMimeType = mimeType;
+    bytesByKey[_key(messageId, attachmentId)] = bytes;
+    final path = '/tmp/awiki-test-cache/$messageId/$attachmentId/$filename';
+    pathsByKey[_key(messageId, attachmentId)] = path;
+    return path;
+  }
+
+  @override
+  Future<String?> lookup({
+    required String messageId,
+    required String attachmentId,
+  }) async {
+    lookupCalls += 1;
+    lastMessageId = messageId;
+    lastAttachmentId = attachmentId;
+    return pathsByKey[_key(messageId, attachmentId)];
+  }
+
+  String _key(String messageId, String attachmentId) =>
+      '$messageId::$attachmentId';
+}
+
 class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   List<SessionIdentity> localCredentials = const <SessionIdentity>[];
   List<ConversationSummary> conversations = const <ConversationSummary>[];
@@ -304,6 +377,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   bool failListFollowers = false;
   bool failNextJoinGroup = false;
   bool failNextAddGroupMember = false;
+  bool includeLocalPathInSentAttachment = true;
   Duration sendDelay = Duration.zero;
   SessionIdentity? refreshedSession;
   HandleRegistrationStatus handleRegistrationStatus =
@@ -958,7 +1032,9 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
         mimeType: attachment.mimeType,
         sizeBytes: attachment.sizeBytes,
         caption: caption,
-        localPath: attachment.localPath,
+        localPath: includeLocalPathInSentAttachment
+            ? attachment.localPath
+            : null,
       ),
     );
   }
@@ -1346,6 +1422,8 @@ class FakeMessagingService implements MessagingService {
 
 class FakeAgentInventoryPort implements AgentInventoryPort {
   List<AgentSummary> agents = const <AgentSummary>[];
+  Map<String, AgentInvocationPolicy> invocationPolicies =
+      <String, AgentInvocationPolicy>{};
   AgentRegistrationToken nextDaemonToken = const AgentRegistrationToken(
     token: 'daemon-token',
   );
@@ -1375,6 +1453,22 @@ class FakeAgentInventoryPort implements AgentInventoryPort {
   @override
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
     return agents;
+  }
+
+  @override
+  Future<AgentInvocationPolicy> getInvocationPolicy({
+    required String agentDid,
+  }) async {
+    return invocationPolicies[agentDid] ?? const AgentInvocationPolicy();
+  }
+
+  @override
+  Future<AgentInvocationPolicy> updateInvocationPolicy({
+    required String agentDid,
+    required AgentInvocationPolicy policy,
+  }) async {
+    invocationPolicies[agentDid] = policy;
+    return policy;
   }
 
   @override
@@ -1458,6 +1552,10 @@ class FakeAgentControlService implements AgentControlService {
   String? lastRenamedAgentDid;
   String? lastDisplayName;
   String? lastUpgradeDaemonDid;
+  Map<String, AgentInvocationPolicy> invocationPolicies =
+      <String, AgentInvocationPolicy>{};
+  String? lastInvocationPolicyAgentDid;
+  AgentInvocationPolicy? lastInvocationPolicy;
 
   @override
   Future<InstallCommand> createDaemonInstallCommand({
@@ -1498,6 +1596,22 @@ class FakeAgentControlService implements AgentControlService {
   @override
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
     return agents;
+  }
+
+  @override
+  Future<AgentInvocationPolicy> getInvocationPolicy(String agentDid) async {
+    return invocationPolicies[agentDid] ?? const AgentInvocationPolicy();
+  }
+
+  @override
+  Future<AgentInvocationPolicy> updateInvocationPolicy({
+    required String agentDid,
+    required AgentInvocationPolicy policy,
+  }) async {
+    lastInvocationPolicyAgentDid = agentDid;
+    lastInvocationPolicy = policy;
+    invocationPolicies[agentDid] = policy;
+    return policy;
   }
 
   @override

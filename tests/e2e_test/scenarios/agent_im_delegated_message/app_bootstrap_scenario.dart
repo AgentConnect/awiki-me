@@ -8,6 +8,7 @@ import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
@@ -249,6 +250,21 @@ final class _ScenarioAgentInventory implements AgentInventoryPort {
   @override
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
     return const <AgentSummary>[];
+  }
+
+  @override
+  Future<AgentInvocationPolicy> getInvocationPolicy({
+    required String agentDid,
+  }) async {
+    return const AgentInvocationPolicy();
+  }
+
+  @override
+  Future<AgentInvocationPolicy> updateInvocationPolicy({
+    required String agentDid,
+    required AgentInvocationPolicy policy,
+  }) async {
+    return policy;
   }
 
   @override

@@ -276,6 +276,10 @@ ConversationSummary _mergeConversationDuplicate(
   return latest.copyWith(
     threadId: identity.threadId,
     unreadCount: first.unreadCount + second.unreadCount,
+    unreadMentionCount: first.unreadMentionCount + second.unreadMentionCount,
+    firstUnreadMentionMessageId:
+        first.firstUnreadMentionMessageId ??
+        second.firstUnreadMentionMessageId,
     targetDid: identity.targetDid ?? latest.targetDid ?? other.targetDid,
     targetPeer:
         _preferredTargetPeer(first, second) ??

@@ -474,7 +474,10 @@ class ChatThreadsController
             idempotencyKey: pending.localId,
           )
           .timeout(_attachmentSendTimeout);
-      final sentInThread = _withThreadId(sent, conversation.threadId);
+      final sentInThread = await _withCachedSentAttachment(
+        sent: _withThreadId(sent, conversation.threadId),
+        originalAttachment: attachment,
+      );
       _replaceMessage(conversation.threadId, pending.localId, sentInThread);
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
@@ -603,7 +606,15 @@ class ChatThreadsController
             idempotencyKey: message.localId,
           )
           .timeout(_attachmentSendTimeout);
-      final retriedInThread = _withThreadId(retried, conversation.threadId);
+      final retriedInThread = await _withCachedSentAttachment(
+        sent: _withThreadId(retried, conversation.threadId),
+        originalAttachment: AttachmentDraft(
+          filename: attachment.filename,
+          mimeType: attachment.mimeType,
+          localPath: localPath,
+          sizeBytes: attachment.sizeBytes,
+        ),
+      );
       _replaceMessage(conversation.threadId, message.localId, retriedInThread);
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
@@ -700,17 +711,36 @@ class ChatThreadsController
     ChatMessage replacement,
   ) {
     final current = List<ChatMessage>.from(thread(threadId).messages);
+    ChatMessage? existing;
     final index = current.indexWhere((item) => item.localId == localId);
     if (index >= 0) {
-      current.removeAt(index);
+      existing = current.removeAt(index);
     } else if (replacement.sendState != MessageSendState.sent) {
       return;
     }
     final replacementIndex = _matchingMessageIndex(current, replacement);
     if (replacementIndex >= 0) {
-      current[replacementIndex] = replacement;
+      final merged = _withPreservedAttachmentState(
+        replacement,
+        current[replacementIndex],
+      );
+      current[replacementIndex] = existing == null
+          ? merged
+          : _withPreservedAttachmentState(
+              merged,
+              existing,
+              trustMessageMatch: true,
+            );
     } else {
-      current.add(replacement);
+      current.add(
+        existing == null
+            ? replacement
+            : _withPreservedAttachmentState(
+                replacement,
+                existing,
+                trustMessageMatch: true,
+              ),
+      );
     }
     _setMessages(threadId, current);
   }
@@ -729,7 +759,7 @@ class ChatThreadsController
     )) {
       final index = _matchingMessageIndex(current, message);
       if (index >= 0) {
-        current[index] = message;
+        current[index] = _withPreservedAttachmentState(message, current[index]);
       } else {
         current.add(message);
         newlyMergedMessages.add(message);
@@ -758,6 +788,113 @@ class ChatThreadsController
     } else {
       _scheduleAgentProcessingOverdue(threadId);
     }
+  }
+
+  Future<ChatMessage> _withCachedSentAttachment({
+    required ChatMessage sent,
+    required AttachmentDraft originalAttachment,
+  }) async {
+    final attachment = sent.attachment;
+    if (attachment == null) {
+      return sent;
+    }
+    final messageId = _stableMessageId(sent);
+    if (messageId.isEmpty || attachment.attachmentId.trim().isEmpty) {
+      return sent;
+    }
+    String? cachedPath;
+    final sourcePath = originalAttachment.localPath?.trim();
+    try {
+      if (sourcePath != null && sourcePath.isNotEmpty) {
+        cachedPath = await ref
+            .read(attachmentCacheServiceProvider)
+            .cacheLocalSource(
+              messageId: messageId,
+              attachmentId: attachment.attachmentId,
+              filename: attachment.filename,
+              mimeType: attachment.mimeType,
+              sourcePath: sourcePath,
+            );
+      } else {
+        final bytes = originalAttachment.bytes;
+        if (bytes != null) {
+          cachedPath = await ref
+              .read(attachmentCacheServiceProvider)
+              .cacheDownloadedBytes(
+                messageId: messageId,
+                attachmentId: attachment.attachmentId,
+                filename: attachment.filename,
+                mimeType: attachment.mimeType,
+                bytes: bytes,
+              );
+        }
+      }
+    } catch (_) {
+      cachedPath = null;
+    }
+    final resolvedPath = _normalizedOptionalText(cachedPath);
+    if (resolvedPath == null) {
+      return sent;
+    }
+    return sent.copyWith(
+      attachment: attachment.copyWith(
+        localPath: resolvedPath,
+        hasLocalSource: true,
+      ),
+    );
+  }
+
+  ChatMessage _withPreservedAttachmentState(
+    ChatMessage incoming,
+    ChatMessage existing, {
+    bool trustMessageMatch = false,
+  }) {
+    final incomingAttachment = incoming.attachment;
+    final existingAttachment = existing.attachment;
+    if (incomingAttachment == null || existingAttachment == null) {
+      return incoming;
+    }
+    if (!trustMessageMatch && !_isSameAttachment(incoming, existing)) {
+      return incoming;
+    }
+    final existingPath = existingAttachment.localPath?.trim();
+    if (existingPath == null || existingPath.isEmpty) {
+      return incoming;
+    }
+    final incomingPath = incomingAttachment.localPath?.trim();
+    if (incomingPath != null && incomingPath.isNotEmpty) {
+      return incoming;
+    }
+    return incoming.copyWith(
+      attachment: incomingAttachment.copyWith(
+        localPath: existingPath,
+        hasLocalSource:
+            incomingAttachment.hasLocalSource ||
+            existingAttachment.hasLocalSource,
+      ),
+    );
+  }
+
+  bool _isSameAttachment(ChatMessage first, ChatMessage second) {
+    final firstAttachment = first.attachment;
+    final secondAttachment = second.attachment;
+    if (firstAttachment == null || secondAttachment == null) {
+      return false;
+    }
+    if (_stableMessageId(first) == _stableMessageId(second)) {
+      return firstAttachment.attachmentId == secondAttachment.attachmentId;
+    }
+    return firstAttachment.attachmentId == secondAttachment.attachmentId &&
+        firstAttachment.filename == secondAttachment.filename &&
+        firstAttachment.mimeType == secondAttachment.mimeType;
+  }
+
+  String _stableMessageId(ChatMessage message) {
+    final remoteId = message.remoteId?.trim();
+    if (remoteId != null && remoteId.isNotEmpty) {
+      return remoteId;
+    }
+    return message.localId.trim();
   }
 
   void _startAgentProcessingForDeliveredMessage({

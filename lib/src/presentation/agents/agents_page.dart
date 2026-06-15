@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
 import '../../application/config/awiki_environment_config.dart';
+import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/install_command.dart';
 import '../../domain/entities/agent/agent_summary.dart';
@@ -89,6 +90,9 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
           _confirmResetRuntimeSession(context, ref, agent),
       onUpgrade: (agent) => _confirmUpgradeDaemon(context, ref, agent),
       onDelete: (agent) => _confirmDeleteAgent(context, ref, agent),
+      onSaveInvocationPolicy: (agentDid, policy) => ref
+          .read(agentsProvider.notifier)
+          .saveInvocationPolicy(agentDid, policy),
     );
 
     if (responsive.supportsTwoPane) {
@@ -671,6 +675,7 @@ class _AgentDetailPane extends StatelessWidget {
     required this.onResetRuntime,
     required this.onUpgrade,
     required this.onDelete,
+    required this.onSaveInvocationPolicy,
   });
 
   final AgentsState state;
@@ -684,6 +689,8 @@ class _AgentDetailPane extends StatelessWidget {
   final ValueChanged<AgentSummary> onResetRuntime;
   final ValueChanged<AgentSummary> onUpgrade;
   final ValueChanged<AgentSummary> onDelete;
+  final Future<void> Function(String agentDid, AgentInvocationPolicy policy)
+  onSaveInvocationPolicy;
 
   @override
   Widget build(BuildContext context) {
@@ -741,7 +748,7 @@ class _AgentDetailPane extends StatelessWidget {
                   if (agent.isDaemon)
                     _ActionButton(
                       icon: CupertinoIcons.sparkles,
-                      label: '创建 Hermes',
+                      label: '创建 Agent',
                       onPressed: state.isActing || agent.latest.needsUpgrade
                           ? null
                           : () => onCreateRuntime(agent),
@@ -803,6 +810,21 @@ class _AgentDetailPane extends StatelessWidget {
               _RunStatusPanel(run: agent.recentRuns.first),
               SizedBox(height: responsive.spacing(18)),
             ],
+            _AgentAccessPolicyPanel(
+              key: ValueKey<String>('access-policy-${agent.agentDid}'),
+              agent: agent,
+              policy:
+                  state.invocationPolicies[agent.agentDid] ??
+                  const AgentInvocationPolicy(),
+              isLoading: state.loadingInvocationPolicies.contains(
+                agent.agentDid,
+              ),
+              isSaving: state.savingInvocationPolicies.contains(agent.agentDid),
+              errorText: state.invocationPolicyErrors[agent.agentDid],
+              onSave: (policy) =>
+                  onSaveInvocationPolicy(agent.agentDid, policy),
+            ),
+            SizedBox(height: responsive.spacing(18)),
             _DiagnosticInfoPanel(
               key: ValueKey<String>('diagnostic-${agent.agentDid}'),
               agent: agent,
@@ -876,6 +898,451 @@ class _RunStatusPanel extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _AgentAccessPolicyPanel extends StatefulWidget {
+  const _AgentAccessPolicyPanel({
+    super.key,
+    required this.agent,
+    required this.policy,
+    required this.isLoading,
+    required this.isSaving,
+    required this.errorText,
+    required this.onSave,
+  });
+
+  final AgentSummary agent;
+  final AgentInvocationPolicy policy;
+  final bool isLoading;
+  final bool isSaving;
+  final String? errorText;
+  final Future<void> Function(AgentInvocationPolicy policy) onSave;
+
+  @override
+  State<_AgentAccessPolicyPanel> createState() =>
+      _AgentAccessPolicyPanelState();
+}
+
+class _AgentAccessPolicyPanelState extends State<_AgentAccessPolicyPanel> {
+  late AgentInvocationPolicyMode _activeMode;
+  late final TextEditingController _whitelistController;
+  late final TextEditingController _blacklistController;
+  bool _savingLocally = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _activeMode = widget.policy.activeMode;
+    _whitelistController = TextEditingController(
+      text: _handlesText(widget.policy.whitelistHandles),
+    )..addListener(_onChanged);
+    _blacklistController = TextEditingController(
+      text: _handlesText(widget.policy.blacklistHandles),
+    )..addListener(_onChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _AgentAccessPolicyPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.agent.agentDid != widget.agent.agentDid ||
+        oldWidget.policy != widget.policy) {
+      _activeMode = widget.policy.activeMode;
+      _setControllerText(
+        _whitelistController,
+        _handlesText(widget.policy.whitelistHandles),
+      );
+      _setControllerText(
+        _blacklistController,
+        _handlesText(widget.policy.blacklistHandles),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _whitelistController
+      ..removeListener(_onChanged)
+      ..dispose();
+    _blacklistController
+      ..removeListener(_onChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _onChanged() {
+    setState(() {});
+  }
+
+  void _setControllerText(TextEditingController controller, String text) {
+    if (controller.text == text) {
+      return;
+    }
+    controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
+  AgentInvocationPolicy _draftPolicy() {
+    return widget.policy.copyWith(
+      activeMode: _activeMode,
+      whitelistHandles: _parseHandleList(_whitelistController.text),
+      blacklistHandles: _parseHandleList(_blacklistController.text),
+    );
+  }
+
+  bool get _isDirty {
+    final draft = _draftPolicy();
+    return draft.activeMode != widget.policy.activeMode ||
+        !_sameStringList(
+          draft.whitelistHandles,
+          widget.policy.whitelistHandles,
+        ) ||
+        !_sameStringList(
+          draft.blacklistHandles,
+          widget.policy.blacklistHandles,
+        );
+  }
+
+  Future<void> _save() async {
+    if (!_isDirty || widget.isSaving || _savingLocally) {
+      return;
+    }
+    setState(() => _savingLocally = true);
+    try {
+      await widget.onSave(_draftPolicy());
+    } finally {
+      if (mounted) {
+        setState(() => _savingLocally = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final saving = widget.isSaving || _savingLocally;
+    return Container(
+      padding: EdgeInsets.all(responsive.spacing(16)),
+      decoration: BoxDecoration(
+        color: CupertinoColors.white,
+        borderRadius: BorderRadius.circular(responsive.radius(10)),
+        border: Border.all(color: const Color(0xFFE4EAF3)),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x0F0B1220),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: responsive.displayScaled(34),
+                height: responsive.displayScaled(34),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0F5FF),
+                  borderRadius: BorderRadius.circular(responsive.radius(9)),
+                ),
+                child: Icon(
+                  CupertinoIcons.lock_shield,
+                  color: const Color(0xFF0B65F8),
+                  size: responsive.iconMd,
+                ),
+              ),
+              SizedBox(width: responsive.spacing(10)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      '访问权限',
+                      style: TextStyle(
+                        color: const Color(0xFF101B32),
+                        fontSize: responsive.bodyMd,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: responsive.spacing(2)),
+                    Text(
+                      widget.agent.isDaemon
+                          ? '控制哪些 Handle 可以访问这个代理'
+                          : '控制哪些 Handle 可以访问这个智能体',
+                      style: TextStyle(
+                        color: const Color(0xFF66728A),
+                        fontSize: responsive.metaSm,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (widget.isLoading)
+                const CupertinoActivityIndicator()
+              else
+                _AccessSaveButton(
+                  isSaving: saving,
+                  enabled: _isDirty && !saving,
+                  onPressed: _save,
+                ),
+            ],
+          ),
+          SizedBox(height: responsive.spacing(14)),
+          SelectionContainer.disabled(
+            child: _AccessModeSwitch(
+              activeMode: _activeMode,
+              onChanged: saving
+                  ? null
+                  : (mode) => setState(() => _activeMode = mode),
+            ),
+          ),
+          SizedBox(height: responsive.spacing(12)),
+          _AccessHandleEditor(
+            fieldKey: const Key('agent-access-whitelist-field'),
+            label: '白名单',
+            controller: _whitelistController,
+            enabled: !saving,
+            active: _activeMode == AgentInvocationPolicyMode.whitelist,
+          ),
+          SizedBox(height: responsive.spacing(10)),
+          _AccessHandleEditor(
+            fieldKey: const Key('agent-access-blacklist-field'),
+            label: '黑名单',
+            controller: _blacklistController,
+            enabled: !saving,
+            active: _activeMode == AgentInvocationPolicyMode.blacklist,
+          ),
+          if (widget.errorText != null) ...<Widget>[
+            SizedBox(height: responsive.spacing(12)),
+            _DiagnosticNotice(text: widget.errorText!),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AccessModeSwitch extends StatelessWidget {
+  const _AccessModeSwitch({required this.activeMode, required this.onChanged});
+
+  final AgentInvocationPolicyMode activeMode;
+  final ValueChanged<AgentInvocationPolicyMode>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Container(
+      padding: EdgeInsets.all(responsive.spacing(3)),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F7FC),
+        borderRadius: BorderRadius.circular(responsive.radius(8)),
+        border: Border.all(color: const Color(0xFFE2E8F2)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: _AccessModeButton(
+              label: '白名单模式',
+              selected: activeMode == AgentInvocationPolicyMode.whitelist,
+              onTap: onChanged == null
+                  ? null
+                  : () => onChanged!(AgentInvocationPolicyMode.whitelist),
+            ),
+          ),
+          Expanded(
+            child: _AccessModeButton(
+              label: '黑名单模式',
+              selected: activeMode == AgentInvocationPolicyMode.blacklist,
+              onTap: onChanged == null
+                  ? null
+                  : () => onChanged!(AgentInvocationPolicyMode.blacklist),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccessModeButton extends StatelessWidget {
+  const _AccessModeButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return AppPressable(
+      onTap: onTap,
+      semanticLabel: label,
+      tooltip: label,
+      borderRadius: BorderRadius.circular(responsive.radius(7)),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        alignment: Alignment.center,
+        padding: EdgeInsets.symmetric(vertical: responsive.spacing(8)),
+        decoration: BoxDecoration(
+          color: selected ? CupertinoColors.white : CupertinoColors.transparent,
+          borderRadius: BorderRadius.circular(responsive.radius(7)),
+          boxShadow: selected
+              ? const <BoxShadow>[
+                  BoxShadow(
+                    color: Color(0x140B1220),
+                    blurRadius: 10,
+                    offset: Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: selected ? const Color(0xFF0B65F8) : const Color(0xFF66728A),
+            fontSize: responsive.metaSm,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccessHandleEditor extends StatelessWidget {
+  const _AccessHandleEditor({
+    required this.fieldKey,
+    required this.label,
+    required this.controller,
+    required this.enabled,
+    required this.active,
+  });
+
+  final Key fieldKey;
+  final String label;
+  final TextEditingController controller;
+  final bool enabled;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return AnimatedOpacity(
+      opacity: active ? 1 : 0.72,
+      duration: const Duration(milliseconds: 120),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: const Color(0xFF40506B),
+                    fontSize: responsive.metaSm,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Text(
+                active ? '当前生效' : '已保存备用',
+                style: TextStyle(
+                  color: active
+                      ? const Color(0xFF0B65F8)
+                      : const Color(0xFF8A96AA),
+                  fontSize: responsive.metaSm,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: responsive.spacing(6)),
+          CupertinoTextField(
+            key: fieldKey,
+            controller: controller,
+            enabled: enabled,
+            minLines: 2,
+            maxLines: 5,
+            placeholder: 'bob 或 bob.example.com',
+            padding: EdgeInsets.symmetric(
+              horizontal: responsive.spacing(12),
+              vertical: responsive.spacing(10),
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFD),
+              borderRadius: BorderRadius.circular(responsive.radius(8)),
+              border: Border.all(color: const Color(0xFFDDE5F1)),
+            ),
+            style: TextStyle(
+              color: const Color(0xFF101B32),
+              fontSize: responsive.bodySm,
+              height: 1.3,
+            ),
+            placeholderStyle: TextStyle(
+              color: const Color(0xFF98A4B8),
+              fontSize: responsive.bodySm,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccessSaveButton extends StatelessWidget {
+  const _AccessSaveButton({
+    required this.isSaving,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final bool isSaving;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return AppPressable(
+      key: const Key('agent-access-save-button'),
+      onTap: enabled ? onPressed : null,
+      enabled: enabled,
+      semanticLabel: '保存访问权限',
+      tooltip: '保存',
+      borderRadius: BorderRadius.circular(responsive.radius(8)),
+      child: Container(
+        constraints: BoxConstraints(minHeight: responsive.displayScaled(32)),
+        padding: EdgeInsets.symmetric(horizontal: responsive.spacing(12)),
+        decoration: BoxDecoration(
+          color: enabled ? const Color(0xFF0B65F8) : const Color(0xFFE8EDF5),
+          borderRadius: BorderRadius.circular(responsive.radius(8)),
+        ),
+        alignment: Alignment.center,
+        child: isSaving
+            ? const CupertinoActivityIndicator(color: CupertinoColors.white)
+            : Text(
+                '保存',
+                style: TextStyle(
+                  color: enabled
+                      ? CupertinoColors.white
+                      : const Color(0xFF8A96AA),
+                  fontSize: responsive.metaSm,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
       ),
     );
   }
@@ -1498,6 +1965,39 @@ Color _runStatusColor(String status) {
   }
 }
 
+String _handlesText(List<String> handles) {
+  return handles.join('\n');
+}
+
+List<String> _parseHandleList(String text) {
+  final seen = <String>{};
+  final result = <String>[];
+  for (final token in text.split(RegExp(r'[\s,，;；]+'))) {
+    final normalized = token
+        .trim()
+        .replaceFirst(RegExp(r'^@+'), '')
+        .toLowerCase();
+    if (normalized.isEmpty || seen.contains(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    result.add(normalized);
+  }
+  return result;
+}
+
+bool _sameStringList(List<String> left, List<String> right) {
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var index = 0; index < left.length; index++) {
+    if (left[index] != right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 Set<String> _pendingAgentDids(Map<String, ChatThreadState> threads) {
   return <String>{
     for (final thread in threads.values)
@@ -1611,6 +2111,7 @@ Future<void> _showRenameAgentDialog(
       content: Padding(
         padding: const EdgeInsets.only(top: 10),
         child: CupertinoTextField(
+          key: const Key('agent-rename-field'),
           controller: controller,
           autofocus: true,
           maxLength: 40,
@@ -1897,7 +2398,7 @@ class _CreateHermesDialogState extends State<_CreateHermesDialog> {
                       children: <Widget>[
                         Expanded(
                           child: Text(
-                            '创建 Hermes',
+                            '创建 Agent',
                             style: TextStyle(
                               color: const Color(0xFF101B32),
                               fontSize: responsive.titleLg,
@@ -1924,6 +2425,7 @@ class _CreateHermesDialogState extends State<_CreateHermesDialog> {
                     const _AgentTypeSelector(),
                     SizedBox(height: responsive.spacing(12)),
                     _AgentDialogField(
+                      fieldKey: const Key('agent-create-name-field'),
                       label: '名称',
                       controller: _nameController,
                       placeholder: 'Hermes',
@@ -1932,6 +2434,7 @@ class _CreateHermesDialogState extends State<_CreateHermesDialog> {
                     ),
                     SizedBox(height: responsive.spacing(12)),
                     _AgentDialogField(
+                      fieldKey: const Key('agent-create-handle-field'),
                       label: 'Handle',
                       controller: _handleController,
                       placeholder: 'my-hermes',
@@ -2083,6 +2586,7 @@ class _AgentTypeSelector extends StatelessWidget {
 
 class _AgentDialogField extends StatelessWidget {
   const _AgentDialogField({
+    required this.fieldKey,
     required this.label,
     required this.controller,
     required this.placeholder,
@@ -2093,6 +2597,7 @@ class _AgentDialogField extends StatelessWidget {
     this.onSubmitted,
   });
 
+  final Key fieldKey;
   final String label;
   final TextEditingController controller;
   final String placeholder;
@@ -2119,6 +2624,7 @@ class _AgentDialogField extends StatelessWidget {
         ),
         SizedBox(height: responsive.spacing(6)),
         CupertinoTextField(
+          key: fieldKey,
           controller: controller,
           focusNode: focusNode,
           placeholder: placeholder,
@@ -2393,6 +2899,7 @@ Future<void> _showRetryRunDialog(
       content: Padding(
         padding: const EdgeInsets.only(top: 10),
         child: CupertinoTextField(
+          key: const Key('agent-retry-run-field'),
           controller: controller,
           autofocus: true,
           placeholder: 'run_id',

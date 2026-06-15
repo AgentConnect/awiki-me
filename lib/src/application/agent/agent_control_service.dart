@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart' as crypto;
 import '../config/awiki_environment_config.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/agent/agent_command.dart';
+import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/install_command.dart';
 import '../models/app_thread_ref.dart';
@@ -72,6 +73,11 @@ abstract interface class AgentControlService {
     required String displayName,
   });
   Future<void> unbindAgent(String agentDid);
+  Future<AgentInvocationPolicy> getInvocationPolicy(String agentDid);
+  Future<AgentInvocationPolicy> updateInvocationPolicy({
+    required String agentDid,
+    required AgentInvocationPolicy policy,
+  });
 }
 
 class DefaultAgentControlService implements AgentControlService {
@@ -353,6 +359,22 @@ class DefaultAgentControlService implements AgentControlService {
   @override
   Future<void> unbindAgent(String agentDid) {
     return _inventory.unbindAgent(agentDid: agentDid);
+  }
+
+  @override
+  Future<AgentInvocationPolicy> getInvocationPolicy(String agentDid) {
+    return _inventory.getInvocationPolicy(agentDid: agentDid);
+  }
+
+  @override
+  Future<AgentInvocationPolicy> updateInvocationPolicy({
+    required String agentDid,
+    required AgentInvocationPolicy policy,
+  }) {
+    return _inventory.updateInvocationPolicy(
+      agentDid: agentDid,
+      policy: policy,
+    );
   }
 
   Future<void> _sendDaemonPayload(

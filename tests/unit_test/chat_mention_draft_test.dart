@@ -47,6 +47,44 @@ void main() {
 
   group('mention candidate search', () {
     test(
+      'typed human and agent members are selectable with explicit badges',
+      () {
+        final candidates =
+            ChatMentionCandidate.forGroupMembers(const <GroupMemberSummary>[
+              GroupMemberSummary(
+                userId: 'did:wba:awiki.info:u:alice',
+                did: 'did:wba:awiki.info:u:alice',
+                handle: 'alice',
+                role: 'member',
+                displayName: 'Alice',
+                subjectType: GroupMemberSubjectType.human,
+              ),
+              GroupMemberSummary(
+                userId: 'did:agent:hermes',
+                did: 'did:agent:hermes',
+                handle: 'hermes',
+                role: 'member',
+                displayName: 'Hermes',
+                subjectType: GroupMemberSubjectType.agent,
+              ),
+            ], query: '');
+
+        final human = candidates.singleWhere(
+          (candidate) => candidate.id == 'member:did:wba:awiki.info:u:alice',
+        );
+        final agent = candidates.singleWhere(
+          (candidate) => candidate.id == 'member:did:agent:hermes',
+        );
+        expect(human.enabled, isTrue);
+        expect(human.badge, '用户');
+        expect(human.target.kind, ChatMentionTargetKind.human);
+        expect(agent.enabled, isTrue);
+        expect(agent.badge, '智能体');
+        expect(agent.target.kind, ChatMentionTargetKind.agent);
+      },
+    );
+
+    test(
       'filters by displayName, handle, and DID without using displayName as identity',
       () {
         final candidates =

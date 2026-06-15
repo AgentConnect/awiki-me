@@ -1,5 +1,6 @@
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/install_command.dart';
+import '../../domain/entities/agent/agent_invocation_policy.dart';
 
 abstract interface class AgentInventoryPort {
   Future<List<AgentSummary>> listAgents({bool includeInactive = false});
@@ -10,6 +11,15 @@ abstract interface class AgentInventoryPort {
   });
 
   Future<void> unbindAgent({required String agentDid});
+
+  Future<AgentInvocationPolicy> getInvocationPolicy({
+    required String agentDid,
+  });
+
+  Future<AgentInvocationPolicy> updateInvocationPolicy({
+    required String agentDid,
+    required AgentInvocationPolicy policy,
+  });
 
   Future<AgentRegistrationToken> issueDaemonToken({
     required String controllerDid,

@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/attachment_picker_service.dart';
+import '../application/attachment_cache_service.dart';
+import '../application/attachment_preview_service.dart';
 import '../application/app_session_service.dart';
 import '../application/agent/agent_control_service.dart';
 import '../application/agent/agent_control_status_store.dart';
@@ -20,6 +22,7 @@ import '../application/profile_application_service.dart';
 import '../application/realtime_application_service.dart';
 import '../application/relationship_application_service.dart';
 import '../data/services/locale_preference_service.dart';
+import '../data/services/file_attachment_cache_service.dart';
 import '../data/services/method_channel_attachment_picker_service.dart';
 import '../data/services/user_service_peer_identity_service.dart';
 import '../domain/entities/realtime_update.dart';
@@ -171,4 +174,14 @@ final updateServiceProvider = Provider<UpdateService>(
 
 final attachmentPickerServiceProvider = Provider<AttachmentPickerService>(
   (ref) => MethodChannelAttachmentPickerService(),
+);
+
+final attachmentCacheServiceProvider = Provider<AttachmentCacheService>(
+  (ref) => FileAttachmentCacheService(),
+);
+
+final attachmentPreviewServiceProvider = Provider<AttachmentPreviewService>(
+  (ref) => AttachmentPreviewService(
+    cache: ref.watch(attachmentCacheServiceProvider),
+  ),
 );

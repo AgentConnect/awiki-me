@@ -4,6 +4,7 @@ import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
@@ -381,12 +382,40 @@ void main() {
       'https://awiki.info/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
     );
   });
+
+  test('invocation policy calls stay on inventory boundary', () async {
+    final inventory = _InventoryStub();
+    final service = DefaultAgentControlService(
+      inventory: inventory,
+      messages: _MessagesStub(),
+    );
+    const policy = AgentInvocationPolicy(
+      activeMode: AgentInvocationPolicyMode.blacklist,
+      whitelistHandles: <String>['alice@awiki.info'],
+      blacklistHandles: <String>['bob@awiki.info'],
+    );
+
+    final saved = await service.updateInvocationPolicy(
+      agentDid: 'did:agent:runtime',
+      policy: policy,
+    );
+    final loaded = await service.getInvocationPolicy('did:agent:runtime');
+
+    expect(saved, policy);
+    expect(loaded, policy);
+    expect(inventory.lastInvocationPolicyAgentDid, 'did:agent:runtime');
+    expect(inventory.lastInvocationPolicy, policy);
+  });
 }
 
 class _InventoryStub implements AgentInventoryPort {
   String? runtimeTokenDaemonDid;
   String? runtimeTokenHandle;
   String? runtimeTokenDisplayName;
+  final Map<String, AgentInvocationPolicy> invocationPolicies =
+      <String, AgentInvocationPolicy>{};
+  String? lastInvocationPolicyAgentDid;
+  AgentInvocationPolicy? lastInvocationPolicy;
 
   @override
   Future<AgentRegistrationToken> issueDaemonToken({
@@ -413,6 +442,24 @@ class _InventoryStub implements AgentInventoryPort {
   @override
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
     return const <AgentSummary>[];
+  }
+
+  @override
+  Future<AgentInvocationPolicy> getInvocationPolicy({
+    required String agentDid,
+  }) async {
+    return invocationPolicies[agentDid] ?? const AgentInvocationPolicy();
+  }
+
+  @override
+  Future<AgentInvocationPolicy> updateInvocationPolicy({
+    required String agentDid,
+    required AgentInvocationPolicy policy,
+  }) async {
+    lastInvocationPolicyAgentDid = agentDid;
+    lastInvocationPolicy = policy;
+    invocationPolicies[agentDid] = policy;
+    return policy;
   }
 
   @override

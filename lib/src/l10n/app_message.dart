@@ -156,6 +156,9 @@ class AppMessage {
   factory AppMessage.conversationRemovedFromRecents() =>
       const AppMessage._('conversationRemovedFromRecents');
 
+  factory AppMessage.attachmentUnavailable() =>
+      const AppMessage._('attachmentUnavailable');
+
   factory AppMessage.fromError(Object error) {
     final raw = _normalize(error);
     if (raw.isEmpty) {
@@ -364,6 +367,8 @@ class AppMessage {
         return l10n.peerProfileThreadDeleted;
       case 'conversationRemovedFromRecents':
         return '已从最近会话移除';
+      case 'attachmentUnavailable':
+        return '附件文件已过期或本机缓存不存在，请让对方重新发送。';
       case 'raw':
         return detail ?? l10n.operationFailedRetry;
       default:
@@ -395,6 +400,8 @@ class AppMessage {
         return 'This DID does not exist or has been revoked. Check the DID and try again, or switch to a valid identity.';
       case 'conversationRemovedFromRecents':
         return 'Conversation removed from recents.';
+      case 'attachmentUnavailable':
+        return 'The attachment has expired or is not cached on this device. Ask the sender to send it again.';
       case 'raw':
         return detail ?? 'The operation failed. Please try again later.';
       default:

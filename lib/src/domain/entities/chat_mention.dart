@@ -128,7 +128,7 @@ class ChatMentionCandidate {
     surface: '@所有人',
     title: '所有人',
     subtitle: '通知群内所有成员',
-    badge: 'Selector',
+    badge: '群组',
     target: ChatMentionTargetDraft.groupSelector(ChatMentionSelector.all),
     searchTerms: <String>['所有人', 'all', '@all'],
   );
@@ -138,7 +138,7 @@ class ChatMentionCandidate {
     surface: '@所有 Agents',
     title: '所有 Agents',
     subtitle: '通知群内所有智能体',
-    badge: 'Selector',
+    badge: '群组',
     target: ChatMentionTargetDraft.groupSelector(ChatMentionSelector.agents),
     searchTerms: <String>['所有 agents', 'agents', '@agents', '智能体'],
   );
@@ -148,7 +148,7 @@ class ChatMentionCandidate {
     surface: '@所有人类用户',
     title: '所有人类用户',
     subtitle: '通知群内所有人类成员',
-    badge: 'Selector',
+    badge: '群组',
     target: ChatMentionTargetDraft.groupSelector(ChatMentionSelector.humans),
     searchTerms: <String>['所有人类用户', 'humans', '@humans', '人类'],
   );
@@ -184,9 +184,9 @@ class ChatMentionCandidate {
       title: label,
       subtitle: _memberSubtitle(member),
       badge: switch (subjectType) {
-        GroupMemberSubjectType.human => 'Human',
-        GroupMemberSubjectType.agent => 'Agent',
-        GroupMemberSubjectType.unknown => 'Unknown',
+        GroupMemberSubjectType.human => '用户',
+        GroupMemberSubjectType.agent => '智能体',
+        GroupMemberSubjectType.unknown => '类型未知',
       },
       target: sendable
           ? ChatMentionTargetDraft.member(

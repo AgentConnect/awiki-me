@@ -2555,7 +2555,7 @@ void main() {
     expect(find.text('copyable-report.pdf'), findsOneWidget);
   });
 
-  testWidgets('查看附件会下载保存后用本机应用打开文件', (tester) async {
+  testWidgets('查看附件会下载后用本机应用打开文件', (tester) async {
     final previousLauncher = UrlLauncherPlatform.instance;
     final launcher = _FakeUrlLauncherPlatform();
     UrlLauncherPlatform.instance = launcher;
@@ -2626,11 +2626,11 @@ void main() {
     await tester.tap(find.bySemanticsLabel('查看附件'));
     await tester.pumpAndSettle();
 
-    expect(picker.saveCalls, 1);
-    expect(picker.lastSavedFilename, 'download.txt');
-    expect(launcher.launchedUrls, <String>[
-      'file:///tmp/native-open-report.txt',
-    ]);
+    expect(picker.saveCalls, 0);
+    expect(
+      launcher.launchedUrls.single,
+      startsWith('file:///tmp/awiki-test-cache/'),
+    );
     expect(
       launcher.launchOptions.single.mode,
       PreferredLaunchMode.externalApplication,

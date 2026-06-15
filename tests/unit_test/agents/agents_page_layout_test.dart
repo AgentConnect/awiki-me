@@ -2,6 +2,7 @@ import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
@@ -35,7 +36,7 @@ void main() {
     expect(find.text('代理 1'), findsWidgets);
     expect(find.text('刷新状态'), findsNothing);
     expect(find.byIcon(CupertinoIcons.refresh), findsWidgets);
-    expect(find.text('创建 Hermes'), findsOneWidget);
+    expect(find.text('创建 Agent'), findsOneWidget);
     expect(find.text('升级'), findsNothing);
     expect(find.text('安装命令'), findsNothing);
   });
@@ -196,14 +197,17 @@ void main() {
 
     await tester.tap(find.text('重试 Run'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(CupertinoTextField), 'run_123');
+    await tester.enterText(
+      find.byKey(const Key('agent-retry-run-field')),
+      'run_123',
+    );
     await tester.tap(find.text('重试').last);
     await tester.pumpAndSettle();
     expect(control.lastRetryRunId, 'run_123');
   });
 
   testWidgets(
-    'create Hermes dialog normalizes handle and submits previewed values',
+    'create Agent dialog normalizes handle and submits previewed values',
     (tester) async {
       final control = FakeAgentControlService()
         ..agents = <AgentSummary>[
@@ -246,27 +250,29 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('创建 Hermes'));
+      await tester.tap(find.text('创建 Agent'));
       await tester.pumpAndSettle();
 
-      expect(find.text('创建 Hermes'), findsWidgets);
+      expect(find.text('创建 Agent'), findsWidgets);
       expect(find.text('Agent 类型'), findsOneWidget);
       expect(find.text('当前仅支持 Hermes Runtime Agent'), findsOneWidget);
-      final fields = find.byType(CupertinoTextField);
-      expect(fields, findsNWidgets(2));
-      final nameField = tester.widget<CupertinoTextField>(fields.at(0));
+      final nameFieldFinder = find.byKey(const Key('agent-create-name-field'));
+      final handleFieldFinder = find.byKey(
+        const Key('agent-create-handle-field'),
+      );
+      final nameField = tester.widget<CupertinoTextField>(nameFieldFinder);
       expect(nameField.controller?.text, 'Hermes2');
 
-      await tester.enterText(fields.at(1), '@My-Agent');
+      await tester.enterText(handleFieldFinder, '@My-Agent');
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
 
-      final handleField = tester.widget<CupertinoTextField>(fields.at(1));
+      final handleField = tester.widget<CupertinoTextField>(handleFieldFinder);
       expect(handleField.controller?.text, 'my-agent');
       expect(find.text('最终 Handle：@my-agent.awiki.info'), findsOneWidget);
       expect(find.text('这个 Handle 可以使用'), findsOneWidget);
 
-      await tester.enterText(fields.at(0), '写作助手');
+      await tester.enterText(nameFieldFinder, '写作助手');
       await tester.tap(find.text('创建').last);
       await tester.pumpAndSettle();
 
@@ -276,7 +282,76 @@ void main() {
     },
   );
 
-  testWidgets('create Hermes dialog blocks unavailable handle', (tester) async {
+  testWidgets('agent detail saves access policy lists', (tester) async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:runtime',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'hermes',
+          handle: 'awiki-agent-hermes',
+          displayName: 'Hermes',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ]
+      ..invocationPolicies['did:agent:runtime'] = const AgentInvocationPolicy(
+        whitelistHandles: <String>['alice@awiki.info'],
+      );
+
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('访问权限'), findsOneWidget);
+    expect(find.text('白名单模式'), findsOneWidget);
+    expect(find.text('黑名单模式'), findsOneWidget);
+
+    await tester.tap(find.text('黑名单模式'));
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const Key('agent-access-whitelist-field')),
+      'alice\ncarol.awiki.info',
+    );
+    await tester.enterText(
+      find.byKey(const Key('agent-access-blacklist-field')),
+      'bob, dave.awiki.info',
+    );
+    await tester.tap(find.byKey(const Key('agent-access-save-button')));
+    await tester.pumpAndSettle();
+
+    expect(control.lastInvocationPolicyAgentDid, 'did:agent:runtime');
+    expect(
+      control.lastInvocationPolicy?.activeMode,
+      AgentInvocationPolicyMode.blacklist,
+    );
+    expect(control.lastInvocationPolicy?.whitelistHandles, <String>[
+      'alice',
+      'carol.awiki.info',
+    ]);
+    expect(control.lastInvocationPolicy?.blacklistHandles, <String>[
+      'bob',
+      'dave.awiki.info',
+    ]);
+  });
+
+  testWidgets('create Agent dialog blocks unavailable handle', (tester) async {
     final gateway = FakeAwikiGateway()
       ..handleRegistrationStatus = HandleRegistrationStatus.registered;
     final control = FakeAgentControlService()
@@ -307,16 +382,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('创建 Hermes'));
+    await tester.tap(find.text('创建 Agent'));
     await tester.pumpAndSettle();
 
-    final fields = find.byType(CupertinoTextField);
-    await tester.enterText(fields.at(1), 'used-agent');
+    await tester.enterText(
+      find.byKey(const Key('agent-create-handle-field')),
+      'used-agent',
+    );
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump();
 
     expect(find.text('这个 Handle 已被使用'), findsWidgets);
-    await tester.enterText(fields.at(0), '写作助手');
+    await tester.enterText(
+      find.byKey(const Key('agent-create-name-field')),
+      '写作助手',
+    );
     await tester.tap(find.text('创建').last);
     await tester.pumpAndSettle();
 
@@ -732,8 +812,8 @@ void main() {
 
     await tester.tap(find.text('改名'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(CupertinoTextField), '我的代理');
-    await tester.tap(find.text('保存'));
+    await tester.enterText(find.byKey(const Key('agent-rename-field')), '我的代理');
+    await tester.tap(find.text('保存').last);
     await tester.pumpAndSettle();
     expect(control.lastRenamedAgentDid, 'did:agent:daemon');
     expect(control.lastDisplayName, '我的代理');
@@ -829,6 +909,10 @@ void main() {
           ),
         ];
 
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(
         buildLocalizedTestApp(
           home: const AgentsWorkspacePage(),
@@ -978,6 +1062,10 @@ void main() {
           ),
         ];
 
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(
         buildLocalizedTestApp(
           home: const AgentsWorkspacePage(),

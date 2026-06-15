@@ -106,7 +106,7 @@ Expected screenshots:
 - `docs/ui-optimization-plan/screenshots/04-agent-info-popup.png`
 - `docs/ui-optimization-plan/screenshots/05-agent-inbox-list.png`
 - `docs/ui-optimization-plan/screenshots/06-agent-inbox-thread.png`
-- `docs/ui-optimization-plan/screenshots/07-agent-create-hermes-type.png`
+- `docs/ui-optimization-plan/screenshots/07-agent-create-agent-type.png`
 
 Linux desktop integration is supported through the `linux/` runner. Ubuntu
 hosts need Flutter Linux desktop prerequisites and an X server; CI and servers

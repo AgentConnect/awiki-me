@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../app/app_router.dart';
 import '../../app/e2e_semantics.dart';
 import '../../app/app_services.dart';
+import '../../application/attachment_preview_service.dart';
 import '../../application/models/attachment_models.dart';
 import '../../core/group_display_name.dart';
 import '../../domain/entities/agent/agent_summary.dart';
@@ -559,6 +560,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
     ConversationSummary conversation,
     ChatMessage message,
   ) async {
+    final attachment = message.attachment;
+    if (attachment == null) {
+      return;
+    }
     if (_downloadingAttachmentMessageIds.contains(message.localId)) {
       return;
     }
@@ -566,40 +571,22 @@ class _ChatViewState extends ConsumerState<ChatView> {
       _downloadingAttachmentMessageIds.add(message.localId);
     });
     try {
-      final localPath = message.attachment?.localPath?.trim();
-      if (localPath != null && localPath.isNotEmpty) {
-        await _launchNativeAttachment(localPath);
-        ref
-            .read(uiFeedbackProvider.notifier)
-            .showInfo(AppMessage.exportedTo(localPath));
-        return;
-      }
-      final result = await ref
-          .read(chatThreadsProvider.notifier)
-          .downloadAttachment(conversation: conversation, message: message);
-      final bytes = result.bytes;
-      if (bytes == null) {
-        throw StateError('附件下载结果为空。');
-      }
-      final filename =
-          result.filename ?? message.attachment?.filename ?? 'attachment';
-      final mimeType =
-          result.mimeType ??
-          message.attachment?.mimeType ??
-          'application/octet-stream';
-      final savedPath = await ref
-          .read(attachmentPickerServiceProvider)
-          .saveAttachment(filename: filename, mimeType: mimeType, bytes: bytes);
-      if (savedPath != null && savedPath.trim().isNotEmpty) {
-        await _launchNativeAttachment(savedPath);
-        ref
-            .read(uiFeedbackProvider.notifier)
-            .showInfo(AppMessage.exportedTo(savedPath));
-      }
+      final previewPath = await ref
+          .read(attachmentPreviewServiceProvider)
+          .previewPathFor(
+            message: message,
+            download: () => ref
+                .read(chatThreadsProvider.notifier)
+                .downloadAttachment(
+                  conversation: conversation,
+                  message: message,
+                ),
+          );
+      await _launchNativeAttachment(previewPath);
     } catch (error) {
       ref
           .read(uiFeedbackProvider.notifier)
-          .showError(AppMessage.fromError(error));
+          .showError(_attachmentOpenErrorMessage(error));
     } finally {
       if (mounted) {
         setState(() {
@@ -607,6 +594,18 @@ class _ChatViewState extends ConsumerState<ChatView> {
         });
       }
     }
+  }
+
+  AppMessage _attachmentOpenErrorMessage(Object error) {
+    final raw = error.toString().toLowerCase();
+    if (error is AttachmentUnavailableException ||
+        raw.contains('attachment object is not committed') ||
+        raw.contains('attachment object has expired') ||
+        raw.contains('attachment object is not available') ||
+        raw.contains('message not found')) {
+      return AppMessage.attachmentUnavailable();
+    }
+    return AppMessage.fromError(error);
   }
 
   Future<void> _launchNativeAttachment(String pathOrUri) async {

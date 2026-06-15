@@ -75,7 +75,7 @@ Step index：06
 | Analyze | `cd awiki-me-ui && flutter analyze ...` | No issues found |
 | Unit | `cd awiki-me-ui && flutter test tests/unit_test/agents/agent_inbox_provider_test.dart tests/unit_test/agents/agents_page_layout_test.dart tests/unit_test/agents/agent_control_payload_test.dart tests/unit_test/agents/agent_control_service_test.dart tests/unit_test/conversation_workspace_test.dart tests/unit_test/chat_page_test.dart tests/unit_test/onboarding_page_test.dart` | 151 passed |
 | Integration | `cd awiki-me-ui && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/app_smoke_test.dart -d macos` | 4 passed |
-| Screenshot visual | `cd awiki-me-ui && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/ui_visual_verification_test.dart -d macos` | 1 passed；生成 `awiki-me-ui/docs/ui-optimization-plan/screenshots/01-onboarding-login.png` 到 `awiki-me-ui/docs/ui-optimization-plan/screenshots/07-agent-create-hermes-type.png` |
+| Screenshot visual | `cd awiki-me-ui && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/ui_visual_verification_test.dart -d macos` | 1 passed；生成 `awiki-me-ui/docs/ui-optimization-plan/screenshots/01-onboarding-login.png` 到 `awiki-me-ui/docs/ui-optimization-plan/screenshots/07-agent-create-agent-type.png` |
 | Docs / whitespace | `cd awiki-me-ui && git diff --check` | 通过 |
 
 ## 9. Review 环节

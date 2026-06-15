@@ -34,7 +34,7 @@ Step index：01
 
 ## 4. 实现方法
 
-1. 在 `agents_page.dart` 的创建 Hermes 对话框加入类型卡片。
+1. 在 `agents_page.dart` 的创建 Agent 对话框加入类型卡片。
 2. 在安装命令对话框增加 Hermes 支持提示。
 3. 更新 Agent 页面 widget test，覆盖类型文案和提交参数不变。
 
@@ -101,5 +101,5 @@ Step index：01
 ## 13. 风险、回滚与后续文档
 
 - 风险：未来新增 Agent 类型时需要避免硬编码散落。
-- 回滚 / 回退：移除类型卡片和文案，保留原创建 Hermes 流程。
+- 回滚 / 回退：移除类型卡片和文案，保留原 Agent 创建流程。
 - 后续文档：新增 runtime 类型时更新本 Plan 与用户文档。

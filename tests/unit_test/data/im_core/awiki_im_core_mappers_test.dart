@@ -168,6 +168,8 @@ void main() {
         threadId: 'dm:peer-scope:v1:abc123',
         participants: <String>['bob.anpclaw.com'],
         unreadCount: 1,
+        unreadMentionCount: 1,
+        firstUnreadMentionMessageId: 'msg-mention-1',
         messageCount: 1,
         lastMessage: message,
       ),
@@ -179,6 +181,9 @@ void main() {
     expect(conversation.targetPeer, 'bob.anpclaw.com');
     expect(conversation.targetDid, 'did:bob:new');
     expect(conversation.displayName, 'bob.anpclaw.com');
+    expect(conversation.unreadMentionCount, 1);
+    expect(conversation.firstUnreadMentionMessageId, 'msg-mention-1');
+    expect(conversation.hasUnreadMention, isTrue);
   });
 
   test('control payload maps into non-renderable chat message', () {

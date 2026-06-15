@@ -332,6 +332,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                           ),
                           avatarUri: item.avatarUri,
                           preview: preview,
+                          hasUnreadMention: item.hasUnreadMention,
                           timeLabel: DateTimeFormatter.conversationTime(
                             item.lastMessageAt,
                           ),
@@ -462,6 +463,7 @@ class _ConversationRefreshView extends ConsumerWidget {
                   ),
                   avatarUri: item.avatarUri,
                   preview: preview,
+                  hasUnreadMention: item.hasUnreadMention,
                   timeLabel: DateTimeFormatter.conversationTime(
                     item.lastMessageAt,
                   ),
@@ -518,6 +520,7 @@ class _MacConversationRow extends StatelessWidget {
     required this.title,
     required this.avatarUri,
     required this.preview,
+    required this.hasUnreadMention,
     required this.timeLabel,
     required this.unreadCount,
     required this.isDeletedAgentConversation,
@@ -531,6 +534,7 @@ class _MacConversationRow extends StatelessWidget {
   final String title;
   final String? avatarUri;
   final String preview;
+  final bool hasUnreadMention;
   final String timeLabel;
   final int unreadCount;
   final bool isDeletedAgentConversation;
@@ -612,6 +616,10 @@ class _MacConversationRow extends StatelessWidget {
                       SizedBox(height: responsive.displayScaled(5)),
                       Row(
                         children: <Widget>[
+                          if (hasUnreadMention) ...<Widget>[
+                            const _UnreadMentionInlineBadge(compact: true),
+                            SizedBox(width: responsive.displayScaled(5)),
+                          ],
                           Expanded(
                             child: Text(
                               preview.isEmpty
@@ -712,6 +720,7 @@ class _ConversationRow extends StatelessWidget {
     required this.title,
     required this.avatarUri,
     required this.preview,
+    required this.hasUnreadMention,
     required this.timeLabel,
     required this.unreadCount,
     required this.isDeletedAgentConversation,
@@ -725,6 +734,7 @@ class _ConversationRow extends StatelessWidget {
   final String title;
   final String? avatarUri;
   final String preview;
+  final bool hasUnreadMention;
   final String timeLabel;
   final int unreadCount;
   final bool isDeletedAgentConversation;
@@ -803,6 +813,10 @@ class _ConversationRow extends StatelessWidget {
                   SizedBox(height: responsive.spacing(4)),
                   Row(
                     children: <Widget>[
+                      if (hasUnreadMention) ...<Widget>[
+                        const _UnreadMentionInlineBadge(compact: false),
+                        SizedBox(width: responsive.spacing(6)),
+                      ],
                       Expanded(
                         child: Text(
                           preview.isEmpty
@@ -979,6 +993,45 @@ ChatComposerDraft _draftForConversation(
   }
   final threadDraft = drafts[conversation.threadId.trim()];
   return threadDraft ?? const ChatComposerDraft();
+}
+
+class _UnreadMentionInlineBadge extends StatelessWidget {
+  const _UnreadMentionInlineBadge({required this.compact});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact
+            ? responsive.displayScaled(4)
+            : responsive.displayScaled(5),
+        vertical: compact
+            ? responsive.displayScaled(1.5)
+            : responsive.displayScaled(2),
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFECEB),
+        borderRadius: BorderRadius.circular(responsive.displayScaled(4)),
+        border: Border.all(color: const Color(0xFFFFD6D3)),
+      ),
+      child: Text(
+        '有人@我',
+        maxLines: 1,
+        overflow: TextOverflow.visible,
+        style: TextStyle(
+          color: const Color(0xFFC22A22),
+          fontSize: compact
+              ? responsive.displayScaled(10.5)
+              : responsive.metaSm,
+          height: 1,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
 }
 
 class _ConversationTitleStatusLine extends StatelessWidget {

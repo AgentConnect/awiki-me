@@ -1,6 +1,7 @@
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
@@ -273,6 +274,60 @@ void main() {
     expect(runtime.displayName, 'Hermes Runtime');
     expect(runtime.latest.status, 'ready');
   });
+
+  test(
+    'loads and saves invocation policy through agent control service',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:runtime',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'hermes',
+            displayName: 'Hermes',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ]
+        ..invocationPolicies['did:agent:runtime'] = const AgentInvocationPolicy(
+          whitelistHandles: <String>['alice@awiki.info'],
+        );
+      final container = _container(control);
+      addTearDown(container.dispose);
+
+      await container.read(agentsProvider.notifier).load();
+      await container
+          .read(agentsProvider.notifier)
+          .loadInvocationPolicy('did:agent:runtime');
+
+      expect(
+        container
+            .read(agentsProvider)
+            .invocationPolicies['did:agent:runtime']
+            ?.whitelistHandles,
+        <String>['alice@awiki.info'],
+      );
+
+      const updated = AgentInvocationPolicy(
+        activeMode: AgentInvocationPolicyMode.blacklist,
+        whitelistHandles: <String>['alice@awiki.info'],
+        blacklistHandles: <String>['bob@awiki.info'],
+      );
+      await container
+          .read(agentsProvider.notifier)
+          .saveInvocationPolicy('did:agent:runtime', updated);
+
+      expect(control.lastInvocationPolicyAgentDid, 'did:agent:runtime');
+      expect(control.lastInvocationPolicy, updated);
+      expect(
+        container.read(agentsProvider).invocationPolicies['did:agent:runtime'],
+        updated,
+      );
+      expect(container.read(agentsProvider).savingInvocationPolicies, isEmpty);
+      expect(container.read(agentsProvider).invocationPolicyErrors, isEmpty);
+    },
+  );
 
   test('upgradeDaemon shows pending until upgrade result arrives', () async {
     final control = FakeAgentControlService()

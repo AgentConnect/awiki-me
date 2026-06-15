@@ -42,7 +42,7 @@ Harness：`awiki-harness/`
 
 | 领域 / 仓库 / 模块 | 影响 | 权威文档或代码 |
 |---|---|---|
-| Agent 管理 | 创建 Hermes dialog 增加类型选择；宿主安装命令增加 Hermes 类型提示 | `awiki-me-ui/lib/src/presentation/agents/agents_page.dart` |
+| Agent 管理 | 创建 Agent dialog 增加类型选择；宿主安装命令增加 Hermes 类型提示 | `awiki-me-ui/lib/src/presentation/agents/agents_page.dart` |
 | Agent 收件箱 | 默认 limit=20；支持 cursor 分页；显示时间和最新预览；文字可选择复制 | `awiki-me-ui/lib/src/presentation/agents/agent_inbox_provider.dart`、`awiki-me-ui/lib/src/presentation/agents/agent_inbox_panel.dart` |
 | Agent control command | list/thread 默认 limit 从旧值统一到 20 | `awiki-me-ui/lib/src/domain/entities/agent/agent_command.dart`、`awiki-me-ui/lib/src/application/agent/agent_control_service.dart` |
 | 消息会话 | 会话信息默认关闭；直聊资料弹窗迁移；群聊信息侧栏保持 | `awiki-me-ui/lib/src/presentation/conversation_list/conversation_workspace_page.dart`、`awiki-me-ui/lib/src/presentation/chat/chat_page.dart` |
@@ -211,7 +211,7 @@ Harness：`awiki-harness/`
 | Analyze | `cd awiki-me-ui && flutter analyze lib/src/presentation/chat/chat_page.dart lib/src/presentation/conversation_list/conversation_workspace_page.dart lib/src/presentation/agents/agents_page.dart lib/src/presentation/agents/agent_inbox_provider.dart lib/src/presentation/agents/agent_inbox_panel.dart lib/src/application/agent/agent_control_service.dart lib/src/domain/entities/agent/agent_command.dart lib/src/presentation/onboarding/onboarding_page.dart tests/unit_test/chat_page_test.dart tests/unit_test/conversation_workspace_test.dart tests/unit_test/agents/agent_inbox_provider_test.dart tests/unit_test/agents/agents_page_layout_test.dart tests/unit_test/agents/agent_control_payload_test.dart tests/unit_test/agents/agent_control_service_test.dart tests/unit_test/test_support.dart tests/integration_test/app/app_smoke_test.dart` | No issues found |
 | Unit / Widget | `cd awiki-me-ui && flutter test tests/unit_test/agents/agent_inbox_provider_test.dart tests/unit_test/agents/agents_page_layout_test.dart tests/unit_test/agents/agent_control_payload_test.dart tests/unit_test/agents/agent_control_service_test.dart tests/unit_test/conversation_workspace_test.dart tests/unit_test/chat_page_test.dart tests/unit_test/onboarding_page_test.dart` | 151 tests passed |
 | Integration smoke | `cd awiki-me-ui && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/app_smoke_test.dart -d macos` | 4 tests passed |
-| Screenshot visual smoke | `cd awiki-me-ui && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/ui_visual_verification_test.dart -d macos` | 1 test passed；生成 `awiki-me-ui/docs/ui-optimization-plan/screenshots/01-onboarding-login.png` 到 `awiki-me-ui/docs/ui-optimization-plan/screenshots/07-agent-create-hermes-type.png` |
+| Screenshot visual smoke | `cd awiki-me-ui && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/ui_visual_verification_test.dart -d macos` | 1 test passed；生成 `awiki-me-ui/docs/ui-optimization-plan/screenshots/01-onboarding-login.png` 到 `awiki-me-ui/docs/ui-optimization-plan/screenshots/07-agent-create-agent-type.png` |
 | Docs / whitespace | `cd awiki-me-ui && git diff --check` | 通过 |
 
 ## 12. 文档更新
@@ -274,7 +274,7 @@ Harness：`awiki-harness/`
   - `awiki-me-ui/docs/ui-optimization-plan/screenshots/04-agent-info-popup.png`：智能体信息弹窗展示 DID copy、Runtime Agent pill、身份卡、关注和 Agent 收件箱入口。
   - `awiki-me-ui/docs/ui-optimization-plan/screenshots/05-agent-inbox-list.png`：Agent 收件箱列表展示时间、未读数、`最新：`预览和加载更多会话。
   - `awiki-me-ui/docs/ui-optimization-plan/screenshots/06-agent-inbox-thread.png`：线程视图展示消息时间、加载更早消息和可读消息气泡。
-  - `awiki-me-ui/docs/ui-optimization-plan/screenshots/07-agent-create-hermes-type.png`：创建 Hermes 弹窗展示 Hermes-only Agent 类型选择卡片。
+  - `awiki-me-ui/docs/ui-optimization-plan/screenshots/07-agent-create-agent-type.png`：创建 Agent 弹窗展示 Hermes-only Agent 类型选择卡片。
 - Review 发现：
   1. integration smoke 首次未设置 UTF-8 locale 时 CocoaPods 失败；已通过 UTF-8 命令验证并记录文档。
   2. 原 app smoke 的 profile/settings 导航在 macOS rail 下 finder 不够稳；已改为 key / semantics / text 多候选点击。

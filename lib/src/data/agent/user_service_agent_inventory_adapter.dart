@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 
 import '../../application/config/awiki_environment_config.dart';
 import '../../application/ports/agent_inventory_port.dart';
+import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/install_command.dart';
 import '../services/authenticated_user_service_rpc_client.dart';
@@ -130,6 +131,36 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
       method: 'unbind_agent',
       params: <String, Object?>{'agent_did': agentDid},
     );
+  }
+
+  @override
+  Future<AgentInvocationPolicy> getInvocationPolicy({
+    required String agentDid,
+  }) async {
+    final result = await _rpcCall(
+      path: inventoryEndpoint,
+      method: 'get_invocation_policy',
+      params: <String, Object?>{'agent_did': agentDid},
+    );
+    return AgentInvocationPolicy.fromJson(result);
+  }
+
+  @override
+  Future<AgentInvocationPolicy> updateInvocationPolicy({
+    required String agentDid,
+    required AgentInvocationPolicy policy,
+  }) async {
+    final result = await _rpcCall(
+      path: inventoryEndpoint,
+      method: 'update_invocation_policy',
+      params: <String, Object?>{
+        'agent_did': agentDid,
+        'active_mode': policy.activeMode.wireValue,
+        'whitelist_handles': policy.whitelistHandles,
+        'blacklist_handles': policy.blacklistHandles,
+      },
+    );
+    return AgentInvocationPolicy.fromJson(result);
   }
 
   @override

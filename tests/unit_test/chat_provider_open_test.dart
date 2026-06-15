@@ -974,6 +974,62 @@ void main() {
     expect(gateway.lastSentAttachmentIdempotencyKey, startsWith('pending-'));
   });
 
+  test('服务端附件消息不带本地路径时发送成功后仍保留本地缓存路径', () async {
+    gateway.includeLocalPathInSentAttachment = false;
+    gateway.nextSentMessageId = 'sent-report';
+    final cache = FakeAttachmentCacheService();
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(
+          gateway,
+          attachmentCacheService: cache,
+        ),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendAttachment(
+          conversation: conversation,
+          attachment: const AttachmentDraft(
+            filename: 'report.pdf',
+            mimeType: 'application/pdf',
+            localPath: '/tmp/original-report.pdf',
+            sizeBytes: 3,
+          ),
+          caption: '报告',
+        );
+    await Future<void>.delayed(Duration.zero);
+
+    final messages = sendContainer
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    final sentAttachment = messages.singleWhere(
+      (message) => message.attachment?.filename == 'report.pdf',
+    );
+    expect(sentAttachment.remoteId, 'sent-report');
+    expect(sentAttachment.attachment?.localPath, isNotNull);
+    expect(sentAttachment.attachment?.localPath, contains('sent-report'));
+    expect(sentAttachment.attachment?.hasLocalSource, isTrue);
+    expect(cache.cacheLocalSourceCalls, 1);
+    expect(cache.lastSourcePath, '/tmp/original-report.pdf');
+  });
+
   test('附件发送成功后会话刷新失败不会覆盖发送结果', () async {
     final flakyGateway = FakeAwikiGateway()
       ..loginResult = const SessionIdentity(

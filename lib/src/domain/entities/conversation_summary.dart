@@ -8,6 +8,8 @@ class ConversationSummary {
     required this.lastMessageAt,
     required this.unreadCount,
     required this.isGroup,
+    this.unreadMentionCount = 0,
+    this.firstUnreadMentionMessageId,
     this.targetDid,
     this.targetPeer,
     this.groupId,
@@ -23,6 +25,8 @@ class ConversationSummary {
   final String lastMessagePreview;
   final DateTime lastMessageAt;
   final int unreadCount;
+  final int unreadMentionCount;
+  final String? firstUnreadMentionMessageId;
   final bool isGroup;
   final String? targetDid;
   final String? targetPeer;
@@ -35,6 +39,8 @@ class ConversationSummary {
 
   bool get isDeletedAgentConversation =>
       peerLifecycleState == ConversationPeerLifecycleState.deletedAgent;
+
+  bool get hasUnreadMention => unreadMentionCount > 0;
 
   String get visibilityKey {
     final explicitKey = conversationKey?.trim();
@@ -95,6 +101,8 @@ class ConversationSummary {
     String? lastMessagePreview,
     DateTime? lastMessageAt,
     int? unreadCount,
+    int? unreadMentionCount,
+    Object? firstUnreadMentionMessageId = _conversationSummaryUnset,
     bool? isGroup,
     Object? targetDid = _conversationSummaryUnset,
     Object? targetPeer = _conversationSummaryUnset,
@@ -111,6 +119,11 @@ class ConversationSummary {
       lastMessagePreview: lastMessagePreview ?? this.lastMessagePreview,
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
       unreadCount: unreadCount ?? this.unreadCount,
+      unreadMentionCount: unreadMentionCount ?? this.unreadMentionCount,
+      firstUnreadMentionMessageId: _resolveNullableString(
+        firstUnreadMentionMessageId,
+        this.firstUnreadMentionMessageId,
+      ),
       isGroup: isGroup ?? this.isGroup,
       targetDid: _resolveNullableString(targetDid, this.targetDid),
       targetPeer: _resolveNullableString(targetPeer, this.targetPeer),

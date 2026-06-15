@@ -189,6 +189,8 @@ class AwikiImCoreMappers {
             lastMessage?.receivedAt,
       ),
       unreadCount: conversation.unreadCount,
+      unreadMentionCount: conversation.unreadMentionCount,
+      firstUnreadMentionMessageId: conversation.firstUnreadMentionMessageId,
       isGroup: isGroup,
       targetDid: targetDid,
       targetPeer: targetPeer,
@@ -230,11 +232,15 @@ class AwikiImCoreMappers {
   GroupMemberSummary groupMemberFromCore(core.GroupMember member) {
     final did = member.did ?? '';
     final handle = _nonEmpty(member.handle) ?? _handleFromDid(did) ?? did;
+    final subjectType = GroupMemberSubjectType.parse(
+      _nonEmpty(member.subjectType) ?? _subjectTypeFromDid(did),
+    );
     return GroupMemberSummary(
       userId: did,
       did: did,
       handle: handle,
       role: member.role ?? 'member',
+      subjectType: subjectType,
       membershipStatus: GroupMemberMembershipStatus.parse(member.status),
     );
   }
@@ -534,6 +540,17 @@ String _compactDid(String did) {
 String? _handleFromDid(String did) {
   final match = RegExp(r'^did:wba:[^:]+:(?:user:)?([^:]+):e1_').firstMatch(did);
   return match == null ? null : _nonEmpty(match.group(1));
+}
+
+String? _subjectTypeFromDid(String did) {
+  final normalized = did.trim();
+  if (normalized.startsWith('did:agent:')) {
+    return 'agent';
+  }
+  if (normalized.startsWith('did:')) {
+    return 'human';
+  }
+  return null;
 }
 
 String _messagePreview(core.Message message) {

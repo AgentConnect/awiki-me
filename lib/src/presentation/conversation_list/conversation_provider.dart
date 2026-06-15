@@ -165,10 +165,15 @@ class ConversationListController extends StateNotifier<ConversationListState> {
 
   void markThreadReadLocal(String threadId) {
     final next = state.conversations.map((item) {
-      if (item.threadId != threadId || item.unreadCount == 0) {
+      if (item.threadId != threadId ||
+          (item.unreadCount == 0 && item.unreadMentionCount == 0)) {
         return item;
       }
-      return item.copyWith(unreadCount: 0);
+      return item.copyWith(
+        unreadCount: 0,
+        unreadMentionCount: 0,
+        firstUnreadMentionMessageId: null,
+      );
     }).toList();
     state = state.copyWith(conversations: next);
     _notification.updateBadgeCount(state.unreadCount);
@@ -176,11 +181,15 @@ class ConversationListController extends StateNotifier<ConversationListState> {
 
   void markConversationReadLocal(ConversationSummary conversation) {
     final next = state.conversations.map((item) {
-      if (item.unreadCount == 0 ||
+      if ((item.unreadCount == 0 && item.unreadMentionCount == 0) ||
           !sameConversationTarget(item, conversation)) {
         return item;
       }
-      return item.copyWith(unreadCount: 0);
+      return item.copyWith(
+        unreadCount: 0,
+        unreadMentionCount: 0,
+        firstUnreadMentionMessageId: null,
+      );
     }).toList();
     state = state.copyWith(conversations: next);
     _notification.updateBadgeCount(state.unreadCount);
@@ -290,7 +299,11 @@ ConversationSummary _mergeConversationReadState({
       refreshed.lastMessageAt.isAfter(local.lastMessageAt)) {
     return refreshed;
   }
-  return refreshed.copyWith(unreadCount: 0);
+  return refreshed.copyWith(
+    unreadCount: 0,
+    unreadMentionCount: 0,
+    firstUnreadMentionMessageId: null,
+  );
 }
 
 ConversationSummary _mergeDirectConversationTitle({
