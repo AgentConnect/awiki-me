@@ -90,3 +90,5 @@ venv/
 /tests/e2e_test/configs/*.local.yaml
 /tests/e2e_test/configs/*.local.yml
 /tests/e2e_test/configs/*.local.env
+/e2e/config.local.yaml
+/e2e/reports/
