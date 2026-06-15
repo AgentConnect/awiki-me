@@ -8,6 +8,8 @@ import '../../domain/entities/agent/agent_control_payloads.dart';
 
 enum AgentInboxScope { all, direct, group }
 
+const int agentInboxPageSize = 20;
+
 class AgentInboxItem {
   const AgentInboxItem({
     required this.threadId,
@@ -319,6 +321,7 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
             daemonAgentDid: daemonAgentDid,
             runtimeAgentDid: runtimeAgentDid,
             scope: _scopeName(scope),
+            limit: agentInboxPageSize,
           );
       state = state.copyWith(lastRequestId: requestId);
       _scheduleListTimeout(requestId);
@@ -356,6 +359,7 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
             daemonAgentDid: daemonAgentDid,
             runtimeAgentDid: runtimeAgentDid,
             scope: _scopeName(state.scope),
+            limit: agentInboxPageSize,
             cursor: cursor,
           );
       state = state.copyWith(lastRequestId: requestId);
@@ -424,6 +428,7 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
             peerDid: item.peerDid,
             peerHandle: item.peerHandle,
             groupDid: item.groupDid,
+            limit: agentInboxPageSize,
           );
       state = state.copyWith(
         thread: state.thread.copyWith(lastRequestId: requestId),
@@ -488,6 +493,7 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
             peerDid: item.peerDid,
             peerHandle: item.peerHandle,
             groupDid: item.groupDid,
+            limit: agentInboxPageSize,
             cursor: cursor,
           );
       state = state.copyWith(
@@ -622,12 +628,13 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
               )
               .toList()
         : const <AgentInboxMessage>[];
+    final orderedMessages = _sortMessagesBySentAt(parsedMessages);
     state = state.copyWith(
       thread: state.thread.copyWith(
         title: _string(result['title']),
         messages: shouldPrepend
-            ? _prependMessages(state.thread.messages, parsedMessages)
-            : parsedMessages,
+            ? _prependMessages(state.thread.messages, orderedMessages)
+            : orderedMessages,
         nextCursor: _string(result['next_cursor']),
         clearNextCursor: result['next_cursor'] == null,
         fetchedAtMs: _int(result['fetched_at_ms']),
@@ -783,7 +790,7 @@ List<AgentInboxItem> _mergeItems(
   for (final item in incoming) {
     _mergeInboxItem(merged, aliasToIndex, item);
   }
-  return merged;
+  return _sortItemsByLatest(merged);
 }
 
 List<AgentInboxItem> _dedupeItems(List<AgentInboxItem> items) {
@@ -792,7 +799,7 @@ List<AgentInboxItem> _dedupeItems(List<AgentInboxItem> items) {
   for (final item in items) {
     _mergeInboxItem(merged, aliasToIndex, item);
   }
-  return merged;
+  return _sortItemsByLatest(merged);
 }
 
 void _mergeInboxItem(
@@ -917,11 +924,57 @@ List<AgentInboxMessage> _prependMessages(
   List<AgentInboxMessage> incoming,
 ) {
   final seen = existing.map((message) => message.messageId).toSet();
-  return <AgentInboxMessage>[
+  return _sortMessagesBySentAt(<AgentInboxMessage>[
     for (final message in incoming)
       if (seen.add(message.messageId)) message,
     ...existing,
+  ]);
+}
+
+List<AgentInboxItem> _sortItemsByLatest(List<AgentInboxItem> items) {
+  final indexed = <({int index, AgentInboxItem item})>[
+    for (var index = 0; index < items.length; index += 1)
+      (index: index, item: items[index]),
   ];
+  indexed.sort((left, right) {
+    final leftTime = left.item.lastMessageAtMs;
+    final rightTime = right.item.lastMessageAtMs;
+    if (leftTime != null && rightTime != null && leftTime != rightTime) {
+      return rightTime.compareTo(leftTime);
+    }
+    if (leftTime != null && rightTime == null) {
+      return -1;
+    }
+    if (leftTime == null && rightTime != null) {
+      return 1;
+    }
+    return left.index.compareTo(right.index);
+  });
+  return indexed.map((entry) => entry.item).toList();
+}
+
+List<AgentInboxMessage> _sortMessagesBySentAt(
+  List<AgentInboxMessage> messages,
+) {
+  final indexed = <({int index, AgentInboxMessage message})>[
+    for (var index = 0; index < messages.length; index += 1)
+      (index: index, message: messages[index]),
+  ];
+  indexed.sort((left, right) {
+    final leftTime = left.message.sentAtMs;
+    final rightTime = right.message.sentAtMs;
+    if (leftTime != null && rightTime != null && leftTime != rightTime) {
+      return leftTime.compareTo(rightTime);
+    }
+    if (leftTime != null && rightTime == null) {
+      return -1;
+    }
+    if (leftTime == null && rightTime != null) {
+      return 1;
+    }
+    return left.index.compareTo(right.index);
+  });
+  return indexed.map((entry) => entry.message).toList(growable: false);
 }
 
 String _scopeName(AgentInboxScope scope) {

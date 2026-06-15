@@ -5,6 +5,7 @@ import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/app_router.dart';
 import '../../app/e2e_semantics.dart';
@@ -29,9 +30,11 @@ import '../friends/friends_page.dart';
 import '../friends/friends_provider.dart';
 import '../group/group_list_page.dart';
 import '../group/group_provider.dart';
-import '../profile/peer_profile_page.dart';
+import '../profile/peer_profile_provider.dart';
 import '../shared/awiki_me_design.dart';
+import '../shared/awiki_me_feedback.dart';
 import '../shared/avatar_badge.dart';
+import '../shared/copyable_did_line.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
@@ -70,10 +73,7 @@ class ChatView extends ConsumerStatefulWidget {
     required this.embedded,
     this.onBack,
     this.onMacIdentityPanelTap,
-    this.onMacAgentInboxTap,
     this.onMacConversationInfoTap,
-    this.macIdentityPanelActive = false,
-    this.macAgentInboxPanelActive = false,
     this.macConversationInfoPanelActive = false,
     this.macStyle = false,
   });
@@ -82,10 +82,7 @@ class ChatView extends ConsumerStatefulWidget {
   final bool embedded;
   final VoidCallback? onBack;
   final VoidCallback? onMacIdentityPanelTap;
-  final VoidCallback? onMacAgentInboxTap;
   final VoidCallback? onMacConversationInfoTap;
-  final bool macIdentityPanelActive;
-  final bool macAgentInboxPanelActive;
   final bool macConversationInfoPanelActive;
   final bool macStyle;
 
@@ -192,7 +189,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
                   localRuntimeAgent: runtimeAgent,
                 ),
         );
-    final friendsState = ref.watch(friendsProvider);
     ref.listen<ChatThreadState>(
       chatThreadProvider(widget.conversation.threadId),
       (_, __) => WidgetsBinding.instance.addPostFrameCallback(
@@ -245,24 +241,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
             isRefreshing: _isRefreshingCurrentConversation || thread.isLoading,
             classification: peerClassification,
             isDeletedAgentConversation: isDeletedAgentConversation,
-            isFollowing: _isFollowableDirect(currentConversation)
-                ? friendsState.isFollowing(currentConversation.targetDid!)
-                : false,
-            onFollowTap: _isFollowableDirect(currentConversation)
-                ? () => _toggleFollow(currentConversation)
-                : null,
             onBack: widget.onBack,
             onDetails: _openDetails,
+            onPeerInfoTap: _openDetails,
             onMacIdentityPanelTap: widget.onMacIdentityPanelTap,
-            onAgentInboxTap: runtimeAgent == null
-                ? null
-                : widget.onMacAgentInboxTap ?? _openAgentInbox,
             onMacConversationInfoTap: widget.onMacConversationInfoTap,
-            macIdentityPanelActive: widget.macIdentityPanelActive,
-            macAgentInboxPanelActive: widget.macAgentInboxPanelActive,
             macConversationInfoPanelActive:
                 widget.macConversationInfoPanelActive,
-            showAgentInbox: runtimeAgent != null,
             onRefresh: () => _refreshCurrentConversation(currentConversation),
           ),
           Expanded(
@@ -363,13 +348,16 @@ class _ChatViewState extends ConsumerState<ChatView> {
                         onDownload:
                             message.attachment != null &&
                                 message.sendState == MessageSendState.sent
-                            ? () => _downloadAttachment(
-                                currentConversation,
-                                message,
-                              )
+                            ? () =>
+                                  _openAttachment(currentConversation, message)
                             : null,
                         isDownloading: _downloadingAttachmentMessageIds
                             .contains(message.localId),
+                        onPeerInfoTap: _peerInfoTapForMessage(
+                          currentConversation,
+                          message,
+                          senderLabel,
+                        ),
                       ),
                       if (pendingTurn != null) ...<Widget>[
                         SizedBox(
@@ -427,13 +415,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   Future<void> _openDetails() async {
-    if (!widget.conversation.isGroup &&
-        widget.conversation.targetDid != null &&
-        widget.conversation.targetDid!.isNotEmpty) {
-      await AppNavigator.push(
-        context,
-        (_) => PeerProfilePage(did: widget.conversation.targetDid!),
-      );
+    final conversation = _currentConversationForTitle();
+    if (!conversation.isGroup &&
+        conversation.targetDid != null &&
+        conversation.targetDid!.isNotEmpty) {
+      await _showPeerInfoDialog(conversation);
       return;
     }
     await AppNavigator.push(
@@ -442,11 +428,39 @@ class _ChatViewState extends ConsumerState<ChatView> {
     );
   }
 
-  Future<void> _openAgentInbox() async {
-    await AppNavigator.push(
-      context,
-      (_) => AgentInboxPage(conversation: _currentConversationForTitle()),
+  Future<void> _showPeerInfoDialog(ConversationSummary conversation) async {
+    await showCupertinoDialog<void>(
+      context: context,
+      builder: (dialogContext) => _PeerInfoDialog(conversation: conversation),
     );
+  }
+
+  VoidCallback? _peerInfoTapForMessage(
+    ConversationSummary conversation,
+    ChatMessage message,
+    String senderLabel,
+  ) {
+    final targetDid = conversation.isGroup
+        ? message.senderDid.trim()
+        : conversation.targetDid?.trim();
+    if (targetDid == null ||
+        targetDid.isEmpty ||
+        !targetDid.startsWith('did:')) {
+      return null;
+    }
+    final peerConversation = conversation.isGroup
+        ? ConversationSummary(
+            threadId: 'profile:$targetDid',
+            displayName: senderLabel,
+            lastMessagePreview: '',
+            lastMessageAt: message.createdAt,
+            unreadCount: 0,
+            isGroup: false,
+            targetDid: targetDid,
+            avatarSeed: senderLabel,
+          )
+        : conversation;
+    return () => _showPeerInfoDialog(peerConversation);
   }
 
   Future<void> _pickAndStageAttachment() async {
@@ -541,7 +555,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
         );
   }
 
-  Future<void> _downloadAttachment(
+  Future<void> _openAttachment(
     ConversationSummary conversation,
     ChatMessage message,
   ) async {
@@ -552,6 +566,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
       _downloadingAttachmentMessageIds.add(message.localId);
     });
     try {
+      final localPath = message.attachment?.localPath?.trim();
+      if (localPath != null && localPath.isNotEmpty) {
+        await _launchNativeAttachment(localPath);
+        ref
+            .read(uiFeedbackProvider.notifier)
+            .showInfo(AppMessage.exportedTo(localPath));
+        return;
+      }
       final result = await ref
           .read(chatThreadsProvider.notifier)
           .downloadAttachment(conversation: conversation, message: message);
@@ -569,6 +591,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
           .read(attachmentPickerServiceProvider)
           .saveAttachment(filename: filename, mimeType: mimeType, bytes: bytes);
       if (savedPath != null && savedPath.trim().isNotEmpty) {
+        await _launchNativeAttachment(savedPath);
         ref
             .read(uiFeedbackProvider.notifier)
             .showInfo(AppMessage.exportedTo(savedPath));
@@ -584,6 +607,23 @@ class _ChatViewState extends ConsumerState<ChatView> {
         });
       }
     }
+  }
+
+  Future<void> _launchNativeAttachment(String pathOrUri) async {
+    final uri = _attachmentUri(pathOrUri);
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched) {
+      throw StateError('无法使用本机应用打开附件：$pathOrUri');
+    }
+  }
+
+  Uri _attachmentUri(String pathOrUri) {
+    final value = pathOrUri.trim();
+    final parsed = Uri.tryParse(value);
+    if (parsed != null && parsed.hasScheme) {
+      return parsed;
+    }
+    return Uri.file(value);
   }
 
   Future<void> _refreshCurrentConversation(
@@ -617,11 +657,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
   }
 
-  bool _isFollowableDirect(ConversationSummary conversation) {
-    final targetDid = conversation.targetDid?.trim() ?? '';
-    return !conversation.isGroup && targetDid.startsWith('did:');
-  }
-
   void _requestAgentsIfNeeded(ConversationSummary conversation) {
     if (_didRequestAgents ||
         conversation.isGroup ||
@@ -636,25 +671,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
       }
       unawaited(ref.read(agentsProvider.notifier).load());
     });
-  }
-
-  Future<void> _toggleFollow(ConversationSummary conversation) async {
-    final targetDid = conversation.targetDid?.trim();
-    if (targetDid == null || targetDid.isEmpty) {
-      return;
-    }
-    final isFollowing = ref.read(friendsProvider).isFollowing(targetDid);
-    if (isFollowing) {
-      await confirmAndUnfollow(context, ref, targetDid);
-      return;
-    }
-    try {
-      await ref.read(friendsProvider.notifier).follow(targetDid);
-    } catch (error) {
-      ref
-          .read(uiFeedbackProvider.notifier)
-          .showError(AppMessage.fromError(error));
-    }
   }
 
   void _scrollToBottom() {
@@ -909,16 +925,11 @@ class _ChatHeader extends StatelessWidget {
     required this.isRefreshing,
     required this.classification,
     required this.isDeletedAgentConversation,
-    required this.isFollowing,
     required this.onDetails,
+    required this.onPeerInfoTap,
     required this.onRefresh,
-    required this.showAgentInbox,
-    this.onFollowTap,
     this.onMacIdentityPanelTap,
-    this.onAgentInboxTap,
     this.onMacConversationInfoTap,
-    this.macIdentityPanelActive = false,
-    this.macAgentInboxPanelActive = false,
     this.macConversationInfoPanelActive = false,
     this.onBack,
   });
@@ -930,15 +941,10 @@ class _ChatHeader extends StatelessWidget {
   final bool isRefreshing;
   final ConversationPeerClassification classification;
   final bool isDeletedAgentConversation;
-  final bool isFollowing;
-  final bool showAgentInbox;
   final VoidCallback onDetails;
-  final Future<void> Function()? onFollowTap;
+  final VoidCallback onPeerInfoTap;
   final VoidCallback? onMacIdentityPanelTap;
-  final VoidCallback? onAgentInboxTap;
   final VoidCallback? onMacConversationInfoTap;
-  final bool macIdentityPanelActive;
-  final bool macAgentInboxPanelActive;
   final bool macConversationInfoPanelActive;
   final Future<void> Function() onRefresh;
 
@@ -978,10 +984,16 @@ class _ChatHeader extends StatelessWidget {
 
             return Row(
               children: <Widget>[
-                AvatarBadge(
-                  seed: compactName,
-                  size: avatarSize,
-                  avatarUri: conversation.avatarUri,
+                AppPressable(
+                  onTap: onPeerInfoTap,
+                  semanticLabel: '打开${classification.detailTypeLabel}信息',
+                  tooltip: '打开${classification.detailTypeLabel}信息',
+                  borderRadius: BorderRadius.circular(avatarSize / 2),
+                  child: AvatarBadge(
+                    seed: compactName,
+                    size: avatarSize,
+                    avatarUri: conversation.avatarUri,
+                  ),
                 ),
                 SizedBox(width: responsive.displayScaled(10)),
                 Expanded(
@@ -1023,14 +1035,6 @@ class _ChatHeader extends StatelessWidget {
                   ),
                 ),
                 SizedBox(width: actionGap),
-                if (onFollowTap != null) ...<Widget>[
-                  _ChatFollowButton(
-                    isFollowing: isFollowing,
-                    compact: width < 560,
-                    onTap: onFollowTap!,
-                  ),
-                  SizedBox(width: responsive.displayScaled(8)),
-                ],
                 _MacChatHeaderButton(
                   key: const Key('chat-refresh-button'),
                   semanticLabel: '刷新当前会话',
@@ -1038,31 +1042,21 @@ class _ChatHeader extends StatelessWidget {
                   isLoading: isRefreshing,
                   onTap: onRefresh,
                 ),
-                if (showAgentInbox && onAgentInboxTap != null) ...<Widget>[
-                  SizedBox(width: responsive.displayScaled(8)),
-                  _MacChatHeaderButton(
-                    key: const Key('chat-agent-inbox-button'),
-                    semanticLabel: 'Agent 收件箱',
-                    icon: CupertinoIcons.tray,
-                    isActive: macAgentInboxPanelActive,
-                    onTap: () async {
-                      onAgentInboxTap!();
-                    },
-                  ),
-                ],
                 SizedBox(width: responsive.displayScaled(8)),
                 _MacChatIdentityButton(
                   key: const Key('chat-identity-card-button'),
                   label: conversation.isGroup ? '群聊信息' : '身份卡',
                   showLabel: showIdentityLabel,
-                  isActive: macIdentityPanelActive,
-                  onTap: onMacIdentityPanelTap ?? onDetails,
+                  isActive: false,
+                  onTap: conversation.isGroup
+                      ? (onMacIdentityPanelTap ?? onDetails)
+                      : onDetails,
                 ),
                 if (onMacConversationInfoTap != null) ...<Widget>[
                   SizedBox(width: responsive.displayScaled(8)),
                   _MacChatHeaderButton(
                     key: const Key('chat-conversation-info-button'),
-                    semanticLabel: '折叠会话信息',
+                    semanticLabel: '打开或关闭会话信息',
                     icon: CupertinoIcons.sidebar_right,
                     isActive: macConversationInfoPanelActive,
                     onTap: () async {
@@ -1106,10 +1100,16 @@ class _ChatHeader extends StatelessWidget {
             ),
           ),
           SizedBox(width: responsive.spacing(4)),
-          AvatarBadge(
-            seed: compactName,
-            size: responsive.avatarSizeMd,
-            avatarUri: conversation.avatarUri,
+          AppPressable(
+            onTap: onPeerInfoTap,
+            semanticLabel: '打开${classification.detailTypeLabel}信息',
+            tooltip: '打开${classification.detailTypeLabel}信息',
+            borderRadius: BorderRadius.circular(responsive.avatarSizeMd / 2),
+            child: AvatarBadge(
+              seed: compactName,
+              size: responsive.avatarSizeMd,
+              avatarUri: conversation.avatarUri,
+            ),
           ),
           SizedBox(width: responsive.spacing(12)),
           Expanded(
@@ -1165,32 +1165,9 @@ class _ChatHeader extends StatelessWidget {
               ],
             ),
           ),
-          if (onFollowTap != null) ...<Widget>[
-            SizedBox(width: responsive.spacing(8)),
-            _ChatFollowButton(
-              isFollowing: isFollowing,
-              compact: true,
-              onTap: onFollowTap!,
-            ),
-            SizedBox(width: responsive.spacing(4)),
-          ],
-          if (showAgentInbox && onAgentInboxTap != null) ...<Widget>[
-            TopBarActionButton(
-              onTap: onAgentInboxTap,
-              semanticsLabel: 'Agent 收件箱',
-              child: Padding(
-                padding: EdgeInsets.all(responsive.spacing(8)),
-                child: Icon(
-                  CupertinoIcons.tray,
-                  color: theme.title,
-                  size: responsive.iconMd,
-                ),
-              ),
-            ),
-            SizedBox(width: responsive.spacing(4)),
-          ],
           TopBarActionButton(
             onTap: onDetails,
+            semanticsLabel: '打开${classification.detailTypeLabel}信息',
             child: Padding(
               padding: EdgeInsets.all(responsive.spacing(8)),
               child: AwikiAssetIcon(
@@ -1200,6 +1177,398 @@ class _ChatHeader extends StatelessWidget {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PeerInfoDialog extends ConsumerStatefulWidget {
+  const _PeerInfoDialog({required this.conversation});
+
+  final ConversationSummary conversation;
+
+  @override
+  ConsumerState<_PeerInfoDialog> createState() => _PeerInfoDialogState();
+}
+
+class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
+  bool _showAgentInbox = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final targetDid = widget.conversation.targetDid?.trim() ?? '';
+    final responsive = context.awikiResponsive;
+    final media = MediaQuery.of(context);
+    final maxDialogWidth = media.size.width < 640
+        ? media.size.width - 32
+        : 620.0;
+    final maxDialogHeight = media.size.height * 0.86;
+    final runtimeAgent = _runtimeAgent();
+    final title = runtimeAgent == null ? '用户信息' : '智能体信息';
+    final state = targetDid.isEmpty
+        ? const PeerProfileState(isLoading: false)
+        : ref.watch(peerProfileProvider(targetDid));
+
+    return SafeArea(
+      minimum: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      child: Center(
+        child: CupertinoPopupSurface(
+          isSurfacePainted: true,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: maxDialogWidth,
+              maxHeight: maxDialogHeight,
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: CupertinoColors.white,
+                borderRadius: BorderRadius.circular(responsive.radius(14)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  _PeerInfoHeader(title: title),
+                  Flexible(
+                    child: state.isLoading
+                        ? const Center(child: CupertinoActivityIndicator())
+                        : state.profile == null
+                        ? _PeerInfoError(onClose: _close)
+                        : _buildProfileContent(
+                            state,
+                            runtimeAgent: runtimeAgent,
+                            maxDialogHeight: maxDialogHeight,
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileContent(
+    PeerProfileState state, {
+    required AgentSummary? runtimeAgent,
+    required double maxDialogHeight,
+  }) {
+    final profile = state.profile!;
+    final displayName = DidDisplayFormatter.profileName(profile);
+    final profileContent = profile.profileMarkdown.trim().isNotEmpty
+        ? profile.profileMarkdown.trim()
+        : profile.bio.trim();
+    final homepageUrl = ref
+        .watch(profileHomepageResolverProvider)
+        .homepageUrl(profile);
+    final isFollowing = ref.watch(friendsProvider).isFollowing(profile.did);
+    final inboxHeight = (maxDialogHeight * 0.48).clamp(320.0, 440.0).toDouble();
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          SelectionArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    AvatarBadge(
+                      seed: displayName,
+                      size: 64,
+                      avatarUri: profile.avatarUri,
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            displayName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF101B32),
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          CopyableDidLine(
+                            value: profile.did,
+                            copySemanticLabel: '复制 DID',
+                            copiedMessage: 'DID 已复制',
+                            textKey: const Key('peer-info-dialog-did-value'),
+                            buttonKey: const Key(
+                              'peer-info-dialog-copy-did-button',
+                            ),
+                            textStyle: const TextStyle(
+                              color: Color(0xFF66728A),
+                              fontSize: 12,
+                              height: 1.25,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    AppPill(
+                      label: localizeRelationshipLabel(
+                        context.l10n,
+                        state.relationship,
+                      ),
+                    ),
+                    if (profile.handle?.isNotEmpty == true)
+                      AppPill(label: '@${profile.handle}'),
+                    AppPill(
+                      label: runtimeAgent == null
+                          ? 'AWiki 用户'
+                          : 'Runtime Agent',
+                    ),
+                  ],
+                ),
+                if (homepageUrl.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 14),
+                  AppInlineLinkRow(
+                    label: homepageUrl,
+                    onTap: () => _openHomepage(homepageUrl),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                _PeerInfoSection(
+                  title: '身份卡',
+                  child: profileContent.isEmpty
+                      ? const Text(
+                          '暂未填写资料',
+                          style: TextStyle(
+                            color: Color(0xFF66728A),
+                            fontSize: 13,
+                          ),
+                        )
+                      : MarkdownBody(
+                          data: profileContent,
+                          selectable: false,
+                          styleSheet: _chatMarkdownStyleSheet(
+                            context,
+                            const TextStyle(
+                              color: Color(0xFF17213A),
+                              fontSize: 13,
+                              height: 1.45,
+                            ),
+                          ),
+                        ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: <Widget>[
+              if (profile.did.trim().startsWith('did:')) ...<Widget>[
+                Expanded(
+                  child: _ChatFollowButton(
+                    isFollowing: isFollowing,
+                    compact: false,
+                    onTap: () => _toggleFollow(profile.did),
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
+              if (runtimeAgent != null)
+                Expanded(
+                  child: AppSecondaryButton(
+                    label: _showAgentInbox ? '收起 Agent 收件箱' : 'Agent 收件箱',
+                    onPressed: () {
+                      setState(() {
+                        _showAgentInbox = !_showAgentInbox;
+                      });
+                    },
+                  ),
+                ),
+            ],
+          ),
+          if (runtimeAgent != null && _showAgentInbox) ...<Widget>[
+            const SizedBox(height: 16),
+            SizedBox(
+              key: const Key('peer-info-agent-inbox'),
+              height: inboxHeight,
+              child: AgentInboxPanel(
+                conversation: widget.conversation,
+                onClose: () {
+                  setState(() {
+                    _showAgentInbox = false;
+                  });
+                },
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _toggleFollow(String did) async {
+    final targetDid = did.trim();
+    if (targetDid.isEmpty) {
+      return;
+    }
+    final isFollowing = ref.read(friendsProvider).isFollowing(targetDid);
+    if (isFollowing) {
+      await confirmAndUnfollow(context, ref, targetDid);
+      return;
+    }
+    try {
+      await ref.read(friendsProvider.notifier).follow(targetDid);
+    } catch (error) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
+    }
+  }
+
+  Future<void> _openHomepage(String homepageUrl) async {
+    try {
+      await launchUrl(
+        Uri.parse(homepageUrl),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (error) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.linkOpenFailed('$error'));
+    }
+  }
+
+  AgentSummary? _runtimeAgent() {
+    final targetDid = widget.conversation.targetDid?.trim();
+    if (targetDid == null || targetDid.isEmpty || widget.conversation.isGroup) {
+      return null;
+    }
+    for (final agent in ref.watch(agentsProvider).agents) {
+      if (agent.isRuntime && agent.agentDid == targetDid) {
+        return agent;
+      }
+    }
+    return null;
+  }
+
+  void _close() {
+    Navigator.of(context).pop();
+  }
+}
+
+class _PeerInfoHeader extends StatelessWidget {
+  const _PeerInfoHeader({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Container(
+      height: responsive.displayScaled(58),
+      padding: EdgeInsets.fromLTRB(
+        responsive.spacing(18),
+        0,
+        responsive.spacing(12),
+        0,
+      ),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xFFE5EAF2))),
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                color: const Color(0xFF101B32),
+                fontSize: responsive.titleLg,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          AppIconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            semanticLabel: '关闭信息弹窗',
+            tooltip: '关闭',
+            size: responsive.displayScaled(32),
+            backgroundColor: const Color(0xFFF5F7FB),
+            borderColor: const Color(0xFFE4E9F2),
+            child: Icon(
+              CupertinoIcons.xmark,
+              color: const Color(0xFF66728A),
+              size: responsive.iconSm,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PeerInfoSection extends StatelessWidget {
+  const _PeerInfoSection({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFD),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5EAF2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            title,
+            style: const TextStyle(
+              color: Color(0xFF101B32),
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _PeerInfoError extends StatelessWidget {
+  const _PeerInfoError({required this.onClose});
+
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          AwikiMeErrorText(
+            message: context.l10n.peerProfileLoadFailed,
+            textAlign: TextAlign.center,
+            compact: true,
+          ),
+          const SizedBox(height: 16),
+          AppSecondaryButton(label: '关闭', onPressed: onClose),
         ],
       ),
     );
@@ -1730,6 +2099,7 @@ class _MessageBubble extends StatelessWidget {
     this.onRetry,
     this.onDownload,
     this.isDownloading = false,
+    this.onPeerInfoTap,
   });
 
   final ChatMessage message;
@@ -1739,11 +2109,29 @@ class _MessageBubble extends StatelessWidget {
   final Future<void> Function()? onRetry;
   final Future<void> Function()? onDownload;
   final bool isDownloading;
+  final VoidCallback? onPeerInfoTap;
 
   Widget _withE2eMessageSemantics({required Widget child}) {
     return e2eSemantics(
       identifier: e2eMessageIdentifier(message.content),
       label: message.content,
+      child: child,
+    );
+  }
+
+  Widget _withPeerInfoTap({
+    required Widget child,
+    required double borderRadius,
+  }) {
+    final tap = onPeerInfoTap;
+    if (tap == null) {
+      return child;
+    }
+    return AppPressable(
+      onTap: tap,
+      semanticLabel: '查看用户或智能体信息',
+      tooltip: '查看用户或智能体信息',
+      borderRadius: BorderRadius.circular(borderRadius),
       child: child,
     );
   }
@@ -1912,9 +2300,12 @@ class _MessageBubble extends StatelessWidget {
                     ? _senderLabelOffset(context, macStyle: true)
                     : 0,
               ),
-              child: AvatarBadge(
-                seed: senderLabel,
-                size: responsive.displayScaled(34),
+              child: _withPeerInfoTap(
+                borderRadius: responsive.displayScaled(17),
+                child: AvatarBadge(
+                  seed: senderLabel,
+                  size: responsive.displayScaled(34),
+                ),
               ),
             ),
             SizedBox(width: responsive.displayScaled(10)),
@@ -1961,9 +2352,12 @@ class _MessageBubble extends StatelessWidget {
                     ? _senderLabelOffset(context, macStyle: false)
                     : 0,
               ),
-              child: AvatarBadge(
-                seed: senderLabel,
-                size: responsive.scaled(28),
+              child: _withPeerInfoTap(
+                borderRadius: responsive.scaled(14),
+                child: AvatarBadge(
+                  seed: senderLabel,
+                  size: responsive.scaled(28),
+                ),
               ),
             ),
             SizedBox(width: responsive.spacing(12)),
@@ -2461,8 +2855,8 @@ class _AttachmentActionButton extends StatelessWidget {
         : responsive.scaled(34);
     return AppIconButton(
       onPressed: isLoading ? null : () async => onTap(),
-      semanticLabel: '下载附件',
-      tooltip: '下载附件',
+      semanticLabel: '查看附件',
+      tooltip: '查看附件',
       isLoading: isLoading,
       size: size,
       backgroundColor: macStyle ? CupertinoColors.white : theme.surface,
@@ -2471,7 +2865,7 @@ class _AttachmentActionButton extends StatelessWidget {
         macStyle ? responsive.displayScaled(8) : 10,
       ),
       child: Icon(
-        CupertinoIcons.arrow_down_doc_fill,
+        CupertinoIcons.eye,
         color: macStyle ? const Color(0xFF0B65F8) : theme.primary,
         size: macStyle ? responsive.displayScaled(17) : responsive.iconSm,
       ),

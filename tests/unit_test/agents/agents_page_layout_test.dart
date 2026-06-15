@@ -250,6 +250,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('创建 Hermes'), findsWidgets);
+      expect(find.text('Agent 类型'), findsOneWidget);
+      expect(find.text('当前仅支持 Hermes Runtime Agent'), findsOneWidget);
       final fields = find.byType(CupertinoTextField);
       expect(fields, findsNWidgets(2));
       final nameField = tester.widget<CupertinoTextField>(fields.at(0));
@@ -782,6 +784,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('到宿主机安装代理'), findsOneWidget);
+    expect(find.textContaining('支持的 Agent 类型：Hermes'), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.xmark), findsOneWidget);
     expect(find.byKey(const Key('agent-install-copy-button')), findsOneWidget);
     expect(find.text('重新生成命令'), findsNothing);

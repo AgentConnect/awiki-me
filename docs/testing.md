@@ -43,6 +43,18 @@ targets, draft range invalidation, ANP P9 payload projection, send-path
 selection, render-time highlight spans, and Unicode code point offsets needed by
 ANP P9 payloads.
 
+Focused UI optimization checks (Agent type selector, conversation info default
+closed, user/Agent info popup, Agent inbox pagination/time display, onboarding
+logo alignment, attachment view affordance, and native attachment open path):
+
+```bash
+flutter test tests/unit_test/agents/agents_page_layout_test.dart
+flutter test tests/unit_test/agents/agent_inbox_provider_test.dart
+flutter test tests/unit_test/conversation_workspace_test.dart
+flutter test tests/unit_test/chat_page_test.dart
+flutter test tests/unit_test/onboarding_page_test.dart
+```
+
 Unit fakes live under `tests/unit_test/support/` and
 `tests/unit_test/test_support.dart`. Integration-only bootstraps live under
 `tests/integration_test/support/`. Keep production code free of test-only mocks.
@@ -68,6 +80,33 @@ flutter test integration_test/app_smoke_test.dart -d macos
 flutter test integration_test/im_core_open_smoke_test.dart -d macos
 flutter test integration_test/agent_im_delegated_message_e2e_test.dart -d macos
 ```
+
+For UI-only smoke after the UI optimization work, run the fake-bootstrap app
+smoke on the local desktop runner. On macOS, set a UTF-8 locale before invoking
+Flutter so CocoaPods does not fail during `pod install`:
+
+```bash
+LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/app_smoke_test.dart -d macos
+```
+
+For UI / visual verification of the same work, run the screenshot smoke. It
+starts the full `AwikiMeApp` with deterministic fake bootstrap data at
+1600x960, walks the modified UI surfaces, and writes PNG evidence under
+`docs/ui-optimization-plan/screenshots/`:
+
+```bash
+LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/ui_visual_verification_test.dart -d macos
+```
+
+Expected screenshots:
+
+- `docs/ui-optimization-plan/screenshots/01-onboarding-login.png`
+- `docs/ui-optimization-plan/screenshots/02-chat-default-info-closed.png`
+- `docs/ui-optimization-plan/screenshots/03-chat-info-side-panel.png`
+- `docs/ui-optimization-plan/screenshots/04-agent-info-popup.png`
+- `docs/ui-optimization-plan/screenshots/05-agent-inbox-list.png`
+- `docs/ui-optimization-plan/screenshots/06-agent-inbox-thread.png`
+- `docs/ui-optimization-plan/screenshots/07-agent-create-hermes-type.png`
 
 Linux desktop integration is supported through the `linux/` runner. Ubuntu
 hosts need Flutter Linux desktop prerequisites and an X server; CI and servers

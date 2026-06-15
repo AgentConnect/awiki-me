@@ -184,7 +184,7 @@ class _MacConversationDetailAreaState
   static const double _maxAgentInboxWidth = 420;
 
   _MacDetailSidePanel _sidePanel = _MacDetailSidePanel.conversationInfo;
-  bool _isSidePanelOpen = true;
+  bool _isSidePanelOpen = false;
   bool _isInlineSidePanelOpen = false;
   String? _activeThreadId;
   double? _conversationInfoWidth;
@@ -198,7 +198,7 @@ class _MacConversationDetailAreaState
     if (selectedThreadId != _activeThreadId) {
       _activeThreadId = selectedThreadId;
       _sidePanel = _MacDetailSidePanel.conversationInfo;
-      _isSidePanelOpen = true;
+      _isSidePanelOpen = false;
       _isInlineSidePanelOpen = false;
     }
   }
@@ -228,11 +228,6 @@ class _MacConversationDetailAreaState
         final visiblePanelIsOpen = canShowSidePanel
             ? _isSidePanelOpen
             : _isInlineSidePanelOpen;
-        final identityPanelActive =
-            _sidePanel == _MacDetailSidePanel.identityCard &&
-            visiblePanelIsOpen;
-        final agentInboxPanelActive =
-            _sidePanel == _MacDetailSidePanel.agentInbox && visiblePanelIsOpen;
         final conversationInfoPanelActive =
             _sidePanel == _MacDetailSidePanel.conversationInfo &&
             visiblePanelIsOpen;
@@ -245,17 +240,14 @@ class _MacConversationDetailAreaState
                 embedded: true,
                 macStyle: true,
                 onBack: widget.onClearSelection,
-                onMacIdentityPanelTap: () {
-                  _openIdentityPanel(canShowSidePanel: canShowSidePanel);
-                },
-                onMacAgentInboxTap: () {
-                  _toggleAgentInbox(canShowSidePanel: canShowSidePanel);
-                },
+                onMacIdentityPanelTap: selectedConversation.isGroup
+                    ? () {
+                        _openIdentityPanel(canShowSidePanel: canShowSidePanel);
+                      }
+                    : null,
                 onMacConversationInfoTap: () {
                   _toggleConversationInfo(canShowSidePanel: canShowSidePanel);
                 },
-                macIdentityPanelActive: identityPanelActive,
-                macAgentInboxPanelActive: agentInboxPanelActive,
                 macConversationInfoPanelActive: conversationInfoPanelActive,
               ),
             ),
@@ -373,6 +365,21 @@ class _MacConversationDetailAreaState
     }
   }
 
+  void _openIdentityPanel({required bool canShowSidePanel}) {
+    setState(() {
+      if (canShowSidePanel &&
+          _sidePanel == _MacDetailSidePanel.identityCard &&
+          _isSidePanelOpen) {
+        _isSidePanelOpen = false;
+        _isInlineSidePanelOpen = false;
+        return;
+      }
+      _sidePanel = _MacDetailSidePanel.identityCard;
+      _isSidePanelOpen = true;
+      _isInlineSidePanelOpen = !canShowSidePanel;
+    });
+  }
+
   Widget _buildSidePanel(
     ConversationSummary selectedConversation, {
     required bool inline,
@@ -417,21 +424,6 @@ class _MacConversationDetailAreaState
     );
   }
 
-  void _openIdentityPanel({required bool canShowSidePanel}) {
-    setState(() {
-      if (canShowSidePanel &&
-          _sidePanel == _MacDetailSidePanel.identityCard &&
-          _isSidePanelOpen) {
-        _isSidePanelOpen = false;
-        _isInlineSidePanelOpen = false;
-        return;
-      }
-      _sidePanel = _MacDetailSidePanel.identityCard;
-      _isSidePanelOpen = true;
-      _isInlineSidePanelOpen = !canShowSidePanel;
-    });
-  }
-
   void _toggleConversationInfo({required bool canShowSidePanel}) {
     setState(() {
       if (!canShowSidePanel) {
@@ -444,24 +436,6 @@ class _MacConversationDetailAreaState
         _isSidePanelOpen = !_isSidePanelOpen;
       } else {
         _sidePanel = _MacDetailSidePanel.conversationInfo;
-        _isSidePanelOpen = true;
-      }
-      _isInlineSidePanelOpen = false;
-    });
-  }
-
-  void _toggleAgentInbox({required bool canShowSidePanel}) {
-    setState(() {
-      if (!canShowSidePanel) {
-        _sidePanel = _MacDetailSidePanel.agentInbox;
-        _isSidePanelOpen = true;
-        _isInlineSidePanelOpen = true;
-        return;
-      }
-      if (_sidePanel == _MacDetailSidePanel.agentInbox) {
-        _isSidePanelOpen = !_isSidePanelOpen;
-      } else {
-        _sidePanel = _MacDetailSidePanel.agentInbox;
         _isSidePanelOpen = true;
       }
       _isInlineSidePanelOpen = false;

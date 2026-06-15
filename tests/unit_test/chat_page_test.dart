@@ -9,6 +9,7 @@ import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/peer_agent_identity.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
@@ -26,6 +27,10 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+// ignore: depend_on_referenced_packages
+import 'package:url_launcher_platform_interface/link.dart';
+// ignore: depend_on_referenced_packages
+import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 
 import 'test_support.dart';
 
@@ -35,6 +40,40 @@ class _StaticConversationListController extends ConversationListController {
     List<ConversationSummary> conversations,
   ) {
     state = ConversationListState(conversations: conversations);
+  }
+}
+
+class _FakeUrlLauncherPlatform extends UrlLauncherPlatform {
+  bool result = true;
+  final launchedUrls = <String>[];
+  final launchOptions = <LaunchOptions>[];
+
+  @override
+  LinkDelegate? get linkDelegate => null;
+
+  @override
+  Future<bool> canLaunch(String url) async => true;
+
+  @override
+  Future<bool> launchUrl(String url, LaunchOptions options) async {
+    launchedUrls.add(url);
+    launchOptions.add(options);
+    return result;
+  }
+
+  @override
+  Future<bool> launch(
+    String url, {
+    required bool useSafariVC,
+    required bool useWebView,
+    required bool enableJavaScript,
+    required bool enableDomStorage,
+    required bool universalLinksOnly,
+    required Map<String, String> headers,
+    String? webOnlyWindowName,
+  }) async {
+    launchedUrls.add(url);
+    return result;
   }
 }
 
@@ -174,7 +213,6 @@ void main() {
             embedded: true,
             macStyle: true,
             onMacConversationInfoTap: () {},
-            macIdentityPanelActive: true,
           ),
         ),
         gateway: gateway,
@@ -208,9 +246,9 @@ void main() {
     expect(infoIcon.size, refreshIcon.size);
     expect(infoIcon.weight, refreshIcon.weight);
     expect(refreshIcon.weight, 500);
-    expect(identityIcon.color, isNot(refreshIcon.color));
-    expect(identityIcon.weight, greaterThan(refreshIcon.weight!));
-    expect(identityLabel.style?.fontWeight, FontWeight.w600);
+    expect(identityIcon.color, refreshIcon.color);
+    expect(identityIcon.weight, refreshIcon.weight);
+    expect(identityLabel.style?.fontWeight, FontWeight.w400);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -361,14 +399,21 @@ void main() {
     expect(find.text('远端智能体'), findsOneWidget);
     expect(find.text('智能体'), findsOneWidget);
     expect(find.text('我的智能体'), findsNothing);
-    expect(find.text('关注'), findsOneWidget);
+    expect(find.text('关注'), findsNothing);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });
 
   testWidgets('聊天头部关注按钮会把对方加入我关注的列表', (tester) async {
-    final gateway = FakeAwikiGateway();
+    final gateway = FakeAwikiGateway()
+      ..publicProfile = const UserProfile(
+        did: 'did:test:peer',
+        nickName: 'Peer',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+      );
     const session = SessionIdentity(
       did: 'did:test:me',
       handle: 'me',
@@ -396,6 +441,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.bySemanticsLabel('打开用户信息').last);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('关注'));
     await tester.pumpAndSettle();
 
@@ -404,7 +451,15 @@ void main() {
   });
 
   testWidgets('聊天头部关注失败时保持未关注并提示错误', (tester) async {
-    final gateway = FakeAwikiGateway()..failNextFollow = true;
+    final gateway = FakeAwikiGateway()
+      ..failNextFollow = true
+      ..publicProfile = const UserProfile(
+        did: 'did:test:peer',
+        nickName: 'Peer',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+      );
     const session = SessionIdentity(
       did: 'did:test:me',
       handle: 'me',
@@ -432,6 +487,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.bySemanticsLabel('打开用户信息').last);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('关注'));
     await tester.pumpAndSettle();
 
@@ -453,7 +510,14 @@ void main() {
           displayName: 'Peer',
           relationship: 'following',
         ),
-      ];
+      ]
+      ..publicProfile = const UserProfile(
+        did: 'did:test:peer',
+        nickName: 'Peer',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+      );
     const session = SessionIdentity(
       did: 'did:test:me',
       handle: 'me',
@@ -496,6 +560,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.bySemanticsLabel('打开用户信息').last);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('已关注'));
     await tester.pump();
 
@@ -2487,6 +2553,88 @@ void main() {
 
     expect(find.text('附件说明'), findsOneWidget);
     expect(find.text('copyable-report.pdf'), findsOneWidget);
+  });
+
+  testWidgets('查看附件会下载保存后用本机应用打开文件', (tester) async {
+    final previousLauncher = UrlLauncherPlatform.instance;
+    final launcher = _FakeUrlLauncherPlatform();
+    UrlLauncherPlatform.instance = launcher;
+    addTearDown(() {
+      UrlLauncherPlatform.instance = previousLauncher;
+    });
+    final gateway = FakeAwikiGateway();
+    final picker = FakeAttachmentPickerService()
+      ..nextSavedPath = '/tmp/native-open-report.txt';
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:native-open-attachment',
+      displayName: 'Tester',
+      lastMessagePreview: '[附件] report.txt',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
+      conversation.targetDid!: <ChatMessage>[
+        ChatMessage(
+          localId: 'native-open-attachment',
+          remoteId: 'native-open-attachment',
+          threadId: conversation.threadId,
+          senderDid: conversation.targetDid!,
+          receiverDid: session.did,
+          content: '',
+          createdAt: DateTime(2026, 4, 5, 12, 1),
+          isMine: false,
+          sendState: MessageSendState.sent,
+          originalType: 'application/anp-attachment-manifest+json',
+          attachment: const ChatAttachment(
+            attachmentId: 'att-native-open',
+            filename: 'report.txt',
+            mimeType: 'text/plain',
+            sizeBytes: 5,
+          ),
+        ),
+      ],
+    };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          attachmentPickerServiceProvider.overrideWithValue(picker),
+        ],
+      ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.bySemanticsLabel('查看附件'));
+    await tester.pumpAndSettle();
+
+    expect(picker.saveCalls, 1);
+    expect(picker.lastSavedFilename, 'download.txt');
+    expect(launcher.launchedUrls, <String>[
+      'file:///tmp/native-open-report.txt',
+    ]);
+    expect(
+      launcher.launchOptions.single.mode,
+      PreferredLaunchMode.externalApplication,
+    );
   });
 
   testWidgets('对方附件说明按 Markdown 渲染，文件名仍按普通文本复制', (tester) async {

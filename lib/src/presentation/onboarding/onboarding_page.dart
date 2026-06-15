@@ -141,23 +141,41 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           children: <Widget>[
             SizedBox(height: responsive.spacing(responsive.isPhone ? 20 : 8)),
             Center(
-              child: Image.asset(
-                'assets/branding/awiki-me-logo.png',
-                width: responsive.scaled(125),
-                height: responsive.scaled(125),
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => Text(
-                  '@_',
-                  style: TextStyle(
-                    fontSize: responsive.isPhone ? 72 : responsive.scaled(58),
-                    fontWeight: FontWeight.w600,
-                    color: AwikiMePalette.actionBlue,
-                    height: 1,
+              child: Container(
+                width: responsive.scaled(126),
+                height: responsive.scaled(126),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: CupertinoColors.white,
+                  borderRadius: BorderRadius.circular(
+                    responsive.radius(responsive.isPhone ? 28 : 24),
+                  ),
+                  boxShadow: const <BoxShadow>[
+                    BoxShadow(
+                      color: Color(0x160B65F8),
+                      blurRadius: 28,
+                      offset: Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: Image.asset(
+                  'assets/branding/awiki-me-logo.png',
+                  width: responsive.scaled(92),
+                  height: responsive.scaled(92),
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => Text(
+                    '@_',
+                    style: TextStyle(
+                      fontSize: responsive.isPhone ? 72 : responsive.scaled(58),
+                      fontWeight: FontWeight.w600,
+                      color: AwikiMePalette.actionBlue,
+                      height: 1,
+                    ),
                   ),
                 ),
               ),
             ),
-            SizedBox(height: responsive.spacing(responsive.isPhone ? 48 : 40)),
+            SizedBox(height: responsive.spacing(responsive.isPhone ? 34 : 30)),
             _SegmentedPill(
               value: onboarding.entryMode,
               options: <String, String>{
@@ -332,7 +350,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             SizedBox(height: responsive.spacing(56)),
             Center(
               child: Text(
-                'Base on awiki.info',
+                'Based on awiki.info',
                 style: TextStyle(
                   color: theme.infoAccent,
                   fontSize: responsive.titleLg,
@@ -687,14 +705,20 @@ class _MacAgentOrbit extends StatelessWidget {
                   ),
                 ],
               ),
-              child: const Center(
-                child: Text(
-                  'AW',
-                  style: TextStyle(
-                    color: Color(0xFF0B65F8),
-                    fontSize: 38,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0,
+              child: Center(
+                child: Image.asset(
+                  'assets/branding/awiki-me-logo.png',
+                  width: 74,
+                  height: 74,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Text(
+                    'AW',
+                    style: TextStyle(
+                      color: Color(0xFF0B65F8),
+                      fontSize: 38,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0,
+                    ),
                   ),
                 ),
               ),

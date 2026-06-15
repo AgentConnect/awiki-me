@@ -1661,6 +1661,12 @@ Future<void> _showCreateHermesDialog(
   if (result == null) {
     return;
   }
+  if (result.agentType != 'hermes') {
+    ref
+        .read(uiFeedbackProvider.notifier)
+        .showError(AppMessage.fromError('暂不支持的 Agent 类型'));
+    return;
+  }
   await ref
       .read(agentsProvider.notifier)
       .createHermesRuntime(
@@ -1672,10 +1678,12 @@ Future<void> _showCreateHermesDialog(
 
 class _RuntimeAgentCreationDraft {
   const _RuntimeAgentCreationDraft({
+    required this.agentType,
     required this.displayName,
     required this.handle,
   });
 
+  final String agentType;
   final String displayName;
   final String handle;
 }
@@ -1812,6 +1820,7 @@ class _CreateHermesDialogState extends State<_CreateHermesDialog> {
   }
 
   void _submit() {
+    const agentType = 'hermes';
     final displayName = _nameController.text.trim();
     final handle = _handleController.text.trim();
     final nameError = _validateAgentDisplayName(displayName);
@@ -1829,9 +1838,13 @@ class _CreateHermesDialogState extends State<_CreateHermesDialog> {
       }
       return;
     }
-    Navigator.of(
-      context,
-    ).pop(_RuntimeAgentCreationDraft(displayName: displayName, handle: handle));
+    Navigator.of(context).pop(
+      _RuntimeAgentCreationDraft(
+        agentType: agentType,
+        displayName: displayName,
+        handle: handle,
+      ),
+    );
   }
 
   @override
@@ -1908,6 +1921,8 @@ class _CreateHermesDialogState extends State<_CreateHermesDialog> {
                       ],
                     ),
                     SizedBox(height: responsive.spacing(14)),
+                    const _AgentTypeSelector(),
+                    SizedBox(height: responsive.spacing(12)),
                     _AgentDialogField(
                       label: '名称',
                       controller: _nameController,
@@ -1984,6 +1999,85 @@ class _CreateHermesDialogState extends State<_CreateHermesDialog> {
       return null;
     }
     return _remoteAvailability;
+  }
+}
+
+class _AgentTypeSelector extends StatelessWidget {
+  const _AgentTypeSelector();
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          'Agent 类型',
+          style: TextStyle(
+            color: const Color(0xFF66728A),
+            fontSize: responsive.metaSm,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        SizedBox(height: responsive.spacing(6)),
+        Container(
+          padding: EdgeInsets.all(responsive.spacing(12)),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEAF2FF),
+            borderRadius: BorderRadius.circular(responsive.radius(10)),
+            border: Border.all(color: const Color(0xFFB8C8E4)),
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: responsive.displayScaled(32),
+                height: responsive.displayScaled(32),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: CupertinoColors.white,
+                  borderRadius: BorderRadius.circular(responsive.radius(8)),
+                ),
+                child: Icon(
+                  CupertinoIcons.sparkles,
+                  color: const Color(0xFF0B65F8),
+                  size: responsive.iconSm,
+                ),
+              ),
+              SizedBox(width: responsive.spacing(10)),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Hermes',
+                      style: TextStyle(
+                        color: Color(0xFF17213A),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      '当前仅支持 Hermes Runtime Agent',
+                      style: TextStyle(
+                        color: Color(0xFF66728A),
+                        fontSize: 12,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                CupertinoIcons.check_mark_circled_solid,
+                color: const Color(0xFF0B65F8),
+                size: responsive.iconMd,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -2517,6 +2611,8 @@ class _InstallCommandDialog extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
+                          const _SupportedAgentTypeHint(),
+                          SizedBox(height: responsive.spacing(12)),
                           _CommandText(
                             command.command,
                             onCopy: () async {
@@ -2542,6 +2638,45 @@ class _InstallCommandDialog extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SupportedAgentTypeHint extends StatelessWidget {
+  const _SupportedAgentTypeHint();
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Container(
+      padding: EdgeInsets.all(responsive.spacing(12)),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7FAFF),
+        borderRadius: BorderRadius.circular(responsive.radius(9)),
+        border: Border.all(color: const Color(0xFFE2EAF6)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(
+            CupertinoIcons.sparkles,
+            color: const Color(0xFF0B65F8),
+            size: responsive.iconSm,
+          ),
+          SizedBox(width: responsive.spacing(8)),
+          const Expanded(
+            child: Text(
+              '支持的 Agent 类型：Hermes。安装宿主代理后，可在 Daemon 下创建 Hermes Runtime Agent。',
+              style: TextStyle(
+                color: Color(0xFF4B5870),
+                fontSize: 12,
+                height: 1.35,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

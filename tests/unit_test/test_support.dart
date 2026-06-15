@@ -1440,12 +1440,16 @@ class FakeAgentControlService implements AgentControlService {
   String? lastInboxDaemonDid;
   String? lastInboxRuntimeDid;
   String? lastInboxScope;
+  int? lastInboxLimit;
+  String? lastInboxCursor;
   String nextInboxRequestId = 'cmd_runtime_inbox_test';
   String? lastInboxThreadDaemonDid;
   String? lastInboxThreadRuntimeDid;
   String? lastInboxThreadId;
   String? lastInboxThreadKind;
   String? lastInboxThreadPeerHandle;
+  int? lastInboxThreadLimit;
+  String? lastInboxThreadCursor;
   String nextInboxThreadRequestId = 'cmd_runtime_inbox_thread_test';
   String? lastUnboundAgentDid;
   String? lastDeletedDaemonDid;
@@ -1527,12 +1531,14 @@ class FakeAgentControlService implements AgentControlService {
     required String daemonAgentDid,
     required String runtimeAgentDid,
     String scope = 'all',
-    int limit = 30,
+    int limit = 20,
     String? cursor,
   }) async {
     lastInboxDaemonDid = daemonAgentDid;
     lastInboxRuntimeDid = runtimeAgentDid;
     lastInboxScope = scope;
+    lastInboxLimit = limit;
+    lastInboxCursor = cursor;
     return nextInboxRequestId;
   }
 
@@ -1545,7 +1551,7 @@ class FakeAgentControlService implements AgentControlService {
     String? peerDid,
     String? peerHandle,
     String? groupDid,
-    int limit = 50,
+    int limit = 20,
     String? cursor,
   }) async {
     lastInboxThreadDaemonDid = daemonAgentDid;
@@ -1553,6 +1559,8 @@ class FakeAgentControlService implements AgentControlService {
     lastInboxThreadId = threadId;
     lastInboxThreadKind = kind;
     lastInboxThreadPeerHandle = peerHandle;
+    lastInboxThreadLimit = limit;
+    lastInboxThreadCursor = cursor;
     return nextInboxThreadRequestId;
   }
 

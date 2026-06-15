@@ -322,6 +322,7 @@ void main() {
       final args = messages.lastPayload?['args'] as Map<String, Object?>;
       expect(args['runtime_agent_did'], 'did:agent:runtime');
       expect(args['scope'], 'direct');
+      expect(args['limit'], 20);
       expect(
         messages.lastIdempotencyKey,
         contains('runtime-inbox:did:agent:runtime:'),
@@ -353,6 +354,7 @@ void main() {
     expect(args['kind'], 'direct');
     expect(args['peer_did'], 'did:human:bob');
     expect(args['peer_handle'], 'bob.anpclaw.com');
+    expect(args['limit'], 20);
   });
 
   test('createDaemonInstallCommand returns token-only main command', () async {
