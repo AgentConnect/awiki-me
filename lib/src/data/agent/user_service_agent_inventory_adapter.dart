@@ -35,11 +35,14 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
        _bearerTokenProvider = bearerTokenProvider,
        _authenticatedClient = authenticatedClient;
 
-  factory UserServiceAgentInventoryAdapter.fromEnvironment() {
-    final environment = AwikiEnvironmentConfig.fromEnvironment();
+  factory UserServiceAgentInventoryAdapter.fromEnvironment({
+    AwikiEnvironmentConfig? environment,
+  }) {
+    final effectiveEnvironment =
+        environment ?? AwikiEnvironmentConfig.fromEnvironment();
     return UserServiceAgentInventoryAdapter._(
-      userServiceUrl: environment.userServiceUrl,
-      environment: environment,
+      userServiceUrl: effectiveEnvironment.userServiceUrl,
+      environment: effectiveEnvironment,
     );
   }
 

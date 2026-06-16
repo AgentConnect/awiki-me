@@ -87,8 +87,6 @@ venv/
 /.e2e/
 /awiki_e2e.local.yaml
 # Local E2E configuration files
-/tests/e2e_test/configs/*.local.yaml
-/tests/e2e_test/configs/*.local.yml
-/tests/e2e_test/configs/*.local.env
-/e2e/config.local.yaml
-/e2e/reports/
+/tests/e2e/configs/*.local.yaml
+/tests/e2e/configs/*.local.yml
+/tests/e2e/configs/*.local.env

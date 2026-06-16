@@ -14,7 +14,7 @@ Step index：03
 | Completed | 2026-06-14T21:18:37+08:00 |
 | Commit | `awiki-me-group:ab5fd16 feat(app): send and render group mentions` |
 | Review evidence | 手工 Review 通过：确认 App 发送的 P9 payload 仅包含 `text` 与 `mentions`，不新增 sender/proof/profile/专用 content type；群聊有合法 draft mention 时走 `sendMentionText`/SDK payload，普通文本仍走旧 `sendText`；mapper 将合法 P9 payload 投影为 `ChatMessage.content + mentions`，invalid range/target 只显示文本不高亮；`_MessageTextContent` 仅在 valid mentions 存在时使用纯文本 RichText，高亮范围不走 Markdown，普通 Markdown/附件 caption 路径保持原行为；retry、fake service、E2E probe stub 均补齐 mention payload 接口，避免重发丢 payload。修复项：补齐 `MessagingService.sendMentionText` 所有测试/工具实现、补 `notificationFacadeProvider` 测试 override、修正 highlight widget test 的 payload 可渲染条件。 |
-| Verification evidence | 通过：`cd awiki-me-group && flutter test tests/unit_test --name "mention payload"`（2 passed）；`cd awiki-me-group && flutter test tests/unit_test --name "mention highlight"`（1 passed）；`cd awiki-me-group && flutter test tests/unit_test --name "send mention"`（1 passed）；`cd awiki-me-group && flutter test tests/unit_test --name "chat mention"`（3 passed）；`cd awiki-me-group && flutter test tests/unit_test/chat_page_test.dart --name "macOS 聊天输入条保持发送能力"`（1 passed）；`cd awiki-me-group && dart analyze`（No issues）；`cd awiki-me-group && git diff --check`（通过）。未做真实后端/手动移动端发送，原因：Step 03 只覆盖 App 发送分支、mapper 投影和 UI 高亮，端到端真实后端验证留到 Step 05。 |
+| Verification evidence | 通过：`cd awiki-me-group && flutter test tests/unit --name "mention payload"`（2 passed）；`cd awiki-me-group && flutter test tests/unit --name "mention highlight"`（1 passed）；`cd awiki-me-group && flutter test tests/unit --name "send mention"`（1 passed）；`cd awiki-me-group && flutter test tests/unit --name "chat mention"`（3 passed）；`cd awiki-me-group && flutter test tests/unit/chat_page_test.dart --name "macOS 聊天输入条保持发送能力"`（1 passed）；`cd awiki-me-group && dart analyze`（No issues）；`cd awiki-me-group && git diff --check`（通过）。未做真实后端/手动移动端发送，原因：Step 03 只覆盖 App 发送分支、mapper 投影和 UI 高亮，端到端真实后端验证留到 Step 05。 |
 | Next action | Step 03 已完成；下一步执行 Step 04 Daemon mention 命中与 prompt 注入 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
@@ -64,7 +64,7 @@ Step index：03
 | `awiki-me/lib/src/data/im_core/awiki_im_core_mappers.dart` | payloadJson → ChatMessage projection | 控制 payload 仍隐藏。 |
 | `awiki-me/lib/src/presentation/chat/chat_provider.dart` | 发送分支、pending message、retry 策略 | retry 需保留 original payload。 |
 | `awiki-me/lib/src/presentation/chat/chat_page.dart` | mention span 高亮 | 普通 Markdown 保持。 |
-| `awiki-me/tests/unit_test/` | mapper / widget / provider tests | 覆盖合法和非法 P9。 |
+| `awiki-me/tests/unit/` | mapper / widget / provider tests | 覆盖合法和非法 P9。 |
 
 ## 6. 依赖
 
@@ -86,9 +86,9 @@ Step index：03
 
 | 检查项 | 命令 / 方法 | 预期证据 |
 |---|---|---|
-| Mapper unit | `cd awiki-me && flutter test tests/unit_test --name "mention payload"` | payload projection 测试通过。 |
-| Widget | `cd awiki-me && flutter test tests/unit_test --name "mention highlight"` | mention span 高亮测试通过。 |
-| Provider | `cd awiki-me && flutter test tests/unit_test --name "send mention"` | 有 mentions 时走 payload，无 mentions 走 sendText。 |
+| Mapper unit | `cd awiki-me && flutter test tests/unit --name "mention payload"` | payload projection 测试通过。 |
+| Widget | `cd awiki-me && flutter test tests/unit --name "mention highlight"` | mention span 高亮测试通过。 |
+| Provider | `cd awiki-me && flutter test tests/unit --name "send mention"` | 有 mentions 时走 payload，无 mentions 走 sendText。 |
 | Analyze | `cd awiki-me && dart analyze` | 无静态分析问题。 |
 | Manual | 群聊发送 `@所有 Agents` 与 `@单个成员` | UI 显示、高亮、preview 正常。 |
 
@@ -122,7 +122,7 @@ Step index：03
 | 项 | 记录 |
 |---|---|
 | Commit 前状态 | `awiki-me-group` 已暂存 Step 03 App sending / mapper / render / tests / docs/testing 改动；主 Plan 与本 Step 台账文件未暂存，留待证据回填提交。 |
-| 纳入文件 | `docs/testing.md`、`lib/src/application/messaging_service.dart`、`lib/src/data/im_core/awiki_im_core_mappers.dart`、`lib/src/data/im_core/awiki_im_core_message_adapter.dart`、`lib/src/domain/entities/chat_mention.dart`、`lib/src/domain/entities/chat_message.dart`、`lib/src/presentation/chat/chat_page.dart`、`lib/src/presentation/chat/chat_provider.dart`、`tests/e2e_test/scenarios/agent_im_delegated_message/app_bootstrap_scenario.dart`、`tests/unit_test/agents/agent_control_service_test.dart`、`tests/unit_test/chat_mention_composer_test.dart`、`tests/unit_test/chat_mention_send_test.dart`、`tests/unit_test/data/compat/compat_awiki_gateway_test.dart`、`tests/unit_test/data/im_core/awiki_im_core_payload_mapper_test.dart`、`tests/unit_test/test_support.dart`、`tool/agent_im_real_e2e_probe.dart`。 |
+| 纳入文件 | `docs/testing.md`、`lib/src/application/messaging_service.dart`、`lib/src/data/im_core/awiki_im_core_mappers.dart`、`lib/src/data/im_core/awiki_im_core_message_adapter.dart`、`lib/src/domain/entities/chat_mention.dart`、`lib/src/domain/entities/chat_message.dart`、`lib/src/presentation/chat/chat_page.dart`、`lib/src/presentation/chat/chat_provider.dart`、`tests/e2e/runner.dart`、`tests/unit/agents/agent_control_service_test.dart`、`tests/unit/chat_mention_composer_test.dart`、`tests/unit/chat_mention_send_test.dart`、`tests/unit/data/compat/compat_awiki_gateway_test.dart`、`tests/unit/data/im_core/awiki_im_core_payload_mapper_test.dart`、`tests/unit/test_support.dart`。 |
 | Commit | `ab5fd16 feat(app): send and render group mentions` |
 | Commit 后状态 | `awiki-me-group` 当前仅剩 `docs/message-mention-extension-implementation-plan/plan.md` 与 `docs/message-mention-extension-implementation-plan/steps/03-app-send-render-mention.md` 台账回填未提交；分支 ahead 5。 |
 

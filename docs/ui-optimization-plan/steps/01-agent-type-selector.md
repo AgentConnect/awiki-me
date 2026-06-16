@@ -14,7 +14,7 @@ Step index：01
 | Completed | 2026-06-15 |
 | Commit | 用户已要求统一提交、推送并合并到 `release/0526`；不再按 Step 拆分提交 |
 | Review evidence | Review 确认只新增 Hermes 类型选择与提示，不引入第二种 runtime，不改变 `createHermesRuntime` 调用语义 |
-| Verification evidence | `flutter analyze ...`；`flutter test tests/unit_test/agents/agents_page_layout_test.dart` 已通过 |
+| Verification evidence | `flutter analyze ...`；`flutter test tests/unit/agents/agents_page_layout_test.dart` 已通过 |
 | Next action | 无 |
 
 ## 2. 目标
@@ -43,7 +43,7 @@ Step index：01
 | 仓库 / 模块 / 文件 | 计划变更 | 备注 |
 |---|---|---|
 | `awiki-me-ui/lib/src/presentation/agents/agents_page.dart` | 新增类型选择 UI 与 Hermes-only 校验 | UI 层 |
-| `awiki-me-ui/tests/unit_test/agents/agents_page_layout_test.dart` | 覆盖文案 / 提交流程 | Widget test |
+| `awiki-me-ui/tests/unit/agents/agents_page_layout_test.dart` | 覆盖文案 / 提交流程 | Widget test |
 
 ## 6. 依赖
 
@@ -63,7 +63,7 @@ Step index：01
 
 | 检查项 | 命令 / 方法 | 预期证据 |
 |---|---|---|
-| Unit / Widget | `cd awiki-me-ui && flutter test tests/unit_test/agents/agents_page_layout_test.dart` | 相关 Agent 页面测试通过 |
+| Unit / Widget | `cd awiki-me-ui && flutter test tests/unit/agents/agents_page_layout_test.dart` | 相关 Agent 页面测试通过 |
 | Analyze | `cd awiki-me-ui && flutter analyze ... agents_page.dart ... agents_page_layout_test.dart` | No issues found |
 | Docs | 检查 `docs/ui-optimization-plan/plan.md` | 台账记录完成 |
 

@@ -49,7 +49,7 @@ Harness：`awiki-harness/`
 | Profile / 关系 | 用户 / Agent 弹窗中显示身份卡、关注、主页和 DID copy | `awiki-me-ui/lib/src/presentation/chat/chat_page.dart` |
 | Onboarding | 登录页 logo 和 hero 对齐，修正文案 | `awiki-me-ui/lib/src/presentation/onboarding/onboarding_page.dart` |
 | 附件查看 | 查看附件时调用本机应用打开 local file / saved file | `awiki-me-ui/lib/src/presentation/chat/chat_page.dart` |
-| 测试 | 单元 / Widget / integration smoke / screenshot smoke 覆盖本轮行为 | `awiki-me-ui/tests/unit_test/**`、`awiki-me-ui/tests/integration_test/app/app_smoke_test.dart`、`awiki-me-ui/tests/integration_test/app/ui_visual_verification_test.dart` |
+| 测试 | 单元 / Widget / integration smoke / screenshot smoke 覆盖本轮行为 | `awiki-me-ui/tests/unit/**`、`awiki-me-ui/tests/e2e/flutter/app/app_smoke_test.dart`、`awiki-me-ui/tests/e2e/flutter/app/ui_visual_verification_test.dart` |
 | 文档 | 记录 focused checks、UTF-8 macOS integration 命令、截图证据和计划证据 | `awiki-me-ui/docs/testing.md`、`awiki-me-ui/docs/ui-optimization-plan/` |
 
 ## 4. 假设与开放问题
@@ -131,7 +131,7 @@ Harness：`awiki-harness/`
 - 目标：创建 Runtime Agent / 安装宿主代理流程展示 Hermes 类型。
 - 设计方法：Hermes-only 只读选择卡片，不新增 runtime 类型。
 - 实现方法：修改 `agents_page.dart` 和 `agents_page_layout_test.dart`。
-- 路径：`awiki-me-ui/lib/src/presentation/agents/agents_page.dart`、`awiki-me-ui/tests/unit_test/agents/agents_page_layout_test.dart`。
+- 路径：`awiki-me-ui/lib/src/presentation/agents/agents_page.dart`、`awiki-me-ui/tests/unit/agents/agents_page_layout_test.dart`。
 - 验证方式：Agent page widget tests + analyze。
 - Review 环节：检查是否误导用户可选择其他类型。
 - Commit 要求：用户已要求统一提交、推送并合并到 `release/0526`。
@@ -179,7 +179,7 @@ Harness：`awiki-harness/`
 - 目标：附件查看调用本机应用。
 - 设计方法：`url_launcher` external application；路径转 file URI。
 - 实现方法：修改 `chat_page.dart`，新增 fake url launcher test。
-- 路径：`awiki-me-ui/lib/src/presentation/chat/chat_page.dart`、`awiki-me-ui/tests/unit_test/chat_page_test.dart`。
+- 路径：`awiki-me-ui/lib/src/presentation/chat/chat_page.dart`、`awiki-me-ui/tests/unit/chat_page_test.dart`。
 - 验证方式：chat widget test 覆盖下载保存后打开。
 - Review 环节：检查失败提示和保存行为不丢失。
 - Commit 要求：用户已要求统一提交、推送并合并到 `release/0526`。
@@ -191,7 +191,7 @@ Harness：`awiki-harness/`
 - 目标：补齐 fake-bootstrap integration smoke、screenshot smoke、docs 和最终审计。
 - 设计方法：以 app smoke 验证 AppShell 关键 UI 流程，以 screenshot smoke 固化视觉证据。
 - 实现方法：修改 `app_smoke_test.dart`、新增 `ui_visual_verification_test.dart`、更新 `docs/testing.md` 与 Plan 文档。
-- 路径：`awiki-me-ui/tests/integration_test/app/app_smoke_test.dart`、`awiki-me-ui/tests/integration_test/app/ui_visual_verification_test.dart`、`awiki-me-ui/integration_test/ui_visual_verification_test.dart`、`awiki-me-ui/docs/testing.md`。
+- 路径：`awiki-me-ui/tests/e2e/flutter/app/app_smoke_test.dart`、`awiki-me-ui/tests/e2e/flutter/app/ui_visual_verification_test.dart`、`awiki-me-ui/integration_test/ui_visual_verification_test.dart`、`awiki-me-ui/docs/testing.md`。
 - 验证方式：analyze、focused unit、macOS app smoke、macOS screenshot smoke、diff check。
 - Review 环节：检查是否覆盖用户目标所有入口。
 - Commit 要求：用户已要求统一提交、推送并合并到 `release/0526`。
@@ -208,8 +208,8 @@ Harness：`awiki-harness/`
 
 | 层级 | 命令 / 检查 | 预期证据 |
 |---|---|---|
-| Analyze | `cd awiki-me-ui && flutter analyze lib/src/presentation/chat/chat_page.dart lib/src/presentation/conversation_list/conversation_workspace_page.dart lib/src/presentation/agents/agents_page.dart lib/src/presentation/agents/agent_inbox_provider.dart lib/src/presentation/agents/agent_inbox_panel.dart lib/src/application/agent/agent_control_service.dart lib/src/domain/entities/agent/agent_command.dart lib/src/presentation/onboarding/onboarding_page.dart tests/unit_test/chat_page_test.dart tests/unit_test/conversation_workspace_test.dart tests/unit_test/agents/agent_inbox_provider_test.dart tests/unit_test/agents/agents_page_layout_test.dart tests/unit_test/agents/agent_control_payload_test.dart tests/unit_test/agents/agent_control_service_test.dart tests/unit_test/test_support.dart tests/integration_test/app/app_smoke_test.dart` | No issues found |
-| Unit / Widget | `cd awiki-me-ui && flutter test tests/unit_test/agents/agent_inbox_provider_test.dart tests/unit_test/agents/agents_page_layout_test.dart tests/unit_test/agents/agent_control_payload_test.dart tests/unit_test/agents/agent_control_service_test.dart tests/unit_test/conversation_workspace_test.dart tests/unit_test/chat_page_test.dart tests/unit_test/onboarding_page_test.dart` | 151 tests passed |
+| Analyze | `cd awiki-me-ui && flutter analyze lib/src/presentation/chat/chat_page.dart lib/src/presentation/conversation_list/conversation_workspace_page.dart lib/src/presentation/agents/agents_page.dart lib/src/presentation/agents/agent_inbox_provider.dart lib/src/presentation/agents/agent_inbox_panel.dart lib/src/application/agent/agent_control_service.dart lib/src/domain/entities/agent/agent_command.dart lib/src/presentation/onboarding/onboarding_page.dart tests/unit/chat_page_test.dart tests/unit/conversation_workspace_test.dart tests/unit/agents/agent_inbox_provider_test.dart tests/unit/agents/agents_page_layout_test.dart tests/unit/agents/agent_control_payload_test.dart tests/unit/agents/agent_control_service_test.dart tests/unit/test_support.dart tests/e2e/flutter/app/app_smoke_test.dart` | No issues found |
+| Unit / Widget | `cd awiki-me-ui && flutter test tests/unit/agents/agent_inbox_provider_test.dart tests/unit/agents/agents_page_layout_test.dart tests/unit/agents/agent_control_payload_test.dart tests/unit/agents/agent_control_service_test.dart tests/unit/conversation_workspace_test.dart tests/unit/chat_page_test.dart tests/unit/onboarding_page_test.dart` | 151 tests passed |
 | Integration smoke | `cd awiki-me-ui && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/app_smoke_test.dart -d macos` | 4 tests passed |
 | Screenshot visual smoke | `cd awiki-me-ui && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/ui_visual_verification_test.dart -d macos` | 1 test passed；生成 `awiki-me-ui/docs/ui-optimization-plan/screenshots/01-onboarding-login.png` 到 `awiki-me-ui/docs/ui-optimization-plan/screenshots/07-agent-create-agent-type.png` |
 | Docs / whitespace | `cd awiki-me-ui && git diff --check` | 通过 |
@@ -263,7 +263,7 @@ Harness：`awiki-harness/`
 - 重点关注：用户 7 条显式需求是否均有证据；跨步骤是否冲突；群聊信息和移动端行为是否回归；附件本机打开是否有直接测试；文档是否记录可复现命令。
 - 整体验证命令 / 检查：
   - `cd awiki-me-ui && flutter analyze ...`：No issues found。
-  - `cd awiki-me-ui && flutter test tests/unit_test/agents/agent_inbox_provider_test.dart tests/unit_test/agents/agents_page_layout_test.dart tests/unit_test/agents/agent_control_payload_test.dart tests/unit_test/agents/agent_control_service_test.dart tests/unit_test/conversation_workspace_test.dart tests/unit_test/chat_page_test.dart tests/unit_test/onboarding_page_test.dart`：151 tests passed。
+  - `cd awiki-me-ui && flutter test tests/unit/agents/agent_inbox_provider_test.dart tests/unit/agents/agents_page_layout_test.dart tests/unit/agents/agent_control_payload_test.dart tests/unit/agents/agent_control_service_test.dart tests/unit/conversation_workspace_test.dart tests/unit/chat_page_test.dart tests/unit/onboarding_page_test.dart`：151 tests passed。
   - `cd awiki-me-ui && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/app_smoke_test.dart -d macos`：4 tests passed。
   - `cd awiki-me-ui && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/ui_visual_verification_test.dart -d macos`：1 test passed；生成 7 张 UI 截图。
   - `cd awiki-me-ui && git diff --check`：通过。

@@ -14,7 +14,7 @@ Step index：05
 | Completed | 2026-06-15 |
 | Commit | 用户已要求统一提交、推送并合并到 `release/0526`；不再按 Step 拆分提交 |
 | Review evidence | Review 确认附件按钮语义改为查看，localPath 直接打开，否则下载保存后用 external application 打开 |
-| Verification evidence | `flutter test tests/unit_test/chat_page_test.dart` 已通过，包含“查看附件会下载保存后用本机应用打开文件” |
+| Verification evidence | `flutter test tests/unit/chat_page_test.dart` 已通过，包含“查看附件会下载保存后用本机应用打开文件” |
 | Next action | 无 |
 
 ## 2. 目标
@@ -45,8 +45,8 @@ Step index：05
 | 仓库 / 模块 / 文件 | 计划变更 | 备注 |
 |---|---|---|
 | `awiki-me-ui/lib/src/presentation/chat/chat_page.dart` | 附件查看 / native open | UI |
-| `awiki-me-ui/tests/unit_test/chat_page_test.dart` | fake url launcher 验证本机打开 | Widget test |
-| `awiki-me-ui/tests/unit_test/test_support.dart` | attachment picker fake 已支持保存记录 | Test support |
+| `awiki-me-ui/tests/unit/chat_page_test.dart` | fake url launcher 验证本机打开 | Widget test |
+| `awiki-me-ui/tests/unit/test_support.dart` | attachment picker fake 已支持保存记录 | Test support |
 
 ## 6. 依赖
 
@@ -68,7 +68,7 @@ Step index：05
 
 | 检查项 | 命令 / 方法 | 预期证据 |
 |---|---|---|
-| Widget | `cd awiki-me-ui && flutter test tests/unit_test/chat_page_test.dart` | native attachment open 测试通过 |
+| Widget | `cd awiki-me-ui && flutter test tests/unit/chat_page_test.dart` | native attachment open 测试通过 |
 | Analyze | `cd awiki-me-ui && flutter analyze ... chat_page.dart chat_page_test.dart ...` | No issues found |
 | Integration | `cd awiki-me-ui && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/app_smoke_test.dart -d macos` | app smoke 不回归 |
 

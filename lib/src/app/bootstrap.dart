@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../application/config/awiki_environment_config.dart';
 import '../application/agent/agent_control_service.dart';
 import '../application/agent/agent_control_status_store.dart';
 import '../application/app_session_service.dart';
@@ -101,12 +102,23 @@ class AppBootstrap {
   final ProductLocalStore? productLocalStore;
   final PeerIdentityService? peerIdentityService;
 
-  static Future<AppBootstrap> create() async {
-    final preferenceStorage = await _buildPreferenceStore();
+  static Future<AppBootstrap> create({
+    AwikiEnvironmentConfig? environment,
+    String? appStateRoot,
+  }) async {
+    final effectiveEnvironment =
+        environment ?? AwikiEnvironmentConfig.fromEnvironment();
+    final preferenceStorage = await _buildPreferenceStore(
+      appStateRoot: appStateRoot,
+    );
 
     final runtime = AwikiImCoreRuntime(
-      config: AwikiImCoreEnvironmentConfig.fromEnvironment(),
-      paths: await AwikiImCorePathLayout.fromPlatform(),
+      config: AwikiImCoreEnvironmentConfig.fromAwikiEnvironment(
+        effectiveEnvironment,
+      ),
+      paths: await AwikiImCorePathLayout.fromPlatform(
+        appStateRoot: appStateRoot,
+      ),
     );
     final productLocalStore = AwikiProductLocalStoreSqlite();
 
@@ -124,8 +136,9 @@ class AppBootstrap {
     );
     final realtimeAdapter = AwikiImCoreRealtimeAdapter(runtime: runtime);
     final messagingService = ImCoreMessagingService(messages: messageAdapter);
-    final agentInventoryPort =
-        UserServiceAgentInventoryAdapter.fromEnvironment();
+    final agentInventoryPort = UserServiceAgentInventoryAdapter.fromEnvironment(
+      environment: effectiveEnvironment,
+    );
     final conversationService = ImCoreConversationService(
       conversations: conversationAdapter,
       localStore: productLocalStore,
@@ -164,10 +177,12 @@ class AppBootstrap {
       sessions: appSessionService,
       profiles: profileAdapter,
     );
-    final onboardingSupportService =
-        AwikiOnboardingSupportService.fromEnvironment();
-    final peerIdentityService =
-        UserServicePeerIdentityService.fromEnvironment();
+    final onboardingSupportService = AwikiOnboardingSupportService(
+      userServiceUrl: effectiveEnvironment.userServiceUrl,
+    );
+    final peerIdentityService = UserServicePeerIdentityService(
+      userServiceUrl: effectiveEnvironment.userServiceUrl,
+    );
 
     final accountGateway = CompatAwikiAccountGateway(
       sessions: appSessionService,
@@ -224,9 +239,14 @@ class AppBootstrap {
     return _buildAccountStore();
   }
 
-  static Future<AppKeyValueStore> _buildAccountStore() async {
-    if (awikiE2eAppStateRoot() != null) {
-      return FileAppKeyValueStore.create(fileName: 'awiki_me_credentials.json');
+  static Future<AppKeyValueStore> _buildAccountStore({
+    String? appStateRoot,
+  }) async {
+    if (_hasStateRoot(appStateRoot) || awikiE2eAppStateRoot() != null) {
+      return FileAppKeyValueStore.create(
+        fileName: 'awiki_me_credentials.json',
+        appStateRoot: appStateRoot,
+      );
     }
     if (Platform.isMacOS && !kReleaseMode) {
       // Local macOS debug/profile builds are usually ad-hoc signed, and
@@ -236,9 +256,11 @@ class AppBootstrap {
     return SecureAppKeyValueStore();
   }
 
-  static Future<AppKeyValueStore> _buildPreferenceStore() async {
-    if (awikiE2eAppStateRoot() != null) {
-      return FileAppKeyValueStore.create();
+  static Future<AppKeyValueStore> _buildPreferenceStore({
+    String? appStateRoot,
+  }) async {
+    if (_hasStateRoot(appStateRoot) || awikiE2eAppStateRoot() != null) {
+      return FileAppKeyValueStore.create(appStateRoot: appStateRoot);
     }
     if (Platform.isMacOS) {
       // macOS debug builds are not consistently signed for Keychain access.
@@ -247,3 +269,5 @@ class AppBootstrap {
     return SecureAppKeyValueStore();
   }
 }
+
+bool _hasStateRoot(String? value) => value != null && value.trim().isNotEmpty;

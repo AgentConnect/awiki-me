@@ -14,7 +14,7 @@ Step index：02
 | Completed | 2026-06-15 |
 | Commit | 用户已要求统一提交、推送并合并到 `release/0526`；不再按 Step 拆分提交 |
 | Review evidence | Review 确认直聊默认不打开右侧信息栏，用户 / Agent 资料进入弹窗；群聊信息仍走原群详情侧栏 |
-| Verification evidence | `flutter test tests/unit_test/conversation_workspace_test.dart tests/unit_test/chat_page_test.dart`；`flutter test integration_test/app_smoke_test.dart -d macos` 已通过 |
+| Verification evidence | `flutter test tests/unit/conversation_workspace_test.dart tests/unit/chat_page_test.dart`；`flutter test integration_test/app_smoke_test.dart -d macos` 已通过 |
 | Next action | 无 |
 
 ## 2. 目标
@@ -45,9 +45,9 @@ Step index：02
 |---|---|---|
 | `awiki-me-ui/lib/src/presentation/conversation_list/conversation_workspace_page.dart` | 默认关闭会话信息，主动切换侧栏 | macOS 工作区 |
 | `awiki-me-ui/lib/src/presentation/chat/chat_page.dart` | 用户 / 智能体信息弹窗，入口迁移 | Chat UI |
-| `awiki-me-ui/tests/unit_test/conversation_workspace_test.dart` | 默认关闭、弹窗、群信息回归 | Widget test |
-| `awiki-me-ui/tests/unit_test/chat_page_test.dart` | 关注 / 头部入口回归 | Widget test |
-| `awiki-me-ui/tests/integration_test/app/app_smoke_test.dart` | fake-bootstrap E2E smoke | Integration |
+| `awiki-me-ui/tests/unit/conversation_workspace_test.dart` | 默认关闭、弹窗、群信息回归 | Widget test |
+| `awiki-me-ui/tests/unit/chat_page_test.dart` | 关注 / 头部入口回归 | Widget test |
+| `awiki-me-ui/tests/e2e/flutter/app/app_smoke_test.dart` | fake-bootstrap E2E smoke | Integration |
 
 ## 6. 依赖
 
@@ -69,7 +69,7 @@ Step index：02
 
 | 检查项 | 命令 / 方法 | 预期证据 |
 |---|---|---|
-| Widget | `cd awiki-me-ui && flutter test tests/unit_test/conversation_workspace_test.dart tests/unit_test/chat_page_test.dart` | 默认关闭、弹窗、群信息回归通过 |
+| Widget | `cd awiki-me-ui && flutter test tests/unit/conversation_workspace_test.dart tests/unit/chat_page_test.dart` | 默认关闭、弹窗、群信息回归通过 |
 | Integration | `cd awiki-me-ui && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/app_smoke_test.dart -d macos` | fake app smoke 4 passed |
 | Analyze | `cd awiki-me-ui && flutter analyze ... chat_page.dart conversation_workspace_page.dart ...` | No issues found |
 

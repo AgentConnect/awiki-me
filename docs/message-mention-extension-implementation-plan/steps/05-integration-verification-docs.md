@@ -87,7 +87,7 @@ Step index：05
 
 | 检查项 | 命令 / 方法 | 预期证据 |
 |---|---|---|
-| App | `cd awiki-me && dart analyze && flutter test tests/unit_test` | App 静态检查和单元 / widget 测试通过。 |
+| App | `cd awiki-me && dart analyze && flutter test tests/unit` | App 静态检查和单元 / widget 测试通过。 |
 | SDK | `cd awiki-cli-rs2 && cargo test --workspace --locked` | SDK / Daemon Rust 测试通过。 |
 | Codegen | `cd awiki-cli-rs2 && scripts/flutter/codegen-check.sh` | Dart / Rust bridge 生成物一致。 |
 | System | `cd awiki-system-test && uv run python manage_local_test_env.py run-tests --suite message-v2 ...` | focused mention E2E 通过。 |
@@ -135,7 +135,7 @@ Step index：05
 ## 13. 实际验证记录
 
 - `cd awiki-me-group && PATH=/Users/cs/development/flutter/bin:$PATH dart analyze`：No issues found。
-- `cd awiki-me-group && PATH=/Users/cs/development/flutter/bin:$PATH flutter test tests/unit_test --name mention`：14 passed。
+- `cd awiki-me-group && PATH=/Users/cs/development/flutter/bin:$PATH flutter test tests/unit --name mention`：14 passed。
 - `cd awiki-me-group && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/desktop_cli_peer_group_test.dart -d macos --dart-define=AWIKI_E2E=false`：macOS build 通过，All tests skipped。
 - `cd awiki-cli-rs2-group && cargo test -p im-core --locked mention`：5 passed。
 - `cd awiki-cli-rs2-group && cargo test -p awiki-deamon --locked mention`：4 passed。
@@ -143,7 +143,7 @@ Step index：05
 - `cd awiki-cli-rs2-group && scripts/flutter/codegen-check.sh`：Done。
 - `cd awiki-cli-rs2-group && cargo build -p awiki-cli --bin awiki-cli --release --locked`：Done。
 - `cd awiki-cli-rs2-group && scripts/flutter/build-apple.sh --macos`：Done，生成本地 macOS `AwikiImCore.xcframework` 用于 worktree E2E。
-- 真实远端 E2E：`cd awiki-me-group && DEV_OTP_PHONE=... DEV_OTP_CODE=... AWIKI_CLI_BIN=../awiki-cli-rs2-group/target/release/awiki-cli dart run tool/desktop_cli_peer_e2e_runner.dart --platform macos --case group --service-base-url https://awiki.info --did-domain awiki.info --app-handle p9g14app01 --cli-handle p9g14cli01 --run-id mention-p9-20260614g`：success，2m10s。
+- 真实远端 E2E：历史验证 runId `mention-p9-20260614g` 已通过；当前 runner 已改为只从 `tests/e2e/configs/e2e.local.yaml` 读取配置，等价入口为 `dart run tests/e2e/runner.dart --case group --run-id mention-p9-20260614g`。
 - `cd awiki-cli-rs2-group && cargo test --workspace --locked`：运行到 `awiki-cli --test identity_live_contract` 时 11 个 live tests 因本地 `127.0.0.1:* /user-service/did-auth/rpc` transport_unavailable 失败，非 P9 回归；focused tests 已覆盖本功能。
 - `git diff --check`：两仓库通过。
 

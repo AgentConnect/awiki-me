@@ -217,14 +217,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
       );
     });
     final messages = thread.messages;
-    final activePendingTurns = runtimeAgent == null
-        ? const <AgentPendingTurn>[]
-        : thread.agentPendingTurns
-              .where((turn) => turn.isActive)
-              .toList(growable: false);
+    final activePendingTurns = thread.agentPendingTurns
+        .where((turn) => turn.isActive)
+        .toList(growable: false);
     final messageIdsWithAgentProcessing = <String>{
       for (final message in messages)
-        if (thread.pendingAgentTurnForMessage(message) != null) message.localId,
+        if (thread.pendingAgentTurnsForMessage(message).isNotEmpty)
+          message.localId,
     };
     final unmatchedPendingTurns = activePendingTurns
         .where(
@@ -283,7 +282,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                           : responsive.spacing(24),
                     ),
                     child: _AgentProcessingIndicator(
-                      label: _agentProcessingLabel(turn),
+                      label: _agentProcessingLabel(<AgentPendingTurn>[turn]),
                       avatarSeed: _agentProcessingAvatarSeed(
                         runtimeAgent,
                         currentConversation,
@@ -293,9 +292,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
                   );
                 }
                 final message = messages[index];
-                final pendingTurn = runtimeAgent == null
-                    ? null
-                    : thread.pendingAgentTurnForMessage(message);
+                final pendingTurns = thread.pendingAgentTurnsForMessage(
+                  message,
+                );
                 final previous = index == 0 ? null : messages[index - 1];
                 final next = index + 1 < messages.length
                     ? messages[index + 1]
@@ -312,7 +311,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                       macStyle: macStyle,
                       current: message,
                       next: next,
-                      hasAgentProcessing: pendingTurn != null,
+                      hasAgentProcessing: pendingTurns.isNotEmpty,
                       nextHasAgentProcessing:
                           next != null &&
                           messageIdsWithAgentProcessing.contains(next.localId),
@@ -360,15 +359,15 @@ class _ChatViewState extends ConsumerState<ChatView> {
                           senderLabel,
                         ),
                       ),
-                      if (pendingTurn != null) ...<Widget>[
+                      if (pendingTurns.isNotEmpty) ...<Widget>[
                         SizedBox(
                           height: macStyle
                               ? responsive.displayScaled(7)
                               : responsive.spacing(7),
                         ),
                         _MessageAgentProcessingStatus(
-                          label: _agentProcessingLabel(pendingTurn),
-                          overdue: pendingTurn.isOverdue,
+                          label: _agentProcessingLabel(pendingTurns),
+                          overdue: pendingTurns.any((turn) => turn.isOverdue),
                           macStyle: macStyle,
                         ),
                       ],
@@ -911,8 +910,35 @@ class _ChatViewState extends ConsumerState<ChatView> {
     return conversation.displayName;
   }
 
-  String _agentProcessingLabel(AgentPendingTurn turn) {
-    return turn.isOverdue ? '智能体仍在处理，稍后可刷新查看' : '智能体正在处理...';
+  String _agentProcessingLabel(List<AgentPendingTurn> turns) {
+    if (turns.isEmpty) {
+      return '智能体正在处理...';
+    }
+    final overdue = turns.any((turn) => turn.isOverdue);
+    final subject = _agentProcessingSubject(turns);
+    if (subject == '智能体') {
+      return overdue ? '智能体仍在处理，稍后可刷新查看' : '智能体正在处理...';
+    }
+    return overdue ? '$subject 仍在处理，稍后可刷新查看' : '$subject 正在处理...';
+  }
+
+  String _agentProcessingSubject(List<AgentPendingTurn> turns) {
+    final handles = <String>[];
+    final seenHandles = <String>{};
+    for (final turn in turns) {
+      final handle = turn.agentHandle?.trim();
+      if (handle == null || handle.isEmpty || !seenHandles.add(handle)) {
+        continue;
+      }
+      handles.add(handle);
+    }
+    if (handles.isEmpty) {
+      return '智能体';
+    }
+    if (handles.length <= 2) {
+      return handles.map((handle) => '@$handle').join('、');
+    }
+    return '${handles.length} 个智能体';
   }
 }
 
@@ -2026,22 +2052,29 @@ class _MessageAgentProcessingStatus extends StatelessWidget {
     return Semantics(
       liveRegion: true,
       label: label,
-      child: Align(
-        alignment: Alignment.centerRight,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: macStyle
+              ? responsive.displayScaled(46)
+              : responsive.spacing(40),
+          right: macStyle
+              ? responsive.displayScaled(46)
+              : responsive.spacing(40),
+        ),
         child: ConstrainedBox(
           constraints: BoxConstraints(
             maxWidth: macStyle
-                ? responsive.displayScaled(420)
-                : (responsive.isLarge ? 500 : 640),
+                ? responsive.displayScaled(320)
+                : (responsive.isLarge ? 360 : 300),
           ),
           child: Container(
             padding: EdgeInsets.symmetric(
               horizontal: macStyle
-                  ? responsive.displayScaled(10)
-                  : responsive.spacing(11),
+                  ? responsive.displayScaled(9)
+                  : responsive.spacing(10),
               vertical: macStyle
-                  ? responsive.displayScaled(6)
-                  : responsive.spacing(7),
+                  ? responsive.displayScaled(5)
+                  : responsive.spacing(6),
             ),
             decoration: BoxDecoration(
               color: background,
@@ -2073,7 +2106,7 @@ class _MessageAgentProcessingStatus extends StatelessWidget {
                     style: TextStyle(
                       color: foreground,
                       fontSize: macStyle
-                          ? responsive.displayScaled(12)
+                          ? responsive.displayScaled(11.5)
                           : responsive.metaSm,
                       fontWeight: FontWeight.w500,
                       height: 1.25,

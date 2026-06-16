@@ -13,7 +13,7 @@ proof generation all run through Dart code.
 ```bash
 PUB_HOSTED_URL=https://mirrors.tuna.tsinghua.edu.cn/dart-pub flutter pub get
 dart analyze
-flutter test tests/unit_test
+dart run tests/unit/runner.dart
 flutter run
 ```
 
@@ -26,10 +26,24 @@ Recommended local gate:
 ```bash
 PUB_HOSTED_URL=https://mirrors.tuna.tsinghua.edu.cn/dart-pub flutter pub get
 dart analyze
-flutter test tests/unit_test
-dart run tests/e2e_test/harness/mobile_e2e_runner.dart --config tests/e2e_test/configs/mobile.example.yaml --dry-run
-dart run tests/e2e_test/harness/desktop_e2e_runner.dart --platform=macos --dry-run
+dart run tests/unit/runner.dart
+dart run tests/e2e/runner.dart --case smoke
 ```
+
+The test gates use the operating system SQLite library through Dart native
+asset hooks, so they do not need to download a prebuilt SQLite dylib from
+GitHub. macOS includes SQLite. Linux machines should install `libsqlite3-dev`
+or the equivalent system package.
+
+Full real-backend E2E uses `tests/e2e/configs/e2e.local.yaml` by default:
+
+```bash
+cp tests/e2e/configs/e2e.example.yaml tests/e2e/configs/e2e.local.yaml
+dart run tests/e2e/runner.dart --case full
+```
+
+The local YAML is ignored by Git and should hold the test backend URL, DID
+domain, OTP, App/CLI peer handles, and `awiki-cli` binary path.
 
 ## Backend Environment
 
@@ -85,9 +99,9 @@ use platform secure storage.
 
 - `lib/`: application, domain, data, and presentation code
 - `assets/`: bundled branding and UI assets
-- `tests/unit_test/`: Dart unit, widget, provider, and harness unit tests
-- `tests/integration_test/`: Flutter app/native/platform smoke tests
-- `tests/e2e_test/`: end-to-end harnesses, configs, scenarios, and Maestro flows
+- `tests/unit/`: unit, widget, provider, and pure Dart tests
+- `tests/e2e/`: desktop E2E runner, Flutter platform test implementations, and support code
+- `integration_test/`: Flutter tooling shims only
 - `android/`, `ios/`, `macos/`, `web/`: platform runners
 
 ## App Icons

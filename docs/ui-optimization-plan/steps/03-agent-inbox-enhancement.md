@@ -14,7 +14,7 @@ Step index：03
 | Completed | 2026-06-15 |
 | Commit | 用户已要求统一提交、推送并合并到 `release/0526`；不再按 Step 拆分提交 |
 | Review evidence | Review 确认 list/thread 默认 limit=20，cursor load more 保留，列表最新优先，线程消息按时间顺序 |
-| Verification evidence | `flutter test tests/unit_test/agents/agent_inbox_provider_test.dart` 已通过；整体 focused unit 151 passed |
+| Verification evidence | `flutter test tests/unit/agents/agent_inbox_provider_test.dart` 已通过；整体 focused unit 151 passed |
 | Next action | 无 |
 
 ## 2. 目标
@@ -48,8 +48,8 @@ Step index：03
 | `awiki-me-ui/lib/src/presentation/agents/agent_inbox_panel.dart` | 时间、预览、SelectionArea | UI |
 | `awiki-me-ui/lib/src/domain/entities/agent/agent_command.dart` | 默认 limit=20 | Domain command |
 | `awiki-me-ui/lib/src/application/agent/agent_control_service.dart` | service 默认 limit=20 | Application service |
-| `awiki-me-ui/tests/unit_test/agents/agent_inbox_provider_test.dart` | limit / 排序 / 分页测试 | Unit |
-| `awiki-me-ui/tests/unit_test/test_support.dart` | fake 记录 limit / cursor | Test support |
+| `awiki-me-ui/tests/unit/agents/agent_inbox_provider_test.dart` | limit / 排序 / 分页测试 | Unit |
+| `awiki-me-ui/tests/unit/test_support.dart` | fake 记录 limit / cursor | Test support |
 
 ## 6. 依赖
 
@@ -72,8 +72,8 @@ Step index：03
 
 | 检查项 | 命令 / 方法 | 预期证据 |
 |---|---|---|
-| Provider | `cd awiki-me-ui && flutter test tests/unit_test/agents/agent_inbox_provider_test.dart` | limit、排序、分页测试通过 |
-| Widget / UI | `cd awiki-me-ui && flutter test tests/unit_test/conversation_workspace_test.dart` | Agent 收件箱入口回归通过 |
+| Provider | `cd awiki-me-ui && flutter test tests/unit/agents/agent_inbox_provider_test.dart` | limit、排序、分页测试通过 |
+| Widget / UI | `cd awiki-me-ui && flutter test tests/unit/conversation_workspace_test.dart` | Agent 收件箱入口回归通过 |
 | Analyze | `cd awiki-me-ui && flutter analyze ... agent_inbox_provider.dart agent_inbox_panel.dart ...` | No issues found |
 
 ## 9. Review 环节

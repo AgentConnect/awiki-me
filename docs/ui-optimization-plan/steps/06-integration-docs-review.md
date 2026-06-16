@@ -27,7 +27,7 @@ Step index：06
 ## 3. 设计方法
 
 - 设计边界：集成测试只验证 App 内 UI 流程；screenshot smoke 使用确定性 fake bootstrap 数据，不模拟真实 daemon inbox payload。
-- 核心决策：复用 `integration_test/app_smoke_test.dart` / `integration_test/ui_visual_verification_test.dart` shims 和 `tests/integration_test/support/fake_app_bootstrap.dart`。
+- 核心决策：复用 `integration_test/app_smoke_test.dart` / `integration_test/ui_visual_verification_test.dart` shims 和 `tests/e2e/flutter/support/fake_app_bootstrap.dart`。
 - 契约 / API / 数据流：使用 fake `ConversationListController` 固定会话，避免 AppRuntime refresh race。
 - 兼容性：保留原 app smoke 的 onboarding / authenticated shell / settings 测试。
 - 风险控制：macOS CocoaPods 需要 UTF-8 locale，文档记录 `LANG` / `LC_ALL`。
@@ -44,8 +44,8 @@ Step index：06
 
 | 仓库 / 模块 / 文件 | 计划变更 | 备注 |
 |---|---|---|
-| `awiki-me-ui/tests/integration_test/app/app_smoke_test.dart` | 新增 UI optimization smoke | Integration |
-| `awiki-me-ui/tests/integration_test/app/ui_visual_verification_test.dart` | 新增 screenshot visual smoke | Integration / Visual |
+| `awiki-me-ui/tests/e2e/flutter/app/app_smoke_test.dart` | 新增 UI optimization smoke | Integration |
+| `awiki-me-ui/tests/e2e/flutter/app/ui_visual_verification_test.dart` | 新增 screenshot visual smoke | Integration / Visual |
 | `awiki-me-ui/integration_test/ui_visual_verification_test.dart` | Flutter tooling root shim | Integration / Visual |
 | `awiki-me-ui/docs/testing.md` | 记录 focused checks 和 UTF-8 macOS 命令 | Docs |
 | `awiki-me-ui/docs/ui-optimization-plan/plan.md` | 主 Plan / 台账 / 最终审计 | Docs |
@@ -73,7 +73,7 @@ Step index：06
 | 检查项 | 命令 / 方法 | 预期证据 |
 |---|---|---|
 | Analyze | `cd awiki-me-ui && flutter analyze ...` | No issues found |
-| Unit | `cd awiki-me-ui && flutter test tests/unit_test/agents/agent_inbox_provider_test.dart tests/unit_test/agents/agents_page_layout_test.dart tests/unit_test/agents/agent_control_payload_test.dart tests/unit_test/agents/agent_control_service_test.dart tests/unit_test/conversation_workspace_test.dart tests/unit_test/chat_page_test.dart tests/unit_test/onboarding_page_test.dart` | 151 passed |
+| Unit | `cd awiki-me-ui && flutter test tests/unit/agents/agent_inbox_provider_test.dart tests/unit/agents/agents_page_layout_test.dart tests/unit/agents/agent_control_payload_test.dart tests/unit/agents/agent_control_service_test.dart tests/unit/conversation_workspace_test.dart tests/unit/chat_page_test.dart tests/unit/onboarding_page_test.dart` | 151 passed |
 | Integration | `cd awiki-me-ui && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/app_smoke_test.dart -d macos` | 4 passed |
 | Screenshot visual | `cd awiki-me-ui && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/ui_visual_verification_test.dart -d macos` | 1 passed；生成 `awiki-me-ui/docs/ui-optimization-plan/screenshots/01-onboarding-login.png` 到 `awiki-me-ui/docs/ui-optimization-plan/screenshots/07-agent-create-agent-type.png` |
 | Docs / whitespace | `cd awiki-me-ui && git diff --check` | 通过 |

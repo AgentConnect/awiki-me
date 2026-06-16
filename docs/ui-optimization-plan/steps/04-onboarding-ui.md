@@ -14,7 +14,7 @@ Step index：04
 | Completed | 2026-06-15 |
 | Commit | 用户已要求统一提交、推送并合并到 `release/0526`；不再按 Step 拆分提交 |
 | Review evidence | Review 确认移动 / 窄布局 logo 卡片、macOS hero 使用真实 logo，英文文案修正 |
-| Verification evidence | `flutter test tests/unit_test/onboarding_page_test.dart` 已通过；integration app smoke 启动 onboarding 通过 |
+| Verification evidence | `flutter test tests/unit/onboarding_page_test.dart` 已通过；integration app smoke 启动 onboarding 通过 |
 | Next action | 无 |
 
 ## 2. 目标
@@ -44,8 +44,8 @@ Step index：04
 | 仓库 / 模块 / 文件 | 计划变更 | 备注 |
 |---|---|---|
 | `awiki-me-ui/lib/src/presentation/onboarding/onboarding_page.dart` | logo / hero / 文案调整 | UI |
-| `awiki-me-ui/tests/unit_test/onboarding_page_test.dart` | 登录页回归测试 | Widget |
-| `awiki-me-ui/tests/integration_test/app/app_smoke_test.dart` | 启动 onboarding smoke | Integration |
+| `awiki-me-ui/tests/unit/onboarding_page_test.dart` | 登录页回归测试 | Widget |
+| `awiki-me-ui/tests/e2e/flutter/app/app_smoke_test.dart` | 启动 onboarding smoke | Integration |
 
 ## 6. 依赖
 
@@ -65,7 +65,7 @@ Step index：04
 
 | 检查项 | 命令 / 方法 | 预期证据 |
 |---|---|---|
-| Widget | `cd awiki-me-ui && flutter test tests/unit_test/onboarding_page_test.dart` | Onboarding tests 通过 |
+| Widget | `cd awiki-me-ui && flutter test tests/unit/onboarding_page_test.dart` | Onboarding tests 通过 |
 | Integration | `cd awiki-me-ui && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/app_smoke_test.dart -d macos` | onboarding smoke 通过 |
 | Analyze | `cd awiki-me-ui && flutter analyze ... onboarding_page.dart ...` | No issues found |
 

@@ -51,13 +51,15 @@ class AwikiImCorePathLayout {
     );
   }
 
-  static Future<AwikiImCorePathLayout> fromPlatform() async {
-    final e2eRoot = _e2eAppStateRoot();
-    if (e2eRoot != null) {
+  static Future<AwikiImCorePathLayout> fromPlatform({
+    String? appStateRoot,
+  }) async {
+    final stateRoot = _firstNonEmpty(appStateRoot, _e2eAppStateRoot());
+    if (stateRoot != null) {
       return AwikiImCorePathLayout.fromRoots(
-        appSupportRoot: _joinAll(<String>[e2eRoot, 'support']),
-        cacheRoot: _joinAll(<String>[e2eRoot, 'cache']),
-        tempRoot: _joinAll(<String>[e2eRoot, 'tmp']),
+        appSupportRoot: _joinAll(<String>[stateRoot, 'support']),
+        cacheRoot: _joinAll(<String>[stateRoot, 'cache']),
+        tempRoot: _joinAll(<String>[stateRoot, 'tmp']),
       );
     }
     final appSupport = await getApplicationSupportDirectory();
@@ -163,6 +165,18 @@ String? _e2eAppStateRoot() {
   }
   final root = _awikiE2eAppStateRoot.trim();
   return root.isEmpty ? null : root;
+}
+
+String? _firstNonEmpty(String? first, String? second) {
+  final firstTrimmed = first?.trim();
+  if (firstTrimmed != null && firstTrimmed.isNotEmpty) {
+    return firstTrimmed;
+  }
+  final secondTrimmed = second?.trim();
+  if (secondTrimmed != null && secondTrimmed.isNotEmpty) {
+    return secondTrimmed;
+  }
+  return null;
 }
 
 class ArchivedLocalState {

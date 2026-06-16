@@ -35,13 +35,16 @@ class ChatThreadState {
   int get pendingAgentReplyCount =>
       agentPendingTurns.where((turn) => turn.isActive).length;
 
+  List<AgentPendingTurn> pendingAgentTurnsForMessage(ChatMessage message) {
+    return <AgentPendingTurn>[
+      for (final turn in agentPendingTurns)
+        if (turn.isActive && turn.matchesMessage(message)) turn,
+    ];
+  }
+
   AgentPendingTurn? pendingAgentTurnForMessage(ChatMessage message) {
-    for (final turn in agentPendingTurns) {
-      if (turn.matchesMessage(message)) {
-        return turn;
-      }
-    }
-    return null;
+    final turns = pendingAgentTurnsForMessage(message);
+    return turns.isEmpty ? null : turns.first;
   }
 
   ChatThreadState copyWith({
@@ -64,12 +67,16 @@ class AgentPendingTurn {
     required this.localMessageId,
     required this.startedAt,
     this.remoteMessageId,
+    this.mentionId,
+    this.agentHandle,
     this.isOverdue = false,
   });
 
   final String agentDid;
   final String localMessageId;
   final String? remoteMessageId;
+  final String? mentionId;
+  final String? agentHandle;
   final DateTime startedAt;
   final bool isOverdue;
 
@@ -94,10 +101,24 @@ class AgentPendingTurn {
       agentDid: agentDid,
       localMessageId: localMessageId,
       remoteMessageId: remoteMessageId,
+      mentionId: mentionId,
+      agentHandle: agentHandle,
       startedAt: startedAt,
       isOverdue: true,
     );
   }
+}
+
+class _AgentPendingTarget {
+  const _AgentPendingTarget({
+    required this.agentDid,
+    required this.agentHandle,
+    required this.mentionId,
+  });
+
+  final String agentDid;
+  final String? agentHandle;
+  final String? mentionId;
 }
 
 class ChatComposerDraft {
@@ -390,6 +411,7 @@ class ChatThreadsController
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
         expectedAgentReplyDid: expectedAgentReplyDid,
+        mentions: validMentionDrafts,
         deliveredMessage: sentInThread,
       );
       latestConversation = _withConversationPreview(conversation, sentInThread);
@@ -482,6 +504,7 @@ class ChatThreadsController
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
         expectedAgentReplyDid: expectedAgentReplyDid,
+        mentions: const <ChatMentionDraft>[],
         deliveredMessage: sentInThread,
       );
       latestConversation = _withConversationPreview(conversation, sentInThread);
@@ -557,6 +580,18 @@ class ChatThreadsController
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
         expectedAgentReplyDid: expectedAgentReplyDid,
+        mentions: retrying.mentions
+            .map(
+              (mention) => ChatMentionDraft(
+                localId: mention.id,
+                surface: mention.surface,
+                start: mention.start,
+                end: mention.end,
+                target: mention.target,
+                role: mention.role,
+              ),
+            )
+            .toList(),
         deliveredMessage: retriedInThread,
       );
     } catch (_) {
@@ -619,6 +654,7 @@ class ChatThreadsController
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
         expectedAgentReplyDid: expectedAgentReplyDid,
+        mentions: const <ChatMentionDraft>[],
         deliveredMessage: retriedInThread,
       );
     } catch (_) {
@@ -900,18 +936,28 @@ class ChatThreadsController
   void _startAgentProcessingForDeliveredMessage({
     required ConversationSummary conversation,
     required String? expectedAgentReplyDid,
+    required List<ChatMentionDraft> mentions,
     required ChatMessage deliveredMessage,
   }) {
-    final agentDid = expectedAgentReplyDid?.trim();
     final remoteMessageId = deliveredMessage.remoteId?.trim().isNotEmpty == true
         ? deliveredMessage.remoteId!.trim()
         : deliveredMessage.localId.trim();
-    if (conversation.isGroup ||
-        agentDid == null ||
-        agentDid.isEmpty ||
-        !deliveredMessage.isMine ||
+    if (!deliveredMessage.isMine ||
         deliveredMessage.sendState != MessageSendState.sent ||
         deliveredMessage.localId.trim().isEmpty) {
+      return;
+    }
+    final pendingTargets = conversation.isGroup
+        ? _agentMentionPendingTargets(mentions)
+        : <_AgentPendingTarget>[
+            if ((expectedAgentReplyDid ?? '').trim().isNotEmpty)
+              _AgentPendingTarget(
+                agentDid: expectedAgentReplyDid!.trim(),
+                agentHandle: null,
+                mentionId: null,
+              ),
+          ];
+    if (pendingTargets.isEmpty) {
       return;
     }
     final threadId = conversation.threadId;
@@ -922,18 +968,48 @@ class ChatThreadsController
             turn.localMessageId != deliveredMessage.localId &&
             turn.remoteMessageId != remoteMessageId,
       ),
-      AgentPendingTurn(
-        agentDid: agentDid,
-        localMessageId: deliveredMessage.localId,
-        remoteMessageId: remoteMessageId,
-        startedAt: deliveredMessage.createdAt,
-      ),
+      for (final target in pendingTargets)
+        AgentPendingTurn(
+          agentDid: target.agentDid,
+          localMessageId: deliveredMessage.localId,
+          remoteMessageId: remoteMessageId,
+          mentionId: target.mentionId,
+          agentHandle: target.agentHandle,
+          startedAt: deliveredMessage.createdAt,
+        ),
     ];
     state = <String, ChatThreadState>{
       ...state,
       threadId: current.copyWith(agentPendingTurns: nextTurns),
     };
     _scheduleAgentProcessingOverdue(threadId);
+  }
+
+  List<_AgentPendingTarget> _agentMentionPendingTargets(
+    List<ChatMentionDraft> mentions,
+  ) {
+    final targets = <_AgentPendingTarget>[];
+    final seenAgentDids = <String>{};
+    for (final mention in mentions) {
+      final target = mention.target;
+      if (target.kind != ChatMentionTargetKind.agent) {
+        continue;
+      }
+      final agentDid = target.did?.trim();
+      if (agentDid == null ||
+          agentDid.isEmpty ||
+          !seenAgentDids.add(agentDid)) {
+        continue;
+      }
+      targets.add(
+        _AgentPendingTarget(
+          agentDid: agentDid,
+          agentHandle: mentionTargetDisplayHandle(target),
+          mentionId: mention.localId,
+        ),
+      );
+    }
+    return targets;
   }
 
   List<AgentPendingTurn> _nextAgentPendingTurnsAfterMerge(
@@ -953,9 +1029,14 @@ class ChatThreadsController
       if (senderDid.isEmpty) {
         continue;
       }
+      final replyToMessageId = _replyToMessageId(message);
       final index = next.indexWhere((turn) {
         if (turn.agentDid.trim() != senderDid) {
           return false;
+        }
+        if (replyToMessageId != null && replyToMessageId.isNotEmpty) {
+          return turn.remoteMessageId == replyToMessageId ||
+              turn.localMessageId == replyToMessageId;
         }
         if (trustIncomingAgentReply) {
           return true;
@@ -969,6 +1050,28 @@ class ChatThreadsController
       }
     }
     return next;
+  }
+
+  String? _replyToMessageId(ChatMessage message) {
+    final payloadJson = message.payloadJson?.trim();
+    if (payloadJson == null || payloadJson.isEmpty) {
+      return null;
+    }
+    Object? decoded;
+    try {
+      decoded = jsonDecode(payloadJson);
+    } on Object {
+      return null;
+    }
+    if (decoded is! Map) {
+      return null;
+    }
+    final annotations = decoded['annotations'];
+    if (annotations is! Map) {
+      return null;
+    }
+    final value = annotations['awiki_reply_to_message_id']?.toString().trim();
+    return value == null || value.isEmpty ? null : value;
   }
 
   void _scheduleAgentProcessingOverdue(String threadId) {

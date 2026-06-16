@@ -14,7 +14,7 @@ Step index：02
 | Completed | 2026-06-14T20:43:02+08:00 |
 | Commit | `awiki-me-group:075a0c0 feat(app): add group mention composer UX` |
 | Review evidence | 手工 Review 通过：composer 仅在群聊启用 mention；候选 selector 保持 all/agents/humans，不展开；单人 target 使用 DID 和 subjectType，不使用 displayName 作为身份；unknown subjectType 可见但不可选；候选加载不逐项远程 profile；IME composing 不弹；普通 composer 发送回归通过。修复：trigger detector 将 `@` 误判为 query break 的问题已修复。 |
-| Verification evidence | 通过：`cd awiki-me-group && dart analyze`（No issues）；`cd awiki-me-group && flutter test tests/unit_test --name mention`（8 passed）；`cd awiki-me-group && flutter test tests/unit_test --name "chat mention"`（2 passed）；`cd awiki-me-group && flutter test tests/unit_test/chat_page_test.dart --name "macOS 聊天输入条保持发送能力"`（1 passed）；`cd awiki-me-group && git diff --check`（通过）。未做真机/手动移动端输入，原因：本步骤以 widget test 覆盖群聊/私聊、点击选择和 draft range，移动端手动体验留到后续集成验证。 |
+| Verification evidence | 通过：`cd awiki-me-group && dart analyze`（No issues）；`cd awiki-me-group && flutter test tests/unit --name mention`（8 passed）；`cd awiki-me-group && flutter test tests/unit --name "chat mention"`（2 passed）；`cd awiki-me-group && flutter test tests/unit/chat_page_test.dart --name "macOS 聊天输入条保持发送能力"`（1 passed）；`cd awiki-me-group && git diff --check`（通过）。未做真机/手动移动端输入，原因：本步骤以 widget test 覆盖群聊/私聊、点击选择和 draft range，移动端手动体验留到后续集成验证。 |
 | Next action | Step 02 已完成；下一步执行 Step 03 App 发送、接收和高亮展示 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
@@ -60,7 +60,7 @@ Step index：02
 | `awiki-me/lib/src/presentation/chat/chat_page.dart` | 增加 trigger detector、overlay、选择插入逻辑 | 注意 IME composing。 |
 | `awiki-me/lib/src/application/group_application_service.dart` | 如需要，补候选数据聚合方法 | 不逐项远程请求。 |
 | `awiki-me/lib/src/domain/entities/group_member_summary.dart` | 补 display/profile/subjectType/status 字段 | 不能从 role 推断 human/agent。 |
-| `awiki-me/tests/unit_test/` | 新增 provider / widget tests | 覆盖 range 与 UI。 |
+| `awiki-me/tests/unit/` | 新增 provider / widget tests | 覆盖 range 与 UI。 |
 
 ## 6. 依赖
 
@@ -82,8 +82,8 @@ Step index：02
 
 | 检查项 | 命令 / 方法 | 预期证据 |
 |---|---|---|
-| Unit | `cd awiki-me && flutter test tests/unit_test --name mention` | trigger、candidate、range 更新测试通过。 |
-| Widget | `cd awiki-me && flutter test tests/unit_test --name "chat mention"` | overlay 展示、选择、插入测试通过。 |
+| Unit | `cd awiki-me && flutter test tests/unit --name mention` | trigger、candidate、range 更新测试通过。 |
+| Widget | `cd awiki-me && flutter test tests/unit --name "chat mention"` | overlay 展示、选择、插入测试通过。 |
 | Analyze | `cd awiki-me && dart analyze` | 无静态分析问题。 |
 | Manual | macOS / mobile 手动输入中文 `@` | IME、键盘选择、触摸选择体验正常。 |
 
@@ -100,7 +100,7 @@ Step index：02
 | 发现问题 | 已处理 | 首轮测试发现 `ChatMentionTrigger.detect` 先判断 query break，导致扫描到 `@` 时返回 null。 |
 | 已修复问题 | 已修复 | 调整 trigger detector 先识别 `@` 再判断 query break，并补充 trigger / widget tests。 |
 | 剩余风险 | 有记录 | 当前群成员 `subjectType` 只由 App projection / 测试数据提供；真实 profile/roster hydration 仍需后续步骤或 SDK 投影补齐。未做真机/手动移动端输入。 |
-| 新增或缺失测试 | 已新增 | 新增 `tests/unit_test/chat_mention_draft_test.dart` 与 `tests/unit_test/chat_mention_composer_test.dart`，覆盖 trigger、搜索、unknown 禁用、range、群聊/私聊 UI。 |
+| 新增或缺失测试 | 已新增 | 新增 `tests/unit/chat_mention_draft_test.dart` 与 `tests/unit/chat_mention_composer_test.dart`，覆盖 trigger、搜索、unknown 禁用、range、群聊/私聊 UI。 |
 | 已更新或缺失文档 | 已更新 | 更新 `awiki-me-group/docs/testing.md`，记录 mention composer focused test gate。 |
 
 ## 10. Commit 要求
@@ -134,6 +134,6 @@ Step index：02
 ## 14. 本步骤执行记录
 
 - Commit 前状态：`awiki-me-group` 有 Step 02 App composer / draft / candidate / tests / docs 修改；`awiki-cli-rs2-group` 工作区干净。上一个用户任务遗留的 Desktop CLI peer 测试拆分改动已暂存到 stash：`codex-uncommitted-desktop-cli-peer-test-split`，未混入本步骤。
-- 纳入代码 Commit 文件：`docs/testing.md`、`lib/src/domain/entities/chat_mention.dart`、`lib/src/domain/entities/group_member_summary.dart`、`lib/src/data/im_core/awiki_im_core_mappers.dart`、`lib/src/presentation/chat/chat_provider.dart`、`lib/src/presentation/chat/chat_page.dart`、`tests/unit_test/chat_mention_draft_test.dart`、`tests/unit_test/chat_mention_composer_test.dart`。
+- 纳入代码 Commit 文件：`docs/testing.md`、`lib/src/domain/entities/chat_mention.dart`、`lib/src/domain/entities/group_member_summary.dart`、`lib/src/data/im_core/awiki_im_core_mappers.dart`、`lib/src/presentation/chat/chat_provider.dart`、`lib/src/presentation/chat/chat_page.dart`、`tests/unit/chat_mention_draft_test.dart`、`tests/unit/chat_mention_composer_test.dart`。
 - 代码 Commit：`awiki-me-group:075a0c0 feat(app): add group mention composer UX`。
 - Commit 后状态：`awiki-me-group` 仅剩本 Plan / Step 回填文档未提交；`awiki-cli-rs2-group` 工作区干净。

@@ -231,10 +231,13 @@ class AwikiImCoreMappers {
 
   GroupMemberSummary groupMemberFromCore(core.GroupMember member) {
     final did = member.did ?? '';
-    final handle = _nonEmpty(member.handle) ?? _handleFromDid(did) ?? did;
     final subjectType = GroupMemberSubjectType.parse(
       _nonEmpty(member.subjectType) ?? _subjectTypeFromDid(did),
     );
+    final handle =
+        _normalizeHandle(_nonEmpty(member.handle)) ??
+        _handleFromDid(did) ??
+        did;
     return GroupMemberSummary(
       userId: did,
       did: did,
@@ -538,13 +541,41 @@ String _compactDid(String did) {
 }
 
 String? _handleFromDid(String did) {
-  final match = RegExp(r'^did:wba:[^:]+:(?:user:)?([^:]+):e1_').firstMatch(did);
-  return match == null ? null : _nonEmpty(match.group(1));
+  final normalized = did.trim();
+  final userMatch = RegExp(
+    r'^did:wba:[^:]+:(?:user:)?([^:]+):e1_',
+  ).firstMatch(normalized);
+  final userHandle = _normalizeHandle(userMatch?.group(1));
+  if (userHandle != null) {
+    return userHandle;
+  }
+  final agentMatch = RegExp(
+    r'^did:wba:[^:]+:agent:[^:]+:([^:]+):e1_',
+  ).firstMatch(normalized);
+  return _normalizeHandle(agentMatch?.group(1));
+}
+
+String? _normalizeHandle(String? value) {
+  var trimmed = value?.trim() ?? '';
+  if (trimmed.isEmpty || trimmed.startsWith('did:')) {
+    return null;
+  }
+  while (trimmed.startsWith('@')) {
+    trimmed = trimmed.substring(1).trimLeft();
+  }
+  if (trimmed.startsWith('wba://')) {
+    trimmed = trimmed.substring('wba://'.length).trimLeft();
+  }
+  final dotIndex = trimmed.indexOf('.');
+  if (dotIndex > 0) {
+    trimmed = trimmed.substring(0, dotIndex);
+  }
+  return _nonEmpty(trimmed);
 }
 
 String? _subjectTypeFromDid(String did) {
   final normalized = did.trim();
-  if (normalized.startsWith('did:agent:')) {
+  if (normalized.startsWith('did:agent:') || normalized.contains(':agent:')) {
     return 'agent';
   }
   if (normalized.startsWith('did:')) {

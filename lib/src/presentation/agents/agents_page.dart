@@ -968,7 +968,13 @@ class _AgentAccessPolicyPanelState extends State<_AgentAccessPolicyPanel> {
     if (_busy || widget.policy.activeMode == mode) {
       return;
     }
-    await _persist(widget.policy.copyWith(activeMode: mode));
+    final saved = await _persist(widget.policy.copyWith(activeMode: mode));
+    if (saved && mounted) {
+      setState(() {
+        _whitelistError = null;
+        _blacklistError = null;
+      });
+    }
   }
 
   Future<void> _addHandle({
@@ -1112,7 +1118,7 @@ class _AgentAccessPolicyPanelState extends State<_AgentAccessPolicyPanel> {
                     ),
                     SizedBox(height: responsive.spacing(2)),
                     Text(
-                      '控制哪些 Handle 可以 @ 这个智能体',
+                      '配置 Handle 对于智能体的控制权限',
                       style: TextStyle(
                         color: const Color(0xFF66728A),
                         fontSize: responsive.metaSm,
@@ -1121,32 +1127,38 @@ class _AgentAccessPolicyPanelState extends State<_AgentAccessPolicyPanel> {
                   ],
                 ),
               ),
-              if (widget.isLoading || saving)
+              SizedBox(width: responsive.spacing(12)),
+              if (widget.isLoading || saving) ...<Widget>[
                 const CupertinoActivityIndicator(),
+                SizedBox(width: responsive.spacing(8)),
+              ],
+              SelectionContainer.disabled(
+                child: _AccessModeToggle(
+                  activeMode: widget.policy.activeMode,
+                  onChanged: _busy ? null : (mode) => unawaited(_setMode(mode)),
+                ),
+              ),
             ],
           ),
           SizedBox(height: responsive.spacing(14)),
-          SelectionContainer.disabled(
-            child: _AccessModeSwitch(
-              activeMode: widget.policy.activeMode,
-              onChanged: _busy ? null : (mode) => unawaited(_setMode(mode)),
-            ),
-          ),
-          SizedBox(height: responsive.spacing(12)),
           LayoutBuilder(
             builder: (context, constraints) {
+              final whitelistActive =
+                  widget.policy.activeMode ==
+                  AgentInvocationPolicyMode.whitelist;
+              final blacklistActive =
+                  widget.policy.activeMode ==
+                  AgentInvocationPolicyMode.blacklist;
               final modules = <Widget>[
                 _AccessPolicyModule(
                   mode: AgentInvocationPolicyMode.whitelist,
                   title: '白名单',
-                  active:
-                      widget.policy.activeMode ==
-                      AgentInvocationPolicyMode.whitelist,
+                  active: whitelistActive,
                   handles: widget.policy.whitelistHandles,
                   controller: _whitelistController,
                   fieldKey: const Key('agent-access-whitelist-field'),
                   addKey: const Key('agent-access-whitelist-add'),
-                  enabled: !_busy,
+                  enabled: whitelistActive && !_busy,
                   errorText: _whitelistError,
                   onSubmitted: () => unawaited(
                     _addHandle(
@@ -1164,14 +1176,12 @@ class _AgentAccessPolicyPanelState extends State<_AgentAccessPolicyPanel> {
                 _AccessPolicyModule(
                   mode: AgentInvocationPolicyMode.blacklist,
                   title: '黑名单',
-                  active:
-                      widget.policy.activeMode ==
-                      AgentInvocationPolicyMode.blacklist,
+                  active: blacklistActive,
                   handles: widget.policy.blacklistHandles,
                   controller: _blacklistController,
                   fieldKey: const Key('agent-access-blacklist-field'),
                   addKey: const Key('agent-access-blacklist-add'),
-                  enabled: !_busy,
+                  enabled: blacklistActive && !_busy,
                   errorText: _blacklistError,
                   onSubmitted: () => unawaited(
                     _addHandle(
@@ -1223,8 +1233,8 @@ class _ParsedAccessHandle {
   final String? error;
 }
 
-class _AccessModeSwitch extends StatelessWidget {
-  const _AccessModeSwitch({required this.activeMode, required this.onChanged});
+class _AccessModeToggle extends StatelessWidget {
+  const _AccessModeToggle({required this.activeMode, required this.onChanged});
 
   final AgentInvocationPolicyMode activeMode;
   final ValueChanged<AgentInvocationPolicyMode>? onChanged;
@@ -1232,86 +1242,86 @@ class _AccessModeSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return Container(
-      padding: EdgeInsets.all(responsive.spacing(3)),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF4F7FC),
-        borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(color: const Color(0xFFE2E8F2)),
-      ),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: _AccessModeButton(
-              label: '白名单模式',
-              selected: activeMode == AgentInvocationPolicyMode.whitelist,
-              onTap: onChanged == null
-                  ? null
-                  : () => onChanged!(AgentInvocationPolicyMode.whitelist),
-            ),
-          ),
-          Expanded(
-            child: _AccessModeButton(
-              label: '黑名单模式',
-              selected: activeMode == AgentInvocationPolicyMode.blacklist,
-              onTap: onChanged == null
-                  ? null
-                  : () => onChanged!(AgentInvocationPolicyMode.blacklist),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AccessModeButton extends StatelessWidget {
-  const _AccessModeButton({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    return AppPressable(
-      onTap: onTap,
-      semanticLabel: label,
-      tooltip: label,
-      borderRadius: BorderRadius.circular(responsive.radius(7)),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        alignment: Alignment.center,
-        padding: EdgeInsets.symmetric(vertical: responsive.spacing(8)),
-        decoration: BoxDecoration(
-          color: selected ? CupertinoColors.white : CupertinoColors.transparent,
-          borderRadius: BorderRadius.circular(responsive.radius(7)),
-          boxShadow: selected
-              ? const <BoxShadow>[
-                  BoxShadow(
-                    color: Color(0x140B1220),
-                    blurRadius: 10,
-                    offset: Offset(0, 4),
-                  ),
-                ]
-              : null,
-        ),
-        child: Text(
-          label,
+    final blacklistActive = activeMode == AgentInvocationPolicyMode.blacklist;
+    final enabled = onChanged != null;
+    const whitelistColor = Color(0xFF0B65F8);
+    const blacklistColor = Color(0xFFB42318);
+    final accentColor = blacklistActive ? blacklistColor : whitelistColor;
+    final nextMode = blacklistActive
+        ? AgentInvocationPolicyMode.whitelist
+        : AgentInvocationPolicyMode.blacklist;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(
+          '白名单',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: selected ? const Color(0xFF0B65F8) : const Color(0xFF66728A),
+            color: !blacklistActive ? whitelistColor : const Color(0xFF8A96AA),
             fontSize: responsive.metaSm,
-            fontWeight: FontWeight.w700,
+            fontWeight: !blacklistActive ? FontWeight.w700 : FontWeight.w600,
           ),
         ),
-      ),
+        SizedBox(width: responsive.spacing(6)),
+        AppPressable(
+          key: const Key('agent-access-mode-toggle'),
+          onTap: enabled ? () => onChanged!(nextMode) : null,
+          enabled: enabled,
+          semanticLabel: blacklistActive ? '切换到白名单模式' : '切换到黑名单模式',
+          tooltip: blacklistActive ? '当前黑名单模式' : '当前白名单模式',
+          borderRadius: BorderRadius.circular(99),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOutCubic,
+            width: responsive.displayScaled(46),
+            height: responsive.displayScaled(24),
+            padding: EdgeInsets.all(responsive.displayScaled(3)),
+            decoration: BoxDecoration(
+              color: enabled ? accentColor : const Color(0xFFD9E1EC),
+              borderRadius: BorderRadius.circular(99),
+              border: Border.all(
+                color: enabled
+                    ? accentColor.withValues(alpha: 0.35)
+                    : const Color(0xFFC7D0DE),
+              ),
+            ),
+            child: AnimatedAlign(
+              duration: const Duration(milliseconds: 140),
+              curve: Curves.easeOutCubic,
+              alignment: blacklistActive
+                  ? Alignment.centerRight
+                  : Alignment.centerLeft,
+              child: Container(
+                width: responsive.displayScaled(18),
+                height: responsive.displayScaled(18),
+                decoration: const BoxDecoration(
+                  color: CupertinoColors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: Color(0x260B1220),
+                      blurRadius: 4,
+                      offset: Offset(0, 1),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        SizedBox(width: responsive.spacing(6)),
+        Text(
+          '黑名单',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: blacklistActive ? blacklistColor : const Color(0xFF8A96AA),
+            fontSize: responsive.metaSm,
+            fontWeight: blacklistActive ? FontWeight.w700 : FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1346,17 +1356,34 @@ class _AccessPolicyModule extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final statusColor = active
-        ? const Color(0xFF0B65F8)
-        : const Color(0xFF8A96AA);
+    final accentColor = switch (mode) {
+      AgentInvocationPolicyMode.whitelist => const Color(0xFF0B65F8),
+      AgentInvocationPolicyMode.blacklist => const Color(0xFFB42318),
+    };
+    final activeBackground = switch (mode) {
+      AgentInvocationPolicyMode.whitelist => const Color(0xFFF7FAFF),
+      AgentInvocationPolicyMode.blacklist => const Color(0xFFFFF8F7),
+    };
+    final activeBorder = switch (mode) {
+      AgentInvocationPolicyMode.whitelist => const Color(0xFFBFD5FF),
+      AgentInvocationPolicyMode.blacklist => const Color(0xFFF3B8B4),
+    };
+    final statusColor = active ? accentColor : const Color(0xFF6F7C91);
+    final textColor = active
+        ? const Color(0xFF40506B)
+        : const Color(0xFF7D8899);
+    final fieldFill = enabled ? CupertinoColors.white : const Color(0xFFEFF3F8);
+    final fieldBorder = enabled
+        ? const Color(0xFFDDE5F1)
+        : const Color(0xFFD4DCE9);
     return AnimatedContainer(
       duration: const Duration(milliseconds: 120),
       padding: EdgeInsets.all(responsive.spacing(12)),
       decoration: BoxDecoration(
-        color: active ? const Color(0xFFF7FAFF) : const Color(0xFFFBFCFE),
+        color: active ? activeBackground : const Color(0xFFF0F3F8),
         borderRadius: BorderRadius.circular(responsive.radius(8)),
         border: Border.all(
-          color: active ? const Color(0xFFBFD5FF) : const Color(0xFFE2E8F2),
+          color: active ? activeBorder : const Color(0xFFD5DDE9),
         ),
       ),
       child: Column(
@@ -1368,7 +1395,7 @@ class _AccessPolicyModule extends StatelessWidget {
                 child: Text(
                   title,
                   style: TextStyle(
-                    color: const Color(0xFF40506B),
+                    color: textColor,
                     fontSize: responsive.metaSm,
                     fontWeight: FontWeight.w700,
                   ),
@@ -1380,11 +1407,13 @@ class _AccessPolicyModule extends StatelessWidget {
                   vertical: responsive.spacing(3),
                 ),
                 decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.10),
+                  color: active
+                      ? statusColor.withValues(alpha: 0.12)
+                      : const Color(0xFFE0E6F0),
                   borderRadius: BorderRadius.circular(99),
                 ),
                 child: Text(
-                  active ? '已启用' : '未启用',
+                  active ? '已启用' : '已禁用',
                   style: TextStyle(
                     color: statusColor,
                     fontSize: responsive.metaSm,
@@ -1408,17 +1437,21 @@ class _AccessPolicyModule extends StatelessWidget {
                     vertical: responsive.spacing(9),
                   ),
                   decoration: BoxDecoration(
-                    color: CupertinoColors.white,
+                    color: fieldFill,
                     borderRadius: BorderRadius.circular(responsive.radius(8)),
-                    border: Border.all(color: const Color(0xFFDDE5F1)),
+                    border: Border.all(color: fieldBorder),
                   ),
                   style: TextStyle(
-                    color: const Color(0xFF101B32),
+                    color: enabled
+                        ? const Color(0xFF101B32)
+                        : const Color(0xFF7D8899),
                     fontSize: responsive.bodySm,
                     height: 1.2,
                   ),
                   placeholderStyle: TextStyle(
-                    color: const Color(0xFF98A4B8),
+                    color: enabled
+                        ? const Color(0xFF98A4B8)
+                        : const Color(0xFFADB7C7),
                     fontSize: responsive.bodySm,
                   ),
                   onSubmitted: enabled ? (_) => onSubmitted() : null,
@@ -1446,6 +1479,7 @@ class _AccessPolicyModule extends StatelessWidget {
           _AccessHandleList(
             mode: mode,
             handles: handles,
+            active: active,
             enabled: enabled,
             onRemove: onRemove,
           ),
@@ -1496,12 +1530,14 @@ class _AccessHandleList extends StatelessWidget {
   const _AccessHandleList({
     required this.mode,
     required this.handles,
+    required this.active,
     required this.enabled,
     required this.onRemove,
   });
 
   final AgentInvocationPolicyMode mode;
   final List<String> handles;
+  final bool active;
   final bool enabled;
   final ValueChanged<String> onRemove;
 
@@ -1515,14 +1551,16 @@ class _AccessHandleList extends StatelessWidget {
         alignment: Alignment.centerLeft,
         padding: EdgeInsets.symmetric(horizontal: responsive.spacing(10)),
         decoration: BoxDecoration(
-          color: const Color(0xFFF5F8FC),
+          color: active ? const Color(0xFFF5F8FC) : const Color(0xFFE7ECF4),
           borderRadius: BorderRadius.circular(responsive.radius(8)),
-          border: Border.all(color: const Color(0xFFE4EAF3)),
+          border: Border.all(
+            color: active ? const Color(0xFFE4EAF3) : const Color(0xFFD3DCE8),
+          ),
         ),
         child: Text(
           '暂无 Handle',
           style: TextStyle(
-            color: const Color(0xFF8A96AA),
+            color: active ? const Color(0xFF8A96AA) : const Color(0xFF9CA7B8),
             fontSize: responsive.metaSm,
           ),
         ),
@@ -1534,6 +1572,7 @@ class _AccessHandleList extends StatelessWidget {
           _AccessHandleRow(
             key: ValueKey<String>('access-${mode.wireValue}-$handle'),
             handle: handle,
+            active: active,
             enabled: enabled,
             onRemove: () => onRemove(handle),
           ),
@@ -1548,11 +1587,13 @@ class _AccessHandleRow extends StatelessWidget {
   const _AccessHandleRow({
     super.key,
     required this.handle,
+    required this.active,
     required this.enabled,
     required this.onRemove,
   });
 
   final String handle;
+  final bool active;
   final bool enabled;
   final VoidCallback onRemove;
 
@@ -1566,9 +1607,11 @@ class _AccessHandleRow extends StatelessWidget {
         right: responsive.spacing(4),
       ),
       decoration: BoxDecoration(
-        color: CupertinoColors.white,
+        color: active ? CupertinoColors.white : const Color(0xFFE8EDF5),
         borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(color: const Color(0xFFE4EAF3)),
+        border: Border.all(
+          color: active ? const Color(0xFFE4EAF3) : const Color(0xFFD2DAE7),
+        ),
       ),
       child: Row(
         children: <Widget>[
@@ -1578,7 +1621,9 @@ class _AccessHandleRow extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: const Color(0xFF17233A),
+                color: active
+                    ? const Color(0xFF17233A)
+                    : const Color(0xFF7D8899),
                 fontSize: responsive.bodySm,
                 fontWeight: FontWeight.w600,
               ),

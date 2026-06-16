@@ -1,0 +1,20 @@
+# Copy this file to e2e.local.yaml and fill in local-only OTP values.
+
+platform: macos
+
+service:
+  baseUrl: https://anpclaw.com
+  didDomain: anpclaw.com
+
+otp:
+  phone: "+8610000000000"
+  code: "000000"
+
+accounts:
+  appUser:
+    handle: awiki-e2e-app
+  cliPeer:
+    handle: awiki-e2e-cli
+
+cliPeer:
+  binary: ../awiki-cli-rs2/target/release/awiki-cli

@@ -16,28 +16,45 @@ class AwikiImCoreEnvironmentConfig {
 
   factory AwikiImCoreEnvironmentConfig.fromEnvironment() {
     final environment = AwikiEnvironmentConfig.fromEnvironment();
+    final config = AwikiImCoreEnvironmentConfig.fromAwikiEnvironment(
+      environment,
+    );
     final serviceBaseUrl =
         _optionalFromEnvironment('AWIKI_SERVICE_BASE_URL') ??
-        environment.baseUrl;
+        config.serviceBaseUrl;
     return AwikiImCoreEnvironmentConfig(
       serviceBaseUrl: serviceBaseUrl,
       userServiceEndpoint:
           _optionalFromEnvironment('AWIKI_USER_SERVICE_URL') ??
-          environment.userServiceUrl,
+          config.userServiceEndpoint,
       messageServiceEndpoint:
           _optionalFromEnvironment('AWIKI_MESSAGE_SERVICE_URL') ??
-          environment.messageServiceUrl,
+          config.messageServiceEndpoint,
       mailServiceEndpoint:
           _optionalFromEnvironment('AWIKI_MAIL_SERVICE_URL') ??
-          environment.mailServiceUrl,
+          config.mailServiceEndpoint,
       didDomain:
-          _optionalFromEnvironment('AWIKI_DID_DOMAIN') ?? environment.didDomain,
+          _optionalFromEnvironment('AWIKI_DID_DOMAIN') ?? config.didDomain,
       anpServiceEndpoint:
           _optionalFromEnvironment('AWIKI_ANP_SERVICE_URL') ??
-          environment.anpServiceUrl,
+          config.anpServiceEndpoint,
       anpServiceDid:
           _optionalFromEnvironment('AWIKI_ANP_SERVICE_DID') ??
-          environment.anpServiceDid,
+          config.anpServiceDid,
+    );
+  }
+
+  factory AwikiImCoreEnvironmentConfig.fromAwikiEnvironment(
+    AwikiEnvironmentConfig environment,
+  ) {
+    return AwikiImCoreEnvironmentConfig(
+      serviceBaseUrl: environment.baseUrl,
+      userServiceEndpoint: environment.userServiceUrl,
+      messageServiceEndpoint: environment.messageServiceUrl,
+      mailServiceEndpoint: environment.mailServiceUrl,
+      didDomain: environment.didDomain,
+      anpServiceEndpoint: environment.anpServiceUrl,
+      anpServiceDid: environment.anpServiceDid,
     );
   }
 

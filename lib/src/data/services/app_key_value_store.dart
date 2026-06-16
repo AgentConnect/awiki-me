@@ -48,11 +48,12 @@ class FileAppKeyValueStore implements AppKeyValueStore {
 
   static Future<FileAppKeyValueStore> create({
     String fileName = 'awiki_me_state.json',
+    String? appStateRoot,
   }) async {
-    final e2eRoot = awikiE2eAppStateRoot();
-    final supportPath = e2eRoot == null
+    final stateRoot = _firstNonEmpty(appStateRoot, awikiE2eAppStateRoot());
+    final supportPath = stateRoot == null
         ? (await getApplicationSupportDirectory()).path
-        : '$e2eRoot/support';
+        : '$stateRoot/support';
     final file = File('$supportPath/$fileName');
     return FileAppKeyValueStore._(file);
   }
@@ -113,4 +114,16 @@ class FileAppKeyValueStore implements AppKeyValueStore {
     await _file.parent.create(recursive: true);
     await _file.writeAsString(jsonEncode(_cache), flush: true);
   }
+}
+
+String? _firstNonEmpty(String? first, String? second) {
+  final firstTrimmed = first?.trim();
+  if (firstTrimmed != null && firstTrimmed.isNotEmpty) {
+    return firstTrimmed;
+  }
+  final secondTrimmed = second?.trim();
+  if (secondTrimmed != null && secondTrimmed.isNotEmpty) {
+    return secondTrimmed;
+  }
+  return null;
 }
