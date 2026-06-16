@@ -369,6 +369,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                           label: _agentProcessingLabel(pendingTurns),
                           overdue: pendingTurns.any((turn) => turn.isOverdue),
                           macStyle: macStyle,
+                          alignEnd: message.isMine,
                         ),
                       ],
                     ],
@@ -2025,11 +2026,13 @@ class _MessageAgentProcessingStatus extends StatelessWidget {
     required this.label,
     required this.overdue,
     required this.macStyle,
+    required this.alignEnd,
   });
 
   final String label;
   final bool overdue;
   final bool macStyle;
+  final bool alignEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -2049,71 +2052,77 @@ class _MessageAgentProcessingStatus extends StatelessWidget {
     final iconSize = macStyle
         ? responsive.displayScaled(12.5)
         : responsive.scaled(13);
+    final horizontalInset = macStyle
+        ? responsive.displayScaled(6)
+        : responsive.spacing(6);
     return Semantics(
       liveRegion: true,
       label: label,
       child: Padding(
-        padding: EdgeInsets.only(
-          left: macStyle
-              ? responsive.displayScaled(46)
-              : responsive.spacing(40),
-          right: macStyle
-              ? responsive.displayScaled(46)
-              : responsive.spacing(40),
+        padding: EdgeInsetsDirectional.only(
+          start: alignEnd ? 0 : horizontalInset,
+          end: alignEnd ? horizontalInset : 0,
         ),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: macStyle
-                ? responsive.displayScaled(320)
-                : (responsive.isLarge ? 360 : 300),
-          ),
-          child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: macStyle
-                  ? responsive.displayScaled(9)
-                  : responsive.spacing(10),
-              vertical: macStyle
-                  ? responsive.displayScaled(5)
-                  : responsive.spacing(6),
+        child: Align(
+          alignment: alignEnd ? Alignment.centerRight : Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: macStyle
+                  ? responsive.displayScaled(320)
+                  : (responsive.isLarge ? 360 : 300),
             ),
-            decoration: BoxDecoration(
-              color: background,
-              borderRadius: BorderRadius.circular(
-                macStyle ? responsive.displayScaled(8) : 12,
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: macStyle
+                    ? responsive.displayScaled(9)
+                    : responsive.spacing(10),
+                vertical: macStyle
+                    ? responsive.displayScaled(5)
+                    : responsive.spacing(6),
               ),
-              border: Border.all(color: border),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                if (overdue)
-                  Icon(CupertinoIcons.clock, color: foreground, size: iconSize)
-                else
-                  CupertinoActivityIndicator(
-                    radius: iconSize / 2,
-                    color: foreground,
-                  ),
-                SizedBox(
-                  width: macStyle
-                      ? responsive.displayScaled(7)
-                      : responsive.spacing(7),
+              decoration: BoxDecoration(
+                color: background,
+                borderRadius: BorderRadius.circular(
+                  macStyle ? responsive.displayScaled(8) : 12,
                 ),
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
+                border: Border.all(color: border),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  if (overdue)
+                    Icon(
+                      CupertinoIcons.clock,
                       color: foreground,
-                      fontSize: macStyle
-                          ? responsive.displayScaled(11.5)
-                          : responsive.metaSm,
-                      fontWeight: FontWeight.w500,
-                      height: 1.25,
+                      size: iconSize,
+                    )
+                  else
+                    CupertinoActivityIndicator(
+                      radius: iconSize / 2,
+                      color: foreground,
+                    ),
+                  SizedBox(
+                    width: macStyle
+                        ? responsive.displayScaled(7)
+                        : responsive.spacing(7),
+                  ),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: foreground,
+                        fontSize: macStyle
+                            ? responsive.displayScaled(11.5)
+                            : responsive.metaSm,
+                        fontWeight: FontWeight.w500,
+                        height: 1.25,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

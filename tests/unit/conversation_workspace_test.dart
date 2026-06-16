@@ -6,6 +6,7 @@ import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
+import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
@@ -614,6 +615,168 @@ void main() {
     );
     expect(processingDot.status.kind, AgentVisualStatusKind.processing);
 
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 最近会话同步显示群聊触发的本地智能体处理中状态', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:human:me',
+      credentialName: 'me.json',
+      displayName: 'Me',
+      handle: 'me',
+    );
+    final agentConversation = ConversationSummary(
+      threadId: 'dm:did:agent:runtime',
+      displayName: 'Hermes',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 6, 4, 10),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:agent:runtime',
+    );
+    final groupConversation = ConversationSummary(
+      threadId: 'group:did:group:agent-room',
+      displayName: 'Agent 群',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 6, 4, 10, 1),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:group:agent-room',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[
+        agentConversation,
+        groupConversation,
+      ]
+      ..dmHistoryByPeerDid = const <String, List<ChatMessage>>{
+        'did:agent:runtime': <ChatMessage>[],
+      }
+      ..groupMembersByGroupId = const <String, List<GroupMemberSummary>>{
+        'did:group:agent-room': <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: 'did:agent:runtime',
+            did: 'did:agent:runtime',
+            handle: 'hermes',
+            role: 'member',
+            displayName: 'Hermes',
+            subjectType: GroupMemberSubjectType.agent,
+          ),
+        ],
+      };
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:runtime',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'hermes',
+          displayName: 'Hermes',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+          agentsProvider.overrideWith((ref) {
+            final controller = AgentsController(ref);
+            controller.state = AgentsState(agents: control.agents);
+            return controller;
+          }),
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final initialDot = tester.widget<AgentStatusDot>(
+      find.byType(AgentStatusDot).first,
+    );
+    expect(initialDot.status.kind, AgentVisualStatusKind.ready);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ConversationWorkspacePage)),
+    );
+    await container
+        .read(chatThreadsProvider.notifier)
+        .sendMessage(
+          conversation: groupConversation,
+          content: '@hermes 请处理',
+          mentions: const <ChatMentionDraft>[
+            ChatMentionDraft(
+              localId: 'men_agent',
+              surface: '@hermes',
+              start: 0,
+              end: 7,
+              target: ChatMentionTargetDraft.member(
+                kind: ChatMentionTargetKind.agent,
+                did: 'did:agent:runtime',
+                handle: 'hermes',
+                displayName: 'Hermes',
+              ),
+            ),
+          ],
+        );
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final processingDot = tester.widget<AgentStatusDot>(
+      find.byType(AgentStatusDot).first,
+    );
+    expect(processingDot.status.kind, AgentVisualStatusKind.processing);
+    final pendingTurn = container
+        .read(chatThreadsProvider)[groupConversation.threadId]!
+        .agentPendingTurns
+        .single;
+
+    container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+      <String, Object?>{
+        'schema': 'awiki.agent.status.v1',
+        'status_scope': 'run',
+        'conversation_id': groupConversation.threadId,
+        'task_id': 'task_group_mention',
+        'runs': <Object?>[
+          <String, Object?>{
+            'run_id': 'run_group_mention',
+            'message_id': 'task_group_mention',
+            'source_message_id': pendingTurn.remoteMessageId,
+            'mention_id': 'men_agent',
+            'runtime_agent_did': 'did:agent:runtime',
+            'conversation_id': groupConversation.threadId,
+            'status': 'failed',
+            'updated_at': DateTime(2026, 6, 4, 10, 2).toIso8601String(),
+            'last_error_code': 'agent_invocation_denied',
+          },
+        ],
+      },
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final settledDot = tester.widget<AgentStatusDot>(
+      find.byType(AgentStatusDot).first,
+    );
+    expect(settledDot.status.kind, AgentVisualStatusKind.ready);
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });

@@ -56,7 +56,7 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
 
     final state = ref.watch(agentsProvider);
     final responsive = context.awikiResponsive;
-    final pendingAgentDids = _pendingAgentDids(ref.watch(chatThreadsProvider));
+    final pendingAgentDids = ref.watch(pendingAgentDidsProvider);
     final list = _AgentListPane(
       state: state,
       footer: widget.listFooter,
@@ -2264,14 +2264,6 @@ Color _runStatusColor(String status) {
     default:
       return const Color(0xFF66728A);
   }
-}
-
-Set<String> _pendingAgentDids(Map<String, ChatThreadState> threads) {
-  return <String>{
-    for (final thread in threads.values)
-      for (final turn in thread.agentPendingTurns)
-        if (turn.isActive) turn.agentDid,
-  };
 }
 
 String _redactDiagnosticValue(Object? value, {String? key}) {

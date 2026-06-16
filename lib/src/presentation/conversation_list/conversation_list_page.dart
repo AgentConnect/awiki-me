@@ -952,10 +952,9 @@ AgentVisualStatus? _conversationAgentStatus(
   if (runtimeAgent == null) {
     return const AgentVisualStatus(AgentVisualStatusKind.unknown);
   }
-  final thread = ref.watch(chatThreadProvider(conversation.threadId));
-  final hasPendingTurn = thread.agentPendingTurns.any(
-    (turn) => turn.isActive && turn.agentDid == runtimeAgent.agentDid,
-  );
+  final hasPendingTurn = ref
+      .watch(pendingAgentDidsProvider)
+      .contains(runtimeAgent.agentDid);
   return AgentVisualStatus.fromAgent(
     runtimeAgent,
     hasPendingTurn: hasPendingTurn,

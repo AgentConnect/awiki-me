@@ -985,6 +985,117 @@ class ChatThreadsController
     _scheduleAgentProcessingOverdue(threadId);
   }
 
+  void applyAgentRunStatusPayload(Map<String, Object?> payload) {
+    if (payload['schema'] != 'awiki.agent.status.v1' ||
+        payload['status_scope'] != 'run') {
+      return;
+    }
+    final runs = payload['runs'];
+    if (runs is! List) {
+      return;
+    }
+    for (final item in runs) {
+      if (item is Map) {
+        _applyAgentRunStatus(_stringKeyMap(item), payload);
+      }
+    }
+  }
+
+  void _applyAgentRunStatus(
+    Map<String, Object?> run,
+    Map<String, Object?> payload,
+  ) {
+    final status = run['status']?.toString().trim();
+    if (status != 'succeeded' && status != 'finished' && status != 'failed') {
+      return;
+    }
+    final agentDid = run['runtime_agent_did']?.toString().trim();
+    if (agentDid == null || agentDid.isEmpty) {
+      return;
+    }
+    final conversationId =
+        run['conversation_id']?.toString().trim().ifNotEmpty ??
+        payload['conversation_id']?.toString().trim().ifNotEmpty;
+    final sourceMessageId = run['source_message_id']
+        ?.toString()
+        .trim()
+        .ifNotEmpty;
+    final messageId =
+        run['message_id']?.toString().trim().ifNotEmpty ??
+        payload['task_id']?.toString().trim().ifNotEmpty;
+    final mentionId = run['mention_id']?.toString().trim().ifNotEmpty;
+    final nextState = Map<String, ChatThreadState>.from(state);
+    var changed = false;
+    final changedThreadIds = <String>[];
+    for (final entry in state.entries) {
+      final thread = entry.value;
+      if (thread.agentPendingTurns.isEmpty) {
+        continue;
+      }
+      if (conversationId != null && entry.key != conversationId) {
+        continue;
+      }
+      final nextTurns = <AgentPendingTurn>[
+        for (final turn in thread.agentPendingTurns)
+          if (!_runStatusMatchesPendingTurn(
+            turn,
+            agentDid: agentDid,
+            sourceMessageId: sourceMessageId,
+            messageId: messageId,
+            mentionId: mentionId,
+            allowAgentOnlyMatch: conversationId != null,
+          ))
+            turn,
+      ];
+      if (nextTurns.length == thread.agentPendingTurns.length) {
+        continue;
+      }
+      changed = true;
+      nextState[entry.key] = thread.copyWith(agentPendingTurns: nextTurns);
+      changedThreadIds.add(entry.key);
+    }
+    if (changed) {
+      state = nextState;
+      for (final threadId in changedThreadIds) {
+        if (state[threadId]?.agentPendingTurns.isEmpty ?? true) {
+          _cancelAgentProcessingTimer(threadId);
+        } else {
+          _scheduleAgentProcessingOverdue(threadId);
+        }
+      }
+    }
+  }
+
+  bool _runStatusMatchesPendingTurn(
+    AgentPendingTurn turn, {
+    required String agentDid,
+    required String? sourceMessageId,
+    required String? messageId,
+    required String? mentionId,
+    required bool allowAgentOnlyMatch,
+  }) {
+    if (turn.agentDid.trim() != agentDid) {
+      return false;
+    }
+    if (mentionId != null && turn.mentionId == mentionId) {
+      return true;
+    }
+    if (sourceMessageId != null &&
+        (turn.remoteMessageId == sourceMessageId ||
+            turn.localMessageId == sourceMessageId)) {
+      return true;
+    }
+    if (messageId != null &&
+        (turn.remoteMessageId == messageId ||
+            turn.localMessageId == messageId)) {
+      return true;
+    }
+    return allowAgentOnlyMatch &&
+        mentionId == null &&
+        sourceMessageId == null &&
+        messageId == null;
+  }
+
   List<_AgentPendingTarget> _agentMentionPendingTargets(
     List<ChatMentionDraft> mentions,
   ) {
@@ -1402,10 +1513,33 @@ String? _normalizedOptionalText(String? value) {
   return normalized;
 }
 
+Map<String, Object?> _stringKeyMap(Map<dynamic, dynamic> value) {
+  return <String, Object?>{
+    for (final entry in value.entries) entry.key.toString(): entry.value,
+  };
+}
+
+extension _NonEmptyStringExtension on String {
+  String? get ifNotEmpty => isEmpty ? null : this;
+}
+
 final chatThreadsProvider =
     StateNotifierProvider<ChatThreadsController, Map<String, ChatThreadState>>(
       (ref) => ChatThreadsController(ref),
     );
+
+final pendingAgentDidsProvider = Provider<Set<String>>((ref) {
+  final threads = ref.watch(chatThreadsProvider);
+  return activePendingAgentDids(threads);
+});
+
+Set<String> activePendingAgentDids(Map<String, ChatThreadState> threads) {
+  return <String>{
+    for (final thread in threads.values)
+      for (final turn in thread.agentPendingTurns)
+        if (turn.isActive) turn.agentDid,
+  };
+}
 
 final chatComposerDraftsProvider =
     StateNotifierProvider<
