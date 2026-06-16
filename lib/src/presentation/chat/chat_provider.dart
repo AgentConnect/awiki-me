@@ -1043,7 +1043,6 @@ class ChatThreadsController
             sourceMessageId: sourceMessageId,
             messageId: messageId,
             mentionId: mentionId,
-            allowAgentOnlyMatch: conversationId != null,
           ))
             turn,
       ];
@@ -1072,28 +1071,30 @@ class ChatThreadsController
     required String? sourceMessageId,
     required String? messageId,
     required String? mentionId,
-    required bool allowAgentOnlyMatch,
   }) {
     if (turn.agentDid.trim() != agentDid) {
       return false;
-    }
-    if (mentionId != null && turn.mentionId == mentionId) {
-      return true;
     }
     if (sourceMessageId != null &&
         (turn.remoteMessageId == sourceMessageId ||
             turn.localMessageId == sourceMessageId)) {
       return true;
     }
+    if (sourceMessageId != null) {
+      return false;
+    }
     if (messageId != null &&
         (turn.remoteMessageId == messageId ||
             turn.localMessageId == messageId)) {
       return true;
     }
-    return allowAgentOnlyMatch &&
-        mentionId == null &&
-        sourceMessageId == null &&
-        messageId == null;
+    if (messageId != null) {
+      return false;
+    }
+    if (mentionId != null && turn.mentionId == mentionId) {
+      return true;
+    }
+    return false;
   }
 
   List<_AgentPendingTarget> _agentMentionPendingTargets(

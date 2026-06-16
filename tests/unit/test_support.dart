@@ -411,6 +411,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   String? lastSentAttachmentCaption;
   String? lastSentAttachmentIdempotencyKey;
   String? nextSentMessageId;
+  List<String> nextSentMessageIds = <String>[];
   int listLocalCredentialsCalls = 0;
   int importCalls = 0;
   int exportCalls = 0;
@@ -970,9 +971,13 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     if (sendDelay > Duration.zero) {
       await Future<void>.delayed(sendDelay);
     }
-    final sentId =
-        nextSentMessageId ?? 'sent-${DateTime.now().microsecondsSinceEpoch}';
-    nextSentMessageId = null;
+    final sentId = nextSentMessageIds.isNotEmpty
+        ? nextSentMessageIds.removeAt(0)
+        : (nextSentMessageId ??
+              'sent-${DateTime.now().microsecondsSinceEpoch}');
+    if (nextSentMessageIds.isEmpty) {
+      nextSentMessageId = null;
+    }
     return ChatMessage(
       localId: sentId,
       remoteId: sentId,

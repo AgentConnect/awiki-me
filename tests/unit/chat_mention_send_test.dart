@@ -159,6 +159,131 @@ void main() {
     },
   );
 
+  test(
+    'run status clears only the matching group agent mention turn',
+    () async {
+      const agentDid = 'did:wba:awiki.info:agent:runtime:hermes:e1_agent';
+      const mention = ChatMentionDraft(
+        localId: 'men_agent',
+        surface: '@hermes',
+        start: 0,
+        end: '@hermes'.length,
+        target: ChatMentionTargetDraft.member(
+          kind: ChatMentionTargetKind.agent,
+          did: agentDid,
+          handle: 'hermes',
+        ),
+      );
+      gateway.nextSentMessageIds = <String>[
+        'msg_group_mention_1',
+        'msg_group_mention_2',
+      ];
+
+      await container
+          .read(chatThreadsProvider.notifier)
+          .sendMessage(
+            conversation: conversation,
+            content: '@hermes 第一个问题',
+            mentions: const <ChatMentionDraft>[mention],
+          );
+      await container
+          .read(chatThreadsProvider.notifier)
+          .sendMessage(
+            conversation: conversation,
+            content: '@hermes 第二个问题',
+            mentions: const <ChatMentionDraft>[mention],
+          );
+
+      var thread = container.read(chatThreadProvider(conversation.threadId));
+      expect(thread.pendingAgentReplyCount, 2);
+      final firstMessage = thread.messages.firstWhere(
+        (message) => message.remoteId == 'msg_group_mention_1',
+      );
+      final secondMessage = thread.messages.firstWhere(
+        (message) => message.remoteId == 'msg_group_mention_2',
+      );
+      expect(thread.pendingAgentTurnForMessage(firstMessage), isNotNull);
+      expect(thread.pendingAgentTurnForMessage(secondMessage), isNotNull);
+
+      container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+        <String, Object?>{
+          'schema': 'awiki.agent.status.v1',
+          'status_scope': 'run',
+          'conversation_id': conversation.threadId,
+          'task_id': 'task_group_mention_1',
+          'runs': <Object?>[
+            <String, Object?>{
+              'run_id': 'run_group_mention_1',
+              'message_id': 'task_group_mention_1',
+              'source_message_id': 'msg_group_mention_1',
+              'mention_id': 'men_agent',
+              'runtime_agent_did': agentDid,
+              'conversation_id': conversation.threadId,
+              'status': 'finished',
+            },
+          ],
+        },
+      );
+
+      thread = container.read(chatThreadProvider(conversation.threadId));
+      expect(thread.pendingAgentReplyCount, 1);
+      expect(thread.pendingAgentTurnForMessage(firstMessage), isNull);
+      expect(thread.pendingAgentTurnForMessage(secondMessage), isNotNull);
+    },
+  );
+
+  test(
+    'run status without source metadata does not clear group mention turns',
+    () async {
+      const agentDid = 'did:wba:awiki.info:agent:runtime:hermes:e1_agent';
+      gateway.nextSentMessageId = 'msg_group_mention_1';
+
+      await container
+          .read(chatThreadsProvider.notifier)
+          .sendMessage(
+            conversation: conversation,
+            content: '@hermes 请处理',
+            mentions: const <ChatMentionDraft>[
+              ChatMentionDraft(
+                localId: 'men_agent',
+                surface: '@hermes',
+                start: 0,
+                end: '@hermes'.length,
+                target: ChatMentionTargetDraft.member(
+                  kind: ChatMentionTargetKind.agent,
+                  did: agentDid,
+                  handle: 'hermes',
+                ),
+              ),
+            ],
+          );
+
+      container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+        const <String, Object?>{
+          'schema': 'awiki.agent.status.v1',
+          'status_scope': 'run',
+          'conversation_id': 'group:did:wba:awiki.info:group:mention',
+          'task_id': 'task_without_source',
+          'runs': <Object?>[
+            <String, Object?>{
+              'run_id': 'run_without_source',
+              'runtime_agent_did': agentDid,
+              'conversation_id': 'group:did:wba:awiki.info:group:mention',
+              'status': 'finished',
+            },
+          ],
+        },
+      );
+
+      final thread = container.read(chatThreadProvider(conversation.threadId));
+      expect(thread.pendingAgentReplyCount, 1);
+      expect(
+        thread.pendingAgentTurnForMessage(thread.messages.single),
+        isNotNull,
+      );
+    },
+  );
+
   test('send text without mentions keeps old sendText path', () async {
     await container
         .read(chatThreadsProvider.notifier)
