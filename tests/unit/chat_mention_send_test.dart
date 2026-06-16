@@ -133,6 +133,7 @@ void main() {
         thread.pendingAgentTurnForMessage(thread.messages.single),
         isNotNull,
       );
+      expect(container.read(pendingAgentDidsProvider), contains(agentDid));
 
       container
           .read(chatThreadsProvider.notifier)
@@ -156,6 +157,7 @@ void main() {
 
       thread = container.read(chatThreadProvider(conversation.threadId));
       expect(thread.agentPendingTurns, isEmpty);
+      expect(container.read(pendingAgentDidsProvider), isNot(contains(agentDid)));
     },
   );
 
