@@ -4,7 +4,13 @@
 `lib/` contains the Flutter application. Domain contracts live in
 `lib/src/domain/`, Dart service clients and persistence live in
 `lib/src/data/`, and UI/providers live in `lib/src/presentation/`.
-`tests/unit_test/` contains Dart unit/widget/provider tests. `tests/integration_test/` contains Flutter app/native/platform smoke implementations. `tests/e2e_test/` contains end-to-end harnesses, configs, scenarios, and Maestro flows. Root `integration_test/*.dart` files are Flutter-tooling shims only. Platform runners live under
+`tests/unit_test/` contains fast Dart logic, widget, provider, and fake-backed
+harness tests. `tests/integration_test/` contains Flutter app/native/platform
+smoke implementations that prove the App can start and integrate with the
+Flutter engine or native plugins, but should not own real multi-client backend
+flows. `tests/e2e_test/` contains end-to-end harnesses, configs, scenarios, and
+Maestro flows for real App + CLI peer/backend/device validation. Root
+`integration_test/*.dart` files are Flutter-tooling shims only. Platform runners live under
 `android/`, `ios/`, `macos/`, and `web/`. Static assets live in `assets/`.
 
 ## Build, Test, and Development Commands
@@ -26,9 +32,29 @@ matches the surrounding code. Keep widgets focused and move reusable business
 logic into `lib/src/data/` or `lib/src/domain/`.
 
 ## Testing Guidelines
-Tests use `flutter_test`. Name test files `*_test.dart` and keep tests in the correct parallel test domain: `tests/unit_test/` for fast fake-backed tests, `tests/integration_test/` for platform/native smoke tests, and `tests/e2e_test/` for real end-to-end harnesses and scenarios. Prefer focused unit tests for account/session storage,
-ANP wire mapping, and service clients; use widget tests for onboarding,
-settings, and chat flows.
+Tests use `flutter_test`. Name test files `*_test.dart` and keep tests in the
+correct parallel test domain:
+
+- `tests/unit_test/`: fast deterministic checks for Dart logic, mappers,
+  application/data services, providers, widgets, and pure E2E harness planning
+  with fakes. These must not require real devices, real services, OTP, or CLI
+  subprocesses.
+- `tests/integration_test/`: Flutter App/platform smoke checks for App
+  bootstrap, shell navigation, visual screenshot smoke, native SDK/plugin
+  loading, and fake-port integration on macOS/Linux/iOS/Android runners. These
+  should not own real multi-client backend E2E orchestration.
+- `tests/e2e_test/`: real end-to-end orchestration assets for App + CLI
+  peer/backend/device flows, including runner code, local/example configs,
+  scenarios, Maestro flows, reports, and redaction rules.
+
+Every new feature or behavior change must add or update the corresponding test
+coverage in the same change. Prefer focused unit/provider/widget tests first;
+add or update integration smoke when App bootstrap, routing, platform bindings,
+native plugins, or visual surfaces change; add or update E2E scenarios or runner
+assertions when the feature spans the real backend, CLI peer, account/OTP,
+multi-client messaging, or mobile-device flows. If coverage cannot be added in
+the current change, document the reason, skipped case ID, owner, and follow-up
+in the relevant test docs or plan before merging.
 
 For development/test OTP flows, use the shared non-production credentials below:
 

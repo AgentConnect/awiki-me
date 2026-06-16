@@ -14,6 +14,45 @@ Root files under `integration_test/` are Flutter-tooling shims. Keep the real
 implementation under `tests/integration_test/` unless a test must be a root
 entrypoint for `flutter test -d <device>`.
 
+## Choosing the right test directory
+
+Use the test domain that matches the question being answered:
+
+| Directory | Answers | Uses real backend/devices? | Put these tests here |
+| --- | --- | --- | --- |
+| `tests/unit_test/` | "Does this Dart logic, mapper, provider, or widget state behave correctly?" | No | Pure Dart unit tests, widget/provider tests, fake service-client tests, parser tests, E2E runner plan/redaction tests. |
+| `tests/integration_test/` | "Can the App start and integrate with Flutter platform bindings or native plugins?" | Usually no | App shell smoke, fake-bootstrap navigation, visual screenshot smoke, native SDK/plugin smoke, App service bootstrap through fake ports. |
+| `tests/e2e_test/` | "Does the real user/business chain work across App, CLI peer, backend, accounts, and devices?" | Yes | E2E runners, scenario orchestration, local/example configs, Maestro flows, real App + CLI peer/backend/mobile-device reports. |
+
+Do not use `tests/integration_test/` as the owner of a real multi-client backend
+scenario. If Flutter tooling requires a root `integration_test/*.dart` shim or a
+desktop entrypoint, keep the orchestration, config, reports, and scenario
+contract in `tests/e2e_test/`, and let the shim only launch the App-side test
+implementation.
+
+## Required test coverage for new features
+
+Every new feature or behavior change must ship with matching test coverage in
+the same change:
+
+1. Start with the smallest deterministic coverage in `tests/unit_test/` for new
+   domain logic, data mapping, service-client behavior, provider state, or UI
+   widget behavior.
+2. Add or update `tests/integration_test/` when the change affects App startup,
+   navigation, platform bindings, native SDK/plugin loading, fake-port App
+   bootstrap, or screenshot-visible UI surfaces.
+3. Add or update `tests/e2e_test/` assets when the change spans real
+   non-production services, account/OTP flows, CLI peer behavior, multi-client
+   messaging, attachments, group flows, mobile devices, Maestro, or report
+   redaction.
+4. If a full E2E case is too expensive or currently blocked, keep a deterministic
+   unit/integration check, record the skipped E2E case ID, owner, blocker, and
+   follow-up in the relevant E2E docs or plan, and do not present the skipped
+   case as passing evidence.
+
+Code-only feature changes without corresponding tests are not acceptable unless
+the exception and follow-up are explicitly documented.
+
 ## Unit tests
 
 `tests/unit_test/` contains deterministic tests that do not require a real
