@@ -329,6 +329,36 @@ void main() {
     },
   );
 
+  test('does not load or save invocation policy for daemon agents', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+
+    await container.read(agentsProvider.notifier).load();
+    await container
+        .read(agentsProvider.notifier)
+        .loadInvocationPolicy('did:agent:daemon');
+    final saved = await container
+        .read(agentsProvider.notifier)
+        .saveInvocationPolicy(
+          'did:agent:daemon',
+          const AgentInvocationPolicy(),
+        );
+
+    expect(saved, isFalse);
+    expect(control.lastInvocationPolicyAgentDid, isNull);
+    expect(container.read(agentsProvider).invocationPolicies, isEmpty);
+  });
+
   test('upgradeDaemon shows pending until upgrade result arrives', () async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[

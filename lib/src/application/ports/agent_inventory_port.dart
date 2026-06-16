@@ -12,9 +12,7 @@ abstract interface class AgentInventoryPort {
 
   Future<void> unbindAgent({required String agentDid});
 
-  Future<AgentInvocationPolicy> getInvocationPolicy({
-    required String agentDid,
-  });
+  Future<AgentInvocationPolicy> getInvocationPolicy({required String agentDid});
 
   Future<AgentInvocationPolicy> updateInvocationPolicy({
     required String agentDid,
@@ -24,6 +22,7 @@ abstract interface class AgentInventoryPort {
   Future<AgentRegistrationToken> issueDaemonToken({
     required String controllerDid,
     required String clientPlatform,
+    String? handle,
   });
 
   Future<AgentRegistrationToken> issueRuntimeToken({

@@ -168,9 +168,9 @@ class AgentsController extends StateNotifier<AgentsState> {
         isLoading: false,
         clearError: true,
       );
-      final selectedDid = state.selectedAgent?.agentDid;
-      if (selectedDid != null) {
-        unawaited(loadInvocationPolicy(selectedDid));
+      final selectedAgent = state.selectedAgent;
+      if (selectedAgent != null && selectedAgent.isRuntime) {
+        unawaited(loadInvocationPolicy(selectedAgent.agentDid));
       }
       for (final daemon in agents.where((agent) => agent.isDaemon)) {
         if (_shouldAutoRefresh(daemon)) {
@@ -187,7 +187,9 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   void select(String agentDid) {
     state = state.copyWith(selectedAgentDid: agentDid);
-    unawaited(loadInvocationPolicy(agentDid));
+    if (_agentByDid(agentDid)?.isRuntime == true) {
+      unawaited(loadInvocationPolicy(agentDid));
+    }
   }
 
   void clearSelection() {
@@ -424,6 +426,7 @@ class AgentsController extends StateNotifier<AgentsState> {
   Future<void> loadInvocationPolicy(String agentDid) async {
     final normalized = agentDid.trim();
     if (normalized.isEmpty ||
+        _agentByDid(normalized)?.isRuntime != true ||
         state.invocationPolicies.containsKey(normalized) ||
         state.loadingInvocationPolicies.contains(normalized)) {
       return;
@@ -466,13 +469,15 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
   }
 
-  Future<void> saveInvocationPolicy(
+  Future<bool> saveInvocationPolicy(
     String agentDid,
     AgentInvocationPolicy policy,
   ) async {
     final normalized = agentDid.trim();
-    if (normalized.isEmpty || state.savingInvocationPolicies.contains(normalized)) {
-      return;
+    if (normalized.isEmpty ||
+        _agentByDid(normalized)?.isRuntime != true ||
+        state.savingInvocationPolicies.contains(normalized)) {
+      return false;
     }
     state = state.copyWith(
       savingInvocationPolicies: <String>{
@@ -498,6 +503,7 @@ class AgentsController extends StateNotifier<AgentsState> {
           normalized,
         ),
       );
+      return true;
     } catch (error) {
       state = state.copyWith(
         savingInvocationPolicies: _withoutSetValue(
@@ -509,6 +515,7 @@ class AgentsController extends StateNotifier<AgentsState> {
           normalized: _agentErrorMessage(error),
         },
       );
+      return false;
     }
   }
 
@@ -739,6 +746,16 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   bool _shouldAutoRefresh(AgentSummary daemon) {
     return daemon.latest.status == 'ready' || daemon.latest.status == 'offline';
+  }
+
+  AgentSummary? _agentByDid(String agentDid) {
+    final normalized = agentDid.trim();
+    for (final agent in state.agents) {
+      if (agent.agentDid == normalized) {
+        return agent;
+      }
+    }
+    return null;
   }
 
   List<AgentSummary> _mergeControlPayload(

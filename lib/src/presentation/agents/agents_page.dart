@@ -689,7 +689,7 @@ class _AgentDetailPane extends StatelessWidget {
   final ValueChanged<AgentSummary> onResetRuntime;
   final ValueChanged<AgentSummary> onUpgrade;
   final ValueChanged<AgentSummary> onDelete;
-  final Future<void> Function(String agentDid, AgentInvocationPolicy policy)
+  final Future<bool> Function(String agentDid, AgentInvocationPolicy policy)
   onSaveInvocationPolicy;
 
   @override
@@ -810,21 +810,24 @@ class _AgentDetailPane extends StatelessWidget {
               _RunStatusPanel(run: agent.recentRuns.first),
               SizedBox(height: responsive.spacing(18)),
             ],
-            _AgentAccessPolicyPanel(
-              key: ValueKey<String>('access-policy-${agent.agentDid}'),
-              agent: agent,
-              policy:
-                  state.invocationPolicies[agent.agentDid] ??
-                  const AgentInvocationPolicy(),
-              isLoading: state.loadingInvocationPolicies.contains(
-                agent.agentDid,
+            if (agent.isRuntime) ...<Widget>[
+              _AgentAccessPolicyPanel(
+                key: ValueKey<String>('access-policy-${agent.agentDid}'),
+                policy:
+                    state.invocationPolicies[agent.agentDid] ??
+                    const AgentInvocationPolicy(),
+                isLoading: state.loadingInvocationPolicies.contains(
+                  agent.agentDid,
+                ),
+                isSaving: state.savingInvocationPolicies.contains(
+                  agent.agentDid,
+                ),
+                errorText: state.invocationPolicyErrors[agent.agentDid],
+                onUpdate: (policy) =>
+                    onSaveInvocationPolicy(agent.agentDid, policy),
               ),
-              isSaving: state.savingInvocationPolicies.contains(agent.agentDid),
-              errorText: state.invocationPolicyErrors[agent.agentDid],
-              onSave: (policy) =>
-                  onSaveInvocationPolicy(agent.agentDid, policy),
-            ),
-            SizedBox(height: responsive.spacing(18)),
+              SizedBox(height: responsive.spacing(18)),
+            ],
             _DiagnosticInfoPanel(
               key: ValueKey<String>('diagnostic-${agent.agentDid}'),
               agent: agent,
@@ -906,20 +909,18 @@ class _RunStatusPanel extends StatelessWidget {
 class _AgentAccessPolicyPanel extends StatefulWidget {
   const _AgentAccessPolicyPanel({
     super.key,
-    required this.agent,
     required this.policy,
     required this.isLoading,
     required this.isSaving,
     required this.errorText,
-    required this.onSave,
+    required this.onUpdate,
   });
 
-  final AgentSummary agent;
   final AgentInvocationPolicy policy;
   final bool isLoading;
   final bool isSaving;
   final String? errorText;
-  final Future<void> Function(AgentInvocationPolicy policy) onSave;
+  final Future<bool> Function(AgentInvocationPolicy policy) onUpdate;
 
   @override
   State<_AgentAccessPolicyPanel> createState() =>
@@ -927,98 +928,137 @@ class _AgentAccessPolicyPanel extends StatefulWidget {
 }
 
 class _AgentAccessPolicyPanelState extends State<_AgentAccessPolicyPanel> {
-  late AgentInvocationPolicyMode _activeMode;
   late final TextEditingController _whitelistController;
   late final TextEditingController _blacklistController;
   bool _savingLocally = false;
+  String? _whitelistError;
+  String? _blacklistError;
 
   @override
   void initState() {
     super.initState();
-    _activeMode = widget.policy.activeMode;
-    _whitelistController = TextEditingController(
-      text: _handlesText(widget.policy.whitelistHandles),
-    )..addListener(_onChanged);
-    _blacklistController = TextEditingController(
-      text: _handlesText(widget.policy.blacklistHandles),
-    )..addListener(_onChanged);
-  }
-
-  @override
-  void didUpdateWidget(covariant _AgentAccessPolicyPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.agent.agentDid != widget.agent.agentDid ||
-        oldWidget.policy != widget.policy) {
-      _activeMode = widget.policy.activeMode;
-      _setControllerText(
-        _whitelistController,
-        _handlesText(widget.policy.whitelistHandles),
-      );
-      _setControllerText(
-        _blacklistController,
-        _handlesText(widget.policy.blacklistHandles),
-      );
-    }
+    _whitelistController = TextEditingController();
+    _blacklistController = TextEditingController();
   }
 
   @override
   void dispose() {
-    _whitelistController
-      ..removeListener(_onChanged)
-      ..dispose();
-    _blacklistController
-      ..removeListener(_onChanged)
-      ..dispose();
+    _whitelistController.dispose();
+    _blacklistController.dispose();
     super.dispose();
   }
 
-  void _onChanged() {
-    setState(() {});
-  }
+  bool get _busy => widget.isLoading || widget.isSaving || _savingLocally;
 
-  void _setControllerText(TextEditingController controller, String text) {
-    if (controller.text == text) {
-      return;
-    }
-    controller.value = TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
-    );
-  }
-
-  AgentInvocationPolicy _draftPolicy() {
-    return widget.policy.copyWith(
-      activeMode: _activeMode,
-      whitelistHandles: _parseHandleList(_whitelistController.text),
-      blacklistHandles: _parseHandleList(_blacklistController.text),
-    );
-  }
-
-  bool get _isDirty {
-    final draft = _draftPolicy();
-    return draft.activeMode != widget.policy.activeMode ||
-        !_sameStringList(
-          draft.whitelistHandles,
-          widget.policy.whitelistHandles,
-        ) ||
-        !_sameStringList(
-          draft.blacklistHandles,
-          widget.policy.blacklistHandles,
-        );
-  }
-
-  Future<void> _save() async {
-    if (!_isDirty || widget.isSaving || _savingLocally) {
-      return;
+  Future<bool> _persist(AgentInvocationPolicy policy) async {
+    if (_busy) {
+      return false;
     }
     setState(() => _savingLocally = true);
     try {
-      await widget.onSave(_draftPolicy());
+      return await widget.onUpdate(policy);
     } finally {
       if (mounted) {
         setState(() => _savingLocally = false);
       }
     }
+  }
+
+  Future<void> _setMode(AgentInvocationPolicyMode mode) async {
+    if (_busy || widget.policy.activeMode == mode) {
+      return;
+    }
+    await _persist(widget.policy.copyWith(activeMode: mode));
+  }
+
+  Future<void> _addHandle({
+    required AgentInvocationPolicyMode listMode,
+    required TextEditingController controller,
+  }) async {
+    final parsed = _parseSingleHandle(controller.text);
+    if (parsed.error != null) {
+      setState(() {
+        if (listMode == AgentInvocationPolicyMode.whitelist) {
+          _whitelistError = parsed.error;
+        } else {
+          _blacklistError = parsed.error;
+        }
+      });
+      return;
+    }
+    final handle = parsed.handle!;
+    final current = _handlesForMode(listMode);
+    if (current.contains(handle)) {
+      setState(() {
+        if (listMode == AgentInvocationPolicyMode.whitelist) {
+          _whitelistError = '这个 Handle 已在白名单中。';
+        } else {
+          _blacklistError = '这个 Handle 已在黑名单中。';
+        }
+      });
+      return;
+    }
+    final next = _policyWithList(listMode, <String>[...current, handle]);
+    final saved = await _persist(next);
+    if (saved && mounted) {
+      controller.clear();
+      setState(() {
+        if (listMode == AgentInvocationPolicyMode.whitelist) {
+          _whitelistError = null;
+        } else {
+          _blacklistError = null;
+        }
+      });
+    }
+  }
+
+  Future<void> _removeHandle({
+    required AgentInvocationPolicyMode listMode,
+    required String handle,
+  }) async {
+    final nextList = _handlesForMode(
+      listMode,
+    ).where((item) => item != handle).toList(growable: false);
+    await _persist(_policyWithList(listMode, nextList));
+  }
+
+  List<String> _handlesForMode(AgentInvocationPolicyMode mode) {
+    return switch (mode) {
+      AgentInvocationPolicyMode.whitelist => widget.policy.whitelistHandles,
+      AgentInvocationPolicyMode.blacklist => widget.policy.blacklistHandles,
+    };
+  }
+
+  AgentInvocationPolicy _policyWithList(
+    AgentInvocationPolicyMode mode,
+    List<String> handles,
+  ) {
+    return switch (mode) {
+      AgentInvocationPolicyMode.whitelist => widget.policy.copyWith(
+        whitelistHandles: handles,
+      ),
+      AgentInvocationPolicyMode.blacklist => widget.policy.copyWith(
+        blacklistHandles: handles,
+      ),
+    };
+  }
+
+  _ParsedAccessHandle _parseSingleHandle(String input) {
+    final trimmed = input.trim();
+    if (trimmed.isEmpty) {
+      return const _ParsedAccessHandle(error: '请输入 Handle。');
+    }
+    if (RegExp(r'[\s,，;；]').hasMatch(trimmed)) {
+      return const _ParsedAccessHandle(error: '每次只能添加一个 Handle。');
+    }
+    final normalized = trimmed.replaceFirst(RegExp(r'^@+'), '').toLowerCase();
+    if (normalized.isEmpty ||
+        normalized.contains('@') ||
+        normalized.contains('://') ||
+        normalized.startsWith('did:')) {
+      return const _ParsedAccessHandle(error: '请输入短 Handle 或完整 Handle。');
+    }
+    return _ParsedAccessHandle(handle: normalized);
   }
 
   @override
@@ -1029,7 +1069,7 @@ class _AgentAccessPolicyPanelState extends State<_AgentAccessPolicyPanel> {
       padding: EdgeInsets.all(responsive.spacing(16)),
       decoration: BoxDecoration(
         color: CupertinoColors.white,
-        borderRadius: BorderRadius.circular(responsive.radius(10)),
+        borderRadius: BorderRadius.circular(responsive.radius(8)),
         border: Border.all(color: const Color(0xFFE4EAF3)),
         boxShadow: const <BoxShadow>[
           BoxShadow(
@@ -1072,9 +1112,7 @@ class _AgentAccessPolicyPanelState extends State<_AgentAccessPolicyPanel> {
                     ),
                     SizedBox(height: responsive.spacing(2)),
                     Text(
-                      widget.agent.isDaemon
-                          ? '控制哪些 Handle 可以访问这个代理'
-                          : '控制哪些 Handle 可以访问这个智能体',
+                      '控制哪些 Handle 可以 @ 这个智能体',
                       style: TextStyle(
                         color: const Color(0xFF66728A),
                         fontSize: responsive.metaSm,
@@ -1083,40 +1121,90 @@ class _AgentAccessPolicyPanelState extends State<_AgentAccessPolicyPanel> {
                   ],
                 ),
               ),
-              if (widget.isLoading)
-                const CupertinoActivityIndicator()
-              else
-                _AccessSaveButton(
-                  isSaving: saving,
-                  enabled: _isDirty && !saving,
-                  onPressed: _save,
-                ),
+              if (widget.isLoading || saving)
+                const CupertinoActivityIndicator(),
             ],
           ),
           SizedBox(height: responsive.spacing(14)),
           SelectionContainer.disabled(
             child: _AccessModeSwitch(
-              activeMode: _activeMode,
-              onChanged: saving
-                  ? null
-                  : (mode) => setState(() => _activeMode = mode),
+              activeMode: widget.policy.activeMode,
+              onChanged: _busy ? null : (mode) => unawaited(_setMode(mode)),
             ),
           ),
           SizedBox(height: responsive.spacing(12)),
-          _AccessHandleEditor(
-            fieldKey: const Key('agent-access-whitelist-field'),
-            label: '白名单',
-            controller: _whitelistController,
-            enabled: !saving,
-            active: _activeMode == AgentInvocationPolicyMode.whitelist,
-          ),
-          SizedBox(height: responsive.spacing(10)),
-          _AccessHandleEditor(
-            fieldKey: const Key('agent-access-blacklist-field'),
-            label: '黑名单',
-            controller: _blacklistController,
-            enabled: !saving,
-            active: _activeMode == AgentInvocationPolicyMode.blacklist,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final modules = <Widget>[
+                _AccessPolicyModule(
+                  mode: AgentInvocationPolicyMode.whitelist,
+                  title: '白名单',
+                  active:
+                      widget.policy.activeMode ==
+                      AgentInvocationPolicyMode.whitelist,
+                  handles: widget.policy.whitelistHandles,
+                  controller: _whitelistController,
+                  fieldKey: const Key('agent-access-whitelist-field'),
+                  addKey: const Key('agent-access-whitelist-add'),
+                  enabled: !_busy,
+                  errorText: _whitelistError,
+                  onSubmitted: () => unawaited(
+                    _addHandle(
+                      listMode: AgentInvocationPolicyMode.whitelist,
+                      controller: _whitelistController,
+                    ),
+                  ),
+                  onRemove: (handle) => unawaited(
+                    _removeHandle(
+                      listMode: AgentInvocationPolicyMode.whitelist,
+                      handle: handle,
+                    ),
+                  ),
+                ),
+                _AccessPolicyModule(
+                  mode: AgentInvocationPolicyMode.blacklist,
+                  title: '黑名单',
+                  active:
+                      widget.policy.activeMode ==
+                      AgentInvocationPolicyMode.blacklist,
+                  handles: widget.policy.blacklistHandles,
+                  controller: _blacklistController,
+                  fieldKey: const Key('agent-access-blacklist-field'),
+                  addKey: const Key('agent-access-blacklist-add'),
+                  enabled: !_busy,
+                  errorText: _blacklistError,
+                  onSubmitted: () => unawaited(
+                    _addHandle(
+                      listMode: AgentInvocationPolicyMode.blacklist,
+                      controller: _blacklistController,
+                    ),
+                  ),
+                  onRemove: (handle) => unawaited(
+                    _removeHandle(
+                      listMode: AgentInvocationPolicyMode.blacklist,
+                      handle: handle,
+                    ),
+                  ),
+                ),
+              ];
+              if (constraints.maxWidth >= responsive.displayScaled(680)) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Expanded(child: modules[0]),
+                    SizedBox(width: responsive.spacing(12)),
+                    Expanded(child: modules[1]),
+                  ],
+                );
+              }
+              return Column(
+                children: <Widget>[
+                  modules[0],
+                  SizedBox(height: responsive.spacing(10)),
+                  modules[1],
+                ],
+              );
+            },
           ),
           if (widget.errorText != null) ...<Widget>[
             SizedBox(height: responsive.spacing(12)),
@@ -1126,6 +1214,13 @@ class _AgentAccessPolicyPanelState extends State<_AgentAccessPolicyPanel> {
       ),
     );
   }
+}
+
+class _ParsedAccessHandle {
+  const _ParsedAccessHandle({this.handle, this.error});
+
+  final String? handle;
+  final String? error;
 }
 
 class _AccessModeSwitch extends StatelessWidget {
@@ -1221,27 +1316,49 @@ class _AccessModeButton extends StatelessWidget {
   }
 }
 
-class _AccessHandleEditor extends StatelessWidget {
-  const _AccessHandleEditor({
-    required this.fieldKey,
-    required this.label,
-    required this.controller,
-    required this.enabled,
+class _AccessPolicyModule extends StatelessWidget {
+  const _AccessPolicyModule({
+    required this.mode,
+    required this.title,
     required this.active,
+    required this.handles,
+    required this.controller,
+    required this.fieldKey,
+    required this.addKey,
+    required this.enabled,
+    required this.errorText,
+    required this.onSubmitted,
+    required this.onRemove,
   });
 
-  final Key fieldKey;
-  final String label;
-  final TextEditingController controller;
-  final bool enabled;
+  final AgentInvocationPolicyMode mode;
+  final String title;
   final bool active;
+  final List<String> handles;
+  final TextEditingController controller;
+  final Key fieldKey;
+  final Key addKey;
+  final bool enabled;
+  final String? errorText;
+  final VoidCallback onSubmitted;
+  final ValueChanged<String> onRemove;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return AnimatedOpacity(
-      opacity: active ? 1 : 0.72,
+    final statusColor = active
+        ? const Color(0xFF0B65F8)
+        : const Color(0xFF8A96AA);
+    return AnimatedContainer(
       duration: const Duration(milliseconds: 120),
+      padding: EdgeInsets.all(responsive.spacing(12)),
+      decoration: BoxDecoration(
+        color: active ? const Color(0xFFF7FAFF) : const Color(0xFFFBFCFE),
+        borderRadius: BorderRadius.circular(responsive.radius(8)),
+        border: Border.all(
+          color: active ? const Color(0xFFBFD5FF) : const Color(0xFFE2E8F2),
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -1249,7 +1366,7 @@ class _AccessHandleEditor extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 child: Text(
-                  label,
+                  title,
                   style: TextStyle(
                     color: const Color(0xFF40506B),
                     fontSize: responsive.metaSm,
@@ -1257,44 +1374,80 @@ class _AccessHandleEditor extends StatelessWidget {
                   ),
                 ),
               ),
-              Text(
-                active ? '当前生效' : '已保存备用',
-                style: TextStyle(
-                  color: active
-                      ? const Color(0xFF0B65F8)
-                      : const Color(0xFF8A96AA),
-                  fontSize: responsive.metaSm,
-                  fontWeight: FontWeight.w600,
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: responsive.spacing(7),
+                  vertical: responsive.spacing(3),
+                ),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  active ? '已启用' : '未启用',
+                  style: TextStyle(
+                    color: statusColor,
+                    fontSize: responsive.metaSm,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
           ),
-          SizedBox(height: responsive.spacing(6)),
-          CupertinoTextField(
-            key: fieldKey,
-            controller: controller,
+          SizedBox(height: responsive.spacing(10)),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: CupertinoTextField(
+                  key: fieldKey,
+                  controller: controller,
+                  enabled: enabled,
+                  placeholder: 'bob 或 bob.example.com',
+                  padding: EdgeInsets.symmetric(
+                    horizontal: responsive.spacing(11),
+                    vertical: responsive.spacing(9),
+                  ),
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.white,
+                    borderRadius: BorderRadius.circular(responsive.radius(8)),
+                    border: Border.all(color: const Color(0xFFDDE5F1)),
+                  ),
+                  style: TextStyle(
+                    color: const Color(0xFF101B32),
+                    fontSize: responsive.bodySm,
+                    height: 1.2,
+                  ),
+                  placeholderStyle: TextStyle(
+                    color: const Color(0xFF98A4B8),
+                    fontSize: responsive.bodySm,
+                  ),
+                  onSubmitted: enabled ? (_) => onSubmitted() : null,
+                ),
+              ),
+              SizedBox(width: responsive.spacing(8)),
+              _AccessAddButton(
+                key: addKey,
+                enabled: enabled,
+                onPressed: onSubmitted,
+              ),
+            ],
+          ),
+          if (errorText != null) ...<Widget>[
+            SizedBox(height: responsive.spacing(6)),
+            Text(
+              errorText!,
+              style: TextStyle(
+                color: AwikiMeColors.danger,
+                fontSize: responsive.metaSm,
+              ),
+            ),
+          ],
+          SizedBox(height: responsive.spacing(10)),
+          _AccessHandleList(
+            mode: mode,
+            handles: handles,
             enabled: enabled,
-            minLines: 2,
-            maxLines: 5,
-            placeholder: 'bob 或 bob.example.com',
-            padding: EdgeInsets.symmetric(
-              horizontal: responsive.spacing(12),
-              vertical: responsive.spacing(10),
-            ),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFD),
-              borderRadius: BorderRadius.circular(responsive.radius(8)),
-              border: Border.all(color: const Color(0xFFDDE5F1)),
-            ),
-            style: TextStyle(
-              color: const Color(0xFF101B32),
-              fontSize: responsive.bodySm,
-              height: 1.3,
-            ),
-            placeholderStyle: TextStyle(
-              color: const Color(0xFF98A4B8),
-              fontSize: responsive.bodySm,
-            ),
+            onRemove: onRemove,
           ),
         ],
       ),
@@ -1302,14 +1455,13 @@ class _AccessHandleEditor extends StatelessWidget {
   }
 }
 
-class _AccessSaveButton extends StatelessWidget {
-  const _AccessSaveButton({
-    required this.isSaving,
+class _AccessAddButton extends StatelessWidget {
+  const _AccessAddButton({
+    super.key,
     required this.enabled,
     required this.onPressed,
   });
 
-  final bool isSaving;
   final bool enabled;
   final VoidCallback onPressed;
 
@@ -1317,32 +1469,136 @@ class _AccessSaveButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     return AppPressable(
-      key: const Key('agent-access-save-button'),
       onTap: enabled ? onPressed : null,
       enabled: enabled,
-      semanticLabel: '保存访问权限',
-      tooltip: '保存',
+      semanticLabel: '添加 Handle',
+      tooltip: '添加',
       borderRadius: BorderRadius.circular(responsive.radius(8)),
       child: Container(
-        constraints: BoxConstraints(minHeight: responsive.displayScaled(32)),
-        padding: EdgeInsets.symmetric(horizontal: responsive.spacing(12)),
+        width: responsive.displayScaled(42),
+        height: responsive.displayScaled(38),
         decoration: BoxDecoration(
           color: enabled ? const Color(0xFF0B65F8) : const Color(0xFFE8EDF5),
           borderRadius: BorderRadius.circular(responsive.radius(8)),
         ),
         alignment: Alignment.center,
-        child: isSaving
-            ? const CupertinoActivityIndicator(color: CupertinoColors.white)
-            : Text(
-                '保存',
-                style: TextStyle(
-                  color: enabled
-                      ? CupertinoColors.white
-                      : const Color(0xFF8A96AA),
-                  fontSize: responsive.metaSm,
-                  fontWeight: FontWeight.w700,
-                ),
+        child: Icon(
+          CupertinoIcons.plus,
+          color: enabled ? CupertinoColors.white : const Color(0xFF8A96AA),
+          size: responsive.iconSm,
+        ),
+      ),
+    );
+  }
+}
+
+class _AccessHandleList extends StatelessWidget {
+  const _AccessHandleList({
+    required this.mode,
+    required this.handles,
+    required this.enabled,
+    required this.onRemove,
+  });
+
+  final AgentInvocationPolicyMode mode;
+  final List<String> handles;
+  final bool enabled;
+  final ValueChanged<String> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    if (handles.isEmpty) {
+      return Container(
+        width: double.infinity,
+        constraints: BoxConstraints(minHeight: responsive.displayScaled(36)),
+        alignment: Alignment.centerLeft,
+        padding: EdgeInsets.symmetric(horizontal: responsive.spacing(10)),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F8FC),
+          borderRadius: BorderRadius.circular(responsive.radius(8)),
+          border: Border.all(color: const Color(0xFFE4EAF3)),
+        ),
+        child: Text(
+          '暂无 Handle',
+          style: TextStyle(
+            color: const Color(0xFF8A96AA),
+            fontSize: responsive.metaSm,
+          ),
+        ),
+      );
+    }
+    return Column(
+      children: <Widget>[
+        for (final handle in handles) ...<Widget>[
+          _AccessHandleRow(
+            key: ValueKey<String>('access-${mode.wireValue}-$handle'),
+            handle: handle,
+            enabled: enabled,
+            onRemove: () => onRemove(handle),
+          ),
+          if (handle != handles.last) SizedBox(height: responsive.spacing(6)),
+        ],
+      ],
+    );
+  }
+}
+
+class _AccessHandleRow extends StatelessWidget {
+  const _AccessHandleRow({
+    super.key,
+    required this.handle,
+    required this.enabled,
+    required this.onRemove,
+  });
+
+  final String handle;
+  final bool enabled;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Container(
+      constraints: BoxConstraints(minHeight: responsive.displayScaled(36)),
+      padding: EdgeInsets.only(
+        left: responsive.spacing(10),
+        right: responsive.spacing(4),
+      ),
+      decoration: BoxDecoration(
+        color: CupertinoColors.white,
+        borderRadius: BorderRadius.circular(responsive.radius(8)),
+        border: Border.all(color: const Color(0xFFE4EAF3)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              '@$handle',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: const Color(0xFF17233A),
+                fontSize: responsive.bodySm,
+                fontWeight: FontWeight.w600,
               ),
+            ),
+          ),
+          AppIconButton(
+            onPressed: enabled ? onRemove : null,
+            semanticLabel: '删除 Handle',
+            tooltip: '删除',
+            size: responsive.displayScaled(30),
+            borderRadius: BorderRadius.circular(responsive.radius(7)),
+            child: Icon(
+              CupertinoIcons.xmark,
+              color: enabled
+                  ? const Color(0xFF68758D)
+                  : const Color(0xFFADB7C7),
+              size: responsive.displayScaled(13),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1963,39 +2219,6 @@ Color _runStatusColor(String status) {
     default:
       return const Color(0xFF66728A);
   }
-}
-
-String _handlesText(List<String> handles) {
-  return handles.join('\n');
-}
-
-List<String> _parseHandleList(String text) {
-  final seen = <String>{};
-  final result = <String>[];
-  for (final token in text.split(RegExp(r'[\s,，;；]+'))) {
-    final normalized = token
-        .trim()
-        .replaceFirst(RegExp(r'^@+'), '')
-        .toLowerCase();
-    if (normalized.isEmpty || seen.contains(normalized)) {
-      continue;
-    }
-    seen.add(normalized);
-    result.add(normalized);
-  }
-  return result;
-}
-
-bool _sameStringList(List<String> left, List<String> right) {
-  if (left.length != right.length) {
-    return false;
-  }
-  for (var index = 0; index < left.length; index++) {
-    if (left[index] != right[index]) {
-      return false;
-    }
-  }
-  return true;
 }
 
 Set<String> _pendingAgentDids(Map<String, ChatThreadState> threads) {

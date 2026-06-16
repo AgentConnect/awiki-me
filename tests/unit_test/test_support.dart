@@ -1435,6 +1435,7 @@ class FakeAgentInventoryPort implements AgentInventoryPort {
   Future<AgentRegistrationToken> issueDaemonToken({
     required String controllerDid,
     required String clientPlatform,
+    String? handle,
   }) async {
     return nextDaemonToken;
   }

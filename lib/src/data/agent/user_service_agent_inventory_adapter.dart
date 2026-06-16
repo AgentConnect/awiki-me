@@ -167,10 +167,17 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
   Future<AgentRegistrationToken> issueDaemonToken({
     required String controllerDid,
     required String clientPlatform,
+    String? handle,
   }) {
+    final normalizedHandle = handle
+        ?.trim()
+        .replaceFirst(RegExp(r'^@+'), '')
+        .toLowerCase();
     return _issueToken(<String, Object?>{
       'agent_kind': 'daemon',
       'controller_did': controllerDid,
+      if (normalizedHandle != null && normalizedHandle.isNotEmpty)
+        'handle': normalizedHandle,
       'metadata': <String, Object?>{
         'default_display_name': '代理 1',
         'client': 'awiki-me',

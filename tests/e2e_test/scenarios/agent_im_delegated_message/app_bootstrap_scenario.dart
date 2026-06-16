@@ -231,6 +231,7 @@ final class _ScenarioAgentInventory implements AgentInventoryPort {
   Future<AgentRegistrationToken> issueDaemonToken({
     required String controllerDid,
     required String clientPlatform,
+    String? handle,
   }) async {
     return const AgentRegistrationToken(token: 'fixture-daemon-token');
   }

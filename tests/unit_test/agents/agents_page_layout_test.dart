@@ -282,7 +282,9 @@ void main() {
     },
   );
 
-  testWidgets('agent detail saves access policy lists', (tester) async {
+  testWidgets('runtime detail updates access policy immediately', (
+    tester,
+  ) async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
         AgentSummary(
@@ -297,7 +299,7 @@ void main() {
         ),
       ]
       ..invocationPolicies['did:agent:runtime'] = const AgentInvocationPolicy(
-        whitelistHandles: <String>['alice@awiki.info'],
+        whitelistHandles: <String>['alice.awiki.info'],
       );
 
     tester.view.physicalSize = const Size(1200, 900);
@@ -322,18 +324,21 @@ void main() {
     expect(find.text('访问权限'), findsOneWidget);
     expect(find.text('白名单模式'), findsOneWidget);
     expect(find.text('黑名单模式'), findsOneWidget);
+    expect(find.text('@alice.awiki.info'), findsOneWidget);
 
     await tester.tap(find.text('黑名单模式'));
-    await tester.pump();
-    await tester.enterText(
-      find.byKey(const Key('agent-access-whitelist-field')),
-      'alice\ncarol.awiki.info',
+    await tester.pumpAndSettle();
+    expect(control.lastInvocationPolicyAgentDid, 'did:agent:runtime');
+    expect(
+      control.lastInvocationPolicy?.activeMode,
+      AgentInvocationPolicyMode.blacklist,
     );
+
     await tester.enterText(
       find.byKey(const Key('agent-access-blacklist-field')),
-      'bob, dave.awiki.info',
+      '@bob.awiki.info',
     );
-    await tester.tap(find.byKey(const Key('agent-access-save-button')));
+    await tester.tap(find.byKey(const Key('agent-access-blacklist-add')));
     await tester.pumpAndSettle();
 
     expect(control.lastInvocationPolicyAgentDid, 'did:agent:runtime');
@@ -342,13 +347,56 @@ void main() {
       AgentInvocationPolicyMode.blacklist,
     );
     expect(control.lastInvocationPolicy?.whitelistHandles, <String>[
-      'alice',
-      'carol.awiki.info',
+      'alice.awiki.info',
     ]);
     expect(control.lastInvocationPolicy?.blacklistHandles, <String>[
-      'bob',
-      'dave.awiki.info',
+      'bob.awiki.info',
     ]);
+    expect(find.text('@bob.awiki.info'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('删除').last);
+    await tester.pumpAndSettle();
+
+    expect(control.lastInvocationPolicy?.blacklistHandles, isEmpty);
+  });
+
+  testWidgets('daemon detail does not show access policy panel', (
+    tester,
+  ) async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready', platform: 'linux-amd64'),
+        ),
+      ];
+
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('访问权限'), findsNothing);
+    expect(find.byKey(const Key('agent-access-whitelist-field')), findsNothing);
+    expect(control.lastInvocationPolicyAgentDid, isNull);
   });
 
   testWidgets('create Agent dialog blocks unavailable handle', (tester) async {
