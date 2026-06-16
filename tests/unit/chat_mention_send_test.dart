@@ -50,13 +50,17 @@ void main() {
   });
 
   test('send mention uses P9 payload without sender or proof fields', () async {
-    const text = '@所有 Agents 请总结';
+    const text = '@alice 请看';
     const mention = ChatMentionDraft(
-      localId: 'men_agents',
-      surface: '@所有 Agents',
+      localId: 'men_alice',
+      surface: '@alice',
       start: 0,
-      end: '@所有 Agents'.length,
-      target: ChatMentionTargetDraft.groupSelector(ChatMentionSelector.agents),
+      end: '@alice'.length,
+      target: ChatMentionTargetDraft.member(
+        kind: ChatMentionTargetKind.human,
+        did: 'did:wba:awiki.info:user:alice',
+        handle: 'alice',
+      ),
     );
 
     await container
@@ -73,10 +77,10 @@ void main() {
     final mentions = gateway.lastSentPayload?['mentions'] as List<Object?>;
     expect(mentions, hasLength(1));
     final json = mentions.single! as Map<String, Object?>;
-    expect(json['id'], 'men_agents');
+    expect(json['id'], 'men_alice');
     expect(json['target'], <String, Object?>{
-      'kind': 'group_selector',
-      'selector': 'agents',
+      'kind': 'human',
+      'did': 'did:wba:awiki.info:user:alice',
     });
     expect(json.containsKey('sender'), isFalse);
     expect(json.containsKey('proof'), isFalse);
@@ -86,7 +90,7 @@ void main() {
         .messages;
     expect(messages.last.content, text);
     expect(messages.last.payloadJson, isNotNull);
-    expect(messages.last.mentions.single.surface, '@所有 Agents');
+    expect(messages.last.mentions.single.surface, '@alice');
 
     final conversations = container
         .read(conversationListProvider)
@@ -157,7 +161,10 @@ void main() {
 
       thread = container.read(chatThreadProvider(conversation.threadId));
       expect(thread.agentPendingTurns, isEmpty);
-      expect(container.read(pendingAgentDidsProvider), isNot(contains(agentDid)));
+      expect(
+        container.read(pendingAgentDidsProvider),
+        isNot(contains(agentDid)),
+      );
     },
   );
 

@@ -26,7 +26,7 @@ Future<void> _verifyGroupTextRegression({
 
   final appGroupText = 'e2e app group ${config.runId} $nonce';
   final appGroupMentionText =
-      '@agents e2e app group mention ${config.runId} $nonce';
+      '@${config.cliHandle} e2e app group mention ${config.runId} $nonce';
   final appGroupMemberMentionText =
       '@${config.cliHandle} e2e app group member mention ${config.runId} $nonce';
   final cliGroupText = 'e2e cli group ${config.runId} $nonce';
@@ -49,17 +49,27 @@ Future<void> _verifyGroupTextRegression({
     expectedText: appGroupText,
   );
 
+  final cliMentionMember = await _findGroupMember(
+    groups: groups,
+    groupDid: group.groupId,
+    memberRef: config.cliHandle,
+  );
   final mentionMessage = await messaging.sendMentionText(
     thread: groupThread,
     text: appGroupMentionText,
-    mentions: const <ChatMentionDraft>[
+    mentions: <ChatMentionDraft>[
       ChatMentionDraft(
-        localId: 'men_agents_e2e',
-        surface: '@agents',
+        localId: 'men_cli_e2e',
+        surface: '@${config.cliHandle}',
         start: 0,
-        end: 7,
-        target: ChatMentionTargetDraft.groupSelector(
-          ChatMentionSelector.agents,
+        end: '@${config.cliHandle}'.length,
+        target: ChatMentionTargetDraft.member(
+          kind: _mentionTargetKindForMember(cliMentionMember),
+          did: cliMentionMember.did,
+          handle: cliMentionMember.handle.isEmpty
+              ? null
+              : cliMentionMember.handle,
+          displayName: cliMentionMember.displayName,
         ),
       ),
     ],
@@ -69,7 +79,11 @@ Future<void> _verifyGroupTextRegression({
   expect(mentionMessage.mentions, hasLength(1));
   expect(
     mentionMessage.payloadJson,
-    allOf(contains('"mentions"'), isNot(contains('"schema"'))),
+    allOf(
+      contains('"mentions"'),
+      contains('"did"'),
+      isNot(contains('"schema"')),
+    ),
   );
 
   await _waitForGroupMessages(

@@ -75,6 +75,10 @@ void main() {
         final agent = candidates.singleWhere(
           (candidate) => candidate.id == 'member:did:agent:hermes',
         );
+        expect(
+          candidates.where((candidate) => candidate.id.startsWith('selector:')),
+          isEmpty,
+        );
         expect(human.enabled, isTrue);
         expect(human.badge, '用户');
         expect(human.target.kind, ChatMentionTargetKind.human);
@@ -198,15 +202,17 @@ void main() {
     test(
       'computes P9 unicode code point offsets for Chinese and emoji text',
       () {
-        const text = 'Hi 😊 @所有 Agents\n请总结';
+        const text = 'Hi 😊 @小智\n请总结';
         final start = text.indexOf('@');
         final mention = ChatMentionDraft(
           localId: 'men_1',
-          surface: '@所有 Agents',
+          surface: '@小智',
           start: start,
-          end: start + '@所有 Agents'.length,
-          target: const ChatMentionTargetDraft.groupSelector(
-            ChatMentionSelector.agents,
+          end: start + '@小智'.length,
+          target: const ChatMentionTargetDraft.member(
+            kind: ChatMentionTargetKind.agent,
+            did: 'did:wba:awiki.info:agent:runtime:xiaozhi:e1_agent',
+            handle: 'xiaozhi',
           ),
         );
 
@@ -214,7 +220,7 @@ void main() {
 
         expect(range.toJson(), <String, Object?>{
           'start': 5,
-          'end': 15,
+          'end': 8,
           'unit': 'unicode_code_point',
         });
       },
@@ -223,27 +229,31 @@ void main() {
     test(
       'shifts preceding edits and invalidates edits inside mention surface',
       () {
-        const original = 'hi @所有人';
+        const original = 'hi @小明';
         const mention = ChatMentionDraft(
           localId: 'men_1',
-          surface: '@所有人',
+          surface: '@小明',
           start: 3,
-          end: 7,
-          target: ChatMentionTargetDraft.groupSelector(ChatMentionSelector.all),
+          end: 6,
+          target: ChatMentionTargetDraft.member(
+            kind: ChatMentionTargetKind.human,
+            did: 'did:wba:awiki.info:user:xiaoming',
+            handle: 'xiaoming',
+          ),
         );
 
         final shifted = ChatMentionDraft.transformMentions(
           oldText: original,
-          newText: '你好 hi @所有人',
+          newText: '你好 hi @小明',
           oldMentions: <ChatMentionDraft>[mention],
         );
         expect(shifted, hasLength(1));
         expect(shifted.single.start, 6);
-        expect(shifted.single.toWireRange('你好 hi @所有人').start, 6);
+        expect(shifted.single.toWireRange('你好 hi @小明').start, 6);
 
         final invalidated = ChatMentionDraft.transformMentions(
           oldText: original,
-          newText: 'hi @所有',
+          newText: 'hi @小',
           oldMentions: <ChatMentionDraft>[mention],
         );
         expect(invalidated, isEmpty);

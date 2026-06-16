@@ -135,42 +135,6 @@ class ChatMentionCandidate {
   final String? disabledReason;
   final List<String> searchTerms;
 
-  static const all = ChatMentionCandidate(
-    id: 'selector:all',
-    surface: '@所有人',
-    title: '所有人',
-    subtitle: '通知群内所有成员',
-    badge: '群组',
-    target: ChatMentionTargetDraft.groupSelector(ChatMentionSelector.all),
-    searchTerms: <String>['所有人', 'all', '@all'],
-  );
-
-  static const agents = ChatMentionCandidate(
-    id: 'selector:agents',
-    surface: '@所有 Agents',
-    title: '所有 Agents',
-    subtitle: '通知群内所有智能体',
-    badge: '群组',
-    target: ChatMentionTargetDraft.groupSelector(ChatMentionSelector.agents),
-    searchTerms: <String>['所有 agents', 'agents', '@agents', '智能体'],
-  );
-
-  static const humans = ChatMentionCandidate(
-    id: 'selector:humans',
-    surface: '@所有人类用户',
-    title: '所有人类用户',
-    subtitle: '通知群内所有人类成员',
-    badge: '群组',
-    target: ChatMentionTargetDraft.groupSelector(ChatMentionSelector.humans),
-    searchTerms: <String>['所有人类用户', 'humans', '@humans', '人类'],
-  );
-
-  static List<ChatMentionCandidate> selectors() => const <ChatMentionCandidate>[
-    all,
-    agents,
-    humans,
-  ];
-
   factory ChatMentionCandidate.fromGroupMember(GroupMemberSummary member) {
     final did = member.did.trim();
     final handle = _mentionHandle(member.handle);
@@ -249,7 +213,6 @@ class ChatMentionCandidate {
     String query = '',
   }) {
     final candidates = <ChatMentionCandidate>[
-      ...selectors(),
       for (final member in members)
         if (member.membershipStatus == GroupMemberMembershipStatus.active)
           ChatMentionCandidate.fromGroupMember(member),

@@ -110,7 +110,7 @@ void main() {
   testWidgets('chat mention highlight renders selected range as styled span', (
     tester,
   ) async {
-    const text = '@所有 Agents 请总结';
+    const text = '@hermes 请总结';
     final gateway = FakeAwikiGateway();
     final message = ChatMessage(
       localId: 'msg-mention-highlight',
@@ -122,18 +122,20 @@ void main() {
       content: text,
       originalType: 'application/json',
       payloadJson:
-          '{"text":"@所有 Agents 请总结","mentions":[{"id":"men_agents","range":{"start":0,"end":10,"unit":"unicode_code_point"},"target":{"kind":"group_selector","selector":"agents"},"mention_role":"addressee"}]}',
+          '{"text":"@hermes 请总结","mentions":[{"id":"men_hermes","range":{"start":0,"end":7,"unit":"unicode_code_point"},"target":{"kind":"agent","did":"did:wba:awiki.info:agent:runtime:hermes:e1_agent"},"mention_role":"addressee"}]}',
       createdAt: DateTime(2026, 6, 14, 21),
       isMine: false,
       sendState: MessageSendState.sent,
       mentions: const <ChatMessageMention>[
         ChatMessageMention(
-          id: 'men_agents',
-          surface: '@所有 Agents',
+          id: 'men_hermes',
+          surface: '@hermes',
           start: 0,
-          end: '@所有 Agents'.length,
-          target: ChatMentionTargetDraft.groupSelector(
-            ChatMentionSelector.agents,
+          end: '@hermes'.length,
+          target: ChatMentionTargetDraft.member(
+            kind: ChatMentionTargetKind.agent,
+            did: 'did:wba:awiki.info:agent:runtime:hermes:e1_agent',
+            handle: 'hermes',
           ),
         ),
       ],
@@ -190,7 +192,7 @@ void main() {
       find.byWidgetPredicate(
         (widget) =>
             widget is RichText &&
-            _textSpanHasStyledMention(widget.text, '@所有 Agents'),
+            _textSpanHasStyledMention(widget.text, '@hermes'),
       ),
       findsOneWidget,
     );
