@@ -1,6 +1,6 @@
 # Testing AWiki Me
 
-AWiki Me keeps two test modes only:
+AWiki Me keeps two active test domains plus Flutter tooling shims:
 
 ```text
 tests/unit/         # fast unit, widget, provider, and pure Dart tests
@@ -9,7 +9,48 @@ integration_test/   # Flutter tooling shims only; do not put test logic here
 .e2e/               # local E2E reports/state; ignored by Git
 ```
 
-## Unit Test Gate
+Root files under `integration_test/` are Flutter-tooling shims. Each shim imports
+the real implementation under `tests/e2e/flutter/`. Do not add durable test logic
+to root shims.
+
+## Choosing The Right Test
+
+Use the smallest deterministic test that answers the question:
+
+| Directory | Answers | Uses real backend/devices? | Put these tests here |
+| --- | --- | --- | --- |
+| `tests/unit/` | Does this Dart logic, mapper, provider, service, or widget state behave correctly? | No | Pure Dart unit tests, widget/provider tests, fake service-client tests, parser tests, E2E runner plan/redaction tests. |
+| `tests/e2e/` | Does the user/business chain work through the App runner, platform shims, native plugin, CLI peer, backend, or devices? | Case-dependent | E2E runners, scenario orchestration, local/example configs, Flutter shim implementations, App + CLI peer/backend reports. |
+| `integration_test/` | Can Flutter tooling discover and launch the test entrypoint? | No business ownership | Thin imports only. Keep orchestration in `tests/e2e/`. |
+
+Do not use the root `integration_test/` directory as the owner of a real
+multi-client backend scenario. If Flutter tooling requires a root entrypoint,
+keep the scenario contract, config, runner, reports, and assertions under
+`tests/e2e/`.
+
+## Required Coverage
+
+Every new feature or behavior change must ship with matching test coverage in
+the same change:
+
+1. Start with focused `tests/unit/` coverage for changed domain logic, data
+   mapping, service-client behavior, provider state, or widget behavior.
+2. Add or update `tests/e2e/` Flutter smoke coverage when App startup,
+   navigation, platform bindings, native SDK/plugin loading, fake-port App
+   bootstrap, or screenshot-visible UI surfaces change.
+3. Add or update `tests/e2e/` runner assets when the behavior spans real
+   non-production services, account/OTP flows, CLI peer behavior, multi-client
+   messaging, attachments, group flows, mobile devices, Maestro, or report
+   redaction.
+4. If a full real E2E case is too expensive or blocked, keep deterministic
+   unit/smoke coverage, record the skipped E2E case ID, owner, blocker, and
+   follow-up in the relevant E2E docs or plan, and do not present the skipped
+   case as passing evidence.
+
+Code-only feature changes without corresponding tests are not acceptable unless
+the exception and follow-up are explicitly documented.
+
+## Unit Gate
 
 Run the full local unit/widget/provider suite:
 
@@ -25,11 +66,22 @@ Flutter arguments can be passed through when debugging:
 dart run tests/unit/runner.dart --name mention
 ```
 
+Focused UI checks are owned by the relevant files under `tests/unit/`, for
+example:
+
+```bash
+dart run tests/unit/runner.dart tests/unit/agents/agents_page_layout_test.dart
+dart run tests/unit/runner.dart tests/unit/agents/agent_inbox_provider_test.dart
+dart run tests/unit/runner.dart tests/unit/conversation_workspace_test.dart
+dart run tests/unit/runner.dart tests/unit/chat_page_test.dart
+dart run tests/unit/runner.dart tests/unit/onboarding_page_test.dart
+```
+
 The repository configures `package:sqlite3` to use the system SQLite library
 through `hooks.user_defines.sqlite3.source: system`. This keeps the test gates
 from downloading a prebuilt SQLite dylib from GitHub during native asset build
-hooks. macOS provides SQLite by default. Linux runners need `libsqlite3-dev` (or
-an equivalent package that exposes `libsqlite3.so`).
+hooks. macOS provides SQLite by default. Linux runners need `libsqlite3-dev` or
+an equivalent package that exposes `libsqlite3.so`.
 
 ## E2E Gate
 
@@ -88,11 +140,7 @@ All E2E runtime state and reports go under `.e2e/` and must remain untracked.
 Local config files named `tests/e2e/configs/*.local.yaml` are also ignored and
 must not be committed because they may contain OTP values.
 
-## Flutter Integration Shims
-
-Root `integration_test/*.dart` files exist only because Flutter desktop/mobile
-tooling expects entrypoints there. Each shim imports the real implementation
-under `tests/e2e/flutter/`. Do not add test logic to root shims.
+## Direct Shim Commands
 
 Useful direct shim commands while debugging E2E internals:
 
@@ -102,12 +150,50 @@ LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/im_core_open_s
 LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/ui_visual_verification_test.dart -d macos
 ```
 
+For UI / visual verification, the screenshot smoke writes PNG evidence under
+`docs/ui-optimization-plan/screenshots/`. If the screenshots are not the intended
+change, restore them before committing.
+
+## Local Gate
+
+Recommended deterministic local gate:
+
+```bash
+PUB_HOSTED_URL=https://mirrors.tuna.tsinghua.edu.cn/dart-pub flutter pub get
+dart analyze
+dart run tests/unit/runner.dart
+dart run tests/e2e/runner.dart --case smoke
+```
+
+Run `dart run tests/e2e/runner.dart --case full` only when real non-production
+backend credentials, OTP, and CLI peer configuration are prepared.
+
+## Gate Policy
+
+| Gate | Default trigger | Required environment | Must run | Must not require |
+| --- | --- | --- | --- | --- |
+| PR required | Every pull request and push to main | Flutter, sibling `awiki-cli-rs2`, deterministic local dependencies. | `dart analyze`, `dart run tests/unit/runner.dart`, smoke E2E. | Real OTP, real service accounts, live backend, mobile devices, SSH evidence. |
+| Optional desktop | Developer or self-hosted runner with desktop support | macOS or Linux desktop runner. | App shell and native SDK smoke on the available desktop platform. | Non-production account pool or real message service. |
+| Nightly desktop | Prepared runner | Non-production services, OTP, built `awiki-cli`, isolated App and CLI state. | Direct message, contacts, group, attachment basics, report redaction scan. | Scenarios without owner or maintained environment. |
+| Nightly mobile | Prepared device runner | iOS or Android device pair, Maestro, local config from secrets. | Real two-device direct message when device pool is available. | Desktop-only scenarios. |
+| Release | Release candidate validation | Stable nightly environment plus release owner review. | P0/P1 regression subset for desktop smoke, native SDK smoke, App + CLI basics, mobile when available. | New feature cases that have not been promoted. |
+| Manual | Developer or QA runbook | Local or remote environment prepared by the runner. | Any focused case needed for debugging or evidence, with command, runId, platform, endpoints, and report path recorded. | Manual results presented as automatic PR gate evidence. |
+
+Real E2E reports must record `runId`, platform, scenario, case IDs,
+pass/fail/skipped status, skipped reason when applicable, and a redaction scan
+result. Keep `.e2e/`, `*.local.yaml`, OTP values, JWTs, private keys, CLI
+workspaces, App state roots, remote logs, screenshots, and device state out of
+Git.
+
 ## Maintenance Rules
 
 - Add ordinary logic, provider, and widget coverage to `tests/unit/`.
-- Add user-flow E2E coverage to `tests/e2e/`.
+- Add user-flow and platform smoke coverage to `tests/e2e/`.
 - Keep root `integration_test/` as shim-only.
 - Do not keep skipped, deferred, historical, or dry-run-only business scenarios
   in the active test tree.
 - Do not commit local configs, OTPs, tokens, generated workspaces, or E2E
   reports.
+- A failed real E2E must be classified as product regression, test bug,
+  account/OTP problem, backend deployment problem, runner/device problem, or
+  unknown. Do not hide a failure by only increasing timeout.

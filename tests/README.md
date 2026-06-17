@@ -1,0 +1,31 @@
+# AWiki Me Test Domains
+
+AWiki Me keeps two active test domains. Choose the directory by the boundary
+being tested, not by test size alone.
+
+| Directory | Purpose | External dependencies |
+| --- | --- | --- |
+| `unit/` | Fast deterministic Dart logic, mapper, service-client, provider, widget, and fake-backed E2E harness tests. | No real device, backend, OTP, or CLI subprocess. |
+| `e2e/` | E2E runners, configs, Flutter shim implementations, platform smoke, real App + CLI peer/backend/device flows, reports, and redaction rules. | Depends on case: smoke uses local Flutter desktop; full flows may need real non-production services, accounts/OTP, CLI peer, devices/simulators, or Maestro. |
+
+Root `../integration_test/*.dart` files are Flutter-tooling shims. Keep durable
+Flutter test implementation under `e2e/flutter/`; keep real E2E orchestration,
+configuration, reporting, and scenario contracts under `e2e/`.
+
+## New Feature Rule
+
+Every new feature or behavior change must add or update tests in the same
+change:
+
+1. Add focused `unit/` coverage for changed logic, mapping, state, or widget
+   behavior.
+2. Add `e2e/` Flutter smoke coverage when App startup, navigation, visual
+   surfaces, platform bindings, native plugins, or fake-port App bootstrap are
+   affected.
+3. Add or update `e2e/` runner assets when the behavior requires real backend,
+   account/OTP, CLI peer, multi-client messaging, mobile devices, Maestro, or
+   report redaction validation.
+
+If a required real E2E case cannot run yet, document the skipped case ID,
+blocker, owner, and follow-up in the relevant E2E docs or plan; do not count a
+skipped case as passing evidence.
