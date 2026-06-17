@@ -73,6 +73,7 @@ class ConversationWorkspacePage extends ConsumerWidget {
       detailPane: selectedConversation == null
           ? const AwikiWorkspaceEmptyDetail()
           : ChatView(
+              key: ValueKey('chat-view:${selectedConversation.threadId}'),
               conversation: selectedConversation,
               embedded: true,
               onBack: () {
@@ -236,6 +237,7 @@ class _MacConversationDetailAreaState
           children: <Widget>[
             Expanded(
               child: ChatView(
+                key: ValueKey('chat-view:${selectedConversation.threadId}'),
                 conversation: selectedConversation,
                 embedded: true,
                 macStyle: true,

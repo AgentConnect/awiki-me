@@ -78,6 +78,67 @@ class _FakeUrlLauncherPlatform extends UrlLauncherPlatform {
   }
 }
 
+class _StaticChatThreadsController extends ChatThreadsController {
+  _StaticChatThreadsController(
+    super.ref,
+    Map<String, List<ChatMessage>> messagesByThread,
+  ) {
+    state = <String, ChatThreadState>{
+      for (final entry in messagesByThread.entries)
+        entry.key: ChatThreadState(threadId: entry.key, messages: entry.value),
+    };
+  }
+}
+
+Finder _chatMessagesListFinder() {
+  return find.byWidgetPredicate(
+    (widget) =>
+        widget is ListView &&
+        widget.key is ValueKey<String> &&
+        (widget.key! as ValueKey<String>).value.startsWith('chat-messages:'),
+  );
+}
+
+ScrollableState _chatScrollable(WidgetTester tester) {
+  return tester.state<ScrollableState>(
+    find.descendant(
+      of: _chatMessagesListFinder(),
+      matching: find.byType(Scrollable),
+    ),
+  );
+}
+
+double _chatScrollPixels(WidgetTester tester) {
+  return _chatScrollable(tester).position.pixels;
+}
+
+double _chatScrollMax(WidgetTester tester) {
+  return _chatScrollable(tester).position.maxScrollExtent;
+}
+
+List<ChatMessage> _scrollMessages({
+  required String threadId,
+  required String peerDid,
+  required DateTime startedAt,
+  required int count,
+}) {
+  return <ChatMessage>[
+    for (var index = 0; index < count; index += 1)
+      ChatMessage(
+        localId: '$threadId-msg-$index',
+        remoteId: '$threadId-msg-$index',
+        threadId: threadId,
+        senderDid: peerDid,
+        receiverDid: 'did:test:me',
+        content:
+            'message $index ${'long content '.padRight(90, '${index % 10}')}',
+        createdAt: startedAt.add(Duration(minutes: index)),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      ),
+  ];
+}
+
 void main() {
   testWidgets('macOS 聊天输入条保持发送能力', (tester) async {
     final gateway = FakeAwikiGateway();
@@ -821,6 +882,66 @@ void main() {
     expect(find.text('hello'), findsOneWidget);
   });
 
+  testWidgets('自己发送消息后即使原本离开底部也会滚到底部', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:scroll-send',
+      displayName: 'Alice',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:alice',
+    );
+    final messages = _scrollMessages(
+      threadId: conversation.threadId,
+      peerDid: 'did:test:alice',
+      startedAt: DateTime(2026, 4, 5, 10),
+      count: 28,
+    );
+
+    await tester.binding.setSurfaceSize(const Size(390, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(
+            key: ValueKey('chat-view:${conversation.threadId}'),
+            conversation: conversation,
+            embedded: false,
+          ),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          chatThreadsProvider.overrideWith(
+            (ref) => _StaticChatThreadsController(
+              ref,
+              <String, List<ChatMessage>>{conversation.threadId: messages},
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.drag(_chatMessagesListFinder(), const Offset(0, 420));
+    await tester.pumpAndSettle();
+    expect(_chatScrollPixels(tester), lessThan(_chatScrollMax(tester) - 96));
+
+    await tester.enterText(find.byType(CupertinoTextField), 'my new message');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastSentContent, 'my new message');
+    expect(_chatScrollPixels(tester), moreOrLessEquals(_chatScrollMax(tester)));
+  });
+
   testWidgets('切换会话后保留各自输入草稿并在发送后清空', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
@@ -934,6 +1055,211 @@ void main() {
 
     input = tester.widget<CupertinoTextField>(find.byType(CupertinoTextField));
     expect(input.controller?.text, isEmpty);
+  });
+
+  testWidgets('切换会话时消息列表默认滚动到底部且不串用滚动位置', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversationA = ConversationSummary(
+      threadId: 'dm:scroll-a',
+      displayName: 'Alice',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:alice',
+    );
+    final conversationB = ConversationSummary(
+      threadId: 'dm:scroll-b',
+      displayName: 'Bob',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 13),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:bob',
+    );
+    final messagesA = _scrollMessages(
+      threadId: conversationA.threadId,
+      peerDid: 'did:test:alice',
+      startedAt: DateTime(2026, 4, 5, 10),
+      count: 28,
+    );
+    final messagesB = _scrollMessages(
+      threadId: conversationB.threadId,
+      peerDid: 'did:test:bob',
+      startedAt: DateTime(2026, 4, 5, 11),
+      count: 28,
+    );
+    var selected = conversationA;
+
+    await tester.binding.setSurfaceSize(const Size(390, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            return CupertinoPageScaffold(
+              child: Column(
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      CupertinoButton(
+                        key: const Key('open-scroll-a'),
+                        onPressed: () {
+                          setState(() => selected = conversationA);
+                        },
+                        child: const Text('Alice'),
+                      ),
+                      CupertinoButton(
+                        key: const Key('open-scroll-b'),
+                        onPressed: () {
+                          setState(() => selected = conversationB);
+                        },
+                        child: const Text('Bob'),
+                      ),
+                    ],
+                  ),
+                  Expanded(
+                    child: ChatView(
+                      key: ValueKey('chat-view:${selected.threadId}'),
+                      conversation: selected,
+                      embedded: false,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          chatThreadsProvider.overrideWith(
+            (ref) =>
+                _StaticChatThreadsController(ref, <String, List<ChatMessage>>{
+                  conversationA.threadId: messagesA,
+                  conversationB.threadId: messagesB,
+                }),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_chatScrollPixels(tester), moreOrLessEquals(_chatScrollMax(tester)));
+
+    await tester.drag(_chatMessagesListFinder(), const Offset(0, 420));
+    await tester.pumpAndSettle();
+    expect(_chatScrollPixels(tester), lessThan(_chatScrollMax(tester) - 96));
+
+    await tester.tap(find.byKey(const Key('open-scroll-b')));
+    await tester.pump();
+
+    expect(_chatScrollPixels(tester), moreOrLessEquals(_chatScrollMax(tester)));
+
+    await tester.pumpAndSettle();
+
+    expect(_chatScrollPixels(tester), moreOrLessEquals(_chatScrollMax(tester)));
+
+    await tester.drag(_chatMessagesListFinder(), const Offset(0, 420));
+    await tester.pumpAndSettle();
+    expect(_chatScrollPixels(tester), lessThan(_chatScrollMax(tester) - 96));
+
+    await tester.tap(find.byKey(const Key('open-scroll-a')));
+    await tester.pump();
+
+    expect(_chatScrollPixels(tester), moreOrLessEquals(_chatScrollMax(tester)));
+
+    await tester.pumpAndSettle();
+
+    expect(_chatScrollPixels(tester), moreOrLessEquals(_chatScrollMax(tester)));
+  });
+
+  testWidgets('用户离开底部时收到新消息不强拉并显示回到底部入口', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:scroll-new-message',
+      displayName: 'Alice',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:alice',
+    );
+    final messages = _scrollMessages(
+      threadId: conversation.threadId,
+      peerDid: 'did:test:alice',
+      startedAt: DateTime(2026, 4, 5, 10),
+      count: 28,
+    );
+
+    await tester.binding.setSurfaceSize(const Size(390, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(
+            key: ValueKey('chat-view:${conversation.threadId}'),
+            conversation: conversation,
+            embedded: false,
+          ),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          chatThreadsProvider.overrideWith(
+            (ref) => _StaticChatThreadsController(
+              ref,
+              <String, List<ChatMessage>>{conversation.threadId: messages},
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.drag(_chatMessagesListFinder(), const Offset(0, 420));
+    await tester.pumpAndSettle();
+    final beforeIncoming = _chatScrollPixels(tester);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    container
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(
+          ChatMessage(
+            localId: 'incoming-while-reading',
+            remoteId: 'incoming-while-reading',
+            threadId: conversation.threadId,
+            senderDid: 'did:test:alice',
+            receiverDid: session.did,
+            content: 'new message while reading',
+            createdAt: DateTime(2026, 4, 5, 12, 30),
+            isMine: false,
+            sendState: MessageSendState.sent,
+          ),
+        );
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(_chatScrollPixels(tester), moreOrLessEquals(beforeIncoming));
+    expect(find.byKey(const Key('chat-new-messages-button')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('chat-new-messages-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('chat-new-messages-button')), findsNothing);
+    expect(_chatScrollPixels(tester), moreOrLessEquals(_chatScrollMax(tester)));
   });
 
   testWidgets('最近会话列表显示未发送草稿预览并在草稿清空后恢复原预览', (tester) async {

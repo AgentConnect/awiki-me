@@ -29,6 +29,7 @@ import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -614,6 +615,88 @@ void main() {
       find.byType(AgentStatusDot).first,
     );
     expect(processingDot.status.kind, AgentVisualStatusKind.processing);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('最近会话会主动加载本地智能体状态', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:human:me',
+      credentialName: 'me.json',
+      displayName: 'Me',
+      handle: 'me',
+    );
+    final agentConversation = ConversationSummary(
+      threadId: 'dm:did:agent:runtime',
+      displayName: 'Hermes',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 6, 4, 10),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:agent:runtime',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[agentConversation]
+      ..dmHistoryByPeerDid = const <String, List<ChatMessage>>{
+        'did:agent:runtime': <ChatMessage>[],
+      };
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:runtime',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'hermes',
+          displayName: 'Hermes',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+          peerIdentityServiceProvider.overrideWithValue(
+            FakePeerIdentityService(
+              identities: const <String, PeerAgentIdentity>{
+                'did:agent:runtime': PeerAgentIdentity.agent(
+                  agentKind: PeerAgentKind.runtime,
+                ),
+              },
+            ),
+          ),
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final dot = tester.widget<AgentStatusDot>(
+      find.byType(AgentStatusDot).first,
+    );
+    expect(dot.status.kind, AgentVisualStatusKind.ready);
+    expect(control.lastRefreshedDaemonDid, 'did:agent:daemon');
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -2120,57 +2203,162 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('消息'), findsOneWidget);
-    expect(find.text('智能体'), findsOneWidget);
-    expect(find.text('朋友'), findsOneWidget);
-    expect(find.text('我'), findsOneWidget);
-    final messageTabSize = tester.getSize(find.text('消息'));
-    final agentsTabSize = tester.getSize(find.text('智能体'));
-    final friendsTabSize = tester.getSize(find.text('朋友'));
-    final meTabSize = tester.getSize(find.text('我'));
+    expect(find.text('Messages'), findsOneWidget);
+    expect(find.text('Agents'), findsOneWidget);
+    expect(find.text('Friends'), findsOneWidget);
+    expect(find.text('Me'), findsOneWidget);
+    expect(
+      find.byKey(const Key('mobile-messages-unread-badge')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('mobile-messages-unread-badge')),
+        matching: find.text('3'),
+      ),
+      findsOneWidget,
+    );
+    final messageTabSize = tester.getSize(find.text('Messages'));
+    final agentsTabSize = tester.getSize(find.text('Agents'));
+    final friendsTabSize = tester.getSize(find.text('Friends'));
+    final meTabSize = tester.getSize(find.text('Me'));
     expect(messageTabSize.height, greaterThan(0));
     expect(agentsTabSize.height, greaterThan(0));
     expect(friendsTabSize.height, greaterThan(0));
     expect(meTabSize.height, greaterThan(0));
     final bottomNavHeight = tester
         .getSize(
-          find.ancestor(of: find.text('消息'), matching: find.byType(Row)).first,
+          find
+              .ancestor(of: find.text('Messages'), matching: find.byType(Row))
+              .first,
         )
         .height;
     expect(bottomNavHeight, closeTo(52, 0.1));
     final navRowCenterY = tester
         .getCenter(
-          find.ancestor(of: find.text('消息'), matching: find.byType(Row)).first,
+          find
+              .ancestor(of: find.text('Messages'), matching: find.byType(Row))
+              .first,
         )
         .dy;
-    final messageLabelCenterY = tester.getCenter(find.text('消息')).dy;
+    final messageLabelCenterY = tester.getCenter(find.text('Messages')).dy;
     expect(messageLabelCenterY, lessThan(navRowCenterY + 22));
+    final navRowRect = tester.getRect(
+      find
+          .ancestor(of: find.text('Messages'), matching: find.byType(Row))
+          .first,
+    );
+    final mobileBadgeRect = tester.getRect(
+      find.byKey(const Key('mobile-messages-unread-badge')),
+    );
+    expect(mobileBadgeRect.top, greaterThanOrEqualTo(navRowRect.top));
+    expect(mobileBadgeRect.right, lessThanOrEqualTo(navRowRect.right));
 
     final navLabels = find
         .descendant(
           of: find
-              .ancestor(of: find.text('消息'), matching: find.byType(Row))
+              .ancestor(of: find.text('Messages'), matching: find.byType(Row))
               .first,
           matching: find.byType(Text),
         )
         .evaluate()
         .map((element) => (element.widget as Text).data)
         .whereType<String>()
+        .where(
+          (label) =>
+              <String>{'Messages', 'Agents', 'Friends', 'Me'}.contains(label),
+        )
         .toList();
-    expect(navLabels, ['消息', '智能体', '朋友', '我']);
+    expect(navLabels, ['Messages', 'Agents', 'Friends', 'Me']);
 
-    await tester.tap(find.text('智能体'));
+    await tester.tap(find.text('Agents'));
     await tester.pumpAndSettle();
     expect(find.byType(AgentsWorkspacePage), findsOneWidget);
     expect(find.text('智能体'), findsWidgets);
 
-    await tester.tap(find.text('朋友'));
+    await tester.tap(find.text('Friends'));
     await tester.pumpAndSettle();
     expect(find.text('朋友'), findsWidgets);
 
-    await tester.tap(find.text('我'));
+    await tester.tap(find.text('Me'));
     await tester.pumpAndSettle();
     expect(find.text('Product lead'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('手机消息列表右侧元信息不会裁切时间状态和未读数', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:human:me',
+      credentialName: 'me.json',
+      displayName: 'Me',
+      handle: 'me',
+    );
+    final richConversation = ConversationSummary(
+      threadId: 'dm:mobile-right-meta',
+      displayName: 'Mobile Runtime Agent',
+      lastMessagePreview: '这是一段很长的最近消息预览，用来验证右侧时间、状态和未读数量不会被遮挡。',
+      lastMessageAt: DateTime(2026, 12, 31, 23, 59),
+      unreadCount: 120,
+      isGroup: false,
+      targetDid: 'did:wba:anpclaw.com:agent:runtime:mobile:e1_agent',
+      targetPeer: 'mobile-agent.anpclaw.com',
+      avatarSeed: 'Mobile Runtime Agent',
+    );
+    final agent = AgentSummary(
+      agentDid: richConversation.targetDid!,
+      kind: AgentKind.runtime,
+      daemonAgentDid: 'did:test:daemon',
+      runtime: 'hermes',
+      handle: 'mobile-agent',
+      displayName: 'Mobile Runtime Agent',
+      activeState: 'active',
+      latest: const AgentLatestStatus(
+        status: 'needs_config',
+        needsConfig: true,
+      ),
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[richConversation];
+    final control = FakeAgentControlService()..agents = <AgentSummary>[agent];
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(360, 780));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mobile Runtime Agent'), findsOneWidget);
+    expect(find.text('999+'), findsNothing);
+    expect(find.text('120'), findsOneWidget);
+    expect(find.byType(AgentStatusDot), findsOneWidget);
+    final rowRect = tester.getRect(
+      find.ancestor(
+        of: find.text('Mobile Runtime Agent'),
+        matching: find.byType(AppPressableTile),
+      ),
+    );
+    final metaRect = tester.getRect(
+      find.byKey(const Key('conversation-row-right-meta')),
+    );
+    final unreadBadgeRect = tester.getRect(
+      find.byKey(const Key('conversation-row-unread-badge')),
+    );
+    final timeRect = tester.getRect(find.text('12-31'));
+    expect(metaRect.right, lessThanOrEqualTo(rowRect.right));
+    expect(timeRect.right, lessThanOrEqualTo(rowRect.right - 2));
+    expect(unreadBadgeRect.right, lessThanOrEqualTo(rowRect.right - 2));
     expect(tester.takeException(), isNull);
   });
 

@@ -50,6 +50,37 @@ void main() {
     },
   );
 
+  test(
+    'ensureLoaded loads once and leaves explicit refresh available',
+    () async {
+      final control = _CountingAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+
+      await Future.wait(<Future<void>>[
+        controller.ensureLoaded(),
+        controller.ensureLoaded(),
+        controller.ensureLoaded(),
+      ]);
+
+      expect(control.listAgentsCalls, 1);
+      await controller.ensureLoaded();
+      expect(control.listAgentsCalls, 1);
+      await controller.load();
+      expect(control.listAgentsCalls, 2);
+    },
+  );
+
   test('load applies stable daemon and runtime ordering', () async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
@@ -1161,6 +1192,16 @@ class _FailingAgentControlService extends FakeAgentControlService {
   @override
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
     throw error;
+  }
+}
+
+class _CountingAgentControlService extends FakeAgentControlService {
+  int listAgentsCalls = 0;
+
+  @override
+  Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
+    listAgentsCalls += 1;
+    return super.listAgents(includeInactive: includeInactive);
   }
 }
 

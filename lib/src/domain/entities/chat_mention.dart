@@ -197,22 +197,22 @@ class ChatMentionCandidate {
   factory ChatMentionCandidate.forGroupSelector(ChatMentionSelector selector) {
     final surface = switch (selector) {
       ChatMentionSelector.all => '@所有人',
-      ChatMentionSelector.humans => '@所有人类',
+      ChatMentionSelector.humans => '@所有用户',
       ChatMentionSelector.agents => '@所有智能体',
     };
     final title = switch (selector) {
       ChatMentionSelector.all => '所有人',
-      ChatMentionSelector.humans => '所有人类',
+      ChatMentionSelector.humans => '所有用户',
       ChatMentionSelector.agents => '所有智能体',
     };
     final subtitle = switch (selector) {
       ChatMentionSelector.all => '提醒群内所有成员',
-      ChatMentionSelector.humans => '只提醒群内人类成员',
+      ChatMentionSelector.humans => '只提醒群内用户',
       ChatMentionSelector.agents => '提醒群内智能体',
     };
     final badge = switch (selector) {
-      ChatMentionSelector.all => '群',
-      ChatMentionSelector.humans => '人类',
+      ChatMentionSelector.all => '用户 + 智能体',
+      ChatMentionSelector.humans => '用户',
       ChatMentionSelector.agents => '智能体',
     };
     return ChatMentionCandidate(
@@ -229,7 +229,7 @@ class ChatMentionCandidate {
         selector.wireValue,
         switch (selector) {
           ChatMentionSelector.all => 'all everyone 全体 全部 所有人',
-          ChatMentionSelector.humans => 'humans human user users 人 人类 用户',
+          ChatMentionSelector.humans => 'humans human user users 人 用户',
           ChatMentionSelector.agents => 'agents agent bot bots 智能体 代理',
         },
       ],

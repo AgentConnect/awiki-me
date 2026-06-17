@@ -135,6 +135,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       try {
         ref.read(sessionProvider.notifier).clear();
         ref.read(profileProvider.notifier).clear();
+        ref.read(agentsProvider.notifier).clear();
         ref.read(selectedConversationProvider.notifier).clearSelection();
         await ref.read(conversationListProvider.notifier).clear();
         ref.read(chatThreadsProvider.notifier).clear();
@@ -159,6 +160,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       try {
         ref.read(sessionProvider.notifier).clear();
         ref.read(profileProvider.notifier).clear();
+        ref.read(agentsProvider.notifier).clear();
         ref.read(selectedConversationProvider.notifier).clearSelection();
         await ref.read(conversationListProvider.notifier).clear();
         ref.read(chatThreadsProvider.notifier).clear();
@@ -200,6 +202,12 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       return;
     }
     await ref.read(conversationListProvider.notifier).refresh();
+    if (!mounted ||
+        _isLoggingOut ||
+        ref.read(sessionProvider).session == null) {
+      return;
+    }
+    await ref.read(agentsProvider.notifier).load();
     if (!mounted ||
         _isLoggingOut ||
         ref.read(sessionProvider).session == null) {
