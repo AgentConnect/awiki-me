@@ -14,6 +14,7 @@ import 'package:awiki_me/src/presentation/agents/agent_inbox_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart' show Key, RepaintBoundary, Size, SizedBox;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -55,81 +56,87 @@ void main() {
   testWidgets('UI optimization visual verification screenshots', (
     tester,
   ) async {
-    addTearDown(() async {
-      await tester.binding.setSurfaceSize(null);
-    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     await tester.binding.setSurfaceSize(const Size(1600, 960));
-    await _cleanScreenshots();
+    try {
+      await _cleanScreenshots();
 
-    final onboardingHarness = createFakeAwikiMeAppHarness();
-    await tester.pumpWidget(
-      RepaintBoundary(
-        key: _captureBoundaryKey,
-        child: AwikiMeApp(
-          bootstrap: onboardingHarness.bootstrap,
-          providerOverrides: onboardingHarness.providerOverrides,
+      final onboardingHarness = createFakeAwikiMeAppHarness();
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: _captureBoundaryKey,
+          child: AwikiMeApp(
+            bootstrap: onboardingHarness.bootstrap,
+            providerOverrides: onboardingHarness.providerOverrides,
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('登录或注册'), findsWidgets);
-    await _captureScreenshot(tester, '01-onboarding-login');
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('登录或注册'), findsWidgets);
+      await _captureScreenshot(tester, '01-onboarding-login');
 
-    final visualHarness = _createVisualHarness();
-    await _resetApp(tester);
-    await _pumpVisualApp(tester, visualHarness);
-    await tester.tap(find.text('Hermes UI').first);
-    await tester.pumpAndSettle();
-    expect(find.text('会话信息'), findsNothing);
-    expect(find.text('product-brief.pdf'), findsOneWidget);
-    await _captureScreenshot(tester, '02-chat-default-info-closed');
+      final visualHarness = _createVisualHarness();
+      await _resetApp(tester);
+      await _pumpVisualApp(tester, visualHarness);
+      await tester.tap(find.text('Hermes UI').first);
+      await tester.pumpAndSettle();
+      expect(find.text('会话信息'), findsNothing);
+      expect(find.text('product-brief.pdf'), findsOneWidget);
+      await _captureScreenshot(tester, '02-chat-default-info-closed');
 
-    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
-    await tester.pumpAndSettle();
-    expect(find.text('会话信息'), findsOneWidget);
-    await _captureScreenshot(tester, '03-chat-info-side-panel');
+      await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
+      await tester.pumpAndSettle();
+      expect(find.text('会话信息'), findsOneWidget);
+      await _captureScreenshot(tester, '03-chat-info-side-panel');
 
-    await tester.tap(find.text('身份卡').first);
-    await tester.pumpAndSettle();
-    expect(find.text('智能体信息'), findsOneWidget);
-    expect(find.text('Runtime Agent'), findsOneWidget);
-    expect(find.byKey(const Key('peer-info-dialog-did-value')), findsOneWidget);
-    await _captureScreenshot(tester, '04-agent-info-popup');
+      await tester.tap(find.text('身份卡').first);
+      await tester.pumpAndSettle();
+      expect(find.text('智能体信息'), findsOneWidget);
+      expect(find.text('Runtime Agent'), findsOneWidget);
+      expect(
+        find.byKey(const Key('peer-info-dialog-did-value')),
+        findsOneWidget,
+      );
+      await _captureScreenshot(tester, '04-agent-info-popup');
 
-    await tester.tap(find.text('Agent 收件箱').last);
-    await tester.pump();
-    final appContainer = _appContainer(tester);
-    appContainer
-        .read(agentInboxProvider.notifier)
-        .applyControlPayload(_inboxPayload());
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('peer-info-agent-inbox')), findsOneWidget);
-    expect(find.textContaining('最新：'), findsWidgets);
-    await tester.ensureVisible(find.text('bob.anpclaw.com').first);
-    await tester.pumpAndSettle();
-    await _captureScreenshot(tester, '05-agent-inbox-list');
+      await tester.tap(find.text('Agent 收件箱').last);
+      await tester.pump();
+      final appContainer = _appContainer(tester);
+      appContainer
+          .read(agentInboxProvider.notifier)
+          .applyControlPayload(_inboxPayload());
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('peer-info-agent-inbox')), findsOneWidget);
+      expect(find.textContaining('最新：'), findsWidgets);
+      await tester.ensureVisible(find.text('bob.anpclaw.com').first);
+      await tester.pumpAndSettle();
+      await _captureScreenshot(tester, '05-agent-inbox-list');
 
-    await tester.tap(find.text('bob.anpclaw.com').first);
-    await tester.pump();
-    appContainer
-        .read(agentInboxProvider.notifier)
-        .applyControlPayload(_threadPayload());
-    await tester.pumpAndSettle();
-    expect(find.text('加载更早消息'), findsOneWidget);
-    await tester.ensureVisible(find.text('加载更早消息'));
-    await tester.pumpAndSettle();
-    await _captureScreenshot(tester, '06-agent-inbox-thread');
+      await tester.tap(find.text('bob.anpclaw.com').first);
+      await tester.pump();
+      appContainer
+          .read(agentInboxProvider.notifier)
+          .applyControlPayload(_threadPayload());
+      await tester.pumpAndSettle();
+      expect(find.text('加载更早消息'), findsOneWidget);
+      await tester.ensureVisible(find.text('加载更早消息'));
+      await tester.pumpAndSettle();
+      await _captureScreenshot(tester, '06-agent-inbox-thread');
 
-    final agentsHarness = _createVisualHarness();
-    await _resetApp(tester);
-    await _pumpVisualApp(tester, agentsHarness);
-    _appContainer(tester).read(shellTabProvider.notifier).setTab(1);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('创建 Agent').first);
-    await tester.pumpAndSettle();
-    expect(find.text('Agent 类型'), findsOneWidget);
-    expect(find.text('当前仅支持 Hermes Runtime Agent'), findsOneWidget);
-    await _captureScreenshot(tester, '07-agent-create-agent-type');
+      final agentsHarness = _createVisualHarness();
+      await _resetApp(tester);
+      await _pumpVisualApp(tester, agentsHarness);
+      _appContainer(tester).read(shellTabProvider.notifier).setTab(1);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('创建 Agent').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Agent 类型'), findsOneWidget);
+      expect(find.text('当前仅支持 Hermes Runtime Agent'), findsOneWidget);
+      await _captureScreenshot(tester, '07-agent-create-agent-type');
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+      await tester.binding.setSurfaceSize(null);
+    }
   });
 }
 

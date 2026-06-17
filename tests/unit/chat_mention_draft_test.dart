@@ -79,7 +79,7 @@ void main() {
           candidates
               .where((candidate) => candidate.id.startsWith('selector:'))
               .map((candidate) => candidate.surface),
-          <String>['@所有人', '@所有人类', '@所有智能体'],
+          <String>['@所有人', '@所有用户', '@所有智能体'],
         );
         expect(human.enabled, isTrue);
         expect(human.badge, '用户');
@@ -133,12 +133,12 @@ void main() {
 
       expect(candidates.take(3).map((candidate) => candidate.surface), [
         '@所有人',
-        '@所有人类',
+        '@所有用户',
         '@所有智能体',
       ]);
       expect(candidates.take(3).map((candidate) => candidate.badge), [
-        '群',
-        '人类',
+        '用户 + 智能体',
+        '用户',
         '智能体',
       ]);
     });

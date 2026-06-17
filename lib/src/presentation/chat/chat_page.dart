@@ -41,6 +41,11 @@ import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'chat_provider.dart';
 
+part 'parts/chat_header_part.dart';
+part 'parts/chat_peer_info_part.dart';
+part 'parts/chat_message_part.dart';
+part 'parts/chat_composer_part.dart';
+
 const _macChatHeaderActionColor = Color(0xFF44506A);
 const _macChatHeaderActionActiveColor = Color(0xFF101B32);
 const _macChatHeaderActionActiveBackground = Color(0xFFE4ECF7);
@@ -59,6 +64,7 @@ class ChatPage extends StatelessWidget {
     return CupertinoPageScaffold(
       backgroundColor: theme.background,
       child: ChatView(
+        key: ValueKey('chat-view:${conversation.threadId}'),
         conversation: conversation,
         embedded: false,
         onBack: () => Navigator.of(context).pop(),
@@ -91,26 +97,98 @@ class ChatView extends ConsumerStatefulWidget {
   ConsumerState<ChatView> createState() => _ChatViewState();
 }
 
+class _BottomInitialScrollController extends ScrollController {
+  _BottomInitialScrollController()
+    : super(keepScrollOffset: false, debugLabel: 'ChatView.messages');
+
+  _BottomInitialScrollPosition? get _bottomInitialPosition {
+    if (!hasClients) {
+      return null;
+    }
+    final position = this.position;
+    return position is _BottomInitialScrollPosition ? position : null;
+  }
+
+  void prepareForInitialBottomPosition() {
+    _bottomInitialPosition?.prepareForInitialBottomPosition();
+  }
+
+  @override
+  ScrollPosition createScrollPosition(
+    ScrollPhysics physics,
+    ScrollContext context,
+    ScrollPosition? oldPosition,
+  ) {
+    return _BottomInitialScrollPosition(
+      physics: physics,
+      context: context,
+      oldPosition: oldPosition,
+      debugLabel: debugLabel,
+    );
+  }
+}
+
+class _BottomInitialScrollPosition extends ScrollPositionWithSingleContext {
+  _BottomInitialScrollPosition({
+    required super.physics,
+    required super.context,
+    super.oldPosition,
+    super.debugLabel,
+  }) : super(initialPixels: 0, keepScrollOffset: false);
+
+  bool _shouldCorrectToBottom = true;
+
+  void prepareForInitialBottomPosition() {
+    _shouldCorrectToBottom = true;
+  }
+
+  @override
+  bool applyContentDimensions(double minScrollExtent, double maxScrollExtent) {
+    final accepted = super.applyContentDimensions(
+      minScrollExtent,
+      maxScrollExtent,
+    );
+    if (!_shouldCorrectToBottom || !hasPixels) {
+      return accepted;
+    }
+    if (maxScrollExtent <= minScrollExtent) {
+      return accepted;
+    }
+    if (pixels == maxScrollExtent) {
+      _shouldCorrectToBottom = false;
+      return accepted;
+    }
+    correctPixels(maxScrollExtent);
+    return false;
+  }
+}
+
 class _ChatViewState extends ConsumerState<ChatView> {
   final textController = TextEditingController();
-  final scrollController = ScrollController();
+  late final _BottomInitialScrollController scrollController;
   AttachmentDraft? _pendingAttachment;
   bool _isApplyingComposerDraft = false;
   bool _isRefreshingCurrentConversation = false;
   bool _didRequestAgents = false;
+  bool _hasDeferredBottomNotice = false;
+  bool _userAwayFromBottom = false;
+  bool _isProgrammaticScroll = false;
   final Set<String> _downloadingAttachmentMessageIds = <String>{};
+  static const double _nearBottomExtent = 96;
 
   @override
   void initState() {
     super.initState();
+    scrollController = _BottomInitialScrollController();
     _restoreComposerDraft(widget.conversation);
     textController.addListener(_persistComposerText);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+    scrollController.addListener(_handleScrollPositionChanged);
   }
 
   @override
   void dispose() {
     textController.removeListener(_persistComposerText);
+    scrollController.removeListener(_handleScrollPositionChanged);
     textController.dispose();
     scrollController.dispose();
     super.dispose();
@@ -121,6 +199,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
     super.didUpdateWidget(oldWidget);
     if (!sameConversationTarget(oldWidget.conversation, widget.conversation)) {
       _restoreComposerDraft(widget.conversation, updateState: true);
+      _hasDeferredBottomNotice = false;
+      _userAwayFromBottom = false;
+      scrollController.prepareForInitialBottomPosition();
     }
   }
 
@@ -192,9 +273,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
         );
     ref.listen<ChatThreadState>(
       chatThreadProvider(widget.conversation.threadId),
-      (_, __) => WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _scrollToBottom(),
-      ),
+      (previous, next) =>
+          _handleThreadChanged(previous, next, currentConversation),
     );
     ref.listen<ConversationListState>(conversationListProvider, (_, next) {
       final updated = _matchingConversation(next.conversations);
@@ -251,131 +331,162 @@ class _ChatViewState extends ConsumerState<ChatView> {
             onRefresh: () => _refreshCurrentConversation(currentConversation),
           ),
           Expanded(
-            child: ListView.builder(
-              controller: scrollController,
-              padding: EdgeInsets.fromLTRB(
-                macStyle
-                    ? responsive.displayScaled(28)
-                    : (widget.embedded
-                          ? responsive.spacing(32)
-                          : responsive.tabContentHorizontalPadding),
-                macStyle
-                    ? responsive.displayScaled(20)
-                    : responsive.spacing(24),
-                macStyle
-                    ? responsive.displayScaled(28)
-                    : (widget.embedded
-                          ? responsive.spacing(32)
-                          : responsive.tabContentHorizontalPadding),
-                macStyle
-                    ? responsive.displayScaled(92)
-                    : responsive.spacing(widget.embedded ? 124 : 140),
-              ),
-              itemCount: messages.length + unmatchedPendingTurns.length,
-              itemBuilder: (_, index) {
-                if (index >= messages.length) {
-                  final turn = unmatchedPendingTurns[index - messages.length];
-                  return Padding(
-                    padding: EdgeInsets.only(
-                      bottom: macStyle
-                          ? responsive.displayScaled(16)
+            child: Stack(
+              children: <Widget>[
+                NotificationListener<ScrollNotification>(
+                  onNotification: _handleScrollNotification,
+                  child: ListView.builder(
+                    key: ValueKey(
+                      'chat-messages:${currentConversation.threadId}',
+                    ),
+                    controller: scrollController,
+                    padding: EdgeInsets.fromLTRB(
+                      macStyle
+                          ? responsive.displayScaled(28)
+                          : (widget.embedded
+                                ? responsive.spacing(32)
+                                : responsive.tabContentHorizontalPadding),
+                      macStyle
+                          ? responsive.displayScaled(20)
                           : responsive.spacing(24),
+                      macStyle
+                          ? responsive.displayScaled(28)
+                          : (widget.embedded
+                                ? responsive.spacing(32)
+                                : responsive.tabContentHorizontalPadding),
+                      macStyle
+                          ? responsive.displayScaled(92)
+                          : responsive.spacing(widget.embedded ? 124 : 140),
                     ),
-                    child: _AgentProcessingIndicator(
-                      label: _agentProcessingLabel(<AgentPendingTurn>[turn]),
-                      avatarSeed: _agentProcessingAvatarSeed(
-                        runtimeAgent,
-                        currentConversation,
-                      ),
-                      macStyle: macStyle,
-                    ),
-                  );
-                }
-                final message = messages[index];
-                final pendingTurns = thread.pendingAgentTurnsForMessage(
-                  message,
-                );
-                final previous = index == 0 ? null : messages[index - 1];
-                final next = index + 1 < messages.length
-                    ? messages[index + 1]
-                    : null;
-                final senderLabel = _displayNameForMessage(context, message);
-                final showSenderLabel = _shouldShowSenderLabel(
-                  previous,
-                  message,
-                );
-                return Padding(
-                  padding: EdgeInsets.only(
-                    bottom: _messageBottomSpacing(
-                      responsive: responsive,
-                      macStyle: macStyle,
-                      current: message,
-                      next: next,
-                      hasAgentProcessing: pendingTurns.isNotEmpty,
-                      nextHasAgentProcessing:
-                          next != null &&
-                          messageIdsWithAgentProcessing.contains(next.localId),
-                    ),
-                  ),
-                  child: Column(
-                    children: <Widget>[
-                      if (_shouldShowDivider(previous, message))
-                        _DateDivider(
-                          label: _timeDividerLabel(
-                            message.createdAt,
-                            previous: previous?.createdAt,
+                    itemCount: messages.length + unmatchedPendingTurns.length,
+                    itemBuilder: (_, index) {
+                      if (index >= messages.length) {
+                        final turn =
+                            unmatchedPendingTurns[index - messages.length];
+                        return Padding(
+                          padding: EdgeInsets.only(
+                            bottom: macStyle
+                                ? responsive.displayScaled(16)
+                                : responsive.spacing(24),
+                          ),
+                          child: _AgentProcessingIndicator(
+                            label: _agentProcessingLabel(<AgentPendingTurn>[
+                              turn,
+                            ]),
+                            avatarSeed: _agentProcessingAvatarSeed(
+                              runtimeAgent,
+                              currentConversation,
+                            ),
+                            macStyle: macStyle,
+                          ),
+                        );
+                      }
+                      final message = messages[index];
+                      final pendingTurns = thread.pendingAgentTurnsForMessage(
+                        message,
+                      );
+                      final previous = index == 0 ? null : messages[index - 1];
+                      final next = index + 1 < messages.length
+                          ? messages[index + 1]
+                          : null;
+                      final senderLabel = _displayNameForMessage(
+                        context,
+                        message,
+                      );
+                      final showSenderLabel = _shouldShowSenderLabel(
+                        previous,
+                        message,
+                      );
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          bottom: _messageBottomSpacing(
+                            responsive: responsive,
+                            macStyle: macStyle,
+                            current: message,
+                            next: next,
+                            hasAgentProcessing: pendingTurns.isNotEmpty,
+                            nextHasAgentProcessing:
+                                next != null &&
+                                messageIdsWithAgentProcessing.contains(
+                                  next.localId,
+                                ),
                           ),
                         ),
-                      _MessageBubble(
-                        message: message,
-                        senderLabel: senderLabel,
-                        showSenderLabel: showSenderLabel,
-                        macStyle: macStyle,
-                        onRetry: message.sendState == MessageSendState.failed
-                            ? (_canRetryMessage(message)
-                                  ? () async {
-                                      await ref
-                                          .read(chatThreadsProvider.notifier)
-                                          .retryMessage(
-                                            conversation: widget.conversation,
-                                            message: message,
-                                            expectedAgentReplyDid:
-                                                runtimeAgent?.agentDid,
-                                          );
-                                    }
-                                  : null)
-                            : null,
-                        onDownload:
-                            message.attachment != null &&
-                                message.sendState == MessageSendState.sent
-                            ? () =>
-                                  _openAttachment(currentConversation, message)
-                            : null,
-                        isDownloading: _downloadingAttachmentMessageIds
-                            .contains(message.localId),
-                        onPeerInfoTap: _peerInfoTapForMessage(
-                          currentConversation,
-                          message,
-                          senderLabel,
+                        child: Column(
+                          children: <Widget>[
+                            if (_shouldShowDivider(previous, message))
+                              _DateDivider(
+                                label: _timeDividerLabel(
+                                  message.createdAt,
+                                  previous: previous?.createdAt,
+                                ),
+                              ),
+                            _MessageBubble(
+                              message: message,
+                              senderLabel: senderLabel,
+                              showSenderLabel: showSenderLabel,
+                              macStyle: macStyle,
+                              onRetry:
+                                  message.sendState == MessageSendState.failed
+                                  ? (_canRetryMessage(message)
+                                        ? () async {
+                                            await ref
+                                                .read(
+                                                  chatThreadsProvider.notifier,
+                                                )
+                                                .retryMessage(
+                                                  conversation:
+                                                      widget.conversation,
+                                                  message: message,
+                                                  expectedAgentReplyDid:
+                                                      runtimeAgent?.agentDid,
+                                                );
+                                          }
+                                        : null)
+                                  : null,
+                              onDownload:
+                                  message.attachment != null &&
+                                      message.sendState == MessageSendState.sent
+                                  ? () => _openAttachment(
+                                      currentConversation,
+                                      message,
+                                    )
+                                  : null,
+                              isDownloading: _downloadingAttachmentMessageIds
+                                  .contains(message.localId),
+                              onPeerInfoTap: _peerInfoTapForMessage(
+                                currentConversation,
+                                message,
+                                senderLabel,
+                              ),
+                            ),
+                            if (pendingTurns.isNotEmpty) ...<Widget>[
+                              SizedBox(
+                                height: macStyle
+                                    ? responsive.displayScaled(7)
+                                    : responsive.spacing(7),
+                              ),
+                              _MessageAgentProcessingStatus(
+                                label: _agentProcessingLabel(pendingTurns),
+                                overdue: pendingTurns.any(
+                                  (turn) => turn.isOverdue,
+                                ),
+                                macStyle: macStyle,
+                                alignEnd: message.isMine,
+                              ),
+                            ],
+                          ],
                         ),
-                      ),
-                      if (pendingTurns.isNotEmpty) ...<Widget>[
-                        SizedBox(
-                          height: macStyle
-                              ? responsive.displayScaled(7)
-                              : responsive.spacing(7),
-                        ),
-                        _MessageAgentProcessingStatus(
-                          label: _agentProcessingLabel(pendingTurns),
-                          overdue: pendingTurns.any((turn) => turn.isOverdue),
-                          macStyle: macStyle,
-                          alignEnd: message.isMine,
-                        ),
-                      ],
-                    ],
+                      );
+                    },
                   ),
-                );
-              },
+                ),
+                if (_hasDeferredBottomNotice)
+                  _NewMessagesButton(
+                    macStyle: macStyle,
+                    onTap: () => _scheduleScrollToBottom(animated: true),
+                  ),
+              ],
             ),
           ),
           _Composer(
@@ -668,15 +779,177 @@ class _ChatViewState extends ConsumerState<ChatView> {
       if (!mounted) {
         return;
       }
-      unawaited(ref.read(agentsProvider.notifier).load());
+      unawaited(ref.read(agentsProvider.notifier).ensureLoaded());
     });
   }
 
-  void _scrollToBottom() {
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification is UserScrollNotification) {
+      _updateUserAwayFromBottom();
+      return false;
+    }
+    if (notification is ScrollEndNotification) {
+      _updateUserAwayFromBottom();
+    }
+    return false;
+  }
+
+  void _handleScrollPositionChanged() {
+    if (_isProgrammaticScroll || !scrollController.hasClients) {
+      return;
+    }
+    _updateUserAwayFromBottom();
+  }
+
+  void _updateUserAwayFromBottom() {
     if (!scrollController.hasClients) {
       return;
     }
-    scrollController.jumpTo(scrollController.position.maxScrollExtent);
+    final away = !_isNearBottom();
+    if (_userAwayFromBottom == away) {
+      return;
+    }
+    _userAwayFromBottom = away;
+    if (!away && _hasDeferredBottomNotice && mounted) {
+      setState(() {
+        _hasDeferredBottomNotice = false;
+      });
+    }
+  }
+
+  void _handleThreadChanged(
+    ChatThreadState? previous,
+    ChatThreadState next,
+    ConversationSummary conversation,
+  ) {
+    if (previous == null) {
+      if (next.messages.isNotEmpty) {
+        _scheduleScrollToBottom(settleFrames: 2);
+      }
+      return;
+    }
+    final previousLast = _lastMessage(previous.messages);
+    final nextLast = _lastMessage(next.messages);
+    final messageAdded =
+        next.messages.length > previous.messages.length &&
+        nextLast != null &&
+        !_sameMessageIdentity(previousLast, nextLast);
+    final pendingAdded =
+        _activePendingTurnCount(next) > _activePendingTurnCount(previous);
+    final wasNearBottom = !_userAwayFromBottom || _isNearBottom();
+    if (messageAdded) {
+      if (nextLast.isMine || wasNearBottom) {
+        _scheduleScrollToBottom(animated: !nextLast.isMine);
+      } else {
+        _showDeferredBottomNotice();
+      }
+      return;
+    }
+    if (pendingAdded) {
+      if (wasNearBottom || _latestMessageIsMine(next)) {
+        _scheduleScrollToBottom(animated: true);
+      } else {
+        _showDeferredBottomNotice();
+      }
+      return;
+    }
+    final contentGrew =
+        next.messages.length > previous.messages.length ||
+        next.agentPendingTurns.length > previous.agentPendingTurns.length;
+    if (contentGrew && wasNearBottom) {
+      _scheduleScrollToBottom();
+    }
+  }
+
+  void _showDeferredBottomNotice() {
+    if (_hasDeferredBottomNotice || !mounted) {
+      return;
+    }
+    setState(() {
+      _hasDeferredBottomNotice = true;
+    });
+  }
+
+  void _scheduleScrollToBottom({bool animated = false, int settleFrames = 1}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _scrollToBottom(animated: animated);
+      if (settleFrames > 1) {
+        _scheduleScrollToBottom(
+          animated: false,
+          settleFrames: settleFrames - 1,
+        );
+        return;
+      }
+    });
+  }
+
+  void _scrollToBottom({bool animated = false}) {
+    if (!scrollController.hasClients) {
+      return;
+    }
+    final target = scrollController.position.maxScrollExtent;
+    _isProgrammaticScroll = true;
+    if (animated) {
+      scrollController
+          .animateTo(
+            target,
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+          )
+          .whenComplete(() {
+            if (!mounted) {
+              return;
+            }
+            _isProgrammaticScroll = false;
+            _markAtBottomAfterProgrammaticScroll();
+          });
+      return;
+    }
+    scrollController.jumpTo(target);
+    _isProgrammaticScroll = false;
+    _markAtBottomAfterProgrammaticScroll();
+  }
+
+  void _markAtBottomAfterProgrammaticScroll() {
+    _userAwayFromBottom = false;
+    if (_hasDeferredBottomNotice && mounted) {
+      setState(() {
+        _hasDeferredBottomNotice = false;
+      });
+    }
+  }
+
+  bool _isNearBottom() {
+    if (!scrollController.hasClients) {
+      return true;
+    }
+    final position = scrollController.position;
+    return position.maxScrollExtent - position.pixels <= _nearBottomExtent;
+  }
+
+  ChatMessage? _lastMessage(List<ChatMessage> messages) {
+    return messages.isEmpty ? null : messages.last;
+  }
+
+  bool _latestMessageIsMine(ChatThreadState thread) {
+    final latest = _lastMessage(thread.messages);
+    return latest?.isMine == true;
+  }
+
+  bool _sameMessageIdentity(ChatMessage? a, ChatMessage? b) {
+    if (a == null || b == null) {
+      return a == b;
+    }
+    final aId = a.remoteId ?? a.localId;
+    final bId = b.remoteId ?? b.localId;
+    return aId == bId;
+  }
+
+  int _activePendingTurnCount(ChatThreadState thread) {
+    return thread.agentPendingTurns.where((turn) => turn.isActive).length;
   }
 
   ConversationSummary? _matchingConversation(
@@ -940,3063 +1213,5 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return handles.map((handle) => '@$handle').join('、');
     }
     return '${handles.length} 个智能体';
-  }
-}
-
-class _ChatHeader extends StatelessWidget {
-  const _ChatHeader({
-    required this.conversation,
-    required this.embedded,
-    required this.macStyle,
-    required this.isRefreshing,
-    required this.classification,
-    required this.isDeletedAgentConversation,
-    required this.onDetails,
-    required this.onPeerInfoTap,
-    required this.onRefresh,
-    this.onMacIdentityPanelTap,
-    this.onMacConversationInfoTap,
-    this.macConversationInfoPanelActive = false,
-    this.onBack,
-  });
-
-  final ConversationSummary conversation;
-  final bool embedded;
-  final VoidCallback? onBack;
-  final bool macStyle;
-  final bool isRefreshing;
-  final ConversationPeerClassification classification;
-  final bool isDeletedAgentConversation;
-  final VoidCallback onDetails;
-  final VoidCallback onPeerInfoTap;
-  final VoidCallback? onMacIdentityPanelTap;
-  final VoidCallback? onMacConversationInfoTap;
-  final bool macConversationInfoPanelActive;
-  final Future<void> Function() onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    final compactName = DidDisplayFormatter.conversationTitle(
-      conversation,
-      context.l10n,
-    );
-    final theme = context.awikiTheme;
-    final responsive = context.awikiResponsive;
-    final agentBadgeLabel = isDeletedAgentConversation
-        ? '智能体已删除'
-        : classification.chatBadgeLabel;
-    if (macStyle) {
-      return Container(
-        height: responsive.displayScaled(64),
-        padding: EdgeInsets.fromLTRB(
-          responsive.displayScaled(22),
-          0,
-          responsive.displayScaled(18),
-          0,
-        ),
-        decoration: const BoxDecoration(
-          color: CupertinoColors.white,
-          border: Border(bottom: BorderSide(color: Color(0xFFE5EAF2))),
-        ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final width = constraints.maxWidth;
-            final showSecurityPill = width >= 620;
-            final showIdentityLabel = width >= 470;
-            final avatarSize = responsive.displayScaled(
-              width >= 360 ? 40.0 : 36.0,
-            );
-            final actionGap = responsive.displayScaled(width >= 520 ? 12 : 8);
-
-            return Row(
-              children: <Widget>[
-                AppPressable(
-                  onTap: onPeerInfoTap,
-                  semanticLabel: '打开${classification.detailTypeLabel}信息',
-                  tooltip: '打开${classification.detailTypeLabel}信息',
-                  borderRadius: BorderRadius.circular(avatarSize / 2),
-                  child: AvatarBadge(
-                    seed: compactName,
-                    size: avatarSize,
-                    avatarUri: conversation.avatarUri,
-                  ),
-                ),
-                SizedBox(width: responsive.displayScaled(10)),
-                Expanded(
-                  child: Row(
-                    children: <Widget>[
-                      Flexible(
-                        child: Text(
-                          compactName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: const Color(0xFF101B32),
-                            fontSize: responsive.displayScaled(17),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      if (agentBadgeLabel != null && width >= 500) ...<Widget>[
-                        SizedBox(width: responsive.displayScaled(8)),
-                        _MacChatPill(
-                          label: agentBadgeLabel,
-                          color: isDeletedAgentConversation
-                              ? const Color(0xFFF1F3F7)
-                              : const Color(0xFFEAF2FF),
-                          textColor: isDeletedAgentConversation
-                              ? const Color(0xFF66728A)
-                              : const Color(0xFF0B65F8),
-                        ),
-                      ],
-                      if (showSecurityPill) ...<Widget>[
-                        SizedBox(width: responsive.displayScaled(6)),
-                        const _MacChatPill(
-                          label: '安全协作中',
-                          color: Color(0xFFE6F8EE),
-                          textColor: Color(0xFF10A85A),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                SizedBox(width: actionGap),
-                _MacChatHeaderButton(
-                  key: const Key('chat-refresh-button'),
-                  semanticLabel: '刷新当前会话',
-                  icon: CupertinoIcons.refresh,
-                  isLoading: isRefreshing,
-                  onTap: onRefresh,
-                ),
-                SizedBox(width: responsive.displayScaled(8)),
-                _MacChatIdentityButton(
-                  key: const Key('chat-identity-card-button'),
-                  label: conversation.isGroup ? '群聊信息' : '身份卡',
-                  showLabel: showIdentityLabel,
-                  isActive: false,
-                  onTap: conversation.isGroup
-                      ? (onMacIdentityPanelTap ?? onDetails)
-                      : onDetails,
-                ),
-                if (onMacConversationInfoTap != null) ...<Widget>[
-                  SizedBox(width: responsive.displayScaled(8)),
-                  _MacChatHeaderButton(
-                    key: const Key('chat-conversation-info-button'),
-                    semanticLabel: '打开或关闭会话信息',
-                    icon: CupertinoIcons.sidebar_right,
-                    isActive: macConversationInfoPanelActive,
-                    onTap: () async {
-                      onMacConversationInfoTap!();
-                    },
-                  ),
-                ],
-              ],
-            );
-          },
-        ),
-      );
-    }
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        embedded
-            ? responsive.spacing(24)
-            : responsive.tabContentHorizontalPadding,
-        responsive.spacing(embedded ? 18 : 8),
-        embedded
-            ? responsive.spacing(24)
-            : responsive.tabContentHorizontalPadding,
-        responsive.spacing(12),
-      ),
-      child: Row(
-        children: <Widget>[
-          SizedBox(
-            width: responsive.scaled(40),
-            child: TopBarActionButton(
-              onTap: onBack,
-              semanticsIdentifier: 'e2e-chat-back-button',
-              semanticsLabel: '返回',
-              child: Padding(
-                padding: EdgeInsets.all(responsive.spacing(8)),
-                child: AwikiAssetIcon(
-                  assetName: 'assets/icons/icon_left.svg',
-                  color: theme.primaryDark,
-                  size: responsive.iconMd,
-                ),
-              ),
-            ),
-          ),
-          SizedBox(width: responsive.spacing(4)),
-          AppPressable(
-            onTap: onPeerInfoTap,
-            semanticLabel: '打开${classification.detailTypeLabel}信息',
-            tooltip: '打开${classification.detailTypeLabel}信息',
-            borderRadius: BorderRadius.circular(responsive.avatarSizeMd / 2),
-            child: AvatarBadge(
-              seed: compactName,
-              size: responsive.avatarSizeMd,
-              avatarUri: conversation.avatarUri,
-            ),
-          ),
-          SizedBox(width: responsive.spacing(12)),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Flexible(
-                      child: Text(
-                        compactName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: responsive.titleLg,
-                          fontWeight: FontWeight.w500,
-                          color: theme.title,
-                        ),
-                      ),
-                    ),
-                    if (agentBadgeLabel != null) ...<Widget>[
-                      SizedBox(width: responsive.spacing(8)),
-                      _ChatAgentPill(
-                        label: agentBadgeLabel,
-                        muted: isDeletedAgentConversation,
-                      ),
-                    ],
-                  ],
-                ),
-                SizedBox(height: responsive.spacing(2)),
-                Row(
-                  children: <Widget>[
-                    Container(
-                      width: responsive.scaled(8),
-                      height: responsive.scaled(8),
-                      decoration: BoxDecoration(
-                        color: theme.success,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                    SizedBox(width: responsive.spacing(6)),
-                    Text(
-                      'ONLINE',
-                      style: TextStyle(
-                        fontSize: responsive.metaSm,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 1,
-                        color: theme.primaryDark,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          TopBarActionButton(
-            onTap: onDetails,
-            semanticsLabel: '打开${classification.detailTypeLabel}信息',
-            child: Padding(
-              padding: EdgeInsets.all(responsive.spacing(8)),
-              child: AwikiAssetIcon(
-                assetName: 'assets/icons/dot_vertical.svg',
-                color: theme.title,
-                size: responsive.iconMd,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PeerInfoDialog extends ConsumerStatefulWidget {
-  const _PeerInfoDialog({required this.conversation});
-
-  final ConversationSummary conversation;
-
-  @override
-  ConsumerState<_PeerInfoDialog> createState() => _PeerInfoDialogState();
-}
-
-class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
-  bool _showAgentInbox = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final targetDid = widget.conversation.targetDid?.trim() ?? '';
-    final responsive = context.awikiResponsive;
-    final media = MediaQuery.of(context);
-    final maxDialogWidth = media.size.width < 640
-        ? media.size.width - 32
-        : 620.0;
-    final maxDialogHeight = media.size.height * 0.86;
-    final runtimeAgent = _runtimeAgent();
-    final title = runtimeAgent == null ? '用户信息' : '智能体信息';
-    final state = targetDid.isEmpty
-        ? const PeerProfileState(isLoading: false)
-        : ref.watch(peerProfileProvider(targetDid));
-
-    return SafeArea(
-      minimum: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-      child: Center(
-        child: CupertinoPopupSurface(
-          isSurfacePainted: true,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: maxDialogWidth,
-              maxHeight: maxDialogHeight,
-            ),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: CupertinoColors.white,
-                borderRadius: BorderRadius.circular(responsive.radius(14)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  _PeerInfoHeader(title: title),
-                  Flexible(
-                    child: state.isLoading
-                        ? const Center(child: CupertinoActivityIndicator())
-                        : state.profile == null
-                        ? _PeerInfoError(onClose: _close)
-                        : _buildProfileContent(
-                            state,
-                            runtimeAgent: runtimeAgent,
-                            maxDialogHeight: maxDialogHeight,
-                          ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProfileContent(
-    PeerProfileState state, {
-    required AgentSummary? runtimeAgent,
-    required double maxDialogHeight,
-  }) {
-    final profile = state.profile!;
-    final displayName = DidDisplayFormatter.profileName(profile);
-    final profileContent = profile.profileMarkdown.trim().isNotEmpty
-        ? profile.profileMarkdown.trim()
-        : profile.bio.trim();
-    final homepageUrl = ref
-        .watch(profileHomepageResolverProvider)
-        .homepageUrl(profile);
-    final isFollowing = ref.watch(friendsProvider).isFollowing(profile.did);
-    final inboxHeight = (maxDialogHeight * 0.48).clamp(320.0, 440.0).toDouble();
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          SelectionArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    AvatarBadge(
-                      seed: displayName,
-                      size: 64,
-                      avatarUri: profile.avatarUri,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            displayName,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF101B32),
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          CopyableDidLine(
-                            value: profile.did,
-                            copySemanticLabel: '复制 DID',
-                            copiedMessage: 'DID 已复制',
-                            textKey: const Key('peer-info-dialog-did-value'),
-                            buttonKey: const Key(
-                              'peer-info-dialog-copy-did-button',
-                            ),
-                            textStyle: const TextStyle(
-                              color: Color(0xFF66728A),
-                              fontSize: 12,
-                              height: 1.25,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: <Widget>[
-                    AppPill(
-                      label: localizeRelationshipLabel(
-                        context.l10n,
-                        state.relationship,
-                      ),
-                    ),
-                    if (profile.handle?.isNotEmpty == true)
-                      AppPill(label: '@${profile.handle}'),
-                    AppPill(
-                      label: runtimeAgent == null
-                          ? 'AWiki 用户'
-                          : 'Runtime Agent',
-                    ),
-                  ],
-                ),
-                if (homepageUrl.isNotEmpty) ...<Widget>[
-                  const SizedBox(height: 14),
-                  AppInlineLinkRow(
-                    label: homepageUrl,
-                    onTap: () => _openHomepage(homepageUrl),
-                  ),
-                ],
-                const SizedBox(height: 16),
-                _PeerInfoSection(
-                  title: '身份卡',
-                  child: profileContent.isEmpty
-                      ? const Text(
-                          '暂未填写资料',
-                          style: TextStyle(
-                            color: Color(0xFF66728A),
-                            fontSize: 13,
-                          ),
-                        )
-                      : MarkdownBody(
-                          data: profileContent,
-                          selectable: false,
-                          styleSheet: _chatMarkdownStyleSheet(
-                            context,
-                            const TextStyle(
-                              color: Color(0xFF17213A),
-                              fontSize: 13,
-                              height: 1.45,
-                            ),
-                          ),
-                        ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: <Widget>[
-              if (profile.did.trim().startsWith('did:')) ...<Widget>[
-                Expanded(
-                  child: _ChatFollowButton(
-                    isFollowing: isFollowing,
-                    compact: false,
-                    onTap: () => _toggleFollow(profile.did),
-                  ),
-                ),
-                const SizedBox(width: 10),
-              ],
-              if (runtimeAgent != null)
-                Expanded(
-                  child: AppSecondaryButton(
-                    label: _showAgentInbox ? '收起 Agent 收件箱' : 'Agent 收件箱',
-                    onPressed: () {
-                      setState(() {
-                        _showAgentInbox = !_showAgentInbox;
-                      });
-                    },
-                  ),
-                ),
-            ],
-          ),
-          if (runtimeAgent != null && _showAgentInbox) ...<Widget>[
-            const SizedBox(height: 16),
-            SizedBox(
-              key: const Key('peer-info-agent-inbox'),
-              height: inboxHeight,
-              child: AgentInboxPanel(
-                conversation: widget.conversation,
-                onClose: () {
-                  setState(() {
-                    _showAgentInbox = false;
-                  });
-                },
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Future<void> _toggleFollow(String did) async {
-    final targetDid = did.trim();
-    if (targetDid.isEmpty) {
-      return;
-    }
-    final isFollowing = ref.read(friendsProvider).isFollowing(targetDid);
-    if (isFollowing) {
-      await confirmAndUnfollow(context, ref, targetDid);
-      return;
-    }
-    try {
-      await ref.read(friendsProvider.notifier).follow(targetDid);
-    } catch (error) {
-      ref
-          .read(uiFeedbackProvider.notifier)
-          .showError(AppMessage.fromError(error));
-    }
-  }
-
-  Future<void> _openHomepage(String homepageUrl) async {
-    try {
-      await launchUrl(
-        Uri.parse(homepageUrl),
-        mode: LaunchMode.externalApplication,
-      );
-    } catch (error) {
-      ref
-          .read(uiFeedbackProvider.notifier)
-          .showError(AppMessage.linkOpenFailed('$error'));
-    }
-  }
-
-  AgentSummary? _runtimeAgent() {
-    final targetDid = widget.conversation.targetDid?.trim();
-    if (targetDid == null || targetDid.isEmpty || widget.conversation.isGroup) {
-      return null;
-    }
-    for (final agent in ref.watch(agentsProvider).agents) {
-      if (agent.isRuntime && agent.agentDid == targetDid) {
-        return agent;
-      }
-    }
-    return null;
-  }
-
-  void _close() {
-    Navigator.of(context).pop();
-  }
-}
-
-class _PeerInfoHeader extends StatelessWidget {
-  const _PeerInfoHeader({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    return Container(
-      height: responsive.displayScaled(58),
-      padding: EdgeInsets.fromLTRB(
-        responsive.spacing(18),
-        0,
-        responsive.spacing(12),
-        0,
-      ),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFFE5EAF2))),
-      ),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              title,
-              style: TextStyle(
-                color: const Color(0xFF101B32),
-                fontSize: responsive.titleLg,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          AppIconButton(
-            onPressed: () => Navigator.of(context).pop(),
-            semanticLabel: '关闭信息弹窗',
-            tooltip: '关闭',
-            size: responsive.displayScaled(32),
-            backgroundColor: const Color(0xFFF5F7FB),
-            borderColor: const Color(0xFFE4E9F2),
-            child: Icon(
-              CupertinoIcons.xmark,
-              color: const Color(0xFF66728A),
-              size: responsive.iconSm,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PeerInfoSection extends StatelessWidget {
-  const _PeerInfoSection({required this.title, required this.child});
-
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFD),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5EAF2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            title,
-            style: const TextStyle(
-              color: Color(0xFF101B32),
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 10),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _PeerInfoError extends StatelessWidget {
-  const _PeerInfoError({required this.onClose});
-
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          AwikiMeErrorText(
-            message: context.l10n.peerProfileLoadFailed,
-            textAlign: TextAlign.center,
-            compact: true,
-          ),
-          const SizedBox(height: 16),
-          AppSecondaryButton(label: '关闭', onPressed: onClose),
-        ],
-      ),
-    );
-  }
-}
-
-class _MacChatPill extends StatelessWidget {
-  const _MacChatPill({
-    required this.label,
-    required this.color,
-    required this.textColor,
-  });
-
-  final String label;
-  final Color color;
-  final Color textColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: responsive.displayScaled(8),
-        vertical: responsive.displayScaled(4),
-      ),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: textColor,
-          fontSize: responsive.displayScaled(11.5),
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-}
-
-class _ChatAgentPill extends StatelessWidget {
-  const _ChatAgentPill({required this.label, this.muted = false});
-
-  final String label;
-  final bool muted;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: responsive.displayScaled(7),
-        vertical: responsive.displayScaled(3),
-      ),
-      decoration: BoxDecoration(
-        color: muted ? const Color(0xFFF1F3F7) : const Color(0xFFEAF2FF),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: muted ? const Color(0xFF66728A) : const Color(0xFF0B65F8),
-          fontSize: responsive.displayScaled(10.5),
-          fontWeight: FontWeight.w600,
-          height: 1,
-        ),
-      ),
-    );
-  }
-}
-
-class _ChatFollowButton extends StatefulWidget {
-  const _ChatFollowButton({
-    required this.isFollowing,
-    required this.onTap,
-    this.compact = false,
-  });
-
-  final bool isFollowing;
-  final bool compact;
-  final Future<void> Function() onTap;
-
-  @override
-  State<_ChatFollowButton> createState() => _ChatFollowButtonState();
-}
-
-class _ChatFollowButtonState extends State<_ChatFollowButton> {
-  bool _isBusy = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final responsive = context.awikiResponsive;
-    final label = widget.isFollowing ? '已关注' : '关注';
-    final foreground = widget.isFollowing
-        ? const Color(0xFF34415C)
-        : theme.primaryForeground;
-    final background = widget.isFollowing
-        ? CupertinoColors.white
-        : theme.primary;
-    return AppPressable(
-      onTap: _isBusy
-          ? null
-          : () async {
-              setState(() => _isBusy = true);
-              try {
-                await widget.onTap();
-              } finally {
-                if (mounted) {
-                  setState(() => _isBusy = false);
-                }
-              }
-            },
-      semanticLabel: label,
-      tooltip: label,
-      enabled: !_isBusy,
-      scaleOnPress: true,
-      pressedScale: 0.97,
-      borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
-      builder: (context, state, child) {
-        return AnimatedOpacity(
-          opacity: state.pressed
-              ? 0.82
-              : state.hovered || state.focused
-              ? 0.92
-              : 1,
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOutCubic,
-          child: child,
-        );
-      },
-      child: Container(
-        height: responsive.displayScaled(30),
-        constraints: BoxConstraints(
-          minWidth: responsive.displayScaled(widget.compact ? 54 : 66),
-        ),
-        alignment: Alignment.center,
-        padding: EdgeInsets.symmetric(horizontal: responsive.displayScaled(10)),
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
-          border: Border.all(
-            color: widget.isFollowing ? const Color(0xFFDDE5F0) : theme.primary,
-          ),
-        ),
-        child: _isBusy
-            ? CupertinoActivityIndicator(
-                radius: responsive.displayScaled(7),
-                color: widget.isFollowing ? const Color(0xFF34415C) : null,
-              )
-            : Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: foreground,
-                  fontSize: responsive.displayScaled(12),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-      ),
-    );
-  }
-}
-
-class _MacChatIdentityButton extends StatelessWidget {
-  const _MacChatIdentityButton({
-    super.key,
-    required this.label,
-    required this.showLabel,
-    required this.onTap,
-    this.isActive = false,
-  });
-
-  final String label;
-  final bool showLabel;
-  final VoidCallback onTap;
-  final bool isActive;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final foreground = isActive
-        ? _macChatHeaderActionActiveColor
-        : _macChatHeaderActionColor;
-    return AppPressable(
-      onTap: onTap,
-      semanticLabel: label,
-      tooltip: label,
-      selected: isActive,
-      scaleOnPress: true,
-      pressedScale: 0.97,
-      borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
-      child: Container(
-        height: responsive.displayScaled(34),
-        width: showLabel ? null : responsive.displayScaled(34),
-        padding: showLabel
-            ? EdgeInsets.symmetric(horizontal: responsive.displayScaled(12))
-            : EdgeInsets.zero,
-        decoration: BoxDecoration(
-          color: isActive
-              ? _macChatHeaderActionActiveBackground
-              : CupertinoColors.white,
-          borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
-          border: Border.all(color: const Color(0xFFDDE5F0)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(
-              CupertinoIcons.person_crop_square,
-              color: foreground,
-              size: responsive.displayScaled(_macChatHeaderActionIconSize),
-              weight: isActive ? 700 : 500,
-            ),
-            if (showLabel) ...<Widget>[
-              SizedBox(width: responsive.displayScaled(7)),
-              Text(
-                label,
-                style: TextStyle(
-                  color: foreground,
-                  fontSize: responsive.displayScaled(12),
-                  fontWeight: isActive
-                      ? _macChatHeaderActionActiveFontWeight
-                      : _macChatHeaderActionFontWeight,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MacChatHeaderButton extends StatelessWidget {
-  const _MacChatHeaderButton({
-    super.key,
-    required this.semanticLabel,
-    required this.icon,
-    required this.onTap,
-    this.isLoading = false,
-    this.isActive = false,
-  });
-
-  final String semanticLabel;
-  final IconData icon;
-  final Future<void> Function() onTap;
-  final bool isLoading;
-  final bool isActive;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final foreground = isActive
-        ? _macChatHeaderActionActiveColor
-        : _macChatHeaderActionColor;
-    return AppIconButton(
-      onPressed: isLoading ? null : () async => onTap(),
-      semanticLabel: semanticLabel,
-      tooltip: semanticLabel,
-      isActive: isActive,
-      isLoading: isLoading,
-      size: responsive.displayScaled(34),
-      backgroundColor: CupertinoColors.white,
-      activeBackgroundColor: _macChatHeaderActionActiveBackground,
-      borderColor: const Color(0xFFDDE5F0),
-      borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
-      child: Icon(
-        icon,
-        color: foreground,
-        size: responsive.displayScaled(_macChatHeaderActionIconSize),
-        weight: isActive ? 900 : 500,
-      ),
-    );
-  }
-}
-
-class _DateDivider extends StatelessWidget {
-  const _DateDivider({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    return Center(
-      child: AppSurface(
-        margin: EdgeInsets.only(bottom: responsive.spacing(24)),
-        padding: responsive.scaledInsets(
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        ),
-        color: context.awikiTheme.subtleSurface,
-        radius: AwikiMeRadii.pill,
-        child: Text(label, style: AwikiMeTextStyles.meta),
-      ),
-    );
-  }
-}
-
-class _AgentProcessingIndicator extends StatelessWidget {
-  const _AgentProcessingIndicator({
-    required this.label,
-    required this.avatarSeed,
-    required this.macStyle,
-  });
-
-  final String label;
-  final String avatarSeed;
-  final bool macStyle;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final theme = context.awikiTheme;
-    final bubbleColor = macStyle
-        ? const Color(0xFFF8FAFD)
-        : theme.subtleSurface;
-    final borderColor = macStyle
-        ? const Color(0xFFDDE5F0)
-        : theme.border.withValues(alpha: 0.72);
-    final textColor = macStyle ? const Color(0xFF66728A) : theme.secondaryText;
-    return Semantics(
-      liveRegion: true,
-      label: label,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          AvatarBadge(
-            seed: avatarSeed,
-            size: macStyle
-                ? responsive.displayScaled(34)
-                : responsive.scaled(28),
-          ),
-          SizedBox(
-            width: macStyle
-                ? responsive.displayScaled(10)
-                : responsive.spacing(12),
-          ),
-          Flexible(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: macStyle
-                    ? responsive.displayScaled(420)
-                    : (responsive.isLarge ? 500 : 640),
-              ),
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: macStyle
-                      ? responsive.displayScaled(13)
-                      : responsive.spacing(15),
-                  vertical: macStyle
-                      ? responsive.displayScaled(9)
-                      : responsive.spacing(12),
-                ),
-                decoration: BoxDecoration(
-                  color: bubbleColor,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(
-                      macStyle
-                          ? responsive.displayScaled(8)
-                          : responsive.scaled(6),
-                    ),
-                    topRight: Radius.circular(
-                      macStyle
-                          ? responsive.displayScaled(10)
-                          : responsive.scaled(20),
-                    ),
-                    bottomLeft: Radius.circular(
-                      macStyle
-                          ? responsive.displayScaled(10)
-                          : responsive.scaled(20),
-                    ),
-                    bottomRight: Radius.circular(
-                      macStyle
-                          ? responsive.displayScaled(10)
-                          : responsive.scaled(20),
-                    ),
-                  ),
-                  border: Border.all(color: borderColor),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    CupertinoActivityIndicator(
-                      radius: macStyle
-                          ? responsive.displayScaled(6.5)
-                          : responsive.scaled(7),
-                      color: textColor,
-                    ),
-                    SizedBox(
-                      width: macStyle
-                          ? responsive.displayScaled(8)
-                          : responsive.spacing(9),
-                    ),
-                    Flexible(
-                      child: Text(
-                        label,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: textColor,
-                          fontSize: macStyle
-                              ? responsive.displayScaled(13)
-                              : responsive.metaSm,
-                          fontWeight: FontWeight.w500,
-                          height: 1.3,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MessageAgentProcessingStatus extends StatelessWidget {
-  const _MessageAgentProcessingStatus({
-    required this.label,
-    required this.overdue,
-    required this.macStyle,
-    required this.alignEnd,
-  });
-
-  final String label;
-  final bool overdue;
-  final bool macStyle;
-  final bool alignEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final theme = context.awikiTheme;
-    final foreground = overdue
-        ? (macStyle ? const Color(0xFF9A5A00) : const Color(0xFF936300))
-        : (macStyle ? const Color(0xFF64718A) : theme.secondaryText);
-    final background = overdue
-        ? const Color(0xFFFFF5DC)
-        : (macStyle ? const Color(0xFFF6F8FC) : theme.subtleSurface);
-    final border = overdue
-        ? const Color(0xFFE9D49D)
-        : (macStyle
-              ? const Color(0xFFE0E7F1)
-              : theme.border.withValues(alpha: 0.68));
-    final iconSize = macStyle
-        ? responsive.displayScaled(12.5)
-        : responsive.scaled(13);
-    final horizontalInset = macStyle
-        ? responsive.displayScaled(6)
-        : responsive.spacing(6);
-    return Semantics(
-      liveRegion: true,
-      label: label,
-      child: Padding(
-        padding: EdgeInsetsDirectional.only(
-          start: alignEnd ? 0 : horizontalInset,
-          end: alignEnd ? horizontalInset : 0,
-        ),
-        child: Align(
-          alignment: alignEnd ? Alignment.centerRight : Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: macStyle
-                  ? responsive.displayScaled(320)
-                  : (responsive.isLarge ? 360 : 300),
-            ),
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: macStyle
-                    ? responsive.displayScaled(9)
-                    : responsive.spacing(10),
-                vertical: macStyle
-                    ? responsive.displayScaled(5)
-                    : responsive.spacing(6),
-              ),
-              decoration: BoxDecoration(
-                color: background,
-                borderRadius: BorderRadius.circular(
-                  macStyle ? responsive.displayScaled(8) : 12,
-                ),
-                border: Border.all(color: border),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  if (overdue)
-                    Icon(
-                      CupertinoIcons.clock,
-                      color: foreground,
-                      size: iconSize,
-                    )
-                  else
-                    CupertinoActivityIndicator(
-                      radius: iconSize / 2,
-                      color: foreground,
-                    ),
-                  SizedBox(
-                    width: macStyle
-                        ? responsive.displayScaled(7)
-                        : responsive.spacing(7),
-                  ),
-                  Flexible(
-                    child: Text(
-                      label,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: foreground,
-                        fontSize: macStyle
-                            ? responsive.displayScaled(11.5)
-                            : responsive.metaSm,
-                        fontWeight: FontWeight.w500,
-                        height: 1.25,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({
-    required this.message,
-    required this.senderLabel,
-    required this.showSenderLabel,
-    this.macStyle = false,
-    this.onRetry,
-    this.onDownload,
-    this.isDownloading = false,
-    this.onPeerInfoTap,
-  });
-
-  final ChatMessage message;
-  final String senderLabel;
-  final bool showSenderLabel;
-  final bool macStyle;
-  final Future<void> Function()? onRetry;
-  final Future<void> Function()? onDownload;
-  final bool isDownloading;
-  final VoidCallback? onPeerInfoTap;
-
-  Widget _withE2eMessageSemantics({required Widget child}) {
-    return e2eSemantics(
-      identifier: e2eMessageIdentifier(message.content),
-      label: message.content,
-      child: child,
-    );
-  }
-
-  Widget _withPeerInfoTap({
-    required Widget child,
-    required double borderRadius,
-  }) {
-    final tap = onPeerInfoTap;
-    if (tap == null) {
-      return child;
-    }
-    return AppPressable(
-      onTap: tap,
-      semanticLabel: '查看用户或智能体信息',
-      tooltip: '查看用户或智能体信息',
-      borderRadius: BorderRadius.circular(borderRadius),
-      child: child,
-    );
-  }
-
-  Widget _buildSenderLabel(BuildContext context, {required bool macStyle}) {
-    final responsive = context.awikiResponsive;
-    final theme = context.awikiTheme;
-    return Padding(
-      padding: EdgeInsets.only(
-        left: macStyle ? responsive.displayScaled(2) : responsive.spacing(4),
-        bottom: macStyle ? responsive.displayScaled(5) : responsive.spacing(5),
-      ),
-      child: Text(
-        senderLabel,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: macStyle ? const Color(0xFF66728A) : theme.secondaryText,
-          fontSize: macStyle
-              ? responsive.displayScaled(11.5)
-              : responsive.metaSm,
-          fontWeight: FontWeight.w500,
-          height: 1.2,
-        ),
-      ),
-    );
-  }
-
-  double _senderLabelOffset(BuildContext context, {required bool macStyle}) {
-    final responsive = context.awikiResponsive;
-    final fontSize = macStyle
-        ? responsive.displayScaled(11.5)
-        : responsive.metaSm;
-    final bottom = macStyle
-        ? responsive.displayScaled(5)
-        : responsive.spacing(5);
-    return fontSize * 1.2 + bottom;
-  }
-
-  double _senderContentTopInset(
-    BuildContext context, {
-    required bool macStyle,
-  }) {
-    final responsive = context.awikiResponsive;
-    return macStyle ? responsive.displayScaled(10) : responsive.spacing(10);
-  }
-
-  Widget _withSendingIndicator(
-    BuildContext context, {
-    required bool isMine,
-    required bool macStyle,
-    required Widget child,
-  }) {
-    if (!isMine || message.sendState != MessageSendState.sending) {
-      return child;
-    }
-    final responsive = context.awikiResponsive;
-    final gap = macStyle ? responsive.displayScaled(7) : responsive.spacing(8);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: <Widget>[
-        _SendingMessageIndicator(macStyle: macStyle),
-        SizedBox(width: gap),
-        Flexible(child: child),
-      ],
-    );
-  }
-
-  Widget _buildMacBubble(BuildContext context, bool isMine) {
-    final responsive = context.awikiResponsive;
-    final textStyle = TextStyle(
-      color: const Color(0xFF17213A),
-      fontSize: responsive.displayScaled(14),
-      height: 1.45,
-    );
-    final child = message.attachment == null
-        ? _MessageTextContent(
-            text: message.content,
-            mentions: message.mentions,
-            style: textStyle,
-            renderMarkdown: !isMine,
-          )
-        : _AttachmentContent(
-            message: message,
-            macStyle: true,
-            onDownload: onDownload,
-            isDownloading: isDownloading,
-          );
-    final bubble = Column(
-      crossAxisAlignment: isMine
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
-      children: <Widget>[
-        if (showSenderLabel) _buildSenderLabel(context, macStyle: true),
-        _withSendingIndicator(
-          context,
-          isMine: isMine,
-          macStyle: true,
-          child: Container(
-            constraints: BoxConstraints(
-              maxWidth: responsive.displayScaled(420),
-            ),
-            padding: EdgeInsets.symmetric(
-              horizontal: responsive.displayScaled(14),
-              vertical: responsive.displayScaled(10),
-            ),
-            decoration: BoxDecoration(
-              color: isMine ? const Color(0xFFEAF2FF) : CupertinoColors.white,
-              borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
-              border: Border.all(
-                color: isMine
-                    ? const Color(0xFFEAF2FF)
-                    : const Color(0xFFDDE5F0),
-              ),
-            ),
-            child: SelectionArea(child: child),
-          ),
-        ),
-        if (message.sendState == MessageSendState.failed) ...<Widget>[
-          SizedBox(height: responsive.displayScaled(8)),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              SelectionArea(
-                child: Text(
-                  '发送失败',
-                  style: TextStyle(
-                    fontSize: responsive.displayScaled(12),
-                    color: const Color(0xFFFF3B30),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              if (onRetry != null) ...<Widget>[
-                SizedBox(width: responsive.displayScaled(10)),
-                AppPressableText(
-                  onTap: onRetry,
-                  semanticLabel: '重试发送',
-                  child: Text(
-                    '重试',
-                    style: TextStyle(
-                      fontSize: responsive.displayScaled(12),
-                      color: const Color(0xFF0B65F8),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
-      ],
-    );
-    return _withE2eMessageSemantics(
-      child: Row(
-        mainAxisAlignment: isMine
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          if (!isMine) ...<Widget>[
-            Padding(
-              padding: EdgeInsets.only(
-                top: showSenderLabel
-                    ? _senderLabelOffset(context, macStyle: true)
-                    : 0,
-              ),
-              child: _withPeerInfoTap(
-                borderRadius: responsive.displayScaled(17),
-                child: AvatarBadge(
-                  seed: senderLabel,
-                  size: responsive.displayScaled(34),
-                ),
-              ),
-            ),
-            SizedBox(width: responsive.displayScaled(10)),
-          ],
-          Flexible(
-            child: Padding(
-              padding: EdgeInsets.only(
-                top: showSenderLabel
-                    ? _senderContentTopInset(context, macStyle: true)
-                    : 0,
-              ),
-              child: bubble,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isMine = message.isMine;
-    final theme = context.awikiTheme;
-    final responsive = context.awikiResponsive;
-    final textStyle = TextStyle(
-      color: theme.title,
-      fontSize: responsive.bodyMd,
-      height: responsive.isPhone ? 1.5 : 1.4,
-    );
-    if (macStyle) {
-      return _buildMacBubble(context, isMine);
-    }
-    return _withE2eMessageSemantics(
-      child: Row(
-        mainAxisAlignment: isMine
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          if (!isMine) ...<Widget>[
-            Padding(
-              padding: EdgeInsets.only(
-                top: showSenderLabel
-                    ? _senderLabelOffset(context, macStyle: false)
-                    : 0,
-              ),
-              child: _withPeerInfoTap(
-                borderRadius: responsive.scaled(14),
-                child: AvatarBadge(
-                  seed: senderLabel,
-                  size: responsive.scaled(28),
-                ),
-              ),
-            ),
-            SizedBox(width: responsive.spacing(12)),
-          ],
-          Flexible(
-            child: Padding(
-              padding: EdgeInsets.only(
-                top: showSenderLabel
-                    ? _senderContentTopInset(context, macStyle: false)
-                    : 0,
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: responsive.isLarge ? 500 : 640,
-                ),
-                child: Column(
-                  crossAxisAlignment: isMine
-                      ? CrossAxisAlignment.end
-                      : CrossAxisAlignment.start,
-                  children: <Widget>[
-                    if (showSenderLabel)
-                      _buildSenderLabel(context, macStyle: false),
-                    _withSendingIndicator(
-                      context,
-                      isMine: isMine,
-                      macStyle: false,
-                      child: Container(
-                        padding: responsive.scaledInsets(
-                          const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 16,
-                          ),
-                        ),
-                        decoration: BoxDecoration(
-                          color: isMine
-                              ? AwikiMePalette.actionBlueSoft
-                              : theme.subtleSurface,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(isMine ? 22 : 6),
-                            topRight: Radius.circular(isMine ? 6 : 22),
-                            bottomLeft: const Radius.circular(22),
-                            bottomRight: const Radius.circular(22),
-                          ),
-                        ),
-                        child: SelectionArea(
-                          child: message.attachment == null
-                              ? _MessageTextContent(
-                                  text: message.content,
-                                  mentions: message.mentions,
-                                  style: textStyle,
-                                  renderMarkdown: !isMine,
-                                )
-                              : _AttachmentContent(
-                                  message: message,
-                                  macStyle: false,
-                                  onDownload: onDownload,
-                                  isDownloading: isDownloading,
-                                ),
-                        ),
-                      ),
-                    ),
-                    if (message.sendState ==
-                        MessageSendState.failed) ...<Widget>[
-                      SizedBox(height: responsive.spacing(8)),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          SelectionArea(
-                            child: Text(
-                              '发送失败',
-                              style: TextStyle(
-                                fontSize: responsive.metaSm,
-                                color: theme.danger,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                          if (onRetry != null) ...<Widget>[
-                            SizedBox(width: responsive.spacing(10)),
-                            AppPressableText(
-                              onTap: onRetry,
-                              semanticLabel: '重试发送',
-                              child: Text(
-                                '重试',
-                                style: TextStyle(
-                                  fontSize: responsive.metaSm,
-                                  color: theme.primaryDark,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SendingMessageIndicator extends StatelessWidget {
-  const _SendingMessageIndicator({required this.macStyle});
-
-  final bool macStyle;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final theme = context.awikiTheme;
-    final size = macStyle
-        ? responsive.displayScaled(18)
-        : responsive.scaled(18);
-    final radius = macStyle
-        ? responsive.displayScaled(6)
-        : responsive.scaled(6);
-    return Semantics(
-      label: '发送中',
-      liveRegion: true,
-      child: SizedBox.square(
-        dimension: size,
-        child: Center(
-          child: CupertinoActivityIndicator(
-            radius: radius,
-            color: macStyle ? const Color(0xFF8A96AA) : theme.tertiaryText,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AttachmentContent extends StatelessWidget {
-  const _AttachmentContent({
-    required this.message,
-    required this.macStyle,
-    required this.onDownload,
-    required this.isDownloading,
-  });
-
-  final ChatMessage message;
-  final bool macStyle;
-  final Future<void> Function()? onDownload;
-  final bool isDownloading;
-
-  @override
-  Widget build(BuildContext context) {
-    final attachment = message.attachment!;
-    final responsive = context.awikiResponsive;
-    final theme = context.awikiTheme;
-    final caption = attachment.caption?.trim();
-    final titleStyle = TextStyle(
-      color: macStyle ? const Color(0xFF17213A) : theme.title,
-      fontSize: macStyle ? responsive.displayScaled(13.5) : responsive.bodyMd,
-      fontWeight: FontWeight.w500,
-      height: 1.25,
-    );
-    final metaStyle = TextStyle(
-      color: macStyle ? const Color(0xFF66728A) : theme.secondaryText,
-      fontSize: macStyle ? responsive.displayScaled(12) : responsive.metaSm,
-      fontWeight: FontWeight.w500,
-      height: 1.25,
-    );
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        minWidth: macStyle
-            ? responsive.displayScaled(220)
-            : responsive.scaled(210),
-        maxWidth: macStyle
-            ? responsive.displayScaled(360)
-            : responsive.scaled(420),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          if (caption != null && caption.isNotEmpty) ...<Widget>[
-            _MessageTextContent(
-              text: caption,
-              mentions: const <ChatMessageMention>[],
-              style: TextStyle(
-                color: macStyle ? const Color(0xFF17213A) : theme.title,
-                fontSize: macStyle
-                    ? responsive.displayScaled(14)
-                    : responsive.bodyMd,
-                height: 1.4,
-              ),
-              renderMarkdown: !message.isMine,
-            ),
-            SizedBox(
-              height: macStyle
-                  ? responsive.displayScaled(9)
-                  : responsive.spacing(9),
-            ),
-            _AttachmentCaptionDivider(macStyle: macStyle),
-            SizedBox(
-              height: macStyle
-                  ? responsive.displayScaled(9)
-                  : responsive.spacing(9),
-            ),
-          ],
-          Row(
-            children: <Widget>[
-              Container(
-                width: macStyle
-                    ? responsive.displayScaled(38)
-                    : responsive.scaled(40),
-                height: macStyle
-                    ? responsive.displayScaled(38)
-                    : responsive.scaled(40),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: macStyle
-                      ? const Color(0xFFEAF2FF)
-                      : theme.surface.withValues(alpha: 0.72),
-                  borderRadius: BorderRadius.circular(
-                    macStyle ? responsive.displayScaled(8) : 10,
-                  ),
-                  border: Border.all(
-                    color: macStyle ? const Color(0xFFDDE5F0) : theme.border,
-                  ),
-                ),
-                child: Icon(
-                  CupertinoIcons.doc_fill,
-                  color: macStyle ? const Color(0xFF0B65F8) : theme.primary,
-                  size: macStyle
-                      ? responsive.displayScaled(20)
-                      : responsive.iconSm,
-                ),
-              ),
-              SizedBox(
-                width: macStyle
-                    ? responsive.displayScaled(10)
-                    : responsive.spacing(10),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    _MessagePlainText(
-                      text: attachment.displayName,
-                      maxLines: 2,
-                      style: titleStyle,
-                    ),
-                    SizedBox(
-                      height: macStyle
-                          ? responsive.displayScaled(4)
-                          : responsive.spacing(4),
-                    ),
-                    Text(
-                      _formatAttachmentMeta(
-                        attachment.mimeType,
-                        attachment.sizeBytes,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: metaStyle,
-                    ),
-                  ],
-                ),
-              ),
-              if (onDownload != null) ...<Widget>[
-                SizedBox(
-                  width: macStyle
-                      ? responsive.displayScaled(10)
-                      : responsive.spacing(10),
-                ),
-                _AttachmentActionButton(
-                  macStyle: macStyle,
-                  isLoading: isDownloading,
-                  onTap: onDownload!,
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MessageTextContent extends StatelessWidget {
-  const _MessageTextContent({
-    required this.text,
-    required this.mentions,
-    required this.style,
-    required this.renderMarkdown,
-  });
-
-  final String text;
-  final List<ChatMessageMention> mentions;
-  final TextStyle style;
-  final bool renderMarkdown;
-
-  @override
-  Widget build(BuildContext context) {
-    final validMentions =
-        mentions.where((mention) => mention.rangeMatches(text)).toList()
-          ..sort((a, b) => a.start.compareTo(b.start));
-    if (validMentions.isNotEmpty) {
-      return Text.rich(
-        TextSpan(
-          style: style,
-          children: _mentionTextSpans(context, validMentions),
-        ),
-      );
-    }
-    if (!renderMarkdown) {
-      return _MessagePlainText(text: text, style: style);
-    }
-    return MarkdownBody(
-      data: text,
-      selectable: false,
-      shrinkWrap: true,
-      styleSheet: _chatMarkdownStyleSheet(context, style),
-    );
-  }
-
-  List<InlineSpan> _mentionTextSpans(
-    BuildContext context,
-    List<ChatMessageMention> validMentions,
-  ) {
-    final theme = context.awikiTheme;
-    final spans = <InlineSpan>[];
-    var cursor = 0;
-    final mentionStyle = style.copyWith(
-      color: theme.primary,
-      fontWeight: FontWeight.w700,
-      backgroundColor: theme.primary.withValues(alpha: 0.10),
-    );
-    for (final mention in validMentions) {
-      if (mention.start < cursor || mention.end > text.length) {
-        continue;
-      }
-      if (mention.start > cursor) {
-        spans.add(TextSpan(text: text.substring(cursor, mention.start)));
-      }
-      spans.add(
-        TextSpan(
-          text: text.substring(mention.start, mention.end),
-          style: mentionStyle,
-        ),
-      );
-      cursor = mention.end;
-    }
-    if (cursor < text.length) {
-      spans.add(TextSpan(text: text.substring(cursor)));
-    }
-    return spans;
-  }
-}
-
-MarkdownStyleSheet _chatMarkdownStyleSheet(
-  BuildContext context,
-  TextStyle bodyStyle,
-) {
-  final theme = context.awikiTheme;
-  final responsive = context.awikiResponsive;
-  final fontSize = bodyStyle.fontSize ?? responsive.bodyMd;
-  final codeBackground = theme.surface.withValues(alpha: 0.74);
-  final quoteBackground = theme.surface.withValues(alpha: 0.58);
-  return MarkdownStyleSheet(
-    a: bodyStyle.copyWith(
-      color: theme.primary,
-      fontWeight: FontWeight.w600,
-      decoration: TextDecoration.none,
-    ),
-    p: bodyStyle,
-    pPadding: EdgeInsets.zero,
-    strong: bodyStyle.copyWith(fontWeight: FontWeight.w700),
-    em: bodyStyle.copyWith(fontStyle: FontStyle.italic),
-    del: bodyStyle.copyWith(decoration: TextDecoration.lineThrough),
-    code: bodyStyle.copyWith(
-      fontFamily: 'monospace',
-      fontSize: fontSize * 0.92,
-      backgroundColor: codeBackground,
-    ),
-    h1: bodyStyle.copyWith(fontSize: fontSize + 2, fontWeight: FontWeight.w700),
-    h1Padding: EdgeInsets.only(bottom: responsive.spacing(4)),
-    h2: bodyStyle.copyWith(fontSize: fontSize + 1, fontWeight: FontWeight.w700),
-    h2Padding: EdgeInsets.only(bottom: responsive.spacing(4)),
-    h3: bodyStyle.copyWith(fontWeight: FontWeight.w700),
-    h3Padding: EdgeInsets.only(bottom: responsive.spacing(3)),
-    h4: bodyStyle.copyWith(fontWeight: FontWeight.w600),
-    h4Padding: EdgeInsets.only(bottom: responsive.spacing(3)),
-    h5: bodyStyle.copyWith(fontWeight: FontWeight.w600),
-    h5Padding: EdgeInsets.zero,
-    h6: bodyStyle.copyWith(fontWeight: FontWeight.w600),
-    h6Padding: EdgeInsets.zero,
-    blockSpacing: responsive.spacing(6),
-    listIndent: responsive.spacing(18),
-    listBullet: bodyStyle,
-    listBulletPadding: EdgeInsets.only(right: responsive.spacing(5)),
-    blockquote: bodyStyle,
-    blockquotePadding: EdgeInsets.symmetric(
-      horizontal: responsive.spacing(9),
-      vertical: responsive.spacing(6),
-    ),
-    blockquoteDecoration: BoxDecoration(
-      color: quoteBackground,
-      border: Border(
-        left: BorderSide(color: theme.border, width: responsive.scaled(3)),
-      ),
-      borderRadius: BorderRadius.circular(6),
-    ),
-    codeblockPadding: EdgeInsets.all(responsive.spacing(8)),
-    codeblockDecoration: BoxDecoration(
-      color: codeBackground,
-      borderRadius: BorderRadius.circular(6),
-      border: Border.all(color: theme.border.withValues(alpha: 0.8)),
-    ),
-    horizontalRuleDecoration: BoxDecoration(
-      border: Border(top: BorderSide(color: theme.border)),
-    ),
-  );
-}
-
-class _MessagePlainText extends StatelessWidget {
-  const _MessagePlainText({
-    required this.text,
-    required this.style,
-    this.maxLines,
-  });
-
-  final String text;
-  final TextStyle style;
-  final int? maxLines;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      maxLines: maxLines,
-      style: style,
-      overflow: maxLines == null ? null : TextOverflow.ellipsis,
-      textWidthBasis: TextWidthBasis.parent,
-      textHeightBehavior: const TextHeightBehavior(
-        applyHeightToFirstAscent: false,
-        applyHeightToLastDescent: false,
-      ),
-    );
-  }
-}
-
-class _AttachmentCaptionDivider extends StatelessWidget {
-  const _AttachmentCaptionDivider({required this.macStyle});
-
-  final bool macStyle;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final theme = context.awikiTheme;
-    final horizontalInset = macStyle
-        ? responsive.displayScaled(2)
-        : responsive.spacing(2);
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: horizontalInset),
-      child: DecoratedBox(
-        key: const Key('chat-attachment-caption-divider'),
-        decoration: BoxDecoration(
-          color: macStyle
-              ? const Color(0xFFC3CDDB).withValues(alpha: 0.95)
-              : theme.secondaryText.withValues(alpha: 0.24),
-          borderRadius: BorderRadius.circular(1),
-        ),
-        child: const SizedBox(height: 1, width: double.infinity),
-      ),
-    );
-  }
-}
-
-class _AttachmentActionButton extends StatelessWidget {
-  const _AttachmentActionButton({
-    required this.macStyle,
-    required this.isLoading,
-    required this.onTap,
-  });
-
-  final bool macStyle;
-  final bool isLoading;
-  final Future<void> Function() onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final theme = context.awikiTheme;
-    final size = macStyle
-        ? responsive.displayScaled(32)
-        : responsive.scaled(34);
-    return AppIconButton(
-      onPressed: isLoading ? null : () async => onTap(),
-      semanticLabel: '查看附件',
-      tooltip: '查看附件',
-      isLoading: isLoading,
-      size: size,
-      backgroundColor: macStyle ? CupertinoColors.white : theme.surface,
-      borderColor: macStyle ? const Color(0xFFDDE5F0) : theme.border,
-      borderRadius: BorderRadius.circular(
-        macStyle ? responsive.displayScaled(8) : 10,
-      ),
-      child: Icon(
-        CupertinoIcons.eye,
-        color: macStyle ? const Color(0xFF0B65F8) : theme.primary,
-        size: macStyle ? responsive.displayScaled(17) : responsive.iconSm,
-      ),
-    );
-  }
-}
-
-String _formatAttachmentMeta(String mimeType, int? sizeBytes) {
-  final parts = <String>[];
-  final type = mimeType.trim();
-  if (type.isNotEmpty && type != 'application/octet-stream') {
-    parts.add(type);
-  }
-  if (sizeBytes != null && sizeBytes >= 0) {
-    parts.add(_formatFileSize(sizeBytes));
-  }
-  return parts.isEmpty ? '文件' : parts.join(' · ');
-}
-
-String _formatFileSize(int bytes) {
-  const units = <String>['B', 'KB', 'MB', 'GB'];
-  var value = bytes.toDouble();
-  var unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  if (unitIndex == 0) {
-    return '$bytes ${units[unitIndex]}';
-  }
-  return '${value.toStringAsFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}';
-}
-
-class _Composer extends ConsumerStatefulWidget {
-  const _Composer({
-    required this.conversation,
-    required this.embedded,
-    required this.macStyle,
-    required this.controller,
-    required this.pendingAttachment,
-    this.enabled = true,
-    this.disabledReason,
-    required this.onSend,
-    required this.onAttach,
-    required this.onRemoveAttachment,
-  });
-
-  final ConversationSummary conversation;
-  final bool embedded;
-  final bool macStyle;
-  final TextEditingController controller;
-  final AttachmentDraft? pendingAttachment;
-  final bool enabled;
-  final String? disabledReason;
-  final Future<void> Function() onSend;
-  final Future<void> Function() onAttach;
-  final VoidCallback onRemoveAttachment;
-
-  @override
-  ConsumerState<_Composer> createState() => _ComposerState();
-}
-
-class _ComposerState extends ConsumerState<_Composer> {
-  final FocusNode _inputFocusNode = FocusNode();
-  bool _isSending = false;
-  ChatMentionTrigger? _activeMentionTrigger;
-  List<ChatMentionCandidate> _mentionCandidates =
-      const <ChatMentionCandidate>[];
-  bool _mentionCandidatesLoading = false;
-  int _selectedMentionIndex = 0;
-  int _mentionCandidateRequestSerial = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    widget.controller.addListener(_handleTextChanged);
-  }
-
-  @override
-  void didUpdateWidget(covariant _Composer oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_handleTextChanged);
-      widget.controller.addListener(_handleTextChanged);
-    }
-    if (!sameConversationTarget(oldWidget.conversation, widget.conversation)) {
-      _clearMentionTrigger();
-    } else {
-      _syncMentionTrigger();
-    }
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_handleTextChanged);
-    _inputFocusNode.dispose();
-    super.dispose();
-  }
-
-  void _handleTextChanged() {
-    if (mounted) {
-      setState(() {});
-    }
-    _syncMentionTrigger();
-  }
-
-  bool get _mentionEnabled {
-    final groupDid = _mentionGroupDid;
-    return widget.enabled && widget.conversation.isGroup && groupDid != null;
-  }
-
-  String? get _mentionGroupDid {
-    final groupId = widget.conversation.groupId?.trim();
-    if (groupId != null && groupId.isNotEmpty) {
-      return groupId;
-    }
-    if (widget.conversation.isGroup) {
-      final thread = widget.conversation.threadId.trim();
-      if (thread.isNotEmpty) {
-        return thread.startsWith('group:')
-            ? thread.substring('group:'.length)
-            : thread;
-      }
-    }
-    return null;
-  }
-
-  void _syncMentionTrigger() {
-    if (!mounted) {
-      return;
-    }
-    final value = widget.controller.value;
-    final trigger = ChatMentionTrigger.detect(
-      text: value.text,
-      selectionBaseOffset: value.selection.baseOffset,
-      selectionExtentOffset: value.selection.extentOffset,
-      composingStart: value.composing.start,
-      composingEnd: value.composing.end,
-      isGroup: _mentionEnabled,
-    );
-    if (trigger == _activeMentionTrigger) {
-      return;
-    }
-    if (trigger == null) {
-      _clearMentionTrigger();
-      return;
-    }
-    setState(() {
-      _activeMentionTrigger = trigger;
-      _mentionCandidates = const <ChatMentionCandidate>[];
-      _mentionCandidatesLoading = true;
-      _selectedMentionIndex = 0;
-    });
-    unawaited(_loadMentionCandidates(trigger));
-  }
-
-  void _clearMentionTrigger() {
-    _mentionCandidateRequestSerial += 1;
-    if (!mounted) {
-      return;
-    }
-    if (_activeMentionTrigger == null &&
-        _mentionCandidates.isEmpty &&
-        !_mentionCandidatesLoading) {
-      return;
-    }
-    setState(() {
-      _activeMentionTrigger = null;
-      _mentionCandidates = const <ChatMentionCandidate>[];
-      _mentionCandidatesLoading = false;
-      _selectedMentionIndex = 0;
-    });
-  }
-
-  Future<void> _loadMentionCandidates(ChatMentionTrigger trigger) async {
-    final groupDid = _mentionGroupDid;
-    if (groupDid == null) {
-      _clearMentionTrigger();
-      return;
-    }
-    final requestSerial = ++_mentionCandidateRequestSerial;
-    try {
-      final members = await ref
-          .read(groupApplicationServiceProvider)
-          .listMembers(groupDid, limit: 100);
-      if (!mounted ||
-          requestSerial != _mentionCandidateRequestSerial ||
-          trigger != _activeMentionTrigger) {
-        return;
-      }
-      final candidates = ChatMentionCandidate.forGroupMembers(
-        members,
-        query: trigger.query,
-      );
-      setState(() {
-        _mentionCandidates = candidates;
-        _mentionCandidatesLoading = false;
-        _selectedMentionIndex = candidates.isEmpty
-            ? 0
-            : _selectedMentionIndex.clamp(0, candidates.length - 1);
-      });
-    } catch (_) {
-      if (!mounted ||
-          requestSerial != _mentionCandidateRequestSerial ||
-          trigger != _activeMentionTrigger) {
-        return;
-      }
-      setState(() {
-        _mentionCandidates = ChatMentionCandidate.forGroupMembers(
-          const <Never>[],
-          query: trigger.query,
-        );
-        _mentionCandidatesLoading = false;
-        _selectedMentionIndex = 0;
-      });
-    }
-  }
-
-  bool get _hasMentionPanel =>
-      _activeMentionTrigger != null &&
-      (_mentionCandidatesLoading || _mentionCandidates.isNotEmpty);
-
-  void _selectMentionCandidate(ChatMentionCandidate candidate) {
-    if (!candidate.enabled) {
-      return;
-    }
-    final trigger = _activeMentionTrigger;
-    if (trigger == null) {
-      return;
-    }
-    final originalValue = widget.controller.value;
-    final insertion = trigger.insert(candidate).applyTo(originalValue.text);
-    final nextValue = originalValue.copyWith(
-      text: insertion.text,
-      selection: TextSelection.collapsed(offset: insertion.selectionOffset),
-      composing: TextRange.empty,
-    );
-    widget.controller.value = nextValue;
-
-    final drafts = ref.read(chatComposerDraftsProvider.notifier);
-    final currentDraft = drafts.draftFor(widget.conversation);
-    drafts.setDraft(
-      widget.conversation,
-      currentDraft.copyWith(
-        text: insertion.text,
-        mentions: ChatMentionDraft.mergeReplacingOverlap(
-          currentDraft.mentions,
-          insertion.mention,
-          insertion.text,
-        ),
-      ),
-    );
-    _clearMentionTrigger();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && widget.enabled) {
-        _inputFocusNode.requestFocus();
-      }
-    });
-  }
-
-  void _moveMentionSelection(int delta) {
-    if (_mentionCandidates.isEmpty) {
-      return;
-    }
-    setState(() {
-      _selectedMentionIndex =
-          (_selectedMentionIndex + delta) % _mentionCandidates.length;
-      if (_selectedMentionIndex < 0) {
-        _selectedMentionIndex += _mentionCandidates.length;
-      }
-    });
-  }
-
-  bool get _canSubmit {
-    return widget.enabled &&
-        (widget.pendingAttachment != null ||
-            widget.controller.text.trim().isNotEmpty);
-  }
-
-  bool get _isComposingInput {
-    final composing = widget.controller.value.composing;
-    return composing.isValid && !composing.isCollapsed;
-  }
-
-  Future<void> _submitIfNeeded() async {
-    if (!widget.enabled || !_canSubmit || _isSending || _isComposingInput) {
-      return;
-    }
-    setState(() {
-      _isSending = true;
-    });
-    try {
-      await widget.onSend();
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSending = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _attachIfNeeded() async {
-    if (!widget.enabled) {
-      return;
-    }
-    await widget.onAttach();
-    if (!mounted || !widget.enabled) {
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && widget.enabled) {
-        _inputFocusNode.requestFocus();
-      }
-    });
-  }
-
-  KeyEventResult _handleInputKeyEvent(FocusNode node, KeyEvent event) {
-    if (!widget.enabled) {
-      return KeyEventResult.handled;
-    }
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-      return KeyEventResult.ignored;
-    }
-    final key = event.logicalKey;
-    if (_hasMentionPanel) {
-      if (key == LogicalKeyboardKey.arrowDown) {
-        _moveMentionSelection(1);
-        return KeyEventResult.handled;
-      }
-      if (key == LogicalKeyboardKey.arrowUp) {
-        _moveMentionSelection(-1);
-        return KeyEventResult.handled;
-      }
-      if (key == LogicalKeyboardKey.escape) {
-        _clearMentionTrigger();
-        return KeyEventResult.handled;
-      }
-      if (key == LogicalKeyboardKey.enter ||
-          key == LogicalKeyboardKey.numpadEnter) {
-        if (_mentionCandidates.isNotEmpty) {
-          _selectMentionCandidate(_mentionCandidates[_selectedMentionIndex]);
-          return KeyEventResult.handled;
-        }
-      }
-    }
-    if (key != LogicalKeyboardKey.enter &&
-        key != LogicalKeyboardKey.numpadEnter) {
-      return KeyEventResult.ignored;
-    }
-    if (_isComposingInput) {
-      return KeyEventResult.ignored;
-    }
-    if (HardwareKeyboard.instance.isShiftPressed) {
-      _insertNewlineAtSelection();
-      return KeyEventResult.handled;
-    }
-    unawaited(_submitIfNeeded());
-    return KeyEventResult.handled;
-  }
-
-  void _insertNewlineAtSelection() {
-    final value = widget.controller.value;
-    final text = value.text;
-    final selection = value.selection;
-    if (!selection.isValid) {
-      widget.controller.text = '$text\n';
-      widget.controller.selection = TextSelection.collapsed(
-        offset: widget.controller.text.length,
-      );
-      return;
-    }
-    final start = selection.start.clamp(0, text.length);
-    final end = selection.end.clamp(0, text.length);
-    final nextText = text.replaceRange(start, end, '\n');
-    widget.controller.value = value.copyWith(
-      text: nextText,
-      selection: TextSelection.collapsed(offset: start + 1),
-      composing: TextRange.empty,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final responsive = context.awikiResponsive;
-    final canSubmit = _canSubmit;
-    final disabledReason = widget.disabledReason ?? '当前会话无法继续发送消息';
-    if (widget.macStyle) {
-      return SafeArea(
-        top: false,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final compact = constraints.maxWidth < 360;
-            final showAttachment = constraints.maxWidth >= 280;
-            final horizontal = responsive.displayScaled(compact ? 14 : 22);
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                horizontal,
-                responsive.displayScaled(8),
-                horizontal,
-                responsive.displayScaled(16),
-              ),
-              child: Container(
-                padding: EdgeInsets.fromLTRB(
-                  responsive.displayScaled(12),
-                  responsive.displayScaled(8),
-                  responsive.displayScaled(8),
-                  responsive.displayScaled(8),
-                ),
-                decoration: BoxDecoration(
-                  color: CupertinoColors.white,
-                  borderRadius: BorderRadius.circular(
-                    responsive.displayScaled(10),
-                  ),
-                  border: Border.all(color: const Color(0xFFDDE5F0)),
-                  boxShadow: const <BoxShadow>[
-                    BoxShadow(
-                      color: Color(0x0F0B1F3A),
-                      blurRadius: 18,
-                      offset: Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    if (_hasMentionPanel) ...<Widget>[
-                      _MentionCandidatePanel(
-                        candidates: _mentionCandidates,
-                        loading: _mentionCandidatesLoading,
-                        selectedIndex: _selectedMentionIndex,
-                        macStyle: true,
-                        onSelected: _selectMentionCandidate,
-                      ),
-                      SizedBox(height: responsive.displayScaled(8)),
-                    ],
-                    if (!widget.enabled)
-                      _DisabledComposerNotice(
-                        message: disabledReason,
-                        macStyle: true,
-                      )
-                    else if (widget.pendingAttachment != null) ...<Widget>[
-                      _PendingAttachmentPreview(
-                        attachment: widget.pendingAttachment!,
-                        macStyle: true,
-                        onRemove: widget.onRemoveAttachment,
-                      ),
-                      SizedBox(height: responsive.displayScaled(8)),
-                    ],
-                    if (widget.enabled)
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: <Widget>[
-                          if (showAttachment) ...<Widget>[
-                            AppIconButton(
-                              key: const Key('chat-attachment-button'),
-                              onPressed: _attachIfNeeded,
-                              semanticLabel: '添加附件',
-                              tooltip: '添加附件',
-                              size: responsive.displayScaled(34),
-                              borderRadius: BorderRadius.circular(
-                                responsive.displayScaled(9),
-                              ),
-                              child: Icon(
-                                CupertinoIcons.paperclip,
-                                color: const Color(0xFF34415C),
-                                size: responsive.displayScaled(22),
-                              ),
-                            ),
-                            SizedBox(width: responsive.displayScaled(10)),
-                          ],
-                          Expanded(
-                            child: _ComposerTextField(
-                              controller: widget.controller,
-                              focusNode: _inputFocusNode,
-                              onKeyEvent: _handleInputKeyEvent,
-                              placeholder: context.l10n.chatInputPlaceholder,
-                              textStyle: TextStyle(
-                                color: const Color(0xFF17213A),
-                                fontSize: responsive.displayScaled(13.5),
-                                height: 1.32,
-                              ),
-                              placeholderStyle: TextStyle(
-                                color: const Color(0xFF8A96AA),
-                                fontSize: responsive.displayScaled(13.5),
-                              ),
-                              padding: EdgeInsets.symmetric(
-                                vertical: responsive.displayScaled(7),
-                              ),
-                              maxLines: 5,
-                              onSubmitted: (_) async => _submitIfNeeded(),
-                            ),
-                          ),
-                          SizedBox(width: responsive.displayScaled(10)),
-                          AppPressable(
-                            key: const Key('chat-send-button'),
-                            onTap: _submitIfNeeded,
-                            semanticLabel: '发送',
-                            semanticsIdentifier: 'e2e-chat-send-button',
-                            tooltip: '发送',
-                            enabled: true,
-                            scaleOnPress: true,
-                            pressedScale: 0.94,
-                            borderRadius: BorderRadius.circular(
-                              responsive.displayScaled(9),
-                            ),
-                            builder: (context, state, child) {
-                              return AnimatedOpacity(
-                                opacity: state.pressed
-                                    ? 0.82
-                                    : state.hovered || state.focused
-                                    ? 0.92
-                                    : 1,
-                                duration: const Duration(milliseconds: 120),
-                                child: child,
-                              );
-                            },
-                            child: Container(
-                              width: responsive.displayScaled(36),
-                              height: responsive.displayScaled(36),
-                              decoration: BoxDecoration(
-                                color: canSubmit
-                                    ? const Color(0xFF0B65F8)
-                                    : const Color(0xFFE5EAF2),
-                                borderRadius: BorderRadius.circular(
-                                  responsive.displayScaled(9),
-                                ),
-                              ),
-                              child: _isSending
-                                  ? const CupertinoActivityIndicator(
-                                      radius: 8,
-                                      color: CupertinoColors.white,
-                                    )
-                                  : Icon(
-                                      CupertinoIcons.paperplane_fill,
-                                      color: canSubmit
-                                          ? CupertinoColors.white
-                                          : const Color(0xFF8A96AA),
-                                      size: responsive.displayScaled(18),
-                                    ),
-                            ),
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      );
-    }
-    final outerPadding = widget.embedded
-        ? const EdgeInsets.fromLTRB(16, 8, 16, 16)
-        : responsive.scaledInsets(const EdgeInsets.fromLTRB(16, 8, 16, 16));
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: outerPadding,
-        child: Container(
-          constraints: BoxConstraints(
-            minHeight: widget.embedded
-                ? responsive.navBarHeight
-                : responsive.controlHeight,
-          ),
-          padding: responsive.scaledInsets(
-            EdgeInsets.fromLTRB(
-              14,
-              widget.embedded ? 8 : 10,
-              14,
-              widget.embedded ? 8 : 10,
-            ),
-          ),
-          decoration: BoxDecoration(
-            color: theme.surface,
-            borderRadius: BorderRadius.circular(
-              widget.embedded ? 24 : responsive.radius(26),
-            ),
-            boxShadow: const <BoxShadow>[
-              BoxShadow(
-                color: Color(0x0F000000),
-                blurRadius: 18,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              if (_hasMentionPanel) ...<Widget>[
-                _MentionCandidatePanel(
-                  candidates: _mentionCandidates,
-                  loading: _mentionCandidatesLoading,
-                  selectedIndex: _selectedMentionIndex,
-                  macStyle: false,
-                  onSelected: _selectMentionCandidate,
-                ),
-                SizedBox(height: responsive.spacing(8)),
-              ],
-              if (!widget.enabled)
-                _DisabledComposerNotice(
-                  message: disabledReason,
-                  macStyle: false,
-                )
-              else if (widget.pendingAttachment != null) ...<Widget>[
-                _PendingAttachmentPreview(
-                  attachment: widget.pendingAttachment!,
-                  macStyle: false,
-                  onRemove: widget.onRemoveAttachment,
-                ),
-                SizedBox(height: responsive.spacing(8)),
-              ],
-              if (widget.enabled)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: <Widget>[
-                    TopBarActionButton(
-                      key: const Key('chat-attachment-button'),
-                      onTap: _attachIfNeeded,
-                      semanticsLabel: '添加附件',
-                      tooltip: '添加附件',
-                      child: Padding(
-                        padding: EdgeInsets.all(responsive.spacing(6)),
-                        child: AwikiAssetIcon(
-                          assetName: 'assets/icons/icon_plus.svg',
-                          size: responsive.iconMd,
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: responsive.spacing(8)),
-                    Expanded(
-                      child: _ComposerTextField(
-                        controller: widget.controller,
-                        focusNode: _inputFocusNode,
-                        onKeyEvent: _handleInputKeyEvent,
-                        placeholder: context.l10n.chatInputPlaceholder,
-                        textStyle: TextStyle(
-                          fontSize: responsive.bodyMd,
-                          color: theme.title,
-                          height: 1.32,
-                        ),
-                        placeholderStyle: TextStyle(
-                          fontSize: responsive.bodyMd,
-                          color: theme.secondaryText,
-                        ),
-                        padding: EdgeInsets.symmetric(
-                          vertical: responsive.spacing(10),
-                        ),
-                        maxLines: 4,
-                        onSubmitted: (_) async => _submitIfNeeded(),
-                      ),
-                    ),
-                    SizedBox(width: responsive.spacing(8)),
-                    e2eSemantics(
-                      identifier: 'e2e-chat-send-button',
-                      label: '发送',
-                      button: true,
-                      child: TopBarActionButton(
-                        key: const Key('chat-send-button'),
-                        onTap: _submitIfNeeded,
-                        semanticsLabel: '发送',
-                        tooltip: '发送',
-                        child: Padding(
-                          padding: EdgeInsets.all(responsive.spacing(6)),
-                          child: _isSending
-                              ? CupertinoActivityIndicator(
-                                  radius: responsive.displayScaled(8),
-                                )
-                              : AwikiAssetIcon(
-                                  assetName: 'assets/icons/icon_send.svg',
-                                  color: canSubmit
-                                      ? theme.primary
-                                      : theme.secondaryText,
-                                  size: responsive.iconMd,
-                                ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ComposerTextField extends StatelessWidget {
-  const _ComposerTextField({
-    required this.controller,
-    required this.focusNode,
-    required this.onKeyEvent,
-    required this.placeholder,
-    required this.textStyle,
-    required this.placeholderStyle,
-    required this.padding,
-    required this.maxLines,
-    required this.onSubmitted,
-  });
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final FocusOnKeyEventCallback onKeyEvent;
-  final String placeholder;
-  final TextStyle textStyle;
-  final TextStyle placeholderStyle;
-  final EdgeInsetsGeometry padding;
-  final int maxLines;
-  final ValueChanged<String> onSubmitted;
-
-  @override
-  Widget build(BuildContext context) {
-    return Focus(
-      onKeyEvent: onKeyEvent,
-      child: e2eSemantics(
-        identifier: 'e2e-chat-input',
-        label: placeholder,
-        textField: true,
-        child: CupertinoTextField(
-          controller: controller,
-          focusNode: focusNode,
-          placeholder: placeholder,
-          keyboardType: TextInputType.multiline,
-          textInputAction: TextInputAction.send,
-          minLines: 1,
-          maxLines: maxLines,
-          onSubmitted: onSubmitted,
-          decoration: null,
-          padding: padding,
-          style: textStyle,
-          placeholderStyle: placeholderStyle,
-        ),
-      ),
-    );
-  }
-}
-
-class _MentionCandidatePanel extends StatelessWidget {
-  const _MentionCandidatePanel({
-    required this.candidates,
-    required this.loading,
-    required this.selectedIndex,
-    required this.macStyle,
-    required this.onSelected,
-  });
-
-  final List<ChatMentionCandidate> candidates;
-  final bool loading;
-  final int selectedIndex;
-  final bool macStyle;
-  final ValueChanged<ChatMentionCandidate> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final borderRadius = BorderRadius.circular(
-      macStyle ? responsive.displayScaled(10) : responsive.radius(14),
-    );
-    final panel = Container(
-      key: const Key('chat-mention-candidate-panel'),
-      constraints: BoxConstraints(
-        maxHeight: macStyle
-            ? responsive.displayScaled(228)
-            : responsive.displayScaled(260),
-      ),
-      decoration: BoxDecoration(
-        color: CupertinoColors.white,
-        borderRadius: borderRadius,
-        border: Border.all(color: const Color(0xFFDDE5F0)),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x140B1F3A),
-            blurRadius: 20,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: loading && candidates.isEmpty
-          ? Padding(
-              padding: EdgeInsets.all(
-                macStyle
-                    ? responsive.displayScaled(14)
-                    : responsive.spacing(14),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  CupertinoActivityIndicator(radius: 8),
-                  SizedBox(width: 10),
-                  Text('正在加载 mention 候选…'),
-                ],
-              ),
-            )
-          : ListView.builder(
-              shrinkWrap: true,
-              padding: EdgeInsets.symmetric(
-                vertical: macStyle
-                    ? responsive.displayScaled(6)
-                    : responsive.spacing(6),
-              ),
-              itemCount: candidates.length,
-              itemBuilder: (context, index) {
-                final candidate = candidates[index];
-                return _MentionCandidateTile(
-                  candidate: candidate,
-                  selected: index == selectedIndex,
-                  macStyle: macStyle,
-                  onTap: () => onSelected(candidate),
-                );
-              },
-            ),
-    );
-    return ClipRRect(borderRadius: borderRadius, child: panel);
-  }
-}
-
-class _MentionCandidateTile extends StatelessWidget {
-  const _MentionCandidateTile({
-    required this.candidate,
-    required this.selected,
-    required this.macStyle,
-    required this.onTap,
-  });
-
-  final ChatMentionCandidate candidate;
-  final bool selected;
-  final bool macStyle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final enabled = candidate.enabled;
-    final background = selected
-        ? const Color(0xFFEAF2FF)
-        : CupertinoColors.transparent;
-    final titleColor = enabled
-        ? const Color(0xFF17213A)
-        : const Color(0xFF8A96AA);
-    final subtitle = enabled
-        ? candidate.subtitle
-        : candidate.disabledReason ?? candidate.subtitle;
-    return CupertinoButton(
-      key: Key('chat-mention-candidate-${candidate.id}'),
-      padding: EdgeInsets.zero,
-      minimumSize: Size.zero,
-      onPressed: enabled ? onTap : null,
-      child: Container(
-        color: background,
-        padding: EdgeInsets.symmetric(
-          horizontal: macStyle
-              ? responsive.displayScaled(12)
-              : responsive.spacing(12),
-          vertical: macStyle
-              ? responsive.displayScaled(8)
-              : responsive.spacing(9),
-        ),
-        child: Opacity(
-          opacity: enabled ? 1 : 0.62,
-          child: Row(
-            children: <Widget>[
-              Container(
-                width: macStyle
-                    ? responsive.displayScaled(28)
-                    : responsive.displayScaled(32),
-                height: macStyle
-                    ? responsive.displayScaled(28)
-                    : responsive.displayScaled(32),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE4ECF7),
-                  borderRadius: BorderRadius.circular(
-                    macStyle
-                        ? responsive.displayScaled(8)
-                        : responsive.radius(10),
-                  ),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  '@',
-                  style: TextStyle(
-                    color: const Color(0xFF0B65F8),
-                    fontSize: macStyle
-                        ? responsive.displayScaled(15)
-                        : responsive.bodyMd,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: macStyle
-                    ? responsive.displayScaled(10)
-                    : responsive.spacing(10),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      candidate.surface,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: titleColor,
-                        fontSize: macStyle
-                            ? responsive.displayScaled(13)
-                            : responsive.bodyMd,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    SizedBox(height: responsive.displayScaled(2)),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: const Color(0xFF6C7890),
-                        fontSize: macStyle
-                            ? responsive.displayScaled(11)
-                            : responsive.bodySm,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(width: responsive.displayScaled(8)),
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: responsive.displayScaled(7),
-                  vertical: responsive.displayScaled(3),
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF2F5FA),
-                  borderRadius: BorderRadius.circular(
-                    responsive.displayScaled(999),
-                  ),
-                ),
-                child: Text(
-                  candidate.badge,
-                  style: TextStyle(
-                    color: const Color(0xFF44506A),
-                    fontSize: macStyle
-                        ? responsive.displayScaled(10)
-                        : responsive.displayScaled(11),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DisabledComposerNotice extends StatelessWidget {
-  const _DisabledComposerNotice({
-    required this.message,
-    required this.macStyle,
-  });
-
-  final String message;
-  final bool macStyle;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    return Container(
-      key: const Key('chat-disabled-composer-notice'),
-      width: double.infinity,
-      padding: EdgeInsets.symmetric(
-        horizontal: responsive.displayScaled(macStyle ? 10 : 12),
-        vertical: responsive.displayScaled(macStyle ? 8 : 10),
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F7FA),
-        borderRadius: BorderRadius.circular(
-          responsive.radius(macStyle ? 8 : 14),
-        ),
-        border: Border.all(color: const Color(0xFFE1E7F0)),
-      ),
-      child: Text(
-        message,
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: const Color(0xFF66728A),
-          fontSize: responsive.displayScaled(macStyle ? 12 : 13),
-          height: 1.25,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-}
-
-class _PendingAttachmentPreview extends StatelessWidget {
-  const _PendingAttachmentPreview({
-    required this.attachment,
-    required this.macStyle,
-    required this.onRemove,
-  });
-
-  final AttachmentDraft attachment;
-  final bool macStyle;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final radius = responsive.radius(macStyle ? 8 : 12);
-    return Container(
-      key: const Key('chat-pending-attachment-preview'),
-      padding: EdgeInsets.fromLTRB(
-        responsive.spacing(macStyle ? 9 : 10),
-        responsive.spacing(macStyle ? 7 : 8),
-        responsive.spacing(macStyle ? 6 : 7),
-        responsive.spacing(macStyle ? 7 : 8),
-      ),
-      decoration: BoxDecoration(
-        color: macStyle ? const Color(0xFFF6F8FC) : const Color(0xFFF7F9FD),
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: const Color(0xFFE1E7F0)),
-      ),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: responsive.displayScaled(macStyle ? 28 : 32),
-            height: responsive.displayScaled(macStyle ? 28 : 32),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEAF2FF),
-              borderRadius: BorderRadius.circular(responsive.radius(8)),
-            ),
-            child: Icon(
-              CupertinoIcons.doc,
-              color: const Color(0xFF0B65F8),
-              size: responsive.displayScaled(macStyle ? 16 : 18),
-            ),
-          ),
-          SizedBox(width: responsive.spacing(9)),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  attachment.displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: const Color(0xFF101B32),
-                    fontSize: macStyle
-                        ? responsive.displayScaled(12.5)
-                        : responsive.bodySm,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                SizedBox(height: responsive.spacing(2)),
-                Text(
-                  _formatAttachmentMeta(
-                    attachment.mimeType,
-                    attachment.sizeBytes,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: const Color(0xFF66728A),
-                    fontSize: responsive.metaSm,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          AppIconButton(
-            key: const Key('chat-pending-attachment-remove-button'),
-            onPressed: onRemove,
-            semanticLabel: '移除附件',
-            tooltip: '移除附件',
-            size: responsive.displayScaled(28),
-            padding: EdgeInsets.all(responsive.spacing(4)),
-            borderRadius: BorderRadius.circular(responsive.displayScaled(14)),
-            child: Icon(
-              CupertinoIcons.xmark_circle_fill,
-              color: const Color(0xFF8A96AA),
-              size: responsive.displayScaled(18),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

@@ -463,23 +463,23 @@ class AppPressableTile extends StatelessWidget {
                 ? Border.all(color: theme.primary.withValues(alpha: 0.38))
                 : border,
           ),
-          child: ClipRRect(
-            borderRadius: radius,
-            child: Stack(
-              fit: StackFit.passthrough,
-              children: <Widget>[
-                child,
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: AnimatedContainer(
-                      duration: duration,
-                      curve: Curves.easeOutCubic,
+          child: Stack(
+            fit: StackFit.passthrough,
+            children: <Widget>[
+              child,
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: AnimatedContainer(
+                    duration: duration,
+                    curve: Curves.easeOutCubic,
+                    decoration: BoxDecoration(
                       color: overlay,
+                      borderRadius: radius,
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },

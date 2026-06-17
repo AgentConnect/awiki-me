@@ -151,26 +151,70 @@ class AgentsController extends StateNotifier<AgentsState> {
   final Ref ref;
   final Map<String, Timer> _statusQueryTimeouts = <String, Timer>{};
   final Map<String, Timer> _statusQueryClearTimers = <String, Timer>{};
+  Future<void>? _loadOperation;
+  String? _loadedCacheOwner;
 
-  Future<void> load() async {
+  Future<void> ensureLoaded() {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
       state = const AgentsState();
+      _loadedCacheOwner = null;
+      return Future<void>.value();
+    }
+    final cacheOwner = _agentCacheOwner(session);
+    final activeLoad = _loadOperation;
+    if (activeLoad != null) {
+      return activeLoad;
+    }
+    if (_loadedCacheOwner == cacheOwner) {
+      return Future<void>.value();
+    }
+    return load();
+  }
+
+  Future<void> load() async {
+    final activeLoad = _loadOperation;
+    if (activeLoad != null) {
+      return activeLoad;
+    }
+    final operation = _load();
+    _loadOperation = operation;
+    try {
+      await operation;
+    } finally {
+      if (identical(_loadOperation, operation)) {
+        _loadOperation = null;
+      }
+    }
+  }
+
+  Future<void> _load() async {
+    final session = ref.read(sessionProvider).session;
+    if (session == null) {
+      state = const AgentsState();
+      _loadedCacheOwner = null;
       return;
     }
     final cacheOwner = _agentCacheOwner(session);
     state = state.copyWith(isLoading: true, clearError: true);
     await _loadCached(cacheOwner);
+    if (!_isCurrentCacheOwner(cacheOwner)) {
+      return;
+    }
     try {
       final agents = _stableAgentOrder(
         await ref.read(agentControlServiceProvider).listAgents(),
       );
+      if (!_isCurrentCacheOwner(cacheOwner)) {
+        return;
+      }
       state = state.copyWith(
         agents: agents,
         selectedAgentDid: _nextSelection(agents),
         isLoading: false,
         clearError: true,
       );
+      _loadedCacheOwner = cacheOwner;
       await _saveCacheBestEffort(cacheOwner, agents);
       final selectedAgent = state.selectedAgent;
       if (selectedAgent != null && selectedAgent.isRuntime) {
@@ -182,10 +226,12 @@ class AgentsController extends StateNotifier<AgentsState> {
         }
       }
     } catch (error) {
-      state = state.copyWith(
-        isLoading: false,
-        error: _agentErrorMessage(error),
-      );
+      if (_isCurrentCacheOwner(cacheOwner)) {
+        state = state.copyWith(
+          isLoading: false,
+          error: _agentErrorMessage(error),
+        );
+      }
     }
   }
 
@@ -540,6 +586,12 @@ class AgentsController extends StateNotifier<AgentsState> {
     state = state.copyWith(clearInstallCommand: true);
   }
 
+  void clear() {
+    _loadedCacheOwner = null;
+    _cancelStatusTimers();
+    state = const AgentsState();
+  }
+
   void applyControlPayload(Map<String, Object?> payload) {
     if (payload['schema'] != AgentControlPayloads.statusSchema) {
       return;
@@ -690,6 +742,11 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   @override
   void dispose() {
+    _cancelStatusTimers();
+    super.dispose();
+  }
+
+  void _cancelStatusTimers() {
     for (final timer in _statusQueryTimeouts.values) {
       timer.cancel();
     }
@@ -698,7 +755,6 @@ class AgentsController extends StateNotifier<AgentsState> {
       timer.cancel();
     }
     _statusQueryClearTimers.clear();
-    super.dispose();
   }
 
   Future<void> _loadCached(String ownerDid) async {
@@ -732,11 +788,19 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     final ordered = _stableAgentOrder(agents);
     if (ordered.isNotEmpty) {
+      if (!_isCurrentCacheOwner(ownerDid)) {
+        return;
+      }
       state = state.copyWith(
         agents: ordered,
         selectedAgentDid: _nextSelection(ordered),
       );
     }
+  }
+
+  bool _isCurrentCacheOwner(String ownerDid) {
+    final session = ref.read(sessionProvider).session;
+    return session != null && _agentCacheOwner(session) == ownerDid;
   }
 
   Future<void> _saveCacheBestEffort(

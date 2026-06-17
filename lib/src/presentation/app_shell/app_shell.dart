@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/e2e_semantics.dart';
@@ -30,6 +29,13 @@ const int _macSettingsTabIndex = 6;
 const _macRailActiveColor = Color(0xFF0B65F8);
 const _macRailInactiveColor = Color(0xFF7A879C);
 const _macRailActiveBackground = Color(0xFFEAF2FF);
+
+String? _formatUnreadBadge(int count) {
+  if (count <= 0) {
+    return null;
+  }
+  return count > 99 ? '99+' : '$count';
+}
 
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
@@ -94,12 +100,14 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     final bottomNav = _BottomNavBar(
       currentIndex: tabIndex,
+      unreadCount: unreadCount,
       onTap: (index) {
         ref.read(shellTabProvider.notifier).setTab(index);
       },
     );
     final embeddedBottomNav = _BottomNavBar(
       currentIndex: tabIndex,
+      unreadCount: unreadCount,
       embedded: true,
       onTap: (index) {
         ref.read(shellTabProvider.notifier).setTab(index);
@@ -356,6 +364,7 @@ class _MacDesktopRail extends StatelessWidget {
                         activeIcon: CupertinoIcons.gear_alt_fill,
                         inactiveIcon: CupertinoIcons.gear_alt,
                         label: '设置',
+                        semanticsIdentifier: 'e2e-settings-tab',
                         selected: currentIndex == _macSettingsTabIndex,
                         compact: compact,
                         onTap: onOpenSettings,
@@ -370,13 +379,6 @@ class _MacDesktopRail extends StatelessWidget {
         },
       ),
     );
-  }
-
-  String? _formatUnreadBadge(int count) {
-    if (count <= 0) {
-      return null;
-    }
-    return count > 99 ? '99+' : '$count';
   }
 
   ({String seed, String? labelOverride}) _avatarSeedForSession(
@@ -432,6 +434,7 @@ class _MacDesktopRailItem extends StatelessWidget {
     required this.compact,
     required this.onTap,
     this.badge,
+    this.semanticsIdentifier,
   });
 
   final IconData activeIcon;
@@ -441,6 +444,7 @@ class _MacDesktopRailItem extends StatelessWidget {
   final bool compact;
   final VoidCallback onTap;
   final String? badge;
+  final String? semanticsIdentifier;
 
   @override
   Widget build(BuildContext context) {
@@ -452,6 +456,7 @@ class _MacDesktopRailItem extends StatelessWidget {
     return AppPressable(
       onTap: onTap,
       semanticLabel: label,
+      semanticsIdentifier: semanticsIdentifier,
       selected: selected,
       borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
       pressedScale: 0.98,
@@ -574,6 +579,7 @@ class _MacRailAvatar extends StatelessWidget {
     return AppPressable(
       onTap: onTap,
       semanticLabel: '我',
+      semanticsIdentifier: 'e2e-profile-tab',
       selected: selected,
       scaleOnPress: true,
       pressedScale: 0.96,
@@ -664,11 +670,13 @@ class _MacDesktopPlaceholderPage extends StatelessWidget {
 class _BottomNavBar extends StatelessWidget {
   const _BottomNavBar({
     required this.currentIndex,
+    required this.unreadCount,
     required this.onTap,
     this.embedded = false,
   });
 
   final int currentIndex;
+  final int unreadCount;
   final ValueChanged<int> onTap;
   final bool embedded;
 
@@ -676,7 +684,6 @@ class _BottomNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
-    final l10n = context.l10n;
     final bottomInset = MediaQuery.of(context).padding.bottom;
     final showLabels = responsive.isPhone && !embedded;
     final horizontalPadding = embedded ? 0.0 : responsive.spacing(24);
@@ -731,43 +738,45 @@ class _BottomNavBar extends StatelessWidget {
                 child: Row(
                   children: <Widget>[
                     Expanded(
-                      child: _NavButton(
-                        label: l10n.shellNavMessages,
+                      child: _BottomNavItem(
+                        label: 'Messages',
                         semanticsIdentifier: 'e2e-messages-tab',
-                        activeAsset: 'assets/icons/message_Active.svg',
-                        inactiveAsset: 'assets/icons/message_Inactive.svg',
+                        activeIcon: CupertinoIcons.chat_bubble_2_fill,
+                        inactiveIcon: CupertinoIcons.chat_bubble_2,
                         active: currentIndex == 0,
                         showLabel: showLabels,
+                        badge: _formatUnreadBadge(unreadCount),
                         onTap: () => onTap(0),
                       ),
                     ),
                     Expanded(
-                      child: _NavIconButton(
-                        label: '智能体',
+                      child: _BottomNavItem(
+                        label: 'Agents',
                         semanticsIdentifier: 'e2e-agents-tab',
-                        icon: CupertinoIcons.sparkles,
+                        activeIcon: CupertinoIcons.sparkles,
+                        inactiveIcon: CupertinoIcons.sparkles,
                         active: currentIndex == 1,
                         showLabel: showLabels,
                         onTap: () => onTap(1),
                       ),
                     ),
                     Expanded(
-                      child: _NavButton(
-                        label: l10n.shellNavFriends,
+                      child: _BottomNavItem(
+                        label: 'Friends',
                         semanticsIdentifier: 'e2e-friends-tab',
-                        activeAsset: 'assets/icons/friend_Active.svg',
-                        inactiveAsset: 'assets/icons/friend_Inactive.svg',
+                        activeIcon: CupertinoIcons.person_2_fill,
+                        inactiveIcon: CupertinoIcons.person_2,
                         active: currentIndex == 2,
                         showLabel: showLabels,
                         onTap: () => onTap(2),
                       ),
                     ),
                     Expanded(
-                      child: _NavButton(
-                        label: l10n.shellNavMe,
+                      child: _BottomNavItem(
+                        label: 'Me',
                         semanticsIdentifier: 'e2e-profile-tab',
-                        activeAsset: 'assets/icons/me_Active.svg',
-                        inactiveAsset: 'assets/icons/me_Inactive.svg',
+                        activeIcon: CupertinoIcons.person_fill,
+                        inactiveIcon: CupertinoIcons.person,
                         active: currentIndex == 3,
                         showLabel: showLabels,
                         onTap: () => onTap(3),
@@ -784,129 +793,63 @@ class _BottomNavBar extends StatelessWidget {
   }
 }
 
-class _NavIconButton extends StatelessWidget {
-  const _NavIconButton({
+class _BottomNavItem extends StatelessWidget {
+  const _BottomNavItem({
     required this.label,
     required this.semanticsIdentifier,
-    required this.icon,
+    required this.activeIcon,
+    required this.inactiveIcon,
     required this.active,
     required this.showLabel,
     required this.onTap,
+    this.badge,
   });
 
   final String label;
   final String semanticsIdentifier;
-  final IconData icon;
+  final IconData activeIcon;
+  final IconData inactiveIcon;
   final bool active;
   final bool showLabel;
   final VoidCallback onTap;
+  final String? badge;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final foreground = active
-        ? AwikiMePalette.actionBlue
-        : AwikiMePalette.actionMuted;
-    return AppPressable(
-      onTap: onTap,
-      semanticLabel: label,
-      semanticsIdentifier: semanticsIdentifier,
-      selected: active,
-      scaleOnPress: true,
-      pressedScale: responsive.isPhone ? 0.96 : 0.98,
-      borderRadius: BorderRadius.circular(
-        showLabel ? responsive.radius(8) : 10,
-      ),
-      child: ExcludeSemantics(
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          padding: showLabel
-              ? EdgeInsets.fromLTRB(
-                  responsive.spacing(4),
-                  responsive.spacing(1),
-                  responsive.spacing(4),
-                  responsive.spacing(5),
-                )
-              : EdgeInsets.zero,
-          decoration: BoxDecoration(
-            color: active && showLabel
-                ? AwikiMePalette.actionBlueSoft
-                : const Color(0x00FFFFFF),
-            borderRadius: BorderRadius.circular(
-              showLabel ? responsive.radius(8) : 0,
-            ),
-          ),
-          child: showLabel
-              ? Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    Icon(icon, color: foreground, size: responsive.scaled(24)),
-                    const SizedBox(height: 2),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        style: TextStyle(
-                          color: foreground,
-                          fontSize: responsive.scaled(13.25),
-                          fontWeight: FontWeight.w600,
-                          height: 1,
-                        ),
-                      ),
-                    ),
-                  ],
-                )
-              : Center(
-                  child: Icon(icon, color: foreground, size: responsive.iconLg),
-                ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NavButton extends StatelessWidget {
-  const _NavButton({
-    required this.label,
-    required this.semanticsIdentifier,
-    required this.activeAsset,
-    required this.inactiveAsset,
-    required this.active,
-    required this.showLabel,
-    required this.onTap,
-  });
-
-  final String label;
-  final String semanticsIdentifier;
-  final String activeAsset;
-  final String inactiveAsset;
-  final bool active;
-  final bool showLabel;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final navIconSize = showLabel
-        ? responsive.scaled(31)
-        : (responsive.isPhone ? 30.0 : responsive.iconLg * 2);
+    final iconSize = showLabel ? responsive.scaled(26) : responsive.iconLg;
     final tapSize = responsive.isPhone
         ? responsive.compactControlHeight + responsive.spacing(6)
         : 44.0;
-    final labelFontSize = responsive.scaled(13.25);
-    final navIconVisualScale = showLabel ? 1.5 : 1.0;
+    final labelFontSize = responsive.scaled(11.25);
+    final iconSlotSize = showLabel ? responsive.scaled(34) : tapSize;
     final foreground = active
         ? AwikiMePalette.actionBlue
         : AwikiMePalette.actionMuted;
     Widget buildNavIcon() {
-      final icon = SvgPicture.asset(
-        active ? activeAsset : inactiveAsset,
-        width: navIconSize,
-        height: navIconSize,
-        colorFilter: ColorFilter.mode(foreground, BlendMode.srcIn),
+      final icon = Icon(
+        active ? activeIcon : inactiveIcon,
+        color: foreground,
+        size: iconSize,
       );
-      return Transform.scale(scale: navIconVisualScale, child: icon);
+      final badgeLabel = badge;
+      return SizedBox(
+        width: iconSlotSize,
+        height: iconSlotSize,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: <Widget>[
+            icon,
+            if (badgeLabel != null)
+              Positioned(
+                top: showLabel ? responsive.scaled(1) : responsive.scaled(3),
+                right: showLabel ? responsive.scaled(-5) : responsive.scaled(3),
+                child: _NavUnreadBadge(label: badgeLabel),
+              ),
+          ],
+        ),
+      );
     }
 
     return AppPressable(
@@ -947,16 +890,17 @@ class _NavButton extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: <Widget>[
                     buildNavIcon(),
-                    const SizedBox(height: 2),
+                    SizedBox(height: responsive.scaled(1)),
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
                         label,
                         maxLines: 1,
+                        softWrap: false,
                         style: TextStyle(
                           color: foreground,
                           fontSize: labelFontSize,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                           height: 1,
                         ),
                       ),
@@ -964,6 +908,44 @@ class _NavButton extends StatelessWidget {
                   ],
                 )
               : Center(child: buildNavIcon()),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavUnreadBadge extends StatelessWidget {
+  const _NavUnreadBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Container(
+      key: const Key('mobile-messages-unread-badge'),
+      constraints: BoxConstraints(
+        minWidth: responsive.scaled(17),
+        minHeight: responsive.scaled(16),
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.scaled(label.length > 1 ? 5 : 4),
+        vertical: responsive.scaled(1.5),
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE5484D),
+        borderRadius: BorderRadius.circular(AwikiMeRadii.pill),
+        border: Border.all(color: CupertinoColors.white, width: 1.5),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        label,
+        maxLines: 1,
+        style: TextStyle(
+          color: CupertinoColors.white,
+          fontSize: responsive.scaled(9.5),
+          fontWeight: FontWeight.w700,
+          height: 1,
         ),
       ),
     );

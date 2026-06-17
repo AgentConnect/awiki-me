@@ -13,6 +13,7 @@ import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../chat/chat_page.dart';
 import '../chat/chat_provider.dart';
+import '../agents/agents_provider.dart';
 import '../agents/agent_status_indicator.dart';
 import '../agents/agent_visual_status.dart';
 import '../shared/awiki_me_design.dart';
@@ -30,7 +31,7 @@ import 'conversation_provider.dart';
 typedef ConversationSelectionHandler =
     Future<void> Function(ConversationSummary conversation);
 
-class ConversationListPage extends ConsumerWidget {
+class ConversationListPage extends ConsumerStatefulWidget {
   const ConversationListPage({
     super.key,
     this.onConversationSelected,
@@ -46,19 +47,36 @@ class ConversationListPage extends ConsumerWidget {
   final double bottomInset;
   final bool macStyle;
 
-  bool get _usesEmbeddedSelection => onConversationSelected != null;
+  @override
+  ConsumerState<ConversationListPage> createState() =>
+      _ConversationListPageState();
+}
+
+class _ConversationListPageState extends ConsumerState<ConversationListPage> {
+  bool get _usesEmbeddedSelection => widget.onConversationSelected != null;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(ref.read(agentsProvider.notifier).ensureLoaded());
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(conversationListProvider);
     final composerDrafts = ref.watch(chatComposerDraftsProvider);
     final responsive = context.awikiResponsive;
-    if (macStyle && responsive.isMacDesktop) {
+    if (widget.macStyle && responsive.isMacDesktop) {
       return _MacConversationList(
         conversations: state.conversations,
         composerDrafts: composerDrafts,
-        selectedThreadId: selectedThreadId,
-        bottomInset: bottomInset,
+        selectedThreadId: widget.selectedThreadId,
+        bottomInset: widget.bottomInset,
         onRefresh: () => ref.read(conversationListProvider.notifier).refresh(),
         onOpen: (item) => _openConversation(context, ref, item),
         onDelete: (item) => _deleteConversationFromRecents(context, ref, item),
@@ -78,9 +96,9 @@ class ConversationListPage extends ConsumerWidget {
       child: _ConversationRefreshView(
         conversations: state.conversations,
         composerDrafts: composerDrafts,
-        selectedThreadId: selectedThreadId,
-        embedded: embedded,
-        bottomInset: bottomInset,
+        selectedThreadId: widget.selectedThreadId,
+        embedded: widget.embedded,
+        bottomInset: widget.bottomInset,
         onRefresh: () => ref.read(conversationListProvider.notifier).refresh(),
         onOpen: (item) => _openConversation(context, ref, item),
         onDelete: (item) => _deleteConversationFromRecents(context, ref, item),
@@ -101,7 +119,7 @@ class ConversationListPage extends ConsumerWidget {
       return;
     }
     if (_usesEmbeddedSelection) {
-      await onConversationSelected?.call(item);
+      await widget.onConversationSelected?.call(item);
       return;
     }
     await AppNavigator.push(context, (_) => ChatPage(conversation: item));
@@ -763,7 +781,7 @@ class _ConversationRow extends StatelessWidget {
         selectedBackgroundColor: theme.subtleSurface,
         border: Border(bottom: BorderSide(color: theme.border)),
         padding: responsive.scaledInsets(
-          const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+          const EdgeInsets.fromLTRB(10, 14, 14, 14),
         ),
         child: Row(
           children: <Widget>[
@@ -836,47 +854,78 @@ class _ConversationRow extends StatelessWidget {
                 ],
               ),
             ),
-            SizedBox(width: responsive.spacing(10)),
-            SizedBox(
-              width: responsive.scaled(58),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: <Widget>[
-                  Text(
-                    timeLabel,
-                    style: AwikiMeTextStyles.meta.copyWith(
-                      fontSize: responsive.metaSm,
-                      letterSpacing: 0,
+            SizedBox(width: responsive.spacing(8)),
+            Padding(
+              key: const Key('conversation-row-right-meta'),
+              padding: EdgeInsets.only(right: responsive.scaled(2)),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minWidth: responsive.scaled(58),
+                  maxWidth: responsive.scaled(90),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      timeLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: false,
+                      textAlign: TextAlign.right,
+                      style: AwikiMeTextStyles.meta.copyWith(
+                        fontSize: responsive.metaSm,
+                        letterSpacing: 0,
+                      ),
                     ),
-                  ),
-                  if (agentStatus != null) ...<Widget>[
-                    SizedBox(height: responsive.spacing(7)),
-                    AgentStatusDot(
-                      status: agentStatus!,
-                      size: responsive.scaled(8),
-                    ),
+                    if (agentStatus != null || unreadCount > 0) ...<Widget>[
+                      SizedBox(height: responsive.spacing(7)),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: <Widget>[
+                          if (agentStatus != null)
+                            AgentStatusDot(
+                              status: agentStatus!,
+                              size: responsive.scaled(8),
+                            ),
+                          if (agentStatus != null && unreadCount > 0)
+                            SizedBox(width: responsive.spacing(6)),
+                          if (unreadCount > 0)
+                            Container(
+                              key: const Key('conversation-row-unread-badge'),
+                              constraints: BoxConstraints(
+                                minWidth: responsive.scaled(20),
+                              ),
+                              padding: responsive.scaledInsets(
+                                const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 3,
+                                ),
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.primary,
+                                borderRadius: BorderRadius.circular(
+                                  AwikiMeRadii.pill,
+                                ),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                unreadCount > 999 ? '999+' : '$unreadCount',
+                                maxLines: 1,
+                                style: TextStyle(
+                                  fontSize: responsive.metaSm,
+                                  color: theme.primaryForeground,
+                                  fontWeight: FontWeight.w500,
+                                  height: 1,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
                   ],
-                  if (unreadCount > 0) ...<Widget>[
-                    SizedBox(height: responsive.spacing(8)),
-                    Container(
-                      padding: responsive.scaledInsets(
-                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                      ),
-                      decoration: BoxDecoration(
-                        color: theme.primary,
-                        borderRadius: BorderRadius.circular(AwikiMeRadii.pill),
-                      ),
-                      child: Text(
-                        unreadCount > 999 ? '999+' : '$unreadCount',
-                        style: TextStyle(
-                          fontSize: responsive.metaSm,
-                          color: theme.primaryForeground,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
+                ),
               ),
             ),
           ],

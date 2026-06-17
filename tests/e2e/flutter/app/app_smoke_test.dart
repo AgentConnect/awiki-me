@@ -9,6 +9,7 @@ import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show Key, Size;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -81,6 +82,8 @@ void main() {
   testWidgets('AwikiMeApp authenticated smoke opens profile and settings', (
     tester,
   ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1200, 840));
     const session = SessionIdentity(
       did: 'did:test:me',
       credentialName: 'default',
@@ -90,40 +93,48 @@ void main() {
     );
     final harness = createFakeAwikiMeAppHarness(session: session);
 
-    await tester.pumpWidget(
-      AwikiMeApp(
-        bootstrap: harness.bootstrap,
-        providerOverrides: harness.providerOverrides,
-      ),
-    );
-    await _pumpSmokeFrame(tester);
+    try {
+      await tester.pumpWidget(
+        AwikiMeApp(
+          bootstrap: harness.bootstrap,
+          providerOverrides: harness.providerOverrides,
+        ),
+      );
+      await _pumpSmokeFrame(tester);
 
-    expect(find.byType(AppShell), findsOneWidget);
+      expect(find.byType(AppShell), findsOneWidget);
 
-    await _tapFirstFound(tester, <Finder>[
-      find.byKey(const Key('mac-me-rail-avatar')),
-      find.bySemanticsLabel('我'),
-      find.text('我'),
-    ]);
-    await _pumpSmokeFrame(tester);
+      await _tapFirstFound(tester, <Finder>[
+        find.bySemanticsIdentifier('e2e-profile-tab'),
+        find.byKey(const Key('mac-me-rail-avatar')),
+        find.bySemanticsLabel('我'),
+        find.text('我'),
+      ]);
+      await _pumpSmokeFrame(tester);
 
-    expect(find.text('Smoke test profile.'), findsOneWidget);
+      expect(find.text('Smoke test profile.'), findsOneWidget);
 
-    await _tapFirstFound(tester, <Finder>[
-      find.bySemanticsLabel('消息'),
-      find.text('消息'),
-    ]);
-    await _pumpSmokeFrame(tester);
-    await _tapFirstFound(tester, <Finder>[
-      find.bySemanticsLabel('设置'),
-      find.text('设置'),
-    ]);
-    await _pumpSmokeFrame(tester);
+      await _tapFirstFound(tester, <Finder>[
+        find.bySemanticsIdentifier('e2e-messages-tab'),
+        find.bySemanticsLabel('消息'),
+        find.text('消息'),
+      ]);
+      await _pumpSmokeFrame(tester);
+      await _tapFirstFound(tester, <Finder>[
+        find.bySemanticsIdentifier('e2e-settings-tab'),
+        find.bySemanticsLabel('设置'),
+        find.text('设置'),
+      ]);
+      await _pumpSmokeFrame(tester);
 
-    expect(find.byType(SettingsPage), findsOneWidget);
-    expect(find.text('设置'), findsWidgets);
-    expect(find.text('语言'), findsOneWidget);
-    expect(find.text('导出身份凭证'), findsOneWidget);
+      expect(find.byType(SettingsPage), findsOneWidget);
+      expect(find.text('设置'), findsWidgets);
+      expect(find.text('语言'), findsOneWidget);
+      expect(find.text('导出身份凭证'), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+      await tester.binding.setSurfaceSize(null);
+    }
   });
 
   testWidgets(
@@ -195,56 +206,60 @@ void main() {
         ),
       ];
 
-      addTearDown(() async {
-        await tester.binding.setSurfaceSize(null);
-      });
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       await tester.binding.setSurfaceSize(const Size(1600, 960));
-
-      await tester.pumpWidget(
-        AwikiMeApp(
-          bootstrap: harness.bootstrap,
-          providerOverrides: <Override>[
-            ...harness.providerOverrides,
-            conversationListProvider.overrideWith(
-              (ref) => _StaticConversationListController(
-                ref,
-                <ConversationSummary>[conversation],
+      try {
+        await tester.pumpWidget(
+          AwikiMeApp(
+            bootstrap: harness.bootstrap,
+            providerOverrides: <Override>[
+              ...harness.providerOverrides,
+              conversationListProvider.overrideWith(
+                (ref) => _StaticConversationListController(
+                  ref,
+                  <ConversationSummary>[conversation],
+                ),
               ),
-            ),
-          ],
-        ),
-      );
-      await tester.pumpAndSettle();
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
 
-      expect(find.byType(AppShell), findsOneWidget);
-      expect(find.text('最近会话'), findsOneWidget);
-      await tester.tap(find.text('Hermes UI').first);
-      await tester.pumpAndSettle();
+        expect(find.byType(AppShell), findsOneWidget);
+        expect(find.text('最近会话'), findsOneWidget);
+        await tester.tap(find.text('Hermes UI').first);
+        await tester.pumpAndSettle();
 
-      expect(find.text('会话信息'), findsNothing);
-      expect(
-        find.byKey(const Key('chat-conversation-info-button')),
-        findsOneWidget,
-      );
+        expect(find.text('会话信息'), findsNothing);
+        expect(
+          find.byKey(const Key('chat-conversation-info-button')),
+          findsOneWidget,
+        );
 
-      await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
-      await tester.pump();
-      expect(find.text('会话信息'), findsOneWidget);
+        await tester.tap(
+          find.byKey(const Key('chat-conversation-info-button')),
+        );
+        await tester.pump();
+        expect(find.text('会话信息'), findsOneWidget);
 
-      await tester.tap(find.text('身份卡').first);
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('身份卡').first);
+        await tester.pumpAndSettle();
 
-      expect(find.text('智能体信息'), findsOneWidget);
-      expect(find.text('Runtime Agent'), findsOneWidget);
-      expect(find.text('Agent 收件箱'), findsOneWidget);
-      expect(
-        find.byKey(const Key('peer-info-dialog-did-value')),
-        findsOneWidget,
-      );
+        expect(find.text('智能体信息'), findsOneWidget);
+        expect(find.text('Runtime Agent'), findsOneWidget);
+        expect(find.text('Agent 收件箱'), findsOneWidget);
+        expect(
+          find.byKey(const Key('peer-info-dialog-did-value')),
+          findsOneWidget,
+        );
 
-      await tester.tap(find.text('Agent 收件箱'));
-      await tester.pump();
-      expect(find.byKey(const Key('peer-info-agent-inbox')), findsOneWidget);
+        await tester.tap(find.text('Agent 收件箱'));
+        await tester.pump();
+        expect(find.byKey(const Key('peer-info-agent-inbox')), findsOneWidget);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+        await tester.binding.setSurfaceSize(null);
+      }
     },
   );
 }
