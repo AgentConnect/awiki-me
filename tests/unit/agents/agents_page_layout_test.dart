@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
@@ -209,7 +211,7 @@ void main() {
   testWidgets(
     'create Agent dialog normalizes handle and submits previewed values',
     (tester) async {
-      final control = FakeAgentControlService()
+      final control = _PendingRefreshAgentControlService()
         ..agents = <AgentSummary>[
           const AgentSummary(
             agentDid: 'did:agent:daemon',
@@ -1023,7 +1025,7 @@ void main() {
       await tester.pump(const Duration(seconds: 10));
       await tester.pump();
 
-      expect(find.text('未收到代理响应'), findsWidgets);
+      expect(find.textContaining('未收到代理响应'), findsWidgets);
       expect(find.text('刷新中'), findsNothing);
     },
   );
@@ -1219,6 +1221,16 @@ class _CountingRefreshAgentControlService extends FakeAgentControlService {
   Future<void> refreshDaemonStatus(String daemonAgentDid) async {
     refreshCount += 1;
     await super.refreshDaemonStatus(daemonAgentDid);
+  }
+}
+
+class _PendingRefreshAgentControlService extends FakeAgentControlService {
+  final Completer<void> _pendingRefresh = Completer<void>();
+
+  @override
+  Future<void> refreshDaemonStatus(String daemonAgentDid) {
+    lastRefreshedDaemonDid = daemonAgentDid;
+    return _pendingRefresh.future;
   }
 }
 

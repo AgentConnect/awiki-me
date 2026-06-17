@@ -364,6 +364,7 @@ class _MacDesktopRail extends StatelessWidget {
                         activeIcon: CupertinoIcons.gear_alt_fill,
                         inactiveIcon: CupertinoIcons.gear_alt,
                         label: '设置',
+                        semanticsIdentifier: 'e2e-settings-tab',
                         selected: currentIndex == _macSettingsTabIndex,
                         compact: compact,
                         onTap: onOpenSettings,
@@ -433,6 +434,7 @@ class _MacDesktopRailItem extends StatelessWidget {
     required this.compact,
     required this.onTap,
     this.badge,
+    this.semanticsIdentifier,
   });
 
   final IconData activeIcon;
@@ -442,6 +444,7 @@ class _MacDesktopRailItem extends StatelessWidget {
   final bool compact;
   final VoidCallback onTap;
   final String? badge;
+  final String? semanticsIdentifier;
 
   @override
   Widget build(BuildContext context) {
@@ -453,6 +456,7 @@ class _MacDesktopRailItem extends StatelessWidget {
     return AppPressable(
       onTap: onTap,
       semanticLabel: label,
+      semanticsIdentifier: semanticsIdentifier,
       selected: selected,
       borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
       pressedScale: 0.98,
@@ -575,6 +579,7 @@ class _MacRailAvatar extends StatelessWidget {
     return AppPressable(
       onTap: onTap,
       semanticLabel: '我',
+      semanticsIdentifier: 'e2e-profile-tab',
       selected: selected,
       scaleOnPress: true,
       pressedScale: 0.96,
