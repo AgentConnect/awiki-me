@@ -76,8 +76,10 @@ void main() {
           (candidate) => candidate.id == 'member:did:agent:hermes',
         );
         expect(
-          candidates.where((candidate) => candidate.id.startsWith('selector:')),
-          isEmpty,
+          candidates
+              .where((candidate) => candidate.id.startsWith('selector:'))
+              .map((candidate) => candidate.surface),
+          <String>['@所有人', '@所有人类', '@所有智能体'],
         );
         expect(human.enabled, isTrue);
         expect(human.badge, '用户');
@@ -113,6 +115,55 @@ void main() {
         expect(member.target.handle, 'hermes1');
         expect(member.target.displayName, 'Hermes One');
         expect(member.target.kind, ChatMentionTargetKind.agent);
+      },
+    );
+
+    test('empty query keeps group selector shortcuts before members', () {
+      final candidates =
+          ChatMentionCandidate.forGroupMembers(const <GroupMemberSummary>[
+            GroupMemberSummary(
+              userId: 'did:wba:awiki.info:u:zhuocheng',
+              did: 'did:wba:awiki.info:u:zhuocheng',
+              handle: 'zhuocheng',
+              role: 'member',
+              displayName: 'Zhuocheng',
+              subjectType: GroupMemberSubjectType.human,
+            ),
+          ]);
+
+      expect(candidates.take(3).map((candidate) => candidate.surface), [
+        '@所有人',
+        '@所有人类',
+        '@所有智能体',
+      ]);
+      expect(candidates.take(3).map((candidate) => candidate.badge), [
+        '群',
+        '人类',
+        '智能体',
+      ]);
+    });
+
+    test(
+      'human WBA DID remains human even when handle contains no type data',
+      () {
+        final candidates =
+            ChatMentionCandidate.forGroupMembers(const <GroupMemberSummary>[
+              GroupMemberSummary(
+                userId: 'did:wba:awiki.info:user:zhuocheng:e1',
+                did: 'did:wba:awiki.info:user:zhuocheng:e1',
+                handle: 'zhuocheng',
+                role: 'member',
+                displayName: 'zhuocheng',
+              ),
+            ], query: 'zhuocheng');
+
+        final member = candidates.singleWhere(
+          (candidate) => candidate.id.startsWith('member:'),
+        );
+        expect(member.enabled, isTrue);
+        expect(member.badge, '用户');
+        expect(member.target.kind, ChatMentionTargetKind.human);
+        expect(member.surface, '@zhuocheng');
       },
     );
 
@@ -182,8 +233,8 @@ void main() {
       final candidates =
           ChatMentionCandidate.forGroupMembers(const <GroupMemberSummary>[
             GroupMemberSummary(
-              userId: 'did:wba:awiki.info:u:unknown',
-              did: 'did:wba:awiki.info:u:unknown',
+              userId: 'local-member-without-did',
+              did: 'local-member-without-did',
               handle: 'unknown',
               role: 'member',
             ),

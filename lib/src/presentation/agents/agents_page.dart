@@ -709,6 +709,9 @@ class _AgentDetailPane extends StatelessWidget {
       hasPendingTurn: pendingAgentDids.contains(agent.agentDid),
       isPendingUpgrade: isUpgrading,
     );
+    final statusQueryError = agent.isDaemon
+        ? state.statusQueryErrors[agent.agentDid]
+        : null;
     return SafeArea(
       bottom: false,
       child: SelectionArea(
@@ -802,6 +805,10 @@ class _AgentDetailPane extends StatelessWidget {
             if (state.error != null) ...<Widget>[
               SizedBox(height: responsive.spacing(10)),
               _AgentErrorBanner(message: state.error!),
+            ],
+            if (statusQueryError != null) ...<Widget>[
+              SizedBox(height: responsive.spacing(10)),
+              _AgentErrorBanner(message: statusQueryError),
             ],
             SizedBox(height: responsive.spacing(18)),
             if (agent.isRuntime && agent.recentRuns.isNotEmpty) ...<Widget>[

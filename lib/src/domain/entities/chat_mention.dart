@@ -139,7 +139,7 @@ class ChatMentionCandidate {
     final did = member.did.trim();
     final handle = _mentionHandle(member.handle);
     final displayName = _mentionDisplayName(member.displayName);
-    final subjectType = member.subjectType;
+    final subjectType = _effectiveGroupMemberSubjectType(member);
     final label = _memberMentionLabel(
       subjectType: subjectType,
       handle: handle,
@@ -194,6 +194,48 @@ class ChatMentionCandidate {
     );
   }
 
+  factory ChatMentionCandidate.forGroupSelector(ChatMentionSelector selector) {
+    final surface = switch (selector) {
+      ChatMentionSelector.all => '@所有人',
+      ChatMentionSelector.humans => '@所有人类',
+      ChatMentionSelector.agents => '@所有智能体',
+    };
+    final title = switch (selector) {
+      ChatMentionSelector.all => '所有人',
+      ChatMentionSelector.humans => '所有人类',
+      ChatMentionSelector.agents => '所有智能体',
+    };
+    final subtitle = switch (selector) {
+      ChatMentionSelector.all => '提醒群内所有成员',
+      ChatMentionSelector.humans => '只提醒群内人类成员',
+      ChatMentionSelector.agents => '提醒群内智能体',
+    };
+    final badge = switch (selector) {
+      ChatMentionSelector.all => '群',
+      ChatMentionSelector.humans => '人类',
+      ChatMentionSelector.agents => '智能体',
+    };
+    return ChatMentionCandidate(
+      id: 'selector:${selector.wireValue}',
+      surface: surface,
+      title: title,
+      subtitle: subtitle,
+      badge: badge,
+      target: ChatMentionTargetDraft.groupSelector(selector),
+      searchTerms: <String>[
+        surface,
+        title,
+        subtitle,
+        selector.wireValue,
+        switch (selector) {
+          ChatMentionSelector.all => 'all everyone 全体 全部 所有人',
+          ChatMentionSelector.humans => 'humans human user users 人 人类 用户',
+          ChatMentionSelector.agents => 'agents agent bot bots 智能体 代理',
+        },
+      ],
+    );
+  }
+
   bool matchesQuery(String query) {
     final normalized = _normalizeSearch(query);
     if (normalized.isEmpty) {
@@ -213,6 +255,9 @@ class ChatMentionCandidate {
     String query = '',
   }) {
     final candidates = <ChatMentionCandidate>[
+      ChatMentionCandidate.forGroupSelector(ChatMentionSelector.all),
+      ChatMentionCandidate.forGroupSelector(ChatMentionSelector.humans),
+      ChatMentionCandidate.forGroupSelector(ChatMentionSelector.agents),
       for (final member in members)
         if (member.membershipStatus == GroupMemberMembershipStatus.active)
           ChatMentionCandidate.fromGroupMember(member),
@@ -792,6 +837,29 @@ String _memberSubtitle(GroupMemberSummary member) {
     if (member.did.trim().isNotEmpty) _compactDid(member.did.trim()),
   ];
   return fields.isEmpty ? '群成员' : fields.join(' · ');
+}
+
+GroupMemberSubjectType _effectiveGroupMemberSubjectType(
+  GroupMemberSummary member,
+) {
+  if (member.subjectType != GroupMemberSubjectType.unknown) {
+    return member.subjectType;
+  }
+  return _inferGroupMemberSubjectType(did: member.did);
+}
+
+GroupMemberSubjectType _inferGroupMemberSubjectType({required String did}) {
+  final normalizedDid = did.trim().toLowerCase();
+  if (normalizedDid.startsWith('did:agent:') ||
+      normalizedDid.contains(':agent:') ||
+      normalizedDid.contains(':agents:') ||
+      normalizedDid.contains(':runtime_agent:')) {
+    return GroupMemberSubjectType.agent;
+  }
+  if (normalizedDid.startsWith('did:')) {
+    return GroupMemberSubjectType.human;
+  }
+  return GroupMemberSubjectType.unknown;
 }
 
 String _memberMentionLabel({

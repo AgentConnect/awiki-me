@@ -53,10 +53,11 @@ Map<String, Object?> runtimeTaskSubmitPayload({
 Map<String, Object?> agentStatusQueryPayload({
   bool includeRuntimes = true,
   bool includeDiagnostics = true,
+  String? commandId,
 }) {
   return <String, Object?>{
     'schema': AgentControlPayloads.commandSchema,
-    'command_id': agentCommandId(),
+    'command_id': commandId ?? agentCommandId(),
     'command': 'agent.status.query',
     'target_agent_kind': 'daemon',
     'args': <String, Object?>{

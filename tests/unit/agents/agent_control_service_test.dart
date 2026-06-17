@@ -46,19 +46,39 @@ void main() {
     },
   );
 
-  test('refreshDaemonStatus sends throttled query payload shape', () async {
-    final messages = _MessagesStub();
-    final service = DefaultAgentControlService(
-      inventory: _InventoryStub(),
-      messages: messages,
-    );
+  test(
+    'refreshDaemonStatus sends unique query payload for each refresh',
+    () async {
+      final messages = _MessagesStub();
+      final service = DefaultAgentControlService(
+        inventory: _InventoryStub(),
+        messages: messages,
+      );
 
-    await service.refreshDaemonStatus('did:agent:daemon');
+      await service.refreshDaemonStatus('did:agent:daemon');
 
-    expect(messages.lastPayload?['command'], 'agent.status.query');
-    expect(messages.lastSecure, isFalse);
-    expect(messages.lastIdempotencyKey, 'agent-status:did:agent:daemon');
-  });
+      expect(messages.lastPayload?['command'], 'agent.status.query');
+      expect(messages.lastSecure, isFalse);
+      final firstCommandId = messages.lastPayload?['command_id'];
+      final firstIdempotencyKey = messages.lastIdempotencyKey;
+      expect(firstCommandId, isA<String>());
+      expect(
+        firstIdempotencyKey,
+        'agent-status:did:agent:daemon:$firstCommandId',
+      );
+
+      await Future<void>.delayed(const Duration(microseconds: 1));
+      await service.refreshDaemonStatus('did:agent:daemon');
+
+      final secondCommandId = messages.lastPayload?['command_id'];
+      expect(secondCommandId, isA<String>());
+      expect(secondCommandId, isNot(firstCommandId));
+      expect(
+        messages.lastIdempotencyKey,
+        'agent-status:did:agent:daemon:$secondCommandId',
+      );
+    },
+  );
 
   test('deleteDaemon sends daemon.delete control payload', () async {
     final messages = _MessagesStub();

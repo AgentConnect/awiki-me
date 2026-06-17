@@ -146,10 +146,11 @@ class DefaultAgentControlService implements AgentControlService {
 
   @override
   Future<void> refreshDaemonStatus(String daemonAgentDid) {
+    final commandId = agentCommandId('cmd_agent_status');
     return _sendDaemonPayload(
       daemonAgentDid,
-      agentStatusQueryPayload(),
-      idempotencyKey: 'agent-status:$daemonAgentDid',
+      agentStatusQueryPayload(commandId: commandId),
+      idempotencyKey: 'agent-status:$daemonAgentDid:$commandId',
     );
   }
 

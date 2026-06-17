@@ -260,6 +260,33 @@ void main() {
     },
   );
 
+  test('refresh failure records daemon-scoped status error only', () async {
+    final control =
+        _FailingRefreshAgentControlService(StateError('message send failed'))
+          ..agents = const <AgentSummary>[
+            AgentSummary(
+              agentDid: 'did:agent:daemon',
+              kind: AgentKind.daemon,
+              displayName: '代理 1',
+              activeState: 'active',
+              latest: AgentLatestStatus(status: 'ready'),
+            ),
+          ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+
+    await container
+        .read(agentsProvider.notifier)
+        .refreshDaemonStatus('did:agent:daemon');
+
+    final state = container.read(agentsProvider);
+    expect(state.error, isNull);
+    expect(state.pendingStatusQueryAtByDaemon, isEmpty);
+    expect(state.statusQueryErrors['did:agent:daemon'], '状态刷新请求发送失败，请稍后再试。');
+    expect(control.lastRefreshedDaemonDid, 'did:agent:daemon');
+  });
+
   test('runtime create result adds runtime agent under daemon', () async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[

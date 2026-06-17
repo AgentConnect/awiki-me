@@ -34,6 +34,7 @@ class AgentsState {
     this.loadingInvocationPolicies = const <String>{},
     this.savingInvocationPolicies = const <String>{},
     this.invocationPolicyErrors = const <String, String>{},
+    this.statusQueryErrors = const <String, String>{},
   });
 
   final List<AgentSummary> agents;
@@ -49,6 +50,7 @@ class AgentsState {
   final Set<String> loadingInvocationPolicies;
   final Set<String> savingInvocationPolicies;
   final Map<String, String> invocationPolicyErrors;
+  final Map<String, String> statusQueryErrors;
 
   AgentSummary? get selectedAgent {
     final selectedDid = selectedAgentDid;
@@ -113,6 +115,7 @@ class AgentsState {
     Set<String>? loadingInvocationPolicies,
     Set<String>? savingInvocationPolicies,
     Map<String, String>? invocationPolicyErrors,
+    Map<String, String>? statusQueryErrors,
   }) {
     return AgentsState(
       agents: agents ?? this.agents,
@@ -137,6 +140,7 @@ class AgentsState {
           savingInvocationPolicies ?? this.savingInvocationPolicies,
       invocationPolicyErrors:
           invocationPolicyErrors ?? this.invocationPolicyErrors,
+      statusQueryErrors: statusQueryErrors ?? this.statusQueryErrors,
     );
   }
 }
@@ -228,6 +232,10 @@ class AgentsController extends StateNotifier<AgentsState> {
           ...state.pendingStatusQueryAtByDaemon,
           daemonDid: now,
         },
+        statusQueryErrors: _withoutStringKey(
+          state.statusQueryErrors,
+          daemonDid,
+        ),
         clearError: true,
       );
       _scheduleStatusQueryTimeout(daemonDid);
@@ -250,7 +258,10 @@ class AgentsController extends StateNotifier<AgentsState> {
         state = state.copyWith(
           isActing: false,
           pendingStatusQueryAtByDaemon: nextPending,
-          error: _agentErrorMessage(error),
+          statusQueryErrors: <String, String>{
+            ...state.statusQueryErrors,
+            daemonDid: _agentStatusRefreshErrorMessage(error),
+          },
         );
       } else if (!identical(nextPending, state.pendingStatusQueryAtByDaemon)) {
         state = state.copyWith(pendingStatusQueryAtByDaemon: nextPending);
@@ -555,6 +566,9 @@ class AgentsController extends StateNotifier<AgentsState> {
       selectedAgentDid: _nextSelection(merged),
       pendingStatusQueryAtByDaemon: nextPending,
       pendingDaemonUpgrades: nextPendingDaemonUpgrades,
+      statusQueryErrors: daemonDid == null
+          ? state.statusQueryErrors
+          : _withoutStringKey(state.statusQueryErrors, daemonDid),
       seenControlEventIds: eventId == null
           ? state.seenControlEventIds
           : _rememberControlEventId(state.seenControlEventIds, eventId),
@@ -589,7 +603,10 @@ class AgentsController extends StateNotifier<AgentsState> {
           state.pendingStatusQueryAtByDaemon,
           daemonDid,
         ),
-        error: '未收到代理响应',
+        statusQueryErrors: <String, String>{
+          ...state.statusQueryErrors,
+          daemonDid: '未收到代理响应，请稍后再刷新状态。',
+        },
       );
     });
   }
@@ -1238,6 +1255,32 @@ String _agentErrorMessage(Object error) {
     return '暂时无法连接后端服务，请检查网络或服务地址后重试。';
   }
   return '智能体信息暂时无法加载，请稍后重试。';
+}
+
+String _agentStatusRefreshErrorMessage(Object error) {
+  final raw = error.toString();
+  final normalized = raw.toLowerCase();
+  final compact = normalized.replaceAll(RegExp(r'\s+'), '');
+  if (normalized.contains('missing or invalid authorization header') ||
+      compact.contains('http401') ||
+      normalized.contains('missing authentication headers') ||
+      normalized.contains('invalid token') ||
+      normalized.contains('empty token') ||
+      normalized.contains('current user did is required') ||
+      normalized.contains('current user did is not bound') ||
+      normalized.contains('controller_scope_mismatch')) {
+    return '登录状态已失效，请重新登录后再刷新代理状态。';
+  }
+  if (normalized.contains('timeoutexception') ||
+      normalized.contains('timed out')) {
+    return '刷新状态超时，请稍后再试。';
+  }
+  if (normalized.contains('connection refused') ||
+      normalized.contains('failed host lookup') ||
+      normalized.contains('network is unreachable')) {
+    return '暂时无法连接后端服务，请检查网络或服务地址后再刷新状态。';
+  }
+  return '状态刷新请求发送失败，请稍后再试。';
 }
 
 final agentsProvider = StateNotifierProvider<AgentsController, AgentsState>(
