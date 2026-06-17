@@ -513,6 +513,19 @@ void main() {
     expect(member.handle, 'hermes');
   });
 
+  test('group member keeps human subject type from WBA human DID', () {
+    final member = mapper.groupMemberFromCore(
+      const core.GroupMember(
+        did: 'did:wba:anpclaw.com:zhuocheng:e1_human',
+        handle: 'zhuocheng',
+        role: 'member',
+      ),
+    );
+
+    expect(member.subjectType.name, 'human');
+    expect(member.handle, 'zhuocheng');
+  });
+
   test('group member derives short agent handle from WBA agent DID', () {
     final member = mapper.groupMemberFromCore(
       const core.GroupMember(
