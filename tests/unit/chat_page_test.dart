@@ -1419,6 +1419,101 @@ void main() {
     expect(find.text('智能体正在处理...'), findsOneWidget);
   });
 
+  testWidgets('发送给远端 Agent 私聊时显示处理中提示', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:remote-agent-processing',
+      displayName: '远端智能体',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:wba:awiki.info:agent:runtime:hermes:e1_agent',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+
+    await tester.enterText(find.byType(CupertinoTextField), '请处理');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('请处理'), findsOneWidget);
+    expect(find.text('智能体正在处理...'), findsOneWidget);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    container
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(
+          ChatMessage(
+            localId: 'remote-agent-reply',
+            remoteId: 'remote-agent-reply',
+            threadId: conversation.threadId,
+            senderDid: conversation.targetDid!,
+            receiverDid: session.did,
+            content: '处理完成',
+            createdAt: DateTime.now(),
+            isMine: false,
+            sendState: MessageSendState.sent,
+          ),
+        );
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('处理完成'), findsOneWidget);
+    expect(find.text('智能体正在处理...'), findsNothing);
+  });
+
+  testWidgets('发送给普通用户私聊时不显示智能体处理中提示', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:human-no-agent-processing',
+      displayName: '普通用户',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:wba:awiki.info:user:bob',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+
+    await tester.enterText(find.byType(CupertinoTextField), '你好');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('你好'), findsOneWidget);
+    expect(find.text('智能体正在处理...'), findsNothing);
+  });
+
   testWidgets('文本消息内容支持系统原生选中复制', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(

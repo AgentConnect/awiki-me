@@ -161,6 +161,11 @@ final conversationPeerClassificationProvider =
           localRuntimeAgent: localRuntime,
         );
       }
+      if (conversationTargetDidLooksLikeAgent(targetDid)) {
+        return ConversationPeerClassification.agent(
+          agentKind: _agentKindFromDid(targetDid),
+        );
+      }
 
       try {
         final identity = await ref
@@ -185,6 +190,29 @@ AgentSummary? _localRuntimeAgentFor(
     if (agent.isRuntime && agent.agentDid == targetDid) {
       return agent;
     }
+  }
+  return null;
+}
+
+bool conversationTargetDidLooksLikeAgent(String? did) {
+  final normalizedDid = did?.trim().toLowerCase();
+  if (normalizedDid == null || normalizedDid.isEmpty) {
+    return false;
+  }
+  return normalizedDid.startsWith('did:agent:') ||
+      normalizedDid.contains(':agent:') ||
+      normalizedDid.contains(':agents:') ||
+      normalizedDid.contains(':runtime_agent:');
+}
+
+PeerAgentKind? _agentKindFromDid(String did) {
+  final normalizedDid = did.trim().toLowerCase();
+  if (normalizedDid.contains(':daemon:')) {
+    return PeerAgentKind.daemon;
+  }
+  if (normalizedDid.contains(':runtime:') ||
+      normalizedDid.contains(':runtime_agent:')) {
+    return PeerAgentKind.runtime;
   }
   return null;
 }

@@ -439,7 +439,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                                       widget.conversation,
                                                   message: message,
                                                   expectedAgentReplyDid:
-                                                      runtimeAgent?.agentDid,
+                                                      _expectedAgentReplyDidForConversation(
+                                                        currentConversation,
+                                                        runtimeAgent:
+                                                            runtimeAgent,
+                                                        classification:
+                                                            peerClassification,
+                                                      ),
                                                 );
                                           }
                                         : null)
@@ -500,7 +506,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
             disabledReason: isDeletedAgentConversation
                 ? '智能体已删除，无法继续发送消息'
                 : groupSendDisabledReason,
-            onSend: () => _submitComposer(currentConversation),
+            onSend: () => _submitComposer(
+              currentConversation,
+              classification: peerClassification,
+            ),
             onAttach: () async {
               await _pickAndStageAttachment();
             },
@@ -617,7 +626,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
         .setAttachment(conversation, null);
   }
 
-  Future<void> _submitComposer(ConversationSummary conversation) async {
+  Future<void> _submitComposer(
+    ConversationSummary conversation, {
+    required ConversationPeerClassification classification,
+  }) async {
     if (conversation.isDeletedAgentConversation ||
         _groupSendDisabledReason(conversation) != null) {
       return;
@@ -642,10 +654,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
         _pendingAttachment = null;
       });
     }
-    final expectedAgentReplyDid = _runtimeAgentForConversation(
+    final expectedAgentReplyDid = _expectedAgentReplyDidForConversation(
       conversation,
-      ref.read(agentsProvider).agents,
-    )?.agentDid;
+      runtimeAgent: _runtimeAgentForConversation(
+        conversation,
+        ref.read(agentsProvider).agents,
+      ),
+      classification: classification,
+    );
     if (attachment != null) {
       await ref
           .read(chatThreadsProvider.notifier)
@@ -1172,6 +1188,29 @@ class _ChatViewState extends ConsumerState<ChatView> {
       }
     }
     return null;
+  }
+
+  String? _expectedAgentReplyDidForConversation(
+    ConversationSummary conversation, {
+    required AgentSummary? runtimeAgent,
+    required ConversationPeerClassification classification,
+  }) {
+    if (conversation.isGroup) {
+      return null;
+    }
+    final localRuntimeDid = runtimeAgent?.agentDid.trim();
+    if (localRuntimeDid != null && localRuntimeDid.isNotEmpty) {
+      return localRuntimeDid;
+    }
+    final targetDid = conversation.targetDid?.trim();
+    if (targetDid == null || targetDid.isEmpty) {
+      return null;
+    }
+    if (!classification.isAgent &&
+        !conversationTargetDidLooksLikeAgent(targetDid)) {
+      return null;
+    }
+    return targetDid;
   }
 
   String _agentProcessingAvatarSeed(
