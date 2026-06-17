@@ -29,7 +29,7 @@ void main() {
   });
 
   test('persists overlays drafts and preferences by owner', () async {
-    final store = AwikiProductLocalStoreSqlite();
+    final store = _store(databaseDir);
     final now = DateTime.utc(2026, 6, 15, 1, 2, 3);
 
     await store.upsertConversationOverlay(
@@ -151,7 +151,7 @@ void main() {
   });
 
   test('stores agent states by owner sorted by latest update', () async {
-    final store = AwikiProductLocalStoreSqlite();
+    final store = _store(databaseDir);
     final oldTime = DateTime.utc(2026, 6, 15, 1);
     final newTime = oldTime.add(const Duration(minutes: 5));
 
@@ -211,8 +211,7 @@ void main() {
   test(
     'upgrades version 1 product store with local agent states table',
     () async {
-      final path =
-          '${databaseDir.path}/${AwikiProductLocalStoreSqlite.databaseName}';
+      final path = _databasePath(databaseDir);
       final version1 = await databaseFactory.openDatabase(
         path,
         options: OpenDatabaseOptions(
@@ -222,7 +221,7 @@ void main() {
       );
       await version1.close();
 
-      final store = AwikiProductLocalStoreSqlite();
+      final store = _store(databaseDir);
       await store.saveAgentState(
         LocalAgentState(
           ownerDid: 'did:alice',
@@ -238,6 +237,48 @@ void main() {
       expect(states.single.valueJson, '{"state":"ready"}');
     },
   );
+
+  test('migrates legacy product store into configured app support path', () async {
+    final legacyPath =
+        '${databaseDir.path}/legacy/${AwikiProductLocalStoreSqlite.databaseName}';
+    final targetPath =
+        '${databaseDir.path}/support/awiki-me/product/${AwikiProductLocalStoreSqlite.databaseName}';
+    await Directory('${databaseDir.path}/legacy').create(recursive: true);
+    final legacyStore = AwikiProductLocalStoreSqlite(databasePath: legacyPath);
+    await legacyStore.saveAgentState(
+      LocalAgentState(
+        ownerDid: 'did:alice',
+        agentDid: 'did:agent',
+        valueJson: '{"state":"legacy"}',
+        updatedAt: DateTime.utc(2026, 6, 16),
+      ),
+    );
+
+    final store = AwikiProductLocalStoreSqlite(
+      databasePath: targetPath,
+      legacyDatabasePath: legacyPath,
+    );
+    final states = await store.loadAgentStates(ownerDid: 'did:alice');
+    await store.saveAgentState(
+      LocalAgentState(
+        ownerDid: 'did:alice',
+        agentDid: 'did:agent-2',
+        valueJson: '{"state":"new"}',
+        updatedAt: DateTime.utc(2026, 6, 17),
+      ),
+    );
+
+    expect(states, hasLength(1));
+    expect(states.single.valueJson, '{"state":"legacy"}');
+    expect(await File(targetPath).exists(), isTrue);
+    final targetRows = await AwikiProductLocalStoreSqlite(
+      databasePath: targetPath,
+    ).loadAgentStates(ownerDid: 'did:alice');
+    expect(targetRows.map((state) => state.agentDid), <String>[
+      'did:agent-2',
+      'did:agent',
+    ]);
+  });
 }
 
 Future<void> _createVersion1Schema(DatabaseExecutor db) async {
@@ -272,4 +313,12 @@ Future<void> _createVersion1Schema(DatabaseExecutor db) async {
       PRIMARY KEY (owner_did, key)
     )
   ''');
+}
+
+AwikiProductLocalStoreSqlite _store(Directory databaseDir) {
+  return AwikiProductLocalStoreSqlite(databasePath: _databasePath(databaseDir));
+}
+
+String _databasePath(Directory databaseDir) {
+  return '${databaseDir.path}/support/awiki-me/product/${AwikiProductLocalStoreSqlite.databaseName}';
 }

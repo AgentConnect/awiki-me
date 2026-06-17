@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../../application/models/product_local_models.dart';
@@ -8,12 +10,20 @@ import '../im_core/awiki_im_core_paths.dart';
 import 'sqflite_desktop_init.dart';
 
 class AwikiProductLocalStoreSqlite implements ProductLocalStore {
-  AwikiProductLocalStoreSqlite({Database? database}) : _database = database;
+  AwikiProductLocalStoreSqlite({
+    Database? database,
+    String? databasePath,
+    String? legacyDatabasePath,
+  }) : _database = database,
+       _databasePath = databasePath,
+       _legacyDatabasePath = legacyDatabasePath;
 
   static const String databaseName = 'awiki_me_product_store.db';
   static const int databaseVersion = 2;
 
   Database? _database;
+  final String? _databasePath;
+  final String? _legacyDatabasePath;
 
   Future<Database> get _db async {
     final existing = _database;
@@ -21,15 +31,15 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
       return existing;
     }
     ensureSqfliteDesktopInitialized();
-    final e2eRoot = awikiE2eAppStateRoot();
-    final base = e2eRoot == null
-        ? await getDatabasesPath()
-        : '$e2eRoot/support';
-    if (e2eRoot != null) {
-      await Directory(base).create(recursive: true);
+    final path = await _resolveDatabasePath();
+    try {
+      await _migrateLegacyDatabaseIfNeeded(path);
+    } catch (_) {
+      // Legacy cache migration is best-effort. A broken old cache must not
+      // prevent the current product store from opening at the new app path.
     }
     _database = await openDatabase(
-      '$base/$databaseName',
+      path,
       version: databaseVersion,
       onCreate: (db, _) => _createSchema(db),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -39,6 +49,62 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
       },
     );
     return _database!;
+  }
+
+  Future<String> _resolveDatabasePath() async {
+    final configured = _databasePath?.trim();
+    if (configured != null && configured.isNotEmpty) {
+      await Directory(p.dirname(configured)).create(recursive: true);
+      return configured;
+    }
+    final e2eRoot = awikiE2eAppStateRoot();
+    final base = e2eRoot == null
+        ? p.join(
+            (await getApplicationSupportDirectory()).path,
+            'awiki-me',
+            'product',
+          )
+        : p.join(e2eRoot, 'support', 'awiki-me', 'product');
+    await Directory(base).create(recursive: true);
+    return p.join(base, databaseName);
+  }
+
+  Future<void> _migrateLegacyDatabaseIfNeeded(String targetPath) async {
+    final targetFile = File(targetPath);
+    if (await targetFile.exists()) {
+      return;
+    }
+    final legacyPath = await _resolveLegacyDatabasePath();
+    if (legacyPath == null ||
+        p.equals(p.absolute(legacyPath), p.absolute(targetFile.path))) {
+      return;
+    }
+    final legacyFile = File(legacyPath);
+    if (!await legacyFile.exists()) {
+      return;
+    }
+    await targetFile.parent.create(recursive: true);
+    await _copyIfExists(legacyPath, targetPath);
+    for (final suffix in const <String>['-wal', '-shm', '-journal']) {
+      await _copyIfExists('$legacyPath$suffix', '$targetPath$suffix');
+    }
+  }
+
+  Future<String?> _resolveLegacyDatabasePath() async {
+    final configured = _legacyDatabasePath?.trim();
+    if (configured != null && configured.isNotEmpty) {
+      return configured;
+    }
+    final legacyBase = await getDatabasesPath();
+    return p.join(legacyBase, databaseName);
+  }
+
+  static Future<void> _copyIfExists(String from, String to) async {
+    final source = File(from);
+    if (!await source.exists()) {
+      return;
+    }
+    await source.copy(to);
   }
 
   static Future<void> _createSchema(DatabaseExecutor db) async {

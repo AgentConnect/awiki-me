@@ -161,20 +161,20 @@ class AgentsController extends StateNotifier<AgentsState> {
       final agents = _stableAgentOrder(
         await ref.read(agentControlServiceProvider).listAgents(),
       );
-      await _saveCache(cacheOwner, agents);
       state = state.copyWith(
         agents: agents,
         selectedAgentDid: _nextSelection(agents),
         isLoading: false,
         clearError: true,
       );
+      await _saveCacheBestEffort(cacheOwner, agents);
       final selectedAgent = state.selectedAgent;
       if (selectedAgent != null && selectedAgent.isRuntime) {
         unawaited(loadInvocationPolicy(selectedAgent.agentDid));
       }
       for (final daemon in agents.where((agent) => agent.isDaemon)) {
         if (_shouldAutoRefresh(daemon)) {
-          await refreshDaemonStatus(daemon.agentDid, fromAutoLoad: true);
+          unawaited(refreshDaemonStatus(daemon.agentDid, fromAutoLoad: true));
         }
       }
     } catch (error) {
@@ -231,24 +231,30 @@ class AgentsController extends StateNotifier<AgentsState> {
         clearError: true,
       );
       _scheduleStatusQueryTimeout(daemonDid);
+      state = state.copyWith(isActing: true, clearError: true);
     }
-    state = state.copyWith(isActing: true, clearError: true);
     try {
       await ref
           .read(agentControlServiceProvider)
           .refreshDaemonStatus(daemonDid);
-      state = state.copyWith(isActing: false, clearError: true);
+      if (!fromAutoLoad) {
+        state = state.copyWith(isActing: false, clearError: true);
+      }
     } catch (error) {
       _statusQueryTimeouts.remove(daemonDid)?.cancel();
       _statusQueryClearTimers.remove(daemonDid)?.cancel();
       final nextPending = fromAutoLoad
           ? state.pendingStatusQueryAtByDaemon
           : _withoutKey(state.pendingStatusQueryAtByDaemon, daemonDid);
-      state = state.copyWith(
-        isActing: false,
-        pendingStatusQueryAtByDaemon: nextPending,
-        error: fromAutoLoad ? state.error : _agentErrorMessage(error),
-      );
+      if (!fromAutoLoad) {
+        state = state.copyWith(
+          isActing: false,
+          pendingStatusQueryAtByDaemon: nextPending,
+          error: _agentErrorMessage(error),
+        );
+      } else if (!identical(nextPending, state.pendingStatusQueryAtByDaemon)) {
+        state = state.copyWith(pendingStatusQueryAtByDaemon: nextPending);
+      }
     }
   }
 
@@ -556,7 +562,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     );
     final session = ref.read(sessionProvider).session;
     if (session != null) {
-      unawaited(_saveCache(_agentCacheOwner(session), merged));
+      unawaited(_saveCacheBestEffort(_agentCacheOwner(session), merged));
     }
   }
 
@@ -679,9 +685,14 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<void> _loadCached(String ownerDid) async {
-    final cached = await ref
-        .read(productLocalStoreProvider)
-        .loadAgentStates(ownerDid: ownerDid);
+    final List<LocalAgentState> cached;
+    try {
+      cached = await ref
+          .read(productLocalStoreProvider)
+          .loadAgentStates(ownerDid: ownerDid);
+    } catch (_) {
+      return;
+    }
     if (cached.isEmpty) {
       return;
     }
@@ -708,6 +719,18 @@ class AgentsController extends StateNotifier<AgentsState> {
         agents: ordered,
         selectedAgentDid: _nextSelection(ordered),
       );
+    }
+  }
+
+  Future<void> _saveCacheBestEffort(
+    String ownerDid,
+    List<AgentSummary> agents,
+  ) async {
+    try {
+      await _saveCache(ownerDid, agents);
+    } catch (_) {
+      // Local cache is only a fast-start snapshot; remote inventory remains
+      // the source of truth for the Agent page.
     }
   }
 
@@ -1196,8 +1219,13 @@ String _agentErrorMessage(Object error) {
   final compact = normalized.replaceAll(RegExp(r'\s+'), '');
   if (normalized.contains('missing or invalid authorization header') ||
       compact.contains('http401') ||
+      normalized.contains('missing authentication headers') ||
       normalized.contains('invalid token') ||
-      normalized.contains('empty token')) {
+      normalized.contains('empty token') ||
+      normalized.contains('current user did is required') ||
+      normalized.contains('current user did is not bound') ||
+      normalized.contains('controller handle') ||
+      normalized.contains('controller_scope_mismatch')) {
     return '登录状态已失效，请重新登录后再查看智能体。';
   }
   if (normalized.contains('timeoutexception') ||

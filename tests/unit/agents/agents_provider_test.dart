@@ -1,4 +1,5 @@
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
@@ -139,6 +140,31 @@ void main() {
     await container.read(agentsProvider.notifier).load();
 
     expect(container.read(agentsProvider).error, '暂时无法连接后端服务，请检查网络或服务地址后重试。');
+  });
+
+  test('load ignores local cache read and write failures', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'registering'),
+        ),
+      ];
+    final container = _container(
+      control,
+      localStore: _FailingAgentStateStore(),
+    );
+    addTearDown(container.dispose);
+
+    await container.read(agentsProvider.notifier).load();
+    final state = container.read(agentsProvider);
+
+    expect(state.error, isNull);
+    expect(state.isLoading, isFalse);
+    expect(state.agents.map((agent) => agent.agentDid), ['did:agent:daemon']);
   });
 
   test(
@@ -1120,5 +1146,19 @@ class _FailingRefreshAgentControlService extends FakeAgentControlService {
   Future<void> refreshDaemonStatus(String daemonAgentDid) async {
     lastRefreshedDaemonDid = daemonAgentDid;
     throw error;
+  }
+}
+
+class _FailingAgentStateStore extends FakeProductLocalStore {
+  @override
+  Future<List<LocalAgentState>> loadAgentStates({
+    required String ownerDid,
+  }) async {
+    throw StateError('local cache unavailable');
+  }
+
+  @override
+  Future<void> saveAgentState(LocalAgentState state) async {
+    throw StateError('local cache unavailable');
   }
 }
