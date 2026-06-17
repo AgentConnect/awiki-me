@@ -706,7 +706,7 @@ class _ComposerTextField extends StatelessWidget {
   }
 }
 
-class _MentionCandidatePanel extends StatelessWidget {
+class _MentionCandidatePanel extends StatefulWidget {
   const _MentionCandidatePanel({
     required this.candidates,
     required this.loading,
@@ -722,15 +722,107 @@ class _MentionCandidatePanel extends StatelessWidget {
   final ValueChanged<ChatMentionCandidate> onSelected;
 
   @override
+  State<_MentionCandidatePanel> createState() => _MentionCandidatePanelState();
+}
+
+class _MentionCandidatePanelState extends State<_MentionCandidatePanel> {
+  final ScrollController _scrollController = ScrollController();
+  bool _scrollScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleSelectedCandidateScroll();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MentionCandidatePanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedIndex != widget.selectedIndex ||
+        oldWidget.candidates.length != widget.candidates.length ||
+        oldWidget.loading != widget.loading ||
+        oldWidget.macStyle != widget.macStyle) {
+      _scheduleSelectedCandidateScroll();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scheduleSelectedCandidateScroll() {
+    if (_scrollScheduled) {
+      return;
+    }
+    _scrollScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      _ensureSelectedCandidateVisible();
+    });
+  }
+
+  void _ensureSelectedCandidateVisible() {
+    if (widget.loading ||
+        widget.candidates.isEmpty ||
+        !_scrollController.hasClients) {
+      return;
+    }
+    final selectedIndex = widget.selectedIndex;
+    if (selectedIndex < 0 || selectedIndex >= widget.candidates.length) {
+      return;
+    }
+
+    final itemExtent = _mentionCandidateItemExtent(context, widget.macStyle);
+    final listPadding = _mentionCandidateListVerticalPadding(
+      context,
+      widget.macStyle,
+    );
+    final position = _scrollController.position;
+    final itemTop = listPadding + selectedIndex * itemExtent;
+    final itemBottom = itemTop + itemExtent;
+    final visibleTop = position.pixels;
+    final visibleBottom = position.pixels + position.viewportDimension;
+
+    double? targetOffset;
+    if (itemTop < visibleTop) {
+      targetOffset = itemTop;
+    } else if (itemBottom > visibleBottom) {
+      targetOffset = itemBottom - position.viewportDimension;
+    }
+    if (targetOffset == null) {
+      return;
+    }
+
+    final clamped = targetOffset.clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    if ((clamped - position.pixels).abs() < 0.5) {
+      return;
+    }
+    _scrollController.jumpTo(clamped);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final borderRadius = BorderRadius.circular(
-      macStyle ? responsive.displayScaled(10) : responsive.radius(14),
+      widget.macStyle ? responsive.displayScaled(10) : responsive.radius(14),
+    );
+    final itemExtent = _mentionCandidateItemExtent(context, widget.macStyle);
+    final listPadding = _mentionCandidateListVerticalPadding(
+      context,
+      widget.macStyle,
     );
     final panel = Container(
       key: const Key('chat-mention-candidate-panel'),
       constraints: BoxConstraints(
-        maxHeight: macStyle
+        maxHeight: widget.macStyle
             ? responsive.displayScaled(228)
             : responsive.displayScaled(260),
       ),
@@ -746,10 +838,10 @@ class _MentionCandidatePanel extends StatelessWidget {
           ),
         ],
       ),
-      child: loading && candidates.isEmpty
+      child: widget.loading && widget.candidates.isEmpty
           ? Padding(
               padding: EdgeInsets.all(
-                macStyle
+                widget.macStyle
                     ? responsive.displayScaled(14)
                     : responsive.spacing(14),
               ),
@@ -763,20 +855,19 @@ class _MentionCandidatePanel extends StatelessWidget {
               ),
             )
           : ListView.builder(
+              controller: _scrollController,
               shrinkWrap: true,
-              padding: EdgeInsets.symmetric(
-                vertical: macStyle
-                    ? responsive.displayScaled(6)
-                    : responsive.spacing(6),
-              ),
-              itemCount: candidates.length,
+              itemExtent: itemExtent,
+              padding: EdgeInsets.symmetric(vertical: listPadding),
+              itemCount: widget.candidates.length,
               itemBuilder: (context, index) {
-                final candidate = candidates[index];
+                final candidate = widget.candidates[index];
                 return _MentionCandidateTile(
                   candidate: candidate,
-                  selected: index == selectedIndex,
-                  macStyle: macStyle,
-                  onTap: () => onSelected(candidate),
+                  selected: index == widget.selectedIndex,
+                  macStyle: widget.macStyle,
+                  itemExtent: itemExtent,
+                  onTap: () => widget.onSelected(candidate),
                 );
               },
             ),
@@ -785,17 +876,32 @@ class _MentionCandidatePanel extends StatelessWidget {
   }
 }
 
+double _mentionCandidateItemExtent(BuildContext context, bool macStyle) {
+  final responsive = context.awikiResponsive;
+  return macStyle ? responsive.displayScaled(48) : responsive.displayScaled(54);
+}
+
+double _mentionCandidateListVerticalPadding(
+  BuildContext context,
+  bool macStyle,
+) {
+  final responsive = context.awikiResponsive;
+  return macStyle ? responsive.displayScaled(6) : responsive.spacing(6);
+}
+
 class _MentionCandidateTile extends StatelessWidget {
   const _MentionCandidateTile({
     required this.candidate,
     required this.selected,
     required this.macStyle,
+    required this.itemExtent,
     required this.onTap,
   });
 
   final ChatMentionCandidate candidate;
   final bool selected;
   final bool macStyle;
+  final double itemExtent;
   final VoidCallback onTap;
 
   @override
@@ -816,108 +922,109 @@ class _MentionCandidateTile extends StatelessWidget {
       padding: EdgeInsets.zero,
       minimumSize: Size.zero,
       onPressed: enabled ? onTap : null,
-      child: Container(
-        color: background,
-        padding: EdgeInsets.symmetric(
-          horizontal: macStyle
-              ? responsive.displayScaled(12)
-              : responsive.spacing(12),
-          vertical: macStyle
-              ? responsive.displayScaled(8)
-              : responsive.spacing(9),
-        ),
-        child: Opacity(
-          opacity: enabled ? 1 : 0.62,
-          child: Row(
-            children: <Widget>[
-              Container(
-                width: macStyle
-                    ? responsive.displayScaled(28)
-                    : responsive.displayScaled(32),
-                height: macStyle
-                    ? responsive.displayScaled(28)
-                    : responsive.displayScaled(32),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE4ECF7),
-                  borderRadius: BorderRadius.circular(
-                    macStyle
-                        ? responsive.displayScaled(8)
-                        : responsive.radius(10),
-                  ),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  '@',
-                  style: TextStyle(
-                    color: const Color(0xFF0B65F8),
-                    fontSize: macStyle
-                        ? responsive.displayScaled(15)
-                        : responsive.bodyMd,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: macStyle
-                    ? responsive.displayScaled(10)
-                    : responsive.spacing(10),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      candidate.surface,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: titleColor,
-                        fontSize: macStyle
-                            ? responsive.displayScaled(13)
-                            : responsive.bodyMd,
-                        fontWeight: FontWeight.w600,
-                      ),
+      child: SizedBox(
+        key: selected ? const Key('chat-mention-selected-candidate') : null,
+        height: itemExtent,
+        child: Container(
+          color: background,
+          padding: EdgeInsets.symmetric(
+            horizontal: macStyle
+                ? responsive.displayScaled(12)
+                : responsive.spacing(12),
+          ),
+          child: Opacity(
+            opacity: enabled ? 1 : 0.62,
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: macStyle
+                      ? responsive.displayScaled(28)
+                      : responsive.displayScaled(32),
+                  height: macStyle
+                      ? responsive.displayScaled(28)
+                      : responsive.displayScaled(32),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE4ECF7),
+                    borderRadius: BorderRadius.circular(
+                      macStyle
+                          ? responsive.displayScaled(8)
+                          : responsive.radius(10),
                     ),
-                    SizedBox(height: responsive.displayScaled(2)),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: const Color(0xFF6C7890),
-                        fontSize: macStyle
-                            ? responsive.displayScaled(11)
-                            : responsive.bodySm,
-                      ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '@',
+                    style: TextStyle(
+                      color: const Color(0xFF0B65F8),
+                      fontSize: macStyle
+                          ? responsive.displayScaled(15)
+                          : responsive.bodyMd,
+                      fontWeight: FontWeight.w700,
                     ),
-                  ],
-                ),
-              ),
-              SizedBox(width: responsive.displayScaled(8)),
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: responsive.displayScaled(7),
-                  vertical: responsive.displayScaled(3),
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF2F5FA),
-                  borderRadius: BorderRadius.circular(
-                    responsive.displayScaled(999),
                   ),
                 ),
-                child: Text(
-                  candidate.badge,
-                  style: TextStyle(
-                    color: const Color(0xFF44506A),
-                    fontSize: macStyle
-                        ? responsive.displayScaled(10)
-                        : responsive.displayScaled(11),
-                    fontWeight: FontWeight.w600,
+                SizedBox(
+                  width: macStyle
+                      ? responsive.displayScaled(10)
+                      : responsive.spacing(10),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        candidate.surface,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: titleColor,
+                          fontSize: macStyle
+                              ? responsive.displayScaled(13)
+                              : responsive.bodyMd,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: responsive.displayScaled(2)),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: const Color(0xFF6C7890),
+                          fontSize: macStyle
+                              ? responsive.displayScaled(11)
+                              : responsive.bodySm,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
+                SizedBox(width: responsive.displayScaled(8)),
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: responsive.displayScaled(7),
+                    vertical: responsive.displayScaled(3),
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF2F5FA),
+                    borderRadius: BorderRadius.circular(
+                      responsive.displayScaled(999),
+                    ),
+                  ),
+                  child: Text(
+                    candidate.badge,
+                    style: TextStyle(
+                      color: const Color(0xFF44506A),
+                      fontSize: macStyle
+                          ? responsive.displayScaled(10)
+                          : responsive.displayScaled(11),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
