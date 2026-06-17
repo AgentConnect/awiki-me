@@ -1006,10 +1006,12 @@ class ChatThreadsController
     Map<String, Object?> payload,
   ) {
     final status = run['status']?.toString().trim();
-    if (status != 'succeeded' && status != 'finished' && status != 'failed') {
+    if (status == null || status.isEmpty) {
       return;
     }
-    final agentDid = run['runtime_agent_did']?.toString().trim();
+    final agentDid =
+        run['runtime_agent_did']?.toString().trim().ifNotEmpty ??
+        run['agent_did']?.toString().trim().ifNotEmpty;
     if (agentDid == null || agentDid.isEmpty) {
       return;
     }
@@ -1024,6 +1026,25 @@ class ChatThreadsController
         run['message_id']?.toString().trim().ifNotEmpty ??
         payload['task_id']?.toString().trim().ifNotEmpty;
     final mentionId = run['mention_id']?.toString().trim().ifNotEmpty;
+    final startedAt = _parseRunTimestamp(run['started_at']) ?? DateTime.now();
+    final agentHandle =
+        run['runtime_agent_handle']?.toString().trim().ifNotEmpty ??
+        run['agent_handle']?.toString().trim().ifNotEmpty;
+    if (_isActiveRunStatus(status)) {
+      _upsertAgentPendingTurnFromStatus(
+        agentDid: agentDid,
+        conversationId: conversationId,
+        sourceMessageId: sourceMessageId,
+        messageId: messageId,
+        mentionId: mentionId,
+        agentHandle: agentHandle,
+        startedAt: startedAt,
+      );
+      return;
+    }
+    if (!_isTerminalRunStatus(status)) {
+      return;
+    }
     final nextState = Map<String, ChatThreadState>.from(state);
     var changed = false;
     final changedThreadIds = <String>[];
@@ -1032,7 +1053,18 @@ class ChatThreadsController
       if (thread.agentPendingTurns.isEmpty) {
         continue;
       }
-      if (conversationId != null && entry.key != conversationId) {
+      final hasMatchingTurn = thread.agentPendingTurns.any(
+        (turn) => _runStatusMatchesPendingTurn(
+          turn,
+          agentDid: agentDid,
+          sourceMessageId: sourceMessageId,
+          messageId: messageId,
+          mentionId: mentionId,
+        ),
+      );
+      if (conversationId != null &&
+          entry.key != conversationId &&
+          !hasMatchingTurn) {
         continue;
       }
       final nextTurns = <AgentPendingTurn>[
@@ -1063,6 +1095,143 @@ class ChatThreadsController
         }
       }
     }
+  }
+
+  bool _isActiveRunStatus(String status) {
+    return status == 'queued' ||
+        status == 'pending' ||
+        status == 'running' ||
+        status == 'in_progress';
+  }
+
+  bool _isTerminalRunStatus(String status) {
+    return status == 'succeeded' || status == 'finished' || status == 'failed';
+  }
+
+  DateTime? _parseRunTimestamp(Object? value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(text);
+  }
+
+  void _upsertAgentPendingTurnFromStatus({
+    required String agentDid,
+    required String? conversationId,
+    required String? sourceMessageId,
+    required String? messageId,
+    required String? mentionId,
+    required String? agentHandle,
+    required DateTime startedAt,
+  }) {
+    final threadId = _threadIdForAgentRunStatus(
+      conversationId: conversationId,
+      agentDid: agentDid,
+      sourceMessageId: sourceMessageId,
+      messageId: messageId,
+      mentionId: mentionId,
+    );
+    if (threadId == null || threadId.isEmpty) {
+      return;
+    }
+    final current = thread(threadId);
+    final pendingLocalMessageId =
+        sourceMessageId ??
+        messageId ??
+        'agent-run:${agentDid}:${mentionId ?? startedAt.microsecondsSinceEpoch}';
+    final pendingRemoteMessageId = sourceMessageId ?? messageId;
+    var found = false;
+    final nextTurns = <AgentPendingTurn>[];
+    for (final turn in current.agentPendingTurns) {
+      if (_runStatusMatchesPendingTurn(
+        turn,
+        agentDid: agentDid,
+        sourceMessageId: sourceMessageId,
+        messageId: messageId,
+        mentionId: mentionId,
+      )) {
+        found = true;
+        nextTurns.add(
+          AgentPendingTurn(
+            agentDid: turn.agentDid,
+            localMessageId: turn.localMessageId,
+            remoteMessageId: turn.remoteMessageId ?? pendingRemoteMessageId,
+            mentionId: turn.mentionId ?? mentionId,
+            agentHandle: turn.agentHandle ?? agentHandle,
+            startedAt: turn.startedAt,
+            isOverdue: turn.isOverdue,
+          ),
+        );
+      } else {
+        nextTurns.add(turn);
+      }
+    }
+    if (!found) {
+      nextTurns.add(
+        AgentPendingTurn(
+          agentDid: agentDid,
+          localMessageId: pendingLocalMessageId,
+          remoteMessageId: pendingRemoteMessageId,
+          mentionId: mentionId,
+          agentHandle: agentHandle,
+          startedAt: startedAt,
+        ),
+      );
+    }
+    state = <String, ChatThreadState>{
+      ...state,
+      threadId: current.copyWith(agentPendingTurns: nextTurns),
+    };
+    _scheduleAgentProcessingOverdue(threadId);
+  }
+
+  String? _threadIdForAgentRunStatus({
+    required String? conversationId,
+    required String agentDid,
+    required String? sourceMessageId,
+    required String? messageId,
+    required String? mentionId,
+  }) {
+    final explicit = conversationId?.trim();
+    if (explicit != null &&
+        explicit.isNotEmpty &&
+        state.containsKey(explicit)) {
+      return explicit;
+    }
+    for (final entry in state.entries) {
+      final thread = entry.value;
+      if (thread.agentPendingTurns.any(
+        (turn) => _runStatusMatchesPendingTurn(
+          turn,
+          agentDid: agentDid,
+          sourceMessageId: sourceMessageId,
+          messageId: messageId,
+          mentionId: mentionId,
+        ),
+      )) {
+        return entry.key;
+      }
+    }
+    if (explicit != null &&
+        explicit.isNotEmpty &&
+        !explicit.startsWith('direct:')) {
+      return explicit;
+    }
+    return _threadIdForAgentDid(agentDid);
+  }
+
+  String _threadIdForAgentDid(String agentDid) {
+    for (final conversation
+        in ref.read(conversationListProvider).conversations) {
+      if (!conversation.isGroup &&
+          (conversation.targetDid == agentDid ||
+              conversation.targetPeer == agentDid ||
+              conversation.threadId == 'direct:$agentDid')) {
+        return conversation.threadId;
+      }
+    }
+    return 'direct:$agentDid';
   }
 
   bool _runStatusMatchesPendingTurn(
@@ -1532,6 +1701,17 @@ final chatThreadsProvider =
 final pendingAgentDidsProvider = Provider<Set<String>>((ref) {
   final threads = ref.watch(chatThreadsProvider);
   return activePendingAgentDids(threads);
+});
+
+final pendingAgentDidsForThreadProvider = Provider.family<Set<String>, String>((
+  ref,
+  threadId,
+) {
+  final thread = ref.watch(chatThreadProvider(threadId));
+  return <String>{
+    for (final turn in thread.agentPendingTurns)
+      if (turn.isActive) turn.agentDid,
+  };
 });
 
 Set<String> activePendingAgentDids(Map<String, ChatThreadState> threads) {

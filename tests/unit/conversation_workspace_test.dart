@@ -864,6 +864,95 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
+  testWidgets('macOS 最近会话用运行状态显示远端智能体处理中状态', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:human:me',
+      credentialName: 'me.json',
+      displayName: 'Me',
+      handle: 'me',
+    );
+    final agentConversation = ConversationSummary(
+      threadId: 'dm:did:agent:remote-runtime',
+      displayName: 'Remote Hermes',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 6, 4, 10),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:agent:remote-runtime',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[agentConversation]
+      ..dmHistoryByPeerDid = const <String, List<ChatMessage>>{
+        'did:agent:remote-runtime': <ChatMessage>[],
+      };
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          peerIdentityServiceProvider.overrideWithValue(
+            FakePeerIdentityService(
+              identities: const <String, PeerAgentIdentity>{
+                'did:agent:remote-runtime': PeerAgentIdentity.agent(
+                  agentKind: PeerAgentKind.runtime,
+                ),
+              },
+            ),
+          ),
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final initialDot = tester.widget<AgentStatusDot>(
+      find.byType(AgentStatusDot).first,
+    );
+    expect(initialDot.status.kind, AgentVisualStatusKind.unknown);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ConversationWorkspacePage)),
+    );
+    container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+      <String, Object?>{
+        'schema': 'awiki.agent.status.v1',
+        'status_scope': 'run',
+        'conversation_id': 'direct:did:human:me',
+        'task_id': 'task_external_direct',
+        'runs': <Object?>[
+          <String, Object?>{
+            'run_id': 'run_external_direct',
+            'message_id': 'task_external_direct',
+            'source_message_id': 'msg_external_direct',
+            'runtime_agent_did': 'did:agent:remote-runtime',
+            'conversation_id': 'direct:did:human:me',
+            'status': 'running',
+          },
+        ],
+      },
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final processingDot = tester.widget<AgentStatusDot>(
+      find.byType(AgentStatusDot).first,
+    );
+    expect(processingDot.status.kind, AgentVisualStatusKind.processing);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
   testWidgets('macOS 最近会话保留已删除智能体并显示状态', (tester) async {
     final deletedConversation = ConversationSummary(
       threadId: 'dm:deleted-agent',

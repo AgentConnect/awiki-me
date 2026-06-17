@@ -997,13 +997,19 @@ AgentVisualStatus? _conversationAgentStatus(
   if (!classification.isAgent || conversation.isDeletedAgentConversation) {
     return null;
   }
+  final pendingInThread = ref.watch(
+    pendingAgentDidsForThreadProvider(conversation.threadId),
+  );
   final runtimeAgent = classification.localRuntimeAgent;
   if (runtimeAgent == null) {
+    if (pendingInThread.isNotEmpty) {
+      return const AgentVisualStatus(AgentVisualStatusKind.processing);
+    }
     return const AgentVisualStatus(AgentVisualStatusKind.unknown);
   }
-  final hasPendingTurn = ref
-      .watch(pendingAgentDidsProvider)
-      .contains(runtimeAgent.agentDid);
+  final hasPendingTurn =
+      ref.watch(pendingAgentDidsProvider).contains(runtimeAgent.agentDid) ||
+      pendingInThread.contains(runtimeAgent.agentDid);
   return AgentVisualStatus.fromAgent(
     runtimeAgent,
     hasPendingTurn: hasPendingTurn,
