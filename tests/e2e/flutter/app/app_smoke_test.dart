@@ -7,6 +7,7 @@ import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
+import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
@@ -221,6 +222,136 @@ void main() {
         control.lastBootstrapDaemonPublicKey?.keyId,
         'did:test:daemon:message#key-3',
       );
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+      await tester.binding.setSurfaceSize(null);
+    }
+  });
+
+  testWidgets('AwikiMeApp smoke recovers Message Agent action into chat', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'default',
+      handle: 'me',
+      displayName: 'Me',
+      jwtToken: 'test-jwt',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'direct:did:human:bob',
+      displayName: 'Bob',
+      lastMessagePreview: 'hello',
+      lastMessageAt: DateTime(2026, 6, 19, 10, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:human:bob',
+    );
+    final history = <ChatMessage>[
+      ChatMessage(
+        localId: 'msg_1',
+        remoteId: 'msg_1',
+        threadId: conversation.threadId,
+        senderDid: 'did:human:bob',
+        receiverDid: session.did,
+        content: 'hello',
+        createdAt: DateTime(2026, 6, 19, 10, 0),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      ),
+    ];
+    final harness = createFakeAwikiMeAppHarness(session: session);
+    harness.gateway
+      ..conversations = <ConversationSummary>[conversation]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
+        'did:human:bob': history,
+      };
+    final control =
+        harness.bootstrap.agentControlService!
+            as test_support.FakeAgentControlService;
+    control.agents = const <AgentSummary>[
+      AgentSummary(
+        agentDid: 'did:agent:daemon',
+        kind: AgentKind.daemon,
+        displayName: 'Message Daemon',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      ),
+      AgentSummary(
+        agentDid: 'did:agent:runtime',
+        kind: AgentKind.runtime,
+        daemonAgentDid: 'did:agent:daemon',
+        runtime: 'hermes',
+        displayName: 'Hermes Message Agent',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      ),
+    ];
+
+    try {
+      await tester.pumpWidget(
+        AwikiMeApp(
+          bootstrap: harness.bootstrap,
+          providerOverrides: <Override>[
+            ...harness.providerOverrides,
+            conversationListProvider.overrideWith(
+              (ref) => _StaticConversationListController(
+                ref,
+                <ConversationSummary>[conversation],
+              ),
+            ),
+          ],
+        ),
+      );
+      await _pumpSmokeFrame(tester);
+
+      expect(find.byType(AppShell), findsOneWidget);
+      expect(find.text('最近会话'), findsOneWidget);
+      await tester.tap(find.text('Bob').first);
+      await _pumpSmokeFrame(tester);
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(AppShell)),
+      );
+      container
+          .read(chatThreadsProvider.notifier)
+          .applyMessageAgentControlPayload(const <String, Object?>{
+            'schema': 'awiki.message.sync.v1',
+            'sync_type': 'runtime_final',
+            'runtime_agent_did': 'did:agent:runtime',
+            'run_id': 'run_1',
+            'source_message_id': 'msg_1',
+            'source_conversation_id': 'direct:did:human:bob',
+            'state': 'finished',
+            'has_text': true,
+            'retention_class': 'hash_only',
+          });
+      container
+          .read(chatThreadsProvider.notifier)
+          .applyMessageAgentControlPayload(const <String, Object?>{
+            'schema': 'awiki.app.action.v1',
+            'action_id': 'act_draft',
+            'action': 'message.create_draft',
+            'state': 'requires_confirmation',
+            'runtime_agent_did': 'did:agent:runtime',
+            'run_id': 'run_1',
+            'source_message_id': 'msg_1',
+            'conversation_id': 'direct:did:human:bob',
+            'requires_confirmation': true,
+            'args': <String, Object?>{'draft_text': '收到，我会处理。'},
+          });
+      await _pumpSmokeFrame(tester);
+
+      expect(find.text('消息 Agent 已完成处理'), findsOneWidget);
+      expect(find.text('消息 Agent 生成了草稿'), findsOneWidget);
+      await tester.tap(find.text('使用草稿'));
+      await _pumpSmokeFrame(tester);
+
+      expect(find.text('草稿已放入输入框'), findsOneWidget);
+      expect(harness.gateway.lastSentPayloadPeerDid, 'did:agent:daemon');
+      expect(harness.gateway.lastSentPayload?['state'], 'succeeded');
     } finally {
       debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);

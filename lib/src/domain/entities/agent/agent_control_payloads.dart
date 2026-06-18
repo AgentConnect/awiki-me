@@ -144,6 +144,7 @@ final class AppActionRequestPayload {
     this.bindingId,
     this.ownerDid,
     this.appInstanceId,
+    this.daemonAgentDid,
     this.runtimeAgentDid,
     this.runtimeProfileId,
     this.runId,
@@ -159,6 +160,7 @@ final class AppActionRequestPayload {
   final String? bindingId;
   final String? ownerDid;
   final String? appInstanceId;
+  final String? daemonAgentDid;
   final String? runtimeAgentDid;
   final String? runtimeProfileId;
   final String? runId;
@@ -196,6 +198,7 @@ final class AppActionRequestPayload {
       bindingId: _nonEmptyString(payload?['binding_id']),
       ownerDid: _nonEmptyString(payload?['owner_did']),
       appInstanceId: _nonEmptyString(payload?['app_instance_id']),
+      daemonAgentDid: _nonEmptyString(payload?['daemon_agent_did']),
       runtimeAgentDid: _nonEmptyString(payload?['runtime_agent_did']),
       runtimeProfileId: _nonEmptyString(payload?['runtime_profile_id']),
       runId: _nonEmptyString(payload?['run_id']),
@@ -258,9 +261,76 @@ final class AppActionResultPayload {
 }
 
 final class MessageSyncPayload {
-  const MessageSyncPayload({required this.payload});
+  const MessageSyncPayload({
+    required this.payload,
+    this.syncType,
+    this.kind,
+    this.messageId,
+    this.conversationId,
+    this.sourceMessageId,
+    this.sourceConversationId,
+    this.runtimeAgentDid,
+    this.runtimeProfileId,
+    this.runId,
+    this.state,
+    this.processingStatus,
+    this.unsupportedReason,
+    this.lastErrorCode,
+    this.lastErrorSummary,
+    this.retentionClass,
+    this.hasText = false,
+    this.summaryText,
+    this.draftText,
+  });
 
   final Map<String, Object?> payload;
+  final String? syncType;
+  final String? kind;
+  final String? messageId;
+  final String? conversationId;
+  final String? sourceMessageId;
+  final String? sourceConversationId;
+  final String? runtimeAgentDid;
+  final String? runtimeProfileId;
+  final String? runId;
+  final String? state;
+  final String? processingStatus;
+  final String? unsupportedReason;
+  final String? lastErrorCode;
+  final String? lastErrorSummary;
+  final String? retentionClass;
+  final bool hasText;
+  final String? summaryText;
+  final String? draftText;
+
+  String get effectiveType {
+    final explicit = syncType ?? kind;
+    if (explicit != null && explicit.isNotEmpty) {
+      return explicit;
+    }
+    if (processingStatus == 'skipped_unsupported') {
+      return 'unsupported';
+    }
+    return 'message';
+  }
+
+  String? get primaryMessageId => sourceMessageId ?? messageId;
+
+  String? get primaryConversationId => sourceConversationId ?? conversationId;
+
+  bool get isRuntimeStatus => effectiveType == 'runtime_status';
+
+  bool get isRuntimeFinal => effectiveType == 'runtime_final';
+
+  bool get isUnsupported =>
+      effectiveType == 'unsupported' ||
+      processingStatus == 'skipped_unsupported';
+
+  bool get isFailed =>
+      state == appActionStateFailed ||
+      state == 'failed' ||
+      lastErrorCode != null ||
+      lastErrorSummary != null;
 
   static MessageSyncPayload? fromPayloadJson(String? payloadJson) {
     final payload = AgentControlPayloads.decode(payloadJson);
@@ -270,7 +340,31 @@ final class MessageSyncPayload {
     if (_containsForbiddenActionPayload(payload)) {
       return null;
     }
-    return MessageSyncPayload(payload: Map.unmodifiable(payload!));
+    return MessageSyncPayload(
+      payload: Map.unmodifiable(payload!),
+      syncType: _nonEmptyString(payload['sync_type']),
+      kind: _nonEmptyString(payload['kind']),
+      messageId: _nonEmptyString(payload['message_id']),
+      conversationId: _nonEmptyString(payload['conversation_id']),
+      sourceMessageId: _nonEmptyString(payload['source_message_id']),
+      sourceConversationId: _nonEmptyString(payload['source_conversation_id']),
+      runtimeAgentDid: _nonEmptyString(payload['runtime_agent_did']),
+      runtimeProfileId: _nonEmptyString(payload['runtime_profile_id']),
+      runId: _nonEmptyString(payload['run_id']),
+      state: _nonEmptyString(payload['state']),
+      processingStatus: _nonEmptyString(payload['processing_status']),
+      unsupportedReason: _nonEmptyString(payload['unsupported_reason']),
+      lastErrorCode: _nonEmptyString(payload['last_error_code']),
+      lastErrorSummary: _nonEmptyString(payload['last_error_summary']),
+      retentionClass: _nonEmptyString(payload['retention_class']),
+      hasText: payload['has_text'] == true,
+      summaryText:
+          _nonEmptyString(payload['summary']) ??
+          _nonEmptyString(payload['summary_text']),
+      draftText:
+          _nonEmptyString(payload['draft_text']) ??
+          _nonEmptyString(payload['draft']),
+    );
   }
 }
 
@@ -371,6 +465,44 @@ bool isSupportedAppActionState(String state) {
     appActionStateSucceeded,
     appActionStateFailed,
   }.contains(state.trim());
+}
+
+Map<String, Object?> appActionResultPayload({
+  required AppActionRequestPayload request,
+  required String state,
+  Map<String, Object?> result = const <String, Object?>{},
+  String? errorCode,
+  String? errorSummary,
+}) {
+  final payload = <String, Object?>{
+    'schema': AgentControlPayloads.appActionResultSchema,
+    'action_id': request.actionId,
+    'action': request.action,
+    'state': state,
+    if (result.isNotEmpty) 'result': result,
+    if (errorCode != null && errorCode.trim().isNotEmpty)
+      'error_code': errorCode.trim(),
+    if (errorSummary != null && errorSummary.trim().isNotEmpty)
+      'error_summary': errorSummary.trim(),
+  };
+  void addOptional(String key, String? value) {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return;
+    }
+    payload[key] = normalized;
+  }
+
+  addOptional('binding_id', request.bindingId);
+  addOptional('owner_did', request.ownerDid);
+  addOptional('app_instance_id', request.appInstanceId);
+  addOptional('daemon_agent_did', request.daemonAgentDid);
+  addOptional('runtime_agent_did', request.runtimeAgentDid);
+  addOptional('runtime_profile_id', request.runtimeProfileId);
+  addOptional('run_id', request.runId);
+  addOptional('source_message_id', request.sourceMessageId);
+  addOptional('conversation_id', request.conversationId);
+  return payload;
 }
 
 List<String> _stringList(Object? value) {

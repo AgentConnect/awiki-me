@@ -485,6 +485,91 @@ void main() {
       expect(notificationFacade.lastSystemTitle, isNull);
     });
 
+    test('实时 Message Agent 控制 payload 回收到 chat provider', () async {
+      final conversation = ConversationSummary(
+        threadId: 'direct:did:human:bob',
+        displayName: 'Bob',
+        lastMessagePreview: 'hello',
+        lastMessageAt: DateTime(2026, 6, 19, 10, 0),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:human:bob',
+      );
+      container
+          .read(conversationListProvider.notifier)
+          .upsertConversation(conversation);
+      container
+          .read(chatThreadsProvider.notifier)
+          .applyRealtimeUpdate(
+            ChatMessage(
+              localId: 'msg_1',
+              remoteId: 'msg_1',
+              threadId: conversation.threadId,
+              senderDid: 'did:human:bob',
+              receiverDid: 'did:test:me',
+              content: 'hello',
+              createdAt: DateTime(2026, 6, 19, 10, 0),
+              isMine: false,
+              sendState: MessageSendState.sent,
+            ),
+          );
+      container.read(agentsProvider.notifier).applyControlPayload(
+        const <String, Object?>{
+          'schema': 'awiki.agent.status.v1',
+          'status_scope': 'snapshot',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'status': 'ready',
+            'display_name': 'Message Daemon',
+          },
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': 'did:agent:runtime',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'hermes',
+              'status': 'ready',
+              'display_name': 'Hermes Message Agent',
+            },
+          ],
+        },
+      );
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await activate();
+      await Future<void>.delayed(Duration.zero);
+
+      gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        agentControlPayload: <String, Object?>{
+          'schema': 'awiki.app.action.v1',
+          'action_id': 'act_draft',
+          'action': 'message.create_draft',
+          'state': 'requires_confirmation',
+          'runtime_agent_did': 'did:agent:runtime',
+          'run_id': 'run_1',
+          'source_message_id': 'msg_1',
+          'conversation_id': 'direct:did:human:bob',
+          'requires_confirmation': true,
+          'args': <String, Object?>{'draft_text': '收到，我会处理。'},
+        },
+      );
+      await realtimeGateway.emit(const <String, Object?>{'type': 'control'});
+
+      final action = container
+          .read(chatThreadProvider(conversation.threadId))
+          .appActionRecords['act_draft'];
+      expect(action, isNotNull);
+      expect(action!.state, 'requires_confirmation');
+      expect(action.request?.args['draft_text'], '收到，我会处理。');
+      expect(
+        container.read(conversationListProvider).conversations,
+        isNotEmpty,
+      );
+      expect(notificationFacade.lastInAppTitle, isNull);
+      expect(notificationFacade.lastSystemTitle, isNull);
+    });
+
     test('实时连接失败时刷新会话数据但不使用相同 token 循环重连', () async {
       container
           .read(sessionProvider.notifier)

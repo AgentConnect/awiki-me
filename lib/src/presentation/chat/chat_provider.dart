@@ -6,11 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_services.dart';
 import '../../application/models/attachment_models.dart';
 import '../../application/models/app_thread_ref.dart';
+import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../../domain/entities/chat_attachment.dart';
 import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
+import '../agents/agents_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../conversation_list/conversation_provider.dart';
 
@@ -20,12 +22,16 @@ class ChatThreadState {
     this.messages = const <ChatMessage>[],
     this.isLoading = false,
     this.agentPendingTurns = const <AgentPendingTurn>[],
+    this.messageAgentSyncs = const <MessageAgentSyncRecord>[],
+    this.appActionRecords = const <String, AppActionRecord>{},
   });
 
   final String threadId;
   final List<ChatMessage> messages;
   final bool isLoading;
   final List<AgentPendingTurn> agentPendingTurns;
+  final List<MessageAgentSyncRecord> messageAgentSyncs;
+  final Map<String, AppActionRecord> appActionRecords;
 
   bool get isAgentProcessing => agentPendingTurns.any((turn) => turn.isActive);
 
@@ -47,18 +53,127 @@ class ChatThreadState {
     return turns.isEmpty ? null : turns.first;
   }
 
+  int get messageAgentTimelineCount =>
+      messageAgentSyncs.length + appActionRecords.length;
+
   ChatThreadState copyWith({
     List<ChatMessage>? messages,
     bool? isLoading,
     List<AgentPendingTurn>? agentPendingTurns,
+    List<MessageAgentSyncRecord>? messageAgentSyncs,
+    Map<String, AppActionRecord>? appActionRecords,
   }) {
     return ChatThreadState(
       threadId: threadId,
       messages: messages ?? this.messages,
       isLoading: isLoading ?? this.isLoading,
       agentPendingTurns: agentPendingTurns ?? this.agentPendingTurns,
+      messageAgentSyncs: messageAgentSyncs ?? this.messageAgentSyncs,
+      appActionRecords: appActionRecords ?? this.appActionRecords,
     );
   }
+}
+
+class MessageAgentSyncRecord {
+  const MessageAgentSyncRecord({
+    required this.identityKey,
+    required this.type,
+    this.messageId,
+    this.conversationId,
+    this.runtimeAgentDid,
+    this.runtimeProfileId,
+    this.runId,
+    this.state,
+    this.processingStatus,
+    this.unsupportedReason,
+    this.lastErrorCode,
+    this.lastErrorSummary,
+    this.retentionClass,
+    this.hasText = false,
+    this.summaryText,
+    this.draftText,
+  });
+
+  final String identityKey;
+  final String type;
+  final String? messageId;
+  final String? conversationId;
+  final String? runtimeAgentDid;
+  final String? runtimeProfileId;
+  final String? runId;
+  final String? state;
+  final String? processingStatus;
+  final String? unsupportedReason;
+  final String? lastErrorCode;
+  final String? lastErrorSummary;
+  final String? retentionClass;
+  final bool hasText;
+  final String? summaryText;
+  final String? draftText;
+
+  bool get isRuntimeStatus => type == 'runtime_status';
+
+  bool get isRuntimeFinal => type == 'runtime_final';
+
+  bool get isUnsupported =>
+      type == 'unsupported' || processingStatus == 'skipped_unsupported';
+
+  bool get isFailed =>
+      state == 'failed' || lastErrorCode != null || lastErrorSummary != null;
+
+  bool get isTerminal =>
+      isRuntimeFinal || isUnsupported || isFailed || state == 'finished';
+
+  static MessageAgentSyncRecord fromPayload(MessageSyncPayload payload) {
+    final type = payload.effectiveType;
+    final messageId = payload.primaryMessageId;
+    final conversationId = payload.primaryConversationId;
+    final runId = payload.runId;
+    return MessageAgentSyncRecord(
+      identityKey: _messageAgentSyncIdentityKey(
+        type: type,
+        runId: runId,
+        messageId: messageId,
+        conversationId: conversationId,
+      ),
+      type: type,
+      messageId: messageId,
+      conversationId: conversationId,
+      runtimeAgentDid: payload.runtimeAgentDid,
+      runtimeProfileId: payload.runtimeProfileId,
+      runId: runId,
+      state: payload.state,
+      processingStatus: payload.processingStatus,
+      unsupportedReason: payload.unsupportedReason,
+      lastErrorCode: payload.lastErrorCode,
+      lastErrorSummary: payload.lastErrorSummary,
+      retentionClass: payload.retentionClass,
+      hasText: payload.hasText,
+      summaryText: payload.summaryText,
+      draftText: payload.draftText,
+    );
+  }
+}
+
+String _messageAgentSyncIdentityKey({
+  required String type,
+  required String? runId,
+  required String? messageId,
+  required String? conversationId,
+}) {
+  final run = runId?.trim();
+  if (run != null && run.isNotEmpty) {
+    return 'run:$run:$type';
+  }
+  final message = messageId?.trim();
+  if (message != null && message.isNotEmpty) {
+    return 'message:$message:$type';
+  }
+  final conversation = conversationId?.trim();
+  if (conversation != null && conversation.isNotEmpty) {
+    return 'conversation:$conversation:$type';
+  }
+  return 'message-agent:$type';
 }
 
 class AgentPendingTurn {
@@ -817,6 +932,8 @@ class ChatThreadsController
         messages: _sortMessages(messages),
         isLoading: isLoading ?? previous.isLoading,
         agentPendingTurns: nextAgentPendingTurns,
+        messageAgentSyncs: previous.messageAgentSyncs,
+        appActionRecords: previous.appActionRecords,
       ),
     };
     if (nextAgentPendingTurns.isEmpty) {
@@ -1097,6 +1214,425 @@ class ChatThreadsController
     }
   }
 
+  void applyMessageAgentControlPayload(Map<String, Object?> payload) {
+    final payloadJson = jsonEncode(payload);
+    final sync = AgentControlPayloads.decodeMessageSync(payloadJson);
+    if (sync != null) {
+      _applyMessageAgentSync(sync);
+      return;
+    }
+    final request = AgentControlPayloads.decodeAppAction(payloadJson);
+    if (request != null) {
+      _applyAppActionRequest(request);
+      return;
+    }
+    final result = AgentControlPayloads.decodeAppActionResult(payloadJson);
+    if (result != null) {
+      _applyAppActionResult(result);
+    }
+  }
+
+  Future<void> confirmAppAction({
+    required ConversationSummary conversation,
+    required String actionId,
+  }) async {
+    final threadId = conversation.threadId;
+    final record = thread(threadId).appActionRecords[actionId];
+    final request = record?.request;
+    if (record == null || request == null || record.isTerminal) {
+      return;
+    }
+    if (!request.isAllowedInMvp) {
+      await _sendAppActionResult(
+        threadId: threadId,
+        request: request,
+        state: appActionStateFailed,
+        errorCode: 'app_action_not_allowed',
+        errorSummary: '此操作不在当前版本允许范围内',
+      );
+      return;
+    }
+    if (request.action != 'message.create_draft') {
+      await _sendAppActionResult(
+        threadId: threadId,
+        request: request,
+        state: appActionStateFailed,
+        errorCode: 'app_action_handler_unavailable',
+        errorSummary: '此操作暂未接入 Human App 执行器',
+      );
+      return;
+    }
+    if (_targetDaemonDidForAppAction(request) == null) {
+      await _sendAppActionResult(
+        threadId: threadId,
+        request: request,
+        state: appActionStateFailed,
+        errorCode: 'app_action_result_target_missing',
+        errorSummary: '找不到 Message Agent 所属 Daemon',
+      );
+      return;
+    }
+    final draftText = _draftTextForAppAction(request);
+    if (draftText == null) {
+      await _sendAppActionResult(
+        threadId: threadId,
+        request: request,
+        state: appActionStateFailed,
+        errorCode: 'app_action_missing_draft',
+        errorSummary: '草稿内容为空',
+      );
+      return;
+    }
+    ref
+        .read(chatComposerDraftsProvider.notifier)
+        .setText(conversation, draftText);
+    await _sendAppActionResult(
+      threadId: threadId,
+      request: request,
+      state: appActionStateSucceeded,
+      result: <String, Object?>{'draft_text': draftText},
+    );
+  }
+
+  Future<void> rejectAppAction({
+    required ConversationSummary conversation,
+    required String actionId,
+  }) async {
+    final threadId = conversation.threadId;
+    final record = thread(threadId).appActionRecords[actionId];
+    final request = record?.request;
+    if (record == null || request == null || record.isTerminal) {
+      return;
+    }
+    await _sendAppActionResult(
+      threadId: threadId,
+      request: request,
+      state: appActionStateRejected,
+      errorCode: 'user_rejected',
+      errorSummary: '用户已拒绝',
+    );
+  }
+
+  void _applyMessageAgentSync(MessageSyncPayload payload) {
+    final record = MessageAgentSyncRecord.fromPayload(payload);
+    final threadId = _threadIdForMessageAgentSync(record);
+    if (threadId == null || threadId.isEmpty) {
+      return;
+    }
+    _upsertMessageAgentSyncRecord(threadId, record);
+    final runtimeAgentDid = record.runtimeAgentDid?.trim();
+    if (runtimeAgentDid == null || runtimeAgentDid.isEmpty) {
+      return;
+    }
+    if (record.isRuntimeStatus && _isActiveRunStatus(record.state ?? '')) {
+      _upsertAgentPendingTurnFromStatus(
+        agentDid: runtimeAgentDid,
+        conversationId: threadId,
+        sourceMessageId: record.messageId,
+        messageId: record.runId,
+        mentionId: null,
+        agentHandle: null,
+        startedAt: DateTime.now(),
+      );
+      return;
+    }
+    if (record.isTerminal) {
+      _clearAgentPendingTurnsForMessageAgent(
+        threadId: threadId,
+        runtimeAgentDid: runtimeAgentDid,
+        sourceMessageId: record.messageId,
+        runId: record.runId,
+      );
+    }
+  }
+
+  void _upsertMessageAgentSyncRecord(
+    String threadId,
+    MessageAgentSyncRecord record,
+  ) {
+    final current = thread(threadId);
+    final nextRecords = <MessageAgentSyncRecord>[];
+    var replaced = false;
+    for (final item in current.messageAgentSyncs) {
+      if (item.identityKey == record.identityKey) {
+        nextRecords.add(record);
+        replaced = true;
+      } else {
+        nextRecords.add(item);
+      }
+    }
+    if (!replaced) {
+      nextRecords.add(record);
+    }
+    state = <String, ChatThreadState>{
+      ...state,
+      threadId: current.copyWith(
+        messageAgentSyncs: _limitMessageAgentSyncs(nextRecords),
+      ),
+    };
+  }
+
+  List<MessageAgentSyncRecord> _limitMessageAgentSyncs(
+    List<MessageAgentSyncRecord> records,
+  ) {
+    if (records.length <= 40) {
+      return records;
+    }
+    return records.sublist(records.length - 40);
+  }
+
+  void _applyAppActionRequest(AppActionRequestPayload request) {
+    final threadId = _threadIdForAppActionRequest(request);
+    if (threadId == null || threadId.isEmpty) {
+      return;
+    }
+    final current = thread(threadId);
+    final nextRecords = <String, AppActionRecord>{
+      ...current.appActionRecords,
+      request.actionId: AppActionRecord(
+        actionId: request.actionId,
+        action: request.action,
+        state: request.state,
+        request: request,
+        result: current.appActionRecords[request.actionId]?.result,
+      ),
+    };
+    state = <String, ChatThreadState>{
+      ...state,
+      threadId: current.copyWith(appActionRecords: nextRecords),
+    };
+  }
+
+  void _applyAppActionResult(AppActionResultPayload result) {
+    var changed = false;
+    final nextState = Map<String, ChatThreadState>.from(state);
+    for (final entry in state.entries) {
+      final existing = entry.value.appActionRecords[result.actionId];
+      if (existing == null || existing.action != result.action) {
+        continue;
+      }
+      changed = true;
+      nextState[entry.key] = entry.value.copyWith(
+        appActionRecords: <String, AppActionRecord>{
+          ...entry.value.appActionRecords,
+          result.actionId: existing.applyResult(result),
+        },
+      );
+    }
+    if (!changed) {
+      return;
+    }
+    state = nextState;
+  }
+
+  Future<void> _sendAppActionResult({
+    required String threadId,
+    required AppActionRequestPayload request,
+    required String state,
+    Map<String, Object?> result = const <String, Object?>{},
+    String? errorCode,
+    String? errorSummary,
+  }) async {
+    final payload = appActionResultPayload(
+      request: request,
+      state: state,
+      result: result,
+      errorCode: errorCode,
+      errorSummary: errorSummary,
+    );
+    final targetDid = _targetDaemonDidForAppAction(request);
+    if (targetDid == null || targetDid.isEmpty) {
+      final failed = appActionResultPayload(
+        request: request,
+        state: appActionStateFailed,
+        errorCode: 'app_action_result_target_missing',
+        errorSummary: '找不到 Message Agent 所属 Daemon',
+      );
+      _applyLocalAppActionResult(threadId, failed);
+      return;
+    }
+    try {
+      await ref
+          .read(messagingServiceProvider)
+          .sendPayload(
+            thread: AppThreadRef.direct(targetDid),
+            payload: payload,
+            secure: true,
+            idempotencyKey: 'app-action-result:${request.actionId}:$state',
+          )
+          .timeout(_sendTimeout);
+      _applyLocalAppActionResult(threadId, payload);
+    } catch (_) {
+      final failed = appActionResultPayload(
+        request: request,
+        state: appActionStateFailed,
+        errorCode: 'app_action_result_send_failed',
+        errorSummary: '回传执行结果失败',
+      );
+      _applyLocalAppActionResult(threadId, failed);
+    }
+  }
+
+  void _applyLocalAppActionResult(
+    String threadId,
+    Map<String, Object?> payload,
+  ) {
+    final result = AgentControlPayloads.decodeAppActionResult(
+      jsonEncode(payload),
+    );
+    if (result == null) {
+      return;
+    }
+    final current = thread(threadId);
+    final existing = current.appActionRecords[result.actionId];
+    final nextRecord = existing == null
+        ? AppActionRecord(
+            actionId: result.actionId,
+            action: result.action,
+            state: result.state,
+            result: result,
+          )
+        : existing.applyResult(result);
+    state = <String, ChatThreadState>{
+      ...state,
+      threadId: current.copyWith(
+        appActionRecords: <String, AppActionRecord>{
+          ...current.appActionRecords,
+          result.actionId: nextRecord,
+        },
+      ),
+    };
+  }
+
+  String? _draftTextForAppAction(AppActionRequestPayload request) {
+    String? stringValue(Object? value) {
+      final text = value?.toString().trim();
+      if (text == null || text.isEmpty) {
+        return null;
+      }
+      return text;
+    }
+
+    final args = request.args;
+    final message = args['message'];
+    return stringValue(args['draft_text']) ??
+        stringValue(args['draft']) ??
+        stringValue(args['text']) ??
+        stringValue(args['content']) ??
+        (message is Map ? stringValue(message['text']) : null);
+  }
+
+  String? _targetDaemonDidForAppAction(AppActionRequestPayload request) {
+    final explicit = request.daemonAgentDid?.trim();
+    if (explicit != null && explicit.isNotEmpty) {
+      return explicit;
+    }
+    final runtimeDid = request.runtimeAgentDid?.trim();
+    if (runtimeDid != null && runtimeDid.isNotEmpty) {
+      for (final agent in ref.read(agentsProvider).agents) {
+        if (agent.agentDid == runtimeDid) {
+          final daemonDid = agent.daemonAgentDid?.trim();
+          if (daemonDid != null && daemonDid.isNotEmpty) {
+            return daemonDid;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  String? _threadIdForMessageAgentSync(MessageAgentSyncRecord record) {
+    return _threadIdForConversationControl(record.conversationId) ??
+        _threadIdForSourceMessage(record.messageId) ??
+        (record.runtimeAgentDid == null
+            ? null
+            : _threadIdForAgentDid(record.runtimeAgentDid!));
+  }
+
+  String? _threadIdForAppActionRequest(AppActionRequestPayload request) {
+    return _threadIdForConversationControl(request.conversationId) ??
+        _threadIdForSourceMessage(request.sourceMessageId) ??
+        (request.runtimeAgentDid == null
+            ? null
+            : _threadIdForAgentDid(request.runtimeAgentDid!));
+  }
+
+  String? _threadIdForConversationControl(String? conversationId) {
+    final explicit = conversationId?.trim();
+    if (explicit == null || explicit.isEmpty) {
+      return null;
+    }
+    if (state.containsKey(explicit)) {
+      return explicit;
+    }
+    for (final conversation
+        in ref.read(conversationListProvider).conversations) {
+      if (conversation.threadId == explicit ||
+          conversation.visibilityKeys.contains(explicit)) {
+        return conversation.threadId;
+      }
+    }
+    for (final entry in state.entries) {
+      final identity = _conversationIdentityForThread(entry.key, entry.value);
+      if (identity.threadId == explicit ||
+          identity.visibilityKeys.contains(explicit)) {
+        return entry.key;
+      }
+    }
+    return explicit;
+  }
+
+  String? _threadIdForSourceMessage(String? messageId) {
+    final normalized = messageId?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    for (final entry in state.entries) {
+      if (entry.value.messages.any(
+        (message) =>
+            message.localId == normalized || message.remoteId == normalized,
+      )) {
+        return entry.key;
+      }
+    }
+    return null;
+  }
+
+  void _clearAgentPendingTurnsForMessageAgent({
+    required String threadId,
+    required String runtimeAgentDid,
+    required String? sourceMessageId,
+    required String? runId,
+  }) {
+    final current = state[threadId];
+    if (current == null || current.agentPendingTurns.isEmpty) {
+      return;
+    }
+    final nextTurns = <AgentPendingTurn>[
+      for (final turn in current.agentPendingTurns)
+        if (!_runStatusMatchesPendingTurn(
+          turn,
+          agentDid: runtimeAgentDid,
+          sourceMessageId: sourceMessageId,
+          messageId: runId,
+          mentionId: null,
+        ))
+          turn,
+    ];
+    if (nextTurns.length == current.agentPendingTurns.length) {
+      return;
+    }
+    state = <String, ChatThreadState>{
+      ...state,
+      threadId: current.copyWith(agentPendingTurns: nextTurns),
+    };
+    if (nextTurns.isEmpty) {
+      _cancelAgentProcessingTimer(threadId);
+    } else {
+      _scheduleAgentProcessingOverdue(threadId);
+    }
+  }
+
   bool _isActiveRunStatus(String status) {
     return status == 'queued' ||
         status == 'pending' ||
@@ -1139,7 +1675,7 @@ class ChatThreadsController
     final pendingLocalMessageId =
         sourceMessageId ??
         messageId ??
-        'agent-run:${agentDid}:${mentionId ?? startedAt.microsecondsSinceEpoch}';
+        'agent-run:$agentDid:${mentionId ?? startedAt.microsecondsSinceEpoch}';
     final pendingRemoteMessageId = sourceMessageId ?? messageId;
     var found = false;
     final nextTurns = <AgentPendingTurn>[];
