@@ -224,7 +224,8 @@ ciphertext: encrypted delegated package / bootstrap secret
 aad: human_did + daemon_did + operation_id + message_agent_binding_id
 ```
 
-MVP 实施契约采用两个层次：
+MVP 实施契约采用两个层次，当前落地方案已经使用 daemon `#key-3`
+X25519 bootstrap public key 构造外层加密 envelope：
 
 ```text
 awiki.daemon.bootstrap.secure.v1 = App 发给 daemon 的外层安全 envelope
@@ -240,17 +241,18 @@ awiki.daemon.bootstrap.v1 = daemon 解密后的内部 bootstrap payload
 - `issued_at`
 - `expires_at`
 - `nonce`
+- `sender_ephemeral_public_key`
 - `ciphertext`
 - `aad`
 - 可选 `payload_sha256`
 
-外层 envelope 的明文字段只能表达路由、收件方、发送方、时效、重放保护和 AAD。`aad` 和其它明文字段不得包含 `private_key_pem`、`private_key_multibase`、bootstrap secret、WSS credential 或其它私密材料。
+外层 envelope 的明文字段只能表达路由、收件方、发送方、时效、重放保护、发送方临时公钥和 AAD。`aad` 和其它明文字段不得包含 `private_key_pem`、`private_key_multibase`、bootstrap secret、WSS credential 或其它私密材料。
 
-内部 `awiki.daemon.bootstrap.v1` 只允许作为解密后的 daemon 内部结构继续复用，不再作为生产路径的普通明文 payload 直接发送。当前 App 过渡期可以先使用 IM secure direct 承载内部 payload，但该路径仍必须满足“普通 `secure:false` payload 不携带 delegated private package”的红线；Step 02/04 继续落地 daemon public-key envelope 的真正加解密。
+内部 `awiki.daemon.bootstrap.v1` 只允许作为解密后的 daemon 内部结构继续复用，不再作为生产路径的普通明文 payload 直接发送。Human App 现在发送的是 `awiki.daemon.bootstrap.secure.v1`，其中 `ciphertext` 使用 X25519 shared secret 派生的 ChaCha20-Poly1305 加密；普通 `secure:false` transport 只承载外层 encrypted envelope，不承载 delegated private package 明文。daemon 收到旧明文 `awiki.daemon.bootstrap.v1` 时必须 fail closed，并提示需要 `awiki.daemon.bootstrap.secure.v1`。
 
 安全验收口径：
 
-- 代码中不再出现 message-agent bootstrap private package 通过 `secure:false` 普通 payload 发送的路径。
+- 代码中不再出现 message-agent bootstrap private package 通过 `secure:false` 普通 payload 明文发送的路径。
 - daemon 不能解密非发给自己的 bootstrap envelope。
 - 过期、重复使用、daemon DID 不匹配、key id 不匹配的 bootstrap 请求必须失败。
 - 停用或删除后，不再允许使用旧 bootstrap token 重放创建绑定。
@@ -303,7 +305,7 @@ message Agent 不做：
 - 不自动回复联系人。
 - 不在用户无感知的情况下发送消息。
 - 不把 daemon/runtime outbound send 打开成默认能力。
-- 默认 delegated key scope 不包含 `message.send.plain`；如果历史数据或测试 fixture 仍出现该 scope，MVP Message Agent bootstrap validation 必须拒绝它或把它视为 legacy 非生产路径。
+- 默认 delegated key scope 不包含 `message.send.plain`；如果历史数据或测试 fixture 仍出现该 scope，MVP Message Agent bootstrap validation 必须拒绝它或把它视为 legacy 非生产路径。user-service delegated key 默认 scope 应只包含 `message.inbox.read.plain` 和 `message.history.read.plain`。
 
 如果用户确认草稿或 action：
 
@@ -533,6 +535,56 @@ MVP 完成时，应能验证：
 - message Agent 不直接代发 IM 消息。
 - 停用后，binding 失效，daemon 停止处理 loop，WSS 不再继续作为 active message Agent 工作。
 - 删除 Message Agent 时不会保留 active binding。
+
+## 当前落地状态
+
+截至 2026-06-19，MVP 已按以下仓库切片落地：
+
+- `awiki-me-message-agent`
+  - Message Agent 设置入口已接入 Agent/daemon 页面，UI 区分「运行 Daemon」和「消息处理 Agent」。
+  - `AWIKI_AGENT_IM_ENABLED` 关闭时阻断入口和 bootstrap action。
+  - App 能从 daemon diagnostics 读取 `bootstrap_key_id`、`bootstrap_public_key_b64u`、`bootstrap_key_algorithm`，并使用 daemon `#key-3` X25519 公钥生成 `awiki.daemon.bootstrap.secure.v1`。
+  - App 回收 `awiki.message.sync.v1`、`awiki.app.action.v1`、`awiki.app.action.result.v1`，在聊天中展示处理状态、草稿和确认 / 拒绝 UI；raw JSON 不作为普通消息显示。
+  - MVP 只允许 `message.create_draft` 写入草稿；用户确认后的发送仍由 Human App 发送链路负责。
+- `awiki-cli-rs2-message-agent`
+  - daemon 发布 bootstrap public key diagnostics。
+  - daemon 接收 secure bootstrap envelope，校验 recipient、key id、TTL、nonce/replay、payload hash 和 canonical AAD，再解密内部 bootstrap payload。
+  - 旧明文 `awiki.daemon.bootstrap.v1` 在 Message Agent bootstrap 路径 fail closed。
+  - daemon 处理 delegated inbox 后写入 `message.sync` / `runtime_final` / `app.action` durable outbox。
+  - active Message Agent runtime 调用 `msg.send` / `attachment.send` 时会被拒绝，避免 MVP 代发。
+- `user-service-message-agent`
+  - `/user-service/message-agent/rpc` 成为 owner + daemon + runtime Message Agent binding 的服务端事实源。
+  - `ensure_binding` 校验 Human ownership、active daemon、daemon 托管 runtime、`runtime_provider`、active delegated key 和敏感字段拒收。
+  - `disable_binding` 只停 binding；`revoke_binding` 要求 delegated key registry 已经 revoked，否则 fail closed。
+  - delegated key public registration 默认是 read-only scope：`message.inbox.read.plain`、`message.history.read.plain`；不默认包含 `message.send.plain`。
+- `awiki-system-test-message-agent`
+  - 新增 Message Agent MVP focused acceptance：App recovery payload classification、user-service binding lifecycle、daemon 明文 bootstrap fail-closed。
+  - 当前环境未部署 Message Agent RPC 或未启动本地 message-service 时，系统测试会显式 skip 并输出配置和原因。
+
+## 发布与回滚
+
+发布建议：
+
+- 默认保持 `AWIKI_AGENT_IM_ENABLED=false`，只在内测用户或指定构建中打开。
+- 打开前确认 daemon 版本包含 secure bootstrap、bootstrap public key diagnostics、no-send enforcement 和 App outbox 回收。
+- 打开前确认 user-service 已部署 `/user-service/message-agent/rpc`，并且 delegated key 默认 scope 不包含 `message.send.plain`。
+- 打开前确认 message-service 能接受 Human DID `#daemon-key-1` 作为当前 DID Document authentication 中的 delegated client。
+- 监控 binding 创建失败、bootstrap 解密失败、daemon `mark_seen`、runtime_final outbox retry、action result 回传失败和 delegated WSS 连接失败。
+
+回滚方式：
+
+- 关闭 `AWIKI_AGENT_IM_ENABLED`，App 不再暴露新启用入口。
+- 对已启用用户调用 `disable_binding`，daemon 停止 active Message Agent 处理 loop。
+- 如需要强回收授权，先提交 signed DID Document update 移除 `user_did#daemon-key-1`，再调用 delegated key revoke / `revoke_binding`。
+- daemon 保留 runtime archive 能力，但删除 runtime 前必须先停用 binding。
+
+## 当前剩余风险
+
+- 完整 App -> daemon -> user-service -> message-service -> App 的 happy path 尚需在部署了 Step 06 user-service RPC 且启动 message-service v2 的环境补跑；当前 Linux 容器只能提供 focused component / acceptance 证据。
+- 当前 message-service 仍将 delegated WSS 视为 Human DID delegated client，协议层尚不能表达 `from: Agent DID` / `on_behalf_of: Human DID` 双 proof。
+- `runtime_final` 当前按 `hash_only` retention 展示完成/有结果状态；完整草稿内容依赖 `message.create_draft` action payload。
+- 撤销 delegated key 的强语义依赖 signed DID Document update 和 message-service DID Document cache 刷新，单纯 disable binding 不是永久撤销授权。
+- MVP 不做会话级策略，默认处理所有可处理会话；后续需要补联系人/群聊/会话策略和隐私提示。
 
 ## 当前结论
 
