@@ -60,8 +60,16 @@ void main() {
     final refusedMessage = AppMessage.fromError(
       Exception('Connection refused'),
     );
+    final proxyMessage = AppMessage.fromError(
+      Exception('ClientException: proxy connection failed'),
+    );
+    final handshakeMessage = AppMessage.fromError(
+      Exception('HandshakeException: Connection terminated during handshake'),
+    );
 
     expect(socketMessage, AppMessage.networkUnavailableRetry());
     expect(refusedMessage, AppMessage.networkUnavailableRetry());
+    expect(proxyMessage, AppMessage.networkUnavailableRetry());
+    expect(handshakeMessage, AppMessage.networkUnavailableRetry());
   });
 }

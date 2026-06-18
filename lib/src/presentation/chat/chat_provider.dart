@@ -1139,7 +1139,7 @@ class ChatThreadsController
     final pendingLocalMessageId =
         sourceMessageId ??
         messageId ??
-        'agent-run:${agentDid}:${mentionId ?? startedAt.microsecondsSinceEpoch}';
+        'agent-run:$agentDid:${mentionId ?? startedAt.microsecondsSinceEpoch}';
     final pendingRemoteMessageId = sourceMessageId ?? messageId;
     var found = false;
     final nextTurns = <AgentPendingTurn>[];

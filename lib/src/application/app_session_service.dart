@@ -3,6 +3,7 @@ import 'ports/auth_core_port.dart';
 import 'ports/identity_core_port.dart';
 import 'ports/im_core_runtime_port.dart';
 import 'ports/realtime_core_port.dart';
+import '../core/app_error_classifier.dart';
 
 abstract interface class AppSessionService {
   Future<AppSession?> restoreSession();
@@ -81,12 +82,23 @@ class ImCoreAppSessionService implements AppSessionService {
       await _runtime.open();
     }
     await _runtime.switchIdentity(identity.identityId);
-    final auth = await _auth.ensureSession();
-    _current = identity.copyWith(
-      authenticated: auth.authenticated,
-      expiresAt: auth.expiresAt,
-      jwtToken: auth.bearerToken,
-    );
+    try {
+      final auth = await _auth.ensureSession();
+      _current = identity.copyWith(
+        authenticated: auth.authenticated,
+        expiresAt: auth.expiresAt,
+        jwtToken: auth.bearerToken,
+      );
+    } catch (error) {
+      if (!isTransientNetworkAppError(error)) {
+        rethrow;
+      }
+      _current = identity.copyWith(
+        authenticated: false,
+        expiresAt: null,
+        jwtToken: null,
+      );
+    }
     return _current!;
   }
 

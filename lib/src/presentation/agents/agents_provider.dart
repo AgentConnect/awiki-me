@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
 import '../../application/models/product_local_models.dart';
+import '../../core/app_error_classifier.dart';
 import '../../data/agent/user_service_agent_inventory_adapter.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
@@ -682,10 +683,6 @@ class AgentsController extends StateNotifier<AgentsState> {
           state.pendingDaemonUpgrades,
           daemonDid,
         ),
-        statusQueryErrors: <String, String>{
-          ...state.statusQueryErrors,
-          daemonDid: '代理升级后暂时没有响应，请稍后刷新状态。',
-        },
       );
     });
   }
@@ -721,15 +718,15 @@ class AgentsController extends StateNotifier<AgentsState> {
     final command = _string(result['command']);
     final payloadState = _string(payload['state'])?.toLowerCase();
     final resultStatus = _string(result['status'])?.toLowerCase();
-    if (command == 'daemon.upgrade' &&
-        (payloadState == 'failed' ||
-            payloadState == 'ready' ||
-            payloadState == 'succeeded' ||
-            resultStatus == 'failed' ||
-            resultStatus == 'ready' ||
-            resultStatus == 'succeeded' ||
-            result['error_code'] != null)) {
-      return _withoutSetValue(state.pendingDaemonUpgrades, daemonDid);
+    if (command == 'daemon.upgrade') {
+      if (payloadState == 'failed' ||
+          resultStatus == 'failed' ||
+          result['error_code'] != null) {
+        return _withoutSetValue(state.pendingDaemonUpgrades, daemonDid);
+      }
+      if (_isFinalDaemonUpgradeSuccess(payload, result)) {
+        return _withoutSetValue(state.pendingDaemonUpgrades, daemonDid);
+      }
     }
     final daemon = merged.where((agent) => agent.agentDid == daemonDid);
     if (daemon.isEmpty) {
@@ -740,7 +737,9 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (latestStatus == 'failed' ||
         latestStatus == 'error' ||
         latestStatus == 'gateway_error' ||
-        (!latest.needsUpgrade && latestStatus != 'upgrading')) {
+        (!latest.needsUpgrade &&
+            latestStatus != 'upgrading' &&
+            latestStatus != 'restart_scheduled')) {
       return _withoutSetValue(state.pendingDaemonUpgrades, daemonDid);
     }
     return state.pendingDaemonUpgrades;
@@ -992,21 +991,17 @@ class AgentsController extends StateNotifier<AgentsState> {
           _string(result['daemon_agent_did']) ??
           _string(payload['daemon_agent_did']);
       if (daemonDid != null) {
+        final statusPayload = _daemonUpgradeStatusPayload(
+          result,
+          payloadState: _string(payload['state']),
+        );
         byDid[daemonDid] = _mergeAgent(
           byDid[daemonDid],
           agentDid: daemonDid,
           kind: AgentKind.daemon,
-          payload: <String, Object?>{
-            ...result,
-            'agent_did': daemonDid,
-            'status': _string(payload['state']) ?? _string(result['status']),
-            if ((_string(payload['state']) ?? _string(result['status']))
-                    ?.trim()
-                    .toLowerCase() ==
-                'ready')
-              'needs_upgrade': false,
-          },
-          fallbackStatus: _string(payload['state']),
+          payload: <String, Object?>{...statusPayload, 'agent_did': daemonDid},
+          fallbackStatus:
+              _string(statusPayload['status']) ?? _string(payload['state']),
           fallbackEventAt: eventAt,
         );
       }
@@ -1261,6 +1256,63 @@ bool _isArchivedAgentPayload(Map<String, Object?> payload) {
   return activeState == 'archived' || status == 'archived';
 }
 
+Map<String, Object?> _daemonUpgradeStatusPayload(
+  Map<String, Object?> result, {
+  required String? payloadState,
+}) {
+  final payloadStatus = payloadState?.trim().toLowerCase();
+  final resultStatus = _string(result['status'])?.toLowerCase();
+  final isFinalSuccess = _isFinalDaemonUpgradeSuccess(<String, Object?>{
+    'state': payloadState,
+  }, result);
+  final status = switch ((payloadStatus, resultStatus)) {
+    (_, _) when result['error_code'] != null => 'failed',
+    (_, _) when isFinalSuccess => 'ready',
+    ('failed', _) || (_, 'failed') => 'failed',
+    ('upgrading', _) ||
+    (_, 'in_progress') ||
+    (_, 'restart_scheduled') => 'upgrading',
+    ('ready', _) ||
+    ('succeeded', _) ||
+    (_, 'ready') ||
+    (_, 'succeeded') => 'upgrading',
+    (final state?, _) => state,
+    (_, final state?) => state,
+    _ => 'upgrading',
+  };
+  return <String, Object?>{
+    ...result,
+    'status': status,
+    if (isFinalSuccess) 'needs_upgrade': false,
+  };
+}
+
+bool _isFinalDaemonUpgradeSuccess(
+  Map<String, Object?> payload,
+  Map<String, Object?> result,
+) {
+  if (result['error_code'] != null) {
+    return false;
+  }
+  final payloadState = _string(payload['state'])?.toLowerCase();
+  final resultStatus = _string(result['status'])?.toLowerCase();
+  if (payloadState == 'restart_scheduled' ||
+      resultStatus == 'restart_scheduled' ||
+      resultStatus == 'in_progress') {
+    return false;
+  }
+  final hasVersionEvidence =
+      _string(result['version']) != null ||
+      _string(result['current_version']) != null;
+  if (!hasVersionEvidence) {
+    return false;
+  }
+  return payloadState == 'ready' ||
+      payloadState == 'succeeded' ||
+      resultStatus == 'ready' ||
+      resultStatus == 'succeeded';
+}
+
 Map<String, DateTime> _withoutKey(Map<String, DateTime> input, String key) {
   if (!input.containsKey(key)) {
     return input;
@@ -1326,54 +1378,31 @@ DateTime? _dateTime(Object? value) {
 }
 
 String _agentErrorMessage(Object error) {
-  final raw = error.toString();
-  final normalized = raw.toLowerCase();
-  final compact = normalized.replaceAll(RegExp(r'\s+'), '');
-  if (normalized.contains('missing or invalid authorization header') ||
-      compact.contains('http401') ||
-      normalized.contains('missing authentication headers') ||
-      normalized.contains('invalid token') ||
-      normalized.contains('empty token') ||
-      normalized.contains('current user did is required') ||
-      normalized.contains('current user did is not bound') ||
-      normalized.contains('controller handle') ||
-      normalized.contains('controller_scope_mismatch')) {
-    return '登录状态已失效，请重新登录后再查看智能体。';
-  }
-  if (normalized.contains('timeoutexception') ||
-      normalized.contains('timed out')) {
-    return '请求超时，请检查网络后重试。';
-  }
-  if (normalized.contains('connection refused') ||
-      normalized.contains('failed host lookup') ||
-      normalized.contains('network is unreachable')) {
-    return '暂时无法连接后端服务，请检查网络或服务地址后重试。';
+  switch (classifyAppError(error)) {
+    case AppErrorKind.authentication:
+      return '登录状态已失效，请重新登录后再查看智能体。';
+    case AppErrorKind.timeout:
+      return '请求超时，请稍后重试。';
+    case AppErrorKind.networkUnavailable:
+      return '网络连接暂时不可用，已保留当前数据。';
+    case AppErrorKind.didNotFoundOrRevoked:
+    case AppErrorKind.other:
+      break;
   }
   return '智能体信息暂时无法加载，请稍后重试。';
 }
 
 String _agentStatusRefreshErrorMessage(Object error) {
-  final raw = error.toString();
-  final normalized = raw.toLowerCase();
-  final compact = normalized.replaceAll(RegExp(r'\s+'), '');
-  if (normalized.contains('missing or invalid authorization header') ||
-      compact.contains('http401') ||
-      normalized.contains('missing authentication headers') ||
-      normalized.contains('invalid token') ||
-      normalized.contains('empty token') ||
-      normalized.contains('current user did is required') ||
-      normalized.contains('current user did is not bound') ||
-      normalized.contains('controller_scope_mismatch')) {
-    return '登录状态已失效，请重新登录后再刷新代理状态。';
-  }
-  if (normalized.contains('timeoutexception') ||
-      normalized.contains('timed out')) {
-    return '刷新状态超时，请稍后再试。';
-  }
-  if (normalized.contains('connection refused') ||
-      normalized.contains('failed host lookup') ||
-      normalized.contains('network is unreachable')) {
-    return '暂时无法连接后端服务，请检查网络或服务地址后再刷新状态。';
+  switch (classifyAppError(error)) {
+    case AppErrorKind.authentication:
+      return '登录状态已失效，请重新登录后再刷新代理状态。';
+    case AppErrorKind.timeout:
+      return '刷新状态超时，当前数据已保留。';
+    case AppErrorKind.networkUnavailable:
+      return '网络连接暂时不可用，当前数据已保留。';
+    case AppErrorKind.didNotFoundOrRevoked:
+    case AppErrorKind.other:
+      break;
   }
   return '状态刷新请求发送失败，请稍后再试。';
 }

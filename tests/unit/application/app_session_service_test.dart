@@ -44,6 +44,42 @@ void main() {
     );
 
     test(
+      'restoreSession keeps the local identity when auth is temporarily offline',
+      () async {
+        final runtime = _FakeRuntime();
+        final identity = _session('id-offline');
+        final auth = _FakeAuth(
+          ensureError: Exception(
+            'transport unavailable: error sending request for url',
+          ),
+        );
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: _FakeIdentities(defaultIdentity: identity),
+          auth: auth,
+        );
+
+        final restored = await service.restoreSession();
+
+        expect(restored?.identityId, 'id-offline');
+        expect(restored?.authenticated, isFalse);
+        expect(restored?.jwtToken, isNull);
+        expect(runtime.switchedIdentities, ['id-offline']);
+        expect(auth.ensureCount, 1);
+      },
+    );
+
+    test('restoreSession still fails on non-transient auth errors', () async {
+      final service = ImCoreAppSessionService(
+        runtime: _FakeRuntime(),
+        identities: _FakeIdentities(defaultIdentity: _session('id-auth')),
+        auth: _FakeAuth(ensureError: StateError('private key missing')),
+      );
+
+      await expectLater(service.restoreSession(), throwsStateError);
+    });
+
+    test(
       'explicit local identity login activates a matching local identity',
       () async {
         final runtime = _FakeRuntime();
@@ -292,7 +328,9 @@ class _FakeIdentities implements IdentityCorePort {
   }
 
   @override
-  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(String identityIdOrAlias) {
+  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(
+    String identityIdOrAlias,
+  ) {
     throw UnsupportedError('unsupported');
   }
 
@@ -304,18 +342,27 @@ class _FakeIdentities implements IdentityCorePort {
 }
 
 class _FakeAuth implements AuthCorePort {
-  _FakeAuth({AppAuthState? ensureResult, AppAuthState? refreshResult})
-    : _ensureResult = ensureResult ?? const AppAuthState(authenticated: true),
-      _refreshResult = refreshResult ?? const AppAuthState(authenticated: true);
+  _FakeAuth({
+    AppAuthState? ensureResult,
+    AppAuthState? refreshResult,
+    this.ensureError,
+  }) : _ensureResult = ensureResult ?? const AppAuthState(authenticated: true),
+       _refreshResult =
+           refreshResult ?? const AppAuthState(authenticated: true);
 
   final AppAuthState _ensureResult;
   final AppAuthState _refreshResult;
+  final Object? ensureError;
   int ensureCount = 0;
   int refreshCount = 0;
 
   @override
   Future<AppAuthState> ensureSession() async {
     ensureCount += 1;
+    final error = ensureError;
+    if (error != null) {
+      throw error;
+    }
     return _ensureResult;
   }
 

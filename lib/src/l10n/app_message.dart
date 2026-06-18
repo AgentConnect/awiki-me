@@ -1,5 +1,7 @@
 import 'package:awiki_me/l10n/app_localizations.dart';
 
+import '../core/app_error_classifier.dart';
+
 class AppMessage {
   const AppMessage._(this.id, {this.path, this.value, this.detail});
 
@@ -160,21 +162,21 @@ class AppMessage {
       const AppMessage._('attachmentUnavailable');
 
   factory AppMessage.fromError(Object error) {
-    final raw = _normalize(error);
+    final raw = normalizeAppError(error);
     if (raw.isEmpty) {
       return AppMessage.operationFailedRetry();
     }
-    if (raw.contains('TimeoutException') || raw.contains('timed out')) {
-      return AppMessage.requestTimeoutRetry();
-    }
-    if (_isNetworkUnavailable(raw)) {
-      return AppMessage.networkUnavailableRetry();
-    }
-    if (_isMissingOrInvalidAuthorization(raw)) {
-      return AppMessage.sessionExpiredRelogin();
-    }
-    if (_isDidNotFoundOrRevoked(raw)) {
-      return AppMessage.didNotFoundOrRevoked();
+    switch (classifyAppError(error)) {
+      case AppErrorKind.timeout:
+        return AppMessage.requestTimeoutRetry();
+      case AppErrorKind.networkUnavailable:
+        return AppMessage.networkUnavailableRetry();
+      case AppErrorKind.authentication:
+        return AppMessage.sessionExpiredRelogin();
+      case AppErrorKind.didNotFoundOrRevoked:
+        return AppMessage.didNotFoundOrRevoked();
+      case AppErrorKind.other:
+        break;
     }
 
     if (raw == '邮箱尚未激活，请先点击邮件中的激活链接。') {
@@ -407,66 +409,6 @@ class AppMessage {
       default:
         return detail ?? 'The operation failed. Please try again later.';
     }
-  }
-
-  static String _normalize(Object error) {
-    final raw = error.toString().trim();
-    if (raw.startsWith('Exception: ')) {
-      return raw.substring('Exception: '.length);
-    }
-    if (raw.startsWith('StateError: ')) {
-      return raw.substring('StateError: '.length);
-    }
-    if (raw.startsWith('Unsupported operation: ')) {
-      return raw.substring('Unsupported operation: '.length);
-    }
-    if (raw.startsWith('UnsupportedError: ')) {
-      return raw.substring('UnsupportedError: '.length);
-    }
-    if (raw.startsWith('ArgumentError: ')) {
-      return raw.substring('ArgumentError: '.length);
-    }
-    if (raw.startsWith('Bad state: ')) {
-      return raw.substring('Bad state: '.length);
-    }
-    return raw;
-  }
-
-  static bool _isDidNotFoundOrRevoked(String raw) {
-    final normalized = raw.toLowerCase();
-    final compact = normalized.replaceAll(RegExp(r'\s+'), '');
-    return compact.contains('didnotfoundorrevoked') ||
-        (normalized.contains('did not found') &&
-            normalized.contains('revoked')) ||
-        (normalized.contains('did not exist') &&
-            normalized.contains('revoked'));
-  }
-
-  static bool _isMissingOrInvalidAuthorization(String raw) {
-    final normalized = raw.toLowerCase();
-    final compact = normalized.replaceAll(RegExp(r'\s+'), '');
-    return normalized.contains('missing or invalid authorization header') ||
-        compact.contains('http401') ||
-        normalized.contains('invalid token') ||
-        normalized.contains('empty token');
-  }
-
-  static bool _isNetworkUnavailable(String raw) {
-    final normalized = raw.toLowerCase();
-    return normalized.contains('transport_unavailable') ||
-        normalized.contains('transport unavailable') ||
-        normalized.contains('error sending request for url') ||
-        normalized.contains('socketexception') ||
-        normalized.contains('failed host lookup') ||
-        normalized.contains('connection refused') ||
-        normalized.contains('connection reset') ||
-        normalized.contains('connection closed') ||
-        normalized.contains('network is unreachable') ||
-        normalized.contains('no address associated with hostname') ||
-        normalized.contains('connection failed') ||
-        normalized.contains('tls error') ||
-        normalized.contains('handshake error') ||
-        normalized.contains('certificate verify failed');
   }
 
   @override
