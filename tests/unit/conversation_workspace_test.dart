@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
@@ -864,6 +865,114 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
+  testWidgets('macOS 最近会话用 Controller activity 显示本地智能体处理中状态', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:human:me',
+      credentialName: 'me.json',
+      displayName: 'Me',
+      handle: 'me',
+    );
+    final agentConversation = ConversationSummary(
+      threadId: 'dm:did:agent:runtime',
+      displayName: 'Hermes',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 6, 4, 10),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:agent:runtime',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[agentConversation]
+      ..dmHistoryByPeerDid = const <String, List<ChatMessage>>{
+        'did:agent:runtime': <ChatMessage>[],
+      };
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:runtime',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'hermes',
+          displayName: 'Hermes',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+          agentsProvider.overrideWith((ref) {
+            final controller = AgentsController(ref);
+            controller.state = AgentsState(agents: control.agents);
+            return controller;
+          }),
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final initialDot = tester.widget<AgentStatusDot>(
+      find.byType(AgentStatusDot).first,
+    );
+    expect(initialDot.status.kind, AgentVisualStatusKind.ready);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ConversationWorkspacePage)),
+    );
+    container.read(agentsProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'status_scope': 'runtime_activity',
+        'daemon_agent_did': 'did:agent:daemon',
+        'runs': <Object?>[
+          <String, Object?>{
+            'run_id': 'run_external_activity',
+            'runtime_agent_did': 'did:agent:runtime',
+            'requester_did': 'did:human:bob',
+            'trigger_kind': 'external_direct',
+            'status': 'running',
+            'updated_at': DateTime(2026, 6, 4, 10, 2).toIso8601String(),
+          },
+        ],
+      },
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final processingDot = tester.widget<AgentStatusDot>(
+      find.byType(AgentStatusDot).first,
+    );
+    expect(processingDot.status.kind, AgentVisualStatusKind.processing);
+    final thread = container.read(
+      chatThreadProvider(agentConversation.threadId),
+    );
+    expect(thread.agentPendingTurns, isEmpty);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
   testWidgets('macOS 最近会话用运行状态显示远端智能体处理中状态', (tester) async {
     const session = SessionIdentity(
       did: 'did:human:me',
@@ -916,10 +1025,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final initialDot = tester.widget<AgentStatusDot>(
-      find.byType(AgentStatusDot).first,
-    );
-    expect(initialDot.status.kind, AgentVisualStatusKind.unknown);
+    expect(find.byType(AgentStatusDot), findsNothing);
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ConversationWorkspacePage)),

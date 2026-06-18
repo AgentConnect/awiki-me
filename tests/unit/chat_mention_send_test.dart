@@ -223,6 +223,30 @@ void main() {
     expect(container.read(pendingAgentDidsProvider), isNot(contains(agentDid)));
   });
 
+  test('controller activity status does not create chat pending turn', () {
+    const agentDid = 'did:wba:awiki.info:agent:runtime:hermes:e1_agent';
+
+    container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+      const <String, Object?>{
+        'schema': 'awiki.agent.status.v1',
+        'status_scope': 'runtime_activity',
+        'runs': <Object?>[
+          <String, Object?>{
+            'run_id': 'run_external_activity',
+            'runtime_agent_did': agentDid,
+            'requester_did': 'did:wba:awiki.info:user:bob',
+            'trigger_kind': 'external_direct',
+            'status': 'running',
+          },
+        ],
+      },
+    );
+
+    final thread = container.read(chatThreadProvider(conversation.threadId));
+    expect(thread.pendingAgentReplyCount, 0);
+    expect(container.read(pendingAgentDidsProvider), isNot(contains(agentDid)));
+  });
+
   test(
     'direct run status uses agent conversation when daemon conversation id is requester scoped',
     () {

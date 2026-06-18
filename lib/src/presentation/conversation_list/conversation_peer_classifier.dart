@@ -154,7 +154,10 @@ final conversationPeerClassificationProvider =
       }
 
       final agents = ref.watch(agentsProvider).agents;
-      final localRuntime = _localRuntimeAgentFor(targetDid, agents);
+      final localRuntime = localRuntimeAgentForConversationTarget(
+        targetDid,
+        agents,
+      );
       if (localRuntime != null) {
         return ConversationPeerClassification.agent(
           agentKind: PeerAgentKind.runtime,
@@ -182,7 +185,7 @@ final conversationPeerClassificationProvider =
       }
     });
 
-AgentSummary? _localRuntimeAgentFor(
+AgentSummary? localRuntimeAgentForConversationTarget(
   String targetDid,
   List<AgentSummary> agents,
 ) {

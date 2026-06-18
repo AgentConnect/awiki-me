@@ -9,6 +9,7 @@ import '../../app/app_router.dart';
 import '../../app/ui_feedback.dart';
 import '../../core/date_time_formatter.dart';
 import '../../domain/entities/conversation_summary.dart';
+import '../../domain/entities/peer_agent_identity.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../chat/chat_page.dart';
@@ -322,18 +323,10 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                       itemCount: visibleConversations.length,
                       itemBuilder: (context, index) {
                         final item = visibleConversations[index];
-                        final classification = ref
-                            .watch(
-                              conversationPeerClassificationProvider(
-                                ConversationPeerTarget.fromConversation(item),
-                              ),
-                            )
-                            .maybeWhen(
-                              data: (value) => value,
-                              orElse: () => item.isGroup
-                                  ? const ConversationPeerClassification.group()
-                                  : const ConversationPeerClassification.unknown(),
-                            );
+                        final classification = _conversationPeerClassification(
+                          ref,
+                          item,
+                        );
                         final agentStatus = _conversationAgentStatus(
                           ref,
                           item,
@@ -453,18 +446,10 @@ class _ConversationRefreshView extends ConsumerWidget {
               itemCount: conversations.length,
               itemBuilder: (_, index) {
                 final item = conversations[index];
-                final classification = ref
-                    .watch(
-                      conversationPeerClassificationProvider(
-                        ConversationPeerTarget.fromConversation(item),
-                      ),
-                    )
-                    .maybeWhen(
-                      data: (value) => value,
-                      orElse: () => item.isGroup
-                          ? const ConversationPeerClassification.group()
-                          : const ConversationPeerClassification.unknown(),
-                    );
+                final classification = _conversationPeerClassification(
+                  ref,
+                  item,
+                );
                 final agentStatus = _conversationAgentStatus(
                   ref,
                   item,
@@ -1005,7 +990,7 @@ AgentVisualStatus? _conversationAgentStatus(
     if (pendingInThread.isNotEmpty) {
       return const AgentVisualStatus(AgentVisualStatusKind.processing);
     }
-    return const AgentVisualStatus(AgentVisualStatusKind.unknown);
+    return null;
   }
   final hasPendingTurn =
       ref.watch(pendingAgentDidsProvider).contains(runtimeAgent.agentDid) ||
@@ -1014,6 +999,57 @@ AgentVisualStatus? _conversationAgentStatus(
     runtimeAgent,
     hasPendingTurn: hasPendingTurn,
   );
+}
+
+ConversationPeerClassification _conversationPeerClassification(
+  WidgetRef ref,
+  ConversationSummary conversation,
+) {
+  return ref
+      .watch(
+        conversationPeerClassificationProvider(
+          ConversationPeerTarget.fromConversation(conversation),
+        ),
+      )
+      .maybeWhen(
+        data: (value) => value,
+        orElse: () =>
+            _fallbackConversationPeerClassification(ref, conversation),
+      );
+}
+
+ConversationPeerClassification _fallbackConversationPeerClassification(
+  WidgetRef ref,
+  ConversationSummary conversation,
+) {
+  if (conversation.isGroup) {
+    return const ConversationPeerClassification.group();
+  }
+  if (conversation.isDeletedAgentConversation) {
+    return const ConversationPeerClassification.agent(
+      agentKind: PeerAgentKind.runtime,
+    );
+  }
+  final targetDid = conversation.targetDid?.trim();
+  if (targetDid == null || targetDid.isEmpty) {
+    return const ConversationPeerClassification.unknown();
+  }
+  final localRuntime = localRuntimeAgentForConversationTarget(
+    targetDid,
+    ref.watch(agentsProvider).agents,
+  );
+  if (localRuntime != null) {
+    return ConversationPeerClassification.agent(
+      agentKind: PeerAgentKind.runtime,
+      localRuntimeAgent: localRuntime,
+    );
+  }
+  if (conversationTargetDidLooksLikeAgent(targetDid)) {
+    return const ConversationPeerClassification.agent(
+      agentKind: PeerAgentKind.runtime,
+    );
+  }
+  return const ConversationPeerClassification.unknown();
 }
 
 String _conversationPreviewForDraft(

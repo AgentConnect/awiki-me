@@ -26,6 +26,9 @@ class AgentRunStatus {
     required this.messageId,
     required this.runtimeAgentDid,
     this.conversationId,
+    this.requesterDid,
+    this.requesterFullHandle,
+    this.triggerKind,
     required this.status,
     this.startedAt,
     this.updatedAt,
@@ -37,6 +40,9 @@ class AgentRunStatus {
   final String messageId;
   final String runtimeAgentDid;
   final String? conversationId;
+  final String? requesterDid;
+  final String? requesterFullHandle;
+  final String? triggerKind;
   final String status;
   final DateTime? startedAt;
   final DateTime? updatedAt;
@@ -49,6 +55,9 @@ class AgentRunStatus {
       messageId: json['message_id']?.toString() ?? '',
       runtimeAgentDid: json['runtime_agent_did']?.toString() ?? '',
       conversationId: _optionalString(json['conversation_id']),
+      requesterDid: _optionalString(json['requester_did']),
+      requesterFullHandle: _optionalString(json['requester_full_handle']),
+      triggerKind: _optionalString(json['trigger_kind']),
       status: json['status']?.toString() ?? 'queued',
       startedAt: DateTime.tryParse(json['started_at']?.toString() ?? ''),
       updatedAt: DateTime.tryParse(json['updated_at']?.toString() ?? ''),
@@ -63,6 +72,9 @@ class AgentRunStatus {
       'message_id': messageId,
       'runtime_agent_did': runtimeAgentDid,
       'conversation_id': conversationId,
+      'requester_did': requesterDid,
+      'requester_full_handle': requesterFullHandle,
+      'trigger_kind': triggerKind,
       'status': status,
       'started_at': startedAt?.toUtc().toIso8601String(),
       'updated_at': updatedAt?.toUtc().toIso8601String(),

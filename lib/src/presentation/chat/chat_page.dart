@@ -1182,12 +1182,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     if (targetDid == null || targetDid.isEmpty) {
       return null;
     }
-    for (final agent in agents) {
-      if (agent.isRuntime && agent.agentDid == targetDid) {
-        return agent;
-      }
-    }
-    return null;
+    return localRuntimeAgentForConversationTarget(targetDid, agents);
   }
 
   String? _expectedAgentReplyDidForConversation(

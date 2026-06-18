@@ -1156,6 +1156,63 @@ void main() {
       expect(runtime.recentRuns[1].status, 'running');
     },
   );
+
+  test(
+    'runtime activity payload updates controller-visible runtime state',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+          AgentSummary(
+            agentDid: 'did:agent:runtime',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'hermes',
+            displayName: 'Hermes',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'runtime_activity',
+          'daemon_agent_did': 'did:agent:daemon',
+          'runs': <Object?>[
+            <String, Object?>{
+              'run_id': 'run_external_activity',
+              'runtime_agent_did': 'did:agent:runtime',
+              'requester_did': 'did:human:bob',
+              'trigger_kind': 'external_direct',
+              'status': 'running',
+              'updated_at': '2026-06-03T09:01:00Z',
+            },
+          ],
+        },
+      );
+
+      final runtime = container
+          .read(agentsProvider)
+          .agents
+          .singleWhere((agent) => agent.agentDid == 'did:agent:runtime');
+      expect(runtime.latest.status, 'ready');
+      expect(runtime.recentRuns, hasLength(1));
+      expect(runtime.recentRuns.single.runId, 'run_external_activity');
+      expect(runtime.recentRuns.single.status, 'running');
+      expect(runtime.recentRuns.single.requesterDid, 'did:human:bob');
+      expect(runtime.recentRuns.single.triggerKind, 'external_direct');
+    },
+  );
 }
 
 ProviderContainer _container(
