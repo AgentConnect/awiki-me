@@ -868,6 +868,15 @@ class _MessageTextContent extends StatelessWidget {
     final validMentions =
         mentions.where((mention) => mention.rangeMatches(text)).toList()
           ..sort((a, b) => a.start.compareTo(b.start));
+    if (renderMarkdown &&
+        (validMentions.isEmpty || _messageTextContainsMarkdownSyntax(text))) {
+      return MarkdownBody(
+        data: text,
+        selectable: false,
+        shrinkWrap: true,
+        styleSheet: _chatMarkdownStyleSheet(context, style),
+      );
+    }
     if (validMentions.isNotEmpty) {
       return Text.rich(
         TextSpan(
@@ -879,12 +888,7 @@ class _MessageTextContent extends StatelessWidget {
     if (!renderMarkdown) {
       return _MessagePlainText(text: text, style: style);
     }
-    return MarkdownBody(
-      data: text,
-      selectable: false,
-      shrinkWrap: true,
-      styleSheet: _chatMarkdownStyleSheet(context, style),
-    );
+    return _MessagePlainText(text: text, style: style);
   }
 
   List<InlineSpan> _mentionTextSpans(
@@ -919,6 +923,19 @@ class _MessageTextContent extends StatelessWidget {
     }
     return spans;
   }
+}
+
+bool _messageTextContainsMarkdownSyntax(String text) {
+  final value = text.trimRight();
+  if (value.isEmpty) {
+    return false;
+  }
+  return RegExp(r'(^|\n)\s{0,3}#{1,6}\s+\S').hasMatch(value) ||
+      RegExp(r'(^|\n)\s{0,3}([-*+]\s+|\d+[.)]\s+)').hasMatch(value) ||
+      RegExp(r'(^|\n)\s{0,3}>\s+\S').hasMatch(value) ||
+      RegExp(r'(^|\n)\s{0,3}```').hasMatch(value) ||
+      RegExp(r'(`[^`\n]+`|\*\*[^*\n].*?\*\*|__[^_\n].*?__)').hasMatch(value) ||
+      RegExp(r'(\[[^\]\n]+\]\([^)]+\)|~~[^~\n].*?~~)').hasMatch(value);
 }
 
 MarkdownStyleSheet _chatMarkdownStyleSheet(

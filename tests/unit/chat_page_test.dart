@@ -3,6 +3,7 @@
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
+import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
@@ -1776,6 +1777,77 @@ void main() {
 
     body = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
     expect(body.data, agentMarkdown);
+    expect(body.selectable, isFalse);
+  });
+
+  testWidgets('群聊收到带 mention 的 Markdown 消息仍按 Markdown 渲染', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'group:mention-markdown',
+      displayName: 'Markdown 群',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:test:group:mention-markdown',
+    );
+    const text = '@Alice **重点**\n\n- 第一项';
+    gateway.groupHistoryByGroupId = <String, List<ChatMessage>>{
+      conversation.groupId!: <ChatMessage>[
+        ChatMessage(
+          localId: 'group-mention-markdown',
+          remoteId: 'group-mention-markdown',
+          threadId: conversation.threadId,
+          senderDid: 'did:test:peer',
+          senderName: 'Bob',
+          groupId: conversation.groupId,
+          content: text,
+          createdAt: DateTime(2026, 4, 5, 12, 1),
+          isMine: false,
+          sendState: MessageSendState.sent,
+          mentions: const <ChatMessageMention>[
+            ChatMessageMention(
+              id: 'mention-alice',
+              surface: '@Alice',
+              start: 0,
+              end: 6,
+              target: ChatMentionTargetDraft.member(
+                kind: ChatMentionTargetKind.human,
+                did: 'did:test:alice',
+                handle: 'alice',
+                displayName: 'Alice',
+              ),
+            ),
+          ],
+        ),
+      ],
+    };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await tester.pumpAndSettle();
+
+    final body = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
+    expect(body.data, text);
     expect(body.selectable, isFalse);
   });
 
