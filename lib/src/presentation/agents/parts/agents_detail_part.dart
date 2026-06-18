@@ -13,6 +13,8 @@ class _AgentDetailPane extends StatelessWidget {
     required this.onResetRuntime,
     required this.onUpgrade,
     required this.onDelete,
+    required this.messageAgentEnabled,
+    required this.onBootstrapMessageAgent,
     required this.onSaveInvocationPolicy,
   });
 
@@ -27,6 +29,8 @@ class _AgentDetailPane extends StatelessWidget {
   final ValueChanged<AgentSummary> onResetRuntime;
   final ValueChanged<AgentSummary> onUpgrade;
   final ValueChanged<AgentSummary> onDelete;
+  final bool messageAgentEnabled;
+  final ValueChanged<AgentSummary> onBootstrapMessageAgent;
   final Future<bool> Function(String agentDid, AgentInvocationPolicy policy)
   onSaveInvocationPolicy;
 
@@ -173,6 +177,15 @@ class _AgentDetailPane extends StatelessWidget {
               ),
               SizedBox(height: responsive.spacing(18)),
             ],
+            if (agent.isDaemon) ...<Widget>[
+              _MessageAgentSettingsPanel(
+                daemon: agent,
+                enabled: messageAgentEnabled,
+                isActing: state.isActing,
+                onEnable: () => onBootstrapMessageAgent(agent),
+              ),
+              SizedBox(height: responsive.spacing(18)),
+            ],
             _DiagnosticInfoPanel(
               key: ValueKey<String>('diagnostic-${agent.agentDid}'),
               agent: agent,
@@ -182,6 +195,258 @@ class _AgentDetailPane extends StatelessWidget {
       ),
     );
   }
+}
+
+class _MessageAgentSettingsPanel extends StatelessWidget {
+  const _MessageAgentSettingsPanel({
+    required this.daemon,
+    required this.enabled,
+    required this.isActing,
+    required this.onEnable,
+  });
+
+  final AgentSummary daemon;
+  final bool enabled;
+  final bool isActing;
+  final VoidCallback onEnable;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final diagnostics = daemon.latest.diagnosticsSummary;
+    final hasBootstrapKey =
+        _nonEmpty(diagnostics['bootstrap_public_key_b64u']?.toString()) != null;
+    final daemonReady =
+        daemon.latest.status.trim().toLowerCase() == 'ready' ||
+        daemon.latest.status.trim().toLowerCase() == 'needs_upgrade';
+    final canEnable = enabled && daemonReady && hasBootstrapKey && !isActing;
+    return Container(
+      key: const Key('message-agent-settings-panel'),
+      padding: EdgeInsets.all(responsive.spacing(16)),
+      decoration: BoxDecoration(
+        color: CupertinoColors.white,
+        borderRadius: BorderRadius.circular(responsive.radius(10)),
+        border: Border.all(color: const Color(0xFFE4EAF3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: responsive.displayScaled(34),
+                height: responsive.displayScaled(34),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF2F7F4),
+                  borderRadius: BorderRadius.circular(responsive.radius(9)),
+                ),
+                child: Icon(
+                  CupertinoIcons.bubble_left_bubble_right,
+                  color: const Color(0xFF1B7A43),
+                  size: responsive.iconMd,
+                ),
+              ),
+              SizedBox(width: responsive.spacing(10)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      '消息处理 Agent',
+                      style: TextStyle(
+                        color: const Color(0xFF101B32),
+                        fontSize: responsive.bodyMd,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: responsive.spacing(2)),
+                    Text(
+                      enabled ? '运行 Daemon 内创建 Hermes runtime' : '实验功能关闭',
+                      style: TextStyle(
+                        color: const Color(0xFF66728A),
+                        fontSize: responsive.metaSm,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _MessageAgentStatePill(
+                text: enabled && hasBootstrapKey ? '可启用' : '未就绪',
+                active: enabled && hasBootstrapKey,
+              ),
+            ],
+          ),
+          SizedBox(height: responsive.spacing(14)),
+          SelectionContainer.disabled(
+            child: _MessageAgentFactGrid(
+              rows: <_MessageAgentFact>[
+                _MessageAgentFact('运行 Daemon', AgentDisplayName.title(daemon)),
+                const _MessageAgentFact('引擎', 'Hermes'),
+                const _MessageAgentFact('处理范围', '所有可处理会话'),
+                _MessageAgentFact('Daemon 版本', _daemonRuntimeSummary(daemon)),
+                const _MessageAgentFact('可用能力', 'Hermes message runtime'),
+                _MessageAgentFact(
+                  '安全 bootstrap',
+                  hasBootstrapKey ? '已上报公钥' : '等待刷新状态',
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: responsive.spacing(12)),
+          _MessageAgentPermissionSummary(enabled: enabled),
+          SizedBox(height: responsive.spacing(12)),
+          SelectionContainer.disabled(
+            child: Wrap(
+              spacing: responsive.spacing(8),
+              runSpacing: responsive.spacing(8),
+              children: <Widget>[
+                _ActionButton(
+                  icon: CupertinoIcons.check_mark_circled,
+                  label: isActing ? '启用中' : '启用消息处理 Agent',
+                  onPressed: canEnable ? onEnable : null,
+                ),
+                const _ActionButton(
+                  icon: CupertinoIcons.pause_circle,
+                  label: '暂停处理消息',
+                  onPressed: null,
+                ),
+                const _ActionButton(
+                  icon: CupertinoIcons.trash,
+                  label: '删除消息处理 Agent',
+                  danger: true,
+                  onPressed: null,
+                ),
+                const _ActionButton(
+                  icon: CupertinoIcons.lock_slash,
+                  label: '撤销 Daemon 消息授权',
+                  danger: true,
+                  onPressed: null,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MessageAgentStatePill extends StatelessWidget {
+  const _MessageAgentStatePill({required this.text, required this.active});
+
+  final String text;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active ? const Color(0xFF1B7A43) : const Color(0xFF66728A);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageAgentFactGrid extends StatelessWidget {
+  const _MessageAgentFactGrid({required this.rows});
+
+  final List<_MessageAgentFact> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Wrap(
+      spacing: responsive.spacing(10),
+      runSpacing: responsive.spacing(10),
+      children: rows
+          .map(
+            (row) => SizedBox(
+              width: responsive.displayScaled(190),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    row.label,
+                    style: TextStyle(
+                      color: const Color(0xFF66728A),
+                      fontSize: responsive.metaSm,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: responsive.spacing(3)),
+                  Text(
+                    row.value,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: const Color(0xFF101B32),
+                      fontSize: responsive.bodySm,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class _MessageAgentPermissionSummary extends StatelessWidget {
+  const _MessageAgentPermissionSummary({required this.enabled});
+
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Container(
+      padding: EdgeInsets.all(responsive.spacing(12)),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9FD),
+        borderRadius: BorderRadius.circular(responsive.radius(8)),
+        border: Border.all(color: const Color(0xFFE8EDF5)),
+      ),
+      child: Text(
+        enabled
+            ? '权限摘要：读取普通消息，分析、总结、生成草稿，并向 App 请求需要确认的 action。'
+            : '启用 AWIKI_AGENT_IM_ENABLED 后可配置消息处理 Agent。',
+        style: TextStyle(
+          color: const Color(0xFF344056),
+          fontSize: responsive.bodySm,
+          height: 1.35,
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageAgentFact {
+  const _MessageAgentFact(this.label, this.value);
+
+  final String label;
+  final String value;
+}
+
+String _daemonRuntimeSummary(AgentSummary daemon) {
+  final version = _nonEmpty(daemon.latest.version);
+  final platform = _nonEmpty(daemon.latest.platform);
+  if (version != null && platform != null) {
+    return '$version · $platform';
+  }
+  return version ?? platform ?? '未知';
 }
 
 class _RunStatusPanel extends StatelessWidget {

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
+import '../../application/config/awiki_environment_config.dart';
 import '../../application/models/product_local_models.dart';
 import '../../data/agent/user_service_agent_inventory_adapter.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
@@ -18,6 +19,10 @@ import 'agent_display_name.dart';
 
 const agentStatusQueryTimeout = Duration(seconds: 10);
 const agentStatusRefreshMinimumIndicatorDuration = Duration(milliseconds: 1500);
+
+final agentImEnabledProvider = Provider<bool>(
+  (ref) => AwikiEnvironmentConfig.fromEnvironment().agentImEnabled,
+);
 
 class AgentsState {
   const AgentsState({
@@ -348,6 +353,21 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(error: '请先登录。');
       return;
     }
+    if (!ref.read(agentImEnabledProvider)) {
+      state = state.copyWith(error: '消息处理 Agent 功能未开启。');
+      return;
+    }
+    await ensureLoaded();
+    final daemon = _agentByDid(daemonDid);
+    if (daemon == null || !daemon.isDaemon) {
+      state = state.copyWith(error: '请选择运行 Daemon。');
+      return;
+    }
+    final daemonBootstrapPublicKey = _daemonBootstrapPublicKey(daemon);
+    if (daemonBootstrapPublicKey == null) {
+      state = state.copyWith(error: '运行 Daemon 尚未上报安全 bootstrap 公钥，请先刷新状态。');
+      return;
+    }
     final resolvedAppInstanceId =
         appInstanceId ?? _defaultAppInstanceId(session.credentialName);
     await _act(() async {
@@ -363,6 +383,7 @@ class AgentsController extends StateNotifier<AgentsState> {
             controllerDid: session.did,
             appInstanceId: resolvedAppInstanceId,
             userSubkeyPackage: subkeyPackage,
+            daemonBootstrapPublicKey: daemonBootstrapPublicKey,
             userHandle: session.handle,
           );
     });
@@ -860,6 +881,17 @@ class AgentsController extends StateNotifier<AgentsState> {
       }
     }
     return null;
+  }
+
+  DaemonBootstrapPublicKey? _daemonBootstrapPublicKey(AgentSummary daemon) {
+    try {
+      return DaemonBootstrapPublicKey.fromDiagnostics(
+        daemonDid: daemon.agentDid,
+        diagnostics: daemon.latest.diagnosticsSummary,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   List<AgentSummary> _mergeControlPayload(

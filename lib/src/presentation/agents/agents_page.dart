@@ -60,6 +60,7 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
     });
 
     final state = ref.watch(agentsProvider);
+    final messageAgentEnabled = ref.watch(agentImEnabledProvider);
     final responsive = context.awikiResponsive;
     final pendingAgentDids = ref.watch(pendingAgentDidsProvider);
     final list = _AgentListPane(
@@ -95,6 +96,10 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
           _confirmResetRuntimeSession(context, ref, agent),
       onUpgrade: (agent) => _confirmUpgradeDaemon(context, ref, agent),
       onDelete: (agent) => _confirmDeleteAgent(context, ref, agent),
+      messageAgentEnabled: messageAgentEnabled,
+      onBootstrapMessageAgent: (agent) => ref
+          .read(agentsProvider.notifier)
+          .bootstrapMessageAgent(daemonDid: agent.agentDid),
       onSaveInvocationPolicy: (agentDid, policy) => ref
           .read(agentsProvider.notifier)
           .saveInvocationPolicy(agentDid, policy),

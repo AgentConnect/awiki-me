@@ -119,7 +119,7 @@ void main() {
   );
 
   test(
-    'ensureMessageAgentBootstrap sends secure direct internal bootstrap payload',
+    'ensureMessageAgentBootstrap sends encrypted bootstrap envelope without private package',
     () async {
       final inventory = _InventoryStub();
       final messages = _MessagesStub();
@@ -134,6 +134,7 @@ void main() {
         controllerDid: 'did:human:me',
         appInstanceId: 'app_1',
         userHandle: 'alice.awiki.info',
+        daemonBootstrapPublicKey: _bootstrapPublicKey(),
         userSubkeyPackage: const UserSubkeyPackage(
           userDid: 'did:human:me',
           verificationMethod: 'did:human:me#daemon-key-1',
@@ -145,44 +146,41 @@ void main() {
       expect(inventory.runtimeTokenDaemonDid, 'did:agent:daemon');
       expect(inventory.runtimeTokenHandle, 'hermes-msg-app-1-334c10a06052');
       expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
-      expect(messages.lastSecure, isTrue);
+      expect(messages.lastSecure, isFalse);
       expect(
         messages.lastIdempotencyKey,
         'message-agent-bootstrap:did:human:me:app_1',
       );
-      expect(messages.lastPayload?['schema'], daemonBootstrapSchema);
+      expect(messages.lastPayload?['schema'], daemonBootstrapSecureSchema);
+      expect(messages.lastPayload?['recipient_daemon_did'], 'did:agent:daemon');
       expect(
-        messages.lastPayload?['bootstrap_id'],
-        matches(RegExp(r'^boot_[0-9a-f]{24}$')),
+        messages.lastPayload?['recipient_key_id'],
+        'did:agent:daemon#key-3',
       );
-      expect(messages.lastPayload?['controller_did'], 'did:human:me');
-      expect(messages.lastPayload?['app_instance_id'], 'app_1');
-      expect(messages.lastPayload?['user_handle'], 'alice.awiki.info');
+      expect(messages.lastPayload?['sender_human_did'], 'did:human:me');
       expect(
-        messages.lastPayload?.containsKey('private_key_multibase'),
-        isFalse,
+        messages.lastPayload?['operation_id'],
+        'message-agent-bootstrap:did:human:me:app_1',
       );
-      final package =
-          messages.lastPayload?['user_subkey_package'] as Map<String, Object?>;
-      expect(package['schema'], userSubkeyPackageSchema);
-      expect(package['verification_method'], 'did:human:me#daemon-key-1');
-      expect(package['private_key_encoding'], 'pem');
-      expect(package['private_key_pem'], 'zPrivate');
-      expect(package.containsKey('private_key_multibase'), isFalse);
-      expect(package['allowed_scopes'], isNot(contains('message.send.plain')));
-      final desired =
-          messages.lastPayload?['desired_message_agent']
-              as Map<String, Object?>;
-      expect(desired['role'], appMessageHandlerRole);
-      expect(desired['runtime'], appMessageHandlerRuntime);
-      expect(desired['runtime_provider'], appMessageHandlerRuntimeProvider);
-      expect(desired['runtime_profile'], appMessageHandlerRuntimeProfile);
       expect(
-        desired['ensure_once_key'],
-        'app-message-agent:did:human:me:app_1',
+        messages.lastPayload?['sender_ephemeral_public_key'],
+        isA<String>(),
       );
-      expect(desired['runtime_registration_token'], 'runtime-token');
-      expect(desired['allowed_actions'], defaultMessageAgentActions);
+      expect(messages.lastPayload?['nonce'], isA<String>());
+      expect(messages.lastPayload?['ciphertext'], isA<String>());
+      expect(
+        messages.lastPayload?['payload_sha256'],
+        matches(RegExp(r'^[0-9a-f]{64}$')),
+      );
+      final aad = messages.lastPayload?['aad'] as Map<String, Object?>;
+      expect(aad['binding_id'], 'app-message-agent:did:human:me:app_1');
+      expect(aad['runtime_provider'], appMessageHandlerRuntimeProvider);
+      final dump = messages.lastPayload.toString();
+      expect(dump, isNot(contains(daemonBootstrapSchema)));
+      expect(dump, isNot(contains('private_key_pem')));
+      expect(dump, isNot(contains('private_key_multibase')));
+      expect(dump, isNot(contains('zPrivate')));
+      expect(dump, isNot(contains('runtime-token')));
     },
   );
 
@@ -198,6 +196,7 @@ void main() {
         issuedAt: issuedAt,
         expiresAt: issuedAt.add(const Duration(minutes: 5)),
         nonce: 'nonce_1',
+        senderEphemeralPublicKey: 'sender_key_1',
         ciphertext: 'base64:ciphertext',
         payloadSha256: 'a' * 64,
         aad: const <String, Object?>{
@@ -210,6 +209,7 @@ void main() {
       expect(envelope['schema'], daemonBootstrapSecureSchema);
       expect(envelope['recipient_daemon_did'], 'did:agent:daemon');
       expect(envelope['sender_human_did'], 'did:human:me');
+      expect(envelope['sender_ephemeral_public_key'], 'sender_key_1');
       expect(envelope['ciphertext'], 'base64:ciphertext');
       expect(envelope.toString(), isNot(contains('private_key_pem')));
       expect(envelope.toString(), isNot(contains('zPrivate')));
@@ -227,6 +227,7 @@ void main() {
         issuedAt: issuedAt,
         expiresAt: issuedAt.add(const Duration(minutes: 5)),
         nonce: 'nonce_1',
+        senderEphemeralPublicKey: 'sender_key_1',
         ciphertext: 'base64:ciphertext',
         aad: const <String, Object?>{'private_key_pem': 'zPrivate'},
       ).toJson(),
@@ -245,6 +246,7 @@ void main() {
         issuedAt: issuedAt,
         expiresAt: issuedAt.add(const Duration(minutes: 5)),
         nonce: 'nonce_1',
+        senderEphemeralPublicKey: 'sender_key_1',
         ciphertext: 'base64:ciphertext',
         payloadSha256: 'not-a-valid-hash',
         aad: const <String, Object?>{
@@ -265,17 +267,21 @@ void main() {
         messages: messages,
       );
 
-      await service.ensureMessageAgentBootstrap(
-        daemonAgentDid: 'did:agent:daemon',
-        controllerDid: 'did:human:me',
-        appInstanceId: 'app_1',
-        userHandle: 'alice.awiki.info',
-        userSubkeyPackage: const UserSubkeyPackage(
-          userDid: 'did:human:me',
-          verificationMethod: 'did:human:me#daemon-key-1',
-          publicKeyMultibase: 'zPublic',
-          privateKeyMultibase: 'zPrivate',
+      await expectLater(
+        service.ensureMessageAgentBootstrap(
+          daemonAgentDid: 'did:agent:daemon',
+          controllerDid: 'did:human:me',
+          appInstanceId: 'app_1',
+          userHandle: 'alice.awiki.info',
+          daemonBootstrapPublicKey: _bootstrapPublicKey(),
+          userSubkeyPackage: const UserSubkeyPackage(
+            userDid: 'did:human:me',
+            verificationMethod: 'did:human:me#daemon-key-1',
+            publicKeyMultibase: 'zPublic',
+            privateKeyMultibase: 'zPrivate',
+          ),
         ),
+        throwsStateError,
       );
 
       expect(inventory.runtimeTokenDaemonDid, isNull);
@@ -300,6 +306,7 @@ void main() {
           controllerDid: 'did:human:me',
           appInstanceId: 'macos-e2e-app',
           userHandle: 'alice.awiki.info',
+          daemonBootstrapPublicKey: _bootstrapPublicKey(),
           userSubkeyPackage: const UserSubkeyPackage(
             userDid: 'did:human:me',
             verificationMethod: 'did:human:me#daemon-key-1',
@@ -315,18 +322,13 @@ void main() {
       final retry = await send('run-001');
       final secondRun = await send('run-002');
 
-      expect(first['app_instance_id'], 'macos-e2e-app');
+      expect(first['schema'], daemonBootstrapSecureSchema);
       expect(messages.lastIdempotencyKey, endsWith(':attempt:run-002'));
-      expect(first['idempotency_key'], retry['idempotency_key']);
-      expect(first['bootstrap_id'], retry['bootstrap_id']);
-      expect(first['idempotency_key'], isNot(secondRun['idempotency_key']));
-      expect(first['bootstrap_id'], isNot(secondRun['bootstrap_id']));
+      expect(first['operation_id'], retry['operation_id']);
+      expect(first['operation_id'], isNot(secondRun['operation_id']));
 
-      final desired = first['desired_message_agent'] as Map<String, Object?>;
-      expect(
-        desired['ensure_once_key'],
-        'app-message-agent:did:human:me:macos-e2e-app',
-      );
+      final aad = first['aad'] as Map<String, Object?>;
+      expect(aad['binding_id'], 'app-message-agent:did:human:me:macos-e2e-app');
       expect(
         inventory.runtimeTokenHandle,
         'hermes-msg-macos-e2e-app-7fe1fc2b5661',
@@ -652,4 +654,12 @@ class _MessagesStub implements MessagingService {
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed) {
     throw UnimplementedError();
   }
+}
+
+DaemonBootstrapPublicKey _bootstrapPublicKey() {
+  return const DaemonBootstrapPublicKey(
+    keyId: 'did:agent:daemon#key-3',
+    publicKeyB64u: 'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    publicKeyMultibase: 'zBootstrapPublic',
+  );
 }

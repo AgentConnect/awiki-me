@@ -30,6 +30,7 @@ abstract interface class AgentControlService {
     required String controllerDid,
     required String appInstanceId,
     required UserSubkeyPackage userSubkeyPackage,
+    required DaemonBootstrapPublicKey daemonBootstrapPublicKey,
     String? userHandle,
     String? runtimeRegistrationToken,
     String? runId,
@@ -188,12 +189,13 @@ class DefaultAgentControlService implements AgentControlService {
     required String controllerDid,
     required String appInstanceId,
     required UserSubkeyPackage userSubkeyPackage,
+    required DaemonBootstrapPublicKey daemonBootstrapPublicKey,
     String? userHandle,
     String? runtimeRegistrationToken,
     String? runId,
   }) async {
     if (!_agentImEnabled) {
-      return;
+      throw StateError('Message Agent is disabled.');
     }
     final userDid = userSubkeyPackage.userDid;
     final idempotencyKey = messageAgentBootstrapAttemptIdempotencyKey(
@@ -233,11 +235,16 @@ class DefaultAgentControlService implements AgentControlService {
         runtimeRegistrationToken: runtimeToken,
       ),
     );
+    final secureEnvelope = await DaemonSecureBootstrapEncryptor().encrypt(
+      internalEnvelope: envelope,
+      recipientDaemonDid: daemonAgentDid,
+      recipientKey: daemonBootstrapPublicKey,
+    );
     await _sendDaemonPayload(
       daemonAgentDid,
-      envelope.toJson(),
+      secureEnvelope,
       idempotencyKey: idempotencyKey,
-      secure: true,
+      secure: false,
     );
   }
 

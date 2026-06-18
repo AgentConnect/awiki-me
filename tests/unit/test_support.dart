@@ -1562,6 +1562,7 @@ class FakeAgentControlService implements AgentControlService {
       <String, AgentInvocationPolicy>{};
   String? lastInvocationPolicyAgentDid;
   AgentInvocationPolicy? lastInvocationPolicy;
+  DaemonBootstrapPublicKey? lastBootstrapDaemonPublicKey;
 
   @override
   Future<InstallCommand> createDaemonInstallCommand({
@@ -1589,6 +1590,7 @@ class FakeAgentControlService implements AgentControlService {
     required String controllerDid,
     required String appInstanceId,
     required UserSubkeyPackage userSubkeyPackage,
+    required DaemonBootstrapPublicKey daemonBootstrapPublicKey,
     String? userHandle,
     String? runtimeRegistrationToken,
     String? runId,
@@ -1597,6 +1599,7 @@ class FakeAgentControlService implements AgentControlService {
     lastBootstrapControllerDid = controllerDid;
     lastBootstrapAppInstanceId = appInstanceId;
     lastBootstrapUserSubkeyPackage = userSubkeyPackage;
+    lastBootstrapDaemonPublicKey = daemonBootstrapPublicKey;
   }
 
   @override

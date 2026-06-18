@@ -4,6 +4,7 @@ import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
@@ -438,6 +439,226 @@ void main() {
     expect(control.lastInvocationPolicyAgentDid, isNull);
   });
 
+  testWidgets('message Agent panel is closed when feature flag is off', (
+    tester,
+  ) async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '运行 Daemon 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'ready',
+            platform: 'linux-amd64',
+            diagnosticsSummary: <String, Object?>{
+              'bootstrap_key_id': 'did:agent:daemon#key-3',
+              'bootstrap_public_key_b64u':
+                  'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+              'bootstrap_key_algorithm': 'x25519',
+            },
+          ),
+        ),
+      ];
+
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+          agentImEnabledProvider.overrideWithValue(false),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('message-agent-settings-panel')),
+      findsOneWidget,
+    );
+    expect(find.text('消息处理 Agent'), findsOneWidget);
+    expect(find.text('实验功能关闭'), findsOneWidget);
+    expect(find.text('未就绪'), findsOneWidget);
+    expect(find.text('运行 Daemon'), findsOneWidget);
+    expect(find.text('Hermes'), findsOneWidget);
+    expect(find.text('所有可处理会话'), findsOneWidget);
+    expect(find.text('可用能力'), findsOneWidget);
+    expect(find.text('Hermes message runtime'), findsOneWidget);
+    expect(find.text('已上报公钥'), findsOneWidget);
+    expect(
+      find.text('启用 AWIKI_AGENT_IM_ENABLED 后可配置消息处理 Agent。'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('启用消息处理 Agent'));
+    await tester.pumpAndSettle();
+
+    expect(control.lastBootstrapDaemonDid, isNull);
+    expect(find.textContaining('自动回复'), findsNothing);
+    expect(find.textContaining('代发'), findsNothing);
+  });
+
+  testWidgets('message Agent panel blocks enable until daemon publishes key', (
+    tester,
+  ) async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '运行 Daemon 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready', platform: 'linux-amd64'),
+        ),
+      ];
+    final identities = FakeIdentityCorePort();
+
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+          identityCorePortProvider.overrideWithValue(identities),
+          agentImEnabledProvider.overrideWithValue(true),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('message-agent-settings-panel')),
+      findsOneWidget,
+    );
+    expect(find.text('运行 Daemon 内创建 Hermes runtime'), findsOneWidget);
+    expect(find.text('等待刷新状态'), findsOneWidget);
+    expect(find.text('未就绪'), findsOneWidget);
+
+    await tester.tap(find.text('启用消息处理 Agent'));
+    await tester.pumpAndSettle();
+
+    expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
+    expect(control.lastBootstrapDaemonDid, isNull);
+    expect(find.textContaining('尚未上报安全 bootstrap 公钥'), findsNothing);
+  });
+
+  testWidgets(
+    'message Agent enable sends secure bootstrap through daemon key',
+    (tester) async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            handle: 'awiki-daemon-test',
+            displayName: '运行 Daemon 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'ready',
+              version: '0.5.26',
+              platform: 'linux-amd64',
+              diagnosticsSummary: <String, Object?>{
+                'bootstrap_key_id': 'did:agent:daemon#key-3',
+                'bootstrap_public_key_b64u':
+                    'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+                'bootstrap_key_algorithm': 'x25519',
+              },
+            ),
+          ),
+        ];
+      final identities = FakeIdentityCorePort(
+        daemonSubkeyPackage: const UserSubkeyPackage(
+          userDid: 'did:human:me',
+          verificationMethod: 'did:human:me#daemon-key-1',
+          publicKeyMultibase: 'zPublic',
+          privateKeyMultibase: 'zPrivate',
+        ),
+      );
+
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+            handle: 'me',
+          ),
+          providerOverrides: <Override>[
+            agentControlServiceProvider.overrideWithValue(control),
+            identityCorePortProvider.overrideWithValue(identities),
+            agentImEnabledProvider.overrideWithValue(true),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('message-agent-settings-panel')),
+        findsOneWidget,
+      );
+      expect(find.text('消息处理 Agent'), findsOneWidget);
+      expect(find.text('运行 Daemon'), findsOneWidget);
+      expect(find.text('运行 Daemon 1'), findsWidgets);
+      expect(find.text('Hermes'), findsOneWidget);
+      expect(find.text('所有可处理会话'), findsOneWidget);
+      expect(find.text('0.5.26 · linux-amd64'), findsOneWidget);
+      expect(find.text('Hermes message runtime'), findsOneWidget);
+      expect(find.text('已上报公钥'), findsOneWidget);
+      expect(find.text('可启用'), findsOneWidget);
+      expect(
+        find.text('权限摘要：读取普通消息，分析、总结、生成草稿，并向 App 请求需要确认的 action。'),
+        findsOneWidget,
+      );
+      expect(find.text('暂停处理消息'), findsOneWidget);
+      expect(find.text('删除消息处理 Agent'), findsOneWidget);
+      expect(find.text('撤销 Daemon 消息授权'), findsOneWidget);
+      expect(find.textContaining('自动回复'), findsNothing);
+      expect(find.textContaining('代发'), findsNothing);
+
+      await tester.tap(find.text('启用消息处理 Agent'));
+      await tester.pumpAndSettle();
+
+      expect(identities.lastEnsuredDaemonSubkeySelector, 'default');
+      expect(control.lastBootstrapDaemonDid, 'did:agent:daemon');
+      expect(control.lastBootstrapControllerDid, 'did:human:me');
+      expect(control.lastBootstrapAppInstanceId, 'app_default');
+      expect(
+        control.lastBootstrapUserSubkeyPackage?.verificationMethod,
+        'did:human:me#daemon-key-1',
+      );
+      expect(
+        control.lastBootstrapDaemonPublicKey?.keyId,
+        'did:agent:daemon#key-3',
+      );
+      expect(control.lastBootstrapDaemonPublicKey?.algorithm, 'x25519');
+    },
+  );
+
   testWidgets('create Agent dialog blocks unavailable handle', (tester) async {
     final gateway = FakeAwikiGateway()
       ..handleRegistrationStatus = HandleRegistrationStatus.registered;
@@ -661,7 +882,7 @@ void main() {
     );
     Finder detailText(String text) =>
         find.descendant(of: detailSelectionArea, matching: find.text(text));
-    expect(detailText('代理 1'), findsOneWidget);
+    expect(detailText('代理 1'), findsWidgets);
     expect(detailText('异常'), findsWidgets);
     expect(detailText('Runtime'), findsNothing);
     expect(detailText('Hermes Runtime'), findsNothing);

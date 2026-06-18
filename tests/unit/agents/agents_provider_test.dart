@@ -24,7 +24,15 @@ void main() {
             kind: AgentKind.daemon,
             displayName: '代理 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'registering'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: <String, Object?>{
+                'bootstrap_key_id': 'did:agent:daemon#key-3',
+                'bootstrap_public_key_b64u':
+                    'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+                'bootstrap_key_algorithm': 'x25519',
+              },
+            ),
           ),
           AgentSummary(
             agentDid: 'did:agent:runtime',
@@ -237,7 +245,15 @@ void main() {
             kind: AgentKind.daemon,
             displayName: '代理 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'registering'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: <String, Object?>{
+                'bootstrap_key_id': 'did:agent:daemon#key-3',
+                'bootstrap_public_key_b64u':
+                    'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+                'bootstrap_key_algorithm': 'x25519',
+              },
+            ),
           ),
         ];
       final container = _container(control);
@@ -695,7 +711,15 @@ void main() {
             kind: AgentKind.daemon,
             displayName: '代理 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'registering'),
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: <String, Object?>{
+                'bootstrap_key_id': 'did:agent:daemon#key-3',
+                'bootstrap_public_key_b64u':
+                    'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+                'bootstrap_key_algorithm': 'x25519',
+              },
+            ),
           ),
         ];
       final identities = FakeIdentityCorePort(
@@ -706,7 +730,11 @@ void main() {
           privateKeyMultibase: 'zPrivate',
         ),
       );
-      final container = _container(control, identities: identities);
+      final container = _container(
+        control,
+        identities: identities,
+        agentImEnabled: true,
+      );
       addTearDown(container.dispose);
       await container
           .read(agentsProvider.notifier)
@@ -724,8 +752,100 @@ void main() {
         control.lastBootstrapUserSubkeyPackage?.verificationMethod,
         'did:human:me#daemon-key-1',
       );
+      expect(
+        control.lastBootstrapDaemonPublicKey?.keyId,
+        'did:agent:daemon#key-3',
+      );
       expect(control.lastRuntimeCreateDaemonDid, isNull);
-      expect(control.lastRefreshedDaemonDid, isNull);
+    },
+  );
+
+  test(
+    'bootstrapMessageAgent is blocked before delegated subkey when feature flag is off',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: <String, Object?>{
+                'bootstrap_key_id': 'did:agent:daemon#key-3',
+                'bootstrap_public_key_b64u':
+                    'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+                'bootstrap_key_algorithm': 'x25519',
+              },
+            ),
+          ),
+        ];
+      final identities = FakeIdentityCorePort(
+        daemonSubkeyPackage: const UserSubkeyPackage(
+          userDid: 'did:human:me',
+          verificationMethod: 'did:human:me#daemon-key-1',
+          publicKeyMultibase: 'zPublic',
+          privateKeyMultibase: 'zPrivate',
+        ),
+      );
+      final container = _container(control, identities: identities);
+      addTearDown(container.dispose);
+
+      await container
+          .read(agentsProvider.notifier)
+          .bootstrapMessageAgent(
+            daemonDid: 'did:agent:daemon',
+            appInstanceId: 'app_1',
+          );
+
+      expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
+      expect(control.lastBootstrapDaemonDid, isNull);
+      expect(container.read(agentsProvider).error, '消息处理 Agent 功能未开启。');
+    },
+  );
+
+  test(
+    'bootstrapMessageAgent requires daemon bootstrap public key before delegated subkey',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final identities = FakeIdentityCorePort(
+        daemonSubkeyPackage: const UserSubkeyPackage(
+          userDid: 'did:human:me',
+          verificationMethod: 'did:human:me#daemon-key-1',
+          publicKeyMultibase: 'zPublic',
+          privateKeyMultibase: 'zPrivate',
+        ),
+      );
+      final container = _container(
+        control,
+        identities: identities,
+        agentImEnabled: true,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(agentsProvider.notifier)
+          .bootstrapMessageAgent(
+            daemonDid: 'did:agent:daemon',
+            appInstanceId: 'app_1',
+          );
+
+      expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
+      expect(control.lastBootstrapDaemonDid, isNull);
+      expect(
+        container.read(agentsProvider).error,
+        '运行 Daemon 尚未上报安全 bootstrap 公钥，请先刷新状态。',
+      );
     },
   );
 
@@ -1219,6 +1339,7 @@ ProviderContainer _container(
   FakeAgentControlService control, {
   FakeProductLocalStore? localStore,
   FakeIdentityCorePort? identities,
+  bool agentImEnabled = false,
   SessionIdentity session = const SessionIdentity(
     did: 'did:human:me',
     credentialName: 'default',
@@ -1234,6 +1355,7 @@ ProviderContainer _container(
       productLocalStoreProvider.overrideWithValue(
         localStore ?? FakeProductLocalStore(),
       ),
+      agentImEnabledProvider.overrideWithValue(agentImEnabled),
       sessionProvider.overrideWith((ref) {
         return SessionController()..setSession(session);
       }),

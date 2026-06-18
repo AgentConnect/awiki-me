@@ -330,6 +330,7 @@ class _MacDesktopRail extends StatelessWidget {
                         label: '智能体',
                         selected: currentIndex == 1,
                         compact: compact,
+                        semanticsIdentifier: 'e2e-agents-tab',
                         onTap: () => onTap(1),
                       ),
                       SizedBox(height: gap),
