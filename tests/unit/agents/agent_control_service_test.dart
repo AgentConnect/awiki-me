@@ -119,7 +119,7 @@ void main() {
   );
 
   test(
-    'ensureMessageAgentBootstrap sends one ordinary bootstrap payload',
+    'ensureMessageAgentBootstrap sends secure direct internal bootstrap payload',
     () async {
       final inventory = _InventoryStub();
       final messages = _MessagesStub();
@@ -145,7 +145,7 @@ void main() {
       expect(inventory.runtimeTokenDaemonDid, 'did:agent:daemon');
       expect(inventory.runtimeTokenHandle, 'hermes-msg-app-1-334c10a06052');
       expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
-      expect(messages.lastSecure, isFalse);
+      expect(messages.lastSecure, isTrue);
       expect(
         messages.lastIdempotencyKey,
         'message-agent-bootstrap:did:human:me:app_1',
@@ -169,11 +169,14 @@ void main() {
       expect(package['private_key_encoding'], 'pem');
       expect(package['private_key_pem'], 'zPrivate');
       expect(package.containsKey('private_key_multibase'), isFalse);
+      expect(package['allowed_scopes'], isNot(contains('message.send.plain')));
       final desired =
           messages.lastPayload?['desired_message_agent']
               as Map<String, Object?>;
       expect(desired['role'], appMessageHandlerRole);
       expect(desired['runtime'], appMessageHandlerRuntime);
+      expect(desired['runtime_provider'], appMessageHandlerRuntimeProvider);
+      expect(desired['runtime_profile'], appMessageHandlerRuntimeProfile);
       expect(
         desired['ensure_once_key'],
         'app-message-agent:did:human:me:app_1',
@@ -182,6 +185,75 @@ void main() {
       expect(desired['allowed_actions'], defaultMessageAgentActions);
     },
   );
+
+  test(
+    'secure bootstrap envelope contract redacts delegated private package',
+    () {
+      final issuedAt = DateTime.utc(2026, 6, 19, 1);
+      final envelope = DaemonSecureBootstrapEnvelope(
+        recipientDaemonDid: 'did:agent:daemon',
+        recipientKeyId: 'did:agent:daemon#bootstrap-key-1',
+        senderHumanDid: 'did:human:me',
+        operationId: 'message-agent-bootstrap:did:human:me:app_1',
+        issuedAt: issuedAt,
+        expiresAt: issuedAt.add(const Duration(minutes: 5)),
+        nonce: 'nonce_1',
+        ciphertext: 'base64:ciphertext',
+        payloadSha256: 'a' * 64,
+        aad: const <String, Object?>{
+          'human_did': 'did:human:me',
+          'daemon_agent_did': 'did:agent:daemon',
+          'binding_id': 'app-message-agent:did:human:me:app_1',
+        },
+      ).toJson();
+
+      expect(envelope['schema'], daemonBootstrapSecureSchema);
+      expect(envelope['recipient_daemon_did'], 'did:agent:daemon');
+      expect(envelope['sender_human_did'], 'did:human:me');
+      expect(envelope['ciphertext'], 'base64:ciphertext');
+      expect(envelope.toString(), isNot(contains('private_key_pem')));
+      expect(envelope.toString(), isNot(contains('zPrivate')));
+    },
+  );
+
+  test('secure bootstrap envelope rejects private fields in aad', () {
+    final issuedAt = DateTime.utc(2026, 6, 19, 1);
+    expect(
+      () => DaemonSecureBootstrapEnvelope(
+        recipientDaemonDid: 'did:agent:daemon',
+        recipientKeyId: 'did:agent:daemon#bootstrap-key-1',
+        senderHumanDid: 'did:human:me',
+        operationId: 'message-agent-bootstrap:did:human:me:app_1',
+        issuedAt: issuedAt,
+        expiresAt: issuedAt.add(const Duration(minutes: 5)),
+        nonce: 'nonce_1',
+        ciphertext: 'base64:ciphertext',
+        aad: const <String, Object?>{'private_key_pem': 'zPrivate'},
+      ).toJson(),
+      throwsArgumentError,
+    );
+  });
+
+  test('secure bootstrap envelope rejects malformed payload hash', () {
+    final issuedAt = DateTime.utc(2026, 6, 19, 1);
+    expect(
+      () => DaemonSecureBootstrapEnvelope(
+        recipientDaemonDid: 'did:agent:daemon',
+        recipientKeyId: 'did:agent:daemon#bootstrap-key-1',
+        senderHumanDid: 'did:human:me',
+        operationId: 'message-agent-bootstrap:did:human:me:app_1',
+        issuedAt: issuedAt,
+        expiresAt: issuedAt.add(const Duration(minutes: 5)),
+        nonce: 'nonce_1',
+        ciphertext: 'base64:ciphertext',
+        payloadSha256: 'not-a-valid-hash',
+        aad: const <String, Object?>{
+          'binding_id': 'app-message-agent:did:human:me:app_1',
+        },
+      ).toJson(),
+      throwsArgumentError,
+    );
+  });
 
   test(
     'ensureMessageAgentBootstrap is disabled unless Agent IM flag is enabled',

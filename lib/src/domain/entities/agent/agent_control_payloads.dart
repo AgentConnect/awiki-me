@@ -19,6 +19,7 @@ final class AgentControlPayloads {
   static const commandSchema = 'awiki.agent.command.v1';
   static const statusSchema = 'awiki.agent.status.v1';
   static const daemonBootstrapSchema = 'awiki.daemon.bootstrap.v1';
+  static const daemonBootstrapSecureSchema = 'awiki.daemon.bootstrap.secure.v1';
   static const messageSyncSchema = 'awiki.message.sync.v1';
   static const appCapabilitiesSchema = 'awiki.app.capabilities.v1';
   static const appActionSchema = 'awiki.app.action.v1';
@@ -65,6 +66,7 @@ final class AgentControlPayloads {
         normalized == commandSchema ||
         normalized == statusSchema ||
         normalized == daemonBootstrapSchema ||
+        normalized == daemonBootstrapSecureSchema ||
         normalized == messageSyncSchema ||
         normalized == appCapabilitiesSchema ||
         normalized == appActionSchema ||

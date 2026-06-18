@@ -28,6 +28,7 @@ void main() {
   test('daemon bootstrap and app action schemas are hidden controls', () {
     const schemas = <String>[
       AgentControlPayloads.daemonBootstrapSchema,
+      AgentControlPayloads.daemonBootstrapSecureSchema,
       AgentControlPayloads.messageSyncSchema,
       AgentControlPayloads.appCapabilitiesSchema,
       AgentControlPayloads.appActionSchema,
@@ -54,6 +55,10 @@ void main() {
       'contact.update_note',
     ]);
     expect(AgentControlPayloads.isAllowedAppAction('message.send'), isFalse);
+    expect(
+      AgentControlPayloads.isAllowedAppAction('message.send.plain'),
+      isFalse,
+    );
     expect(
       AgentControlPayloads.isAllowedAppAction('message.e2ee_forward'),
       isFalse,
@@ -118,6 +123,25 @@ void main() {
     expect(sync, isNotNull);
     expect(sync!.payload['kind'], 'runtime_final');
     expect(AgentControlPayloads.isControl(payload), isTrue);
+  });
+
+  test('message sync MVP lifecycle kinds carry provider contract', () {
+    for (final kind in <String>[
+      'runtime_status',
+      'runtime_final',
+      'unsupported',
+      'error',
+    ]) {
+      final payload =
+          '{"schema":"awiki.message.sync.v1","kind":"$kind","message_id":"msg_1","runtime_provider":"hermes","runtime_profile":"message_agent"}';
+      final sync = AgentControlPayloads.decodeMessageSync(payload);
+
+      expect(sync, isNotNull, reason: kind);
+      expect(sync!.payload['kind'], kind);
+      expect(sync.payload['runtime_provider'], 'hermes');
+      expect(sync.payload['runtime_profile'], 'message_agent');
+      expect(AgentControlPayloads.isControl(payload), isTrue);
+    }
   });
 
   test('runtime create command carries token in args only', () {

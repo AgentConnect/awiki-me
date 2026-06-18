@@ -237,6 +237,7 @@ class DefaultAgentControlService implements AgentControlService {
       daemonAgentDid,
       envelope.toJson(),
       idempotencyKey: idempotencyKey,
+      secure: true,
     );
   }
 
@@ -382,11 +383,12 @@ class DefaultAgentControlService implements AgentControlService {
     String daemonAgentDid,
     Map<String, Object?> payload, {
     String? idempotencyKey,
+    bool secure = false,
   }) async {
     await _messages.sendPayload(
       thread: AppThreadRef.direct(daemonAgentDid),
       payload: payload,
-      secure: false,
+      secure: secure,
       idempotencyKey: idempotencyKey,
     );
   }

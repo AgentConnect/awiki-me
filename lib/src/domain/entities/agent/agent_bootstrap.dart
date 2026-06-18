@@ -3,9 +3,12 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
 const daemonBootstrapSchema = 'awiki.daemon.bootstrap.v1';
+const daemonBootstrapSecureSchema = 'awiki.daemon.bootstrap.secure.v1';
 const userSubkeyPackageSchema = 'awiki.daemon.user_subkey_package.v2';
 const appMessageHandlerRole = 'app_message_handler';
 const appMessageHandlerRuntime = 'hermes';
+const appMessageHandlerRuntimeProvider = 'hermes';
+const appMessageHandlerRuntimeProfile = 'message_agent';
 
 const defaultMessageAgentActions = <String>[
   'message.summarize_plain',
@@ -18,7 +21,6 @@ const defaultMessageAgentActions = <String>[
 const defaultMessageAgentScopes = <String>[
   'message.inbox.read.plain',
   'message.history.read.plain',
-  'message.send.plain',
   'message.summarize_plain',
   'contact.read',
   'contact.update_display_name',
@@ -89,6 +91,8 @@ class DesiredMessageAgent {
   const DesiredMessageAgent({
     this.role = appMessageHandlerRole,
     this.runtime = appMessageHandlerRuntime,
+    this.runtimeProvider = appMessageHandlerRuntimeProvider,
+    this.runtimeProfile = appMessageHandlerRuntimeProfile,
     this.displayName = 'Hermes Message Agent',
     required this.ensureOnceKey,
     this.runtimeRegistrationToken,
@@ -100,6 +104,8 @@ class DesiredMessageAgent {
 
   final String role;
   final String runtime;
+  final String runtimeProvider;
+  final String runtimeProfile;
   final String displayName;
   final String ensureOnceKey;
   final String? runtimeRegistrationToken;
@@ -112,6 +118,8 @@ class DesiredMessageAgent {
     return <String, Object?>{
       'role': role,
       'runtime': runtime,
+      'runtime_provider': runtimeProvider,
+      'runtime_profile': runtimeProfile,
       'display_name': displayName,
       'ensure_once_key': ensureOnceKey,
       if (_nonEmpty(runtimeRegistrationToken) != null)
@@ -215,6 +223,71 @@ class DaemonBootstrapEnvelope {
   }
 }
 
+class DaemonSecureBootstrapEnvelope {
+  const DaemonSecureBootstrapEnvelope({
+    required this.recipientDaemonDid,
+    required this.recipientKeyId,
+    required this.senderHumanDid,
+    required this.operationId,
+    required this.issuedAt,
+    required this.expiresAt,
+    required this.nonce,
+    required this.ciphertext,
+    required this.aad,
+    this.payloadSha256,
+  });
+
+  final String recipientDaemonDid;
+  final String recipientKeyId;
+  final String senderHumanDid;
+  final String operationId;
+  final DateTime issuedAt;
+  final DateTime expiresAt;
+  final String nonce;
+  final String ciphertext;
+  final Map<String, Object?> aad;
+  final String? payloadSha256;
+
+  Map<String, Object?> toJson() {
+    _requireNonEmpty(recipientDaemonDid, 'recipientDaemonDid');
+    _requireNonEmpty(recipientKeyId, 'recipientKeyId');
+    _requireNonEmpty(senderHumanDid, 'senderHumanDid');
+    _requireNonEmpty(operationId, 'operationId');
+    _requireNonEmpty(nonce, 'nonce');
+    _requireNonEmpty(ciphertext, 'ciphertext');
+    if (!expiresAt.toUtc().isAfter(issuedAt.toUtc())) {
+      throw ArgumentError.value(
+        expiresAt,
+        'expiresAt',
+        'must be after issuedAt',
+      );
+    }
+    _rejectPrivateBootstrapKeys(aad);
+    final hash = _nonEmpty(payloadSha256);
+    if (hash != null &&
+        (hash.length != 64 || !RegExp(r'^[0-9a-fA-F]+$').hasMatch(hash))) {
+      throw ArgumentError.value(
+        payloadSha256,
+        'payloadSha256',
+        'must be a 64-character hex digest',
+      );
+    }
+    return <String, Object?>{
+      'schema': daemonBootstrapSecureSchema,
+      'recipient_daemon_did': recipientDaemonDid.trim(),
+      'recipient_key_id': recipientKeyId.trim(),
+      'sender_human_did': senderHumanDid.trim(),
+      'operation_id': operationId.trim(),
+      'issued_at': issuedAt.toUtc().toIso8601String(),
+      'expires_at': expiresAt.toUtc().toIso8601String(),
+      'nonce': nonce.trim(),
+      'ciphertext': ciphertext.trim(),
+      'aad': Map<String, Object?>.unmodifiable(aad),
+      if (hash != null) 'payload_sha256': hash,
+    };
+  }
+}
+
 String messageAgentBootstrapId({
   required String userDid,
   required String appInstanceId,
@@ -276,6 +349,44 @@ void _validateDaemonKey({
 void _requireNonEmpty(String value, String name) {
   if (_nonEmpty(value) == null) {
     throw ArgumentError.value(value, name, 'must not be empty');
+  }
+}
+
+void _rejectPrivateBootstrapKeys(Object? value) {
+  if (value is Map) {
+    for (final entry in value.entries) {
+      _rejectPrivateBootstrapName(entry.key.toString());
+      _rejectPrivateBootstrapKeys(entry.value);
+    }
+    return;
+  }
+  if (value is Iterable) {
+    for (final item in value) {
+      _rejectPrivateBootstrapKeys(item);
+    }
+    return;
+  }
+  if (value is String) {
+    _rejectPrivateBootstrapName(value);
+  }
+}
+
+void _rejectPrivateBootstrapName(String value) {
+  final lower = value.toLowerCase();
+  const forbidden = <String>[
+    'private_key',
+    'private-key',
+    'private key',
+    'bootstrap_secret',
+    'wss_credential',
+    'session_private',
+    'key_package_private',
+    'begin private key',
+  ];
+  for (final marker in forbidden) {
+    if (lower.contains(marker)) {
+      throw ArgumentError.value(value, 'aad', 'must not contain $marker');
+    }
   }
 }
 
