@@ -17,6 +17,7 @@ import '../app_shell/providers/session_provider.dart';
 import 'agent_display_name.dart';
 
 const agentStatusQueryTimeout = Duration(seconds: 10);
+const agentDaemonUpgradeTimeout = Duration(seconds: 45);
 const agentStatusRefreshMinimumIndicatorDuration = Duration(milliseconds: 1500);
 
 class AgentsState {
@@ -151,6 +152,7 @@ class AgentsController extends StateNotifier<AgentsState> {
   final Ref ref;
   final Map<String, Timer> _statusQueryTimeouts = <String, Timer>{};
   final Map<String, Timer> _statusQueryClearTimers = <String, Timer>{};
+  final Map<String, Timer> _daemonUpgradeTimeouts = <String, Timer>{};
   Future<void>? _loadOperation;
   String? _loadedCacheOwner;
 
@@ -414,6 +416,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     );
     try {
       await ref.read(agentControlServiceProvider).upgradeDaemon(daemonDid);
+      _scheduleDaemonUpgradeTimeout(daemonDid);
       state = state.copyWith(isActing: false, clearError: true);
       return true;
     } catch (error) {
@@ -425,6 +428,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         ),
         error: _agentErrorMessage(error),
       );
+      _daemonUpgradeTimeouts.remove(daemonDid)?.cancel();
       return false;
     }
   }
@@ -612,6 +616,9 @@ class AgentsController extends StateNotifier<AgentsState> {
     );
     if (daemonDid != null) {
       _statusQueryTimeouts.remove(daemonDid)?.cancel();
+      if (!nextPendingDaemonUpgrades.contains(daemonDid)) {
+        _daemonUpgradeTimeouts.remove(daemonDid)?.cancel();
+      }
     }
     state = state.copyWith(
       agents: merged,
@@ -658,6 +665,26 @@ class AgentsController extends StateNotifier<AgentsState> {
         statusQueryErrors: <String, String>{
           ...state.statusQueryErrors,
           daemonDid: '未收到代理响应，请稍后再刷新状态。',
+        },
+      );
+    });
+  }
+
+  void _scheduleDaemonUpgradeTimeout(String daemonDid) {
+    _daemonUpgradeTimeouts.remove(daemonDid)?.cancel();
+    _daemonUpgradeTimeouts[daemonDid] = Timer(agentDaemonUpgradeTimeout, () {
+      _daemonUpgradeTimeouts.remove(daemonDid);
+      if (!mounted || !state.pendingDaemonUpgrades.contains(daemonDid)) {
+        return;
+      }
+      state = state.copyWith(
+        pendingDaemonUpgrades: _withoutSetValue(
+          state.pendingDaemonUpgrades,
+          daemonDid,
+        ),
+        statusQueryErrors: <String, String>{
+          ...state.statusQueryErrors,
+          daemonDid: '代理升级后暂时没有响应，请稍后刷新状态。',
         },
       );
     });
@@ -755,6 +782,10 @@ class AgentsController extends StateNotifier<AgentsState> {
       timer.cancel();
     }
     _statusQueryClearTimers.clear();
+    for (final timer in _daemonUpgradeTimeouts.values) {
+      timer.cancel();
+    }
+    _daemonUpgradeTimeouts.clear();
   }
 
   Future<void> _loadCached(String ownerDid) async {
