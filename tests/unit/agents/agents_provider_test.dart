@@ -540,50 +540,89 @@ void main() {
     expect(control.lastUnboundAgentDid, isNull);
   });
 
-  test('message Agent lifecycle actions target Hermes message runtime', () async {
-    final control = FakeAgentControlService()
-      ..agents = const <AgentSummary>[
-        AgentSummary(
-          agentDid: 'did:agent:daemon',
-          kind: AgentKind.daemon,
-          displayName: '代理 1',
-          activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
-        ),
-        AgentSummary(
-          agentDid: 'did:agent:message',
-          kind: AgentKind.runtime,
-          daemonAgentDid: 'did:agent:daemon',
-          runtime: 'hermes',
-          handle: 'hermes-msg-app-1',
-          displayName: 'Hermes Message Agent',
-          activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
-        ),
-      ];
-    final container = _container(control, agentImEnabled: true);
-    addTearDown(container.dispose);
-    await container.read(agentsProvider.notifier).load();
+  test(
+    'message Agent lifecycle actions target Hermes message runtime',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+          AgentSummary(
+            agentDid: 'did:agent:message',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'hermes',
+            handle: 'hermes-msg-app-1',
+            displayName: 'Hermes Message Agent',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final container = _container(control, agentImEnabled: true);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
 
-    await container
-        .read(agentsProvider.notifier)
-        .pauseMessageAgentForDaemon('did:agent:daemon');
-    await container
-        .read(agentsProvider.notifier)
-        .deleteMessageAgentForDaemon('did:agent:daemon');
-    await container
-        .read(agentsProvider.notifier)
-        .revokeMessageAgentAuthorizationForDaemon('did:agent:daemon');
+      await container
+          .read(agentsProvider.notifier)
+          .pauseMessageAgentForDaemon('did:agent:daemon');
+      await container
+          .read(agentsProvider.notifier)
+          .deleteMessageAgentForDaemon('did:agent:daemon');
+      await container
+          .read(agentsProvider.notifier)
+          .revokeMessageAgentAuthorizationForDaemon('did:agent:daemon');
 
-    expect(control.lastPausedMessageAgentDaemonDid, 'did:agent:daemon');
-    expect(control.lastPausedMessageAgentDid, 'did:agent:message');
-    expect(control.lastDeletedMessageAgentDaemonDid, 'did:agent:daemon');
-    expect(control.lastDeletedMessageAgentDid, 'did:agent:message');
-    expect(control.lastDeletedRuntimeDaemonDid, 'did:agent:daemon');
-    expect(control.lastDeletedRuntimeDid, 'did:agent:message');
-    expect(control.lastRevokedMessageAgentDaemonDid, 'did:agent:daemon');
-    expect(control.lastRevokedMessageAgentDid, 'did:agent:message');
-  });
+      expect(control.lastPausedMessageAgentDaemonDid, 'did:agent:daemon');
+      expect(control.lastPausedMessageAgentDid, 'did:agent:message');
+      expect(control.lastDeletedMessageAgentDaemonDid, 'did:agent:daemon');
+      expect(control.lastDeletedMessageAgentDid, 'did:agent:message');
+      expect(control.lastDeletedRuntimeDaemonDid, 'did:agent:daemon');
+      expect(control.lastDeletedRuntimeDid, 'did:agent:message');
+      expect(control.lastRevokedMessageAgentDaemonDid, 'did:agent:daemon');
+      expect(control.lastRevokedMessageAgentDid, 'did:agent:message');
+    },
+  );
+
+  test(
+    'future provider runtime is not treated as enabled message Agent',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+          AgentSummary(
+            agentDid: 'did:agent:codex-message',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'codex',
+            handle: 'codex-msg-app-1',
+            displayName: 'Codex Message Agent',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final container = _container(control, agentImEnabled: true);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      await container
+          .read(agentsProvider.notifier)
+          .pauseMessageAgentForDaemon('did:agent:daemon');
+
+      expect(control.lastPausedMessageAgentDid, isNull);
+      expect(container.read(agentsProvider).error, '当前 Daemon 尚未创建消息处理 Agent。');
+    },
+  );
 
   test(
     'archive control payload removes archived agents from current list',

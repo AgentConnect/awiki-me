@@ -5,13 +5,16 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 import 'package:crypto/crypto.dart';
 
+import 'message_agent_runtime_provider.dart';
+
 const daemonBootstrapSchema = 'awiki.daemon.bootstrap.v1';
 const daemonBootstrapSecureSchema = 'awiki.daemon.bootstrap.secure.v1';
 const userSubkeyPackageSchema = 'awiki.daemon.user_subkey_package.v2';
 const appMessageHandlerRole = 'app_message_handler';
-const appMessageHandlerRuntime = 'hermes';
-const appMessageHandlerRuntimeProvider = 'hermes';
-const appMessageHandlerRuntimeProfile = 'message_agent';
+const appMessageHandlerRuntime = messageAgentProviderHermesRuntime;
+const appMessageHandlerRuntimeProvider = messageAgentProviderHermesId;
+const appMessageHandlerRuntimeProfile =
+    messageAgentProviderHermesRuntimeProfile;
 const daemonBootstrapDefaultTtl = Duration(minutes: 5);
 const daemonBootstrapKeyDerivationLabel = 'AWIKI daemon bootstrap secure v1';
 
@@ -98,7 +101,7 @@ class DesiredMessageAgent {
     this.runtime = appMessageHandlerRuntime,
     this.runtimeProvider = appMessageHandlerRuntimeProvider,
     this.runtimeProfile = appMessageHandlerRuntimeProfile,
-    this.displayName = 'Hermes Message Agent',
+    this.displayName = messageAgentProviderHermesRuntimeDisplayName,
     required this.ensureOnceKey,
     this.runtimeRegistrationToken,
     this.autoCreate = true,

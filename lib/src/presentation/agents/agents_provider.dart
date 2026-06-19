@@ -13,6 +13,7 @@ import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/install_command.dart';
+import '../../domain/entities/agent/message_agent_runtime_provider.dart';
 import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/session_provider.dart';
 import 'agent_display_name.dart';
@@ -532,7 +533,9 @@ class AgentsController extends StateNotifier<AgentsState> {
     });
   }
 
-  Future<void> revokeMessageAgentAuthorizationForDaemon(String daemonDid) async {
+  Future<void> revokeMessageAgentAuthorizationForDaemon(
+    String daemonDid,
+  ) async {
     final target = _messageAgentTargetForDaemon(daemonDid);
     if (target == null) {
       state = state.copyWith(error: '当前 Daemon 尚未创建消息处理 Agent。');
@@ -1327,15 +1330,15 @@ bool _isMessageAgentRuntime(AgentSummary agent) {
   if (!agent.isRuntime) {
     return false;
   }
-  final runtime = agent.runtime?.trim().toLowerCase();
-  if (runtime != appMessageHandlerRuntimeProvider) {
+  final provider = MessageAgentRuntimeProviders.byRuntime(agent.runtime);
+  if (provider == null || !provider.enabled) {
     return false;
   }
   final display = agent.displayName.trim().toLowerCase();
-  final handle = agent.handle?.trim().toLowerCase() ?? '';
+  final handle = agent.handle?.trim() ?? '';
   return display.contains('message agent') ||
       display.contains('消息处理') ||
-      handle.startsWith('hermes-msg');
+      provider.matchesHandle(handle);
 }
 
 bool _isArchivedAgentPayload(Map<String, Object?> payload) {

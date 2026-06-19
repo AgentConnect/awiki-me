@@ -237,8 +237,10 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
     final daemonReady =
         daemon.latest.status.trim().toLowerCase() == 'ready' ||
         daemon.latest.status.trim().toLowerCase() == 'needs_upgrade';
+    const provider = defaultMessageAgentRuntimeProvider;
     final canEnable = enabled && daemonReady && hasBootstrapKey && !isActing;
-    final canManage = enabled && daemonReady && messageAgent != null && !isActing;
+    final canManage =
+        enabled && daemonReady && messageAgent != null && !isActing;
     return Container(
       key: const Key('message-agent-settings-panel'),
       padding: EdgeInsets.all(responsive.spacing(16)),
@@ -280,7 +282,9 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
                     ),
                     SizedBox(height: responsive.spacing(2)),
                     Text(
-                      enabled ? '运行 Daemon 内创建 Hermes runtime' : '实验功能关闭',
+                      enabled
+                          ? '运行 Daemon 内创建 ${provider.displayLabel} runtime'
+                          : '实验功能关闭',
                       style: TextStyle(
                         color: const Color(0xFF66728A),
                         fontSize: responsive.metaSm,
@@ -300,10 +304,10 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
             child: _MessageAgentFactGrid(
               rows: <_MessageAgentFact>[
                 _MessageAgentFact('运行 Daemon', AgentDisplayName.title(daemon)),
-                const _MessageAgentFact('引擎', 'Hermes'),
+                _MessageAgentFact('引擎', provider.displayLabel),
                 const _MessageAgentFact('处理范围', '所有可处理会话'),
                 _MessageAgentFact('Daemon 版本', _daemonRuntimeSummary(daemon)),
-                const _MessageAgentFact('可用能力', 'Hermes message runtime'),
+                _MessageAgentFact('可用能力', provider.capabilityLabel),
                 _MessageAgentFact(
                   '安全 bootstrap',
                   hasBootstrapKey ? '已上报公钥' : '等待刷新状态',

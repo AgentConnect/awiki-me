@@ -6,6 +6,7 @@ import '../config/awiki_environment_config.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/agent/agent_command.dart';
 import '../../domain/entities/agent/agent_invocation_policy.dart';
+import '../../domain/entities/agent/message_agent_runtime_provider.dart';
 import '../../domain/entities/agent/message_agent_binding.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/install_command.dart';
@@ -227,12 +228,12 @@ class DefaultAgentControlService implements AgentControlService {
         (await _inventory.issueRuntimeToken(
           controllerDid: controllerDid,
           daemonAgentDid: daemonAgentDid,
-          runtime: appMessageHandlerRuntime,
+          runtime: defaultMessageAgentRuntimeProvider.runtime,
           handle: _messageAgentRuntimeHandle(
             userDid: userDid,
             appInstanceId: appInstanceId,
           ),
-          displayName: 'Hermes Message Agent',
+          displayName: defaultMessageAgentRuntimeProvider.runtimeDisplayName,
         )).token;
     final envelope = DaemonBootstrapEnvelope(
       bootstrapId: messageAgentBootstrapAttemptId(
@@ -515,7 +516,7 @@ String _messageAgentRuntimeHandle({
   required String userDid,
   required String appInstanceId,
 }) {
-  const prefix = 'hermes-msg';
+  const prefix = messageAgentProviderHermesHandlePrefix;
   final seed = '${userDid.trim()}|${appInstanceId.trim()}';
   final hash = crypto.sha256
       .convert(utf8.encode(seed))
