@@ -31,6 +31,7 @@ import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
@@ -1452,6 +1453,11 @@ class FakeAgentInventoryPort implements AgentInventoryPort {
     required String runtime,
     required String handle,
     required String displayName,
+    String? driverId,
+    String? workspaceMode,
+    String? defaultSandbox,
+    String? defaultModel,
+    Map<String, Object?>? driverConfig,
   }) async {
     return nextRuntimeToken;
   }
@@ -1526,12 +1532,16 @@ class FakeAgentControlService implements AgentControlService {
   );
   String? lastRefreshedDaemonDid;
   String? lastRuntimeCreateDaemonDid;
+  RuntimeAgentKind? lastRuntimeCreateKind;
   String? lastBootstrapDaemonDid;
   String? lastBootstrapControllerDid;
   String? lastBootstrapAppInstanceId;
   UserSubkeyPackage? lastBootstrapUserSubkeyPackage;
   String? lastRuntimeCreateHandle;
   String? lastRuntimeCreateDisplayName;
+  String? lastRuntimeCreateWorkspaceMode;
+  String? lastRuntimeCreateSandbox;
+  String? lastRuntimeCreateModel;
   String? lastResetDaemonDid;
   String? lastResetRuntimeDid;
   String? lastRetryDaemonDid;
@@ -1577,10 +1587,31 @@ class FakeAgentControlService implements AgentControlService {
     required String controllerDid,
     required String handle,
     required String displayName,
+  }) {
+    return createRuntimeAgent(
+      daemonAgentDid: daemonAgentDid,
+      controllerDid: controllerDid,
+      options: RuntimeAgentCreateOptions(
+        kind: RuntimeAgentKind.hermes,
+        handle: handle,
+        displayName: displayName,
+      ),
+    );
+  }
+
+  @override
+  Future<void> createRuntimeAgent({
+    required String daemonAgentDid,
+    required String controllerDid,
+    required RuntimeAgentCreateOptions options,
   }) async {
     lastRuntimeCreateDaemonDid = daemonAgentDid;
-    lastRuntimeCreateHandle = handle;
-    lastRuntimeCreateDisplayName = displayName;
+    lastRuntimeCreateKind = options.kind;
+    lastRuntimeCreateHandle = options.handle;
+    lastRuntimeCreateDisplayName = options.displayName;
+    lastRuntimeCreateWorkspaceMode = options.workspaceMode;
+    lastRuntimeCreateSandbox = options.sandbox;
+    lastRuntimeCreateModel = options.model;
   }
 
   @override

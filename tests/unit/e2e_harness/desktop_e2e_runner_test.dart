@@ -423,18 +423,33 @@ cliPeer:
 
       final log = lines.join('\n');
       expect(log, contains('case: smoke'));
-      expect(
-        log,
-        contains(
-          r'$ flutter test integration_test/app_smoke_test.dart -d macos',
-        ),
-      );
-      expect(
-        log,
-        contains(
-          r'$ flutter test integration_test/im_core_open_smoke_test.dart -d macos',
-        ),
-      );
+      if (Platform.isLinux) {
+        expect(
+          log,
+          contains(
+            r'$ xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux',
+          ),
+        );
+        expect(
+          log,
+          contains(
+            r'$ xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux',
+          ),
+        );
+      } else {
+        expect(
+          log,
+          contains(
+            r'$ flutter test integration_test/app_smoke_test.dart -d macos',
+          ),
+        );
+        expect(
+          log,
+          contains(
+            r'$ flutter test integration_test/im_core_open_smoke_test.dart -d macos',
+          ),
+        );
+      }
       expect(log, isNot(contains('fake-awiki-cli')));
       expect(log, isNot(contains('DEV_OTP')));
       final timings = File(

@@ -7,6 +7,7 @@ import '../../app/app_services.dart';
 import '../../application/models/product_local_models.dart';
 import '../../data/agent/user_service_agent_inventory_adapter.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
+import '../../domain/entities/agent/agent_command.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_summary.dart';
@@ -319,6 +320,20 @@ class AgentsController extends StateNotifier<AgentsState> {
     String daemonDid, {
     required String handle,
     required String displayName,
+  }) {
+    return createRuntimeAgent(
+      daemonDid,
+      options: RuntimeAgentCreateOptions(
+        kind: RuntimeAgentKind.hermes,
+        handle: handle,
+        displayName: displayName,
+      ),
+    );
+  }
+
+  Future<void> createRuntimeAgent(
+    String daemonDid, {
+    required RuntimeAgentCreateOptions options,
   }) async {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
@@ -328,11 +343,10 @@ class AgentsController extends StateNotifier<AgentsState> {
     await _act(() async {
       await ref
           .read(agentControlServiceProvider)
-          .createHermesRuntime(
+          .createRuntimeAgent(
             daemonAgentDid: daemonDid,
             controllerDid: session.did,
-            handle: handle,
-            displayName: displayName,
+            options: options,
           );
       await load();
     });

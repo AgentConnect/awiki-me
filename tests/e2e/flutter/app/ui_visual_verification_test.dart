@@ -131,7 +131,15 @@ void main() {
       await tester.tap(find.text('创建 Agent').first);
       await tester.pumpAndSettle();
       expect(find.text('Agent 类型'), findsOneWidget);
-      expect(find.text('当前仅支持 Hermes Runtime Agent'), findsOneWidget);
+      expect(find.text('Hermes'), findsWidgets);
+      expect(find.text('Codex'), findsOneWidget);
+      expect(find.text('Claude Code'), findsOneWidget);
+      await tester.tap(find.text('Codex'));
+      await tester.pumpAndSettle();
+      expect(find.text('工作目录策略'), findsOneWidget);
+      expect(find.text('权限模式'), findsOneWidget);
+      expect(find.text('按会话目录'), findsOneWidget);
+      expect(find.text('workspace-write'), findsOneWidget);
       await _captureScreenshot(tester, '07-agent-create-agent-type');
     } finally {
       debugDefaultTargetPlatformOverride = null;

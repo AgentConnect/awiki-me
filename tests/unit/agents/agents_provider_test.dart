@@ -1,6 +1,7 @@
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
@@ -726,6 +727,44 @@ void main() {
       );
       expect(control.lastRuntimeCreateDaemonDid, isNull);
       expect(control.lastRefreshedDaemonDid, isNull);
+    },
+  );
+
+  test(
+    'createRuntimeAgent delegates codex options from signed-in session',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+
+      await container
+          .read(agentsProvider.notifier)
+          .createRuntimeAgent(
+            'did:agent:daemon',
+            options: const RuntimeAgentCreateOptions(
+              kind: RuntimeAgentKind.codex,
+              handle: 'alice-codex',
+              displayName: 'Alice Codex',
+              workspaceMode: runtimeWorkspaceModeRouteRoot,
+              sandbox: runtimeSandboxWorkspaceWrite,
+            ),
+          );
+
+      expect(control.lastRuntimeCreateDaemonDid, 'did:agent:daemon');
+      expect(control.lastRuntimeCreateKind, RuntimeAgentKind.codex);
+      expect(control.lastRuntimeCreateHandle, 'alice-codex');
+      expect(control.lastRuntimeCreateDisplayName, 'Alice Codex');
+      expect(control.lastRuntimeCreateWorkspaceMode, 'route-root');
+      expect(control.lastRuntimeCreateSandbox, 'workspace-write');
     },
   );
 

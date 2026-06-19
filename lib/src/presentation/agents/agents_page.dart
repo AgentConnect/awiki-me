@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
 import '../../application/config/awiki_environment_config.dart';
+import '../../domain/entities/agent/agent_command.dart';
 import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/install_command.dart';
@@ -82,7 +83,7 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
       onRefresh: (agent) {
         ref.read(agentsProvider.notifier).refreshDaemonStatus(agent.agentDid);
       },
-      onCreateRuntime: (agent) => _showCreateHermesDialog(
+      onCreateRuntime: (agent) => _showCreateRuntimeDialog(
         context,
         ref,
         agent,

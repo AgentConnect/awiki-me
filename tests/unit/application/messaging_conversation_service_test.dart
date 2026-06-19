@@ -621,6 +621,11 @@ class _FakeAgentInventory implements AgentInventoryPort {
     required String runtime,
     required String handle,
     required String displayName,
+    String? driverId,
+    String? workspaceMode,
+    String? defaultSandbox,
+    String? defaultModel,
+    Map<String, Object?>? driverConfig,
   }) {
     throw UnimplementedError();
   }

@@ -4,6 +4,7 @@ import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
@@ -257,13 +258,25 @@ void main() {
 
       expect(find.text('创建 Agent'), findsWidgets);
       expect(find.text('Agent 类型'), findsOneWidget);
-      expect(find.text('当前仅支持 Hermes Runtime Agent'), findsOneWidget);
+      expect(find.text('Hermes'), findsWidgets);
+      expect(find.text('Codex'), findsOneWidget);
+      expect(find.text('Claude Code'), findsOneWidget);
+      expect(find.text('未启用'), findsOneWidget);
       final nameFieldFinder = find.byKey(const Key('agent-create-name-field'));
       final handleFieldFinder = find.byKey(
         const Key('agent-create-handle-field'),
       );
       final nameField = tester.widget<CupertinoTextField>(nameFieldFinder);
       expect(nameField.controller?.text, 'Hermes2');
+
+      await tester.tap(find.text('Codex'));
+      await tester.pumpAndSettle();
+      expect(find.text('工作目录策略'), findsOneWidget);
+      expect(find.text('权限模式'), findsOneWidget);
+      expect(find.text('按会话目录'), findsOneWidget);
+      expect(find.text('只读'), findsOneWidget);
+      final codexNameField = tester.widget<CupertinoTextField>(nameFieldFinder);
+      expect(codexNameField.controller?.text, 'Codex1');
 
       await tester.enterText(handleFieldFinder, '@My-Agent');
       await tester.pump(const Duration(milliseconds: 500));
@@ -279,10 +292,76 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(control.lastRuntimeCreateDaemonDid, 'did:agent:daemon');
+      expect(control.lastRuntimeCreateKind, RuntimeAgentKind.codex);
       expect(control.lastRuntimeCreateHandle, 'my-agent');
       expect(control.lastRuntimeCreateDisplayName, '写作助手');
+      expect(control.lastRuntimeCreateWorkspaceMode, 'route-root');
+      expect(control.lastRuntimeCreateSandbox, 'read-only');
     },
   );
+
+  testWidgets('create Agent dialog confirms workspace-write before submit', (
+    tester,
+  ) async {
+    final control = _PendingRefreshAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready', platform: 'linux-amd64'),
+        ),
+      ];
+
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('创建 Agent'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Codex'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('workspace-write'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('agent-create-handle-field')),
+      'write-agent',
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const Key('agent-create-name-field')),
+      '写入助手',
+    );
+
+    await tester.tap(find.text('创建').last);
+    await tester.pumpAndSettle();
+    expect(find.text('确认 workspace-write'), findsOneWidget);
+    expect(control.lastRuntimeCreateDaemonDid, isNull);
+
+    await tester.tap(find.text('继续创建'));
+    await tester.pumpAndSettle();
+
+    expect(control.lastRuntimeCreateKind, RuntimeAgentKind.codex);
+    expect(control.lastRuntimeCreateSandbox, 'workspace-write');
+  });
 
   testWidgets('runtime detail updates access policy immediately', (
     tester,

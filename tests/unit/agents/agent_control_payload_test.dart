@@ -139,6 +139,36 @@ void main() {
     expect(args['handle'], 'alice-hermes');
     expect(args['display_name'], 'Alice Hermes');
     expect(args['client_request_id'], 'app_req_1');
+    expect(args.containsKey('driver_id'), isFalse);
+  });
+
+  test('runtime create command carries codex generic cli options', () {
+    final payload = runtimeAgentCreatePayload(
+      controllerDid: 'did:human:alice',
+      registrationToken: 'runtime-token',
+      clientRequestId: 'app_req_1',
+      runtime: 'codex',
+      driverId: 'codex',
+      displayName: 'Alice Codex',
+      handle: 'alice-codex',
+      workspaceMode: runtimeWorkspaceModeRouteRoot,
+      defaultSandbox: runtimeSandboxReadOnly,
+      driverConfig: const <String, Object?>{'ephemeral': false},
+    );
+
+    final args = payload['args'] as Map<String, Object?>;
+    expect(args['runtime'], 'codex');
+    expect(args['driver_id'], 'codex');
+    expect(args['workspace_mode'], 'route-root');
+    expect(args['default_sandbox'], 'read-only');
+    expect(args['driver_config'], <String, Object?>{'ephemeral': false});
+    expect(args.containsKey('binary_path'), isFalse);
+    expect(
+      (args['driver_config'] as Map<String, Object?>).containsKey(
+        'binary_path',
+      ),
+      isFalse,
+    );
   });
 
   test('runtime create command allows explicit test runtime', () {
