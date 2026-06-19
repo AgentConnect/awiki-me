@@ -100,6 +100,7 @@ Future<void> _showCreateRuntimeDialog(
       ),
       handleDomain: AwikiEnvironmentConfig.fromEnvironment().didDomain,
       existingRuntimes: existingRuntimes,
+      runtimeCapability: _RuntimeCreateCapability.fromDaemon(daemon),
       validateHandle: (handle, domain) {
         return ref
             .read(onboardingSupportServiceProvider)
@@ -111,12 +112,6 @@ Future<void> _showCreateRuntimeDialog(
     return;
   }
   if (!context.mounted) {
-    return;
-  }
-  if (!result.kindEnabled) {
-    ref
-        .read(uiFeedbackProvider.notifier)
-        .showError(AppMessage.fromError('暂不支持的 Agent 类型'));
     return;
   }
   if (result.sandbox == runtimeSandboxWorkspaceWrite) {
@@ -159,8 +154,6 @@ class _RuntimeAgentCreationDraft {
   final String handle;
   final String workspaceMode;
   final String sandbox;
-
-  bool get kindEnabled => kind != RuntimeAgentKind.claudeCode;
 }
 
 class _CreateRuntimeDialog extends StatefulWidget {
@@ -168,12 +161,14 @@ class _CreateRuntimeDialog extends StatefulWidget {
     required this.initialDisplayName,
     required this.handleDomain,
     required this.existingRuntimes,
+    required this.runtimeCapability,
     required this.validateHandle,
   });
 
   final String initialDisplayName;
   final String handleDomain;
   final List<AgentSummary> existingRuntimes;
+  final _RuntimeCreateCapability runtimeCapability;
   final Future<HandleAvailability> Function(String handle, String domain)
   validateHandle;
 
@@ -317,6 +312,10 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
   }
 
   void _submit() {
+    final kindStatus = widget.runtimeCapability.statusFor(_kind);
+    if (!kindStatus.enabled) {
+      return;
+    }
     final displayName = _nameController.text.trim();
     final handle = _handleController.text.trim();
     final nameError = _validateAgentDisplayName(displayName);
@@ -357,7 +356,9 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
         _submittedHandleError ??
         _softValidateAgentHandle(handle) ??
         remoteError;
+    final kindStatus = widget.runtimeCapability.statusFor(_kind);
     final canSubmit =
+        kindStatus.enabled &&
         _validateAgentDisplayName(displayName) == null &&
         _validateAgentHandle(handle) == null &&
         !_remoteHandleChecking &&
@@ -421,6 +422,7 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
                     SizedBox(height: responsive.spacing(14)),
                     _AgentTypeSelector(
                       selected: _kind,
+                      runtimeCapability: widget.runtimeCapability,
                       onSelected: _selectKind,
                     ),
                     SizedBox(height: responsive.spacing(12)),
@@ -553,9 +555,14 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
 }
 
 class _AgentTypeSelector extends StatelessWidget {
-  const _AgentTypeSelector({required this.selected, required this.onSelected});
+  const _AgentTypeSelector({
+    required this.selected,
+    required this.runtimeCapability,
+    required this.onSelected,
+  });
 
   final RuntimeAgentKind selected;
+  final _RuntimeCreateCapability runtimeCapability;
   final ValueChanged<RuntimeAgentKind> onSelected;
 
   @override
@@ -576,24 +583,21 @@ class _AgentTypeSelector extends StatelessWidget {
         _RuntimeKindTile(
           kind: RuntimeAgentKind.hermes,
           selected: selected == RuntimeAgentKind.hermes,
-          enabled: true,
-          description: '内置 Hermes Runtime Agent。',
+          status: runtimeCapability.statusFor(RuntimeAgentKind.hermes),
           onTap: () => onSelected(RuntimeAgentKind.hermes),
         ),
         SizedBox(height: responsive.spacing(8)),
         _RuntimeKindTile(
           kind: RuntimeAgentKind.codex,
           selected: selected == RuntimeAgentKind.codex,
-          enabled: true,
-          description: '使用 daemon 上已安装并登录的 Codex CLI。',
+          status: runtimeCapability.statusFor(RuntimeAgentKind.codex),
           onTap: () => onSelected(RuntimeAgentKind.codex),
         ),
         SizedBox(height: responsive.spacing(8)),
         _RuntimeKindTile(
           kind: RuntimeAgentKind.claudeCode,
           selected: selected == RuntimeAgentKind.claudeCode,
-          enabled: false,
-          description: '等待 daemon Claude Code driver 完成后启用。',
+          status: runtimeCapability.statusFor(RuntimeAgentKind.claudeCode),
           onTap: () => onSelected(RuntimeAgentKind.claudeCode),
         ),
       ],
@@ -605,20 +609,19 @@ class _RuntimeKindTile extends StatelessWidget {
   const _RuntimeKindTile({
     required this.kind,
     required this.selected,
-    required this.enabled,
-    required this.description,
+    required this.status,
     required this.onTap,
   });
 
   final RuntimeAgentKind kind;
   final bool selected;
-  final bool enabled;
-  final String description;
+  final _RuntimeKindStatus status;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final enabled = status.enabled;
     final accent = enabled ? const Color(0xFF0B65F8) : const Color(0xFF8A96AA);
     return AppPressable(
       onTap: enabled ? onTap : null,
@@ -674,7 +677,7 @@ class _RuntimeKindTile extends StatelessWidget {
                       if (!enabled) ...<Widget>[
                         SizedBox(width: responsive.spacing(6)),
                         Text(
-                          '未启用',
+                          status.reasonLabel ?? '未启用',
                           style: TextStyle(
                             color: const Color(0xFF8A96AA),
                             fontSize: responsive.metaSm,
@@ -686,7 +689,7 @@ class _RuntimeKindTile extends StatelessWidget {
                   ),
                   SizedBox(height: responsive.spacing(3)),
                   Text(
-                    description,
+                    status.description,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -716,6 +719,131 @@ IconData _runtimeKindIcon(RuntimeAgentKind kind) => switch (kind) {
   RuntimeAgentKind.codex => CupertinoIcons.chevron_left_slash_chevron_right,
   RuntimeAgentKind.claudeCode => CupertinoIcons.text_bubble,
 };
+
+class _RuntimeKindStatus {
+  const _RuntimeKindStatus({
+    required this.enabled,
+    required this.description,
+    this.reasonLabel,
+  });
+
+  final bool enabled;
+  final String description;
+  final String? reasonLabel;
+}
+
+class _RuntimeCreateCapability {
+  const _RuntimeCreateCapability({
+    required this.hasGenericCliSchema,
+    required this.supportedDrivers,
+    required this.supportedWorkspaceModes,
+    required this.supportedSandboxModes,
+    required this.routeSessionSupported,
+    required this.nativeResumeSupported,
+  });
+
+  factory _RuntimeCreateCapability.fromDaemon(AgentSummary daemon) {
+    final diagnostics = daemon.latest.diagnosticsSummary;
+    final config = _objectMap(diagnostics['config_summary']);
+    final genericCli = _objectMap(config['generic_cli']);
+    final schemaVersion = _intValue(genericCli['capability_schema_version']);
+    return _RuntimeCreateCapability(
+      hasGenericCliSchema: schemaVersion == 1,
+      supportedDrivers: _stringSet(genericCli['supported_drivers']),
+      supportedWorkspaceModes: _stringSet(
+        genericCli['supported_workspace_modes'],
+      ),
+      supportedSandboxModes: _stringSet(genericCli['supported_sandbox_modes']),
+      routeSessionSupported: genericCli['route_session_supported'] == true,
+      nativeResumeSupported: genericCli['native_resume_supported'] == true,
+    );
+  }
+
+  final bool hasGenericCliSchema;
+  final Set<String> supportedDrivers;
+  final Set<String> supportedWorkspaceModes;
+  final Set<String> supportedSandboxModes;
+  final bool routeSessionSupported;
+  final bool nativeResumeSupported;
+
+  _RuntimeKindStatus statusFor(RuntimeAgentKind kind) {
+    if (kind == RuntimeAgentKind.hermes) {
+      return const _RuntimeKindStatus(
+        enabled: true,
+        description: '内置 Hermes Runtime Agent。',
+      );
+    }
+    final driverId = kind.driverId;
+    if (!hasGenericCliSchema) {
+      return _RuntimeKindStatus(
+        enabled: false,
+        description:
+            '${kind.displayLabel} 需要 daemon 提供 generic-cli capability。',
+        reasonLabel: '需刷新',
+      );
+    }
+    if (driverId == null || !supportedDrivers.contains(driverId)) {
+      return _RuntimeKindStatus(
+        enabled: false,
+        description: '当前 daemon 不支持 ${kind.displayLabel} driver。',
+        reasonLabel: '未支持',
+      );
+    }
+    if (!routeSessionSupported || !nativeResumeSupported) {
+      return _RuntimeKindStatus(
+        enabled: false,
+        description:
+            '${kind.displayLabel} 需要 route session 和 native resume 支持。',
+        reasonLabel: '需升级',
+      );
+    }
+    if (!supportedWorkspaceModes.contains(runtimeWorkspaceModeRouteRoot)) {
+      return _RuntimeKindStatus(
+        enabled: false,
+        description: '${kind.displayLabel} 需要按会话目录工作模式。',
+        reasonLabel: '需升级',
+      );
+    }
+    if (!supportedSandboxModes.contains(runtimeSandboxReadOnly)) {
+      return _RuntimeKindStatus(
+        enabled: false,
+        description: '${kind.displayLabel} 需要只读权限模式。',
+        reasonLabel: '需升级',
+      );
+    }
+    return _RuntimeKindStatus(
+      enabled: true,
+      description: '需要 daemon 上已安装并登录的 ${kind.displayLabel} CLI。',
+    );
+  }
+}
+
+Map<String, Object?> _objectMap(Object? value) {
+  if (value is! Map) {
+    return const <String, Object?>{};
+  }
+  return value.map<String, Object?>(
+    (key, value) => MapEntry(key.toString(), value),
+  );
+}
+
+Set<String> _stringSet(Object? value) {
+  if (value is! List) {
+    return const <String>{};
+  }
+  return value
+      .map((item) => item?.toString().trim())
+      .whereType<String>()
+      .where((item) => item.isNotEmpty)
+      .toSet();
+}
+
+int? _intValue(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  return int.tryParse(value?.toString() ?? '');
+}
 
 class _RuntimeOption {
   const _RuntimeOption({

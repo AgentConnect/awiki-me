@@ -63,6 +63,44 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+const Map<String, Object?> genericCliCapabilityDiagnostics = <String, Object?>{
+  'config_summary': <String, Object?>{
+    'generic_cli': <String, Object?>{
+      'capability_schema_version': 1,
+      'supported_drivers': <String>['codex', 'claude-code', 'command'],
+      'supported_workspace_modes': <String>[
+        'route-root',
+        'shared-root',
+        'worktree-per-task',
+      ],
+      'supported_sandbox_modes': <String>['read-only', 'workspace-write'],
+      'supported_runtime_create_args': <String>[
+        'runtime',
+        'driver_id',
+        'workspace_mode',
+        'workspace_strategy',
+        'default_sandbox',
+        'default_model',
+        'driver_config',
+        'recipient_policy',
+        'client_request_id',
+      ],
+      'route_session_supported': true,
+      'native_resume_supported': true,
+      'profile_concurrency_cap_supported': false,
+      'max_parallel_runs_per_profile': 1,
+      'runtime_target_required': true,
+    },
+  },
+};
+
+const AgentLatestStatus readyDaemonStatusWithGenericCliCapability =
+    AgentLatestStatus(
+      status: 'ready',
+      platform: 'darwin-arm64',
+      diagnosticsSummary: genericCliCapabilityDiagnostics,
+    );
+
 Widget buildLocalizedTestApp({
   required Widget home,
   Locale locale = const Locale('zh'),
@@ -1516,7 +1554,7 @@ class FakeAgentControlService implements AgentControlService {
       handle: 'awiki-daemon-test',
       displayName: '代理 1',
       activeState: 'active',
-      latest: AgentLatestStatus(status: 'ready', platform: 'darwin-arm64'),
+      latest: readyDaemonStatusWithGenericCliCapability,
     ),
   ];
   InstallCommand? lastInstallCommand;

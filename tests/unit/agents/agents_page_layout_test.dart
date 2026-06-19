@@ -220,7 +220,7 @@ void main() {
             handle: 'awiki-daemon-test',
             displayName: '代理 1',
             activeState: 'active',
-            latest: AgentLatestStatus(status: 'ready', platform: 'linux-amd64'),
+            latest: readyDaemonStatusWithGenericCliCapability,
           ),
           const AgentSummary(
             agentDid: 'did:agent:runtime',
@@ -261,13 +261,21 @@ void main() {
       expect(find.text('Hermes'), findsWidgets);
       expect(find.text('Codex'), findsOneWidget);
       expect(find.text('Claude Code'), findsOneWidget);
-      expect(find.text('未启用'), findsOneWidget);
+      expect(find.text('需刷新'), findsNothing);
       final nameFieldFinder = find.byKey(const Key('agent-create-name-field'));
       final handleFieldFinder = find.byKey(
         const Key('agent-create-handle-field'),
       );
       final nameField = tester.widget<CupertinoTextField>(nameFieldFinder);
       expect(nameField.controller?.text, 'Hermes2');
+
+      await tester.tap(find.text('Claude Code'));
+      await tester.pumpAndSettle();
+      final claudeNameField = tester.widget<CupertinoTextField>(
+        nameFieldFinder,
+      );
+      expect(claudeNameField.controller?.text, 'Claude Code1');
+      expect(find.text('需要 daemon 上已安装并登录的 Claude Code CLI。'), findsOneWidget);
 
       await tester.tap(find.text('Codex'));
       await tester.pumpAndSettle();
@@ -311,7 +319,7 @@ void main() {
           handle: 'awiki-daemon-test',
           displayName: '代理 1',
           activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready', platform: 'linux-amd64'),
+          latest: readyDaemonStatusWithGenericCliCapability,
         ),
       ];
 
@@ -362,6 +370,108 @@ void main() {
     expect(control.lastRuntimeCreateKind, RuntimeAgentKind.codex);
     expect(control.lastRuntimeCreateSandbox, 'workspace-write');
   });
+
+  testWidgets(
+    'create Agent dialog disables generic CLI when daemon lacks capability',
+    (tester) async {
+      final control = _PendingRefreshAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            handle: 'awiki-daemon-test',
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready', platform: 'linux-amd64'),
+          ),
+        ];
+
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+          ),
+          providerOverrides: <Override>[
+            agentControlServiceProvider.overrideWithValue(control),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('创建 Agent'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('需刷新'), findsNWidgets(2));
+      expect(
+        find.text('Codex 需要 daemon 提供 generic-cli capability。'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Claude Code 需要 daemon 提供 generic-cli capability。'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Codex'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('工作目录策略'), findsNothing);
+      expect(control.lastRuntimeCreateDaemonDid, isNull);
+    },
+  );
+
+  testWidgets(
+    'create Agent dialog fails closed for incompatible generic CLI schema',
+    (tester) async {
+      final control = await _pumpCreateAgentDialog(
+        tester,
+        daemon: _daemonWithGenericCliCapability(
+          _genericCliCapability(schemaVersion: 99),
+        ),
+      );
+
+      expect(find.text('需刷新'), findsWidgets);
+      expect(
+        find.text('Codex 需要 daemon 提供 generic-cli capability。'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Codex'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('工作目录策略'), findsNothing);
+      expect(control.lastRuntimeCreateDaemonDid, isNull);
+    },
+  );
+
+  testWidgets(
+    'create Agent dialog fails closed when route-root is unsupported',
+    (tester) async {
+      final control = await _pumpCreateAgentDialog(
+        tester,
+        daemon: _daemonWithGenericCliCapability(
+          _genericCliCapability(
+            supportedWorkspaceModes: const <String>['shared-root'],
+          ),
+        ),
+      );
+
+      expect(find.text('需升级'), findsWidgets);
+      expect(find.text('Codex 需要按会话目录工作模式。'), findsOneWidget);
+
+      await tester.tap(find.text('Codex'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('工作目录策略'), findsNothing);
+      expect(control.lastRuntimeCreateDaemonDid, isNull);
+    },
+  );
 
   testWidgets('runtime detail updates access policy immediately', (
     tester,
@@ -1291,6 +1401,87 @@ void main() {
       expect(find.text('<redacted>'), findsWidgets);
     },
   );
+}
+
+Map<String, Object?> _genericCliCapability({
+  int schemaVersion = 1,
+  List<String> supportedDrivers = const <String>[
+    'codex',
+    'claude-code',
+    'command',
+  ],
+  List<String> supportedWorkspaceModes = const <String>[
+    'route-root',
+    'shared-root',
+    'worktree-per-task',
+  ],
+  List<String> supportedSandboxModes = const <String>[
+    'read-only',
+    'workspace-write',
+  ],
+  bool routeSessionSupported = true,
+  bool nativeResumeSupported = true,
+}) {
+  final configSummary =
+      genericCliCapabilityDiagnostics['config_summary'] as Map<String, Object?>;
+  final base = configSummary['generic_cli'] as Map<String, Object?>;
+  return <String, Object?>{
+    ...base,
+    'capability_schema_version': schemaVersion,
+    'supported_drivers': supportedDrivers,
+    'supported_workspace_modes': supportedWorkspaceModes,
+    'supported_sandbox_modes': supportedSandboxModes,
+    'route_session_supported': routeSessionSupported,
+    'native_resume_supported': nativeResumeSupported,
+  };
+}
+
+AgentSummary _daemonWithGenericCliCapability(Map<String, Object?> genericCli) {
+  return AgentSummary(
+    agentDid: 'did:agent:daemon',
+    kind: AgentKind.daemon,
+    handle: 'awiki-daemon-test',
+    displayName: '代理 1',
+    activeState: 'active',
+    latest: AgentLatestStatus(
+      status: 'ready',
+      platform: 'linux-amd64',
+      diagnosticsSummary: <String, Object?>{
+        'config_summary': <String, Object?>{'generic_cli': genericCli},
+      },
+    ),
+  );
+}
+
+Future<_PendingRefreshAgentControlService> _pumpCreateAgentDialog(
+  WidgetTester tester, {
+  required AgentSummary daemon,
+}) async {
+  final control = _PendingRefreshAgentControlService()
+    ..agents = <AgentSummary>[daemon];
+  tester.view.physicalSize = const Size(1200, 900);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(
+    buildLocalizedTestApp(
+      home: const AgentsWorkspacePage(),
+      session: const SessionIdentity(
+        did: 'did:human:me',
+        credentialName: 'default',
+        displayName: 'Me',
+      ),
+      providerOverrides: <Override>[
+        agentControlServiceProvider.overrideWithValue(control),
+      ],
+    ),
+  );
+  await tester.pumpAndSettle();
+
+  await tester.tap(find.text('创建 Agent'));
+  await tester.pumpAndSettle();
+
+  return control;
 }
 
 class _CountingRefreshAgentControlService extends FakeAgentControlService {

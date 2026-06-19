@@ -182,7 +182,7 @@ FakeAwikiMeAppHarness _createVisualHarness() {
       handle: 'local-daemon',
       displayName: 'Local Daemon',
       activeState: 'active',
-      latest: AgentLatestStatus(status: 'ready', platform: 'darwin-arm64'),
+      latest: test_support.readyDaemonStatusWithGenericCliCapability,
     ),
     const AgentSummary(
       agentDid: _runtimeDid,
