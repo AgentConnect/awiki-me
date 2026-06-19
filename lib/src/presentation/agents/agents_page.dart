@@ -100,6 +100,12 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
       onBootstrapMessageAgent: (agent) => ref
           .read(agentsProvider.notifier)
           .bootstrapMessageAgent(daemonDid: agent.agentDid),
+      onPauseMessageAgent: (agent) =>
+          _confirmPauseMessageAgent(context, ref, agent),
+      onDeleteMessageAgent: (agent) =>
+          _confirmDeleteMessageAgent(context, ref, agent),
+      onRevokeMessageAgentAuthorization: (agent) =>
+          _confirmRevokeMessageAgentAuthorization(context, ref, agent),
       onSaveInvocationPolicy: (agentDid, policy) => ref
           .read(agentsProvider.notifier)
           .saveInvocationPolicy(agentDid, policy),

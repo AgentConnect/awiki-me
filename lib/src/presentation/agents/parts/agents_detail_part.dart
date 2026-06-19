@@ -15,6 +15,9 @@ class _AgentDetailPane extends StatelessWidget {
     required this.onDelete,
     required this.messageAgentEnabled,
     required this.onBootstrapMessageAgent,
+    required this.onPauseMessageAgent,
+    required this.onDeleteMessageAgent,
+    required this.onRevokeMessageAgentAuthorization,
     required this.onSaveInvocationPolicy,
   });
 
@@ -31,6 +34,9 @@ class _AgentDetailPane extends StatelessWidget {
   final ValueChanged<AgentSummary> onDelete;
   final bool messageAgentEnabled;
   final ValueChanged<AgentSummary> onBootstrapMessageAgent;
+  final ValueChanged<AgentSummary> onPauseMessageAgent;
+  final ValueChanged<AgentSummary> onDeleteMessageAgent;
+  final ValueChanged<AgentSummary> onRevokeMessageAgentAuthorization;
   final Future<bool> Function(String agentDid, AgentInvocationPolicy policy)
   onSaveInvocationPolicy;
 
@@ -180,9 +186,13 @@ class _AgentDetailPane extends StatelessWidget {
             if (agent.isDaemon) ...<Widget>[
               _MessageAgentSettingsPanel(
                 daemon: agent,
+                messageAgent: state.messageAgentRuntimeFor(agent.agentDid),
                 enabled: messageAgentEnabled,
                 isActing: state.isActing,
                 onEnable: () => onBootstrapMessageAgent(agent),
+                onPause: () => onPauseMessageAgent(agent),
+                onDelete: () => onDeleteMessageAgent(agent),
+                onRevoke: () => onRevokeMessageAgentAuthorization(agent),
               ),
               SizedBox(height: responsive.spacing(18)),
             ],
@@ -200,15 +210,23 @@ class _AgentDetailPane extends StatelessWidget {
 class _MessageAgentSettingsPanel extends StatelessWidget {
   const _MessageAgentSettingsPanel({
     required this.daemon,
+    required this.messageAgent,
     required this.enabled,
     required this.isActing,
     required this.onEnable,
+    required this.onPause,
+    required this.onDelete,
+    required this.onRevoke,
   });
 
   final AgentSummary daemon;
+  final AgentSummary? messageAgent;
   final bool enabled;
   final bool isActing;
   final VoidCallback onEnable;
+  final VoidCallback onPause;
+  final VoidCallback onDelete;
+  final VoidCallback onRevoke;
 
   @override
   Widget build(BuildContext context) {
@@ -220,6 +238,7 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
         daemon.latest.status.trim().toLowerCase() == 'ready' ||
         daemon.latest.status.trim().toLowerCase() == 'needs_upgrade';
     final canEnable = enabled && daemonReady && hasBootstrapKey && !isActing;
+    final canManage = enabled && daemonReady && messageAgent != null && !isActing;
     return Container(
       key: const Key('message-agent-settings-panel'),
       padding: EdgeInsets.all(responsive.spacing(16)),
@@ -305,22 +324,22 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
                   label: isActing ? '启用中' : '启用消息处理 Agent',
                   onPressed: canEnable ? onEnable : null,
                 ),
-                const _ActionButton(
+                _ActionButton(
                   icon: CupertinoIcons.pause_circle,
                   label: '暂停处理消息',
-                  onPressed: null,
+                  onPressed: canManage ? onPause : null,
                 ),
-                const _ActionButton(
+                _ActionButton(
                   icon: CupertinoIcons.trash,
                   label: '删除消息处理 Agent',
                   danger: true,
-                  onPressed: null,
+                  onPressed: canManage ? onDelete : null,
                 ),
-                const _ActionButton(
+                _ActionButton(
                   icon: CupertinoIcons.lock_slash,
                   label: '撤销 Daemon 消息授权',
                   danger: true,
-                  onPressed: null,
+                  onPressed: canManage ? onRevoke : null,
                 ),
               ],
             ),

@@ -15,6 +15,7 @@ import '../application/onboarding_support_service.dart';
 import '../application/peer_identity_service.dart';
 import '../application/ports/agent_inventory_port.dart';
 import '../application/ports/identity_core_port.dart';
+import '../application/ports/message_agent_binding_port.dart';
 import '../application/product_local_store.dart';
 import '../application/profile_application_service.dart';
 import '../application/realtime_application_service.dart';
@@ -23,6 +24,7 @@ import '../data/compat/compat_awiki_account_gateway.dart';
 import '../data/compat/compat_awiki_gateway.dart';
 import '../data/compat/compat_realtime_gateway.dart';
 import '../data/agent/user_service_agent_inventory_adapter.dart';
+import '../data/agent/user_service_message_agent_binding_adapter.dart';
 import '../data/im_core/awiki_im_core_auth_adapter.dart';
 import '../data/im_core/awiki_im_core_agent_control_status_store.dart';
 import '../data/im_core/awiki_im_core_config.dart';
@@ -67,6 +69,7 @@ class AppBootstrap {
     this.messagingService,
     this.conversationService,
     this.agentInventoryPort,
+    this.messageAgentBindingPort,
     this.agentControlService,
     this.agentControlStatusStore,
     this.groupApplicationService,
@@ -92,6 +95,7 @@ class AppBootstrap {
   final MessagingService? messagingService;
   final ConversationService? conversationService;
   final AgentInventoryPort? agentInventoryPort;
+  final MessageAgentBindingPort? messageAgentBindingPort;
   final AgentControlService? agentControlService;
   final AgentControlStatusStore? agentControlStatusStore;
   final GroupApplicationService? groupApplicationService;
@@ -139,6 +143,9 @@ class AppBootstrap {
     final agentInventoryPort = UserServiceAgentInventoryAdapter.fromEnvironment(
       environment: effectiveEnvironment,
     );
+    final messageAgentBindingPort = UserServiceMessageAgentBindingAdapter(
+      userServiceUrl: effectiveEnvironment.userServiceUrl,
+    );
     final conversationService = ImCoreConversationService(
       conversations: conversationAdapter,
       localStore: productLocalStore,
@@ -147,6 +154,7 @@ class AppBootstrap {
     final agentControlService = DefaultAgentControlService(
       inventory: agentInventoryPort,
       messages: messagingService,
+      messageAgentBindings: messageAgentBindingPort,
     );
     final agentControlStatusStore = AwikiImCoreAgentControlStatusStore(
       sqlitePath: runtime.paths.sqlitePath,
@@ -222,6 +230,7 @@ class AppBootstrap {
       messagingService: messagingService,
       conversationService: conversationService,
       agentInventoryPort: agentInventoryPort,
+      messageAgentBindingPort: messageAgentBindingPort,
       agentControlService: agentControlService,
       agentControlStatusStore: agentControlStatusStore,
       groupApplicationService: groupApplicationService,

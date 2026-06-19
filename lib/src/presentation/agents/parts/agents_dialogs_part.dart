@@ -931,6 +931,62 @@ Future<void> _confirmDeleteAgent(
   }
 }
 
+Future<void> _confirmPauseMessageAgent(
+  BuildContext context,
+  WidgetRef ref,
+  AgentSummary daemon,
+) async {
+  final confirmed = await _confirm(
+    context,
+    title: '暂停处理消息',
+    message: '暂停后，消息处理 Agent 不再读取和处理新消息；runtime 和授权仍会保留，可以重新启用。',
+    actionLabel: '暂停',
+  );
+  if (confirmed) {
+    await ref
+        .read(agentsProvider.notifier)
+        .pauseMessageAgentForDaemon(daemon.agentDid);
+  }
+}
+
+Future<void> _confirmDeleteMessageAgent(
+  BuildContext context,
+  WidgetRef ref,
+  AgentSummary daemon,
+) async {
+  final confirmed = await _confirm(
+    context,
+    title: '删除消息处理 Agent',
+    message: '删除前会先暂停消息处理，然后归档对应 runtime。Daemon 和授权不会被删除。',
+    actionLabel: '删除',
+    destructive: true,
+  );
+  if (confirmed) {
+    await ref
+        .read(agentsProvider.notifier)
+        .deleteMessageAgentForDaemon(daemon.agentDid);
+  }
+}
+
+Future<void> _confirmRevokeMessageAgentAuthorization(
+  BuildContext context,
+  WidgetRef ref,
+  AgentSummary daemon,
+) async {
+  final confirmed = await _confirm(
+    context,
+    title: '撤销 Daemon 消息授权',
+    message: '撤销需要先通过签名 DID Document 更新移除 daemon-key-1。未完成更新时会失败，不会把暂停误认为撤销成功。',
+    actionLabel: '撤销授权',
+    destructive: true,
+  );
+  if (confirmed) {
+    await ref
+        .read(agentsProvider.notifier)
+        .revokeMessageAgentAuthorizationForDaemon(daemon.agentDid);
+  }
+}
+
 Future<bool> _confirm(
   BuildContext context, {
   required String title,

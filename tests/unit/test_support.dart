@@ -34,6 +34,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart'
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
+import 'package:awiki_me/src/domain/entities/agent/message_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
@@ -1555,6 +1556,12 @@ class FakeAgentControlService implements AgentControlService {
   String? lastDeletedDaemonDid;
   String? lastDeletedRuntimeDaemonDid;
   String? lastDeletedRuntimeDid;
+  String? lastPausedMessageAgentDaemonDid;
+  String? lastPausedMessageAgentDid;
+  String? lastDeletedMessageAgentDaemonDid;
+  String? lastDeletedMessageAgentDid;
+  String? lastRevokedMessageAgentDaemonDid;
+  String? lastRevokedMessageAgentDid;
   String? lastRenamedAgentDid;
   String? lastDisplayName;
   String? lastUpgradeDaemonDid;
@@ -1705,6 +1712,52 @@ class FakeAgentControlService implements AgentControlService {
   }) async {
     lastDeletedRuntimeDaemonDid = daemonAgentDid;
     lastDeletedRuntimeDid = runtimeAgentDid;
+  }
+
+  @override
+  Future<MessageAgentBinding> pauseMessageAgent({
+    required String daemonAgentDid,
+    required String messageAgentDid,
+  }) async {
+    lastPausedMessageAgentDaemonDid = daemonAgentDid;
+    lastPausedMessageAgentDid = messageAgentDid;
+    return _messageAgentBinding(
+      daemonAgentDid: daemonAgentDid,
+      messageAgentDid: messageAgentDid,
+      status: 'disabled',
+    );
+  }
+
+  @override
+  Future<MessageAgentBinding> deleteMessageAgent({
+    required String daemonAgentDid,
+    required String messageAgentDid,
+  }) async {
+    lastDeletedMessageAgentDaemonDid = daemonAgentDid;
+    lastDeletedMessageAgentDid = messageAgentDid;
+    lastPausedMessageAgentDaemonDid = daemonAgentDid;
+    lastPausedMessageAgentDid = messageAgentDid;
+    lastDeletedRuntimeDaemonDid = daemonAgentDid;
+    lastDeletedRuntimeDid = messageAgentDid;
+    return _messageAgentBinding(
+      daemonAgentDid: daemonAgentDid,
+      messageAgentDid: messageAgentDid,
+      status: 'disabled',
+    );
+  }
+
+  @override
+  Future<MessageAgentBinding> revokeMessageAgentAuthorization({
+    required String daemonAgentDid,
+    required String messageAgentDid,
+  }) async {
+    lastRevokedMessageAgentDaemonDid = daemonAgentDid;
+    lastRevokedMessageAgentDid = messageAgentDid;
+    return _messageAgentBinding(
+      daemonAgentDid: daemonAgentDid,
+      messageAgentDid: messageAgentDid,
+      status: 'revoked',
+    );
   }
 
   @override
@@ -2405,4 +2458,21 @@ class TestProfileController extends ProfileController {
       state = ProfileState(profile: initialProfile);
     }
   }
+}
+
+MessageAgentBinding _messageAgentBinding({
+  required String daemonAgentDid,
+  required String messageAgentDid,
+  required String status,
+}) {
+  return MessageAgentBinding(
+    id: 'binding_$messageAgentDid',
+    userDid: 'did:human:me',
+    daemonAgentDid: daemonAgentDid,
+    messageAgentDid: messageAgentDid,
+    runtimeProvider: 'hermes',
+    runtimeProfile: const <String, Object?>{'profile': 'message_agent'},
+    delegatedKeyVerificationMethod: 'did:human:me#daemon-key-1',
+    status: status,
+  );
 }

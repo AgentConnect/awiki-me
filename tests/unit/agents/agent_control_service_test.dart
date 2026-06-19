@@ -3,8 +3,10 @@ import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
+import 'package:awiki_me/src/application/ports/message_agent_binding_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
+import 'package:awiki_me/src/domain/entities/agent/message_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
@@ -115,6 +117,87 @@ void main() {
       expect(messages.lastPayload?['command'], 'runtime.agent.delete');
       final args = messages.lastPayload?['args'] as Map<String, Object?>;
       expect(args['runtime_agent_did'], 'did:agent:runtime');
+    },
+  );
+
+  test(
+    'pauseMessageAgent disables service binding and local daemon binding',
+    () async {
+      final messages = _MessagesStub();
+      final bindings = _MessageAgentBindingsStub();
+      final service = DefaultAgentControlService(
+        inventory: _InventoryStub(),
+        messages: messages,
+        messageAgentBindings: bindings,
+      );
+
+      final binding = await service.pauseMessageAgent(
+        daemonAgentDid: 'did:agent:daemon',
+        messageAgentDid: 'did:agent:message',
+      );
+
+      expect(binding.status, 'disabled');
+      expect(bindings.lastDisabledMessageAgentDid, 'did:agent:message');
+      expect(bindings.lastRevokedMessageAgentDid, isNull);
+      expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
+      expect(messages.lastIdempotencyKey, 'message-agent-disable:did:agent:message');
+      expect(messages.lastPayload?['command'], 'message_agent.binding.disable');
+      final args = messages.lastPayload?['args'] as Map<String, Object?>;
+      expect(args['message_agent_did'], 'did:agent:message');
+      expect(args['runtime_agent_did'], 'did:agent:message');
+      expect(args['binding_id'], 'binding_1');
+      expect(args['lifecycle_action'], 'pause');
+    },
+  );
+
+  test(
+    'deleteMessageAgent pauses binding before runtime archive',
+    () async {
+      final messages = _MessagesStub();
+      final bindings = _MessageAgentBindingsStub();
+      final service = DefaultAgentControlService(
+        inventory: _InventoryStub(),
+        messages: messages,
+        messageAgentBindings: bindings,
+      );
+
+      await service.deleteMessageAgent(
+        daemonAgentDid: 'did:agent:daemon',
+        messageAgentDid: 'did:agent:message',
+      );
+
+      expect(bindings.lastDisabledMessageAgentDid, 'did:agent:message');
+      expect(messages.payloads.map((payload) => payload['command']), [
+        'message_agent.binding.disable',
+        'runtime.agent.delete',
+      ]);
+      final deleteArgs = messages.payloads.last['args'] as Map<String, Object?>;
+      expect(deleteArgs['runtime_agent_did'], 'did:agent:message');
+    },
+  );
+
+  test(
+    'revokeMessageAgentAuthorization fails before local revoke command when service rejects',
+    () async {
+      final messages = _MessagesStub();
+      final bindings = _MessageAgentBindingsStub()
+        ..revokeError = StateError('delegated_key_still_active');
+      final service = DefaultAgentControlService(
+        inventory: _InventoryStub(),
+        messages: messages,
+        messageAgentBindings: bindings,
+      );
+
+      await expectLater(
+        service.revokeMessageAgentAuthorization(
+          daemonAgentDid: 'did:agent:daemon',
+          messageAgentDid: 'did:agent:message',
+        ),
+        throwsStateError,
+      );
+
+      expect(bindings.lastRevokedMessageAgentDid, 'did:agent:message');
+      expect(messages.payloads, isEmpty);
     },
   );
 
@@ -572,6 +655,7 @@ class _InventoryStub implements AgentInventoryPort {
 class _MessagesStub implements MessagingService {
   AppThreadRef? lastThread;
   Map<String, Object?>? lastPayload;
+  final List<Map<String, Object?>> payloads = <Map<String, Object?>>[];
   String? lastIdempotencyKey;
   bool? lastSecure;
 
@@ -584,6 +668,7 @@ class _MessagesStub implements MessagingService {
   }) async {
     lastThread = thread;
     lastPayload = payload;
+    payloads.add(payload);
     lastIdempotencyKey = idempotencyKey;
     lastSecure = secure;
     return ChatMessage(
@@ -653,6 +738,65 @@ class _MessagesStub implements MessagingService {
   @override
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed) {
     throw UnimplementedError();
+  }
+}
+
+class _MessageAgentBindingsStub implements MessageAgentBindingPort {
+  String? lastDisabledBindingId;
+  String? lastDisabledMessageAgentDid;
+  String? lastRevokedBindingId;
+  String? lastRevokedMessageAgentDid;
+  Object? revokeError;
+
+  @override
+  Future<MessageAgentBinding?> getActiveBinding() async {
+    return _binding(status: 'active');
+  }
+
+  @override
+  Future<MessageAgentBinding> disableBinding({
+    String? bindingId,
+    String? messageAgentDid,
+  }) async {
+    lastDisabledBindingId = bindingId;
+    lastDisabledMessageAgentDid = messageAgentDid;
+    return _binding(
+      messageAgentDid: messageAgentDid ?? 'did:agent:message',
+      status: 'disabled',
+    );
+  }
+
+  @override
+  Future<MessageAgentBinding> revokeBinding({
+    String? bindingId,
+    String? messageAgentDid,
+  }) async {
+    lastRevokedBindingId = bindingId;
+    lastRevokedMessageAgentDid = messageAgentDid;
+    final error = revokeError;
+    if (error != null) {
+      throw error;
+    }
+    return _binding(
+      messageAgentDid: messageAgentDid ?? 'did:agent:message',
+      status: 'revoked',
+    );
+  }
+
+  MessageAgentBinding _binding({
+    String messageAgentDid = 'did:agent:message',
+    required String status,
+  }) {
+    return MessageAgentBinding(
+      id: 'binding_1',
+      userDid: 'did:human:me',
+      daemonAgentDid: 'did:agent:daemon',
+      messageAgentDid: messageAgentDid,
+      runtimeProvider: 'hermes',
+      runtimeProfile: const <String, Object?>{'profile': 'message_agent'},
+      delegatedKeyVerificationMethod: 'did:human:me#daemon-key-1',
+      status: status,
+    );
   }
 }
 

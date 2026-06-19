@@ -77,6 +77,15 @@ class AgentsState {
       .where((agent) => agent.isRuntime && agent.daemonAgentDid == daemonDid)
       .toList();
 
+  AgentSummary? messageAgentRuntimeFor(String daemonDid) {
+    for (final runtime in runtimesFor(daemonDid)) {
+      if (_isMessageAgentRuntime(runtime)) {
+        return runtime;
+      }
+    }
+    return null;
+  }
+
   AgentSummary? daemonForRuntime(AgentSummary runtime) {
     final daemonDid = runtime.daemonAgentDid;
     if (daemonDid == null) {
@@ -491,6 +500,54 @@ class AgentsController extends StateNotifier<AgentsState> {
     });
   }
 
+  Future<void> pauseMessageAgentForDaemon(String daemonDid) async {
+    final target = _messageAgentTargetForDaemon(daemonDid);
+    if (target == null) {
+      state = state.copyWith(error: '当前 Daemon 尚未创建消息处理 Agent。');
+      return;
+    }
+    await _act(() async {
+      await ref
+          .read(agentControlServiceProvider)
+          .pauseMessageAgent(
+            daemonAgentDid: daemonDid,
+            messageAgentDid: target.agentDid,
+          );
+    });
+  }
+
+  Future<void> deleteMessageAgentForDaemon(String daemonDid) async {
+    final target = _messageAgentTargetForDaemon(daemonDid);
+    if (target == null) {
+      state = state.copyWith(error: '当前 Daemon 尚未创建消息处理 Agent。');
+      return;
+    }
+    await _act(() async {
+      await ref
+          .read(agentControlServiceProvider)
+          .deleteMessageAgent(
+            daemonAgentDid: daemonDid,
+            messageAgentDid: target.agentDid,
+          );
+    });
+  }
+
+  Future<void> revokeMessageAgentAuthorizationForDaemon(String daemonDid) async {
+    final target = _messageAgentTargetForDaemon(daemonDid);
+    if (target == null) {
+      state = state.copyWith(error: '当前 Daemon 尚未创建消息处理 Agent。');
+      return;
+    }
+    await _act(() async {
+      await ref
+          .read(agentControlServiceProvider)
+          .revokeMessageAgentAuthorization(
+            daemonAgentDid: daemonDid,
+            messageAgentDid: target.agentDid,
+          );
+    });
+  }
+
   Future<void> renameSelected(String displayName) async {
     final selected = state.selectedAgent;
     if (selected == null) {
@@ -883,6 +940,16 @@ class AgentsController extends StateNotifier<AgentsState> {
     return null;
   }
 
+  AgentSummary? _messageAgentTargetForDaemon(String daemonDid) {
+    final daemon = _agentByDid(daemonDid);
+    if (daemon == null ||
+        !daemon.isDaemon ||
+        !_daemonAcceptsControlCommands(daemon)) {
+      return null;
+    }
+    return state.messageAgentRuntimeFor(daemonDid);
+  }
+
   DaemonBootstrapPublicKey? _daemonBootstrapPublicKey(AgentSummary daemon) {
     try {
       return DaemonBootstrapPublicKey.fromDiagnostics(
@@ -1254,6 +1321,21 @@ bool _daemonAcceptsControlCommands(AgentSummary daemon) {
     'archiving' => true,
     _ => false,
   };
+}
+
+bool _isMessageAgentRuntime(AgentSummary agent) {
+  if (!agent.isRuntime) {
+    return false;
+  }
+  final runtime = agent.runtime?.trim().toLowerCase();
+  if (runtime != appMessageHandlerRuntimeProvider) {
+    return false;
+  }
+  final display = agent.displayName.trim().toLowerCase();
+  final handle = agent.handle?.trim().toLowerCase() ?? '';
+  return display.contains('message agent') ||
+      display.contains('消息处理') ||
+      handle.startsWith('hermes-msg');
 }
 
 bool _isArchivedAgentPayload(Map<String, Object?> payload) {

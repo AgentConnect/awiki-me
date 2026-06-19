@@ -585,6 +585,16 @@ void main() {
               },
             ),
           ),
+          AgentSummary(
+            agentDid: 'did:agent:message',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'hermes',
+            handle: 'hermes-msg-app-default',
+            displayName: 'Hermes Message Agent',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
         ];
       final identities = FakeIdentityCorePort(
         daemonSubkeyPackage: const UserSubkeyPackage(
@@ -656,6 +666,40 @@ void main() {
         'did:agent:daemon#key-3',
       );
       expect(control.lastBootstrapDaemonPublicKey?.algorithm, 'x25519');
+
+      await tester.tap(find.text('暂停处理消息'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('暂停后，消息处理 Agent 不再读取和处理新消息；runtime 和授权仍会保留，可以重新启用。'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('暂停'));
+      await tester.pumpAndSettle();
+      expect(control.lastPausedMessageAgentDid, 'did:agent:message');
+
+      await tester.tap(find.text('删除消息处理 Agent'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('删除前会先暂停消息处理，然后归档对应 runtime。Daemon 和授权不会被删除。'),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find
+            .descendant(
+              of: find.byType(CupertinoAlertDialog),
+              matching: find.text('删除'),
+            )
+            .last,
+      );
+      await tester.pumpAndSettle();
+      expect(control.lastDeletedMessageAgentDid, 'did:agent:message');
+
+      await tester.tap(find.text('撤销 Daemon 消息授权'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('签名 DID Document 更新'), findsOneWidget);
+      await tester.tap(find.text('撤销授权'));
+      await tester.pumpAndSettle();
+      expect(control.lastRevokedMessageAgentDid, 'did:agent:message');
     },
   );
 

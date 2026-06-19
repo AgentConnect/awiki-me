@@ -10,6 +10,7 @@ import '../application/auth/auth_session_coordinator.dart';
 import '../application/conversation_service.dart';
 import '../application/models/app_session.dart';
 import '../data/agent/user_service_agent_inventory_adapter.dart';
+import '../data/agent/user_service_message_agent_binding_adapter.dart';
 import '../data/services/authenticated_user_service_rpc_client.dart';
 import '../presentation/app_shell/app_shell.dart';
 import '../presentation/app_shell/providers/app_lifecycle_provider.dart';
@@ -89,6 +90,29 @@ class AwikiMeApp extends StatelessWidget {
             }
             return inventory;
           }),
+        if (bootstrap.messageAgentBindingPort != null)
+          messageAgentBindingPortProvider.overrideWith((ref) {
+            final bindings = bootstrap.messageAgentBindingPort!;
+            if (bindings is UserServiceMessageAgentBindingAdapter &&
+                bootstrap.appSessionService != null) {
+              final sessions = ref.read(appSessionServiceProvider);
+              final coordinator = AuthSessionCoordinator(
+                sessions: sessions,
+                onSessionUpdated: (session) {
+                  ref
+                      .read(sessionProvider.notifier)
+                      .setSession(session.toLegacySessionIdentity());
+                },
+              );
+              return bindings.withAuthenticatedClient(
+                AuthenticatedUserServiceRpcClient(
+                  client: bindings.httpClient,
+                  sessions: coordinator,
+                ),
+              );
+            }
+            return bindings;
+          }),
         if (bootstrap.conversationService != null)
           conversationServiceProvider.overrideWith((ref) {
             final conversations = bootstrap.conversationService!;
@@ -104,9 +128,14 @@ class AwikiMeApp extends StatelessWidget {
             final control = bootstrap.agentControlService!;
             if (control is DefaultAgentControlService &&
                 bootstrap.messagingService != null) {
+              final messageAgentBindings = bootstrap.messageAgentBindingPort ==
+                      null
+                  ? null
+                  : ref.watch(messageAgentBindingPortProvider);
               return DefaultAgentControlService(
                 inventory: ref.watch(agentInventoryPortProvider),
                 messages: bootstrap.messagingService!,
+                messageAgentBindings: messageAgentBindings,
                 downloadBaseUrl: control.downloadBaseUrl,
               );
             }

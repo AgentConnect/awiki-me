@@ -16,6 +16,7 @@ import '../application/onboarding_support_service.dart';
 import '../application/peer_identity_service.dart';
 import '../application/ports/agent_inventory_port.dart';
 import '../application/ports/identity_core_port.dart';
+import '../application/ports/message_agent_binding_port.dart';
 import '../application/product_local_store.dart';
 import '../application/profile_homepage_resolver.dart';
 import '../application/profile_application_service.dart';
@@ -99,6 +100,12 @@ final agentInventoryPortProvider = Provider<AgentInventoryPort>(
 final agentControlServiceProvider = Provider<AgentControlService>(
   (ref) => throw UnimplementedError(
     'agentControlServiceProvider must be overridden',
+  ),
+);
+
+final messageAgentBindingPortProvider = Provider<MessageAgentBindingPort>(
+  (ref) => throw UnimplementedError(
+    'messageAgentBindingPortProvider must be overridden',
   ),
 );
 
