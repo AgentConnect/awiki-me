@@ -58,6 +58,25 @@ void main() {
       expect(contacts.e2eCase, DesktopE2eCase.contacts);
     });
 
+    test('parses message-agent case aliases', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'message-agent',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'message_agent',
+        '--dry-run',
+      ]);
+
+      expect(hyphen.e2eCase, DesktopE2eCase.messageAgent);
+      expect(underscore.e2eCase, DesktopE2eCase.messageAgent);
+      expect(hyphen.e2eCase.caseName, 'message-agent');
+      expect(hyphen.e2eCase.reportScope, 'message-agent');
+      expect(hyphen.e2eCase.runConfigPath, contains('message-agent'));
+    });
+
     test('rejects unsupported case', () {
       expect(
         () => DesktopE2eOptions.parse(const <String>['--case', 'unknown']),
@@ -66,7 +85,8 @@ void main() {
             (error) => error.message,
             'message',
             'Unsupported E2E case "unknown". '
-                'Use smoke, full, direct, group, attachment, or contacts.',
+                'Use smoke, full, direct, group, attachment, contacts, '
+                'or message-agent.',
           ),
         ),
       );
@@ -128,9 +148,16 @@ service:
   didDomain: example.test
   userServiceUrl: https://users.example.test
   messageServiceUrl: https://messages.example.test
+  messageServiceWsUrl: wss://messages.example.test/im/ws
   mailServiceUrl: https://mail.example.test
   anpServiceUrl: https://service.example.test/anp-im/rpc
   anpServiceDid: did:wba:example.test
+daemon:
+  rustRepo: ../awiki-cli-rs2-message-agent
+messageAgent:
+  enabled: true
+  runtimeProvider: hermes
+  processingScope: all_conversations
 otp:
   phone: test-phone-secret
   code: test-otp-secret
@@ -153,10 +180,15 @@ cliPeer:
       expect(config.serviceBaseUrl, 'https://service.example.test');
       expect(config.userServiceUrl, 'https://users.example.test');
       expect(config.messageServiceUrl, 'https://messages.example.test');
+      expect(config.messageServiceWsUrl, 'wss://messages.example.test/im/ws');
       expect(config.mailServiceUrl, 'https://mail.example.test');
       expect(config.didDomain, 'example.test');
       expect(config.anpServiceUrl, 'https://service.example.test/anp-im/rpc');
       expect(config.anpServiceDid, 'did:wba:example.test');
+      expect(config.daemonRustRepo, '../awiki-cli-rs2-message-agent');
+      expect(config.messageAgentEnabled, isTrue);
+      expect(config.messageAgentRuntimeProvider, 'hermes');
+      expect(config.messageAgentProcessingScope, 'all_conversations');
       expect(config.otpPhone, 'test-phone-secret');
       expect(config.otpCode, 'test-otp-secret');
       expect(config.appHandle, 'app-from-file');
@@ -221,10 +253,15 @@ cliHandle: legacy-cli
           serviceBaseUrl: 'https://service.example.test',
           userServiceUrl: 'https://users.example.test',
           messageServiceUrl: 'https://messages.example.test',
+          messageServiceWsUrl: 'wss://messages.example.test/im/ws',
           mailServiceUrl: 'https://mail.example.test',
           didDomain: 'example.test',
           anpServiceUrl: 'https://service.example.test/anp-im/rpc',
           anpServiceDid: 'did:wba:example.test',
+          daemonRustRepo: '../awiki-cli-rs2-message-agent',
+          messageAgentEnabled: true,
+          messageAgentRuntimeProvider: 'hermes',
+          messageAgentProcessingScope: 'all_conversations',
           otpPhone: 'test-phone-secret',
           otpCode: 'test-otp-secret',
           appHandle: 'app-from-file',
@@ -237,10 +274,15 @@ cliHandle: legacy-cli
       expect(config.serviceBaseUrl, 'https://service.example.test');
       expect(config.userServiceUrl, 'https://users.example.test');
       expect(config.messageServiceUrl, 'https://messages.example.test');
+      expect(config.messageServiceWsUrl, 'wss://messages.example.test/im/ws');
       expect(config.mailServiceUrl, 'https://mail.example.test');
       expect(config.didDomain, 'example.test');
       expect(config.anpServiceUrl, 'https://service.example.test/anp-im/rpc');
       expect(config.anpServiceDid, 'did:wba:example.test');
+      expect(config.daemonRustRepo, '../awiki-cli-rs2-message-agent');
+      expect(config.messageAgentEnabled, isTrue);
+      expect(config.messageAgentRuntimeProvider, 'hermes');
+      expect(config.messageAgentProcessingScope, 'all_conversations');
       expect(config.otpPhone, 'test-phone-secret');
       expect(config.otpCode, 'test-otp-secret');
       expect(config.appHandle, 'app-from-file');
@@ -423,18 +465,33 @@ cliPeer:
 
       final log = lines.join('\n');
       expect(log, contains('case: smoke'));
-      expect(
-        log,
-        contains(
-          r'$ flutter test integration_test/app_smoke_test.dart -d macos',
-        ),
-      );
-      expect(
-        log,
-        contains(
-          r'$ flutter test integration_test/im_core_open_smoke_test.dart -d macos',
-        ),
-      );
+      if (Platform.isLinux) {
+        expect(
+          log,
+          contains(
+            r'$ xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux',
+          ),
+        );
+        expect(
+          log,
+          contains(
+            r'$ xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux',
+          ),
+        );
+      } else {
+        expect(
+          log,
+          contains(
+            r'$ flutter test integration_test/app_smoke_test.dart -d macos',
+          ),
+        );
+        expect(
+          log,
+          contains(
+            r'$ flutter test integration_test/im_core_open_smoke_test.dart -d macos',
+          ),
+        );
+      }
       expect(log, isNot(contains('fake-awiki-cli')));
       expect(log, isNot(contains('DEV_OTP')));
       final timings = File(
@@ -443,6 +500,7 @@ cliPeer:
       final decoded =
           jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
       expect(decoded['case'], 'smoke');
+      expect(decoded['platform'], Platform.isLinux ? 'linux' : 'macos');
       expect(decoded['caseIds'], <dynamic>['SMOKE-E2E-001', 'NATIVE-E2E-001']);
     });
 
@@ -866,6 +924,104 @@ cliPeer:
       ]);
     });
 
+    test('generates message-agent Flutter command and report case IDs', () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_message_agent_runner_test_',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      _writeLocalConfig(
+        root,
+        platform: 'linux',
+        appHandle: 'message-agent-app',
+        cliHandle: 'message-agent-cli',
+        cliBin: '/tmp/fake-awiki-cli',
+        messageServiceUrl: 'https://messages.example.test',
+        messageServiceWsUrl: 'wss://messages.example.test/im/ws',
+        daemonRustRepo: '../awiki-cli-rs2-message-agent',
+        messageAgentEnabled: true,
+      );
+      final lines = <String>[];
+      final runner = DesktopE2eRunner(
+        root: root,
+        options: DesktopE2eOptions.parse(const <String>[
+          '--case',
+          'message-agent',
+          '--run-id',
+          'run-message-agent',
+        ]),
+        commands: DesktopCommandRunner(
+          root: root,
+          dryRun: true,
+          redactor: DesktopSecretRedactor(const <String>[
+            'test-phone-secret',
+            'test-otp-secret',
+          ]),
+          logLine: lines.add,
+        ),
+      );
+
+      await runner.run();
+
+      final log = lines.join('\n');
+      expect(log, contains('case: message-agent'));
+      expect(
+        log,
+        contains(
+          r'$ xvfb-run -a flutter test integration_test/message_agent_full_ui_test.dart -d linux',
+        ),
+      );
+      expect(log, isNot(contains('--dart-define=')));
+      expect(log, isNot(contains('test-phone-secret')));
+      expect(log, isNot(contains('test-otp-secret')));
+
+      final timings = File(
+        '${root.path}/.e2e/message-agent/run-message-agent/reports/timings.json',
+      );
+      final decoded =
+          jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
+      expect(decoded['scenario'], 'message-agent-full-ui');
+      expect(decoded['case'], 'message-agent');
+      expect(decoded['caseIds'], <dynamic>[
+        'MSGAGENT-E2E-001',
+        'MSGAGENT-E2E-002',
+        'MSGAGENT-E2E-003',
+        'MSGAGENT-E2E-004',
+      ]);
+      expect(
+        decoded['messageServiceWsUrl'],
+        'wss://messages.example.test/im/ws',
+      );
+      expect(decoded['daemonRustRepo'], '<redacted-daemon-repo>');
+      final messageAgent = decoded['messageAgent'] as Map<String, dynamic>;
+      expect(messageAgent['enabled'], isTrue);
+      expect(messageAgent['runtimeProvider'], 'hermes');
+      expect(messageAgent['processingScope'], 'all_conversations');
+
+      final runConfig = File(
+        '${root.path}/.e2e/message-agent/current/run_config.json',
+      );
+      expect(runConfig.existsSync(), isTrue);
+      final runConfigJson =
+          jsonDecode(await runConfig.readAsString()) as Map<String, dynamic>;
+      expect(runConfigJson['case'], 'message-agent');
+      expect(runConfigJson['daemon'], isA<Map<String, dynamic>>());
+      expect(runConfigJson['messageAgent'], isA<Map<String, dynamic>>());
+      final runMessageAgent =
+          runConfigJson['messageAgent'] as Map<String, dynamic>;
+      expect(runMessageAgent['enabled'], isTrue);
+      expect(runMessageAgent['runtimeProvider'], 'hermes');
+      expect(runMessageAgent['processingScope'], 'all_conversations');
+      final service = runConfigJson['service'] as Map<String, dynamic>;
+      expect(
+        service['messageServiceWsUrl'],
+        'wss://messages.example.test/im/ws',
+      );
+    });
+
     test('generates macOS Flutter command without Xvfb', () async {
       final root = await Directory.systemTemp.createTemp(
         'awiki_desktop_cli_peer_runner_macos_test_',
@@ -958,10 +1114,29 @@ void _writeLocalConfig(
   String cliHandle = 'e2e-cli',
   String cliBin = '/tmp/fake-awiki-cli',
   String? messageServiceUrl,
+  String? messageServiceWsUrl,
+  String? daemonRustRepo,
+  bool messageAgentEnabled = false,
 }) {
   final messageService = messageServiceUrl == null
       ? ''
       : '  messageServiceUrl: $messageServiceUrl\n';
+  final messageServiceWs = messageServiceWsUrl == null
+      ? ''
+      : '  messageServiceWsUrl: $messageServiceWsUrl\n';
+  final daemon = daemonRustRepo == null
+      ? ''
+      : '''
+daemon:
+  rustRepo: $daemonRustRepo
+''';
+  final messageAgent =
+      '''
+messageAgent:
+  enabled: $messageAgentEnabled
+  runtimeProvider: hermes
+  processingScope: all_conversations
+''';
   File('${root.path}/tests/e2e/configs/e2e.local.yaml')
     ..createSync(recursive: true)
     ..writeAsStringSync('''
@@ -970,6 +1145,8 @@ service:
   baseUrl: https://service.example.test
   didDomain: example.test
 $messageService
+$messageServiceWs
+$daemon$messageAgent
 otp:
   phone: test-phone-secret
   code: test-otp-secret
