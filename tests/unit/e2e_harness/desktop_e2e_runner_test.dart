@@ -349,6 +349,72 @@ cliHandle: legacy-cli
         ),
       );
     });
+
+    test('defaults message-agent case to enabled when YAML omits it', () {
+      final config = DesktopCliPeerConfig.from(
+        DesktopE2eOptions.parse(const <String>['--case', 'message-agent']),
+        const DesktopE2eFileConfig(
+          path: '/tmp/e2e.local.yaml',
+          platform: DesktopE2ePlatform.linux,
+          serviceBaseUrl: 'https://service.example.test',
+          didDomain: 'example.test',
+          otpPhone: 'test-phone-secret',
+          otpCode: 'test-otp-secret',
+          appHandle: 'app-from-file',
+          cliHandle: 'cli-from-file',
+          cliBin: '/tmp/file-awiki-cli',
+        ),
+      );
+
+      expect(config.messageAgentEnabled, isTrue);
+    });
+
+    test('rejects message-agent case when YAML disables it', () {
+      expect(
+        () => DesktopCliPeerConfig.from(
+          DesktopE2eOptions.parse(const <String>['--case', 'message-agent']),
+          const DesktopE2eFileConfig(
+            path: '/tmp/e2e.local.yaml',
+            platform: DesktopE2ePlatform.linux,
+            serviceBaseUrl: 'https://service.example.test',
+            didDomain: 'example.test',
+            messageAgentEnabled: false,
+            otpPhone: 'test-phone-secret',
+            otpCode: 'test-otp-secret',
+            appHandle: 'app-from-file',
+            cliHandle: 'cli-from-file',
+            cliBin: '/tmp/file-awiki-cli',
+          ),
+        ),
+        throwsA(
+          isA<E2eFailure>().having(
+            (error) => error.message,
+            'message',
+            'messageAgent.enabled must be true for --case message-agent '
+                'in /tmp/e2e.local.yaml.',
+          ),
+        ),
+      );
+    });
+
+    test('keeps non-message-agent cases disabled by default', () {
+      final config = DesktopCliPeerConfig.from(
+        DesktopE2eOptions.parse(const <String>['--case', 'full']),
+        const DesktopE2eFileConfig(
+          path: '/tmp/e2e.local.yaml',
+          platform: DesktopE2ePlatform.linux,
+          serviceBaseUrl: 'https://service.example.test',
+          didDomain: 'example.test',
+          otpPhone: 'test-phone-secret',
+          otpCode: 'test-otp-secret',
+          appHandle: 'app-from-file',
+          cliHandle: 'cli-from-file',
+          cliBin: '/tmp/file-awiki-cli',
+        ),
+      );
+
+      expect(config.messageAgentEnabled, isFalse);
+    });
   });
 
   group('DesktopE2eRunner dry-run', () {
@@ -1015,12 +1081,74 @@ cliPeer:
       expect(runMessageAgent['enabled'], isTrue);
       expect(runMessageAgent['runtimeProvider'], 'hermes');
       expect(runMessageAgent['processingScope'], 'all_conversations');
+      expect(runMessageAgent['enabled'], messageAgent['enabled']);
       final service = runConfigJson['service'] as Map<String, dynamic>;
       expect(
         service['messageServiceWsUrl'],
         'wss://messages.example.test/im/ws',
       );
     });
+
+    test(
+      'defaults message-agent runner report and run config to enabled',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'awiki_message_agent_runner_default_test_',
+        );
+        addTearDown(() async {
+          if (await root.exists()) {
+            await root.delete(recursive: true);
+          }
+        });
+        _writeLocalConfig(
+          root,
+          platform: 'linux',
+          appHandle: 'message-agent-app',
+          cliHandle: 'message-agent-cli',
+          cliBin: '/tmp/fake-awiki-cli',
+          includeMessageAgent: false,
+        );
+        final lines = <String>[];
+        final runner = DesktopE2eRunner(
+          root: root,
+          options: DesktopE2eOptions.parse(const <String>[
+            '--case',
+            'message-agent',
+            '--run-id',
+            'run-message-agent-default',
+          ]),
+          commands: DesktopCommandRunner(
+            root: root,
+            dryRun: true,
+            redactor: DesktopSecretRedactor(const <String>[
+              'test-phone-secret',
+              'test-otp-secret',
+            ]),
+            logLine: lines.add,
+          ),
+        );
+
+        await runner.run();
+
+        final timings = File(
+          '${root.path}/.e2e/message-agent/run-message-agent-default/reports/timings.json',
+        );
+        final decoded =
+            jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
+        final messageAgent = decoded['messageAgent'] as Map<String, dynamic>;
+        expect(messageAgent['enabled'], isTrue);
+
+        final runConfig = File(
+          '${root.path}/.e2e/message-agent/current/run_config.json',
+        );
+        final runConfigJson =
+            jsonDecode(await runConfig.readAsString()) as Map<String, dynamic>;
+        final runMessageAgent =
+            runConfigJson['messageAgent'] as Map<String, dynamic>;
+        expect(runMessageAgent['enabled'], isTrue);
+        expect(runMessageAgent['enabled'], messageAgent['enabled']);
+      },
+    );
 
     test('generates macOS Flutter command without Xvfb', () async {
       final root = await Directory.systemTemp.createTemp(
@@ -1117,6 +1245,7 @@ void _writeLocalConfig(
   String? messageServiceWsUrl,
   String? daemonRustRepo,
   bool messageAgentEnabled = false,
+  bool includeMessageAgent = true,
 }) {
   final messageService = messageServiceUrl == null
       ? ''
@@ -1130,13 +1259,14 @@ void _writeLocalConfig(
 daemon:
   rustRepo: $daemonRustRepo
 ''';
-  final messageAgent =
-      '''
+  final messageAgent = includeMessageAgent
+      ? '''
 messageAgent:
   enabled: $messageAgentEnabled
   runtimeProvider: hermes
   processingScope: all_conversations
-''';
+'''
+      : '';
   File('${root.path}/tests/e2e/configs/e2e.local.yaml')
     ..createSync(recursive: true)
     ..writeAsStringSync('''

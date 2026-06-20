@@ -391,9 +391,8 @@ class DesktopE2eRunner {
         'processingScope': peerConfig.messageAgentProcessingScope,
       },
     };
-    if (options.dryRun) {
+    if (options.dryRun && !options.prepareOnly) {
       _line('would write Flutter E2E run config: ${runConfigFile.path}');
-      return;
     }
     await runConfigFile.parent.create(recursive: true);
     await runConfigFile.writeAsString(
@@ -848,13 +847,34 @@ class DesktopCliPeerConfig {
       anpServiceUrl: fileConfig.anpServiceUrl,
       anpServiceDid: fileConfig.anpServiceDid,
       daemonRustRepo: fileConfig.daemonRustRepo,
-      messageAgentEnabled: fileConfig.messageAgentEnabled ?? false,
+      messageAgentEnabled: _effectiveMessageAgentEnabled(
+        options,
+        fileConfig,
+        sourcePath,
+      ),
       messageAgentRuntimeProvider:
           fileConfig.messageAgentRuntimeProvider ?? 'hermes',
       messageAgentProcessingScope:
           fileConfig.messageAgentProcessingScope ?? 'all_conversations',
     );
   }
+}
+
+bool _effectiveMessageAgentEnabled(
+  DesktopE2eOptions options,
+  DesktopE2eFileConfig fileConfig,
+  String sourcePath,
+) {
+  final configured = fileConfig.messageAgentEnabled;
+  if (options.e2eCase != DesktopE2eCase.messageAgent) {
+    return configured ?? false;
+  }
+  if (configured == false) {
+    throw E2eFailure(
+      'messageAgent.enabled must be true for --case message-agent in $sourcePath.',
+    );
+  }
+  return true;
 }
 
 class DesktopE2eFileConfig {
