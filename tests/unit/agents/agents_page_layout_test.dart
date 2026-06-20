@@ -939,6 +939,86 @@ void main() {
     expect(find.text('running'), findsOneWidget);
   });
 
+  testWidgets('generic CLI runtime card drives shared agent status UI', (
+    tester,
+  ) async {
+    final control = FakeAgentControlService()
+      ..agents = <AgentSummary>[
+        const AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:runtime-codex',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'codex',
+          handle: 'codex-ui',
+          displayName: 'Codex UI',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: genericCliRuntimeCardDiagnostics(
+              lifecycleState: 'needs_setup',
+              setupReady: false,
+            ),
+          ),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:runtime-queued',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'claude-code',
+          handle: 'claude-queue',
+          displayName: 'Claude Queue',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'ready',
+            diagnosticsSummary: genericCliRuntimeCardDiagnostics(
+              lifecycleState: 'queued',
+              driverId: 'claude-code',
+              queueState: 'queued',
+              queuedCount: 1,
+              nextAction: 'wait_for_run_slot',
+            ),
+          ),
+        ),
+      ];
+
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('codex · 需要配置'), findsOneWidget);
+    expect(find.text('claude-code · 正在处理'), findsOneWidget);
+
+    await tester.tap(find.text('Codex UI').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('需要配置'), findsOneWidget);
+    expect(find.textContaining('route_'), findsNothing);
+    expect(find.textContaining('native_session'), findsNothing);
+    expect(find.textContaining('/Users/'), findsNothing);
+  });
+
   testWidgets('agent detail keeps diagnostics summary visible without data', (
     tester,
   ) async {

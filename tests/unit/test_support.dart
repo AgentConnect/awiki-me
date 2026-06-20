@@ -101,6 +101,54 @@ const AgentLatestStatus readyDaemonStatusWithGenericCliCapability =
       diagnosticsSummary: genericCliCapabilityDiagnostics,
     );
 
+Map<String, Object?> genericCliRuntimeCardDiagnostics({
+  String lifecycleState = 'needs_setup',
+  bool supported = true,
+  int statusSchemaVersion = 1,
+  String runtimeFamily = 'generic-cli',
+  String driverId = 'codex',
+  bool setupReady = false,
+  String setupState = 'binary_missing',
+  String queueState = 'idle',
+  String activeRunState = 'idle',
+  String routeSessionState = 'none',
+  int queuedCount = 0,
+  int runningCount = 0,
+  int deadLetterCount = 0,
+  int failedCount = 0,
+  int? oldestQueuedAgeMs,
+  String nextAction = 'setup_required',
+  bool containsUserContent = false,
+  bool containsProviderAuthMaterial = false,
+  String lastMessageIdWatermarkPolicy = 'final_only',
+}) {
+  return <String, Object?>{
+    'config_summary': <String, Object?>{
+      'runtime_card': <String, Object?>{
+        'supported': supported,
+        'status_schema_version': statusSchemaVersion,
+        'runtime_family': runtimeFamily,
+        'driver_id': driverId,
+        'lifecycle_state': lifecycleState,
+        'setup_ready': setupReady,
+        'setup_state': setupState,
+        'queue_state': queueState,
+        'active_run_state': activeRunState,
+        'route_session_state': routeSessionState,
+        'queued_count': queuedCount,
+        'running_count': runningCount,
+        'dead_letter_count': deadLetterCount,
+        'failed_count': failedCount,
+        'oldest_queued_age_ms': oldestQueuedAgeMs,
+        'next_action': nextAction,
+        'contains_user_content': containsUserContent,
+        'contains_provider_auth_material': containsProviderAuthMaterial,
+        'last_message_id_watermark_policy': lastMessageIdWatermarkPolicy,
+      },
+    },
+  };
+}
+
 Widget buildLocalizedTestApp({
   required Widget home,
   Locale locale = const Locale('zh'),

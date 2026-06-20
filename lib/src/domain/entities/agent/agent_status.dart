@@ -146,6 +146,109 @@ class AgentLatestStatus {
       'diagnostics_summary': diagnosticsSummary,
     };
   }
+
+  AgentRuntimeCardStatus? get runtimeCard =>
+      AgentRuntimeCardStatus.fromDiagnosticsSummary(diagnosticsSummary);
+}
+
+class AgentRuntimeCardStatus {
+  const AgentRuntimeCardStatus({
+    required this.supported,
+    required this.statusSchemaVersion,
+    required this.runtimeFamily,
+    required this.driverId,
+    required this.lifecycleState,
+    required this.setupReady,
+    this.setupState,
+    this.queueState,
+    this.activeRunState,
+    this.routeSessionState,
+    this.queuedCount,
+    this.runningCount,
+    this.deadLetterCount,
+    this.failedCount,
+    this.oldestQueuedAgeMs,
+    this.nextAction,
+    required this.containsUserContent,
+    required this.containsProviderAuthMaterial,
+    this.lastMessageIdWatermarkPolicy,
+  });
+
+  final bool supported;
+  final int statusSchemaVersion;
+  final String runtimeFamily;
+  final String? driverId;
+  final String lifecycleState;
+  final bool setupReady;
+  final String? setupState;
+  final String? queueState;
+  final String? activeRunState;
+  final String? routeSessionState;
+  final int? queuedCount;
+  final int? runningCount;
+  final int? deadLetterCount;
+  final int? failedCount;
+  final int? oldestQueuedAgeMs;
+  final String? nextAction;
+  final bool containsUserContent;
+  final bool containsProviderAuthMaterial;
+  final String? lastMessageIdWatermarkPolicy;
+
+  static AgentRuntimeCardStatus? fromDiagnosticsSummary(
+    Map<String, Object?> diagnosticsSummary,
+  ) {
+    final configSummary = _readMap(diagnosticsSummary['config_summary']);
+    final runtimeCard = _readMap(configSummary['runtime_card']);
+    if (runtimeCard.isEmpty) {
+      return null;
+    }
+    return AgentRuntimeCardStatus.fromJson(runtimeCard);
+  }
+
+  static AgentRuntimeCardStatus? fromJson(Map<String, Object?> json) {
+    final statusSchemaVersion = _optionalNonNegativeInt(
+      json['status_schema_version'],
+    );
+    final runtimeFamily = _optionalString(json['runtime_family']);
+    final lifecycleState = _optionalString(json['lifecycle_state']);
+    if (statusSchemaVersion != 1 ||
+        runtimeFamily != 'generic-cli' ||
+        lifecycleState == null) {
+      return null;
+    }
+    final supported = _optionalBool(json['supported']) ?? false;
+    final setupReady = _optionalBool(json['setup_ready']) ?? false;
+    final containsUserContent =
+        _optionalBool(json['contains_user_content']) ?? false;
+    final containsProviderAuthMaterial =
+        _optionalBool(json['contains_provider_auth_material']) ?? false;
+    if (containsUserContent || containsProviderAuthMaterial) {
+      return null;
+    }
+    return AgentRuntimeCardStatus(
+      supported: supported,
+      statusSchemaVersion: 1,
+      runtimeFamily: 'generic-cli',
+      driverId: _optionalString(json['driver_id']),
+      lifecycleState: lifecycleState,
+      setupReady: setupReady,
+      setupState: _optionalString(json['setup_state']),
+      queueState: _optionalString(json['queue_state']),
+      activeRunState: _optionalString(json['active_run_state']),
+      routeSessionState: _optionalString(json['route_session_state']),
+      queuedCount: _optionalNonNegativeInt(json['queued_count']),
+      runningCount: _optionalNonNegativeInt(json['running_count']),
+      deadLetterCount: _optionalNonNegativeInt(json['dead_letter_count']),
+      failedCount: _optionalNonNegativeInt(json['failed_count']),
+      oldestQueuedAgeMs: _optionalNonNegativeInt(json['oldest_queued_age_ms']),
+      nextAction: _optionalString(json['next_action']),
+      containsUserContent: containsUserContent,
+      containsProviderAuthMaterial: containsProviderAuthMaterial,
+      lastMessageIdWatermarkPolicy: _optionalString(
+        json['last_message_id_watermark_policy'],
+      ),
+    );
+  }
 }
 
 String? _optionalString(Object? value) {
@@ -160,4 +263,20 @@ Map<String, Object?> _readMap(Object? value) {
   return value.map<String, Object?>(
     (key, value) => MapEntry(key.toString(), value),
   );
+}
+
+bool? _optionalBool(Object? value) {
+  return value is bool ? value : null;
+}
+
+int? _optionalNonNegativeInt(Object? value) {
+  final parsed = switch (value) {
+    int() => value,
+    String() => int.tryParse(value),
+    _ => null,
+  };
+  if (parsed == null || parsed < 0) {
+    return null;
+  }
+  return parsed;
 }

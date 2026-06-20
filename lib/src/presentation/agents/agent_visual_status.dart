@@ -36,8 +36,23 @@ class AgentVisualStatus {
         rawStatus: 'upgrading',
       );
     }
+    if (agent.isRuntime) {
+      final criticalRuntimeStatus = _fromRuntimeCard(
+        agent.latest.runtimeCard,
+        criticalOnly: true,
+      );
+      if (criticalRuntimeStatus != null) {
+        return criticalRuntimeStatus;
+      }
+    }
     if (hasPendingTurn || agent.recentRuns.any(AgentVisualStatus.isActiveRun)) {
       return const AgentVisualStatus(AgentVisualStatusKind.processing);
+    }
+    if (agent.isRuntime) {
+      final runtimeStatus = _fromRuntimeCard(agent.latest.runtimeCard);
+      if (runtimeStatus != null) {
+        return runtimeStatus;
+      }
     }
     return AgentVisualStatus.fromLatest(agent.latest);
   }
@@ -108,5 +123,42 @@ class AgentVisualStatus {
   static bool isActiveRun(AgentRunStatus run) {
     final status = run.status.trim().toLowerCase();
     return status == 'queued' || status == 'pending' || status == 'running';
+  }
+
+  static AgentVisualStatus? _fromRuntimeCard(
+    AgentRuntimeCardStatus? card, {
+    bool criticalOnly = false,
+  }) {
+    if (card == null) {
+      return null;
+    }
+    final lifecycle = card.lifecycleState.trim().toLowerCase();
+    final rawStatus = 'runtime_card:$lifecycle';
+    return switch (lifecycle) {
+      'needs_setup' => AgentVisualStatus(
+        AgentVisualStatusKind.needsConfig,
+        rawStatus: rawStatus,
+      ),
+      'dead_letter' || 'failed' || 'manual_review_required' =>
+        AgentVisualStatus(AgentVisualStatusKind.failed, rawStatus: rawStatus),
+      'disabled' => AgentVisualStatus(
+        AgentVisualStatusKind.disabled,
+        rawStatus: rawStatus,
+      ),
+      _ when criticalOnly => null,
+      'queued' || 'running' => AgentVisualStatus(
+        AgentVisualStatusKind.processing,
+        rawStatus: rawStatus,
+      ),
+      'created' || 'ready' || 'final_sent' => AgentVisualStatus(
+        AgentVisualStatusKind.ready,
+        rawStatus: rawStatus,
+      ),
+      'unknown' => AgentVisualStatus(
+        AgentVisualStatusKind.unknown,
+        rawStatus: rawStatus,
+      ),
+      _ => null,
+    };
   }
 }
