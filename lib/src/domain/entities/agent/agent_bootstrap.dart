@@ -317,22 +317,29 @@ class DaemonBootstrapPublicKey {
     required String daemonDid,
     required Map<String, Object?> diagnostics,
   }) {
+    final bootstrap = _bootstrapKeyDiagnostics(diagnostics);
     final keyId =
+        _nonEmpty(bootstrap['key_id']?.toString()) ??
         _nonEmpty(diagnostics['bootstrap_key_id']?.toString()) ??
         '$daemonDid#key-3';
     final publicKeyB64u = _nonEmpty(
+      bootstrap['public_key_b64u']?.toString(),
+    ) ?? _nonEmpty(
       diagnostics['bootstrap_public_key_b64u']?.toString(),
     );
     if (publicKeyB64u == null) {
       throw StateError('Daemon bootstrap public key is not available.');
     }
     final algorithm =
+        _nonEmpty(bootstrap['algorithm']?.toString()) ??
         _nonEmpty(diagnostics['bootstrap_key_algorithm']?.toString()) ??
         'x25519';
     return DaemonBootstrapPublicKey(
       keyId: keyId,
       publicKeyB64u: publicKeyB64u,
       publicKeyMultibase: _nonEmpty(
+        bootstrap['public_key_multibase']?.toString(),
+      ) ?? _nonEmpty(
         diagnostics['bootstrap_public_key_multibase']?.toString(),
       ),
       algorithm: algorithm,
@@ -363,6 +370,34 @@ class DaemonBootstrapPublicKey {
       throw ArgumentError.value(keyId, 'keyId', 'must equal $daemonDid#key-3');
     }
   }
+}
+
+Map<String, Object?> _bootstrapKeyDiagnostics(Map<String, Object?> diagnostics) {
+  final configSummary = diagnostics['config_summary'];
+  if (configSummary is Map) {
+    final bootstrapKey = configSummary['bootstrap_key'];
+    if (bootstrapKey is Map) {
+      return bootstrapKey.map<String, Object?>(
+        (key, value) => MapEntry(key.toString(), value),
+      );
+    }
+    final flatConfigSummary = configSummary.map<String, Object?>(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    final publicKeyB64u = _nonEmpty(
+      flatConfigSummary['bootstrap_public_key_b64u']?.toString(),
+    );
+    if (publicKeyB64u != null) {
+      return <String, Object?>{
+        'key_id': flatConfigSummary['bootstrap_key_id'],
+        'public_key_b64u': publicKeyB64u,
+        'public_key_multibase':
+            flatConfigSummary['bootstrap_public_key_multibase'],
+        'algorithm': flatConfigSummary['bootstrap_key_algorithm'],
+      };
+    }
+  }
+  return const <String, Object?>{};
 }
 
 class DaemonSecureBootstrapEncryptor {

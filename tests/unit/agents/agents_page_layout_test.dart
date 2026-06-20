@@ -578,10 +578,13 @@ void main() {
               version: '0.5.26',
               platform: 'linux-amd64',
               diagnosticsSummary: <String, Object?>{
-                'bootstrap_key_id': 'did:agent:daemon#key-3',
-                'bootstrap_public_key_b64u':
-                    'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-                'bootstrap_key_algorithm': 'x25519',
+                'config_summary': <String, Object?>{
+                  'bootstrap_key_status': 'ready',
+                  'bootstrap_key_id': 'did:agent:daemon#key-3',
+                  'bootstrap_public_key_b64u':
+                      'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+                  'bootstrap_key_algorithm': 'x25519',
+                },
               },
             ),
           ),

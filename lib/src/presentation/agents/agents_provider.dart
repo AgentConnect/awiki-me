@@ -41,6 +41,7 @@ class AgentsState {
     this.savingInvocationPolicies = const <String>{},
     this.invocationPolicyErrors = const <String, String>{},
     this.statusQueryErrors = const <String, String>{},
+    this.debugLastError,
   });
 
   final List<AgentSummary> agents;
@@ -57,6 +58,7 @@ class AgentsState {
   final Set<String> savingInvocationPolicies;
   final Map<String, String> invocationPolicyErrors;
   final Map<String, String> statusQueryErrors;
+  final String? debugLastError;
 
   AgentSummary? get selectedAgent {
     final selectedDid = selectedAgentDid;
@@ -131,6 +133,7 @@ class AgentsState {
     Set<String>? savingInvocationPolicies,
     Map<String, String>? invocationPolicyErrors,
     Map<String, String>? statusQueryErrors,
+    String? debugLastError,
   }) {
     return AgentsState(
       agents: agents ?? this.agents,
@@ -156,6 +159,9 @@ class AgentsState {
       invocationPolicyErrors:
           invocationPolicyErrors ?? this.invocationPolicyErrors,
       statusQueryErrors: statusQueryErrors ?? this.statusQueryErrors,
+      debugLastError: clearError
+          ? null
+          : (debugLastError ?? this.debugLastError),
     );
   }
 }
@@ -245,6 +251,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         state = state.copyWith(
           isLoading: false,
           error: _agentErrorMessage(error),
+          debugLastError: error.toString(),
         );
       }
     }
@@ -719,7 +726,11 @@ class AgentsController extends StateNotifier<AgentsState> {
       await action();
       state = state.copyWith(isActing: false, clearError: true);
     } catch (error) {
-      state = state.copyWith(isActing: false, error: _agentErrorMessage(error));
+      state = state.copyWith(
+        isActing: false,
+        error: _agentErrorMessage(error),
+        debugLastError: error.toString(),
+      );
     }
   }
 

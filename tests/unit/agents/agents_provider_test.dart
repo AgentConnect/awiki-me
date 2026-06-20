@@ -845,6 +845,48 @@ void main() {
   );
 
   test(
+    'bootstrapMessageAgent keeps raw diagnostic error while showing friendly text',
+    () async {
+      final control = _FailingBootstrapAgentControlService(
+        Exception('issue_token failed: invalid_handle hermes-msg-too-long'),
+      )..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: <String, Object?>{
+                'bootstrap_key_id': 'did:agent:daemon#key-3',
+                'bootstrap_public_key_b64u':
+                    'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+                'bootstrap_key_algorithm': 'x25519',
+              },
+            ),
+          ),
+        ];
+      final container = _container(
+        control,
+        agentImEnabled: true,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(agentsProvider.notifier)
+          .bootstrapMessageAgent(
+            daemonDid: 'did:agent:daemon',
+            appInstanceId: 'app_1',
+          );
+
+      final state = container.read(agentsProvider);
+      expect(state.error, '智能体信息暂时无法加载，请稍后重试。');
+      expect(state.error, isNot(contains('invalid_handle')));
+      expect(state.debugLastError, contains('invalid_handle'));
+    },
+  );
+
+  test(
     'bootstrapMessageAgent is blocked before delegated subkey when feature flag is off',
     () async {
       final control = FakeAgentControlService()
@@ -886,6 +928,118 @@ void main() {
       expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
       expect(control.lastBootstrapDaemonDid, isNull);
       expect(container.read(agentsProvider).error, '消息处理 Agent 功能未开启。');
+    },
+  );
+
+  test(
+    'bootstrapMessageAgent accepts nested bootstrap key diagnostics',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: <String, Object?>{
+                'config_summary': <String, Object?>{
+                  'bootstrap_key_status': 'ready',
+                  'bootstrap_key': <String, Object?>{
+                    'key_id': 'did:agent:daemon#key-3',
+                    'public_key_b64u':
+                        'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+                    'algorithm': 'x25519',
+                  },
+                },
+              },
+            ),
+          ),
+        ];
+      final identities = FakeIdentityCorePort(
+        daemonSubkeyPackage: const UserSubkeyPackage(
+          userDid: 'did:human:me',
+          verificationMethod: 'did:human:me#daemon-key-1',
+          publicKeyMultibase: 'zPublic',
+          privateKeyMultibase: 'zPrivate',
+        ),
+      );
+      final container = _container(
+        control,
+        identities: identities,
+        agentImEnabled: true,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(agentsProvider.notifier)
+          .bootstrapMessageAgent(
+            daemonDid: 'did:agent:daemon',
+            appInstanceId: 'app_1',
+          );
+
+      expect(identities.lastEnsuredDaemonSubkeySelector, 'default');
+      expect(control.lastBootstrapDaemonDid, 'did:agent:daemon');
+      expect(
+        control.lastBootstrapDaemonPublicKey?.publicKeyB64u,
+        'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      );
+    },
+  );
+
+  test(
+    'bootstrapMessageAgent accepts flat config summary bootstrap key diagnostics',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: <String, Object?>{
+                'config_summary': <String, Object?>{
+                  'bootstrap_key_status': 'ready',
+                  'bootstrap_key_id': 'did:agent:daemon#key-3',
+                  'bootstrap_public_key_b64u':
+                      'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+                  'bootstrap_key_algorithm': 'x25519',
+                },
+              },
+            ),
+          ),
+        ];
+      final identities = FakeIdentityCorePort(
+        daemonSubkeyPackage: const UserSubkeyPackage(
+          userDid: 'did:human:me',
+          verificationMethod: 'did:human:me#daemon-key-1',
+          publicKeyMultibase: 'zPublic',
+          privateKeyMultibase: 'zPrivate',
+        ),
+      );
+      final container = _container(
+        control,
+        identities: identities,
+        agentImEnabled: true,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(agentsProvider.notifier)
+          .bootstrapMessageAgent(
+            daemonDid: 'did:agent:daemon',
+            appInstanceId: 'app_1',
+          );
+
+      expect(identities.lastEnsuredDaemonSubkeySelector, 'default');
+      expect(control.lastBootstrapDaemonDid, 'did:agent:daemon');
+      expect(
+        control.lastBootstrapDaemonPublicKey?.publicKeyB64u,
+        'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      );
     },
   );
 
@@ -1454,6 +1608,26 @@ class _FailingAgentControlService extends FakeAgentControlService {
 
   @override
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
+    throw error;
+  }
+}
+
+class _FailingBootstrapAgentControlService extends FakeAgentControlService {
+  _FailingBootstrapAgentControlService(this.error);
+
+  final Object error;
+
+  @override
+  Future<void> ensureMessageAgentBootstrap({
+    required String daemonAgentDid,
+    required String controllerDid,
+    required String appInstanceId,
+    required UserSubkeyPackage userSubkeyPackage,
+    required DaemonBootstrapPublicKey daemonBootstrapPublicKey,
+    String? userHandle,
+    String? runtimeRegistrationToken,
+    String? runId,
+  }) async {
     throw error;
   }
 }

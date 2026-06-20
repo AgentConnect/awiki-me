@@ -10,6 +10,7 @@ import 'package:awiki_me/src/application/ports/message_agent_binding_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/message_agent_binding.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
@@ -22,9 +23,23 @@ void main() {
     () async {
       final inventory = _InventoryStub();
       final messages = _MessagesStub();
+      final bindings = _MessageAgentBindingsStub();
+      inventory.agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:message',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'hermes',
+          handle: 'hermes-msg-macos-e2e-app-7fe1fc2b5661',
+          displayName: 'Hermes Message Agent',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
       final service = DefaultAgentControlService(
         inventory: inventory,
         messages: messages,
+        messageAgentBindings: bindings,
         agentImEnabled: true,
       );
 
@@ -278,9 +293,30 @@ void main() {
     () async {
       final inventory = _InventoryStub();
       final messages = _MessagesStub();
+      final bindings = _MessageAgentBindingsStub();
+      inventory.agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: 'Message Daemon',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:message',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'hermes',
+          handle: 'hermes-msg-app-1-334c10a06052',
+          displayName: 'Hermes Message Agent',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
       final service = DefaultAgentControlService(
         inventory: inventory,
         messages: messages,
+        messageAgentBindings: bindings,
         agentImEnabled: true,
       );
 
@@ -330,6 +366,20 @@ void main() {
       final aad = messages.lastPayload?['aad'] as Map<String, Object?>;
       expect(aad['binding_id'], 'app-message-agent:did:human:me:app_1');
       expect(aad['runtime_provider'], appMessageHandlerRuntimeProvider);
+      expect(bindings.lastEnsuredUserDid, 'did:human:me');
+      expect(bindings.lastEnsuredDaemonDid, 'did:agent:daemon');
+      expect(bindings.lastEnsuredMessageAgentDid, 'did:agent:message');
+      expect(
+        bindings.lastEnsuredRuntimeProvider,
+        appMessageHandlerRuntimeProvider,
+      );
+      expect(bindings.lastEnsuredRuntimeProfile, const <String, Object?>{
+        'profile': appMessageHandlerRuntimeProfile,
+      });
+      expect(
+        bindings.lastEnsuredDelegatedKeyVerificationMethod,
+        'did:human:me#daemon-key-1',
+      );
       final dump = messages.lastPayload.toString();
       expect(dump, isNot(contains(daemonBootstrapSchema)));
       expect(dump, isNot(contains('private_key_pem')));
@@ -449,9 +499,23 @@ void main() {
     () async {
       final inventory = _InventoryStub();
       final messages = _MessagesStub();
+      final bindings = _MessageAgentBindingsStub();
+      inventory.agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:message',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'hermes',
+          handle: 'hermes-msg-macos-e2e-app-7fe1fc2b5661',
+          displayName: 'Hermes Message Agent',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
       final service = DefaultAgentControlService(
         inventory: inventory,
         messages: messages,
+        messageAgentBindings: bindings,
         agentImEnabled: true,
       );
 
@@ -658,6 +722,7 @@ void main() {
 }
 
 class _InventoryStub implements AgentInventoryPort {
+  List<AgentSummary> agents = const <AgentSummary>[];
   String? runtimeTokenDaemonDid;
   String? runtimeTokenHandle;
   String? runtimeTokenDisplayName;
@@ -691,7 +756,7 @@ class _InventoryStub implements AgentInventoryPort {
 
   @override
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
-    return const <AgentSummary>[];
+    return agents;
   }
 
   @override
@@ -815,11 +880,36 @@ class _MessagesStub implements MessagingService {
 
 class _MessageAgentBindingsStub implements MessageAgentBindingPort {
   final List<String> calls = <String>[];
+  String? lastEnsuredUserDid;
+  String? lastEnsuredDaemonDid;
+  String? lastEnsuredMessageAgentDid;
+  String? lastEnsuredRuntimeProvider;
+  Map<String, Object?>? lastEnsuredRuntimeProfile;
+  String? lastEnsuredDelegatedKeyVerificationMethod;
   String? lastDisabledBindingId;
   String? lastDisabledMessageAgentDid;
   String? lastRevokedBindingId;
   String? lastRevokedMessageAgentDid;
   Object? revokeError;
+
+  @override
+  Future<MessageAgentBinding> ensureBinding({
+    required String userDid,
+    required String daemonAgentDid,
+    required String messageAgentDid,
+    required String runtimeProvider,
+    required Map<String, Object?> runtimeProfile,
+    required String delegatedKeyVerificationMethod,
+  }) async {
+    calls.add('ensure:$messageAgentDid');
+    lastEnsuredUserDid = userDid;
+    lastEnsuredDaemonDid = daemonAgentDid;
+    lastEnsuredMessageAgentDid = messageAgentDid;
+    lastEnsuredRuntimeProvider = runtimeProvider;
+    lastEnsuredRuntimeProfile = runtimeProfile;
+    lastEnsuredDelegatedKeyVerificationMethod = delegatedKeyVerificationMethod;
+    return _binding(messageAgentDid: messageAgentDid, status: 'active');
+  }
 
   @override
   Future<MessageAgentBinding?> getActiveBinding() async {

@@ -141,6 +141,12 @@ class DefaultAgentControlService implements AgentControlService {
   final AwikiEnvironmentConfig _environment;
   final bool _agentImEnabled;
   final String downloadBaseUrl;
+  static const Duration _messageAgentRuntimeWaitTimeout = Duration(
+    seconds: 90,
+  );
+  static const Duration _messageAgentRuntimeWaitInterval = Duration(
+    seconds: 2,
+  );
 
   @override
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) {
@@ -271,6 +277,21 @@ class DefaultAgentControlService implements AgentControlService {
       secureEnvelope,
       idempotencyKey: idempotencyKey,
       secure: false,
+    );
+    final runtime = await _waitForMessageAgentRuntime(
+      daemonAgentDid: daemonAgentDid,
+      userDid: userDid,
+      appInstanceId: appInstanceId,
+    );
+    await _requireMessageAgentBindings().ensureBinding(
+      userDid: userDid,
+      daemonAgentDid: daemonAgentDid,
+      messageAgentDid: runtime.agentDid,
+      runtimeProvider: appMessageHandlerRuntimeProvider,
+      runtimeProfile: const <String, Object?>{
+        'profile': appMessageHandlerRuntimeProfile,
+      },
+      delegatedKeyVerificationMethod: userSubkeyPackage.verificationMethod,
     );
   }
 
@@ -511,6 +532,61 @@ class DefaultAgentControlService implements AgentControlService {
       throw StateError('Identity service is unavailable.');
     }
     return identities;
+  }
+
+  Future<AgentSummary> _waitForMessageAgentRuntime({
+    required String daemonAgentDid,
+    required String userDid,
+    required String appInstanceId,
+  }) async {
+    final expectedHandle = _messageAgentRuntimeHandle(
+      userDid: userDid,
+      appInstanceId: appInstanceId,
+    );
+    final deadline = DateTime.now().add(_messageAgentRuntimeWaitTimeout);
+    Object? lastError;
+    while (DateTime.now().isBefore(deadline)) {
+      try {
+        final runtime = await _findMessageAgentRuntime(
+          daemonAgentDid: daemonAgentDid,
+          expectedHandle: expectedHandle,
+        );
+        if (runtime != null) {
+          return runtime;
+        }
+      } on Object catch (error) {
+        lastError = error;
+      }
+      await Future<void>.delayed(_messageAgentRuntimeWaitInterval);
+    }
+    throw StateError(
+      'Message Agent runtime was not published by daemon.'
+      '${lastError == null ? '' : ' Last error: $lastError'}',
+    );
+  }
+
+  Future<AgentSummary?> _findMessageAgentRuntime({
+    required String daemonAgentDid,
+    required String expectedHandle,
+  }) async {
+    final agents = await _inventory.listAgents(includeInactive: true);
+    for (final agent in agents) {
+      if (!agent.isRuntime || agent.daemonAgentDid != daemonAgentDid) {
+        continue;
+      }
+      final runtime = agent.runtime?.trim().toLowerCase();
+      final handle = agent.handle?.trim().toLowerCase();
+      if (runtime == appMessageHandlerRuntime && handle == expectedHandle) {
+        return agent;
+      }
+      if (runtime == appMessageHandlerRuntime &&
+          (agent.displayName == defaultMessageAgentRuntimeProvider.runtimeDisplayName ||
+              handle?.startsWith(messageAgentProviderHermesHandlePrefix) ==
+                  true)) {
+        return agent;
+      }
+    }
+    return null;
   }
 }
 

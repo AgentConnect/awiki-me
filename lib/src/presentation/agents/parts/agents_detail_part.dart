@@ -232,8 +232,7 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final diagnostics = daemon.latest.diagnosticsSummary;
-    final hasBootstrapKey =
-        _nonEmpty(diagnostics['bootstrap_public_key_b64u']?.toString()) != null;
+    final hasBootstrapKey = _daemonHasBootstrapPublicKey(daemon, diagnostics);
     final daemonReady =
         daemon.latest.status.trim().toLowerCase() == 'ready' ||
         daemon.latest.status.trim().toLowerCase() == 'needs_upgrade';
@@ -461,6 +460,21 @@ class _MessageAgentFact {
 
   final String label;
   final String value;
+}
+
+bool _daemonHasBootstrapPublicKey(
+  AgentSummary daemon,
+  Map<String, Object?> diagnostics,
+) {
+  try {
+    DaemonBootstrapPublicKey.fromDiagnostics(
+      daemonDid: daemon.agentDid,
+      diagnostics: diagnostics,
+    );
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 String _daemonRuntimeSummary(AgentSummary daemon) {

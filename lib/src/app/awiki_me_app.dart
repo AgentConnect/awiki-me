@@ -15,6 +15,7 @@ import '../data/services/authenticated_user_service_rpc_client.dart';
 import '../presentation/app_shell/app_shell.dart';
 import '../presentation/app_shell/providers/app_lifecycle_provider.dart';
 import '../presentation/app_shell/providers/session_provider.dart';
+import '../presentation/agents/agents_provider.dart';
 import '../presentation/shared/awiki_me_design.dart';
 import '../presentation/shared/display_scale.dart';
 import 'app_orientation.dart';
@@ -140,6 +141,7 @@ class AwikiMeApp extends StatelessWidget {
                     ? null
                     : ref.watch(identityCorePortProvider),
                 downloadBaseUrl: control.downloadBaseUrl,
+                agentImEnabled: ref.watch(agentImEnabledProvider),
               );
             }
             return control;

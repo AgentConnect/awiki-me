@@ -154,10 +154,16 @@ service:
   anpServiceDid: did:wba:example.test
 daemon:
   rustRepo: ../awiki-cli-rs2-message-agent
+  binary: ../awiki-cli-rs2-message-agent/target/release/awiki-deamon
+  stateRoot: .e2e/daemon-state
+  readyFile: .e2e/daemon-ready.json
+  handle: daemon-from-file
+  fakeHermesGatewayCommand: python3 fake_hermes_gateway.py
 messageAgent:
   enabled: true
   runtimeProvider: hermes
   processingScope: all_conversations
+  realBackend: true
 otp:
   phone: test-phone-secret
   code: test-otp-secret
@@ -186,9 +192,21 @@ cliPeer:
       expect(config.anpServiceUrl, 'https://service.example.test/anp-im/rpc');
       expect(config.anpServiceDid, 'did:wba:example.test');
       expect(config.daemonRustRepo, '../awiki-cli-rs2-message-agent');
+      expect(
+        config.daemonBinary,
+        '${root.path}/../awiki-cli-rs2-message-agent/target/release/awiki-deamon',
+      );
+      expect(config.daemonStateRoot, '${root.path}/.e2e/daemon-state');
+      expect(config.daemonReadyFile, '${root.path}/.e2e/daemon-ready.json');
+      expect(config.daemonHandle, 'daemon-from-file');
+      expect(
+        config.daemonFakeHermesGatewayCommand,
+        'python3 fake_hermes_gateway.py',
+      );
       expect(config.messageAgentEnabled, isTrue);
       expect(config.messageAgentRuntimeProvider, 'hermes');
       expect(config.messageAgentProcessingScope, 'all_conversations');
+      expect(config.messageAgentRealBackend, isTrue);
       expect(config.otpPhone, 'test-phone-secret');
       expect(config.otpCode, 'test-otp-secret');
       expect(config.appHandle, 'app-from-file');
@@ -259,9 +277,15 @@ cliHandle: legacy-cli
           anpServiceUrl: 'https://service.example.test/anp-im/rpc',
           anpServiceDid: 'did:wba:example.test',
           daemonRustRepo: '../awiki-cli-rs2-message-agent',
+          daemonBinary: '/tmp/awiki-deamon',
+          daemonStateRoot: '/tmp/daemon-state',
+          daemonReadyFile: '/tmp/daemon-ready.json',
+          daemonHandle: 'daemon-from-file',
+          daemonFakeHermesGatewayCommand: 'python3 fake_hermes_gateway.py',
           messageAgentEnabled: true,
           messageAgentRuntimeProvider: 'hermes',
           messageAgentProcessingScope: 'all_conversations',
+          messageAgentRealBackend: true,
           otpPhone: 'test-phone-secret',
           otpCode: 'test-otp-secret',
           appHandle: 'app-from-file',
@@ -280,9 +304,18 @@ cliHandle: legacy-cli
       expect(config.anpServiceUrl, 'https://service.example.test/anp-im/rpc');
       expect(config.anpServiceDid, 'did:wba:example.test');
       expect(config.daemonRustRepo, '../awiki-cli-rs2-message-agent');
+      expect(config.daemonBinary, '/tmp/awiki-deamon');
+      expect(config.daemonStateRoot, '/tmp/daemon-state');
+      expect(config.daemonReadyFile, '/tmp/daemon-ready.json');
+      expect(config.daemonHandle, 'daemon-from-file');
+      expect(
+        config.daemonFakeHermesGatewayCommand,
+        'python3 fake_hermes_gateway.py',
+      );
       expect(config.messageAgentEnabled, isTrue);
       expect(config.messageAgentRuntimeProvider, 'hermes');
       expect(config.messageAgentProcessingScope, 'all_conversations');
+      expect(config.messageAgentRealBackend, isTrue);
       expect(config.otpPhone, 'test-phone-secret');
       expect(config.otpCode, 'test-otp-secret');
       expect(config.appHandle, 'app-from-file');
@@ -1008,7 +1041,13 @@ cliPeer:
         messageServiceUrl: 'https://messages.example.test',
         messageServiceWsUrl: 'wss://messages.example.test/im/ws',
         daemonRustRepo: '../awiki-cli-rs2-message-agent',
+        daemonBinary: '/tmp/awiki-deamon',
+        daemonStateRoot: '.e2e/daemon-state',
+        daemonReadyFile: '.e2e/daemon-ready.json',
+        daemonHandle: 'message-agent-daemon',
+        fakeHermesGatewayCommand: 'python3 fake_hermes_gateway.py',
         messageAgentEnabled: true,
+        messageAgentRealBackend: true,
       );
       final lines = <String>[];
       final runner = DesktopE2eRunner(
@@ -1066,6 +1105,7 @@ cliPeer:
       expect(messageAgent['enabled'], isTrue);
       expect(messageAgent['runtimeProvider'], 'hermes');
       expect(messageAgent['processingScope'], 'all_conversations');
+      expect(messageAgent['realBackend'], isTrue);
 
       final runConfig = File(
         '${root.path}/.e2e/message-agent/current/run_config.json',
@@ -1076,11 +1116,22 @@ cliPeer:
       expect(runConfigJson['case'], 'message-agent');
       expect(runConfigJson['daemon'], isA<Map<String, dynamic>>());
       expect(runConfigJson['messageAgent'], isA<Map<String, dynamic>>());
+      final daemon = runConfigJson['daemon'] as Map<String, dynamic>;
+      expect(daemon['rustRepo'], '../awiki-cli-rs2-message-agent');
+      expect(daemon['binary'], '/tmp/awiki-deamon');
+      expect(daemon['stateRoot'], '${root.path}/.e2e/daemon-state');
+      expect(daemon['readyFile'], '${root.path}/.e2e/daemon-ready.json');
+      expect(daemon['handle'], 'message-agent-daemon');
+      expect(
+        daemon['fakeHermesGatewayCommand'],
+        'python3 fake_hermes_gateway.py',
+      );
       final runMessageAgent =
           runConfigJson['messageAgent'] as Map<String, dynamic>;
       expect(runMessageAgent['enabled'], isTrue);
       expect(runMessageAgent['runtimeProvider'], 'hermes');
       expect(runMessageAgent['processingScope'], 'all_conversations');
+      expect(runMessageAgent['realBackend'], isTrue);
       expect(runMessageAgent['enabled'], messageAgent['enabled']);
       final service = runConfigJson['service'] as Map<String, dynamic>;
       expect(
@@ -1137,6 +1188,7 @@ cliPeer:
             jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
         final messageAgent = decoded['messageAgent'] as Map<String, dynamic>;
         expect(messageAgent['enabled'], isTrue);
+        expect(messageAgent['realBackend'], isFalse);
 
         final runConfig = File(
           '${root.path}/.e2e/message-agent/current/run_config.json',
@@ -1146,6 +1198,7 @@ cliPeer:
         final runMessageAgent =
             runConfigJson['messageAgent'] as Map<String, dynamic>;
         expect(runMessageAgent['enabled'], isTrue);
+        expect(runMessageAgent['realBackend'], isFalse);
         expect(runMessageAgent['enabled'], messageAgent['enabled']);
       },
     );
@@ -1244,7 +1297,13 @@ void _writeLocalConfig(
   String? messageServiceUrl,
   String? messageServiceWsUrl,
   String? daemonRustRepo,
+  String? daemonBinary,
+  String? daemonStateRoot,
+  String? daemonReadyFile,
+  String? daemonHandle,
+  String? fakeHermesGatewayCommand,
   bool messageAgentEnabled = false,
+  bool messageAgentRealBackend = false,
   bool includeMessageAgent = true,
 }) {
   final messageService = messageServiceUrl == null
@@ -1253,11 +1312,17 @@ void _writeLocalConfig(
   final messageServiceWs = messageServiceWsUrl == null
       ? ''
       : '  messageServiceWsUrl: $messageServiceWsUrl\n';
-  final daemon = daemonRustRepo == null
+  final daemon =
+      daemonRustRepo == null &&
+          daemonBinary == null &&
+          daemonStateRoot == null &&
+          daemonReadyFile == null &&
+          daemonHandle == null &&
+          fakeHermesGatewayCommand == null
       ? ''
       : '''
 daemon:
-  rustRepo: $daemonRustRepo
+${daemonRustRepo == null ? '' : '  rustRepo: $daemonRustRepo\n'}${daemonBinary == null ? '' : '  binary: $daemonBinary\n'}${daemonStateRoot == null ? '' : '  stateRoot: $daemonStateRoot\n'}${daemonReadyFile == null ? '' : '  readyFile: $daemonReadyFile\n'}${daemonHandle == null ? '' : '  handle: $daemonHandle\n'}${fakeHermesGatewayCommand == null ? '' : '  fakeHermesGatewayCommand: $fakeHermesGatewayCommand\n'}
 ''';
   final messageAgent = includeMessageAgent
       ? '''
@@ -1265,6 +1330,7 @@ messageAgent:
   enabled: $messageAgentEnabled
   runtimeProvider: hermes
   processingScope: all_conversations
+  realBackend: $messageAgentRealBackend
 '''
       : '';
   File('${root.path}/tests/e2e/configs/e2e.local.yaml')

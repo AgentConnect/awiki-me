@@ -310,7 +310,8 @@ class DesktopE2eRunner {
     }
     if (!_looksRecoverableForRegister(recover.output)) {
       throw E2eFailure(
-        'CLI peer recover failed and did not look like a missing-handle error.',
+        'CLI peer recover failed and did not look like a missing-handle error: '
+        '${redactor.redact(recover.output)}',
       );
     }
     final register = await _cli(<String>[
@@ -326,7 +327,9 @@ class DesktopE2eRunner {
       peerConfig.otpCode,
     ], allowFailure: true);
     if (register.exitCode != 0) {
-      throw E2eFailure('CLI peer register failed.');
+      throw E2eFailure(
+        'CLI peer register failed: ${redactor.redact(register.output)}',
+      );
     }
   }
 
@@ -384,11 +387,19 @@ class DesktopE2eRunner {
         'home': cliHomeDir.path,
       },
       'app': <String, Object?>{'stateRoot': appStateRootDir.path},
-      'daemon': <String, Object?>{'rustRepo': peerConfig.daemonRustRepo},
+      'daemon': <String, Object?>{
+        'rustRepo': peerConfig.daemonRustRepo,
+        'binary': peerConfig.daemonBinary,
+        'stateRoot': peerConfig.daemonStateRoot,
+        'readyFile': peerConfig.daemonReadyFile,
+        'handle': peerConfig.daemonHandle,
+        'fakeHermesGatewayCommand': peerConfig.daemonFakeHermesGatewayCommand,
+      },
       'messageAgent': <String, Object?>{
         'enabled': peerConfig.messageAgentEnabled,
         'runtimeProvider': peerConfig.messageAgentRuntimeProvider,
         'processingScope': peerConfig.messageAgentProcessingScope,
+        'realBackend': peerConfig.messageAgentRealBackend,
       },
     };
     if (options.dryRun && !options.prepareOnly) {
@@ -503,6 +514,7 @@ class DesktopE2eRunner {
             'enabled': config!.messageAgentEnabled,
             'runtimeProvider': config!.messageAgentRuntimeProvider,
             'processingScope': config!.messageAgentProcessingScope,
+            'realBackend': config!.messageAgentRealBackend,
           },
         'cliWorkspace': '<redacted-workspace>',
         'cliHome': '<redacted-home>',
@@ -635,7 +647,8 @@ class DesktopCommandRunner {
       throw E2eFailure(
         redactor.redact(
           '$executable ${args.join(' ')} failed with code ${result.exitCode}.\n'
-          '$err',
+          'stdout:\n$out\n'
+          'stderr:\n$err',
         ),
       );
     }
@@ -762,9 +775,15 @@ class DesktopCliPeerConfig {
     this.anpServiceUrl,
     this.anpServiceDid,
     this.daemonRustRepo,
+    this.daemonBinary,
+    this.daemonStateRoot,
+    this.daemonReadyFile,
+    this.daemonHandle,
+    this.daemonFakeHermesGatewayCommand,
     this.messageAgentEnabled = false,
     this.messageAgentRuntimeProvider = 'hermes',
     this.messageAgentProcessingScope = 'all_conversations',
+    this.messageAgentRealBackend = false,
   });
 
   final DesktopE2ePlatform platform;
@@ -783,9 +802,15 @@ class DesktopCliPeerConfig {
   final String? anpServiceUrl;
   final String? anpServiceDid;
   final String? daemonRustRepo;
+  final String? daemonBinary;
+  final String? daemonStateRoot;
+  final String? daemonReadyFile;
+  final String? daemonHandle;
+  final String? daemonFakeHermesGatewayCommand;
   final bool messageAgentEnabled;
   final String messageAgentRuntimeProvider;
   final String messageAgentProcessingScope;
+  final bool messageAgentRealBackend;
 
   static DesktopCliPeerConfig from(
     DesktopE2eOptions options,
@@ -847,6 +872,11 @@ class DesktopCliPeerConfig {
       anpServiceUrl: fileConfig.anpServiceUrl,
       anpServiceDid: fileConfig.anpServiceDid,
       daemonRustRepo: fileConfig.daemonRustRepo,
+      daemonBinary: fileConfig.daemonBinary,
+      daemonStateRoot: fileConfig.daemonStateRoot,
+      daemonReadyFile: fileConfig.daemonReadyFile,
+      daemonHandle: fileConfig.daemonHandle,
+      daemonFakeHermesGatewayCommand: fileConfig.daemonFakeHermesGatewayCommand,
       messageAgentEnabled: _effectiveMessageAgentEnabled(
         options,
         fileConfig,
@@ -856,6 +886,7 @@ class DesktopCliPeerConfig {
           fileConfig.messageAgentRuntimeProvider ?? 'hermes',
       messageAgentProcessingScope:
           fileConfig.messageAgentProcessingScope ?? 'all_conversations',
+      messageAgentRealBackend: fileConfig.messageAgentRealBackend ?? false,
     );
   }
 }
@@ -890,9 +921,15 @@ class DesktopE2eFileConfig {
     this.anpServiceUrl,
     this.anpServiceDid,
     this.daemonRustRepo,
+    this.daemonBinary,
+    this.daemonStateRoot,
+    this.daemonReadyFile,
+    this.daemonHandle,
+    this.daemonFakeHermesGatewayCommand,
     this.messageAgentEnabled,
     this.messageAgentRuntimeProvider,
     this.messageAgentProcessingScope,
+    this.messageAgentRealBackend,
     this.otpPhone,
     this.otpCode,
     this.appHandle,
@@ -912,9 +949,15 @@ class DesktopE2eFileConfig {
       anpServiceUrl = null,
       anpServiceDid = null,
       daemonRustRepo = null,
+      daemonBinary = null,
+      daemonStateRoot = null,
+      daemonReadyFile = null,
+      daemonHandle = null,
+      daemonFakeHermesGatewayCommand = null,
       messageAgentEnabled = null,
       messageAgentRuntimeProvider = null,
       messageAgentProcessingScope = null,
+      messageAgentRealBackend = null,
       otpPhone = null,
       otpCode = null,
       appHandle = null,
@@ -932,9 +975,15 @@ class DesktopE2eFileConfig {
   final String? anpServiceUrl;
   final String? anpServiceDid;
   final String? daemonRustRepo;
+  final String? daemonBinary;
+  final String? daemonStateRoot;
+  final String? daemonReadyFile;
+  final String? daemonHandle;
+  final String? daemonFakeHermesGatewayCommand;
   final bool? messageAgentEnabled;
   final String? messageAgentRuntimeProvider;
   final String? messageAgentProcessingScope;
+  final bool? messageAgentRealBackend;
   final String? otpPhone;
   final String? otpCode;
   final String? appHandle;
@@ -982,9 +1031,24 @@ class DesktopE2eFileConfig {
       anpServiceUrl: _stringAt(service, 'anpServiceUrl'),
       anpServiceDid: _stringAt(service, 'anpServiceDid'),
       daemonRustRepo: _stringAt(daemon, 'rustRepo'),
+      daemonBinary: _resolveOptionalPath(root, _stringAt(daemon, 'binary')),
+      daemonStateRoot: _resolveOptionalPath(
+        root,
+        _stringAt(daemon, 'stateRoot'),
+      ),
+      daemonReadyFile: _resolveOptionalPath(
+        root,
+        _stringAt(daemon, 'readyFile'),
+      ),
+      daemonHandle: _stringAt(daemon, 'handle'),
+      daemonFakeHermesGatewayCommand: _stringAt(
+        daemon,
+        'fakeHermesGatewayCommand',
+      ),
       messageAgentEnabled: _boolAt(messageAgent, 'enabled'),
       messageAgentRuntimeProvider: _stringAt(messageAgent, 'runtimeProvider'),
       messageAgentProcessingScope: _stringAt(messageAgent, 'processingScope'),
+      messageAgentRealBackend: _boolAt(messageAgent, 'realBackend'),
       otpPhone: otpPhone,
       otpCode: otpCode,
       appHandle: appHandle,
@@ -1180,6 +1244,7 @@ bool _looksRecoverableForRegister(String output) {
   final lower = output.toLowerCase();
   return lower.contains('not found') ||
       lower.contains('handle_not_found') ||
+      lower.contains('not active') ||
       lower.contains('not_registered') ||
       lower.contains('not registered') ||
       lower.contains('404');
@@ -1228,6 +1293,13 @@ String _resolvePath(Directory root, String path) {
     return value;
   }
   return '${root.path}/$value';
+}
+
+String? _resolveOptionalPath(Directory root, String? path) {
+  if (path == null) {
+    return null;
+  }
+  return _resolvePath(root, path);
 }
 
 String _takeValue(List<String> args, int index, String flag) {

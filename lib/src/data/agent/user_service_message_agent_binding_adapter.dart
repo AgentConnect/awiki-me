@@ -41,6 +41,37 @@ class UserServiceMessageAgentBindingAdapter implements MessageAgentBindingPort {
   final AuthenticatedUserServiceRpcClient? _authenticatedClient;
 
   @override
+  Future<MessageAgentBinding> ensureBinding({
+    required String userDid,
+    required String daemonAgentDid,
+    required String messageAgentDid,
+    required String runtimeProvider,
+    required Map<String, Object?> runtimeProfile,
+    required String delegatedKeyVerificationMethod,
+  }) async {
+    final result = await _rpcCall(
+      method: 'ensure_binding',
+      params: <String, Object?>{
+        'user_did': userDid,
+        'daemon_agent_did': daemonAgentDid,
+        'message_agent_did': messageAgentDid,
+        'runtime_provider': runtimeProvider,
+        'runtime_profile': runtimeProfile,
+        'delegated_key_verification_method': delegatedKeyVerificationMethod,
+      },
+    );
+    final binding = result['binding'];
+    if (binding is Map) {
+      return MessageAgentBinding.fromJson(
+        binding.map<String, Object?>(
+          (key, value) => MapEntry(key.toString(), value),
+        ),
+      );
+    }
+    throw StateError('ensure_binding returned an invalid binding.');
+  }
+
+  @override
   Future<MessageAgentBinding?> getActiveBinding() async {
     final result = await _rpcCall(
       method: 'get_active_binding',
