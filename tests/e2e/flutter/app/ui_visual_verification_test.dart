@@ -35,6 +35,7 @@ const _session = SessionIdentity(
 );
 const _daemonDid = 'did:test:daemon:local';
 const _runtimeDid = 'did:test:agent:hermes-ui';
+const _codexRuntimeDid = 'did:test:agent:codex-ui';
 
 class _StaticConversationListController extends ConversationListController {
   _StaticConversationListController(
@@ -128,10 +129,21 @@ void main() {
       await _pumpVisualApp(tester, agentsHarness);
       _appContainer(tester).read(shellTabProvider.notifier).setTab(1);
       await tester.pumpAndSettle();
+      expect(find.text('Codex UI'), findsOneWidget);
+      expect(find.text('codex · 需要配置'), findsOneWidget);
+      expect(find.textContaining('需要配置'), findsWidgets);
       await tester.tap(find.text('创建 Agent').first);
       await tester.pumpAndSettle();
       expect(find.text('Agent 类型'), findsOneWidget);
-      expect(find.text('当前仅支持 Hermes Runtime Agent'), findsOneWidget);
+      expect(find.text('Hermes'), findsWidgets);
+      expect(find.text('Codex'), findsOneWidget);
+      expect(find.text('Claude Code'), findsOneWidget);
+      await tester.tap(find.text('Codex'));
+      await tester.pumpAndSettle();
+      expect(find.text('工作目录策略'), findsOneWidget);
+      expect(find.text('权限模式'), findsOneWidget);
+      expect(find.text('按会话目录'), findsOneWidget);
+      expect(find.text('workspace-write'), findsOneWidget);
       await _captureScreenshot(tester, '07-agent-create-agent-type');
     } finally {
       debugDefaultTargetPlatformOverride = null;
@@ -174,7 +186,7 @@ FakeAwikiMeAppHarness _createVisualHarness() {
       handle: 'local-daemon',
       displayName: 'Local Daemon',
       activeState: 'active',
-      latest: AgentLatestStatus(status: 'ready', platform: 'darwin-arm64'),
+      latest: test_support.readyDaemonStatusWithGenericCliCapability,
     ),
     const AgentSummary(
       agentDid: _runtimeDid,
@@ -185,6 +197,22 @@ FakeAwikiMeAppHarness _createVisualHarness() {
       displayName: 'Hermes UI',
       activeState: 'active',
       latest: AgentLatestStatus(status: 'ready'),
+    ),
+    AgentSummary(
+      agentDid: _codexRuntimeDid,
+      kind: AgentKind.runtime,
+      daemonAgentDid: _daemonDid,
+      runtime: 'codex',
+      handle: 'codex-ui',
+      displayName: 'Codex UI',
+      activeState: 'active',
+      latest: AgentLatestStatus(
+        status: 'ready',
+        diagnosticsSummary: test_support.genericCliRuntimeCardDiagnostics(
+          lifecycleState: 'needs_setup',
+          setupReady: false,
+        ),
+      ),
     ),
   ];
   return harness;

@@ -85,7 +85,7 @@ Future<void> _showRenameAgentDialog(
   await ref.read(agentsProvider.notifier).renameSelected(displayName);
 }
 
-Future<void> _showCreateHermesDialog(
+Future<void> _showCreateRuntimeDialog(
   BuildContext context,
   WidgetRef ref,
   AgentSummary daemon,
@@ -93,9 +93,14 @@ Future<void> _showCreateHermesDialog(
 ) async {
   final result = await showCupertinoDialog<_RuntimeAgentCreationDraft>(
     context: context,
-    builder: (dialogContext) => _CreateHermesDialog(
-      initialDisplayName: _nextHermesDisplayName(existingRuntimes),
+    builder: (dialogContext) => _CreateRuntimeDialog(
+      initialDisplayName: _nextRuntimeDisplayName(
+        existingRuntimes,
+        RuntimeAgentKind.hermes,
+      ),
       handleDomain: AwikiEnvironmentConfig.fromEnvironment().didDomain,
+      existingRuntimes: existingRuntimes,
+      runtimeCapability: _RuntimeCreateCapability.fromDaemon(daemon),
       validateHandle: (handle, domain) {
         return ref
             .read(onboardingSupportServiceProvider)
@@ -106,55 +111,80 @@ Future<void> _showCreateHermesDialog(
   if (result == null) {
     return;
   }
-  if (result.agentType != 'hermes') {
-    ref
-        .read(uiFeedbackProvider.notifier)
-        .showError(AppMessage.fromError('暂不支持的 Agent 类型'));
+  if (!context.mounted) {
     return;
+  }
+  if (result.sandbox == runtimeSandboxWorkspaceWrite) {
+    final confirmed = await _confirm(
+      context,
+      title: '确认 workspace-write',
+      message: '该权限允许 runtime 修改它的 route workspace 或 worktree 文件。它不是安全隔离边界。',
+      actionLabel: '继续创建',
+      destructive: true,
+    );
+    if (!confirmed) {
+      return;
+    }
   }
   await ref
       .read(agentsProvider.notifier)
-      .createHermesRuntime(
+      .createRuntimeAgent(
         daemon.agentDid,
-        handle: result.handle,
-        displayName: result.displayName,
+        options: RuntimeAgentCreateOptions(
+          kind: result.kind,
+          handle: result.handle,
+          displayName: result.displayName,
+          workspaceMode: result.workspaceMode,
+          sandbox: result.sandbox,
+        ),
       );
 }
 
 class _RuntimeAgentCreationDraft {
   const _RuntimeAgentCreationDraft({
-    required this.agentType,
+    required this.kind,
     required this.displayName,
     required this.handle,
+    required this.workspaceMode,
+    required this.sandbox,
   });
 
-  final String agentType;
+  final RuntimeAgentKind kind;
   final String displayName;
   final String handle;
+  final String workspaceMode;
+  final String sandbox;
 }
 
-class _CreateHermesDialog extends StatefulWidget {
-  const _CreateHermesDialog({
+class _CreateRuntimeDialog extends StatefulWidget {
+  const _CreateRuntimeDialog({
     required this.initialDisplayName,
     required this.handleDomain,
+    required this.existingRuntimes,
+    required this.runtimeCapability,
     required this.validateHandle,
   });
 
   final String initialDisplayName;
   final String handleDomain;
+  final List<AgentSummary> existingRuntimes;
+  final _RuntimeCreateCapability runtimeCapability;
   final Future<HandleAvailability> Function(String handle, String domain)
   validateHandle;
 
   @override
-  State<_CreateHermesDialog> createState() => _CreateHermesDialogState();
+  State<_CreateRuntimeDialog> createState() => _CreateRuntimeDialogState();
 }
 
-class _CreateHermesDialogState extends State<_CreateHermesDialog> {
+class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
   late final TextEditingController _nameController;
   late final TextEditingController _handleController;
   final FocusNode _handleFocusNode = FocusNode();
   Timer? _handleValidationDebounce;
   bool _normalizingHandle = false;
+  RuntimeAgentKind _kind = RuntimeAgentKind.hermes;
+  String _workspaceMode = runtimeWorkspaceModeRouteRoot;
+  String _sandbox = runtimeSandboxReadOnly;
   String? _submittedNameError;
   String? _submittedHandleError;
   String? _remoteHandle;
@@ -182,6 +212,23 @@ class _CreateHermesDialogState extends State<_CreateHermesDialog> {
     _handleValidationDebounce?.cancel();
     _handleFocusNode.dispose();
     super.dispose();
+  }
+
+  void _selectKind(RuntimeAgentKind kind) {
+    if (_kind == kind) {
+      return;
+    }
+    setState(() {
+      _kind = kind;
+      _nameController.text = _nextRuntimeDisplayName(
+        widget.existingRuntimes,
+        kind,
+      );
+      if (kind == RuntimeAgentKind.hermes) {
+        _workspaceMode = runtimeWorkspaceModeRouteRoot;
+        _sandbox = runtimeSandboxReadOnly;
+      }
+    });
   }
 
   void _onFieldChanged() {
@@ -265,7 +312,10 @@ class _CreateHermesDialogState extends State<_CreateHermesDialog> {
   }
 
   void _submit() {
-    const agentType = 'hermes';
+    final kindStatus = widget.runtimeCapability.statusFor(_kind);
+    if (!kindStatus.enabled) {
+      return;
+    }
     final displayName = _nameController.text.trim();
     final handle = _handleController.text.trim();
     final nameError = _validateAgentDisplayName(displayName);
@@ -285,9 +335,11 @@ class _CreateHermesDialogState extends State<_CreateHermesDialog> {
     }
     Navigator.of(context).pop(
       _RuntimeAgentCreationDraft(
-        agentType: agentType,
+        kind: _kind,
         displayName: displayName,
         handle: handle,
+        workspaceMode: _workspaceMode,
+        sandbox: _sandbox,
       ),
     );
   }
@@ -304,7 +356,9 @@ class _CreateHermesDialogState extends State<_CreateHermesDialog> {
         _submittedHandleError ??
         _softValidateAgentHandle(handle) ??
         remoteError;
+    final kindStatus = widget.runtimeCapability.statusFor(_kind);
     final canSubmit =
+        kindStatus.enabled &&
         _validateAgentDisplayName(displayName) == null &&
         _validateAgentHandle(handle) == null &&
         !_remoteHandleChecking &&
@@ -366,13 +420,64 @@ class _CreateHermesDialogState extends State<_CreateHermesDialog> {
                       ],
                     ),
                     SizedBox(height: responsive.spacing(14)),
-                    const _AgentTypeSelector(),
+                    _AgentTypeSelector(
+                      selected: _kind,
+                      runtimeCapability: widget.runtimeCapability,
+                      onSelected: _selectKind,
+                    ),
                     SizedBox(height: responsive.spacing(12)),
+                    if (_kind.isGenericCli) ...<Widget>[
+                      _RuntimeOptionSelector(
+                        title: '工作目录策略',
+                        value: _workspaceMode,
+                        options: const <_RuntimeOption>[
+                          _RuntimeOption(
+                            value: runtimeWorkspaceModeRouteRoot,
+                            label: '按会话目录',
+                            description: '每个联系人、群组或线程使用独立上下文目录。',
+                          ),
+                          _RuntimeOption(
+                            value: runtimeWorkspaceModeSharedRoot,
+                            label: '共享目录',
+                            description: '该身份共用一个目录，适合手工任务。',
+                          ),
+                          _RuntimeOption(
+                            value: runtimeWorkspaceModeWorktreePerTask,
+                            label: '每次任务 worktree',
+                            description: '每次运行使用独立工作树。',
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setState(() => _workspaceMode = value);
+                        },
+                      ),
+                      SizedBox(height: responsive.spacing(12)),
+                      _RuntimeOptionSelector(
+                        title: '权限模式',
+                        value: _sandbox,
+                        options: const <_RuntimeOption>[
+                          _RuntimeOption(
+                            value: runtimeSandboxReadOnly,
+                            label: '只读',
+                            description: '默认模式，不允许修改 route workspace。',
+                          ),
+                          _RuntimeOption(
+                            value: runtimeSandboxWorkspaceWrite,
+                            label: 'workspace-write',
+                            description: '允许修改 route workspace 或 worktree 文件。',
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setState(() => _sandbox = value);
+                        },
+                      ),
+                      SizedBox(height: responsive.spacing(12)),
+                    ],
                     _AgentDialogField(
                       fieldKey: const Key('agent-create-name-field'),
                       label: '名称',
                       controller: _nameController,
-                      placeholder: 'Hermes',
+                      placeholder: _kind.displayLabel,
                       errorText: nameError,
                       textInputAction: TextInputAction.next,
                     ),
@@ -381,7 +486,7 @@ class _CreateHermesDialogState extends State<_CreateHermesDialog> {
                       fieldKey: const Key('agent-create-handle-field'),
                       label: 'Handle',
                       controller: _handleController,
-                      placeholder: 'my-hermes',
+                      placeholder: _kind.handlePlaceholder,
                       errorText: handleError,
                       focusNode: _handleFocusNode,
                       prefix: const Text('@'),
@@ -450,7 +555,15 @@ class _CreateHermesDialogState extends State<_CreateHermesDialog> {
 }
 
 class _AgentTypeSelector extends StatelessWidget {
-  const _AgentTypeSelector();
+  const _AgentTypeSelector({
+    required this.selected,
+    required this.runtimeCapability,
+    required this.onSelected,
+  });
+
+  final RuntimeAgentKind selected;
+  final _RuntimeCreateCapability runtimeCapability;
+  final ValueChanged<RuntimeAgentKind> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -467,63 +580,403 @@ class _AgentTypeSelector extends StatelessWidget {
           ),
         ),
         SizedBox(height: responsive.spacing(6)),
-        Container(
-          padding: EdgeInsets.all(responsive.spacing(12)),
-          decoration: BoxDecoration(
-            color: const Color(0xFFEAF2FF),
-            borderRadius: BorderRadius.circular(responsive.radius(10)),
-            border: Border.all(color: const Color(0xFFB8C8E4)),
-          ),
-          child: Row(
-            children: <Widget>[
-              Container(
-                width: responsive.displayScaled(32),
-                height: responsive.displayScaled(32),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: CupertinoColors.white,
-                  borderRadius: BorderRadius.circular(responsive.radius(8)),
-                ),
-                child: Icon(
-                  CupertinoIcons.sparkles,
-                  color: const Color(0xFF0B65F8),
-                  size: responsive.iconSm,
-                ),
-              ),
-              SizedBox(width: responsive.spacing(10)),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'Hermes',
-                      style: TextStyle(
-                        color: Color(0xFF17213A),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    SizedBox(height: 3),
-                    Text(
-                      '当前仅支持 Hermes Runtime Agent',
-                      style: TextStyle(
-                        color: Color(0xFF66728A),
-                        fontSize: 12,
-                        height: 1.25,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                CupertinoIcons.check_mark_circled_solid,
-                color: const Color(0xFF0B65F8),
-                size: responsive.iconMd,
-              ),
-            ],
-          ),
+        _RuntimeKindTile(
+          kind: RuntimeAgentKind.hermes,
+          selected: selected == RuntimeAgentKind.hermes,
+          status: runtimeCapability.statusFor(RuntimeAgentKind.hermes),
+          onTap: () => onSelected(RuntimeAgentKind.hermes),
+        ),
+        SizedBox(height: responsive.spacing(8)),
+        _RuntimeKindTile(
+          kind: RuntimeAgentKind.codex,
+          selected: selected == RuntimeAgentKind.codex,
+          status: runtimeCapability.statusFor(RuntimeAgentKind.codex),
+          onTap: () => onSelected(RuntimeAgentKind.codex),
+        ),
+        SizedBox(height: responsive.spacing(8)),
+        _RuntimeKindTile(
+          kind: RuntimeAgentKind.claudeCode,
+          selected: selected == RuntimeAgentKind.claudeCode,
+          status: runtimeCapability.statusFor(RuntimeAgentKind.claudeCode),
+          onTap: () => onSelected(RuntimeAgentKind.claudeCode),
         ),
       ],
+    );
+  }
+}
+
+class _RuntimeKindTile extends StatelessWidget {
+  const _RuntimeKindTile({
+    required this.kind,
+    required this.selected,
+    required this.status,
+    required this.onTap,
+  });
+
+  final RuntimeAgentKind kind;
+  final bool selected;
+  final _RuntimeKindStatus status;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final enabled = status.enabled;
+    final accent = enabled ? const Color(0xFF0B65F8) : const Color(0xFF8A96AA);
+    return AppPressable(
+      onTap: enabled ? onTap : null,
+      enabled: enabled,
+      semanticLabel: kind.displayLabel,
+      borderRadius: BorderRadius.circular(responsive.radius(10)),
+      child: Container(
+        padding: EdgeInsets.all(responsive.spacing(12)),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFEAF2FF) : const Color(0xFFF8FAFD),
+          borderRadius: BorderRadius.circular(responsive.radius(10)),
+          border: Border.all(
+            color: selected ? const Color(0xFFB8C8E4) : const Color(0xFFDDE5F1),
+          ),
+        ),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: responsive.displayScaled(32),
+              height: responsive.displayScaled(32),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: CupertinoColors.white,
+                borderRadius: BorderRadius.circular(responsive.radius(8)),
+              ),
+              child: Icon(
+                _runtimeKindIcon(kind),
+                color: accent,
+                size: responsive.iconSm,
+              ),
+            ),
+            SizedBox(width: responsive.spacing(10)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Flexible(
+                        child: Text(
+                          kind.displayLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: enabled
+                                ? const Color(0xFF17213A)
+                                : const Color(0xFF66728A),
+                            fontSize: responsive.bodyMd,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (!enabled) ...<Widget>[
+                        SizedBox(width: responsive.spacing(6)),
+                        Text(
+                          status.reasonLabel ?? '未启用',
+                          style: TextStyle(
+                            color: const Color(0xFF8A96AA),
+                            fontSize: responsive.metaSm,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  SizedBox(height: responsive.spacing(3)),
+                  Text(
+                    status.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: const Color(0xFF66728A),
+                      fontSize: responsive.metaSm,
+                      height: 1.25,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              Icon(
+                CupertinoIcons.check_mark_circled_solid,
+                color: accent,
+                size: responsive.iconMd,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+IconData _runtimeKindIcon(RuntimeAgentKind kind) => switch (kind) {
+  RuntimeAgentKind.hermes => CupertinoIcons.sparkles,
+  RuntimeAgentKind.codex => CupertinoIcons.chevron_left_slash_chevron_right,
+  RuntimeAgentKind.claudeCode => CupertinoIcons.text_bubble,
+};
+
+class _RuntimeKindStatus {
+  const _RuntimeKindStatus({
+    required this.enabled,
+    required this.description,
+    this.reasonLabel,
+  });
+
+  final bool enabled;
+  final String description;
+  final String? reasonLabel;
+}
+
+class _RuntimeCreateCapability {
+  const _RuntimeCreateCapability({
+    required this.hasGenericCliSchema,
+    required this.supportedDrivers,
+    required this.supportedWorkspaceModes,
+    required this.supportedSandboxModes,
+    required this.routeSessionSupported,
+    required this.nativeResumeSupported,
+  });
+
+  factory _RuntimeCreateCapability.fromDaemon(AgentSummary daemon) {
+    final diagnostics = daemon.latest.diagnosticsSummary;
+    final config = _objectMap(diagnostics['config_summary']);
+    final genericCli = _objectMap(config['generic_cli']);
+    final schemaVersion = _intValue(genericCli['capability_schema_version']);
+    return _RuntimeCreateCapability(
+      hasGenericCliSchema: schemaVersion == 1,
+      supportedDrivers: _stringSet(genericCli['supported_drivers']),
+      supportedWorkspaceModes: _stringSet(
+        genericCli['supported_workspace_modes'],
+      ),
+      supportedSandboxModes: _stringSet(genericCli['supported_sandbox_modes']),
+      routeSessionSupported: genericCli['route_session_supported'] == true,
+      nativeResumeSupported: genericCli['native_resume_supported'] == true,
+    );
+  }
+
+  final bool hasGenericCliSchema;
+  final Set<String> supportedDrivers;
+  final Set<String> supportedWorkspaceModes;
+  final Set<String> supportedSandboxModes;
+  final bool routeSessionSupported;
+  final bool nativeResumeSupported;
+
+  _RuntimeKindStatus statusFor(RuntimeAgentKind kind) {
+    if (kind == RuntimeAgentKind.hermes) {
+      return const _RuntimeKindStatus(
+        enabled: true,
+        description: '内置 Hermes Runtime Agent。',
+      );
+    }
+    final driverId = kind.driverId;
+    if (!hasGenericCliSchema) {
+      return _RuntimeKindStatus(
+        enabled: false,
+        description:
+            '${kind.displayLabel} 需要 daemon 提供 generic-cli capability。',
+        reasonLabel: '需刷新',
+      );
+    }
+    if (driverId == null || !supportedDrivers.contains(driverId)) {
+      return _RuntimeKindStatus(
+        enabled: false,
+        description: '当前 daemon 不支持 ${kind.displayLabel} driver。',
+        reasonLabel: '未支持',
+      );
+    }
+    if (!routeSessionSupported || !nativeResumeSupported) {
+      return _RuntimeKindStatus(
+        enabled: false,
+        description:
+            '${kind.displayLabel} 需要 route session 和 native resume 支持。',
+        reasonLabel: '需升级',
+      );
+    }
+    if (!supportedWorkspaceModes.contains(runtimeWorkspaceModeRouteRoot)) {
+      return _RuntimeKindStatus(
+        enabled: false,
+        description: '${kind.displayLabel} 需要按会话目录工作模式。',
+        reasonLabel: '需升级',
+      );
+    }
+    if (!supportedSandboxModes.contains(runtimeSandboxReadOnly)) {
+      return _RuntimeKindStatus(
+        enabled: false,
+        description: '${kind.displayLabel} 需要只读权限模式。',
+        reasonLabel: '需升级',
+      );
+    }
+    return _RuntimeKindStatus(
+      enabled: true,
+      description: '需要 daemon 上已安装并登录的 ${kind.displayLabel} CLI。',
+    );
+  }
+}
+
+Map<String, Object?> _objectMap(Object? value) {
+  if (value is! Map) {
+    return const <String, Object?>{};
+  }
+  return value.map<String, Object?>(
+    (key, value) => MapEntry(key.toString(), value),
+  );
+}
+
+Set<String> _stringSet(Object? value) {
+  if (value is! List) {
+    return const <String>{};
+  }
+  return value
+      .map((item) => item?.toString().trim())
+      .whereType<String>()
+      .where((item) => item.isNotEmpty)
+      .toSet();
+}
+
+int? _intValue(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  return int.tryParse(value?.toString() ?? '');
+}
+
+class _RuntimeOption {
+  const _RuntimeOption({
+    required this.value,
+    required this.label,
+    required this.description,
+  });
+
+  final String value;
+  final String label;
+  final String description;
+}
+
+class _RuntimeOptionSelector extends StatelessWidget {
+  const _RuntimeOptionSelector({
+    required this.title,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  final String title;
+  final String value;
+  final List<_RuntimeOption> options;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          title,
+          style: TextStyle(
+            color: const Color(0xFF66728A),
+            fontSize: responsive.metaSm,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        SizedBox(height: responsive.spacing(6)),
+        Column(
+          children: <Widget>[
+            for (var index = 0; index < options.length; index++) ...<Widget>[
+              _RuntimeOptionTile(
+                option: options[index],
+                selected: value == options[index].value,
+                onTap: () => onChanged(options[index].value),
+              ),
+              if (index != options.length - 1)
+                SizedBox(height: responsive.spacing(7)),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _RuntimeOptionTile extends StatelessWidget {
+  const _RuntimeOptionTile({
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _RuntimeOption option;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return AppPressable(
+      onTap: onTap,
+      semanticLabel: option.label,
+      borderRadius: BorderRadius.circular(responsive.radius(9)),
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(
+          horizontal: responsive.spacing(11),
+          vertical: responsive.spacing(9),
+        ),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFEAF2FF) : const Color(0xFFF8FAFD),
+          borderRadius: BorderRadius.circular(responsive.radius(9)),
+          border: Border.all(
+            color: selected ? const Color(0xFFB8C8E4) : const Color(0xFFDDE5F1),
+          ),
+        ),
+        child: Row(
+          children: <Widget>[
+            Icon(
+              selected
+                  ? CupertinoIcons.largecircle_fill_circle
+                  : CupertinoIcons.circle,
+              color: selected
+                  ? const Color(0xFF0B65F8)
+                  : const Color(0xFF98A4B8),
+              size: responsive.iconSm,
+            ),
+            SizedBox(width: responsive.spacing(9)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    option.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: const Color(0xFF17213A),
+                      fontSize: responsive.bodySm,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(height: responsive.spacing(2)),
+                  Text(
+                    option.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: const Color(0xFF66728A),
+                      fontSize: responsive.metaSm,
+                      height: 1.25,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -783,11 +1236,14 @@ class _DialogSecondaryButton extends StatelessWidget {
   }
 }
 
-String _nextHermesDisplayName(List<AgentSummary> runtimes) {
+String _nextRuntimeDisplayName(
+  List<AgentSummary> runtimes,
+  RuntimeAgentKind kind,
+) {
   final count = runtimes
-      .where((runtime) => runtime.runtime?.trim().toLowerCase() == 'hermes')
+      .where((runtime) => runtime.runtime?.trim().toLowerCase() == kind.runtime)
       .length;
-  return 'Hermes${count + 1}';
+  return '${kind.displayLabel}${count + 1}';
 }
 
 String _normalizeAgentHandleInput(String value) {

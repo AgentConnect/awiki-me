@@ -199,15 +199,27 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
     required String runtime,
     required String handle,
     required String displayName,
+    String? driverId,
+    String? workspaceMode,
+    String? defaultSandbox,
+    String? defaultModel,
+    Map<String, Object?>? driverConfig,
   }) {
+    final sanitizedDriverConfig = _runtimeTokenDriverConfig(driverConfig);
     return _issueToken(<String, Object?>{
       'agent_kind': 'runtime',
       'controller_did': controllerDid,
       'handle': handle,
       'metadata': <String, Object?>{
         'runtime': runtime,
+        if (driverId != null) 'driver_id': driverId,
         'daemon_agent_did': daemonAgentDid,
         'default_display_name': displayName,
+        if (workspaceMode != null) 'workspace_mode': workspaceMode,
+        if (defaultSandbox != null) 'default_sandbox': defaultSandbox,
+        if (defaultModel != null) 'default_model': defaultModel,
+        if (sanitizedDriverConfig.isNotEmpty)
+          'driver_config': sanitizedDriverConfig,
         'client_request_id':
             'app_req_${DateTime.now().toUtc().microsecondsSinceEpoch}',
       },
@@ -261,6 +273,29 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
     final token = rawToken?.trim();
     return token == null || token.isEmpty ? null : token;
   }
+}
+
+Map<String, Object?> _runtimeTokenDriverConfig(
+  Map<String, Object?>? driverConfig,
+) {
+  if (driverConfig == null || driverConfig.isEmpty) {
+    return const <String, Object?>{};
+  }
+  return <String, Object?>{
+    for (final entry in driverConfig.entries)
+      if (entry.key != 'binary_path' && !_looksSensitiveMetadataKey(entry.key))
+        entry.key: entry.value,
+  };
+}
+
+bool _looksSensitiveMetadataKey(String key) {
+  final normalized = key.toLowerCase();
+  return normalized.contains('token') ||
+      normalized.contains('secret') ||
+      normalized.contains('private_key') ||
+      normalized.contains('jwt') ||
+      normalized.contains('oauth') ||
+      normalized.contains('password');
 }
 
 String awikiClientPlatform() {

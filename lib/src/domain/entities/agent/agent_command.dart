@@ -2,6 +2,69 @@ import 'dart:convert';
 
 import 'agent_control_payloads.dart';
 
+const runtimeWorkspaceModeRouteRoot = 'route-root';
+const runtimeWorkspaceModeSharedRoot = 'shared-root';
+const runtimeWorkspaceModeWorktreePerTask = 'worktree-per-task';
+
+const runtimeSandboxReadOnly = 'read-only';
+const runtimeSandboxWorkspaceWrite = 'workspace-write';
+
+enum RuntimeAgentKind { hermes, codex, claudeCode }
+
+extension RuntimeAgentKindInfo on RuntimeAgentKind {
+  String get runtime => switch (this) {
+    RuntimeAgentKind.hermes => 'hermes',
+    RuntimeAgentKind.codex => 'codex',
+    RuntimeAgentKind.claudeCode => 'claude-code',
+  };
+
+  String? get driverId => switch (this) {
+    RuntimeAgentKind.hermes => null,
+    RuntimeAgentKind.codex => 'codex',
+    RuntimeAgentKind.claudeCode => 'claude-code',
+  };
+
+  String get displayLabel => switch (this) {
+    RuntimeAgentKind.hermes => 'Hermes',
+    RuntimeAgentKind.codex => 'Codex',
+    RuntimeAgentKind.claudeCode => 'Claude Code',
+  };
+
+  String get handlePlaceholder => switch (this) {
+    RuntimeAgentKind.hermes => 'my-hermes',
+    RuntimeAgentKind.codex => 'my-codex',
+    RuntimeAgentKind.claudeCode => 'my-claude',
+  };
+
+  bool get isGenericCli => driverId != null;
+
+  Map<String, Object?> get defaultDriverConfig => switch (this) {
+    RuntimeAgentKind.codex => const <String, Object?>{'ephemeral': false},
+    RuntimeAgentKind.hermes ||
+    RuntimeAgentKind.claudeCode => const <String, Object?>{},
+  };
+}
+
+class RuntimeAgentCreateOptions {
+  const RuntimeAgentCreateOptions({
+    required this.kind,
+    required this.handle,
+    required this.displayName,
+    this.workspaceMode = runtimeWorkspaceModeRouteRoot,
+    this.sandbox = runtimeSandboxReadOnly,
+    this.model,
+  });
+
+  final RuntimeAgentKind kind;
+  final String handle;
+  final String displayName;
+  final String workspaceMode;
+  final String sandbox;
+  final String? model;
+
+  Map<String, Object?> get driverConfig => kind.defaultDriverConfig;
+}
+
 String agentCommandId([String prefix = 'cmd']) =>
     '${prefix}_${DateTime.now().toUtc().microsecondsSinceEpoch}';
 
@@ -13,6 +76,12 @@ Map<String, Object?> runtimeAgentCreatePayload({
   String displayName = 'Hermes',
   String? handle,
   String? workspace,
+  String? driverId,
+  String? workspaceMode,
+  String? defaultSandbox,
+  String? defaultModel,
+  Map<String, Object?>? driverConfig,
+  Map<String, Object?>? recipientPolicy,
 }) {
   return <String, Object?>{
     'schema': AgentControlPayloads.commandSchema,
@@ -27,6 +96,14 @@ Map<String, Object?> runtimeAgentCreatePayload({
       'client_request_id': clientRequestId,
       if (handle != null) 'handle': handle,
       if (workspace != null) 'workspace': workspace,
+      if (driverId != null) 'driver_id': driverId,
+      if (workspaceMode != null) 'workspace_mode': workspaceMode,
+      if (defaultSandbox != null) 'default_sandbox': defaultSandbox,
+      if (defaultModel != null) 'default_model': defaultModel,
+      if (driverConfig != null && driverConfig.isNotEmpty)
+        'driver_config': driverConfig,
+      if (recipientPolicy != null && recipientPolicy.isNotEmpty)
+        'recipient_policy': recipientPolicy,
     },
     'reply_policy': <String, Object?>{'progress': true, 'final': true},
   };

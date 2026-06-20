@@ -32,6 +32,7 @@ import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
@@ -63,6 +64,92 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+const Map<String, Object?> genericCliCapabilityDiagnostics = <String, Object?>{
+  'config_summary': <String, Object?>{
+    'generic_cli': <String, Object?>{
+      'capability_schema_version': 1,
+      'supported_drivers': <String>['codex', 'claude-code', 'command'],
+      'supported_workspace_modes': <String>[
+        'route-root',
+        'shared-root',
+        'worktree-per-task',
+      ],
+      'supported_sandbox_modes': <String>['read-only', 'workspace-write'],
+      'supported_runtime_create_args': <String>[
+        'runtime',
+        'driver_id',
+        'workspace_mode',
+        'workspace_strategy',
+        'default_sandbox',
+        'default_model',
+        'driver_config',
+        'recipient_policy',
+        'client_request_id',
+      ],
+      'route_session_supported': true,
+      'native_resume_supported': true,
+      'profile_concurrency_cap_supported': false,
+      'max_parallel_runs_per_profile': 1,
+      'runtime_target_required': true,
+    },
+  },
+};
+
+const AgentLatestStatus readyDaemonStatusWithGenericCliCapability =
+    AgentLatestStatus(
+      status: 'ready',
+      platform: 'darwin-arm64',
+      diagnosticsSummary: genericCliCapabilityDiagnostics,
+    );
+
+Map<String, Object?> genericCliRuntimeCardDiagnostics({
+  String lifecycleState = 'needs_setup',
+  bool supported = true,
+  int statusSchemaVersion = 1,
+  String runtimeFamily = 'generic-cli',
+  String driverId = 'codex',
+  bool setupReady = false,
+  String setupState = 'binary_missing',
+  String queueState = 'idle',
+  String activeRunState = 'idle',
+  String routeSessionState = 'none',
+  int queuedCount = 0,
+  int runningCount = 0,
+  int deadLetterCount = 0,
+  int failedCount = 0,
+  int? oldestQueuedAgeMs,
+  String nextAction = 'setup_required',
+  bool containsUserContent = false,
+  bool containsProviderAuthMaterial = false,
+  String lastMessageIdWatermarkPolicy = 'final_only',
+}) {
+  return <String, Object?>{
+    'config_summary': <String, Object?>{
+      'runtime_card': <String, Object?>{
+        'supported': supported,
+        'status_schema_version': statusSchemaVersion,
+        'runtime_family': runtimeFamily,
+        'driver_id': driverId,
+        'lifecycle_state': lifecycleState,
+        'setup_ready': setupReady,
+        'setup_state': setupState,
+        'queue_state': queueState,
+        'active_run_state': activeRunState,
+        'route_session_state': routeSessionState,
+        'queued_count': queuedCount,
+        'running_count': runningCount,
+        'dead_letter_count': deadLetterCount,
+        'failed_count': failedCount,
+        'oldest_queued_age_ms': oldestQueuedAgeMs,
+        'next_action': nextAction,
+        'contains_user_content': containsUserContent,
+        'contains_provider_auth_material': containsProviderAuthMaterial,
+        'last_message_id_watermark_policy': lastMessageIdWatermarkPolicy,
+      },
+    },
+  };
+}
 
 Widget buildLocalizedTestApp({
   required Widget home,
@@ -1454,6 +1541,11 @@ class FakeAgentInventoryPort implements AgentInventoryPort {
     required String runtime,
     required String handle,
     required String displayName,
+    String? driverId,
+    String? workspaceMode,
+    String? defaultSandbox,
+    String? defaultModel,
+    Map<String, Object?>? driverConfig,
   }) async {
     return nextRuntimeToken;
   }
@@ -1512,7 +1604,7 @@ class FakeAgentControlService implements AgentControlService {
       handle: 'awiki-daemon-test',
       displayName: '代理 1',
       activeState: 'active',
-      latest: AgentLatestStatus(status: 'ready', platform: 'darwin-arm64'),
+      latest: readyDaemonStatusWithGenericCliCapability,
     ),
   ];
   InstallCommand? lastInstallCommand;
@@ -1528,12 +1620,16 @@ class FakeAgentControlService implements AgentControlService {
   );
   String? lastRefreshedDaemonDid;
   String? lastRuntimeCreateDaemonDid;
+  RuntimeAgentKind? lastRuntimeCreateKind;
   String? lastBootstrapDaemonDid;
   String? lastBootstrapControllerDid;
   String? lastBootstrapAppInstanceId;
   UserSubkeyPackage? lastBootstrapUserSubkeyPackage;
   String? lastRuntimeCreateHandle;
   String? lastRuntimeCreateDisplayName;
+  String? lastRuntimeCreateWorkspaceMode;
+  String? lastRuntimeCreateSandbox;
+  String? lastRuntimeCreateModel;
   String? lastResetDaemonDid;
   String? lastResetRuntimeDid;
   String? lastRetryDaemonDid;
@@ -1586,10 +1682,31 @@ class FakeAgentControlService implements AgentControlService {
     required String controllerDid,
     required String handle,
     required String displayName,
+  }) {
+    return createRuntimeAgent(
+      daemonAgentDid: daemonAgentDid,
+      controllerDid: controllerDid,
+      options: RuntimeAgentCreateOptions(
+        kind: RuntimeAgentKind.hermes,
+        handle: handle,
+        displayName: displayName,
+      ),
+    );
+  }
+
+  @override
+  Future<void> createRuntimeAgent({
+    required String daemonAgentDid,
+    required String controllerDid,
+    required RuntimeAgentCreateOptions options,
   }) async {
     lastRuntimeCreateDaemonDid = daemonAgentDid;
-    lastRuntimeCreateHandle = handle;
-    lastRuntimeCreateDisplayName = displayName;
+    lastRuntimeCreateKind = options.kind;
+    lastRuntimeCreateHandle = options.handle;
+    lastRuntimeCreateDisplayName = options.displayName;
+    lastRuntimeCreateWorkspaceMode = options.workspaceMode;
+    lastRuntimeCreateSandbox = options.sandbox;
+    lastRuntimeCreateModel = options.model;
   }
 
   @override

@@ -1,6 +1,7 @@
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
@@ -304,6 +305,64 @@ void main() {
         container.read(agentsProvider).pendingStatusQueryAtByDaemon,
         isEmpty,
       );
+    },
+  );
+
+  test(
+    'status payload preserves generic CLI runtime card diagnostics',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'snapshot',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'status': 'ready',
+          },
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': 'did:agent:runtime-codex',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'codex',
+              'display_name': 'Codex',
+              'status': 'ready',
+              'diagnostics_summary': genericCliRuntimeCardDiagnostics(
+                lifecycleState: 'needs_setup',
+                setupReady: false,
+                setupState: 'binary_missing',
+                nextAction: 'setup_required',
+              ),
+            },
+          ],
+        },
+      );
+
+      final runtime = container
+          .read(agentsProvider)
+          .agents
+          .singleWhere((agent) => agent.agentDid == 'did:agent:runtime-codex');
+      final runtimeCard = runtime.latest.runtimeCard;
+      expect(runtimeCard, isNotNull);
+      expect(runtimeCard?.runtimeFamily, 'generic-cli');
+      expect(runtimeCard?.driverId, 'codex');
+      expect(runtimeCard?.lifecycleState, 'needs_setup');
+      expect(runtimeCard?.setupState, 'binary_missing');
+      expect(runtimeCard?.nextAction, 'setup_required');
     },
   );
 
@@ -1177,6 +1236,44 @@ void main() {
         container.read(agentsProvider).error,
         '运行 Daemon 尚未上报安全 bootstrap 公钥，请先刷新状态。',
       );
+    },
+  );
+
+  test(
+    'createRuntimeAgent delegates codex options from signed-in session',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+
+      await container
+          .read(agentsProvider.notifier)
+          .createRuntimeAgent(
+            'did:agent:daemon',
+            options: const RuntimeAgentCreateOptions(
+              kind: RuntimeAgentKind.codex,
+              handle: 'alice-codex',
+              displayName: 'Alice Codex',
+              workspaceMode: runtimeWorkspaceModeRouteRoot,
+              sandbox: runtimeSandboxWorkspaceWrite,
+            ),
+          );
+
+      expect(control.lastRuntimeCreateDaemonDid, 'did:agent:daemon');
+      expect(control.lastRuntimeCreateKind, RuntimeAgentKind.codex);
+      expect(control.lastRuntimeCreateHandle, 'alice-codex');
+      expect(control.lastRuntimeCreateDisplayName, 'Alice Codex');
+      expect(control.lastRuntimeCreateWorkspaceMode, 'route-root');
+      expect(control.lastRuntimeCreateSandbox, 'workspace-write');
     },
   );
 
