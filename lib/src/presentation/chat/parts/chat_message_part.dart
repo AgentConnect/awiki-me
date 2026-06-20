@@ -254,6 +254,464 @@ class _MessageAgentProcessingStatus extends StatelessWidget {
   }
 }
 
+sealed class _MessageAgentTimelineItem {
+  const _MessageAgentTimelineItem();
+}
+
+class _MessageAgentSyncTimelineItem extends _MessageAgentTimelineItem {
+  const _MessageAgentSyncTimelineItem(this.record);
+
+  final MessageAgentSyncRecord record;
+}
+
+class _MessageAgentActionTimelineItem extends _MessageAgentTimelineItem {
+  const _MessageAgentActionTimelineItem(this.record);
+
+  final AppActionRecord record;
+}
+
+class _MessageAgentRecoveryCard extends StatelessWidget {
+  const _MessageAgentRecoveryCard({
+    required this.item,
+    required this.macStyle,
+    this.onConfirm,
+    this.onReject,
+  });
+
+  final _MessageAgentTimelineItem item;
+  final bool macStyle;
+  final Future<void> Function()? onConfirm;
+  final Future<void> Function()? onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final content = switch (item) {
+      _MessageAgentSyncTimelineItem(:final record) =>
+        _MessageAgentCardContent.sync(record),
+      _MessageAgentActionTimelineItem(:final record) =>
+        _MessageAgentCardContent.action(record),
+    };
+    final isAttention = content.tone == _MessageAgentCardTone.attention;
+    final isDanger = content.tone == _MessageAgentCardTone.danger;
+    final accent = isDanger
+        ? theme.danger
+        : isAttention
+        ? const Color(0xFF996300)
+        : theme.primary;
+    final background = macStyle
+        ? CupertinoColors.white
+        : (isDanger
+              ? const Color(0xFFFFF3F1)
+              : isAttention
+              ? const Color(0xFFFFF7E6)
+              : theme.subtleSurface);
+    final border = isDanger
+        ? const Color(0xFFFFD1CA)
+        : isAttention
+        ? const Color(0xFFEAD49A)
+        : (macStyle
+              ? const Color(0xFFDDE5F0)
+              : theme.border.withValues(alpha: 0.76));
+    final width = macStyle
+        ? responsive.displayScaled(420)
+        : (responsive.isLarge ? 500.0 : 640.0);
+    return Semantics(
+      liveRegion: true,
+      label: content.title,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: width),
+          child: Container(
+            key: Key('message-agent-card:${content.keySuffix}'),
+            padding: EdgeInsets.symmetric(
+              horizontal: macStyle
+                  ? responsive.displayScaled(12)
+                  : responsive.spacing(14),
+              vertical: macStyle
+                  ? responsive.displayScaled(10)
+                  : responsive.spacing(12),
+            ),
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Icon(
+                      content.icon,
+                      color: accent,
+                      size: macStyle
+                          ? responsive.displayScaled(16)
+                          : responsive.iconSm,
+                    ),
+                    SizedBox(
+                      width: macStyle
+                          ? responsive.displayScaled(8)
+                          : responsive.spacing(9),
+                    ),
+                    Expanded(
+                      child: Text(
+                        content.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: macStyle
+                              ? const Color(0xFF17213A)
+                              : theme.title,
+                          fontSize: macStyle
+                              ? responsive.displayScaled(13)
+                              : responsive.metaSm,
+                          fontWeight: FontWeight.w700,
+                          height: 1.25,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (content.detail != null) ...<Widget>[
+                  SizedBox(
+                    height: macStyle
+                        ? responsive.displayScaled(7)
+                        : responsive.spacing(7),
+                  ),
+                  Text(
+                    content.detail!,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: macStyle
+                          ? const Color(0xFF66728A)
+                          : theme.secondaryText,
+                      fontSize: macStyle
+                          ? responsive.displayScaled(12)
+                          : responsive.metaSm,
+                      fontWeight: FontWeight.w500,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+                if (content.preview != null) ...<Widget>[
+                  SizedBox(
+                    height: macStyle
+                        ? responsive.displayScaled(9)
+                        : responsive.spacing(9),
+                  ),
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: macStyle
+                          ? responsive.displayScaled(10)
+                          : responsive.spacing(10),
+                      vertical: macStyle
+                          ? responsive.displayScaled(8)
+                          : responsive.spacing(8),
+                    ),
+                    decoration: BoxDecoration(
+                      color: macStyle
+                          ? const Color(0xFFF7F9FC)
+                          : theme.surface.withValues(alpha: 0.72),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      content.preview!,
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: macStyle ? const Color(0xFF17213A) : theme.title,
+                        fontSize: macStyle
+                            ? responsive.displayScaled(12.5)
+                            : responsive.bodySm,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+                if (content.hasActions) ...<Widget>[
+                  SizedBox(
+                    height: macStyle
+                        ? responsive.displayScaled(10)
+                        : responsive.spacing(10),
+                  ),
+                  Wrap(
+                    spacing: macStyle
+                        ? responsive.displayScaled(8)
+                        : responsive.spacing(8),
+                    runSpacing: macStyle
+                        ? responsive.displayScaled(8)
+                        : responsive.spacing(8),
+                    children: <Widget>[
+                      _MessageAgentActionButton(
+                        label: content.confirmLabel,
+                        icon: CupertinoIcons.check_mark_circled,
+                        accent: theme.primary,
+                        macStyle: macStyle,
+                        onTap: onConfirm,
+                      ),
+                      _MessageAgentActionButton(
+                        label: content.rejectLabel,
+                        icon: CupertinoIcons.xmark_circle,
+                        accent: theme.secondaryText,
+                        macStyle: macStyle,
+                        onTap: onReject,
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageAgentActionButton extends StatelessWidget {
+  const _MessageAgentActionButton({
+    required this.label,
+    required this.icon,
+    required this.accent,
+    required this.macStyle,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color accent;
+  final bool macStyle;
+  final Future<void> Function()? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final enabled = onTap != null;
+    return AppPressable(
+      onTap: enabled ? () => unawaited(onTap!()) : null,
+      enabled: enabled,
+      semanticLabel: label,
+      tooltip: label,
+      borderRadius: BorderRadius.circular(8),
+      child: const SizedBox.shrink(),
+      builder: (context, state, child) {
+        final foreground = enabled ? accent : context.awikiTheme.tertiaryText;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.symmetric(
+            horizontal: macStyle
+                ? responsive.displayScaled(10)
+                : responsive.spacing(10),
+            vertical: macStyle
+                ? responsive.displayScaled(6)
+                : responsive.spacing(7),
+          ),
+          decoration: BoxDecoration(
+            color: state.pressed
+                ? foreground.withValues(alpha: 0.12)
+                : foreground.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: foreground.withValues(alpha: 0.18)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(
+                icon,
+                size: macStyle
+                    ? responsive.displayScaled(14)
+                    : responsive.scaled(14),
+                color: foreground,
+              ),
+              SizedBox(
+                width: macStyle
+                    ? responsive.displayScaled(6)
+                    : responsive.spacing(6),
+              ),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: foreground,
+                  fontSize: macStyle
+                      ? responsive.displayScaled(12)
+                      : responsive.metaSm,
+                  fontWeight: FontWeight.w600,
+                  height: 1.2,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+enum _MessageAgentCardTone { neutral, attention, danger }
+
+class _MessageAgentCardContent {
+  const _MessageAgentCardContent({
+    required this.keySuffix,
+    required this.title,
+    required this.icon,
+    this.detail,
+    this.preview,
+    this.tone = _MessageAgentCardTone.neutral,
+    this.confirmLabel = '确认',
+    this.rejectLabel = '拒绝',
+    this.hasActions = false,
+  });
+
+  final String keySuffix;
+  final String title;
+  final IconData icon;
+  final String? detail;
+  final String? preview;
+  final _MessageAgentCardTone tone;
+  final String confirmLabel;
+  final String rejectLabel;
+  final bool hasActions;
+
+  factory _MessageAgentCardContent.sync(MessageAgentSyncRecord record) {
+    final key = record.identityKey;
+    if (record.isUnsupported) {
+      return _MessageAgentCardContent(
+        keySuffix: key,
+        title: '消息 Agent 跳过此消息',
+        icon: CupertinoIcons.exclamationmark_triangle,
+        detail: _messageAgentOptionalDetail(record.unsupportedReason),
+        tone: _MessageAgentCardTone.attention,
+      );
+    }
+    if (record.isFailed) {
+      return _MessageAgentCardContent(
+        keySuffix: key,
+        title: '消息 Agent 处理失败',
+        icon: CupertinoIcons.exclamationmark_circle,
+        detail:
+            _messageAgentOptionalDetail(record.lastErrorSummary) ??
+            _messageAgentOptionalDetail(record.lastErrorCode),
+        tone: _MessageAgentCardTone.danger,
+      );
+    }
+    if (record.isRuntimeFinal) {
+      return _MessageAgentCardContent(
+        keySuffix: key,
+        title: '消息 Agent 已完成处理',
+        icon: CupertinoIcons.check_mark_circled,
+        detail: record.hasText ? '已生成处理结果' : null,
+        preview: _messageAgentOptionalDetail(
+          record.summaryText ?? record.draftText,
+        ),
+      );
+    }
+    if (record.isRuntimeStatus) {
+      return _MessageAgentCardContent(
+        keySuffix: key,
+        title: '消息 Agent 正在处理',
+        icon: CupertinoIcons.clock,
+        detail: _messageAgentOptionalDetail(record.state),
+      );
+    }
+    return _MessageAgentCardContent(
+      keySuffix: key,
+      title: '消息 Agent 已收到消息',
+      icon: CupertinoIcons.bolt_horizontal_circle,
+      detail: _messageAgentOptionalDetail(record.processingStatus),
+    );
+  }
+
+  factory _MessageAgentCardContent.action(AppActionRecord record) {
+    final request = record.request;
+    final draft = _draftPreviewForAppActionRecord(record);
+    if (record.state == appActionStateSucceeded) {
+      return _MessageAgentCardContent(
+        keySuffix: record.actionId,
+        title: record.action == 'message.create_draft'
+            ? '草稿已放入输入框'
+            : 'App action 已完成',
+        icon: CupertinoIcons.check_mark_circled,
+        preview: draft,
+      );
+    }
+    if (record.state == appActionStateRejected) {
+      return _MessageAgentCardContent(
+        keySuffix: record.actionId,
+        title: '已拒绝消息 Agent 请求',
+        icon: CupertinoIcons.xmark_circle,
+        tone: _MessageAgentCardTone.attention,
+      );
+    }
+    if (record.state == appActionStateFailed) {
+      return _MessageAgentCardContent(
+        keySuffix: record.actionId,
+        title: 'App action 处理失败',
+        icon: CupertinoIcons.exclamationmark_circle,
+        detail:
+            _messageAgentOptionalDetail(record.result?.errorSummary) ??
+            _messageAgentOptionalDetail(record.result?.errorCode),
+        preview: draft,
+        tone: _MessageAgentCardTone.danger,
+      );
+    }
+    return _MessageAgentCardContent(
+      keySuffix: record.actionId,
+      title: _appActionTitle(record.action),
+      icon: CupertinoIcons.square_pencil,
+      detail: request?.needsUserConfirmation == true ? '等待确认' : null,
+      preview: draft,
+      hasActions: true,
+      confirmLabel: record.action == 'message.create_draft' ? '使用草稿' : '确认',
+      rejectLabel: '拒绝',
+    );
+  }
+}
+
+String _appActionTitle(String action) {
+  return switch (action) {
+    'message.create_draft' => '消息 Agent 生成了草稿',
+    'message.summarize_plain' => '消息 Agent 生成了摘要',
+    'contact.read' => '消息 Agent 请求读取联系人',
+    'contact.update_display_name' => '消息 Agent 请求修改联系人名称',
+    'contact.update_note' => '消息 Agent 请求修改联系人备注',
+    _ => '消息 Agent 请求 App action',
+  };
+}
+
+String? _draftPreviewForAppActionRecord(AppActionRecord record) {
+  final resultDraft = record.result?.result['draft_text']?.toString().trim();
+  if (resultDraft != null && resultDraft.isNotEmpty) {
+    return resultDraft;
+  }
+  final args = record.request?.args ?? const <String, Object?>{};
+  String? value(Object? raw) {
+    final text = raw?.toString().trim();
+    return text == null || text.isEmpty ? null : text;
+  }
+
+  final message = args['message'];
+  return value(args['draft_text']) ??
+      value(args['draft']) ??
+      value(args['text']) ??
+      value(args['content']) ??
+      (message is Map ? value(message['text']) : null);
+}
+
+String? _messageAgentOptionalDetail(String? value) {
+  final trimmed = value?.trim();
+  return trimmed == null || trimmed.isEmpty ? null : trimmed;
+}
+
 class _NewMessagesButton extends StatelessWidget {
   const _NewMessagesButton({required this.macStyle, required this.onTap});
 

@@ -349,6 +349,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       ref
           .read(chatThreadsProvider.notifier)
           .applyAgentRunStatusPayload(controlPayload);
+      ref
+          .read(chatThreadsProvider.notifier)
+          .applyMessageAgentControlPayload(controlPayload);
       return;
     }
     final message = update.message;

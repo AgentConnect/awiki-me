@@ -28,6 +28,7 @@ void main() {
   test('daemon bootstrap and app action schemas are hidden controls', () {
     const schemas = <String>[
       AgentControlPayloads.daemonBootstrapSchema,
+      AgentControlPayloads.daemonBootstrapSecureSchema,
       AgentControlPayloads.messageSyncSchema,
       AgentControlPayloads.appCapabilitiesSchema,
       AgentControlPayloads.appActionSchema,
@@ -55,6 +56,10 @@ void main() {
     ]);
     expect(AgentControlPayloads.isAllowedAppAction('message.send'), isFalse);
     expect(
+      AgentControlPayloads.isAllowedAppAction('message.send.plain'),
+      isFalse,
+    );
+    expect(
       AgentControlPayloads.isAllowedAppAction('message.e2ee_forward'),
       isFalse,
     );
@@ -62,7 +67,7 @@ void main() {
 
   test('app action request parses contact write confirmation state', () {
     const payload =
-        '{"schema":"awiki.app.action.v1","action_id":"act_1","action":"contact.update_note","state":"requires_confirmation","requires_confirmation":true,"args":{"contact_did":"did:human:bob","note":"Follow up"}}';
+        '{"schema":"awiki.app.action.v1","action_id":"act_1","action":"contact.update_note","state":"requires_confirmation","binding_id":"binding_1","daemon_agent_did":"did:agent:daemon","runtime_agent_did":"did:agent:runtime","run_id":"run_1","source_message_id":"msg_1","conversation_id":"direct:did:human:bob","requires_confirmation":true,"args":{"contact_did":"did:human:bob","note":"Follow up"}}';
 
     final request = AgentControlPayloads.decodeAppAction(payload);
 
@@ -76,6 +81,12 @@ void main() {
       isTrue,
     );
     expect(request.args['contact_did'], 'did:human:bob');
+    expect(request.bindingId, 'binding_1');
+    expect(request.daemonAgentDid, 'did:agent:daemon');
+    expect(request.runtimeAgentDid, 'did:agent:runtime');
+    expect(request.runId, 'run_1');
+    expect(request.sourceMessageId, 'msg_1');
+    expect(request.conversationId, 'direct:did:human:bob');
   });
 
   test('app action parser rejects private state payloads', () {
@@ -109,15 +120,71 @@ void main() {
     );
   });
 
+  test('app action result payload mirrors daemon routing context', () {
+    const requestPayload =
+        '{"schema":"awiki.app.action.v1","action_id":"act_draft","action":"message.create_draft","state":"requires_confirmation","binding_id":"binding_1","owner_did":"did:human:alice","app_instance_id":"app_1","daemon_agent_did":"did:agent:daemon","runtime_agent_did":"did:agent:runtime","runtime_profile_id":"profile_1","run_id":"run_1","source_message_id":"msg_1","conversation_id":"direct:did:human:bob","requires_confirmation":true,"args":{"draft_text":"Looks good"}}';
+    final request = AgentControlPayloads.decodeAppAction(requestPayload)!;
+
+    final result = appActionResultPayload(
+      request: request,
+      state: appActionStateSucceeded,
+      result: const <String, Object?>{'draft_text': 'Looks good'},
+    );
+
+    expect(result['schema'], AgentControlPayloads.appActionResultSchema);
+    expect(result['action_id'], 'act_draft');
+    expect(result['action'], 'message.create_draft');
+    expect(result['state'], appActionStateSucceeded);
+    expect(result['binding_id'], 'binding_1');
+    expect(result['owner_did'], 'did:human:alice');
+    expect(result['app_instance_id'], 'app_1');
+    expect(result['daemon_agent_did'], 'did:agent:daemon');
+    expect(result['runtime_agent_did'], 'did:agent:runtime');
+    expect(result['runtime_profile_id'], 'profile_1');
+    expect(result['run_id'], 'run_1');
+    expect(result['source_message_id'], 'msg_1');
+    expect(result['conversation_id'], 'direct:did:human:bob');
+    expect(
+      (result['result']! as Map<String, Object?>)['draft_text'],
+      'Looks good',
+    );
+  });
+
   test('message sync schema decodes as hidden system payload', () {
     const payload =
-        '{"schema":"awiki.message.sync.v1","kind":"runtime_final","message_id":"msg_1"}';
+        '{"schema":"awiki.message.sync.v1","sync_type":"runtime_final","source_message_id":"msg_1","source_conversation_id":"direct:did:human:bob","runtime_agent_did":"did:agent:runtime","run_id":"run_1","state":"finished","has_text":true,"retention_class":"hash_only"}';
 
     final sync = AgentControlPayloads.decodeMessageSync(payload);
 
     expect(sync, isNotNull);
-    expect(sync!.payload['kind'], 'runtime_final');
+    expect(sync!.effectiveType, 'runtime_final');
+    expect(sync.primaryMessageId, 'msg_1');
+    expect(sync.primaryConversationId, 'direct:did:human:bob');
+    expect(sync.runtimeAgentDid, 'did:agent:runtime');
+    expect(sync.runId, 'run_1');
+    expect(sync.state, 'finished');
+    expect(sync.hasText, isTrue);
+    expect(sync.retentionClass, 'hash_only');
     expect(AgentControlPayloads.isControl(payload), isTrue);
+  });
+
+  test('message sync MVP lifecycle kinds carry provider contract', () {
+    for (final kind in <String>[
+      'runtime_status',
+      'runtime_final',
+      'unsupported',
+      'error',
+    ]) {
+      final payload =
+          '{"schema":"awiki.message.sync.v1","kind":"$kind","message_id":"msg_1","runtime_provider":"hermes","runtime_profile":"message_agent"}';
+      final sync = AgentControlPayloads.decodeMessageSync(payload);
+
+      expect(sync, isNotNull, reason: kind);
+      expect(sync!.payload['kind'], kind);
+      expect(sync.payload['runtime_provider'], 'hermes');
+      expect(sync.payload['runtime_profile'], 'message_agent');
+      expect(AgentControlPayloads.isControl(payload), isTrue);
+    }
   });
 
   test('runtime create command carries token in args only', () {

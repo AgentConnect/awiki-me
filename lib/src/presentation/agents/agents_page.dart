@@ -9,9 +9,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_services.dart';
 import '../../application/config/awiki_environment_config.dart';
 import '../../domain/entities/agent/agent_invocation_policy.dart';
+import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/install_command.dart';
 import '../../domain/entities/agent/agent_summary.dart';
+import '../../domain/entities/agent/message_agent_runtime_provider.dart';
 import '../../domain/repositories/awiki_account_gateway.dart';
 import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
@@ -60,6 +62,7 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
     });
 
     final state = ref.watch(agentsProvider);
+    final messageAgentEnabled = ref.watch(agentImEnabledProvider);
     final responsive = context.awikiResponsive;
     final pendingAgentDids = ref.watch(pendingAgentDidsProvider);
     final list = _AgentListPane(
@@ -95,6 +98,16 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
           _confirmResetRuntimeSession(context, ref, agent),
       onUpgrade: (agent) => _confirmUpgradeDaemon(context, ref, agent),
       onDelete: (agent) => _confirmDeleteAgent(context, ref, agent),
+      messageAgentEnabled: messageAgentEnabled,
+      onBootstrapMessageAgent: (agent) => ref
+          .read(agentsProvider.notifier)
+          .bootstrapMessageAgent(daemonDid: agent.agentDid),
+      onPauseMessageAgent: (agent) =>
+          _confirmPauseMessageAgent(context, ref, agent),
+      onDeleteMessageAgent: (agent) =>
+          _confirmDeleteMessageAgent(context, ref, agent),
+      onRevokeMessageAgentAuthorization: (agent) =>
+          _confirmRevokeMessageAgentAuthorization(context, ref, agent),
       onSaveInvocationPolicy: (agentDid, policy) => ref
           .read(agentsProvider.notifier)
           .saveInvocationPolicy(agentDid, policy),

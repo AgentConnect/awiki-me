@@ -25,6 +25,7 @@ import '../../app/ui_feedback.dart';
 import '../agents/agent_inbox_panel.dart';
 import '../agents/agent_display_name.dart';
 import '../agents/agents_provider.dart';
+import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../conversation_list/conversation_peer_classifier.dart';
 import '../conversation_list/conversation_provider.dart';
 import '../friends/friends_page.dart';
@@ -300,6 +301,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final activePendingTurns = thread.agentPendingTurns
         .where((turn) => turn.isActive)
         .toList(growable: false);
+    final messageAgentItems = _messageAgentTimelineItems(thread);
     final messageIdsWithAgentProcessing = <String>{
       for (final message in messages)
         if (thread.pendingAgentTurnsForMessage(message).isNotEmpty)
@@ -358,9 +360,54 @@ class _ChatViewState extends ConsumerState<ChatView> {
                           ? responsive.displayScaled(92)
                           : responsive.spacing(widget.embedded ? 124 : 140),
                     ),
-                    itemCount: messages.length + unmatchedPendingTurns.length,
+                    itemCount:
+                        messages.length +
+                        unmatchedPendingTurns.length +
+                        messageAgentItems.length,
                     itemBuilder: (_, index) {
                       if (index >= messages.length) {
+                        final recoveryIndex =
+                            index -
+                            messages.length -
+                            unmatchedPendingTurns.length;
+                        if (recoveryIndex >= 0) {
+                          final item = messageAgentItems[recoveryIndex];
+                          return Padding(
+                            padding: EdgeInsets.only(
+                              bottom: macStyle
+                                  ? responsive.displayScaled(16)
+                                  : responsive.spacing(18),
+                            ),
+                            child: _MessageAgentRecoveryCard(
+                              item: item,
+                              macStyle: macStyle,
+                              onConfirm: item is _MessageAgentActionTimelineItem
+                                  ? () async {
+                                      await ref
+                                          .read(chatThreadsProvider.notifier)
+                                          .confirmAppAction(
+                                            conversation: currentConversation,
+                                            actionId: item.record.actionId,
+                                          );
+                                      if (mounted) {
+                                        _restoreComposerDraft(
+                                          currentConversation,
+                                          updateState: true,
+                                        );
+                                      }
+                                    }
+                                  : null,
+                              onReject: item is _MessageAgentActionTimelineItem
+                                  ? () => ref
+                                        .read(chatThreadsProvider.notifier)
+                                        .rejectAppAction(
+                                          conversation: currentConversation,
+                                          actionId: item.record.actionId,
+                                        )
+                                  : null,
+                            ),
+                          );
+                        }
                         final turn =
                             unmatchedPendingTurns[index - messages.length];
                         return Padding(
@@ -852,6 +899,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
         !_sameMessageIdentity(previousLast, nextLast);
     final pendingAdded =
         _activePendingTurnCount(next) > _activePendingTurnCount(previous);
+    final recoveryAdded =
+        next.messageAgentTimelineCount > previous.messageAgentTimelineCount;
     final wasNearBottom = !_userAwayFromBottom || _isNearBottom();
     if (messageAdded) {
       if (nextLast.isMine || wasNearBottom) {
@@ -861,7 +910,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       }
       return;
     }
-    if (pendingAdded) {
+    if (pendingAdded || recoveryAdded) {
       if (wasNearBottom || _latestMessageIsMine(next)) {
         _scheduleScrollToBottom(animated: true);
       } else {
@@ -871,7 +920,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
     final contentGrew =
         next.messages.length > previous.messages.length ||
-        next.agentPendingTurns.length > previous.agentPendingTurns.length;
+        next.agentPendingTurns.length > previous.agentPendingTurns.length ||
+        next.messageAgentTimelineCount > previous.messageAgentTimelineCount;
     if (contentGrew && wasNearBottom) {
       _scheduleScrollToBottom();
     }
@@ -966,6 +1016,17 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   int _activePendingTurnCount(ChatThreadState thread) {
     return thread.agentPendingTurns.where((turn) => turn.isActive).length;
+  }
+
+  List<_MessageAgentTimelineItem> _messageAgentTimelineItems(
+    ChatThreadState thread,
+  ) {
+    return <_MessageAgentTimelineItem>[
+      for (final sync in thread.messageAgentSyncs)
+        _MessageAgentSyncTimelineItem(sync),
+      for (final action in thread.appActionRecords.values)
+        _MessageAgentActionTimelineItem(action),
+    ];
   }
 
   ConversationSummary? _matchingConversation(

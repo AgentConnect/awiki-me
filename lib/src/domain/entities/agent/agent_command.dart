@@ -181,4 +181,24 @@ Map<String, Object?> runtimeAgentDeletePayload({
   };
 }
 
+Map<String, Object?> messageAgentBindingDisablePayload({
+  required String messageAgentDid,
+  String? bindingId,
+  String lifecycleAction = 'pause',
+}) {
+  return <String, Object?>{
+    'schema': AgentControlPayloads.commandSchema,
+    'command_id': agentCommandId('cmd_message_agent_lifecycle'),
+    'command': 'message_agent.binding.disable',
+    'target_agent_kind': 'runtime',
+    'args': <String, Object?>{
+      'message_agent_did': messageAgentDid,
+      'runtime_agent_did': messageAgentDid,
+      'lifecycle_action': lifecycleAction,
+      if (bindingId != null && bindingId.trim().isNotEmpty)
+        'binding_id': bindingId.trim(),
+    },
+  };
+}
+
 String encodeAgentCommand(Map<String, Object?> payload) => jsonEncode(payload);

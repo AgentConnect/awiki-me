@@ -7,6 +7,7 @@ import 'package:awiki_me/src/application/agent/agent_control_service.dart';
 import 'package:awiki_me/src/application/attachment_cache_service.dart';
 import 'package:awiki_me/src/application/attachment_picker_service.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
+import 'package:awiki_me/src/application/models/daemon_subkey_authorization_revoke_result.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/group_application_service.dart';
@@ -34,6 +35,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart'
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
+import 'package:awiki_me/src/domain/entities/agent/message_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
@@ -1555,6 +1557,12 @@ class FakeAgentControlService implements AgentControlService {
   String? lastDeletedDaemonDid;
   String? lastDeletedRuntimeDaemonDid;
   String? lastDeletedRuntimeDid;
+  String? lastPausedMessageAgentDaemonDid;
+  String? lastPausedMessageAgentDid;
+  String? lastDeletedMessageAgentDaemonDid;
+  String? lastDeletedMessageAgentDid;
+  String? lastRevokedMessageAgentDaemonDid;
+  String? lastRevokedMessageAgentDid;
   String? lastRenamedAgentDid;
   String? lastDisplayName;
   String? lastUpgradeDaemonDid;
@@ -1562,6 +1570,7 @@ class FakeAgentControlService implements AgentControlService {
       <String, AgentInvocationPolicy>{};
   String? lastInvocationPolicyAgentDid;
   AgentInvocationPolicy? lastInvocationPolicy;
+  DaemonBootstrapPublicKey? lastBootstrapDaemonPublicKey;
 
   @override
   Future<InstallCommand> createDaemonInstallCommand({
@@ -1589,6 +1598,7 @@ class FakeAgentControlService implements AgentControlService {
     required String controllerDid,
     required String appInstanceId,
     required UserSubkeyPackage userSubkeyPackage,
+    required DaemonBootstrapPublicKey daemonBootstrapPublicKey,
     String? userHandle,
     String? runtimeRegistrationToken,
     String? runId,
@@ -1597,6 +1607,7 @@ class FakeAgentControlService implements AgentControlService {
     lastBootstrapControllerDid = controllerDid;
     lastBootstrapAppInstanceId = appInstanceId;
     lastBootstrapUserSubkeyPackage = userSubkeyPackage;
+    lastBootstrapDaemonPublicKey = daemonBootstrapPublicKey;
   }
 
   @override
@@ -1702,6 +1713,52 @@ class FakeAgentControlService implements AgentControlService {
   }) async {
     lastDeletedRuntimeDaemonDid = daemonAgentDid;
     lastDeletedRuntimeDid = runtimeAgentDid;
+  }
+
+  @override
+  Future<MessageAgentBinding> pauseMessageAgent({
+    required String daemonAgentDid,
+    required String messageAgentDid,
+  }) async {
+    lastPausedMessageAgentDaemonDid = daemonAgentDid;
+    lastPausedMessageAgentDid = messageAgentDid;
+    return _messageAgentBinding(
+      daemonAgentDid: daemonAgentDid,
+      messageAgentDid: messageAgentDid,
+      status: 'disabled',
+    );
+  }
+
+  @override
+  Future<MessageAgentBinding> deleteMessageAgent({
+    required String daemonAgentDid,
+    required String messageAgentDid,
+  }) async {
+    lastDeletedMessageAgentDaemonDid = daemonAgentDid;
+    lastDeletedMessageAgentDid = messageAgentDid;
+    lastPausedMessageAgentDaemonDid = daemonAgentDid;
+    lastPausedMessageAgentDid = messageAgentDid;
+    lastDeletedRuntimeDaemonDid = daemonAgentDid;
+    lastDeletedRuntimeDid = messageAgentDid;
+    return _messageAgentBinding(
+      daemonAgentDid: daemonAgentDid,
+      messageAgentDid: messageAgentDid,
+      status: 'disabled',
+    );
+  }
+
+  @override
+  Future<MessageAgentBinding> revokeMessageAgentAuthorization({
+    required String daemonAgentDid,
+    required String messageAgentDid,
+  }) async {
+    lastRevokedMessageAgentDaemonDid = daemonAgentDid;
+    lastRevokedMessageAgentDid = messageAgentDid;
+    return _messageAgentBinding(
+      daemonAgentDid: daemonAgentDid,
+      messageAgentDid: messageAgentDid,
+      status: 'revoked',
+    );
   }
 
   @override
@@ -2124,6 +2181,7 @@ class FakeIdentityCorePort implements IdentityCorePort {
   final AppSession defaultSession;
   String? lastDaemonSubkeySelector;
   String? lastEnsuredDaemonSubkeySelector;
+  String? lastRevokedDaemonSubkeySelector;
 
   @override
   Future<AppSession?> defaultIdentity() async => defaultSession;
@@ -2147,6 +2205,18 @@ class FakeIdentityCorePort implements IdentityCorePort {
   ) async {
     lastEnsuredDaemonSubkeySelector = identityIdOrAlias;
     return daemonSubkeyPackage;
+  }
+
+  @override
+  Future<DaemonSubkeyAuthorizationRevokeResult> revokeDaemonSubkeyAuthorization(
+    String identityIdOrAlias,
+  ) async {
+    lastRevokedDaemonSubkeySelector = identityIdOrAlias;
+    return DaemonSubkeyAuthorizationRevokeResult(
+      userDid: daemonSubkeyPackage.userDid,
+      verificationMethod: daemonSubkeyPackage.verificationMethod,
+      updated: true,
+    );
   }
 
   @override
@@ -2402,4 +2472,21 @@ class TestProfileController extends ProfileController {
       state = ProfileState(profile: initialProfile);
     }
   }
+}
+
+MessageAgentBinding _messageAgentBinding({
+  required String daemonAgentDid,
+  required String messageAgentDid,
+  required String status,
+}) {
+  return MessageAgentBinding(
+    id: 'binding_$messageAgentDid',
+    userDid: 'did:human:me',
+    daemonAgentDid: daemonAgentDid,
+    messageAgentDid: messageAgentDid,
+    runtimeProvider: 'hermes',
+    runtimeProfile: const <String, Object?>{'profile': 'message_agent'},
+    delegatedKeyVerificationMethod: 'did:human:me#daemon-key-1',
+    status: status,
+  );
 }

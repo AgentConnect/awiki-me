@@ -1,4 +1,5 @@
 import '../models/app_session.dart';
+import '../models/daemon_subkey_authorization_revoke_result.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
 
 abstract interface class IdentityCorePort {
@@ -11,6 +12,10 @@ abstract interface class IdentityCorePort {
   Future<UserSubkeyPackage> loadDaemonSubkeyPackage(String identityIdOrAlias);
 
   Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(String identityIdOrAlias);
+
+  Future<DaemonSubkeyAuthorizationRevokeResult> revokeDaemonSubkeyAuthorization(
+    String identityIdOrAlias,
+  );
 
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias);
 

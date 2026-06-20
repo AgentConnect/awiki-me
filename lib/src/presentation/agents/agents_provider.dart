@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
+import '../../application/config/awiki_environment_config.dart';
 import '../../application/models/product_local_models.dart';
 import '../../core/app_error_classifier.dart';
 import '../../data/agent/user_service_agent_inventory_adapter.dart';
@@ -13,6 +14,7 @@ import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/install_command.dart';
+import '../../domain/entities/agent/message_agent_runtime_provider.dart';
 import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/session_provider.dart';
 import 'agent_display_name.dart';
@@ -20,6 +22,10 @@ import 'agent_display_name.dart';
 const agentStatusQueryTimeout = Duration(seconds: 10);
 const agentDaemonUpgradeTimeout = Duration(seconds: 45);
 const agentStatusRefreshMinimumIndicatorDuration = Duration(milliseconds: 1500);
+
+final agentImEnabledProvider = Provider<bool>(
+  (ref) => AwikiEnvironmentConfig.fromEnvironment().agentImEnabled,
+);
 
 class AgentsState {
   const AgentsState({
@@ -37,6 +43,7 @@ class AgentsState {
     this.savingInvocationPolicies = const <String>{},
     this.invocationPolicyErrors = const <String, String>{},
     this.statusQueryErrors = const <String, String>{},
+    this.debugLastError,
   });
 
   final List<AgentSummary> agents;
@@ -53,6 +60,7 @@ class AgentsState {
   final Set<String> savingInvocationPolicies;
   final Map<String, String> invocationPolicyErrors;
   final Map<String, String> statusQueryErrors;
+  final String? debugLastError;
 
   AgentSummary? get selectedAgent {
     final selectedDid = selectedAgentDid;
@@ -73,6 +81,15 @@ class AgentsState {
   List<AgentSummary> runtimesFor(String daemonDid) => agents
       .where((agent) => agent.isRuntime && agent.daemonAgentDid == daemonDid)
       .toList();
+
+  AgentSummary? messageAgentRuntimeFor(String daemonDid) {
+    for (final runtime in runtimesFor(daemonDid)) {
+      if (_isMessageAgentRuntime(runtime)) {
+        return runtime;
+      }
+    }
+    return null;
+  }
 
   AgentSummary? daemonForRuntime(AgentSummary runtime) {
     final daemonDid = runtime.daemonAgentDid;
@@ -118,6 +135,7 @@ class AgentsState {
     Set<String>? savingInvocationPolicies,
     Map<String, String>? invocationPolicyErrors,
     Map<String, String>? statusQueryErrors,
+    String? debugLastError,
   }) {
     return AgentsState(
       agents: agents ?? this.agents,
@@ -143,6 +161,9 @@ class AgentsState {
       invocationPolicyErrors:
           invocationPolicyErrors ?? this.invocationPolicyErrors,
       statusQueryErrors: statusQueryErrors ?? this.statusQueryErrors,
+      debugLastError: clearError
+          ? null
+          : (debugLastError ?? this.debugLastError),
     );
   }
 }
@@ -233,6 +254,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         state = state.copyWith(
           isLoading: false,
           error: _agentErrorMessage(error),
+          debugLastError: error.toString(),
         );
       }
     }
@@ -351,6 +373,21 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(error: '请先登录。');
       return;
     }
+    if (!ref.read(agentImEnabledProvider)) {
+      state = state.copyWith(error: '消息处理 Agent 功能未开启。');
+      return;
+    }
+    await ensureLoaded();
+    final daemon = _agentByDid(daemonDid);
+    if (daemon == null || !daemon.isDaemon) {
+      state = state.copyWith(error: '请选择运行 Daemon。');
+      return;
+    }
+    final daemonBootstrapPublicKey = _daemonBootstrapPublicKey(daemon);
+    if (daemonBootstrapPublicKey == null) {
+      state = state.copyWith(error: '运行 Daemon 尚未上报安全 bootstrap 公钥，请先刷新状态。');
+      return;
+    }
     final resolvedAppInstanceId =
         appInstanceId ?? _defaultAppInstanceId(session.credentialName);
     await _act(() async {
@@ -366,6 +403,7 @@ class AgentsController extends StateNotifier<AgentsState> {
             controllerDid: session.did,
             appInstanceId: resolvedAppInstanceId,
             userSubkeyPackage: subkeyPackage,
+            daemonBootstrapPublicKey: daemonBootstrapPublicKey,
             userHandle: session.handle,
           );
     });
@@ -472,6 +510,56 @@ class AgentsController extends StateNotifier<AgentsState> {
               runtimeAgentDid: selected.agentDid,
             );
       }
+    });
+  }
+
+  Future<void> pauseMessageAgentForDaemon(String daemonDid) async {
+    final target = _messageAgentTargetForDaemon(daemonDid);
+    if (target == null) {
+      state = state.copyWith(error: '当前 Daemon 尚未创建消息处理 Agent。');
+      return;
+    }
+    await _act(() async {
+      await ref
+          .read(agentControlServiceProvider)
+          .pauseMessageAgent(
+            daemonAgentDid: daemonDid,
+            messageAgentDid: target.agentDid,
+          );
+    });
+  }
+
+  Future<void> deleteMessageAgentForDaemon(String daemonDid) async {
+    final target = _messageAgentTargetForDaemon(daemonDid);
+    if (target == null) {
+      state = state.copyWith(error: '当前 Daemon 尚未创建消息处理 Agent。');
+      return;
+    }
+    await _act(() async {
+      await ref
+          .read(agentControlServiceProvider)
+          .deleteMessageAgent(
+            daemonAgentDid: daemonDid,
+            messageAgentDid: target.agentDid,
+          );
+    });
+  }
+
+  Future<void> revokeMessageAgentAuthorizationForDaemon(
+    String daemonDid,
+  ) async {
+    final target = _messageAgentTargetForDaemon(daemonDid);
+    if (target == null) {
+      state = state.copyWith(error: '当前 Daemon 尚未创建消息处理 Agent。');
+      return;
+    }
+    await _act(() async {
+      await ref
+          .read(agentControlServiceProvider)
+          .revokeMessageAgentAuthorization(
+            daemonAgentDid: daemonDid,
+            messageAgentDid: target.agentDid,
+          );
     });
   }
 
@@ -646,7 +734,11 @@ class AgentsController extends StateNotifier<AgentsState> {
       await action();
       state = state.copyWith(isActing: false, clearError: true);
     } catch (error) {
-      state = state.copyWith(isActing: false, error: _agentErrorMessage(error));
+      state = state.copyWith(
+        isActing: false,
+        error: _agentErrorMessage(error),
+        debugLastError: error.toString(),
+      );
     }
   }
 
@@ -890,6 +982,27 @@ class AgentsController extends StateNotifier<AgentsState> {
       }
     }
     return null;
+  }
+
+  AgentSummary? _messageAgentTargetForDaemon(String daemonDid) {
+    final daemon = _agentByDid(daemonDid);
+    if (daemon == null ||
+        !daemon.isDaemon ||
+        !_daemonAcceptsControlCommands(daemon)) {
+      return null;
+    }
+    return state.messageAgentRuntimeFor(daemonDid);
+  }
+
+  DaemonBootstrapPublicKey? _daemonBootstrapPublicKey(AgentSummary daemon) {
+    try {
+      return DaemonBootstrapPublicKey.fromDiagnostics(
+        daemonDid: daemon.agentDid,
+        diagnostics: daemon.latest.diagnosticsSummary,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   List<AgentSummary> _mergeControlPayload(
@@ -1248,6 +1361,21 @@ bool _daemonAcceptsControlCommands(AgentSummary daemon) {
     'archiving' => true,
     _ => false,
   };
+}
+
+bool _isMessageAgentRuntime(AgentSummary agent) {
+  if (!agent.isRuntime) {
+    return false;
+  }
+  final provider = MessageAgentRuntimeProviders.byRuntime(agent.runtime);
+  if (provider == null || !provider.enabled) {
+    return false;
+  }
+  final display = agent.displayName.trim().toLowerCase();
+  final handle = agent.handle?.trim() ?? '';
+  return display.contains('message agent') ||
+      display.contains('消息处理') ||
+      provider.matchesHandle(handle);
 }
 
 bool _isArchivedAgentPayload(Map<String, Object?> payload) {

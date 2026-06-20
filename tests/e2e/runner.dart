@@ -7,7 +7,10 @@ import 'package:yaml/yaml.dart';
 const String _defaultDesktopE2eConfigPath = 'tests/e2e/configs/e2e.local.yaml';
 const String _desktopCliPeerRunConfigPath =
     '.e2e/desktop-cli-peer/current/run_config.json';
+const String _messageAgentRunConfigPath =
+    '.e2e/message-agent/current/run_config.json';
 const String _desktopCliPeerScenario = 'desktop-app-cli-peer';
+const String _messageAgentScenario = 'message-agent-full-ui';
 const List<String> _desktopCliPeerCaseIds = <String>[
   'AUTH-E2E-001',
   'MSG-E2E-001',
@@ -54,6 +57,12 @@ const List<String> _desktopCliPeerContactsCaseIds = <String>[
   'CONTACT-E2E-001',
   'CONTACT-E2E-002',
   'CONTACT-REG-001',
+];
+const List<String> _messageAgentCaseIds = <String>[
+  'MSGAGENT-E2E-001', // App UI selects daemon and enables Message Agent.
+  'MSGAGENT-E2E-002', // CLI peer message is recovered into App UI.
+  'MSGAGENT-E2E-003', // App confirms draft/action and returns result.
+  'MSGAGENT-E2E-004', // Pause/delete/revoke UI lifecycle entries are visible.
 ];
 
 Future<void> main(List<String> args) async {
@@ -111,27 +120,19 @@ class DesktopE2eRunner {
     _addRuntimeSecret(fileConfig.otpCode ?? '');
     platform = fileConfig.platform ?? DesktopE2ePlatform.fromHost();
     runId = options.runId ?? _newRunId();
-    final reportScope = options.e2eCase == DesktopE2eCase.smoke
-        ? 'smoke'
-        : 'desktop-cli-peer';
-    reportDir = Directory('${root.path}/.e2e/$reportScope/$runId/reports')
+    final runScope = options.e2eCase.reportScope;
+    reportDir = Directory('${root.path}/.e2e/$runScope/$runId/reports')
       ..createSync(recursive: true);
-    cliWorkspaceDir = Directory(
-      '${root.path}/.e2e/desktop-cli-peer/$runId/cli-peer',
-    );
-    cliHomeDir = Directory(
-      '${root.path}/.e2e/desktop-cli-peer/$runId/cli-home',
-    );
-    appStateRootDir = Directory(
-      '${root.path}/.e2e/desktop-cli-peer/$runId/app',
-    );
-    runConfigFile = File('${root.path}/$_desktopCliPeerRunConfigPath');
+    cliWorkspaceDir = Directory('${root.path}/.e2e/$runScope/$runId/cli-peer');
+    cliHomeDir = Directory('${root.path}/.e2e/$runScope/$runId/cli-home');
+    appStateRootDir = Directory('${root.path}/.e2e/$runScope/$runId/app');
+    runConfigFile = File('${root.path}/${options.e2eCase.runConfigPath}');
     _addRuntimeSecret(reportDir.path);
     _addRuntimeSecret(cliWorkspaceDir.path);
     _addRuntimeSecret(cliHomeDir.path);
     _addRuntimeSecret(appStateRootDir.path);
     _addRuntimeSecret(runConfigFile.path);
-    if (!options.dryRun && options.e2eCase != DesktopE2eCase.smoke) {
+    if (!options.dryRun && options.e2eCase.requiresCliPeer) {
       cliWorkspaceDir.createSync(recursive: true);
       cliHomeDir.createSync(recursive: true);
       appStateRootDir.createSync(recursive: true);
@@ -163,7 +164,7 @@ class DesktopE2eRunner {
     _section('AWiki Desktop local smoke E2E $runId');
     _line('platform: ${platform.name}');
     _line('reports: ${redactor.redact(reportDir.path)}');
-    _line('case: ${options.e2eCase.name}');
+    _line('case: ${options.e2eCase.caseName}');
 
     await _timed('Checking desktop tooling', () async {
       await commands.requireExecutable('flutter');
@@ -193,7 +194,7 @@ class DesktopE2eRunner {
     _line('app state: ${redactor.redact(appStateRootDir.path)}');
     _line('app handle: ${peerConfig.appHandle}');
     _line('cli handle: ${peerConfig.cliHandle}');
-    _line('case: ${peerConfig.e2eCase.name}');
+    _line('case: ${peerConfig.e2eCase.caseName}');
     _line('service base: ${peerConfig.serviceBaseUrl}');
     _line(
       'user service: ${peerConfig.userServiceUrl ?? peerConfig.serviceBaseUrl}',
@@ -309,7 +310,8 @@ class DesktopE2eRunner {
     }
     if (!_looksRecoverableForRegister(recover.output)) {
       throw E2eFailure(
-        'CLI peer recover failed and did not look like a missing-handle error.',
+        'CLI peer recover failed and did not look like a missing-handle error: '
+        '${redactor.redact(recover.output)}',
       );
     }
     final register = await _cli(<String>[
@@ -325,7 +327,9 @@ class DesktopE2eRunner {
       peerConfig.otpCode,
     ], allowFailure: true);
     if (register.exitCode != 0) {
-      throw E2eFailure('CLI peer register failed.');
+      throw E2eFailure(
+        'CLI peer register failed: ${redactor.redact(register.output)}',
+      );
     }
   }
 
@@ -358,11 +362,12 @@ class DesktopE2eRunner {
       'enabled': true,
       'runId': runId,
       'platform': peerConfig.platform.name,
-      'case': peerConfig.e2eCase.name,
+      'case': peerConfig.e2eCase.caseName,
       'service': <String, Object?>{
         'baseUrl': peerConfig.serviceBaseUrl,
         'userServiceUrl': peerConfig.userServiceUrl,
         'messageServiceUrl': peerConfig.messageServiceUrl,
+        'messageServiceWsUrl': peerConfig.messageServiceWsUrl,
         'mailServiceUrl': peerConfig.mailServiceUrl,
         'didDomain': peerConfig.didDomain,
         'anpServiceUrl': peerConfig.anpServiceUrl,
@@ -382,10 +387,23 @@ class DesktopE2eRunner {
         'home': cliHomeDir.path,
       },
       'app': <String, Object?>{'stateRoot': appStateRootDir.path},
+      'daemon': <String, Object?>{
+        'rustRepo': peerConfig.daemonRustRepo,
+        'binary': peerConfig.daemonBinary,
+        'stateRoot': peerConfig.daemonStateRoot,
+        'readyFile': peerConfig.daemonReadyFile,
+        'handle': peerConfig.daemonHandle,
+        'fakeHermesGatewayCommand': peerConfig.daemonFakeHermesGatewayCommand,
+      },
+      'messageAgent': <String, Object?>{
+        'enabled': peerConfig.messageAgentEnabled,
+        'runtimeProvider': peerConfig.messageAgentRuntimeProvider,
+        'processingScope': peerConfig.messageAgentProcessingScope,
+        'realBackend': peerConfig.messageAgentRealBackend,
+      },
     };
-    if (options.dryRun) {
+    if (options.dryRun && !options.prepareOnly) {
       _line('would write Flutter E2E run config: ${runConfigFile.path}');
-      return;
     }
     await runConfigFile.parent.create(recursive: true);
     await runConfigFile.writeAsString(
@@ -466,11 +484,11 @@ class DesktopE2eRunner {
     file.writeAsStringSync(
       encoder.convert(<String, Object?>{
         'status': succeeded ? 'success' : 'failed',
-        'scenario': _desktopCliPeerScenario,
+        'scenario': (config?.e2eCase ?? options.e2eCase).scenario,
         'caseIds': (config?.e2eCase ?? options.e2eCase).caseIds,
         'runId': runId,
         'platform': platform.name,
-        'case': (config?.e2eCase ?? options.e2eCase).name,
+        'case': (config?.e2eCase ?? options.e2eCase).caseName,
         'dryRun': options.dryRun,
         'prepareOnly': options.prepareOnly,
         'configPath': fileConfig.path == null ? null : '<redacted-config-path>',
@@ -480,12 +498,24 @@ class DesktopE2eRunner {
         if (config != null)
           'messageServiceUrl':
               config!.messageServiceUrl ?? config!.serviceBaseUrl,
+        if (config != null) 'messageServiceWsUrl': config!.messageServiceWsUrl,
         if (config != null) 'mailServiceUrl': config!.mailServiceUrl,
         if (config != null) 'anpServiceUrl': config!.anpServiceUrl,
         if (config != null) 'anpServiceDid': config!.anpServiceDid,
         if (config != null) 'didDomain': config!.didDomain,
         if (config != null) 'appHandle': config!.appHandle,
         if (config != null) 'cliHandle': config!.cliHandle,
+        if (config != null)
+          'daemonRustRepo': config!.daemonRustRepo == null
+              ? null
+              : '<redacted-daemon-repo>',
+        if (config != null)
+          'messageAgent': <String, Object?>{
+            'enabled': config!.messageAgentEnabled,
+            'runtimeProvider': config!.messageAgentRuntimeProvider,
+            'processingScope': config!.messageAgentProcessingScope,
+            'realBackend': config!.messageAgentRealBackend,
+          },
         'cliWorkspace': '<redacted-workspace>',
         'cliHome': '<redacted-home>',
         'appStateRoot': '<redacted-app-state>',
@@ -617,7 +647,8 @@ class DesktopCommandRunner {
       throw E2eFailure(
         redactor.redact(
           '$executable ${args.join(' ')} failed with code ${result.exitCode}.\n'
-          '$err',
+          'stdout:\n$out\n'
+          'stderr:\n$err',
         ),
       );
     }
@@ -709,13 +740,17 @@ Run the AWiki Me Desktop App + CLI peer E2E smoke.
 Usage:
   dart run tests/e2e/runner.dart --case smoke
   dart run tests/e2e/runner.dart --case full
+  dart run tests/e2e/runner.dart --case message-agent
 
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|full|direct|group|attachment|contacts
+  --case smoke|full|direct|group|attachment|contacts|message-agent
                                smoke runs local App/native checks. The other
-                               cases run real App+CLI peer flows.
+                               cases run real App+CLI peer flows. The
+                               message-agent case is the full UI acceptance
+                               gate for Message Agent; probes are only lower
+                               level helpers.
   --prepare-only               Prepare CLI peer but do not start Flutter test.
   --dry-run                    Print planned commands without side effects.
 ''');
@@ -735,9 +770,20 @@ class DesktopCliPeerConfig {
     required this.e2eCase,
     this.userServiceUrl,
     this.messageServiceUrl,
+    this.messageServiceWsUrl,
     this.mailServiceUrl,
     this.anpServiceUrl,
     this.anpServiceDid,
+    this.daemonRustRepo,
+    this.daemonBinary,
+    this.daemonStateRoot,
+    this.daemonReadyFile,
+    this.daemonHandle,
+    this.daemonFakeHermesGatewayCommand,
+    this.messageAgentEnabled = false,
+    this.messageAgentRuntimeProvider = 'hermes',
+    this.messageAgentProcessingScope = 'all_conversations',
+    this.messageAgentRealBackend = false,
   });
 
   final DesktopE2ePlatform platform;
@@ -751,9 +797,20 @@ class DesktopCliPeerConfig {
   final DesktopE2eCase e2eCase;
   final String? userServiceUrl;
   final String? messageServiceUrl;
+  final String? messageServiceWsUrl;
   final String? mailServiceUrl;
   final String? anpServiceUrl;
   final String? anpServiceDid;
+  final String? daemonRustRepo;
+  final String? daemonBinary;
+  final String? daemonStateRoot;
+  final String? daemonReadyFile;
+  final String? daemonHandle;
+  final String? daemonFakeHermesGatewayCommand;
+  final bool messageAgentEnabled;
+  final String messageAgentRuntimeProvider;
+  final String messageAgentProcessingScope;
+  final bool messageAgentRealBackend;
 
   static DesktopCliPeerConfig from(
     DesktopE2eOptions options,
@@ -810,11 +867,45 @@ class DesktopCliPeerConfig {
       e2eCase: options.e2eCase,
       userServiceUrl: fileConfig.userServiceUrl,
       messageServiceUrl: fileConfig.messageServiceUrl,
+      messageServiceWsUrl: fileConfig.messageServiceWsUrl,
       mailServiceUrl: fileConfig.mailServiceUrl,
       anpServiceUrl: fileConfig.anpServiceUrl,
       anpServiceDid: fileConfig.anpServiceDid,
+      daemonRustRepo: fileConfig.daemonRustRepo,
+      daemonBinary: fileConfig.daemonBinary,
+      daemonStateRoot: fileConfig.daemonStateRoot,
+      daemonReadyFile: fileConfig.daemonReadyFile,
+      daemonHandle: fileConfig.daemonHandle,
+      daemonFakeHermesGatewayCommand: fileConfig.daemonFakeHermesGatewayCommand,
+      messageAgentEnabled: _effectiveMessageAgentEnabled(
+        options,
+        fileConfig,
+        sourcePath,
+      ),
+      messageAgentRuntimeProvider:
+          fileConfig.messageAgentRuntimeProvider ?? 'hermes',
+      messageAgentProcessingScope:
+          fileConfig.messageAgentProcessingScope ?? 'all_conversations',
+      messageAgentRealBackend: fileConfig.messageAgentRealBackend ?? false,
     );
   }
+}
+
+bool _effectiveMessageAgentEnabled(
+  DesktopE2eOptions options,
+  DesktopE2eFileConfig fileConfig,
+  String sourcePath,
+) {
+  final configured = fileConfig.messageAgentEnabled;
+  if (options.e2eCase != DesktopE2eCase.messageAgent) {
+    return configured ?? false;
+  }
+  if (configured == false) {
+    throw E2eFailure(
+      'messageAgent.enabled must be true for --case message-agent in $sourcePath.',
+    );
+  }
+  return true;
 }
 
 class DesktopE2eFileConfig {
@@ -824,10 +915,21 @@ class DesktopE2eFileConfig {
     this.serviceBaseUrl,
     this.userServiceUrl,
     this.messageServiceUrl,
+    this.messageServiceWsUrl,
     this.mailServiceUrl,
     this.didDomain,
     this.anpServiceUrl,
     this.anpServiceDid,
+    this.daemonRustRepo,
+    this.daemonBinary,
+    this.daemonStateRoot,
+    this.daemonReadyFile,
+    this.daemonHandle,
+    this.daemonFakeHermesGatewayCommand,
+    this.messageAgentEnabled,
+    this.messageAgentRuntimeProvider,
+    this.messageAgentProcessingScope,
+    this.messageAgentRealBackend,
     this.otpPhone,
     this.otpCode,
     this.appHandle,
@@ -841,10 +943,21 @@ class DesktopE2eFileConfig {
       serviceBaseUrl = null,
       userServiceUrl = null,
       messageServiceUrl = null,
+      messageServiceWsUrl = null,
       mailServiceUrl = null,
       didDomain = null,
       anpServiceUrl = null,
       anpServiceDid = null,
+      daemonRustRepo = null,
+      daemonBinary = null,
+      daemonStateRoot = null,
+      daemonReadyFile = null,
+      daemonHandle = null,
+      daemonFakeHermesGatewayCommand = null,
+      messageAgentEnabled = null,
+      messageAgentRuntimeProvider = null,
+      messageAgentProcessingScope = null,
+      messageAgentRealBackend = null,
       otpPhone = null,
       otpCode = null,
       appHandle = null,
@@ -856,10 +969,21 @@ class DesktopE2eFileConfig {
   final String? serviceBaseUrl;
   final String? userServiceUrl;
   final String? messageServiceUrl;
+  final String? messageServiceWsUrl;
   final String? mailServiceUrl;
   final String? didDomain;
   final String? anpServiceUrl;
   final String? anpServiceDid;
+  final String? daemonRustRepo;
+  final String? daemonBinary;
+  final String? daemonStateRoot;
+  final String? daemonReadyFile;
+  final String? daemonHandle;
+  final String? daemonFakeHermesGatewayCommand;
+  final bool? messageAgentEnabled;
+  final String? messageAgentRuntimeProvider;
+  final String? messageAgentProcessingScope;
+  final bool? messageAgentRealBackend;
   final String? otpPhone;
   final String? otpCode;
   final String? appHandle;
@@ -880,6 +1004,8 @@ class DesktopE2eFileConfig {
     final appUser = _mapAt(accounts, 'appUser', optional: true);
     final cliUser = _mapAt(accounts, 'cliPeer', optional: true);
     final cliPeer = _mapAt(raw, 'cliPeer', optional: true);
+    final daemon = _mapAt(raw, 'daemon', optional: true);
+    final messageAgent = _mapAt(raw, 'messageAgent', optional: true);
     final otp = _mapAt(raw, 'otp', optional: true);
 
     final baseUrl = _stringAt(service, 'baseUrl');
@@ -899,10 +1025,30 @@ class DesktopE2eFileConfig {
       serviceBaseUrl: baseUrl,
       userServiceUrl: _stringAt(service, 'userServiceUrl'),
       messageServiceUrl: _stringAt(service, 'messageServiceUrl'),
+      messageServiceWsUrl: _stringAt(service, 'messageServiceWsUrl'),
       mailServiceUrl: _stringAt(service, 'mailServiceUrl'),
       didDomain: didDomain,
       anpServiceUrl: _stringAt(service, 'anpServiceUrl'),
       anpServiceDid: _stringAt(service, 'anpServiceDid'),
+      daemonRustRepo: _stringAt(daemon, 'rustRepo'),
+      daemonBinary: _resolveOptionalPath(root, _stringAt(daemon, 'binary')),
+      daemonStateRoot: _resolveOptionalPath(
+        root,
+        _stringAt(daemon, 'stateRoot'),
+      ),
+      daemonReadyFile: _resolveOptionalPath(
+        root,
+        _stringAt(daemon, 'readyFile'),
+      ),
+      daemonHandle: _stringAt(daemon, 'handle'),
+      daemonFakeHermesGatewayCommand: _stringAt(
+        daemon,
+        'fakeHermesGatewayCommand',
+      ),
+      messageAgentEnabled: _boolAt(messageAgent, 'enabled'),
+      messageAgentRuntimeProvider: _stringAt(messageAgent, 'runtimeProvider'),
+      messageAgentProcessingScope: _stringAt(messageAgent, 'processingScope'),
+      messageAgentRealBackend: _boolAt(messageAgent, 'realBackend'),
       otpPhone: otpPhone,
       otpCode: otpCode,
       appHandle: appHandle,
@@ -918,7 +1064,8 @@ enum DesktopE2eCase {
   direct(_desktopCliPeerDirectCaseIds),
   group(_desktopCliPeerGroupCaseIds),
   attachment(_desktopCliPeerAttachmentCaseIds),
-  contacts(_desktopCliPeerContactsCaseIds);
+  contacts(_desktopCliPeerContactsCaseIds),
+  messageAgent(_messageAgentCaseIds);
 
   const DesktopE2eCase(this.caseIds);
 
@@ -937,6 +1084,39 @@ enum DesktopE2eCase {
         'integration_test/desktop_cli_peer_attachment_test.dart',
       DesktopE2eCase.contacts =>
         'integration_test/desktop_cli_peer_contacts_test.dart',
+      DesktopE2eCase.messageAgent =>
+        'integration_test/message_agent_full_ui_test.dart',
+    };
+  }
+
+  String get caseName {
+    return switch (this) {
+      DesktopE2eCase.messageAgent => 'message-agent',
+      _ => name,
+    };
+  }
+
+  bool get requiresCliPeer => this != DesktopE2eCase.smoke;
+
+  String get reportScope {
+    return switch (this) {
+      DesktopE2eCase.smoke => 'smoke',
+      DesktopE2eCase.messageAgent => 'message-agent',
+      _ => 'desktop-cli-peer',
+    };
+  }
+
+  String get scenario {
+    return switch (this) {
+      DesktopE2eCase.messageAgent => _messageAgentScenario,
+      _ => _desktopCliPeerScenario,
+    };
+  }
+
+  String get runConfigPath {
+    return switch (this) {
+      DesktopE2eCase.messageAgent => _messageAgentRunConfigPath,
+      _ => _desktopCliPeerRunConfigPath,
     };
   }
 
@@ -960,9 +1140,14 @@ enum DesktopE2eCase {
       'people' ||
       'follow' ||
       'contact-only' => DesktopE2eCase.contacts,
+      'message-agent' ||
+      'message_agent' ||
+      'msgagent' ||
+      'im-agent' ||
+      'im_agent' => DesktopE2eCase.messageAgent,
       _ => throw E2eFailure(
         'Unsupported E2E case "$value". '
-        'Use smoke, full, direct, group, attachment, or contacts.',
+        'Use smoke, full, direct, group, attachment, contacts, or message-agent.',
       ),
     };
   }
@@ -1059,6 +1244,7 @@ bool _looksRecoverableForRegister(String output) {
   final lower = output.toLowerCase();
   return lower.contains('not found') ||
       lower.contains('handle_not_found') ||
+      lower.contains('not active') ||
       lower.contains('not_registered') ||
       lower.contains('not registered') ||
       lower.contains('404');
@@ -1071,6 +1257,23 @@ String? _stringAt(Map<String, Object?> map, String key) {
   }
   final string = value.toString().trim();
   return string.isEmpty ? null : string;
+}
+
+bool? _boolAt(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value == null) {
+    return null;
+  }
+  if (value is bool) {
+    return value;
+  }
+  final normalized = value.toString().trim().toLowerCase();
+  return switch (normalized) {
+    '' => null,
+    '1' || 'true' || 'yes' || 'on' => true,
+    '0' || 'false' || 'no' || 'off' => false,
+    _ => throw E2eFailure('$key must be a boolean value.'),
+  };
 }
 
 String _requiredConfig(String? value, String key, String sourcePath) {
@@ -1090,6 +1293,13 @@ String _resolvePath(Directory root, String path) {
     return value;
   }
   return '${root.path}/$value';
+}
+
+String? _resolveOptionalPath(Directory root, String? path) {
+  if (path == null) {
+    return null;
+  }
+  return _resolvePath(root, path);
 }
 
 String _takeValue(List<String> args, int index, String flag) {

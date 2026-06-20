@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
 import '../../application/models/app_session.dart';
+import '../../application/models/daemon_subkey_authorization_revoke_result.dart';
 import '../../application/models/app_thread_ref.dart';
 import '../../application/models/product_local_models.dart';
 import '../../application/ports/relationship_core_port.dart';
@@ -280,6 +281,17 @@ class AwikiImCoreMappers {
       displayName: status.displayName ?? _compactDid(status.peer),
       relationship: status.relationship ?? 'none',
       avatarUri: null,
+    );
+  }
+
+  DaemonSubkeyAuthorizationRevokeResult
+  daemonSubkeyAuthorizationRevokeResultFromCore(
+    core.DaemonSubkeyAuthorizationRevokeResult result,
+  ) {
+    return DaemonSubkeyAuthorizationRevokeResult(
+      userDid: result.userDid,
+      verificationMethod: result.verificationMethod,
+      updated: result.updated,
     );
   }
 

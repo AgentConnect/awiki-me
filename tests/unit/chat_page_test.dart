@@ -15,6 +15,7 @@ import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_list_page.dart';
@@ -3277,6 +3278,149 @@ void main() {
     expect(body.data, caption);
     expect(body.selectable, isFalse);
     expect(find.text(filename), findsOneWidget);
+  });
+
+  testWidgets('Message Agent 回收卡片展示状态和草稿确认，不显示 raw JSON', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'direct:did:human:bob',
+      displayName: 'Bob',
+      lastMessagePreview: 'hello',
+      lastMessageAt: DateTime(2026, 6, 19, 10, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:human:bob',
+    );
+    final message = ChatMessage(
+      localId: 'local_msg_1',
+      remoteId: 'msg_1',
+      threadId: conversation.threadId,
+      senderDid: 'did:human:bob',
+      receiverDid: session.did,
+      content: 'hello',
+      createdAt: DateTime(2026, 6, 19, 10, 0),
+      isMine: false,
+      sendState: MessageSendState.sent,
+    );
+    gateway
+      ..conversations = <ConversationSummary>[conversation]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
+        'did:human:bob': <ChatMessage>[
+          message,
+          ChatMessage(
+            localId: 'control-json',
+            remoteId: 'control-json',
+            threadId: conversation.threadId,
+            senderDid: 'did:agent:daemon',
+            receiverDid: session.did,
+            content: '{"schema":"awiki.message.sync.v1"}',
+            originalType: 'application/json',
+            payloadJson: '{"schema":"awiki.message.sync.v1"}',
+            createdAt: DateTime(2026, 6, 19, 10, 1),
+            isMine: false,
+            sendState: MessageSendState.sent,
+          ),
+        ],
+      };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          agentsProvider.overrideWith((ref) {
+            final controller = AgentsController(ref);
+            controller.state = const AgentsState(
+              agents: <AgentSummary>[
+                AgentSummary(
+                  agentDid: 'did:agent:daemon',
+                  kind: AgentKind.daemon,
+                  displayName: 'Message Daemon',
+                  activeState: 'active',
+                  latest: AgentLatestStatus(status: 'ready'),
+                ),
+                AgentSummary(
+                  agentDid: 'did:agent:runtime',
+                  kind: AgentKind.runtime,
+                  daemonAgentDid: 'did:agent:daemon',
+                  runtime: 'hermes',
+                  displayName: 'Hermes Message Agent',
+                  activeState: 'active',
+                  latest: AgentLatestStatus(status: 'ready'),
+                ),
+              ],
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await tester.pumpAndSettle();
+
+    expect(find.text('hello'), findsOneWidget);
+    expect(find.text('{"schema":"awiki.message.sync.v1"}'), findsNothing);
+
+    container
+        .read(chatThreadsProvider.notifier)
+        .applyMessageAgentControlPayload(const <String, Object?>{
+          'schema': 'awiki.message.sync.v1',
+          'sync_type': 'runtime_final',
+          'runtime_agent_did': 'did:agent:runtime',
+          'run_id': 'run_1',
+          'source_message_id': 'msg_1',
+          'source_conversation_id': 'direct:did:human:bob',
+          'state': 'finished',
+          'has_text': true,
+          'retention_class': 'hash_only',
+        });
+    container
+        .read(chatThreadsProvider.notifier)
+        .applyMessageAgentControlPayload(const <String, Object?>{
+          'schema': 'awiki.app.action.v1',
+          'action_id': 'act_draft',
+          'action': 'message.create_draft',
+          'state': 'requires_confirmation',
+          'runtime_agent_did': 'did:agent:runtime',
+          'run_id': 'run_1',
+          'source_message_id': 'msg_1',
+          'conversation_id': 'direct:did:human:bob',
+          'requires_confirmation': true,
+          'args': <String, Object?>{'draft_text': '收到，我会处理。'},
+        });
+    await tester.pumpAndSettle();
+
+    expect(find.text('消息 Agent 已完成处理'), findsOneWidget);
+    expect(find.text('已生成处理结果'), findsOneWidget);
+    expect(find.text('消息 Agent 生成了草稿'), findsOneWidget);
+    expect(find.text('收到，我会处理。'), findsOneWidget);
+    expect(find.text('使用草稿'), findsOneWidget);
+    expect(find.text('拒绝'), findsOneWidget);
+
+    await tester.tap(find.text('使用草稿'));
+    await tester.pumpAndSettle();
+
+    final input = tester.widget<CupertinoTextField>(
+      find.byType(CupertinoTextField),
+    );
+    expect(input.controller?.text, '收到，我会处理。');
+    expect(gateway.lastSentPayloadPeerDid, 'did:agent:daemon');
+    expect(gateway.lastSentPayload?['state'], appActionStateSucceeded);
+    expect(find.text('草稿已放入输入框'), findsOneWidget);
   });
 
   testWidgets('已删除智能体会话保留历史但禁用发送', (tester) async {
