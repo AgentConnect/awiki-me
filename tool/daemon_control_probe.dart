@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
@@ -30,6 +31,7 @@ Future<Map<String, Object?>> _run(List<String> args) async {
   final options = _parseOptions(args.skip(1).toList(growable: false));
   return switch (command) {
     'create-agent' => _createAgent(options),
+    'message-agent-bootstrap' => await _messageAgentBootstrap(options),
     'submit-task' => _submitTask(options),
     'parse-status' => await _parseStatus(options),
     'classify-payload' => await _classifyPayload(options),
@@ -47,6 +49,61 @@ Map<String, Object?> _createAgent(Map<String, String> options) {
     displayName: options['name'] ?? options['display-name'] ?? 'Hermes',
     handle: options['handle'],
     workspace: options['workspace'],
+  );
+  return <String, Object?>{'payload': payload};
+}
+
+Future<Map<String, Object?>> _messageAgentBootstrap(
+  Map<String, String> options,
+) async {
+  final controllerDid = _required(options, 'controller-did');
+  final daemonAgentDid = _required(options, 'daemon-agent-did');
+  final appInstanceId = _required(options, 'app-instance-id');
+  final runId = options['run-id'];
+  final userSubkeyPackage = UserSubkeyPackage(
+    userDid: controllerDid,
+    verificationMethod: _required(options, 'verification-method'),
+    publicKeyMultibase: _required(options, 'public-key-multibase'),
+    privateKeyPem: await _readPrivateKeyPem(options),
+    keyType: options['key-type'] ?? 'Multikey/Ed25519',
+    keyAlgorithm: options['key-algorithm'] ?? 'Ed25519',
+    privateKeyEncoding: options['private-key-encoding'] ?? 'pem',
+    allowedScopes:
+        _csvOption(options, 'allowed-scopes') ?? defaultMessageAgentScopes,
+  );
+  final envelope = DaemonBootstrapEnvelope(
+    bootstrapId: messageAgentBootstrapAttemptId(
+      userDid: controllerDid,
+      appInstanceId: appInstanceId,
+      runId: runId,
+    ),
+    idempotencyKey: messageAgentBootstrapAttemptIdempotencyKey(
+      userDid: controllerDid,
+      appInstanceId: appInstanceId,
+      runId: runId,
+    ),
+    appInstanceId: appInstanceId,
+    controllerDid: controllerDid,
+    userHandle: options['user-handle'],
+    runId: runId,
+    userSubkeyPackage: userSubkeyPackage,
+    desiredMessageAgent: DesiredMessageAgent(
+      ensureOnceKey: messageAgentEnsureOnceKey(
+        userDid: controllerDid,
+        appInstanceId: appInstanceId,
+      ),
+      runtimeRegistrationToken: options['runtime-registration-token'],
+    ),
+  );
+  final payload = await DaemonSecureBootstrapEncryptor().encrypt(
+    internalEnvelope: envelope,
+    recipientDaemonDid: daemonAgentDid,
+    recipientKey: DaemonBootstrapPublicKey(
+      keyId: _required(options, 'recipient-key-id'),
+      publicKeyB64u: _required(options, 'recipient-public-key-b64u'),
+      publicKeyMultibase: options['recipient-public-key-multibase'],
+      algorithm: options['recipient-key-algorithm'] ?? 'x25519',
+    ),
   );
   return <String, Object?>{'payload': payload};
 }
@@ -151,6 +208,13 @@ Map<String, String> _parseOptions(List<String> args) {
   return options;
 }
 
+Future<String> _readPrivateKeyPem(Map<String, String> options) async {
+  if (options.containsKey('private-key-pem-file')) {
+    return File(_required(options, 'private-key-pem-file')).readAsString();
+  }
+  return _required(options, 'private-key-pem');
+}
+
 Future<String> _readPayloadJson(Map<String, String> options) async {
   if (options.containsKey('json')) {
     return _required(options, 'json');
@@ -184,11 +248,24 @@ List<Object?> _list(Object? value) {
   return value is List ? value : const <Object?>[];
 }
 
+List<String>? _csvOption(Map<String, String> options, String name) {
+  final value = options[name]?.trim();
+  if (value == null || value.isEmpty) {
+    return null;
+  }
+  return value
+      .split(',')
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
+}
+
 const _usageLines = <String>[
   'daemon_control_probe.dart <command> [options]',
   '',
   'Commands:',
   '  create-agent --controller-did DID --registration-token TOKEN [--daemon-agent-did DID] [--runtime RUNTIME] [--name NAME] [--client-request-id ID] [--handle HANDLE] [--workspace PATH]',
+  '  message-agent-bootstrap --controller-did DID --daemon-agent-did DID --app-instance-id ID --verification-method DID#daemon-key-1 --public-key-multibase KEY --private-key-pem-file PATH --recipient-key-id DID#key-3 --recipient-public-key-b64u KEY [--runtime-registration-token TOKEN] [--run-id ID]',
   '  submit-task --runtime-agent-did DID --text TEXT [--command-id ID] [--task-id ID] [--conversation-id ID]',
   '  parse-status (--json JSON | --json-file PATH | --stdin)',
   '  classify-payload (--json JSON | --json-file PATH | --stdin)',
