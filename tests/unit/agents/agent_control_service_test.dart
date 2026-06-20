@@ -1,8 +1,11 @@
 import 'package:awiki_me/src/application/agent/agent_control_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/app_session.dart';
+import 'package:awiki_me/src/application/models/daemon_subkey_authorization_revoke_result.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
+import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/message_agent_binding_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
@@ -140,7 +143,10 @@ void main() {
       expect(bindings.lastDisabledMessageAgentDid, 'did:agent:message');
       expect(bindings.lastRevokedMessageAgentDid, isNull);
       expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
-      expect(messages.lastIdempotencyKey, 'message-agent-disable:did:agent:message');
+      expect(
+        messages.lastIdempotencyKey,
+        'message-agent-disable:did:agent:message',
+      );
       expect(messages.lastPayload?['command'], 'message_agent.binding.disable');
       final args = messages.lastPayload?['args'] as Map<String, Object?>;
       expect(args['message_agent_did'], 'did:agent:message');
@@ -150,42 +156,78 @@ void main() {
     },
   );
 
+  test('deleteMessageAgent pauses binding before runtime archive', () async {
+    final messages = _MessagesStub();
+    final bindings = _MessageAgentBindingsStub();
+    final service = DefaultAgentControlService(
+      inventory: _InventoryStub(),
+      messages: messages,
+      messageAgentBindings: bindings,
+    );
+
+    await service.deleteMessageAgent(
+      daemonAgentDid: 'did:agent:daemon',
+      messageAgentDid: 'did:agent:message',
+    );
+
+    expect(bindings.lastDisabledMessageAgentDid, 'did:agent:message');
+    expect(messages.payloads.map((payload) => payload['command']), [
+      'message_agent.binding.disable',
+      'runtime.agent.delete',
+    ]);
+    final deleteArgs = messages.payloads.last['args'] as Map<String, Object?>;
+    expect(deleteArgs['runtime_agent_did'], 'did:agent:message');
+  });
+
   test(
-    'deleteMessageAgent pauses binding before runtime archive',
+    'revokeMessageAgentAuthorization updates DID Document before service binding and daemon command',
     () async {
       final messages = _MessagesStub();
       final bindings = _MessageAgentBindingsStub();
+      final identities = _IdentityCoreStub();
       final service = DefaultAgentControlService(
         inventory: _InventoryStub(),
         messages: messages,
         messageAgentBindings: bindings,
+        identities: identities,
       );
 
-      await service.deleteMessageAgent(
+      final binding = await service.revokeMessageAgentAuthorization(
         daemonAgentDid: 'did:agent:daemon',
         messageAgentDid: 'did:agent:message',
       );
 
-      expect(bindings.lastDisabledMessageAgentDid, 'did:agent:message');
-      expect(messages.payloads.map((payload) => payload['command']), [
-        'message_agent.binding.disable',
-        'runtime.agent.delete',
-      ]);
-      final deleteArgs = messages.payloads.last['args'] as Map<String, Object?>;
-      expect(deleteArgs['runtime_agent_did'], 'did:agent:message');
+      expect(binding.status, 'revoked');
+      expect(bindings.calls, <String>['get_active', 'revoke:binding_1']);
+      expect(identities.calls, <String>['revoke:did:human:me']);
+      expect(bindings.lastRevokedBindingId, 'binding_1');
+      expect(bindings.lastRevokedMessageAgentDid, isNull);
+      expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
+      expect(
+        messages.lastIdempotencyKey,
+        'message-agent-revoke:did:agent:message',
+      );
+      expect(messages.lastPayload?['command'], 'message_agent.binding.disable');
+      final args = messages.lastPayload?['args'] as Map<String, Object?>;
+      expect(args['message_agent_did'], 'did:agent:message');
+      expect(args['runtime_agent_did'], 'did:agent:message');
+      expect(args['binding_id'], 'binding_1');
+      expect(args['lifecycle_action'], 'revoke');
     },
   );
 
   test(
-    'revokeMessageAgentAuthorization fails before local revoke command when service rejects',
+    'revokeMessageAgentAuthorization fails before binding revoke when DID update fails',
     () async {
       final messages = _MessagesStub();
-      final bindings = _MessageAgentBindingsStub()
-        ..revokeError = StateError('delegated_key_still_active');
+      final bindings = _MessageAgentBindingsStub();
+      final identities = _IdentityCoreStub()
+        ..revokeError = StateError('did_document_update_failed');
       final service = DefaultAgentControlService(
         inventory: _InventoryStub(),
         messages: messages,
         messageAgentBindings: bindings,
+        identities: identities,
       );
 
       await expectLater(
@@ -196,7 +238,37 @@ void main() {
         throwsStateError,
       );
 
-      expect(bindings.lastRevokedMessageAgentDid, 'did:agent:message');
+      expect(bindings.calls, <String>['get_active']);
+      expect(identities.calls, <String>['revoke:did:human:me']);
+      expect(bindings.lastRevokedMessageAgentDid, isNull);
+      expect(messages.payloads, isEmpty);
+    },
+  );
+
+  test(
+    'revokeMessageAgentAuthorization fails before daemon command when service still sees active delegated key',
+    () async {
+      final messages = _MessagesStub();
+      final bindings = _MessageAgentBindingsStub()
+        ..revokeError = StateError('delegated_key_still_active');
+      final identities = _IdentityCoreStub();
+      final service = DefaultAgentControlService(
+        inventory: _InventoryStub(),
+        messages: messages,
+        messageAgentBindings: bindings,
+        identities: identities,
+      );
+
+      await expectLater(
+        service.revokeMessageAgentAuthorization(
+          daemonAgentDid: 'did:agent:daemon',
+          messageAgentDid: 'did:agent:message',
+        ),
+        throwsStateError,
+      );
+
+      expect(bindings.calls, <String>['get_active', 'revoke:binding_1']);
+      expect(identities.calls, <String>['revoke:did:human:me']);
       expect(messages.payloads, isEmpty);
     },
   );
@@ -742,6 +814,7 @@ class _MessagesStub implements MessagingService {
 }
 
 class _MessageAgentBindingsStub implements MessageAgentBindingPort {
+  final List<String> calls = <String>[];
   String? lastDisabledBindingId;
   String? lastDisabledMessageAgentDid;
   String? lastRevokedBindingId;
@@ -750,6 +823,7 @@ class _MessageAgentBindingsStub implements MessageAgentBindingPort {
 
   @override
   Future<MessageAgentBinding?> getActiveBinding() async {
+    calls.add('get_active');
     return _binding(status: 'active');
   }
 
@@ -758,6 +832,7 @@ class _MessageAgentBindingsStub implements MessageAgentBindingPort {
     String? bindingId,
     String? messageAgentDid,
   }) async {
+    calls.add('disable:${bindingId ?? messageAgentDid}');
     lastDisabledBindingId = bindingId;
     lastDisabledMessageAgentDid = messageAgentDid;
     return _binding(
@@ -771,6 +846,7 @@ class _MessageAgentBindingsStub implements MessageAgentBindingPort {
     String? bindingId,
     String? messageAgentDid,
   }) async {
+    calls.add('revoke:${bindingId ?? messageAgentDid}');
     lastRevokedBindingId = bindingId;
     lastRevokedMessageAgentDid = messageAgentDid;
     final error = revokeError;
@@ -797,6 +873,90 @@ class _MessageAgentBindingsStub implements MessageAgentBindingPort {
       delegatedKeyVerificationMethod: 'did:human:me#daemon-key-1',
       status: status,
     );
+  }
+}
+
+class _IdentityCoreStub implements IdentityCorePort {
+  final List<String> calls = <String>[];
+  Object? revokeError;
+  String verificationMethod = 'did:human:me#daemon-key-1';
+
+  @override
+  Future<DaemonSubkeyAuthorizationRevokeResult> revokeDaemonSubkeyAuthorization(
+    String identityIdOrAlias,
+  ) async {
+    calls.add('revoke:$identityIdOrAlias');
+    final error = revokeError;
+    if (error != null) {
+      throw error;
+    }
+    return DaemonSubkeyAuthorizationRevokeResult(
+      userDid: 'did:human:me',
+      verificationMethod: verificationMethod,
+      updated: true,
+    );
+  }
+
+  @override
+  Future<AppSession?> defaultIdentity() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(
+    String identityIdOrAlias,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<AppSession>> listLocalIdentities() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(String identityIdOrAlias) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<AppSession> recoverHandle({
+    required String phone,
+    required String otp,
+    required String handle,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<AppSession> registerHandleWithEmail({
+    required String email,
+    required String handle,
+    String? inviteCode,
+    String? displayName,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<AppSession> registerHandleWithPhone({
+    required String phone,
+    required String otp,
+    required String handle,
+    String? inviteCode,
+    String? displayName,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<AppSession> resolveIdentity(String identityIdOrAlias) {
+    throw UnimplementedError();
   }
 }
 

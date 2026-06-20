@@ -13,6 +13,7 @@ import '../../domain/entities/agent/install_command.dart';
 import '../models/app_thread_ref.dart';
 import '../messaging_service.dart';
 import '../ports/agent_inventory_port.dart';
+import '../ports/identity_core_port.dart';
 import '../ports/message_agent_binding_port.dart';
 
 abstract interface class AgentControlService {
@@ -101,6 +102,7 @@ class DefaultAgentControlService implements AgentControlService {
     required AgentInventoryPort inventory,
     required MessagingService messages,
     MessageAgentBindingPort? messageAgentBindings,
+    IdentityCorePort? identities,
     String? downloadBaseUrl,
     AwikiEnvironmentConfig? environment,
     bool? agentImEnabled,
@@ -108,6 +110,7 @@ class DefaultAgentControlService implements AgentControlService {
          inventory: inventory,
          messages: messages,
          messageAgentBindings: messageAgentBindings,
+         identities: identities,
          environment: environment ?? AwikiEnvironmentConfig.fromEnvironment(),
          downloadBaseUrl: downloadBaseUrl,
          agentImEnabled: agentImEnabled,
@@ -117,12 +120,14 @@ class DefaultAgentControlService implements AgentControlService {
     required AgentInventoryPort inventory,
     required MessagingService messages,
     MessageAgentBindingPort? messageAgentBindings,
+    IdentityCorePort? identities,
     required AwikiEnvironmentConfig environment,
     String? downloadBaseUrl,
     bool? agentImEnabled,
   }) : _inventory = inventory,
        _messages = messages,
        _messageAgentBindings = messageAgentBindings,
+       _identities = identities,
        _environment = environment,
        _agentImEnabled = agentImEnabled ?? environment.agentImEnabled,
        downloadBaseUrl =
@@ -132,6 +137,7 @@ class DefaultAgentControlService implements AgentControlService {
   final AgentInventoryPort _inventory;
   final MessagingService _messages;
   final MessageAgentBindingPort? _messageAgentBindings;
+  final IdentityCorePort? _identities;
   final AwikiEnvironmentConfig _environment;
   final bool _agentImEnabled;
   final String downloadBaseUrl;
@@ -415,9 +421,24 @@ class DefaultAgentControlService implements AgentControlService {
     required String daemonAgentDid,
     required String messageAgentDid,
   }) async {
-    final binding = await _requireMessageAgentBindings().revokeBinding(
-      messageAgentDid: messageAgentDid,
-    );
+    final bindings = _requireMessageAgentBindings();
+    final activeBinding = await bindings.getActiveBinding();
+    if (activeBinding == null) {
+      throw StateError('Message Agent binding is not active.');
+    }
+    if (activeBinding.daemonAgentDid != daemonAgentDid ||
+        activeBinding.messageAgentDid != messageAgentDid) {
+      throw StateError('Message Agent binding does not match selected daemon.');
+    }
+    final revokeResult = await _requireIdentities()
+        .revokeDaemonSubkeyAuthorization(activeBinding.userDid);
+    if (revokeResult.verificationMethod !=
+        activeBinding.delegatedKeyVerificationMethod) {
+      throw StateError(
+        'DID Document update removed a different delegated key.',
+      );
+    }
+    final binding = await bindings.revokeBinding(bindingId: activeBinding.id);
     await _sendDaemonPayload(
       daemonAgentDid,
       messageAgentBindingDisablePayload(
@@ -482,6 +503,14 @@ class DefaultAgentControlService implements AgentControlService {
       throw StateError('Message Agent binding service is unavailable.');
     }
     return bindings;
+  }
+
+  IdentityCorePort _requireIdentities() {
+    final identities = _identities;
+    if (identities == null) {
+      throw StateError('Identity service is unavailable.');
+    }
+    return identities;
   }
 }
 

@@ -128,14 +128,17 @@ class AwikiMeApp extends StatelessWidget {
             final control = bootstrap.agentControlService!;
             if (control is DefaultAgentControlService &&
                 bootstrap.messagingService != null) {
-              final messageAgentBindings = bootstrap.messageAgentBindingPort ==
-                      null
+              final messageAgentBindings =
+                  bootstrap.messageAgentBindingPort == null
                   ? null
                   : ref.watch(messageAgentBindingPortProvider);
               return DefaultAgentControlService(
                 inventory: ref.watch(agentInventoryPortProvider),
                 messages: bootstrap.messagingService!,
                 messageAgentBindings: messageAgentBindings,
+                identities: bootstrap.identityCorePort == null
+                    ? null
+                    : ref.watch(identityCorePortProvider),
                 downloadBaseUrl: control.downloadBaseUrl,
               );
             }

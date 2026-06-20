@@ -155,6 +155,7 @@ class AppBootstrap {
       inventory: agentInventoryPort,
       messages: messagingService,
       messageAgentBindings: messageAgentBindingPort,
+      identities: identityAdapter,
     );
     final agentControlStatusStore = AwikiImCoreAgentControlStatusStore(
       sqlitePath: runtime.paths.sqlitePath,

@@ -1,6 +1,21 @@
 import 'package:awiki_me/src/app/awiki_me_app.dart';
+import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/agent/agent_control_service.dart';
+import 'package:awiki_me/src/application/messaging_service.dart';
+import 'package:awiki_me/src/application/models/app_session.dart';
+import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/attachment_models.dart';
+import 'package:awiki_me/src/application/models/daemon_subkey_authorization_revoke_result.dart';
+import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
+import 'package:awiki_me/src/application/ports/identity_core_port.dart';
+import 'package:awiki_me/src/application/ports/message_agent_binding_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
+import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
+import 'package:awiki_me/src/domain/entities/agent/message_agent_binding.dart';
+import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
@@ -48,6 +63,17 @@ void main() {
     final control =
         harness.bootstrap.agentControlService!
             as test_support.FakeAgentControlService;
+    final inventory = _UiAgentInventoryPort(() => control.agents);
+    final bindings = _UiMessageAgentBindingPort();
+    final identities = _UiIdentityCorePort();
+    final messages = _UiMessagingService();
+    final realControl = DefaultAgentControlService(
+      inventory: inventory,
+      messages: messages,
+      messageAgentBindings: bindings,
+      identities: identities,
+      agentImEnabled: true,
+    );
     control.agents = const <AgentSummary>[
       AgentSummary(
         agentDid: 'did:test:daemon:message',
@@ -86,6 +112,11 @@ void main() {
           providerOverrides: <Override>[
             ...harness.providerOverrides,
             agentImEnabledProvider.overrideWithValue(true),
+            agentInventoryPortProvider.overrideWithValue(inventory),
+            messageAgentBindingPortProvider.overrideWithValue(bindings),
+            identityCorePortProvider.overrideWithValue(identities),
+            messagingServiceProvider.overrideWithValue(messages),
+            agentControlServiceProvider.overrideWithValue(realControl),
           ],
         ),
       );
@@ -119,11 +150,9 @@ void main() {
       await tester.tap(find.text('启用消息处理 Agent'));
       await _pumpFrame(tester);
 
-      expect(control.lastBootstrapDaemonDid, 'did:test:daemon:message');
-      expect(control.lastBootstrapControllerDid, 'did:test:me');
       expect(
-        control.lastBootstrapDaemonPublicKey?.keyId,
-        'did:test:daemon:message#key-3',
+        messages.lastIdempotencyKey,
+        startsWith('message-agent-bootstrap:'),
       );
 
       await tester.tap(find.text('暂停处理消息'));
@@ -134,11 +163,7 @@ void main() {
       );
       await tester.tap(find.text('暂停'));
       await _pumpFrame(tester);
-      expect(
-        control.lastPausedMessageAgentDaemonDid,
-        'did:test:daemon:message',
-      );
-      expect(control.lastPausedMessageAgentDid, 'did:test:agent:message');
+      expect(messages.lastPayload?['command'], 'message_agent.binding.disable');
 
       await tester.tap(find.text('删除消息处理 Agent'));
       await _pumpFrame(tester);
@@ -156,21 +181,29 @@ void main() {
       );
       await _pumpFrame(tester);
       expect(
-        control.lastDeletedMessageAgentDaemonDid,
-        'did:test:daemon:message',
+        messages.payloads.map((payload) => payload['command']),
+        contains('runtime.agent.delete'),
       );
-      expect(control.lastDeletedMessageAgentDid, 'did:test:agent:message');
 
+      bindings.calls.clear();
+      identities.calls.clear();
+      messages.resetRecordedPayloads();
       await tester.tap(find.text('撤销 Daemon 消息授权'));
       await _pumpFrame(tester);
       expect(find.textContaining('签名 DID Document 更新'), findsOneWidget);
       await tester.tap(find.text('撤销授权'));
       await _pumpFrame(tester);
+      expect(identities.calls, <String>['revoke:did:test:me']);
+      expect(bindings.calls, <String>['get_active', 'revoke:binding_1']);
+      expect(messages.lastPayload?['command'], 'message_agent.binding.disable');
       expect(
-        control.lastRevokedMessageAgentDaemonDid,
-        'did:test:daemon:message',
+        messages.lastIdempotencyKey,
+        'message-agent-revoke:did:test:agent:message',
       );
-      expect(control.lastRevokedMessageAgentDid, 'did:test:agent:message');
+      final revokeArgs = messages.lastPayload?['args'] as Map<String, Object?>;
+      expect(revokeArgs['binding_id'], 'binding_1');
+      expect(revokeArgs['message_agent_did'], 'did:test:agent:message');
+      expect(revokeArgs['lifecycle_action'], 'revoke');
     } finally {
       debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);
@@ -307,6 +340,296 @@ void main() {
       }
     },
   );
+}
+
+class _UiAgentInventoryPort implements AgentInventoryPort {
+  _UiAgentInventoryPort(this._agents);
+
+  final List<AgentSummary> Function() _agents;
+
+  @override
+  Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
+    return _agents();
+  }
+
+  @override
+  Future<AgentRegistrationToken> issueDaemonToken({
+    required String controllerDid,
+    required String clientPlatform,
+    String? handle,
+  }) async {
+    return const AgentRegistrationToken(token: 'daemon-token');
+  }
+
+  @override
+  Future<AgentRegistrationToken> issueRuntimeToken({
+    required String controllerDid,
+    required String daemonAgentDid,
+    required String runtime,
+    required String handle,
+    required String displayName,
+  }) async {
+    return const AgentRegistrationToken(token: 'runtime-token');
+  }
+
+  @override
+  Future<AgentInvocationPolicy> getInvocationPolicy({
+    required String agentDid,
+  }) async {
+    return const AgentInvocationPolicy();
+  }
+
+  @override
+  Future<AgentInvocationPolicy> updateInvocationPolicy({
+    required String agentDid,
+    required AgentInvocationPolicy policy,
+  }) async {
+    return policy;
+  }
+
+  @override
+  Future<void> unbindAgent({required String agentDid}) async {}
+
+  @override
+  Future<AgentSummary> updateDisplayName({
+    required String agentDid,
+    required String displayName,
+  }) async {
+    return AgentSummary(
+      agentDid: agentDid,
+      kind: AgentKind.daemon,
+      displayName: displayName,
+      activeState: 'active',
+      latest: const AgentLatestStatus(status: 'ready'),
+    );
+  }
+}
+
+class _UiMessageAgentBindingPort implements MessageAgentBindingPort {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<MessageAgentBinding?> getActiveBinding() async {
+    calls.add('get_active');
+    return const MessageAgentBinding(
+      id: 'binding_1',
+      userDid: 'did:test:me',
+      daemonAgentDid: 'did:test:daemon:message',
+      messageAgentDid: 'did:test:agent:message',
+      runtimeProvider: 'hermes',
+      runtimeProfile: <String, Object?>{'profile': 'message_agent'},
+      delegatedKeyVerificationMethod: 'did:test:me#daemon-key-1',
+      status: 'active',
+    );
+  }
+
+  @override
+  Future<MessageAgentBinding> disableBinding({
+    String? bindingId,
+    String? messageAgentDid,
+  }) async {
+    calls.add('disable:${bindingId ?? messageAgentDid}');
+    return const MessageAgentBinding(
+      id: 'binding_1',
+      userDid: 'did:test:me',
+      daemonAgentDid: 'did:test:daemon:message',
+      messageAgentDid: 'did:test:agent:message',
+      runtimeProvider: 'hermes',
+      runtimeProfile: <String, Object?>{'profile': 'message_agent'},
+      delegatedKeyVerificationMethod: 'did:test:me#daemon-key-1',
+      status: 'disabled',
+    );
+  }
+
+  @override
+  Future<MessageAgentBinding> revokeBinding({
+    String? bindingId,
+    String? messageAgentDid,
+  }) async {
+    calls.add('revoke:${bindingId ?? messageAgentDid}');
+    return const MessageAgentBinding(
+      id: 'binding_1',
+      userDid: 'did:test:me',
+      daemonAgentDid: 'did:test:daemon:message',
+      messageAgentDid: 'did:test:agent:message',
+      runtimeProvider: 'hermes',
+      runtimeProfile: <String, Object?>{'profile': 'message_agent'},
+      delegatedKeyVerificationMethod: 'did:test:me#daemon-key-1',
+      status: 'revoked',
+    );
+  }
+}
+
+class _UiIdentityCorePort implements IdentityCorePort {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<DaemonSubkeyAuthorizationRevokeResult> revokeDaemonSubkeyAuthorization(
+    String identityIdOrAlias,
+  ) async {
+    calls.add('revoke:$identityIdOrAlias');
+    return const DaemonSubkeyAuthorizationRevokeResult(
+      userDid: 'did:test:me',
+      verificationMethod: 'did:test:me#daemon-key-1',
+      updated: true,
+    );
+  }
+
+  @override
+  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(
+    String identityIdOrAlias,
+  ) async {
+    return const UserSubkeyPackage(
+      userDid: 'did:test:me',
+      verificationMethod: 'did:test:me#daemon-key-1',
+      publicKeyMultibase: 'zPublic',
+      privateKeyMultibase: 'zPrivate',
+    );
+  }
+
+  @override
+  Future<AppSession?> defaultIdentity() async => const AppSession(
+    did: 'did:test:me',
+    identityId: 'default',
+    displayName: 'Me',
+    localAlias: 'default',
+  );
+
+  @override
+  Future<List<AppSession>> listLocalIdentities() async => <AppSession>[
+    (await defaultIdentity())!,
+  ];
+
+  @override
+  Future<UserSubkeyPackage> loadDaemonSubkeyPackage(String identityIdOrAlias) {
+    return ensureDaemonSubkeyPackage(identityIdOrAlias);
+  }
+
+  @override
+  Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<AppSession> recoverHandle({
+    required String phone,
+    required String otp,
+    required String handle,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<AppSession> registerHandleWithEmail({
+    required String email,
+    required String handle,
+    String? inviteCode,
+    String? displayName,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<AppSession> registerHandleWithPhone({
+    required String phone,
+    required String otp,
+    required String handle,
+    String? inviteCode,
+    String? displayName,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<AppSession> resolveIdentity(String identityIdOrAlias) async {
+    return (await defaultIdentity())!;
+  }
+}
+
+class _UiMessagingService implements MessagingService {
+  final List<Map<String, Object?>> payloads = <Map<String, Object?>>[];
+  Map<String, Object?>? lastPayload;
+  String? lastIdempotencyKey;
+
+  void resetRecordedPayloads() {
+    payloads.clear();
+    lastPayload = null;
+    lastIdempotencyKey = null;
+  }
+
+  @override
+  Future<ChatMessage> sendPayload({
+    required AppThreadRef thread,
+    required Map<String, Object?> payload,
+    bool secure = true,
+    String? idempotencyKey,
+  }) async {
+    payloads.add(payload);
+    lastPayload = payload;
+    lastIdempotencyKey = idempotencyKey;
+    return ChatMessage(
+      localId: 'payload_1',
+      threadId: thread.stableId,
+      senderDid: 'did:test:me',
+      receiverDid: thread is AppDirectThreadRef ? thread.peerDidOrHandle : null,
+      content: '',
+      createdAt: DateTime(2026, 6, 20),
+      isMine: true,
+      sendState: MessageSendState.sent,
+    );
+  }
+
+  @override
+  Future<AttachmentDownloadResult> downloadAttachment({
+    required AppThreadRef thread,
+    required String messageId,
+    String? attachmentId,
+    String? localPath,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<ChatMessage>> loadHistory(
+    AppThreadRef thread, {
+    int limit = 100,
+    String? cursor,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ChatMessage> sendAttachment({
+    required AppThreadRef thread,
+    required AttachmentDraft attachment,
+    String? caption,
+    String? idempotencyKey,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ChatMessage> sendMentionText({
+    required AppThreadRef thread,
+    required String text,
+    required List<ChatMentionDraft> mentions,
+    String? idempotencyKey,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ChatMessage> sendText({
+    required AppThreadRef thread,
+    required String content,
+  }) {
+    throw UnimplementedError();
+  }
 }
 
 Future<void> _pumpFrame(WidgetTester tester) async {

@@ -1,6 +1,7 @@
 import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/models/app_auth_state.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
+import 'package:awiki_me/src/application/models/daemon_subkey_authorization_revoke_result.dart';
 import 'package:awiki_me/src/application/ports/auth_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/im_core_runtime_port.dart';
@@ -292,7 +293,16 @@ class _FakeIdentities implements IdentityCorePort {
   }
 
   @override
-  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(String identityIdOrAlias) {
+  Future<UserSubkeyPackage> ensureDaemonSubkeyPackage(
+    String identityIdOrAlias,
+  ) {
+    throw UnsupportedError('unsupported');
+  }
+
+  @override
+  Future<DaemonSubkeyAuthorizationRevokeResult> revokeDaemonSubkeyAuthorization(
+    String identityIdOrAlias,
+  ) {
     throw UnsupportedError('unsupported');
   }
 

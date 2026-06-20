@@ -7,6 +7,7 @@ import 'package:awiki_me/src/application/agent/agent_control_service.dart';
 import 'package:awiki_me/src/application/attachment_cache_service.dart';
 import 'package:awiki_me/src/application/attachment_picker_service.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
+import 'package:awiki_me/src/application/models/daemon_subkey_authorization_revoke_result.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/group_application_service.dart';
@@ -2180,6 +2181,7 @@ class FakeIdentityCorePort implements IdentityCorePort {
   final AppSession defaultSession;
   String? lastDaemonSubkeySelector;
   String? lastEnsuredDaemonSubkeySelector;
+  String? lastRevokedDaemonSubkeySelector;
 
   @override
   Future<AppSession?> defaultIdentity() async => defaultSession;
@@ -2203,6 +2205,18 @@ class FakeIdentityCorePort implements IdentityCorePort {
   ) async {
     lastEnsuredDaemonSubkeySelector = identityIdOrAlias;
     return daemonSubkeyPackage;
+  }
+
+  @override
+  Future<DaemonSubkeyAuthorizationRevokeResult> revokeDaemonSubkeyAuthorization(
+    String identityIdOrAlias,
+  ) async {
+    lastRevokedDaemonSubkeySelector = identityIdOrAlias;
+    return DaemonSubkeyAuthorizationRevokeResult(
+      userDid: daemonSubkeyPackage.userDid,
+      verificationMethod: daemonSubkeyPackage.verificationMethod,
+      updated: true,
+    );
   }
 
   @override

@@ -1,6 +1,7 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
 import '../../application/models/app_session.dart';
+import '../../application/models/daemon_subkey_authorization_revoke_result.dart';
 import '../../application/ports/identity_core_port.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
 import 'awiki_im_core_mappers.dart';
@@ -79,6 +80,30 @@ class AwikiImCoreIdentityAdapter implements IdentityCorePort {
       ),
     );
     return _mappers.userSubkeyPackageFromCore(package);
+  }
+
+  @override
+  Future<DaemonSubkeyAuthorizationRevokeResult> revokeDaemonSubkeyAuthorization(
+    String identityIdOrAlias,
+  ) async {
+    final coreInstance = await _runtime.coreInstance();
+    final selector = _selectorFromString(identityIdOrAlias);
+    try {
+      final result = await coreInstance.revokeDaemonSubkeyAuthorization(
+        selector,
+      );
+      return _mappers.daemonSubkeyAuthorizationRevokeResultFromCore(result);
+    } on core.AwikiImCoreException catch (error) {
+      if (!_shouldTryLocalAliasFallback(selector, error)) {
+        rethrow;
+      }
+    }
+    final result = await coreInstance.revokeDaemonSubkeyAuthorization(
+      core.IdentitySelector.localAlias(
+        _trimLeadingAt(identityIdOrAlias.trim()),
+      ),
+    );
+    return _mappers.daemonSubkeyAuthorizationRevokeResultFromCore(result);
   }
 
   @override
