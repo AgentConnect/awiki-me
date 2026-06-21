@@ -1427,6 +1427,11 @@ class _UiAgentInventoryPort implements AgentInventoryPort {
     required String runtime,
     required String handle,
     required String displayName,
+    String? driverId,
+    String? workspaceMode,
+    String? defaultSandbox,
+    String? defaultModel,
+    Map<String, Object?>? driverConfig,
   }) async {
     return const AgentRegistrationToken(token: 'runtime-token');
   }
