@@ -19,6 +19,7 @@ class AgentVisualStatus {
     AgentSummary? agent, {
     bool hasPendingTurn = false,
     bool isPendingUpgrade = false,
+    bool hasUpgradeError = false,
   }) {
     if (agent == null) {
       return const AgentVisualStatus(AgentVisualStatusKind.unknown);
@@ -34,6 +35,12 @@ class AgentVisualStatus {
       return const AgentVisualStatus(
         AgentVisualStatusKind.processing,
         rawStatus: 'upgrading',
+      );
+    }
+    if (agent.isDaemon && hasUpgradeError) {
+      return const AgentVisualStatus(
+        AgentVisualStatusKind.failed,
+        rawStatus: 'upgrade_failed',
       );
     }
     if (hasPendingTurn || agent.recentRuns.any(AgentVisualStatus.isActiveRun)) {

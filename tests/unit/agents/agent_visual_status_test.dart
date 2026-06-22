@@ -60,6 +60,21 @@ void main() {
     expect(status.rawStatus, 'upgrading');
   });
 
+  test('daemon upgrade error takes precedence over needs-upgrade latest', () {
+    const agent = AgentSummary(
+      agentDid: 'did:agent:daemon',
+      kind: AgentKind.daemon,
+      displayName: '代理 1',
+      activeState: 'active',
+      latest: AgentLatestStatus(status: 'needs_upgrade', needsUpgrade: true),
+    );
+
+    final status = AgentVisualStatus.fromAgent(agent, hasUpgradeError: true);
+
+    expect(status.kind, AgentVisualStatusKind.failed);
+    expect(status.rawStatus, 'upgrade_failed');
+  });
+
   test('pending daemon upgrade flag does not affect runtime health', () {
     const agent = AgentSummary(
       agentDid: 'did:agent:runtime',

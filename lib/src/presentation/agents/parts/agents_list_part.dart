@@ -218,6 +218,7 @@ class _AgentDaemonGroup extends StatelessWidget {
             agent: daemon,
             pendingAgentDids: pendingAgentDids,
             pendingDaemonUpgrades: state.pendingDaemonUpgrades,
+            daemonUpgradeErrors: state.daemonUpgradeErrors,
             selected: selectedAgentDid == daemon.agentDid,
             onTap: () => onSelect(daemon.agentDid),
             runtimeCount: runtimes.length + pendingRuntimeCreations.length,
@@ -235,6 +236,7 @@ class _AgentDaemonGroup extends StatelessWidget {
                 agent: runtime,
                 pendingAgentDids: pendingAgentDids,
                 pendingDaemonUpgrades: state.pendingDaemonUpgrades,
+                daemonUpgradeErrors: state.daemonUpgradeErrors,
                 selected: selectedAgentDid == runtime.agentDid,
                 onTap: () => onSelect(runtime.agentDid),
                 depth: 1,
@@ -452,6 +454,7 @@ class _AgentListTile extends StatelessWidget {
     required this.pendingDaemonUpgrades,
     required this.selected,
     required this.onTap,
+    this.daemonUpgradeErrors = const <String, String>{},
     this.depth = 0,
     this.runtimeCount,
     this.onRefresh,
@@ -461,6 +464,7 @@ class _AgentListTile extends StatelessWidget {
   final AgentSummary agent;
   final Set<String> pendingAgentDids;
   final Set<String> pendingDaemonUpgrades;
+  final Map<String, String> daemonUpgradeErrors;
   final bool selected;
   final VoidCallback onTap;
   final int depth;
@@ -473,10 +477,14 @@ class _AgentListTile extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final isChild = depth > 0;
     final title = AgentDisplayName.title(agent);
+    final daemonUpgradeError = daemonUpgradeErrors[agent.agentDid];
     final visualStatus = AgentVisualStatus.fromAgent(
       agent,
       hasPendingTurn: pendingAgentDids.contains(agent.agentDid),
       isPendingUpgrade: pendingDaemonUpgrades.contains(agent.agentDid),
+      hasUpgradeError: pendingDaemonUpgrades.contains(agent.agentDid)
+          ? false
+          : daemonUpgradeError != null,
     );
     return Padding(
       padding: EdgeInsets.only(
@@ -550,6 +558,10 @@ class _AgentListTile extends StatelessWidget {
                               agent,
                               runtimeCount,
                               visualStatus,
+                              isUpgrading: pendingDaemonUpgrades.contains(
+                                agent.agentDid,
+                              ),
+                              upgradeError: daemonUpgradeError,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -644,11 +656,18 @@ class _DaemonRefreshIconButton extends StatelessWidget {
 String _agentListSubtitle(
   AgentSummary agent,
   int? runtimeCount,
-  AgentVisualStatus visualStatus,
-) {
+  AgentVisualStatus visualStatus, {
+  bool isUpgrading = false,
+  String? upgradeError,
+}) {
   if (agent.isDaemon) {
     final count = runtimeCount ?? 0;
-    return 'Daemon · $count 个 Agent · ${visualStatus.label}';
+    final statusLabel = upgradeError != null
+        ? '升级失败'
+        : isUpgrading
+        ? '正在升级'
+        : visualStatus.label;
+    return 'Daemon · $count 个 Agent · $statusLabel';
   }
   final runtime = agent.runtime ?? 'Runtime';
   return '$runtime · ${visualStatus.label}';

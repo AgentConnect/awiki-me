@@ -651,6 +651,113 @@ void main() {
     },
   );
 
+  test('daemon upgrade failure keeps readable daemon-scoped error', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'needs_upgrade',
+            needsUpgrade: true,
+          ),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+
+    final started = await container
+        .read(agentsProvider.notifier)
+        .upgradeDaemon('did:agent:daemon');
+    expect(started, isTrue);
+
+    container.read(agentsProvider.notifier).applyControlPayload(<
+      String,
+      Object?
+    >{
+      'schema': AgentControlPayloads.statusSchema,
+      'state': 'failed',
+      'daemon_agent_did': 'did:agent:daemon',
+      'result': <String, Object?>{
+        'command': 'daemon.upgrade',
+        'daemon_agent_did': 'did:agent:daemon',
+        'error_code': 'upgrade_failed',
+        'last_error_summary':
+            'download daemon package https://anpclaw.com/daemon/releases/0.1.39/awiki-deamon-darwin-arm64.tar.gz: request timed out',
+      },
+    });
+
+    var state = container.read(agentsProvider);
+    expect(state.pendingDaemonUpgrades, isEmpty);
+    expect(
+      state.daemonUpgradeErrors['did:agent:daemon'],
+      contains('安装包下载失败，请检查网络后重试。'),
+    );
+    expect(
+      state.daemonUpgradeErrors['did:agent:daemon'],
+      contains('request timed out'),
+    );
+    expect(state.agents.single.latest.status, 'failed');
+
+    container.read(agentsProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'daemon_agent_did': 'did:agent:daemon',
+        'daemon': <String, Object?>{
+          'agent_did': 'did:agent:daemon',
+          'status': 'ready',
+          'version': '0.1.39',
+          'latest_version': '0.1.39',
+          'needs_upgrade': false,
+        },
+      },
+    );
+
+    state = container.read(agentsProvider);
+    expect(state.daemonUpgradeErrors, isEmpty);
+  });
+
+  test(
+    'status refresh timeout is suppressed while daemon upgrade is pending',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'needs_upgrade',
+              needsUpgrade: true,
+            ),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      final started = await container
+          .read(agentsProvider.notifier)
+          .upgradeDaemon('did:agent:daemon');
+      expect(started, isTrue);
+
+      await container
+          .read(agentsProvider.notifier)
+          .refreshDaemonStatus('did:agent:daemon');
+      container
+          .read(agentsProvider.notifier)
+          .handleStatusQueryTimeoutForTest('did:agent:daemon');
+
+      final state = container.read(agentsProvider);
+      expect(state.pendingDaemonUpgrades, contains('did:agent:daemon'));
+      expect(state.statusQueryErrors, isEmpty);
+    },
+  );
+
   test('deleteSelected sends runtime delete through owning daemon', () async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[

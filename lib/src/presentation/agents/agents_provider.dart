@@ -19,7 +19,7 @@ import '../app_shell/providers/session_provider.dart';
 import 'agent_display_name.dart';
 
 const agentStatusQueryTimeout = Duration(seconds: 10);
-const agentDaemonUpgradeTimeout = Duration(seconds: 45);
+const agentDaemonUpgradeTimeout = Duration(minutes: 6);
 const agentRuntimeCreationTimeout = Duration(seconds: 45);
 const agentStatusRefreshMinimumIndicatorDuration = Duration(milliseconds: 1500);
 
@@ -76,6 +76,7 @@ class AgentsState {
     this.savingInvocationPolicies = const <String>{},
     this.invocationPolicyErrors = const <String, String>{},
     this.statusQueryErrors = const <String, String>{},
+    this.daemonUpgradeErrors = const <String, String>{},
     this.pendingRuntimeCreations = const <PendingRuntimeCreation>[],
   });
 
@@ -93,6 +94,7 @@ class AgentsState {
   final Set<String> savingInvocationPolicies;
   final Map<String, String> invocationPolicyErrors;
   final Map<String, String> statusQueryErrors;
+  final Map<String, String> daemonUpgradeErrors;
   final List<PendingRuntimeCreation> pendingRuntimeCreations;
 
   AgentSummary? get selectedAgent {
@@ -164,6 +166,7 @@ class AgentsState {
     Set<String>? savingInvocationPolicies,
     Map<String, String>? invocationPolicyErrors,
     Map<String, String>? statusQueryErrors,
+    Map<String, String>? daemonUpgradeErrors,
     List<PendingRuntimeCreation>? pendingRuntimeCreations,
   }) {
     return AgentsState(
@@ -190,6 +193,7 @@ class AgentsState {
       invocationPolicyErrors:
           invocationPolicyErrors ?? this.invocationPolicyErrors,
       statusQueryErrors: statusQueryErrors ?? this.statusQueryErrors,
+      daemonUpgradeErrors: daemonUpgradeErrors ?? this.daemonUpgradeErrors,
       pendingRuntimeCreations:
           pendingRuntimeCreations ?? this.pendingRuntimeCreations,
     );
@@ -356,13 +360,16 @@ class AgentsController extends StateNotifier<AgentsState> {
           ? state.pendingStatusQueryAtByDaemon
           : _withoutKey(state.pendingStatusQueryAtByDaemon, daemonDid);
       if (!fromAutoLoad) {
+        final isUpgrading = state.pendingDaemonUpgrades.contains(daemonDid);
         state = state.copyWith(
           isActing: false,
           pendingStatusQueryAtByDaemon: nextPending,
-          statusQueryErrors: <String, String>{
-            ...state.statusQueryErrors,
-            daemonDid: _agentStatusRefreshErrorMessage(error),
-          },
+          statusQueryErrors: isUpgrading
+              ? state.statusQueryErrors
+              : <String, String>{
+                  ...state.statusQueryErrors,
+                  daemonDid: _agentStatusRefreshErrorMessage(error),
+                },
         );
       } else if (!identical(nextPending, state.pendingStatusQueryAtByDaemon)) {
         state = state.copyWith(pendingStatusQueryAtByDaemon: nextPending);
@@ -501,6 +508,11 @@ class AgentsController extends StateNotifier<AgentsState> {
         ...state.pendingDaemonUpgrades,
         daemonDid,
       },
+      daemonUpgradeErrors: _withoutStringKey(
+        state.daemonUpgradeErrors,
+        daemonDid,
+      ),
+      statusQueryErrors: _withoutStringKey(state.statusQueryErrors, daemonDid),
       isActing: true,
       clearError: true,
     );
@@ -516,6 +528,10 @@ class AgentsController extends StateNotifier<AgentsState> {
           state.pendingDaemonUpgrades,
           daemonDid,
         ),
+        daemonUpgradeErrors: <String, String>{
+          ...state.daemonUpgradeErrors,
+          daemonDid: _agentErrorMessage(error),
+        },
         error: _agentErrorMessage(error),
       );
       _daemonUpgradeTimeouts.remove(daemonDid)?.cancel();
@@ -716,12 +732,17 @@ class AgentsController extends StateNotifier<AgentsState> {
         _daemonUpgradeTimeouts.remove(daemonDid)?.cancel();
       }
     }
+    final nextDaemonUpgradeErrors = _daemonUpgradeErrorsAfterPayload(
+      payload,
+      daemonDid,
+    );
     state = state.copyWith(
       agents: merged,
       selectedAgentDid: _nextSelection(merged),
       pendingRuntimeCreations: pendingRuntimeCreations,
       pendingStatusQueryAtByDaemon: nextPending,
       pendingDaemonUpgrades: nextPendingDaemonUpgrades,
+      daemonUpgradeErrors: nextDaemonUpgradeErrors,
       statusQueryErrors: daemonDid == null
           ? state.statusQueryErrors
           : _withoutStringKey(state.statusQueryErrors, daemonDid),
@@ -750,21 +771,32 @@ class AgentsController extends StateNotifier<AgentsState> {
     _statusQueryTimeouts.remove(daemonDid)?.cancel();
     _statusQueryTimeouts[daemonDid] = Timer(agentStatusQueryTimeout, () {
       _statusQueryTimeouts.remove(daemonDid);
-      if (!mounted ||
-          !state.pendingStatusQueryAtByDaemon.containsKey(daemonDid)) {
-        return;
-      }
-      state = state.copyWith(
-        pendingStatusQueryAtByDaemon: _withoutKey(
-          state.pendingStatusQueryAtByDaemon,
-          daemonDid,
-        ),
-        statusQueryErrors: <String, String>{
-          ...state.statusQueryErrors,
-          daemonDid: '未收到代理响应，请稍后再刷新状态。',
-        },
-      );
+      _handleStatusQueryTimeout(daemonDid);
     });
+  }
+
+  void handleStatusQueryTimeoutForTest(String daemonDid) {
+    _statusQueryTimeouts.remove(daemonDid)?.cancel();
+    _handleStatusQueryTimeout(daemonDid);
+  }
+
+  void _handleStatusQueryTimeout(String daemonDid) {
+    if (!mounted ||
+        !state.pendingStatusQueryAtByDaemon.containsKey(daemonDid)) {
+      return;
+    }
+    state = state.copyWith(
+      pendingStatusQueryAtByDaemon: _withoutKey(
+        state.pendingStatusQueryAtByDaemon,
+        daemonDid,
+      ),
+      statusQueryErrors: state.pendingDaemonUpgrades.contains(daemonDid)
+          ? state.statusQueryErrors
+          : <String, String>{
+              ...state.statusQueryErrors,
+              daemonDid: '未收到代理响应，请稍后再刷新状态。',
+            },
+    );
   }
 
   void _scheduleDaemonUpgradeTimeout(String daemonDid) {
@@ -779,6 +811,10 @@ class AgentsController extends StateNotifier<AgentsState> {
           state.pendingDaemonUpgrades,
           daemonDid,
         ),
+        daemonUpgradeErrors: <String, String>{
+          ...state.daemonUpgradeErrors,
+          daemonDid: '升级仍未完成，请稍后刷新状态确认结果。',
+        },
       );
     });
   }
@@ -858,6 +894,38 @@ class AgentsController extends StateNotifier<AgentsState> {
       return _withoutSetValue(state.pendingDaemonUpgrades, daemonDid);
     }
     return state.pendingDaemonUpgrades;
+  }
+
+  Map<String, String> _daemonUpgradeErrorsAfterPayload(
+    Map<String, Object?> payload,
+    String? daemonDid,
+  ) {
+    if (daemonDid == null) {
+      return state.daemonUpgradeErrors;
+    }
+    final result = _readMap(payload['result']);
+    if (_string(result['command']) != 'daemon.upgrade') {
+      if (_daemonStatusShowsUpgradeResolved(payload)) {
+        return _withoutStringKey(state.daemonUpgradeErrors, daemonDid);
+      }
+      return state.daemonUpgradeErrors;
+    }
+    if (_isFinalDaemonUpgradeSuccess(payload, result)) {
+      return _withoutStringKey(state.daemonUpgradeErrors, daemonDid);
+    }
+    final payloadState = _string(payload['state'])?.toLowerCase();
+    final resultStatus = _string(result['status'])?.toLowerCase();
+    final failed =
+        payloadState == 'failed' ||
+        resultStatus == 'failed' ||
+        result['error_code'] != null;
+    if (!failed) {
+      return state.daemonUpgradeErrors;
+    }
+    return <String, String>{
+      ...state.daemonUpgradeErrors,
+      daemonDid: _daemonUpgradeFailureMessage(result),
+    };
   }
 
   void _scheduleStatusQueryClear(
@@ -1475,6 +1543,34 @@ bool _isFinalDaemonUpgradeSuccess(
       payloadState == 'succeeded' ||
       resultStatus == 'ready' ||
       resultStatus == 'succeeded';
+}
+
+String _daemonUpgradeFailureMessage(Map<String, Object?> result) {
+  final summary = _string(result['last_error_summary']);
+  if (summary == null) {
+    return '升级没有完成，请检查网络后重试。';
+  }
+  final normalized = summary.toLowerCase();
+  final looksLikeDownload =
+      normalized.contains('download daemon package') ||
+      normalized.contains('timed out') ||
+      normalized.contains('timeout') ||
+      normalized.contains('network') ||
+      normalized.contains('connection');
+  if (!looksLikeDownload) {
+    return summary;
+  }
+  return '安装包下载失败，请检查网络后重试。$summary';
+}
+
+bool _daemonStatusShowsUpgradeResolved(Map<String, Object?> payload) {
+  final daemon = _readMap(payload['daemon']);
+  if (daemon.isEmpty) {
+    return false;
+  }
+  final status = _string(daemon['status'])?.toLowerCase();
+  final needsUpgrade = daemon['needs_upgrade'];
+  return needsUpgrade == false && (status == null || status == 'ready');
 }
 
 Map<String, DateTime> _withoutKey(Map<String, DateTime> input, String key) {

@@ -46,9 +46,13 @@ class _AgentDetailPane extends StatelessWidget {
       agent,
       hasPendingTurn: pendingAgentDids.contains(agent.agentDid),
       isPendingUpgrade: isUpgrading,
+      hasUpgradeError: state.daemonUpgradeErrors.containsKey(agent.agentDid),
     );
     final statusQueryError = agent.isDaemon
         ? state.statusQueryErrors[agent.agentDid]
+        : null;
+    final upgradeError = agent.isDaemon
+        ? state.daemonUpgradeErrors[agent.agentDid]
         : null;
     return SafeArea(
       bottom: false,
@@ -149,6 +153,10 @@ class _AgentDetailPane extends StatelessWidget {
             if (statusQueryError != null) ...<Widget>[
               SizedBox(height: responsive.spacing(10)),
               _AgentErrorBanner(message: statusQueryError),
+            ],
+            if (upgradeError != null) ...<Widget>[
+              SizedBox(height: responsive.spacing(10)),
+              _AgentErrorBanner(message: upgradeError),
             ],
             SizedBox(height: responsive.spacing(18)),
             if (agent.isRuntime && agent.recentRuns.isNotEmpty) ...<Widget>[
