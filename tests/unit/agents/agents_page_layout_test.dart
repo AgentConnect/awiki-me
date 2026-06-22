@@ -309,6 +309,65 @@ void main() {
     },
   );
 
+  testWidgets(
+    'create Agent dialog scrolls generic CLI options on compact height',
+    (tester) async {
+      final control = _PendingRefreshAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            handle: 'awiki-daemon-test',
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: readyDaemonStatusWithGenericCliCapability,
+          ),
+        ];
+
+      tester.view.physicalSize = const Size(1200, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+          ),
+          providerOverrides: <Override>[
+            agentControlServiceProvider.overrideWithValue(control),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('创建 Agent'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Codex'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('agent-create-scroll-body')), findsOneWidget);
+      expect(find.text('工作目录策略'), findsOneWidget);
+      expect(find.text('权限模式'), findsOneWidget);
+
+      await tester.ensureVisible(
+        find.byKey(const Key('agent-create-handle-field')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('agent-create-name-field')), findsOneWidget);
+      expect(
+        find.byKey(const Key('agent-create-handle-field')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('create Agent dialog confirms workspace-write before submit', (
     tester,
   ) async {
