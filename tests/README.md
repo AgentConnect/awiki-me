@@ -29,3 +29,13 @@ change:
 If a required real E2E case cannot run yet, document the skipped case ID,
 blocker, owner, and follow-up in the relevant E2E docs or plan; do not count a
 skipped case as passing evidence.
+
+
+## Message Agent real-backend E2E note
+
+The real-backend `message-agent` flow intentionally waits until the local daemon
+has queued a runtime final for the CLI peer message before opening the App chat
+conversation. Opening the conversation can mark the message read in the live
+`awiki.info` inbox; the daemon currently consumes the delegated inbox as an
+unread processing queue, so the test must not mark the source message read before
+observing daemon-side processing.
