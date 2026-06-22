@@ -693,6 +693,74 @@ void main() {
   });
 
   test(
+    'deleteSelected unbinds daemon stuck in registering before first heartbeat',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:stale-daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'registering'),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      expect(
+        container
+            .read(agentsProvider)
+            .canDeleteAgent(container.read(agentsProvider).selectedAgent!),
+        isTrue,
+      );
+
+      await container.read(agentsProvider.notifier).deleteSelected();
+
+      expect(control.lastUnboundAgentDid, 'did:agent:stale-daemon');
+      expect(control.lastDeletedDaemonDid, isNull);
+      expect(container.read(agentsProvider).agents, isEmpty);
+      expect(container.read(agentsProvider).error, isNull);
+    },
+  );
+
+  test(
+    'deleteSelected does not unbind registering daemon after a heartbeat',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:registering-seen',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'registering',
+              lastSeenAt: DateTime.utc(2026, 6, 21, 10),
+            ),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      expect(
+        container
+            .read(agentsProvider)
+            .canDeleteAgent(container.read(agentsProvider).selectedAgent!),
+        isFalse,
+      );
+
+      await container.read(agentsProvider.notifier).deleteSelected();
+
+      expect(control.lastUnboundAgentDid, isNull);
+      expect(control.lastDeletedDaemonDid, isNull);
+      expect(container.read(agentsProvider).error, '代理当前不可达，暂时不能删除。');
+    },
+  );
+
+  test(
     'message Agent lifecycle actions target Hermes message runtime',
     () async {
       final control = FakeAgentControlService()
@@ -999,29 +1067,30 @@ void main() {
   test(
     'bootstrapMessageAgent keeps raw diagnostic error while showing friendly text',
     () async {
-      final control = _FailingBootstrapAgentControlService(
-        Exception('issue_token failed: invalid_handle hermes-msg-too-long'),
-      )..agents = const <AgentSummary>[
-          AgentSummary(
-            agentDid: 'did:agent:daemon',
-            kind: AgentKind.daemon,
-            displayName: '代理 1',
-            activeState: 'active',
-            latest: AgentLatestStatus(
-              status: 'ready',
-              diagnosticsSummary: <String, Object?>{
-                'bootstrap_key_id': 'did:agent:daemon#key-3',
-                'bootstrap_public_key_b64u':
-                    'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-                'bootstrap_key_algorithm': 'x25519',
-              },
-            ),
-          ),
-        ];
-      final container = _container(
-        control,
-        agentImEnabled: true,
-      );
+      final control =
+          _FailingBootstrapAgentControlService(
+              Exception(
+                'issue_token failed: invalid_handle hermes-msg-too-long',
+              ),
+            )
+            ..agents = const <AgentSummary>[
+              AgentSummary(
+                agentDid: 'did:agent:daemon',
+                kind: AgentKind.daemon,
+                displayName: '代理 1',
+                activeState: 'active',
+                latest: AgentLatestStatus(
+                  status: 'ready',
+                  diagnosticsSummary: <String, Object?>{
+                    'bootstrap_key_id': 'did:agent:daemon#key-3',
+                    'bootstrap_public_key_b64u':
+                        'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+                    'bootstrap_key_algorithm': 'x25519',
+                  },
+                ),
+              ),
+            ];
+      final container = _container(control, agentImEnabled: true);
       addTearDown(container.dispose);
 
       await container

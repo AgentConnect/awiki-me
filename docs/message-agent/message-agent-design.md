@@ -472,6 +472,11 @@ MVP 第一版至少要支持：
 - 「删除消息处理 Agent」：先停用，再 archive runtime。
 - 「撤销 Daemon 消息授权」：撤销 delegated key，影响该 daemon 后续读取消息。
 
+Daemon 本身的「删除代理」入口与 Message Agent 生命周期分开处理：
+
+- 正常已上线 daemon 通过 daemon control payload 执行自删除，避免 App 绕过运行端清理本地状态。
+- 如果 daemon 注册后从未完成首个心跳（`status = registering` 且 `last_seen_at = null`），App 允许直接调用 `unbind_agent` 清理这条未完成安装记录；这种记录没有可达 daemon，不能依赖 control payload 删除。
+
 ## MVP 范围约束
 
 第一版约束：
