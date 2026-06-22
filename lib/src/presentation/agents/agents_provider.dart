@@ -8,6 +8,7 @@ import '../../application/models/product_local_models.dart';
 import '../../core/app_error_classifier.dart';
 import '../../data/agent/user_service_agent_inventory_adapter.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
+import '../../domain/entities/agent/agent_command.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_summary.dart';
@@ -19,7 +20,45 @@ import 'agent_display_name.dart';
 
 const agentStatusQueryTimeout = Duration(seconds: 10);
 const agentDaemonUpgradeTimeout = Duration(seconds: 45);
+const agentRuntimeCreationTimeout = Duration(seconds: 45);
 const agentStatusRefreshMinimumIndicatorDuration = Duration(milliseconds: 1500);
+
+enum PendingRuntimeCreationState { creating, waitingForStatus }
+
+class PendingRuntimeCreation {
+  const PendingRuntimeCreation({
+    required this.requestId,
+    required this.daemonAgentDid,
+    required this.handle,
+    required this.displayName,
+    required this.runtime,
+    required this.createdAt,
+    this.state = PendingRuntimeCreationState.creating,
+  });
+
+  final String requestId;
+  final String daemonAgentDid;
+  final String handle;
+  final String displayName;
+  final String runtime;
+  final DateTime createdAt;
+  final PendingRuntimeCreationState state;
+
+  bool get isWaitingForStatus =>
+      state == PendingRuntimeCreationState.waitingForStatus;
+
+  PendingRuntimeCreation copyWith({PendingRuntimeCreationState? state}) {
+    return PendingRuntimeCreation(
+      requestId: requestId,
+      daemonAgentDid: daemonAgentDid,
+      handle: handle,
+      displayName: displayName,
+      runtime: runtime,
+      createdAt: createdAt,
+      state: state ?? this.state,
+    );
+  }
+}
 
 class AgentsState {
   const AgentsState({
@@ -37,6 +76,7 @@ class AgentsState {
     this.savingInvocationPolicies = const <String>{},
     this.invocationPolicyErrors = const <String, String>{},
     this.statusQueryErrors = const <String, String>{},
+    this.pendingRuntimeCreations = const <PendingRuntimeCreation>[],
   });
 
   final List<AgentSummary> agents;
@@ -53,6 +93,7 @@ class AgentsState {
   final Set<String> savingInvocationPolicies;
   final Map<String, String> invocationPolicyErrors;
   final Map<String, String> statusQueryErrors;
+  final List<PendingRuntimeCreation> pendingRuntimeCreations;
 
   AgentSummary? get selectedAgent {
     final selectedDid = selectedAgentDid;
@@ -73,6 +114,11 @@ class AgentsState {
   List<AgentSummary> runtimesFor(String daemonDid) => agents
       .where((agent) => agent.isRuntime && agent.daemonAgentDid == daemonDid)
       .toList();
+
+  List<PendingRuntimeCreation> pendingRuntimeCreationsFor(String daemonDid) =>
+      pendingRuntimeCreations
+          .where((item) => item.daemonAgentDid == daemonDid)
+          .toList();
 
   AgentSummary? daemonForRuntime(AgentSummary runtime) {
     final daemonDid = runtime.daemonAgentDid;
@@ -118,6 +164,7 @@ class AgentsState {
     Set<String>? savingInvocationPolicies,
     Map<String, String>? invocationPolicyErrors,
     Map<String, String>? statusQueryErrors,
+    List<PendingRuntimeCreation>? pendingRuntimeCreations,
   }) {
     return AgentsState(
       agents: agents ?? this.agents,
@@ -143,6 +190,8 @@ class AgentsState {
       invocationPolicyErrors:
           invocationPolicyErrors ?? this.invocationPolicyErrors,
       statusQueryErrors: statusQueryErrors ?? this.statusQueryErrors,
+      pendingRuntimeCreations:
+          pendingRuntimeCreations ?? this.pendingRuntimeCreations,
     );
   }
 }
@@ -154,6 +203,7 @@ class AgentsController extends StateNotifier<AgentsState> {
   final Map<String, Timer> _statusQueryTimeouts = <String, Timer>{};
   final Map<String, Timer> _statusQueryClearTimers = <String, Timer>{};
   final Map<String, Timer> _daemonUpgradeTimeouts = <String, Timer>{};
+  final Map<String, Timer> _runtimeCreationTimeouts = <String, Timer>{};
   Future<void>? _loadOperation;
   String? _loadedCacheOwner;
 
@@ -211,10 +261,12 @@ class AgentsController extends StateNotifier<AgentsState> {
       if (!_isCurrentCacheOwner(cacheOwner)) {
         return;
       }
+      final pendingRuntimeCreations = _pendingCreationsAfterAgents(agents);
       state = state.copyWith(
         agents: agents,
         selectedAgentDid: _nextSelection(agents),
         isLoading: false,
+        pendingRuntimeCreations: pendingRuntimeCreations,
         clearError: true,
       );
       _loadedCacheOwner = cacheOwner;
@@ -329,15 +381,52 @@ class AgentsController extends StateNotifier<AgentsState> {
       return;
     }
     await _act(() async {
-      await ref
-          .read(agentControlServiceProvider)
-          .createHermesRuntime(
-            daemonAgentDid: daemonDid,
-            controllerDid: session.did,
-            handle: handle,
-            displayName: displayName,
-          );
-      await load();
+      final requestId = agentCommandId('app_req');
+      final pending = PendingRuntimeCreation(
+        requestId: requestId,
+        daemonAgentDid: daemonDid,
+        handle: handle,
+        displayName: displayName,
+        runtime: 'hermes',
+        createdAt: DateTime.now().toUtc(),
+      );
+      _runtimeCreationTimeouts.remove(requestId)?.cancel();
+      state = state.copyWith(
+        pendingRuntimeCreations: _upsertPendingRuntimeCreation(
+          state.pendingRuntimeCreations,
+          pending,
+        ),
+        selectedAgentDid: daemonDid,
+        clearError: true,
+      );
+      _scheduleRuntimeCreationTimeout(requestId);
+      try {
+        await ref
+            .read(agentControlServiceProvider)
+            .createHermesRuntime(
+              daemonAgentDid: daemonDid,
+              controllerDid: session.did,
+              handle: handle,
+              displayName: displayName,
+              clientRequestId: requestId,
+            );
+      } catch (_) {
+        _runtimeCreationTimeouts.remove(requestId)?.cancel();
+        state = state.copyWith(
+          pendingRuntimeCreations: _removePendingRuntimeCreation(
+            state.pendingRuntimeCreations,
+            requestId,
+          ),
+        );
+        rethrow;
+      }
+      state = state.copyWith(
+        pendingRuntimeCreations: _markPendingRuntimeCreationWaiting(
+          state.pendingRuntimeCreations,
+          requestId,
+        ),
+      );
+      unawaited(load());
     });
   }
 
@@ -606,6 +695,12 @@ class AgentsController extends StateNotifier<AgentsState> {
       return;
     }
     final merged = _mergeControlPayload(state.agents, payload);
+    final pendingRuntimeCreations =
+        _pendingCreationsAfterControlPayloadAndAgents(
+          state.pendingRuntimeCreations,
+          payload,
+          merged,
+        );
     final daemonDid =
         _string(payload['daemon_agent_did']) ??
         _string(_readMap(payload['daemon'])['agent_did']);
@@ -624,6 +719,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     state = state.copyWith(
       agents: merged,
       selectedAgentDid: _nextSelection(merged),
+      pendingRuntimeCreations: pendingRuntimeCreations,
       pendingStatusQueryAtByDaemon: nextPending,
       pendingDaemonUpgrades: nextPendingDaemonUpgrades,
       statusQueryErrors: daemonDid == null
@@ -685,6 +781,25 @@ class AgentsController extends StateNotifier<AgentsState> {
         ),
       );
     });
+  }
+
+  void _scheduleRuntimeCreationTimeout(String requestId) {
+    _runtimeCreationTimeouts.remove(requestId)?.cancel();
+    _runtimeCreationTimeouts[requestId] = Timer(
+      agentRuntimeCreationTimeout,
+      () {
+        _runtimeCreationTimeouts.remove(requestId);
+        if (!mounted) {
+          return;
+        }
+        state = state.copyWith(
+          pendingRuntimeCreations: _markPendingRuntimeCreationWaiting(
+            state.pendingRuntimeCreations,
+            requestId,
+          ),
+        );
+      },
+    );
   }
 
   Map<String, DateTime> _pendingAfterStatusPayload(String? daemonDid) {
@@ -785,6 +900,10 @@ class AgentsController extends StateNotifier<AgentsState> {
       timer.cancel();
     }
     _daemonUpgradeTimeouts.clear();
+    for (final timer in _runtimeCreationTimeouts.values) {
+      timer.cancel();
+    }
+    _runtimeCreationTimeouts.clear();
   }
 
   Future<void> _loadCached(String ownerDid) async {
@@ -829,6 +948,9 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   bool _isCurrentCacheOwner(String ownerDid) {
+    if (!mounted) {
+      return false;
+    }
     final session = ref.read(sessionProvider).session;
     return session != null && _agentCacheOwner(session) == ownerDid;
   }
@@ -1044,6 +1166,45 @@ class AgentsController extends StateNotifier<AgentsState> {
       }
     }
     return _stableAgentOrder(byDid.values);
+  }
+
+  List<PendingRuntimeCreation> _pendingCreationsAfterAgents(
+    List<AgentSummary> agents,
+  ) {
+    return _pendingCreationsAfterControlPayloadAndAgents(
+      state.pendingRuntimeCreations,
+      const <String, Object?>{},
+      agents,
+    );
+  }
+
+  List<PendingRuntimeCreation> _pendingCreationsAfterControlPayloadAndAgents(
+    List<PendingRuntimeCreation> current,
+    Map<String, Object?> payload,
+    List<AgentSummary> agents,
+  ) {
+    final completedRequestIds = <String>{};
+    final result = _readMap(payload['result']);
+    if (_string(result['command']) == 'runtime.agent.create') {
+      final clientRequestId =
+          _string(result['client_request_id']) ??
+          _string(result['request_id']) ??
+          _string(_readMap(result['args'])['client_request_id']);
+      if (clientRequestId != null) {
+        completedRequestIds.add(clientRequestId);
+      }
+    }
+
+    final retained = <PendingRuntimeCreation>[];
+    for (final pending in current) {
+      if (completedRequestIds.contains(pending.requestId) ||
+          _hasMatchingRuntimeAgent(agents, pending)) {
+        _runtimeCreationTimeouts.remove(pending.requestId)?.cancel();
+        continue;
+      }
+      retained.add(pending);
+    }
+    return retained;
   }
 
   AgentSummary _mergeRuntimeRunStatus(
@@ -1344,6 +1505,84 @@ Set<String> _withoutSetValue(Set<String> input, String value) {
     for (final item in input)
       if (item != value) item,
   };
+}
+
+List<PendingRuntimeCreation> _upsertPendingRuntimeCreation(
+  List<PendingRuntimeCreation> input,
+  PendingRuntimeCreation pending,
+) {
+  return <PendingRuntimeCreation>[
+    for (final item in input)
+      if (item.requestId != pending.requestId &&
+          !_samePendingRuntimeTarget(item, pending))
+        item,
+    pending,
+  ];
+}
+
+List<PendingRuntimeCreation> _markPendingRuntimeCreationWaiting(
+  List<PendingRuntimeCreation> input,
+  String requestId,
+) {
+  var changed = false;
+  final next = <PendingRuntimeCreation>[
+    for (final item in input)
+      if (item.requestId == requestId)
+        () {
+          changed = true;
+          return item.copyWith(
+            state: PendingRuntimeCreationState.waitingForStatus,
+          );
+        }()
+      else
+        item,
+  ];
+  return changed ? next : input;
+}
+
+List<PendingRuntimeCreation> _removePendingRuntimeCreation(
+  List<PendingRuntimeCreation> input,
+  String requestId,
+) {
+  if (!input.any((item) => item.requestId == requestId)) {
+    return input;
+  }
+  return <PendingRuntimeCreation>[
+    for (final item in input)
+      if (item.requestId != requestId) item,
+  ];
+}
+
+bool _samePendingRuntimeTarget(
+  PendingRuntimeCreation left,
+  PendingRuntimeCreation right,
+) {
+  return left.daemonAgentDid == right.daemonAgentDid &&
+      _normalizedAgentHandle(left.handle) ==
+          _normalizedAgentHandle(right.handle);
+}
+
+bool _hasMatchingRuntimeAgent(
+  List<AgentSummary> agents,
+  PendingRuntimeCreation pending,
+) {
+  return agents.any((agent) {
+    if (!agent.isRuntime || agent.daemonAgentDid != pending.daemonAgentDid) {
+      return false;
+    }
+    final agentHandle = _normalizedAgentHandle(agent.handle);
+    final pendingHandle = _normalizedAgentHandle(pending.handle);
+    if (agentHandle != null && pendingHandle != null) {
+      return agentHandle == pendingHandle;
+    }
+    final agentName = agent.displayName.trim();
+    return agentName.isNotEmpty && agentName == pending.displayName.trim();
+  });
+}
+
+String? _normalizedAgentHandle(String? value) {
+  final text = value?.trim().toLowerCase();
+  return text == null || text.isEmpty ? null : text;
 }
 
 Map<String, Object?> _readMap(Object? value) {

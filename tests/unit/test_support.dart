@@ -1526,12 +1526,14 @@ class FakeAgentControlService implements AgentControlService {
   );
   String? lastRefreshedDaemonDid;
   String? lastRuntimeCreateDaemonDid;
+  String? lastRuntimeCreateControllerDid;
   String? lastBootstrapDaemonDid;
   String? lastBootstrapControllerDid;
   String? lastBootstrapAppInstanceId;
   UserSubkeyPackage? lastBootstrapUserSubkeyPackage;
   String? lastRuntimeCreateHandle;
   String? lastRuntimeCreateDisplayName;
+  String? lastRuntimeCreateClientRequestId;
   String? lastResetDaemonDid;
   String? lastResetRuntimeDid;
   String? lastRetryDaemonDid;
@@ -1577,10 +1579,13 @@ class FakeAgentControlService implements AgentControlService {
     required String controllerDid,
     required String handle,
     required String displayName,
+    String? clientRequestId,
   }) async {
     lastRuntimeCreateDaemonDid = daemonAgentDid;
+    lastRuntimeCreateControllerDid = controllerDid;
     lastRuntimeCreateHandle = handle;
     lastRuntimeCreateDisplayName = displayName;
+    lastRuntimeCreateClientRequestId = clientRequestId;
   }
 
   @override

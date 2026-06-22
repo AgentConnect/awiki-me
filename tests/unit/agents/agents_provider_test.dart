@@ -360,6 +360,73 @@ void main() {
   });
 
   test(
+    'createHermesRuntime shows pending creation until daemon result returns',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            handle: 'awiki-daemon-test',
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      await container
+          .read(agentsProvider.notifier)
+          .createHermesRuntime(
+            'did:agent:daemon',
+            handle: 'alice-hermes',
+            displayName: 'Alice Hermes',
+          );
+
+      final pending = container
+          .read(agentsProvider)
+          .pendingRuntimeCreations
+          .single;
+      expect(pending.daemonAgentDid, 'did:agent:daemon');
+      expect(pending.handle, 'alice-hermes');
+      expect(pending.displayName, 'Alice Hermes');
+      expect(pending.state, PendingRuntimeCreationState.waitingForStatus);
+      expect(control.lastRuntimeCreateDaemonDid, 'did:agent:daemon');
+      expect(control.lastRuntimeCreateControllerDid, 'did:human:me');
+      expect(control.lastRuntimeCreateClientRequestId, pending.requestId);
+
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'runtime',
+          'daemon_agent_did': 'did:agent:daemon',
+          'state': 'ready',
+          'result': <String, Object?>{
+            'command': 'runtime.agent.create',
+            'client_request_id': pending.requestId,
+            'runtime_agent_did': 'did:agent:runtime-new',
+            'daemon_agent_did': 'did:agent:daemon',
+            'runtime': 'hermes',
+            'handle': 'alice-hermes',
+            'display_name': 'Alice Hermes',
+          },
+        },
+      );
+
+      final state = container.read(agentsProvider);
+      expect(state.pendingRuntimeCreations, isEmpty);
+      final runtime = state.agents.singleWhere(
+        (agent) => agent.agentDid == 'did:agent:runtime-new',
+      );
+      expect(runtime.displayName, 'Alice Hermes');
+      expect(runtime.handle, 'alice-hermes');
+      expect(runtime.daemonAgentDid, 'did:agent:daemon');
+    },
+  );
+
+  test(
     'loads and saves invocation policy through agent control service',
     () async {
       final control = FakeAgentControlService()

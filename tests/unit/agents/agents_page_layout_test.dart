@@ -281,6 +281,9 @@ void main() {
       expect(control.lastRuntimeCreateDaemonDid, 'did:agent:daemon');
       expect(control.lastRuntimeCreateHandle, 'my-agent');
       expect(control.lastRuntimeCreateDisplayName, '写作助手');
+      expect(control.lastRuntimeCreateClientRequestId, isNotNull);
+      expect(find.text('写作助手'), findsWidgets);
+      expect(find.text('hermes · 创建状态暂未返回，可刷新查看'), findsOneWidget);
     },
   );
 

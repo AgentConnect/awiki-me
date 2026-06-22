@@ -28,6 +28,7 @@ void main() {
         controllerDid: 'did:human:me',
         handle: 'alice-hermes',
         displayName: 'Alice Hermes',
+        clientRequestId: 'app_req_test',
       );
 
       expect(inventory.runtimeTokenDaemonDid, 'did:agent:daemon');
@@ -43,6 +44,11 @@ void main() {
       expect(args['runtime'], 'hermes');
       expect(args['handle'], 'alice-hermes');
       expect(args['display_name'], 'Alice Hermes');
+      expect(args['client_request_id'], 'app_req_test');
+      expect(
+        messages.lastIdempotencyKey,
+        'runtime-create:did:agent:daemon:app_req_test',
+      );
     },
   );
 

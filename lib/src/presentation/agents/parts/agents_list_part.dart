@@ -112,7 +112,7 @@ class _AgentHierarchyList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selectedDid = state.selectedAgent?.agentDid;
-    final groups = _AgentTreeGroup.fromAgents(state.agents);
+    final groups = _AgentTreeGroup.fromState(state);
     return Column(
       children: <Widget>[
         for (final group in groups) ...<Widget>[
@@ -131,12 +131,18 @@ class _AgentHierarchyList extends StatelessWidget {
 }
 
 class _AgentTreeGroup {
-  const _AgentTreeGroup({required this.daemon, required this.runtimes});
+  const _AgentTreeGroup({
+    required this.daemon,
+    required this.runtimes,
+    required this.pendingRuntimeCreations,
+  });
 
   final AgentSummary? daemon;
   final List<AgentSummary> runtimes;
+  final List<PendingRuntimeCreation> pendingRuntimeCreations;
 
-  static List<_AgentTreeGroup> fromAgents(List<AgentSummary> agents) {
+  static List<_AgentTreeGroup> fromState(AgentsState state) {
+    final agents = state.agents;
     final daemons = agents.where((agent) => agent.isDaemon).toList();
     final groupedRuntimes = <String, List<AgentSummary>>{};
     final orphanRuntimes = <AgentSummary>[];
@@ -156,9 +162,16 @@ class _AgentTreeGroup {
         _AgentTreeGroup(
           daemon: daemon,
           runtimes: groupedRuntimes[daemon.agentDid] ?? const <AgentSummary>[],
+          pendingRuntimeCreations: state.pendingRuntimeCreationsFor(
+            daemon.agentDid,
+          ),
         ),
       if (orphanRuntimes.isNotEmpty)
-        _AgentTreeGroup(daemon: null, runtimes: orphanRuntimes),
+        _AgentTreeGroup(
+          daemon: null,
+          runtimes: orphanRuntimes,
+          pendingRuntimeCreations: const <PendingRuntimeCreation>[],
+        ),
     ];
   }
 }
@@ -185,6 +198,7 @@ class _AgentDaemonGroup extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final daemon = group.daemon;
     final runtimes = group.runtimes;
+    final pendingRuntimeCreations = group.pendingRuntimeCreations;
     if (daemon == null) {
       return Padding(
         padding: EdgeInsets.only(bottom: responsive.spacing(10)),
@@ -206,16 +220,16 @@ class _AgentDaemonGroup extends StatelessWidget {
             pendingDaemonUpgrades: state.pendingDaemonUpgrades,
             selected: selectedAgentDid == daemon.agentDid,
             onTap: () => onSelect(daemon.agentDid),
-            runtimeCount: runtimes.length,
+            runtimeCount: runtimes.length + pendingRuntimeCreations.length,
             onRefresh:
                 state.isActing || state.isStatusQueryPending(daemon.agentDid)
                 ? null
                 : () => onRefreshDaemon(daemon),
             isRefreshing: state.isStatusQueryPending(daemon.agentDid),
           ),
-          if (runtimes.isEmpty)
+          if (runtimes.isEmpty && pendingRuntimeCreations.isEmpty)
             _EmptyRuntimeHint()
-          else
+          else ...<Widget>[
             for (final runtime in runtimes)
               _AgentListTile(
                 agent: runtime,
@@ -225,6 +239,9 @@ class _AgentDaemonGroup extends StatelessWidget {
                 onTap: () => onSelect(runtime.agentDid),
                 depth: 1,
               ),
+            for (final pending in pendingRuntimeCreations)
+              _PendingRuntimeCreationTile(pending: pending),
+          ],
         ],
       ),
     );
@@ -314,6 +331,111 @@ class _EmptyRuntimeHint extends StatelessWidget {
                   color: const Color(0xFF66728A),
                   fontSize: responsive.metaSm,
                 ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingRuntimeCreationTile extends StatelessWidget {
+  const _PendingRuntimeCreationTile({required this.pending});
+
+  final PendingRuntimeCreation pending;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final waiting = pending.isWaitingForStatus;
+    final visualStatus = waiting
+        ? const AgentVisualStatus(AgentVisualStatusKind.unknown)
+        : const AgentVisualStatus(
+            AgentVisualStatusKind.processing,
+            rawStatus: 'creating',
+          );
+    return Padding(
+      padding: EdgeInsets.only(
+        left: responsive.spacing(30),
+        bottom: responsive.spacing(6),
+      ),
+      child: Row(
+        children: <Widget>[
+          SizedBox(
+            width: responsive.spacing(12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                width: 1,
+                height: responsive.displayScaled(50),
+                color: const Color(0xFFDDE5F0),
+              ),
+            ),
+          ),
+          SizedBox(width: responsive.spacing(8)),
+          Expanded(
+            child: Container(
+              padding: EdgeInsets.all(responsive.spacing(10)),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFAFBFE),
+                borderRadius: BorderRadius.circular(responsive.radius(8)),
+                border: Border.all(color: const Color(0xFFE8EDF5)),
+              ),
+              child: Row(
+                children: <Widget>[
+                  Container(
+                    width: responsive.displayScaled(28),
+                    height: responsive.displayScaled(28),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF7C4DFF).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(responsive.radius(8)),
+                    ),
+                    child: Center(
+                      child: waiting
+                          ? Icon(
+                              CupertinoIcons.clock,
+                              color: const Color(0xFF66728A),
+                              size: responsive.iconSm,
+                            )
+                          : CupertinoActivityIndicator(
+                              radius: responsive.displayScaled(7),
+                            ),
+                    ),
+                  ),
+                  SizedBox(width: responsive.spacing(10)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          pending.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: const Color(0xFF101B32),
+                            fontSize: responsive.bodySm,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SizedBox(height: responsive.spacing(3)),
+                        Text(
+                          waiting
+                              ? '${pending.runtime} · 创建状态暂未返回，可刷新查看'
+                              : '${pending.runtime} · 创建中',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: const Color(0xFF66728A),
+                            fontSize: responsive.metaSm,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(width: responsive.spacing(8)),
+                  AgentStatusDot(status: visualStatus),
+                ],
               ),
             ),
           ),

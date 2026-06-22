@@ -24,6 +24,7 @@ abstract interface class AgentControlService {
     required String controllerDid,
     required String handle,
     required String displayName,
+    String? clientRequestId,
   });
   Future<void> ensureMessageAgentBootstrap({
     required String daemonAgentDid,
@@ -160,6 +161,7 @@ class DefaultAgentControlService implements AgentControlService {
     required String controllerDid,
     required String handle,
     required String displayName,
+    String? clientRequestId,
   }) async {
     final token = await _inventory.issueRuntimeToken(
       controllerDid: controllerDid,
@@ -168,7 +170,7 @@ class DefaultAgentControlService implements AgentControlService {
       handle: handle,
       displayName: displayName,
     );
-    final requestId = agentCommandId('app_req');
+    final requestId = clientRequestId ?? agentCommandId('app_req');
     await _sendDaemonPayload(
       daemonAgentDid,
       runtimeAgentCreatePayload(
