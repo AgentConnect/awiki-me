@@ -41,6 +41,7 @@ Future<Map<String, Object?>> _run(List<String> args) async {
 }
 
 Map<String, Object?> _createAgent(Map<String, String> options) {
+  final driverConfig = _jsonObjectOption(options, 'driver-config-json');
   final payload = runtimeAgentCreatePayload(
     controllerDid: _required(options, 'controller-did'),
     registrationToken: _required(options, 'registration-token'),
@@ -49,6 +50,11 @@ Map<String, Object?> _createAgent(Map<String, String> options) {
     displayName: options['name'] ?? options['display-name'] ?? 'Hermes',
     handle: options['handle'],
     workspace: options['workspace'],
+    driverId: options['driver-id'],
+    workspaceMode: options['workspace-mode'],
+    defaultSandbox: options['default-sandbox'],
+    defaultModel: options['default-model'],
+    driverConfig: driverConfig,
   );
   return <String, Object?>{'payload': payload};
 }
@@ -260,11 +266,28 @@ List<String>? _csvOption(Map<String, String> options, String name) {
       .toList(growable: false);
 }
 
+Map<String, Object?>? _jsonObjectOption(
+  Map<String, String> options,
+  String name,
+) {
+  final value = options[name]?.trim();
+  if (value == null || value.isEmpty) {
+    return null;
+  }
+  final decoded = jsonDecode(value);
+  if (decoded is! Map) {
+    throw _UsageException('--$name must decode to a JSON object');
+  }
+  return decoded.map<String, Object?>(
+    (key, value) => MapEntry(key.toString(), value as Object?),
+  );
+}
+
 const _usageLines = <String>[
   'daemon_control_probe.dart <command> [options]',
   '',
   'Commands:',
-  '  create-agent --controller-did DID --registration-token TOKEN [--daemon-agent-did DID] [--runtime RUNTIME] [--name NAME] [--client-request-id ID] [--handle HANDLE] [--workspace PATH]',
+  '  create-agent --controller-did DID --registration-token TOKEN [--daemon-agent-did DID] [--runtime RUNTIME] [--driver-id DRIVER] [--name NAME] [--client-request-id ID] [--handle HANDLE] [--workspace PATH] [--workspace-mode MODE] [--default-sandbox MODE] [--default-model MODEL] [--driver-config-json JSON]',
   '  message-agent-bootstrap --controller-did DID --daemon-agent-did DID --app-instance-id ID --verification-method DID#daemon-key-1 --public-key-multibase KEY --private-key-pem-file PATH --recipient-key-id DID#key-3 --recipient-public-key-b64u KEY [--runtime-registration-token TOKEN] [--run-id ID]',
   '  submit-task --runtime-agent-did DID --text TEXT [--command-id ID] [--task-id ID] [--conversation-id ID]',
   '  parse-status (--json JSON | --json-file PATH | --stdin)',

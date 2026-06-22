@@ -238,6 +238,36 @@ void main() {
     );
   });
 
+  test('runtime create command carries claude code generic cli options', () {
+    final payload = runtimeAgentCreatePayload(
+      controllerDid: 'did:human:alice',
+      registrationToken: 'runtime-token',
+      clientRequestId: 'app_req_1',
+      runtime: 'claude-code',
+      driverId: 'claude-code',
+      displayName: 'Alice Claude',
+      handle: 'alice-claude',
+      workspaceMode: runtimeWorkspaceModeRouteRoot,
+      defaultSandbox: runtimeSandboxReadOnly,
+      defaultModel: 'claude-sonnet-test',
+      driverConfig: const <String, Object?>{
+        'binary_path': '/tmp/fake-claude',
+        'run_timeout_ms': 30000,
+      },
+    );
+
+    final args = payload['args'] as Map<String, Object?>;
+    expect(args['runtime'], 'claude-code');
+    expect(args['driver_id'], 'claude-code');
+    expect(args['workspace_mode'], 'route-root');
+    expect(args['default_sandbox'], 'read-only');
+    expect(args['default_model'], 'claude-sonnet-test');
+    expect(args['driver_config'], <String, Object?>{
+      'binary_path': '/tmp/fake-claude',
+      'run_timeout_ms': 30000,
+    });
+  });
+
   test('runtime create command allows explicit test runtime', () {
     final payload = runtimeAgentCreatePayload(
       controllerDid: 'did:human:alice',
