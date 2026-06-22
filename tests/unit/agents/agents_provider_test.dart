@@ -873,6 +873,12 @@ void main() {
               'daemon_agent_did': 'did:agent:daemon',
               'runtime': 'hermes',
               'status': 'needs_config',
+              'version': '0.3.0',
+              'latest_version': '0.4.0',
+              'min_supported_version': '0.4.0',
+              'platform': 'linux-amd64',
+              'service': 'systemd_user',
+              'needs_upgrade': true,
               'needs_config': true,
             },
           ],
@@ -943,6 +949,12 @@ void main() {
       );
       expect(runtime.latest.status, 'needs_config');
       expect(runtime.latest.needsConfig, isTrue);
+      expect(runtime.latest.needsUpgrade, isFalse);
+      expect(runtime.latest.version, isNull);
+      expect(runtime.latest.latestVersion, isNull);
+      expect(runtime.latest.minSupportedVersion, isNull);
+      expect(runtime.latest.platform, isNull);
+      expect(runtime.latest.service, isNull);
       expect(runtime.latest.lastSeenAt, DateTime.parse('2026-06-03T09:06:00Z'));
     },
   );

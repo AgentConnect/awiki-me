@@ -27,15 +27,19 @@ class AgentSummary {
   bool get isRuntime => kind == AgentKind.runtime;
 
   factory AgentSummary.fromJson(Map<String, Object?> json) {
+    final kind = _parseKind(json['agent_kind']?.toString());
     return AgentSummary(
       agentDid: json['agent_did']?.toString() ?? '',
-      kind: _parseKind(json['agent_kind']?.toString()),
+      kind: kind,
       daemonAgentDid: _optionalString(json['daemon_agent_did']),
       runtime: _optionalString(json['runtime']),
       handle: _optionalString(json['handle']),
       displayName: json['display_name']?.toString() ?? '代理',
       activeState: json['active_state']?.toString() ?? 'active',
-      latest: AgentLatestStatus.fromJson(_readMap(json['status'])),
+      latest: normalizeAgentLatestStatusForKind(
+        kind,
+        AgentLatestStatus.fromJson(_readMap(json['status'])),
+      ),
       recentRuns: _readList(json['recent_runs'])
           .map((item) => AgentRunStatus.fromJson(_readMap(item)))
           .where((run) => run.runId.isNotEmpty)
@@ -52,10 +56,36 @@ class AgentSummary {
       'handle': handle,
       'display_name': displayName,
       'active_state': activeState,
-      'status': latest.toJson(),
+      'status': normalizeAgentLatestStatusForKind(kind, latest).toJson(),
       'recent_runs': recentRuns.map((run) => run.toJson()).toList(),
     };
   }
+}
+
+AgentLatestStatus normalizeAgentLatestStatusForKind(
+  AgentKind kind,
+  AgentLatestStatus latest,
+) {
+  if (kind == AgentKind.daemon) {
+    return latest;
+  }
+  final status = latest.status.trim().toLowerCase();
+  return AgentLatestStatus(
+    status: status == 'needs_upgrade'
+        ? (latest.needsConfig ? 'needs_config' : 'ready')
+        : latest.status,
+    lastSeenAt: latest.lastSeenAt,
+    version: null,
+    latestVersion: null,
+    minSupportedVersion: null,
+    platform: null,
+    service: null,
+    needsUpgrade: false,
+    needsConfig: latest.needsConfig,
+    lastErrorCode: latest.lastErrorCode,
+    lastErrorSummary: latest.lastErrorSummary,
+    diagnosticsSummary: latest.diagnosticsSummary,
+  );
 }
 
 AgentKind _parseKind(String? value) {

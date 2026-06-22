@@ -90,7 +90,9 @@ class _AgentDetailPane extends StatelessWidget {
                     _ActionButton(
                       icon: CupertinoIcons.sparkles,
                       label: '创建 Agent',
-                      onPressed: state.isActing || agent.latest.needsUpgrade
+                      onPressed:
+                          state.isActing ||
+                              (agent.isDaemon && agent.latest.needsUpgrade)
                           ? null
                           : () => onCreateRuntime(agent),
                     ),

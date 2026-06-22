@@ -1107,11 +1107,14 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     final resolvedAgentDid =
         _string(payload['agent_did']) ?? current?.agentDid ?? agentDid;
-    final latest = _latestFromPayload(
-      current?.latest,
-      payload,
-      fallbackStatus: fallbackStatus,
-      fallbackEventAt: incomingEventAt,
+    final latest = normalizeAgentLatestStatusForKind(
+      kind,
+      _latestFromPayload(
+        current?.latest,
+        payload,
+        fallbackStatus: fallbackStatus,
+        fallbackEventAt: incomingEventAt,
+      ),
     );
     return AgentSummary(
       agentDid: resolvedAgentDid,

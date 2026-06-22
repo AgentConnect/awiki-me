@@ -30,7 +30,7 @@ class AgentVisualStatus {
         rawStatus: activeState,
       );
     }
-    if (isPendingUpgrade) {
+    if (agent.isDaemon && isPendingUpgrade) {
       return const AgentVisualStatus(
         AgentVisualStatusKind.processing,
         rawStatus: 'upgrading',
@@ -39,17 +39,13 @@ class AgentVisualStatus {
     if (hasPendingTurn || agent.recentRuns.any(AgentVisualStatus.isActiveRun)) {
       return const AgentVisualStatus(AgentVisualStatusKind.processing);
     }
-    return AgentVisualStatus.fromLatest(agent.latest);
+    return agent.isDaemon
+        ? AgentVisualStatus.fromDaemonLatest(agent.latest)
+        : AgentVisualStatus.fromRuntimeLatest(agent.latest);
   }
 
-  factory AgentVisualStatus.fromLatest(AgentLatestStatus latest) {
+  factory AgentVisualStatus.fromDaemonLatest(AgentLatestStatus latest) {
     final status = latest.status.trim().toLowerCase();
-    if (latest.needsConfig || status == 'needs_config') {
-      return AgentVisualStatus(
-        AgentVisualStatusKind.needsConfig,
-        rawStatus: status,
-      );
-    }
     if (latest.needsUpgrade || status == 'needs_upgrade') {
       return AgentVisualStatus(
         AgentVisualStatusKind.needsUpgrade,
@@ -100,6 +96,37 @@ class AgentVisualStatus {
       AgentVisualStatusKind.offline => '离线',
       AgentVisualStatusKind.disabled => '已停用',
       AgentVisualStatusKind.unknown => '未知',
+    };
+  }
+
+  factory AgentVisualStatus.fromRuntimeLatest(AgentLatestStatus latest) {
+    final status = latest.status.trim().toLowerCase();
+    if (latest.needsConfig || status == 'needs_config') {
+      return AgentVisualStatus(
+        AgentVisualStatusKind.needsConfig,
+        rawStatus: status,
+      );
+    }
+    return switch (status) {
+      'ready' || 'needs_upgrade' => AgentVisualStatus(
+        AgentVisualStatusKind.ready,
+        rawStatus: status,
+      ),
+      'installing' || 'registering' || 'creating' || 'archiving' =>
+        AgentVisualStatus(AgentVisualStatusKind.processing, rawStatus: status),
+      'failed' || 'error' || 'gateway_error' => AgentVisualStatus(
+        AgentVisualStatusKind.failed,
+        rawStatus: status,
+      ),
+      'offline' || 'not_running' || 'unavailable' => AgentVisualStatus(
+        AgentVisualStatusKind.offline,
+        rawStatus: status,
+      ),
+      'disabled' || 'archived' || 'deleted' => AgentVisualStatus(
+        AgentVisualStatusKind.disabled,
+        rawStatus: status,
+      ),
+      _ => AgentVisualStatus(AgentVisualStatusKind.unknown, rawStatus: status),
     };
   }
 
