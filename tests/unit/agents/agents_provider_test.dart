@@ -635,7 +635,7 @@ void main() {
       expect(control.lastUpgradeDaemonDid, 'did:agent:daemon');
       expect(
         container.read(agentsProvider).pendingDaemonUpgrades,
-        contains('did:agent:daemon'),
+        containsPair('did:agent:daemon', isA<PendingDaemonUpgrade>()),
       );
 
       container.read(agentsProvider.notifier).applyControlPayload(
@@ -652,7 +652,10 @@ void main() {
       );
 
       var state = container.read(agentsProvider);
-      expect(state.pendingDaemonUpgrades, contains('did:agent:daemon'));
+      expect(
+        state.pendingDaemonUpgrades,
+        containsPair('did:agent:daemon', isA<PendingDaemonUpgrade>()),
+      );
       expect(state.agents.single.latest.status, 'upgrading');
       expect(state.agents.single.latest.needsUpgrade, isTrue);
 
@@ -723,7 +726,10 @@ void main() {
     );
 
     var state = container.read(agentsProvider);
-    expect(state.pendingDaemonUpgrades, contains('did:agent:daemon'));
+    expect(
+      state.pendingDaemonUpgrades,
+      containsPair('did:agent:daemon', isA<PendingDaemonUpgrade>()),
+    );
     final progress = state.daemonUpgradeProgress['did:agent:daemon'];
     expect(progress, isNotNull);
     expect(progress!.stage, 'downloading');
@@ -798,7 +804,10 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       final state = container.read(agentsProvider);
-      expect(state.pendingDaemonUpgrades, contains('did:agent:daemon'));
+      expect(
+        state.pendingDaemonUpgrades,
+        containsPair('did:agent:daemon', isA<PendingDaemonUpgrade>()),
+      );
       expect(state.daemonUpgradeErrors, isEmpty);
       expect(
         state.daemonUpgradeProgress['did:agent:daemon']?.stage,
@@ -808,6 +817,116 @@ void main() {
         state.daemonUpgradeProgress['did:agent:daemon']?.speedBytesPerSecond,
         9780,
       );
+    },
+  );
+
+  test(
+    'daemon upgrade ack timeout clears only pre-ack sending state',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'needs_upgrade',
+              needsUpgrade: true,
+            ),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      await container
+          .read(agentsProvider.notifier)
+          .upgradeDaemon('did:agent:daemon');
+      final commandId = container
+          .read(agentsProvider)
+          .pendingDaemonUpgrades['did:agent:daemon']!
+          .commandId;
+
+      container
+          .read(agentsProvider.notifier)
+          .handleDaemonUpgradeAckTimeoutForTest('did:agent:daemon', commandId);
+
+      final state = container.read(agentsProvider);
+      expect(state.pendingDaemonUpgrades, isEmpty);
+      expect(state.daemonUpgradeProgress, isEmpty);
+      expect(
+        state.daemonUpgradeErrors['did:agent:daemon'],
+        '升级请求已发送，但代理暂未响应。请刷新状态后重试。',
+      );
+      expect(state.isActing, isFalse);
+    },
+  );
+
+  test(
+    'daemon upgrade ack timeout leaves acknowledged slow download pending',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'needs_upgrade',
+              needsUpgrade: true,
+            ),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      await container
+          .read(agentsProvider.notifier)
+          .upgradeDaemon('did:agent:daemon');
+      final commandId = container
+          .read(agentsProvider)
+          .pendingDaemonUpgrades['did:agent:daemon']!
+          .commandId;
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'command_id': commandId,
+          'state': 'upgrading',
+          'daemon_agent_did': 'did:agent:daemon',
+          'result': <String, Object?>{
+            'command': 'daemon.upgrade',
+            'daemon_agent_did': 'did:agent:daemon',
+            'status': 'in_progress',
+            'progress': <String, Object?>{
+              'stage': 'downloading',
+              'message': '正在下载安装包',
+              'percent': 12,
+            },
+          },
+        },
+      );
+
+      container
+          .read(agentsProvider.notifier)
+          .handleDaemonUpgradeAckTimeoutForTest('did:agent:daemon', commandId);
+
+      final state = container.read(agentsProvider);
+      expect(
+        state.pendingDaemonUpgrades,
+        containsPair('did:agent:daemon', isA<PendingDaemonUpgrade>()),
+      );
+      expect(
+        state.pendingDaemonUpgrades['did:agent:daemon']!.acknowledged,
+        isTrue,
+      );
+      expect(
+        state.daemonUpgradeProgress['did:agent:daemon']?.stage,
+        'downloading',
+      );
+      expect(state.daemonUpgradeErrors, isEmpty);
     },
   );
 
@@ -834,15 +953,26 @@ void main() {
       await container
           .read(agentsProvider.notifier)
           .upgradeDaemon('did:agent:daemon');
+      final upgradeCommandId = container
+          .read(agentsProvider)
+          .pendingDaemonUpgrades['did:agent:daemon']!
+          .commandId;
       final requested = await container
           .read(agentsProvider.notifier)
           .cancelDaemonUpgrade('did:agent:daemon');
 
       expect(requested, isTrue);
       expect(control.lastCancelledUpgradeDaemonDid, 'did:agent:daemon');
+      expect(control.lastCancelledUpgradeTargetCommandId, upgradeCommandId);
       var state = container.read(agentsProvider);
-      expect(state.pendingDaemonUpgrades, contains('did:agent:daemon'));
-      expect(state.cancellingDaemonUpgrades, contains('did:agent:daemon'));
+      expect(
+        state.pendingDaemonUpgrades,
+        containsPair('did:agent:daemon', isA<PendingDaemonUpgrade>()),
+      );
+      expect(
+        state.cancellingDaemonUpgrades,
+        containsPair('did:agent:daemon', isA<PendingDaemonUpgradeCancel>()),
+      );
 
       container.read(agentsProvider.notifier).applyControlPayload(
         <String, Object?>{
@@ -858,8 +988,14 @@ void main() {
       );
 
       state = container.read(agentsProvider);
-      expect(state.pendingDaemonUpgrades, contains('did:agent:daemon'));
-      expect(state.cancellingDaemonUpgrades, contains('did:agent:daemon'));
+      expect(
+        state.pendingDaemonUpgrades,
+        containsPair('did:agent:daemon', isA<PendingDaemonUpgrade>()),
+      );
+      expect(
+        state.cancellingDaemonUpgrades,
+        containsPair('did:agent:daemon', isA<PendingDaemonUpgradeCancel>()),
+      );
 
       container.read(agentsProvider.notifier).applyControlPayload(
         <String, Object?>{
@@ -879,6 +1015,131 @@ void main() {
       expect(state.pendingDaemonUpgrades, isEmpty);
       expect(state.cancellingDaemonUpgrades, isEmpty);
       expect(state.daemonUpgradeProgress, isEmpty);
+      expect(state.daemonUpgradeErrors, isEmpty);
+      expect(state.agents.single.latest.status, 'needs_upgrade');
+    },
+  );
+
+  test('daemon upgrade cancel ack timeout clears cancelling only', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'needs_upgrade',
+            needsUpgrade: true,
+          ),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+
+    await container
+        .read(agentsProvider.notifier)
+        .upgradeDaemon('did:agent:daemon');
+    final upgradeCommandId = container
+        .read(agentsProvider)
+        .pendingDaemonUpgrades['did:agent:daemon']!
+        .commandId;
+    container.read(agentsProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'command_id': upgradeCommandId,
+        'state': 'upgrading',
+        'daemon_agent_did': 'did:agent:daemon',
+        'result': <String, Object?>{
+          'command': 'daemon.upgrade',
+          'daemon_agent_did': 'did:agent:daemon',
+          'status': 'in_progress',
+          'progress': <String, Object?>{
+            'stage': 'downloading',
+            'message': '正在下载安装包',
+          },
+        },
+      },
+    );
+    await container
+        .read(agentsProvider.notifier)
+        .cancelDaemonUpgrade('did:agent:daemon');
+    final cancelCommandId = container
+        .read(agentsProvider)
+        .cancellingDaemonUpgrades['did:agent:daemon']!
+        .commandId;
+
+    container
+        .read(agentsProvider.notifier)
+        .handleDaemonUpgradeCancelAckTimeoutForTest(
+          'did:agent:daemon',
+          cancelCommandId,
+        );
+
+    final state = container.read(agentsProvider);
+    expect(
+      state.pendingDaemonUpgrades,
+      containsPair('did:agent:daemon', isA<PendingDaemonUpgrade>()),
+    );
+    expect(state.cancellingDaemonUpgrades, isEmpty);
+    expect(
+      state.daemonUpgradeProgress['did:agent:daemon']?.stage,
+      'downloading',
+    );
+    expect(
+      state.daemonUpgradeErrors['did:agent:daemon'],
+      '取消请求已发送，但代理暂未响应。请刷新状态确认升级结果。',
+    );
+  });
+
+  test(
+    'stale daemon upgrade command payload does not override current pending',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'needs_upgrade',
+              needsUpgrade: true,
+            ),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      await container
+          .read(agentsProvider.notifier)
+          .upgradeDaemon('did:agent:daemon');
+      final commandId = container
+          .read(agentsProvider)
+          .pendingDaemonUpgrades['did:agent:daemon']!
+          .commandId;
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'command_id': 'cmd_old_upgrade',
+          'state': 'failed',
+          'daemon_agent_did': 'did:agent:daemon',
+          'result': <String, Object?>{
+            'command': 'daemon.upgrade',
+            'daemon_agent_did': 'did:agent:daemon',
+            'status': 'failed',
+            'error_code': 'upgrade_failed',
+          },
+        },
+      );
+
+      final state = container.read(agentsProvider);
+      expect(
+        state.pendingDaemonUpgrades['did:agent:daemon']?.commandId,
+        commandId,
+      );
       expect(state.daemonUpgradeErrors, isEmpty);
       expect(state.agents.single.latest.status, 'needs_upgrade');
     },
@@ -925,7 +1186,10 @@ void main() {
       );
 
       var state = container.read(agentsProvider);
-      expect(state.pendingDaemonUpgrades, contains('did:agent:daemon'));
+      expect(
+        state.pendingDaemonUpgrades,
+        containsPair('did:agent:daemon', isA<PendingDaemonUpgrade>()),
+      );
       expect(state.agents.single.latest.status, 'upgrading');
       expect(state.agents.single.latest.needsUpgrade, isTrue);
 
@@ -949,7 +1213,10 @@ void main() {
       );
 
       state = container.read(agentsProvider);
-      expect(state.pendingDaemonUpgrades, contains('did:agent:daemon'));
+      expect(
+        state.pendingDaemonUpgrades,
+        containsPair('did:agent:daemon', isA<PendingDaemonUpgrade>()),
+      );
       expect(state.agents.single.latest.status, 'needs_upgrade');
       expect(state.agents.single.latest.needsUpgrade, isTrue);
     },
@@ -1057,7 +1324,10 @@ void main() {
           .handleStatusQueryTimeoutForTest('did:agent:daemon');
 
       final state = container.read(agentsProvider);
-      expect(state.pendingDaemonUpgrades, contains('did:agent:daemon'));
+      expect(
+        state.pendingDaemonUpgrades,
+        containsPair('did:agent:daemon', isA<PendingDaemonUpgrade>()),
+      );
       expect(state.statusQueryErrors, isEmpty);
     },
   );

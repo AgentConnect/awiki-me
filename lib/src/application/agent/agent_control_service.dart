@@ -64,8 +64,12 @@ abstract interface class AgentControlService {
     int limit = 20,
     String? cursor,
   });
-  Future<void> upgradeDaemon(String daemonAgentDid);
-  Future<void> cancelDaemonUpgrade(String daemonAgentDid);
+  Future<String> upgradeDaemon(String daemonAgentDid, {String? commandId});
+  Future<String> cancelDaemonUpgrade(
+    String daemonAgentDid, {
+    String? commandId,
+    String? upgradeCommandId,
+  });
   Future<void> deleteDaemon(String daemonAgentDid);
   Future<void> deleteRuntimeAgent({
     required String daemonAgentDid,
@@ -329,13 +333,38 @@ class DefaultAgentControlService implements AgentControlService {
   }
 
   @override
-  Future<void> upgradeDaemon(String daemonAgentDid) {
-    return _sendDaemonPayload(daemonAgentDid, daemonUpgradePayload());
+  Future<String> upgradeDaemon(
+    String daemonAgentDid, {
+    String? commandId,
+  }) async {
+    final effectiveCommandId =
+        commandId ?? agentCommandId('cmd_daemon_upgrade');
+    await _sendDaemonPayload(
+      daemonAgentDid,
+      daemonUpgradePayload(commandId: effectiveCommandId),
+      idempotencyKey: 'daemon-upgrade:$daemonAgentDid:$effectiveCommandId',
+    );
+    return effectiveCommandId;
   }
 
   @override
-  Future<void> cancelDaemonUpgrade(String daemonAgentDid) {
-    return _sendDaemonPayload(daemonAgentDid, daemonUpgradeCancelPayload());
+  Future<String> cancelDaemonUpgrade(
+    String daemonAgentDid, {
+    String? commandId,
+    String? upgradeCommandId,
+  }) async {
+    final effectiveCommandId =
+        commandId ?? agentCommandId('cmd_daemon_upgrade_cancel');
+    await _sendDaemonPayload(
+      daemonAgentDid,
+      daemonUpgradeCancelPayload(
+        commandId: effectiveCommandId,
+        upgradeCommandId: upgradeCommandId,
+      ),
+      idempotencyKey:
+          'daemon-upgrade-cancel:$daemonAgentDid:$effectiveCommandId',
+    );
+    return effectiveCommandId;
   }
 
   @override
