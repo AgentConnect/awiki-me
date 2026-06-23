@@ -487,7 +487,7 @@ void runMessageAgentRealBackendE2e() {
           thread: AppThreadRef.direct(config.cliHandle),
           expectedText: sourceText,
         );
-        await _waitForDaemonRuntimeFinalQueued(
+        await _waitForDaemonRuntimeFinalSent(
           daemonStateRoot: config.daemonStateRoot,
           sourceText: sourceText,
         );
@@ -822,7 +822,7 @@ Future<void> _waitForUserServiceBindingRevoked({
   );
 }
 
-Future<void> _waitForDaemonRuntimeFinalQueued({
+Future<void> _waitForDaemonRuntimeFinalSent({
   required String daemonStateRoot,
   required String sourceText,
 }) async {
@@ -845,7 +845,8 @@ Future<void> _waitForDaemonRuntimeFinalQueued({
           '''
           SELECT t.task_id, t.status AS task_status,
                  r.run_id, r.status AS run_status,
-                 f.status AS final_status, f.message_id AS final_message_id
+                 f.status AS final_status, f.message_id AS final_message_id,
+                 f.sent_at_ms AS final_sent_at_ms
           FROM runtime_task t
           LEFT JOIN runtime_run r ON r.task_id = t.task_id
           LEFT JOIN runtime_final_outbox f ON f.run_id = r.run_id
@@ -862,9 +863,9 @@ Future<void> _waitForDaemonRuntimeFinalQueued({
         final row = rows.first;
         lastState = jsonEncode(row);
         final finalStatus = row['final_status']?.toString();
-        return finalStatus == 'pending' ||
-            finalStatus == 'sending' ||
-            finalStatus == 'sent';
+        return finalStatus == 'sent' &&
+            row['final_message_id'] != null &&
+            row['final_sent_at_ms'] != null;
       } finally {
         await db.close();
       }

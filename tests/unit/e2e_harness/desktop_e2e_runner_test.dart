@@ -77,6 +77,25 @@ void main() {
       expect(hyphen.e2eCase.runConfigPath, contains('message-agent'));
     });
 
+    test('parses codex-agent case aliases', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'codex-agent',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'codex_agent',
+        '--dry-run',
+      ]);
+
+      expect(hyphen.e2eCase, DesktopE2eCase.codexAgent);
+      expect(underscore.e2eCase, DesktopE2eCase.codexAgent);
+      expect(hyphen.e2eCase.caseName, 'codex-agent');
+      expect(hyphen.e2eCase.reportScope, 'codex-agent');
+      expect(hyphen.e2eCase.runConfigPath, contains('codex-agent'));
+    });
+
     test('rejects unsupported case', () {
       expect(
         () => DesktopE2eOptions.parse(const <String>['--case', 'unknown']),
@@ -86,7 +105,7 @@ void main() {
             'message',
             'Unsupported E2E case "unknown". '
                 'Use smoke, full, direct, group, attachment, contacts, '
-                'or message-agent.',
+                'message-agent, or codex-agent.',
           ),
         ),
       );
@@ -447,6 +466,54 @@ cliHandle: legacy-cli
       );
 
       expect(config.messageAgentEnabled, isFalse);
+    });
+
+    test('defaults codex-agent case to enabled real backend', () {
+      final config = DesktopCliPeerConfig.from(
+        DesktopE2eOptions.parse(const <String>['--case', 'codex-agent']),
+        const DesktopE2eFileConfig(
+          path: '/tmp/e2e.local.yaml',
+          platform: DesktopE2ePlatform.linux,
+          serviceBaseUrl: 'https://service.example.test',
+          didDomain: 'example.test',
+          otpPhone: 'test-phone-secret',
+          otpCode: 'test-otp-secret',
+          appHandle: 'app-from-file',
+          cliHandle: 'cli-from-file',
+          cliBin: '/tmp/file-awiki-cli',
+        ),
+      );
+
+      expect(config.codexAgentEnabled, isTrue);
+      expect(config.codexAgentRealBackend, isTrue);
+    });
+
+    test('rejects codex-agent case when YAML disables it', () {
+      expect(
+        () => DesktopCliPeerConfig.from(
+          DesktopE2eOptions.parse(const <String>['--case', 'codex-agent']),
+          const DesktopE2eFileConfig(
+            path: '/tmp/e2e.local.yaml',
+            platform: DesktopE2ePlatform.linux,
+            serviceBaseUrl: 'https://service.example.test',
+            didDomain: 'example.test',
+            codexAgentEnabled: false,
+            otpPhone: 'test-phone-secret',
+            otpCode: 'test-otp-secret',
+            appHandle: 'app-from-file',
+            cliHandle: 'cli-from-file',
+            cliBin: '/tmp/file-awiki-cli',
+          ),
+        ),
+        throwsA(
+          isA<E2eFailure>().having(
+            (error) => error.message,
+            'message',
+            'codexAgent.enabled must be true for --case codex-agent '
+                'in /tmp/e2e.local.yaml.',
+          ),
+        ),
+      );
     });
   });
 
@@ -1203,6 +1270,109 @@ cliPeer:
       },
     );
 
+    test(
+      'writes Codex Agent runner report and deterministic run config',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'awiki_codex_agent_runner_test_',
+        );
+        addTearDown(() async {
+          if (await root.exists()) {
+            await root.delete(recursive: true);
+          }
+        });
+        _writeLocalConfig(
+          root,
+          platform: 'linux',
+          appHandle: 'codex-agent-app',
+          cliHandle: 'codex-agent-cli',
+          cliBin: '/tmp/fake-awiki-cli',
+          daemonRustRepo: '../awiki-cli-rs2-codex-agent',
+          daemonBinary: '/tmp/awiki-deamon',
+          daemonStateRoot: '.e2e/codex-daemon-state',
+          daemonReadyFile: '.e2e/codex-daemon-ready.json',
+          daemonHandle: 'codex-agent-daemon',
+          codexAgentEnabled: true,
+          codexAgentRealBackend: true,
+          codexAgentPrompt: 'Reply exactly OK-CODEX-UNIT and nothing else',
+          codexAgentExpectedReply: 'OK-CODEX-UNIT',
+        );
+        final lines = <String>[];
+        final runner = DesktopE2eRunner(
+          root: root,
+          options: DesktopE2eOptions.parse(const <String>[
+            '--case',
+            'codex-agent',
+            '--run-id',
+            'run-codex-agent',
+          ]),
+          commands: DesktopCommandRunner(
+            root: root,
+            dryRun: true,
+            redactor: DesktopSecretRedactor(const <String>[
+              'test-phone-secret',
+              'test-otp-secret',
+            ]),
+            logLine: lines.add,
+          ),
+        );
+
+        await runner.run();
+
+        final log = lines.join('\n');
+        expect(log, contains('case: codex-agent'));
+        expect(
+          log,
+          contains(
+            r'$ xvfb-run -a flutter test integration_test/codex_agent_full_ui_test.dart -d linux',
+          ),
+        );
+
+        final timings = File(
+          '${root.path}/.e2e/codex-agent/run-codex-agent/reports/timings.json',
+        );
+        final decoded =
+            jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
+        expect(decoded['scenario'], 'codex-agent-full-ui');
+        expect(decoded['case'], 'codex-agent');
+        expect(decoded['caseIds'], <dynamic>[
+          'CODEXAGENT-E2E-001',
+          'CODEXAGENT-E2E-002',
+          'CODEXAGENT-E2E-003',
+          'CODEXAGENT-E2E-004',
+        ]);
+        final codexAgent = decoded['codexAgent'] as Map<String, dynamic>;
+        expect(codexAgent['enabled'], isTrue);
+        expect(codexAgent['realBackend'], isTrue);
+        expect(codexAgent['expectedReply'], 'OK-CODEX-UNIT');
+        expect(codexAgent['prompt'], '<redacted-deterministic-prompt>');
+
+        final runConfig = File(
+          '${root.path}/.e2e/codex-agent/current/run_config.json',
+        );
+        expect(runConfig.existsSync(), isTrue);
+        final runConfigJson =
+            jsonDecode(await runConfig.readAsString()) as Map<String, dynamic>;
+        expect(runConfigJson['case'], 'codex-agent');
+        final daemon = runConfigJson['daemon'] as Map<String, dynamic>;
+        expect(daemon['binary'], '/tmp/awiki-deamon');
+        expect(daemon['stateRoot'], '${root.path}/.e2e/codex-daemon-state');
+        expect(
+          daemon['readyFile'],
+          '${root.path}/.e2e/codex-daemon-ready.json',
+        );
+        final runCodexAgent =
+            runConfigJson['codexAgent'] as Map<String, dynamic>;
+        expect(runCodexAgent['enabled'], isTrue);
+        expect(runCodexAgent['realBackend'], isTrue);
+        expect(
+          runCodexAgent['prompt'],
+          'Reply exactly OK-CODEX-UNIT and nothing else',
+        );
+        expect(runCodexAgent['expectedReply'], 'OK-CODEX-UNIT');
+      },
+    );
+
     test('generates macOS Flutter command without Xvfb', () async {
       final root = await Directory.systemTemp.createTemp(
         'awiki_desktop_cli_peer_runner_macos_test_',
@@ -1305,6 +1475,11 @@ void _writeLocalConfig(
   bool messageAgentEnabled = false,
   bool messageAgentRealBackend = false,
   bool includeMessageAgent = true,
+  bool codexAgentEnabled = false,
+  bool codexAgentRealBackend = false,
+  String? codexAgentPrompt,
+  String? codexAgentExpectedReply,
+  bool includeCodexAgent = true,
 }) {
   final messageService = messageServiceUrl == null
       ? ''
@@ -1333,6 +1508,20 @@ messageAgent:
   realBackend: $messageAgentRealBackend
 '''
       : '';
+  final codexPromptLine = codexAgentPrompt == null
+      ? ''
+      : '  prompt: "$codexAgentPrompt"\n';
+  final codexExpectedReplyLine = codexAgentExpectedReply == null
+      ? ''
+      : '  expectedReply: "$codexAgentExpectedReply"\n';
+  final codexAgent = includeCodexAgent
+      ? '''
+codexAgent:
+  enabled: $codexAgentEnabled
+  realBackend: $codexAgentRealBackend
+$codexPromptLine$codexExpectedReplyLine
+'''
+      : '';
   File('${root.path}/tests/e2e/configs/e2e.local.yaml')
     ..createSync(recursive: true)
     ..writeAsStringSync('''
@@ -1342,7 +1531,7 @@ service:
   didDomain: example.test
 $messageService
 $messageServiceWs
-$daemon$messageAgent
+$daemon$messageAgent$codexAgent
 otp:
   phone: test-phone-secret
   code: test-otp-secret
