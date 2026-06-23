@@ -580,6 +580,79 @@ void main() {
     },
   );
 
+  test('daemon upgrade progress is stored until final success', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'needs_upgrade',
+            needsUpgrade: true,
+          ),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+
+    final started = await container
+        .read(agentsProvider.notifier)
+        .upgradeDaemon('did:agent:daemon');
+    expect(started, isTrue);
+
+    container.read(agentsProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'state': 'upgrading',
+        'daemon_agent_did': 'did:agent:daemon',
+        'result': <String, Object?>{
+          'command': 'daemon.upgrade',
+          'daemon_agent_did': 'did:agent:daemon',
+          'status': 'in_progress',
+          'progress': <String, Object?>{
+            'stage': 'downloading',
+            'message': '正在下载安装包',
+            'percent': 42.5,
+            'downloaded_bytes': 1024,
+            'total_bytes': 4096,
+            'source_url': 'https://anpclaw.com/daemon',
+            'route': 'direct',
+          },
+        },
+      },
+    );
+
+    var state = container.read(agentsProvider);
+    expect(state.pendingDaemonUpgrades, contains('did:agent:daemon'));
+    final progress = state.daemonUpgradeProgress['did:agent:daemon'];
+    expect(progress, isNotNull);
+    expect(progress!.stage, 'downloading');
+    expect(progress.percent, 42.5);
+    expect(progress.compactLabel, '正在下载安装包 43%');
+    expect(state.agents.single.latest.status, 'upgrading');
+
+    container.read(agentsProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'state': 'ready',
+        'daemon_agent_did': 'did:agent:daemon',
+        'result': <String, Object?>{
+          'command': 'daemon.upgrade',
+          'daemon_agent_did': 'did:agent:daemon',
+          'status': 'ready',
+          'version': '0.1.41',
+        },
+      },
+    );
+
+    state = container.read(agentsProvider);
+    expect(state.pendingDaemonUpgrades, isEmpty);
+    expect(state.daemonUpgradeProgress, isEmpty);
+  });
+
   test(
     'upgradeDaemon does not treat restart scheduled as final success',
     () async {

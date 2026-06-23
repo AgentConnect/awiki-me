@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:awiki_me/src/app/app_services.dart';
@@ -259,6 +260,135 @@ void main() {
     expect(conversations.single.threadId, conversation.threadId);
     expect(conversations.single.lastMessagePreview, '你好');
     expect(conversations.single.targetDid, conversation.targetDid);
+    expect(gateway.listConversationsCalls, 1);
+  });
+
+  test('发送时刷新后的线程标识不会分裂当前打开会话的消息列表', () async {
+    const agentDid = 'did:agent:runtime';
+    const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
+    final openedConversation = ConversationSummary(
+      threadId: 'dm:did:me:$agentDid',
+      displayName: 'Hermes',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 5, 8, 10),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentDid,
+    );
+    final refreshedConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:zhuocheng-test-hermes',
+      displayName: 'Hermes',
+      lastMessagePreview: '旧预览',
+      lastMessageAt: DateTime(2026, 5, 8, 10, 1),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentHandle,
+    );
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+    sendContainer
+        .read(conversationListProvider.notifier)
+        .upsertConversation(refreshedConversation);
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendMessage(
+          conversation: refreshedConversation,
+          displayThreadId: openedConversation.threadId,
+          content: '你好',
+          expectedAgentReplyDid: agentDid,
+        );
+    await Future<void>.delayed(Duration.zero);
+
+    final openedThread = sendContainer.read(
+      chatThreadProvider(openedConversation.threadId),
+    );
+    final refreshedThread = sendContainer.read(
+      chatThreadProvider(refreshedConversation.threadId),
+    );
+    expect(openedThread.messages.map((item) => item.content), contains('你好'));
+    expect(openedThread.isAgentProcessing, isTrue);
+    expect(refreshedThread.messages, isEmpty);
+    expect(gateway.lastSentPeerDid, agentHandle);
+    expect(
+      sendContainer
+          .read(conversationListProvider)
+          .conversations
+          .single
+          .lastMessagePreview,
+      '你好',
+    );
+  });
+
+  test('发送后刷新返回旧概览时不会覆盖本地最新预览', () async {
+    final staleConversation = ConversationSummary(
+      threadId: conversation.threadId,
+      displayName: conversation.displayName,
+      lastMessagePreview: '旧消息',
+      lastMessageAt: DateTime.now().subtract(const Duration(minutes: 1)),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: conversation.targetDid,
+    );
+    gateway.conversations = <ConversationSummary>[staleConversation];
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+    sendContainer
+        .read(conversationListProvider.notifier)
+        .upsertConversation(conversation);
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendMessage(
+          conversation: conversation,
+          content: '正在处理的问题',
+          expectedAgentReplyDid: 'did:peer',
+        );
+
+    final latest = sendContainer
+        .read(conversationListProvider)
+        .conversations
+        .single;
+    expect(latest.lastMessagePreview, '正在处理的问题');
+    expect(latest.lastMessageAt.isAfter(staleConversation.lastMessageAt), true);
     expect(gateway.listConversationsCalls, 1);
   });
 
@@ -1277,6 +1407,71 @@ void main() {
         .messages;
     expect(messages.map((item) => item.content), contains('你好。欢迎'));
     expect(gateway.fetchDmHistoryCalls, 1);
+  });
+
+  test('历史加载中收到新的会话概览时会排队再补拉一次', () async {
+    final firstReply = ChatMessage(
+      localId: 'reply-old',
+      remoteId: 'reply-old',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      senderName: 'Peer',
+      receiverDid: 'did:me',
+      content: '旧回复',
+      createdAt: DateTime(2026, 5, 8, 10, 1),
+      isMine: false,
+      sendState: MessageSendState.sent,
+    );
+    final latestReply = ChatMessage(
+      localId: 'reply-latest',
+      remoteId: 'reply-latest',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      senderName: 'Peer',
+      receiverDid: 'did:me',
+      content: '最新回复',
+      createdAt: DateTime(2026, 5, 8, 10, 2),
+      isMine: false,
+      sendState: MessageSendState.sent,
+    );
+    gateway
+      ..fetchDmHistoryCompleter = Completer<void>()
+      ..dmHistoryBatchesByPeerDid = <String, List<List<ChatMessage>>>{
+        'did:peer': <List<ChatMessage>>[
+          <ChatMessage>[firstReply],
+          <ChatMessage>[firstReply, latestReply],
+        ],
+      };
+
+    final firstLoad = container
+        .read(chatThreadsProvider.notifier)
+        .syncHistoryForConversation(conversation);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      container.read(chatThreadProvider(conversation.threadId)).isLoading,
+      true,
+    );
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .syncHistoryForConversation(
+          conversation.copyWith(
+            lastMessagePreview: latestReply.content,
+            lastMessageAt: latestReply.createdAt,
+          ),
+        );
+
+    gateway.fetchDmHistoryCompleter!.complete();
+    await firstLoad;
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    final messages = container
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    expect(messages.map((item) => item.content), contains('最新回复'));
+    expect(gateway.fetchDmHistoryCalls, 2);
   });
 
   test('群列表刷新后会把已知群名称同步到会话列表', () async {

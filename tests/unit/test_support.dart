@@ -346,8 +346,11 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   List<ConversationSummary> conversations = const <ConversationSummary>[];
   Map<String, List<ChatMessage>> dmHistoryByPeerDid =
       <String, List<ChatMessage>>{};
+  Map<String, List<List<ChatMessage>>> dmHistoryBatchesByPeerDid =
+      <String, List<List<ChatMessage>>>{};
   Map<String, List<ChatMessage>> groupHistoryByGroupId =
       <String, List<ChatMessage>>{};
+  Completer<void>? fetchDmHistoryCompleter;
   List<RelationshipSummary> followers = const <RelationshipSummary>[];
   List<RelationshipSummary> following = const <RelationshipSummary>[];
   List<GroupSummary> groups = const <GroupSummary>[];
@@ -481,6 +484,15 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   @override
   Future<List<ChatMessage>> fetchDmHistory(String peerDid) async {
     fetchDmHistoryCalls += 1;
+    final completer = fetchDmHistoryCompleter;
+    if (completer != null) {
+      await completer.future;
+      fetchDmHistoryCompleter = null;
+    }
+    final batches = dmHistoryBatchesByPeerDid[peerDid];
+    if (batches != null && batches.isNotEmpty) {
+      return batches.removeAt(0);
+    }
     return dmHistoryByPeerDid[peerDid] ?? const <ChatMessage>[];
   }
 

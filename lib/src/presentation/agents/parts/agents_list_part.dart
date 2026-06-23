@@ -219,6 +219,7 @@ class _AgentDaemonGroup extends StatelessWidget {
             pendingAgentDids: pendingAgentDids,
             pendingDaemonUpgrades: state.pendingDaemonUpgrades,
             daemonUpgradeErrors: state.daemonUpgradeErrors,
+            daemonUpgradeProgress: state.daemonUpgradeProgress,
             selected: selectedAgentDid == daemon.agentDid,
             onTap: () => onSelect(daemon.agentDid),
             runtimeCount: runtimes.length + pendingRuntimeCreations.length,
@@ -237,6 +238,7 @@ class _AgentDaemonGroup extends StatelessWidget {
                 pendingAgentDids: pendingAgentDids,
                 pendingDaemonUpgrades: state.pendingDaemonUpgrades,
                 daemonUpgradeErrors: state.daemonUpgradeErrors,
+                daemonUpgradeProgress: state.daemonUpgradeProgress,
                 selected: selectedAgentDid == runtime.agentDid,
                 onTap: () => onSelect(runtime.agentDid),
                 depth: 1,
@@ -290,6 +292,7 @@ class _OrphanRuntimeGroup extends StatelessWidget {
             agent: runtime,
             pendingAgentDids: pendingAgentDids,
             pendingDaemonUpgrades: const <String>{},
+            daemonUpgradeProgress: const <String, DaemonUpgradeProgress>{},
             selected: selectedAgentDid == runtime.agentDid,
             onTap: () => onSelect(runtime.agentDid),
           ),
@@ -455,6 +458,7 @@ class _AgentListTile extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.daemonUpgradeErrors = const <String, String>{},
+    this.daemonUpgradeProgress = const <String, DaemonUpgradeProgress>{},
     this.depth = 0,
     this.runtimeCount,
     this.onRefresh,
@@ -465,6 +469,7 @@ class _AgentListTile extends StatelessWidget {
   final Set<String> pendingAgentDids;
   final Set<String> pendingDaemonUpgrades;
   final Map<String, String> daemonUpgradeErrors;
+  final Map<String, DaemonUpgradeProgress> daemonUpgradeProgress;
   final bool selected;
   final VoidCallback onTap;
   final int depth;
@@ -478,6 +483,7 @@ class _AgentListTile extends StatelessWidget {
     final isChild = depth > 0;
     final title = AgentDisplayName.title(agent);
     final daemonUpgradeError = daemonUpgradeErrors[agent.agentDid];
+    final daemonUpgradeProgress = this.daemonUpgradeProgress[agent.agentDid];
     final visualStatus = AgentVisualStatus.fromAgent(
       agent,
       hasPendingTurn: pendingAgentDids.contains(agent.agentDid),
@@ -561,6 +567,7 @@ class _AgentListTile extends StatelessWidget {
                               isUpgrading: pendingDaemonUpgrades.contains(
                                 agent.agentDid,
                               ),
+                              upgradeProgress: daemonUpgradeProgress,
                               upgradeError: daemonUpgradeError,
                             ),
                             maxLines: 1,
@@ -658,6 +665,7 @@ String _agentListSubtitle(
   int? runtimeCount,
   AgentVisualStatus visualStatus, {
   bool isUpgrading = false,
+  DaemonUpgradeProgress? upgradeProgress,
   String? upgradeError,
 }) {
   if (agent.isDaemon) {
@@ -665,10 +673,45 @@ String _agentListSubtitle(
     final statusLabel = upgradeError != null
         ? '升级失败'
         : isUpgrading
-        ? '正在升级'
+        ? upgradeProgress?.compactLabel ?? '正在升级'
         : visualStatus.label;
     return 'Daemon · $count 个 Agent · $statusLabel';
   }
   final runtime = agent.runtime ?? 'Runtime';
   return '$runtime · ${visualStatus.label}';
+}
+
+String _formatBytes(int bytes) {
+  const units = <String>['B', 'KB', 'MB', 'GB'];
+  var value = bytes.toDouble();
+  var unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  if (unit == 0) {
+    return '${bytes}B';
+  }
+  return '${value.toStringAsFixed(value >= 10 ? 1 : 2)}${units[unit]}';
+}
+
+String _upgradeSourceLabel(DaemonUpgradeProgress progress) {
+  final parts = <String>[
+    if (progress.sourceUrl != null) progress.sourceUrl!,
+    if (progress.route != null) _upgradeRouteLabel(progress.route!),
+  ];
+  return parts.isEmpty ? '正在准备下载' : parts.join(' · ');
+}
+
+String _upgradeRouteLabel(String route) {
+  if (route == 'direct') {
+    return '直连';
+  }
+  if (route == 'environment_proxy') {
+    return '代理';
+  }
+  if (route.startsWith('local_proxy:')) {
+    return '本机代理 ${route.substring('local_proxy:'.length)}';
+  }
+  return route;
 }

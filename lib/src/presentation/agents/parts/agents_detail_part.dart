@@ -54,6 +54,9 @@ class _AgentDetailPane extends StatelessWidget {
     final upgradeError = agent.isDaemon
         ? state.daemonUpgradeErrors[agent.agentDid]
         : null;
+    final upgradeProgress = agent.isDaemon
+        ? state.daemonUpgradeProgress[agent.agentDid]
+        : null;
     return SafeArea(
       bottom: false,
       child: SelectionArea(
@@ -158,6 +161,10 @@ class _AgentDetailPane extends StatelessWidget {
               SizedBox(height: responsive.spacing(10)),
               _AgentErrorBanner(message: upgradeError),
             ],
+            if (isUpgrading && upgradeProgress != null) ...<Widget>[
+              SizedBox(height: responsive.spacing(12)),
+              _DaemonUpgradeProgressPanel(progress: upgradeProgress),
+            ],
             SizedBox(height: responsive.spacing(18)),
             if (agent.isRuntime && agent.recentRuns.isNotEmpty) ...<Widget>[
               const _SectionTitle('最近 Run'),
@@ -188,6 +195,115 @@ class _AgentDetailPane extends StatelessWidget {
               agent: agent,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DaemonUpgradeProgressPanel extends StatelessWidget {
+  const _DaemonUpgradeProgressPanel({required this.progress});
+
+  final DaemonUpgradeProgress progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final percent = progress.percent?.clamp(0, 100);
+    final progressValue = percent == null ? null : percent / 100;
+    final details = <String>[
+      if (progress.downloadedBytes != null && progress.totalBytes != null)
+        '${_formatBytes(progress.downloadedBytes!)} / ${_formatBytes(progress.totalBytes!)}'
+      else if (progress.downloadedBytes != null)
+        '已下载 ${_formatBytes(progress.downloadedBytes!)}',
+      if (progress.speedBytesPerSecond != null)
+        '${_formatBytes(progress.speedBytesPerSecond!)}/s',
+      if (progress.sourceIndex != null && progress.sourceCount != null)
+        '线路 ${progress.sourceIndex}/${progress.sourceCount}',
+    ];
+    return Container(
+      padding: EdgeInsets.all(responsive.spacing(14)),
+      decoration: BoxDecoration(
+        color: CupertinoColors.white,
+        borderRadius: BorderRadius.circular(responsive.radius(8)),
+        border: Border.all(color: const Color(0xFFE5EAF2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              CupertinoActivityIndicator(radius: responsive.displayScaled(7)),
+              SizedBox(width: responsive.spacing(9)),
+              Expanded(
+                child: Text(
+                  progress.displayMessage,
+                  style: TextStyle(
+                    color: const Color(0xFF101B32),
+                    fontSize: responsive.bodySm,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (percent != null)
+                Text(
+                  '${percent.round()}%',
+                  style: TextStyle(
+                    color: const Color(0xFF0B65F8),
+                    fontSize: responsive.metaSm,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+            ],
+          ),
+          SizedBox(height: responsive.spacing(10)),
+          _DaemonUpgradeProgressBar(value: progressValue),
+          if (details.isNotEmpty) ...<Widget>[
+            SizedBox(height: responsive.spacing(8)),
+            Text(
+              details.join(' · '),
+              style: TextStyle(
+                color: const Color(0xFF66728A),
+                fontSize: responsive.metaSm,
+              ),
+            ),
+          ],
+          if (progress.sourceUrl != null || progress.route != null) ...<Widget>[
+            SizedBox(height: responsive.spacing(6)),
+            Text(
+              _upgradeSourceLabel(progress),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: const Color(0xFF66728A),
+                fontSize: responsive.metaSm,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DaemonUpgradeProgressBar extends StatelessWidget {
+  const _DaemonUpgradeProgressBar({required this.value});
+
+  final double? value;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(responsive.radius(99)),
+      child: Container(
+        height: responsive.displayScaled(7),
+        color: const Color(0xFFEAF2FF),
+        alignment: Alignment.centerLeft,
+        child: FractionallySizedBox(
+          widthFactor: value?.clamp(0.06, 1) ?? 0.18,
+          heightFactor: 1,
+          child: Container(color: const Color(0xFF0B65F8)),
         ),
       ),
     );

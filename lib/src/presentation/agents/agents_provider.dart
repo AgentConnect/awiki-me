@@ -60,6 +60,100 @@ class PendingRuntimeCreation {
   }
 }
 
+class DaemonUpgradeProgress {
+  const DaemonUpgradeProgress({
+    required this.stage,
+    required this.message,
+    this.targetVersion,
+    this.sourceUrl,
+    this.route,
+    this.attempt,
+    this.sourceIndex,
+    this.sourceCount,
+    this.downloadedBytes,
+    this.totalBytes,
+    this.percent,
+    this.speedBytesPerSecond,
+  });
+
+  final String stage;
+  final String message;
+  final String? targetVersion;
+  final String? sourceUrl;
+  final String? route;
+  final int? attempt;
+  final int? sourceIndex;
+  final int? sourceCount;
+  final int? downloadedBytes;
+  final int? totalBytes;
+  final double? percent;
+  final int? speedBytesPerSecond;
+
+  String get displayMessage {
+    final text = message.trim();
+    if (text.isNotEmpty) {
+      return text;
+    }
+    return switch (stage) {
+      'manifest' => '正在获取版本信息',
+      'selecting_source' => '正在选择下载线路',
+      'downloading' => '正在下载安装包',
+      'retrying_source' => '下载中断，正在重试',
+      'verifying' => '正在校验安装包',
+      'extracting' => '正在解压安装包',
+      'installing' => '正在安装新版本',
+      'restarting' => '正在重启代理服务',
+      _ => '正在升级',
+    };
+  }
+
+  String get compactLabel {
+    final p = percent;
+    if (p != null && p > 0 && p < 100) {
+      return '$displayMessage ${p.round()}%';
+    }
+    if (p != null && p >= 100) {
+      return '$displayMessage 100%';
+    }
+    return displayMessage;
+  }
+
+  bool get hasDownloadDetail {
+    return downloadedBytes != null ||
+        totalBytes != null ||
+        speedBytesPerSecond != null ||
+        sourceUrl != null ||
+        route != null;
+  }
+
+  static DaemonUpgradeProgress started() {
+    return const DaemonUpgradeProgress(stage: 'requested', message: '正在发送升级请求');
+  }
+
+  static DaemonUpgradeProgress? fromPayload(Map<String, Object?> payload) {
+    final progress = _readMap(payload['progress']);
+    if (progress.isEmpty) {
+      return null;
+    }
+    final stage = _string(progress['stage']) ?? 'upgrading';
+    final message = _string(progress['message']) ?? '';
+    return DaemonUpgradeProgress(
+      stage: stage,
+      message: message,
+      targetVersion: _string(progress['target_version']),
+      sourceUrl: _string(progress['source_url']),
+      route: _string(progress['route']),
+      attempt: _int(progress['attempt']),
+      sourceIndex: _int(progress['source_index']),
+      sourceCount: _int(progress['source_count']),
+      downloadedBytes: _int(progress['downloaded_bytes']),
+      totalBytes: _int(progress['total_bytes']),
+      percent: _double(progress['percent']),
+      speedBytesPerSecond: _int(progress['speed_bytes_per_sec']),
+    );
+  }
+}
+
 class AgentsState {
   const AgentsState({
     this.agents = const <AgentSummary>[],
@@ -77,6 +171,7 @@ class AgentsState {
     this.invocationPolicyErrors = const <String, String>{},
     this.statusQueryErrors = const <String, String>{},
     this.daemonUpgradeErrors = const <String, String>{},
+    this.daemonUpgradeProgress = const <String, DaemonUpgradeProgress>{},
     this.pendingRuntimeCreations = const <PendingRuntimeCreation>[],
   });
 
@@ -95,6 +190,7 @@ class AgentsState {
   final Map<String, String> invocationPolicyErrors;
   final Map<String, String> statusQueryErrors;
   final Map<String, String> daemonUpgradeErrors;
+  final Map<String, DaemonUpgradeProgress> daemonUpgradeProgress;
   final List<PendingRuntimeCreation> pendingRuntimeCreations;
 
   AgentSummary? get selectedAgent {
@@ -167,6 +263,7 @@ class AgentsState {
     Map<String, String>? invocationPolicyErrors,
     Map<String, String>? statusQueryErrors,
     Map<String, String>? daemonUpgradeErrors,
+    Map<String, DaemonUpgradeProgress>? daemonUpgradeProgress,
     List<PendingRuntimeCreation>? pendingRuntimeCreations,
   }) {
     return AgentsState(
@@ -194,6 +291,8 @@ class AgentsState {
           invocationPolicyErrors ?? this.invocationPolicyErrors,
       statusQueryErrors: statusQueryErrors ?? this.statusQueryErrors,
       daemonUpgradeErrors: daemonUpgradeErrors ?? this.daemonUpgradeErrors,
+      daemonUpgradeProgress:
+          daemonUpgradeProgress ?? this.daemonUpgradeProgress,
       pendingRuntimeCreations:
           pendingRuntimeCreations ?? this.pendingRuntimeCreations,
     );
@@ -508,6 +607,10 @@ class AgentsController extends StateNotifier<AgentsState> {
         ...state.pendingDaemonUpgrades,
         daemonDid,
       },
+      daemonUpgradeProgress: <String, DaemonUpgradeProgress>{
+        ...state.daemonUpgradeProgress,
+        daemonDid: DaemonUpgradeProgress.started(),
+      },
       daemonUpgradeErrors: _withoutStringKey(
         state.daemonUpgradeErrors,
         daemonDid,
@@ -526,6 +629,10 @@ class AgentsController extends StateNotifier<AgentsState> {
         isActing: false,
         pendingDaemonUpgrades: _withoutSetValue(
           state.pendingDaemonUpgrades,
+          daemonDid,
+        ),
+        daemonUpgradeProgress: _withoutDaemonUpgradeProgressKey(
+          state.daemonUpgradeProgress,
           daemonDid,
         ),
         daemonUpgradeErrors: <String, String>{
@@ -736,6 +843,11 @@ class AgentsController extends StateNotifier<AgentsState> {
       payload,
       daemonDid,
     );
+    final nextDaemonUpgradeProgress = _daemonUpgradeProgressAfterPayload(
+      payload,
+      daemonDid,
+      nextPendingDaemonUpgrades,
+    );
     state = state.copyWith(
       agents: merged,
       selectedAgentDid: _nextSelection(merged),
@@ -743,6 +855,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       pendingStatusQueryAtByDaemon: nextPending,
       pendingDaemonUpgrades: nextPendingDaemonUpgrades,
       daemonUpgradeErrors: nextDaemonUpgradeErrors,
+      daemonUpgradeProgress: nextDaemonUpgradeProgress,
       statusQueryErrors: daemonDid == null
           ? state.statusQueryErrors
           : _withoutStringKey(state.statusQueryErrors, daemonDid),
@@ -809,6 +922,10 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(
         pendingDaemonUpgrades: _withoutSetValue(
           state.pendingDaemonUpgrades,
+          daemonDid,
+        ),
+        daemonUpgradeProgress: _withoutDaemonUpgradeProgressKey(
+          state.daemonUpgradeProgress,
           daemonDid,
         ),
         daemonUpgradeErrors: <String, String>{
@@ -925,6 +1042,40 @@ class AgentsController extends StateNotifier<AgentsState> {
     return <String, String>{
       ...state.daemonUpgradeErrors,
       daemonDid: _daemonUpgradeFailureMessage(result),
+    };
+  }
+
+  Map<String, DaemonUpgradeProgress> _daemonUpgradeProgressAfterPayload(
+    Map<String, Object?> payload,
+    String? daemonDid,
+    Set<String> nextPendingDaemonUpgrades,
+  ) {
+    if (daemonDid == null) {
+      return state.daemonUpgradeProgress;
+    }
+    final result = _readMap(payload['result']);
+    if (_string(result['command']) != 'daemon.upgrade') {
+      if (_daemonStatusShowsUpgradeResolved(payload)) {
+        return _withoutDaemonUpgradeProgressKey(
+          state.daemonUpgradeProgress,
+          daemonDid,
+        );
+      }
+      return state.daemonUpgradeProgress;
+    }
+    if (!nextPendingDaemonUpgrades.contains(daemonDid)) {
+      return _withoutDaemonUpgradeProgressKey(
+        state.daemonUpgradeProgress,
+        daemonDid,
+      );
+    }
+    final progress = DaemonUpgradeProgress.fromPayload(result);
+    if (progress == null) {
+      return state.daemonUpgradeProgress;
+    }
+    return <String, DaemonUpgradeProgress>{
+      ...state.daemonUpgradeProgress,
+      daemonDid: progress,
     };
   }
 
@@ -1593,6 +1744,19 @@ Map<String, String> _withoutStringKey(Map<String, String> input, String key) {
   };
 }
 
+Map<String, DaemonUpgradeProgress> _withoutDaemonUpgradeProgressKey(
+  Map<String, DaemonUpgradeProgress> input,
+  String key,
+) {
+  if (!input.containsKey(key)) {
+    return input;
+  }
+  return <String, DaemonUpgradeProgress>{
+    for (final entry in input.entries)
+      if (entry.key != key) entry.key: entry.value,
+  };
+}
+
 Set<String> _withoutSetValue(Set<String> input, String value) {
   if (!input.contains(value)) {
     return input;
@@ -1693,6 +1857,26 @@ Map<String, Object?> _readMap(Object? value) {
 String? _string(Object? value) {
   final text = value?.toString().trim();
   return text == null || text.isEmpty ? null : text;
+}
+
+int? _int(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.round();
+  }
+  return int.tryParse(value?.toString().trim() ?? '');
+}
+
+double? _double(Object? value) {
+  if (value is double) {
+    return value;
+  }
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value?.toString().trim() ?? '');
 }
 
 String _defaultAppInstanceId(String credentialName) {
