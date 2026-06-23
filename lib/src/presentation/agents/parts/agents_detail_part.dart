@@ -12,6 +12,7 @@ class _AgentDetailPane extends StatelessWidget {
     required this.onRetryRun,
     required this.onResetRuntime,
     required this.onUpgrade,
+    required this.onCancelUpgrade,
     required this.onDelete,
     required this.onSaveInvocationPolicy,
   });
@@ -26,6 +27,7 @@ class _AgentDetailPane extends StatelessWidget {
   final ValueChanged<AgentSummary> onRetryRun;
   final ValueChanged<AgentSummary> onResetRuntime;
   final ValueChanged<AgentSummary> onUpgrade;
+  final ValueChanged<AgentSummary> onCancelUpgrade;
   final ValueChanged<AgentSummary> onDelete;
   final Future<bool> Function(String agentDid, AgentInvocationPolicy policy)
   onSaveInvocationPolicy;
@@ -41,6 +43,8 @@ class _AgentDetailPane extends StatelessWidget {
         agent.isDaemon && state.isStatusQueryPending(agent.agentDid);
     final isUpgrading =
         agent.isDaemon && state.isDaemonUpgradePending(agent.agentDid);
+    final isCancelling =
+        agent.isDaemon && state.isDaemonUpgradeCancelling(agent.agentDid);
     final title = AgentDisplayName.title(agent);
     final visualStatus = AgentVisualStatus.fromAgent(
       agent,
@@ -138,6 +142,15 @@ class _AgentDetailPane extends StatelessWidget {
                           ? null
                           : () => onUpgrade(agent),
                     ),
+                  if (isUpgrading)
+                    _ActionButton(
+                      icon: CupertinoIcons.xmark_circle,
+                      label: isCancelling ? '取消中' : '取消升级',
+                      danger: true,
+                      onPressed: state.isActing || isCancelling
+                          ? null
+                          : () => onCancelUpgrade(agent),
+                    ),
                   _ActionButton(
                     icon: CupertinoIcons.trash,
                     label: agent.isDaemon ? '删除代理' : '删除智能体',
@@ -163,7 +176,11 @@ class _AgentDetailPane extends StatelessWidget {
             ],
             if (isUpgrading && upgradeProgress != null) ...<Widget>[
               SizedBox(height: responsive.spacing(12)),
-              _DaemonUpgradeProgressPanel(progress: upgradeProgress),
+              _DaemonUpgradeProgressPanel(
+                progress: upgradeProgress,
+                isCancelling: isCancelling,
+                onCancel: isCancelling ? null : () => onCancelUpgrade(agent),
+              ),
             ],
             SizedBox(height: responsive.spacing(18)),
             if (agent.isRuntime && agent.recentRuns.isNotEmpty) ...<Widget>[
@@ -202,9 +219,15 @@ class _AgentDetailPane extends StatelessWidget {
 }
 
 class _DaemonUpgradeProgressPanel extends StatelessWidget {
-  const _DaemonUpgradeProgressPanel({required this.progress});
+  const _DaemonUpgradeProgressPanel({
+    required this.progress,
+    required this.isCancelling,
+    required this.onCancel,
+  });
 
   final DaemonUpgradeProgress progress;
+  final bool isCancelling;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -254,6 +277,31 @@ class _DaemonUpgradeProgressPanel extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+              SizedBox(width: responsive.spacing(10)),
+              CupertinoButton(
+                minimumSize: Size(
+                  responsive.displayScaled(28),
+                  responsive.displayScaled(28),
+                ),
+                padding: EdgeInsets.symmetric(
+                  horizontal: responsive.spacing(10),
+                  vertical: responsive.spacing(5),
+                ),
+                color: const Color(0xFFFEEEF0),
+                disabledColor: const Color(0xFFF2F4F8),
+                borderRadius: BorderRadius.circular(responsive.radius(7)),
+                onPressed: onCancel,
+                child: Text(
+                  isCancelling ? '取消中' : '取消',
+                  style: TextStyle(
+                    color: isCancelling
+                        ? const Color(0xFF8A96AA)
+                        : AwikiMeColors.danger,
+                    fontSize: responsive.metaSm,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ],
           ),
           SizedBox(height: responsive.spacing(10)),

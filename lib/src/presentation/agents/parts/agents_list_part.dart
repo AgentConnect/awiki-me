@@ -218,6 +218,7 @@ class _AgentDaemonGroup extends StatelessWidget {
             agent: daemon,
             pendingAgentDids: pendingAgentDids,
             pendingDaemonUpgrades: state.pendingDaemonUpgrades,
+            cancellingDaemonUpgrades: state.cancellingDaemonUpgrades,
             daemonUpgradeErrors: state.daemonUpgradeErrors,
             daemonUpgradeProgress: state.daemonUpgradeProgress,
             selected: selectedAgentDid == daemon.agentDid,
@@ -237,6 +238,7 @@ class _AgentDaemonGroup extends StatelessWidget {
                 agent: runtime,
                 pendingAgentDids: pendingAgentDids,
                 pendingDaemonUpgrades: state.pendingDaemonUpgrades,
+                cancellingDaemonUpgrades: state.cancellingDaemonUpgrades,
                 daemonUpgradeErrors: state.daemonUpgradeErrors,
                 daemonUpgradeProgress: state.daemonUpgradeProgress,
                 selected: selectedAgentDid == runtime.agentDid,
@@ -292,6 +294,7 @@ class _OrphanRuntimeGroup extends StatelessWidget {
             agent: runtime,
             pendingAgentDids: pendingAgentDids,
             pendingDaemonUpgrades: const <String>{},
+            cancellingDaemonUpgrades: const <String>{},
             daemonUpgradeProgress: const <String, DaemonUpgradeProgress>{},
             selected: selectedAgentDid == runtime.agentDid,
             onTap: () => onSelect(runtime.agentDid),
@@ -455,6 +458,7 @@ class _AgentListTile extends StatelessWidget {
     required this.agent,
     required this.pendingAgentDids,
     required this.pendingDaemonUpgrades,
+    required this.cancellingDaemonUpgrades,
     required this.selected,
     required this.onTap,
     this.daemonUpgradeErrors = const <String, String>{},
@@ -468,6 +472,7 @@ class _AgentListTile extends StatelessWidget {
   final AgentSummary agent;
   final Set<String> pendingAgentDids;
   final Set<String> pendingDaemonUpgrades;
+  final Set<String> cancellingDaemonUpgrades;
   final Map<String, String> daemonUpgradeErrors;
   final Map<String, DaemonUpgradeProgress> daemonUpgradeProgress;
   final bool selected;
@@ -565,6 +570,9 @@ class _AgentListTile extends StatelessWidget {
                               runtimeCount,
                               visualStatus,
                               isUpgrading: pendingDaemonUpgrades.contains(
+                                agent.agentDid,
+                              ),
+                              isCancelling: cancellingDaemonUpgrades.contains(
                                 agent.agentDid,
                               ),
                               upgradeProgress: daemonUpgradeProgress,
@@ -665,6 +673,7 @@ String _agentListSubtitle(
   int? runtimeCount,
   AgentVisualStatus visualStatus, {
   bool isUpgrading = false,
+  bool isCancelling = false,
   DaemonUpgradeProgress? upgradeProgress,
   String? upgradeError,
 }) {
@@ -672,6 +681,8 @@ String _agentListSubtitle(
     final count = runtimeCount ?? 0;
     final statusLabel = upgradeError != null
         ? '升级失败'
+        : isCancelling
+        ? '正在取消升级'
         : isUpgrading
         ? upgradeProgress?.compactLabel ?? '正在升级'
         : visualStatus.label;

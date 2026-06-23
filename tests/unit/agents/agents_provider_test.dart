@@ -751,6 +751,140 @@ void main() {
   });
 
   test(
+    'slow daemon upgrade progress stays pending without app timeout',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'needs_upgrade',
+              needsUpgrade: true,
+            ),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      final started = await container
+          .read(agentsProvider.notifier)
+          .upgradeDaemon('did:agent:daemon');
+      expect(started, isTrue);
+
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'state': 'upgrading',
+          'daemon_agent_did': 'did:agent:daemon',
+          'result': <String, Object?>{
+            'command': 'daemon.upgrade',
+            'daemon_agent_did': 'did:agent:daemon',
+            'status': 'in_progress',
+            'progress': <String, Object?>{
+              'stage': 'downloading',
+              'message': '正在下载安装包',
+              'downloaded_bytes': 335872,
+              'total_bytes': 7350518,
+              'percent': 4.57,
+              'speed_bytes_per_sec': 9780,
+            },
+          },
+        },
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final state = container.read(agentsProvider);
+      expect(state.pendingDaemonUpgrades, contains('did:agent:daemon'));
+      expect(state.daemonUpgradeErrors, isEmpty);
+      expect(
+        state.daemonUpgradeProgress['did:agent:daemon']?.stage,
+        'downloading',
+      );
+      expect(
+        state.daemonUpgradeProgress['did:agent:daemon']?.speedBytesPerSecond,
+        9780,
+      );
+    },
+  );
+
+  test(
+    'cancelDaemonUpgrade tracks cancelling until daemon reports terminal state',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'needs_upgrade',
+              needsUpgrade: true,
+            ),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      await container
+          .read(agentsProvider.notifier)
+          .upgradeDaemon('did:agent:daemon');
+      final requested = await container
+          .read(agentsProvider.notifier)
+          .cancelDaemonUpgrade('did:agent:daemon');
+
+      expect(requested, isTrue);
+      expect(control.lastCancelledUpgradeDaemonDid, 'did:agent:daemon');
+      var state = container.read(agentsProvider);
+      expect(state.pendingDaemonUpgrades, contains('did:agent:daemon'));
+      expect(state.cancellingDaemonUpgrades, contains('did:agent:daemon'));
+
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'state': 'cancel_requested',
+          'daemon_agent_did': 'did:agent:daemon',
+          'result': <String, Object?>{
+            'command': 'daemon.upgrade.cancel',
+            'daemon_agent_did': 'did:agent:daemon',
+            'status': 'cancel_requested',
+          },
+        },
+      );
+
+      state = container.read(agentsProvider);
+      expect(state.pendingDaemonUpgrades, contains('did:agent:daemon'));
+      expect(state.cancellingDaemonUpgrades, contains('did:agent:daemon'));
+
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'state': 'cancelled',
+          'daemon_agent_did': 'did:agent:daemon',
+          'result': <String, Object?>{
+            'command': 'daemon.upgrade',
+            'daemon_agent_did': 'did:agent:daemon',
+            'status': 'cancelled',
+            'error_code': 'upgrade_cancelled',
+          },
+        },
+      );
+
+      state = container.read(agentsProvider);
+      expect(state.pendingDaemonUpgrades, isEmpty);
+      expect(state.cancellingDaemonUpgrades, isEmpty);
+      expect(state.daemonUpgradeProgress, isEmpty);
+      expect(state.daemonUpgradeErrors, isEmpty);
+      expect(state.agents.single.latest.status, 'needs_upgrade');
+    },
+  );
+
+  test(
     'upgradeDaemon does not treat restart scheduled as final success',
     () async {
       final control = FakeAgentControlService()

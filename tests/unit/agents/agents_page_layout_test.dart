@@ -942,6 +942,7 @@ void main() {
           did: 'did:human:me',
           credentialName: 'default',
           displayName: 'Me',
+          handle: 'me.anpclaw.com',
         ),
         providerOverrides: <Override>[
           agentControlServiceProvider.overrideWithValue(control),

@@ -159,6 +159,18 @@ Map<String, Object?> daemonUpgradePayload({String targetVersion = 'latest'}) {
   };
 }
 
+Map<String, Object?> daemonUpgradeCancelPayload({String? upgradeCommandId}) {
+  return <String, Object?>{
+    'schema': AgentControlPayloads.commandSchema,
+    'command_id': agentCommandId('cmd_daemon_upgrade_cancel'),
+    'command': 'daemon.upgrade.cancel',
+    'target_agent_kind': 'daemon',
+    'args': <String, Object?>{
+      if (upgradeCommandId != null) 'upgrade_command_id': upgradeCommandId,
+    },
+  };
+}
+
 Map<String, Object?> daemonDeletePayload({required String daemonAgentDid}) {
   return <String, Object?>{
     'schema': AgentControlPayloads.commandSchema,

@@ -1575,6 +1575,7 @@ class FakeAgentControlService implements AgentControlService {
   String? lastRenamedAgentDid;
   String? lastDisplayName;
   String? lastUpgradeDaemonDid;
+  String? lastCancelledUpgradeDaemonDid;
   Map<String, AgentInvocationPolicy> invocationPolicies =
       <String, AgentInvocationPolicy>{};
   String? lastInvocationPolicyAgentDid;
@@ -1760,6 +1761,11 @@ class FakeAgentControlService implements AgentControlService {
   @override
   Future<void> upgradeDaemon(String daemonAgentDid) async {
     lastUpgradeDaemonDid = daemonAgentDid;
+  }
+
+  @override
+  Future<void> cancelDaemonUpgrade(String daemonAgentDid) async {
+    lastCancelledUpgradeDaemonDid = daemonAgentDid;
   }
 }
 
