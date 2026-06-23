@@ -6,6 +6,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart'
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -172,6 +173,102 @@ void main() {
 
     expect(container.read(agentsProvider).error, '网络连接暂时不可用，已保留当前数据。');
   });
+
+  test(
+    'load maps controller handle mismatch to a friendly agent error',
+    () async {
+      final control = _FailingAgentControlService(
+        const AwikiOnboardingUtilityError(
+          rpcCode: -32001,
+          message: 'controller_handle must match current controller scope',
+          data: <String, Object?>{'reason': 'controller_handle_mismatch'},
+        ),
+      );
+      final container = _container(control);
+      addTearDown(container.dispose);
+
+      await container.read(agentsProvider.notifier).load();
+
+      expect(
+        container.read(agentsProvider).error,
+        '当前客户端身份和登录 handle 不一致，请切换到正确账号后重新复制安装命令。',
+      );
+    },
+  );
+
+  test(
+    'load maps missing controller handle to a friendly agent error',
+    () async {
+      final control = _FailingAgentControlService(
+        const AwikiOnboardingUtilityError(
+          rpcCode: -32001,
+          message:
+              'controller_handle is required for daemon registration tokens',
+          data: <String, Object?>{'reason': 'controller_handle_required'},
+        ),
+      );
+      final container = _container(control);
+      addTearDown(container.dispose);
+
+      await container.read(agentsProvider.notifier).load();
+
+      expect(
+        container.read(agentsProvider).error,
+        '当前账号没有可用 handle，暂时不能生成 Daemon 安装命令。',
+      );
+    },
+  );
+
+  test(
+    'createDaemonInstallCommand binds command to current session handle',
+    () async {
+      final control = FakeAgentControlService();
+      final container = _container(
+        control,
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+          handle: 'Alice.Anpclaw.com',
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(agentsProvider.notifier)
+          .createDaemonInstallCommand();
+      final state = container.read(agentsProvider);
+
+      expect(state.installCommand, control.nextInstallCommand);
+      expect(control.lastInstallControllerDid, 'did:human:me');
+      expect(control.lastInstallControllerHandle, 'alice.anpclaw.com');
+    },
+  );
+
+  test(
+    'createDaemonInstallCommand requires a current session handle',
+    () async {
+      final control = FakeAgentControlService();
+      final container = _container(
+        control,
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(agentsProvider.notifier)
+          .createDaemonInstallCommand();
+      final state = container.read(agentsProvider);
+
+      expect(control.lastInstallCommand, isNull);
+      expect(state.installCommand, isNull);
+      expect(state.error, '当前账号没有可用 handle，暂时不能生成 Daemon 安装命令。');
+    },
+  );
 
   test('load ignores local cache read and write failures', () async {
     final control = FakeAgentControlService()
@@ -1575,6 +1672,7 @@ ProviderContainer _container(
     did: 'did:human:me',
     credentialName: 'default',
     displayName: 'Me',
+    handle: 'me.anpclaw.com',
   ),
 }) {
   return ProviderContainer(

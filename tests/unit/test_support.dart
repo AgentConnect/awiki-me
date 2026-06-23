@@ -1451,8 +1451,8 @@ class FakeAgentInventoryPort implements AgentInventoryPort {
   @override
   Future<AgentRegistrationToken> issueDaemonToken({
     required String controllerDid,
+    required String controllerHandle,
     required String clientPlatform,
-    String? handle,
   }) async {
     return nextDaemonToken;
   }
@@ -1537,6 +1537,9 @@ class FakeAgentControlService implements AgentControlService {
         'https://awiki.info/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
   );
   String? lastRefreshedDaemonDid;
+  String? lastInstallControllerDid;
+  String? lastInstallControllerHandle;
+  String? lastInstallClientPlatform;
   String? lastRuntimeCreateDaemonDid;
   String? lastRuntimeCreateControllerDid;
   String? lastBootstrapDaemonDid;
@@ -1580,8 +1583,12 @@ class FakeAgentControlService implements AgentControlService {
   @override
   Future<InstallCommand> createDaemonInstallCommand({
     required String controllerDid,
+    required String controllerHandle,
     required String clientPlatform,
   }) async {
+    lastInstallControllerDid = controllerDid;
+    lastInstallControllerHandle = controllerHandle;
+    lastInstallClientPlatform = clientPlatform;
     return lastInstallCommand = nextInstallCommand;
   }
 

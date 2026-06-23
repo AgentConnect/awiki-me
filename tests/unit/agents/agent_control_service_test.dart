@@ -385,16 +385,19 @@ void main() {
   });
 
   test('createDaemonInstallCommand returns token-only main command', () async {
+    final inventory = _InventoryStub();
     final service = DefaultAgentControlService(
-      inventory: _InventoryStub(),
+      inventory: inventory,
       messages: _MessagesStub(),
     );
 
     final command = await service.createDaemonInstallCommand(
       controllerDid: 'did:human:me',
+      controllerHandle: 'alice.anpclaw.com',
       clientPlatform: 'macos',
     );
 
+    expect(inventory.lastDaemonTokenControllerHandle, 'alice.anpclaw.com');
     expect(command.command, contains('--token daemon-token'));
     expect(command.command, isNot(contains('did:human:me')));
     expect(command.command, isNot(contains('--base-url')));
@@ -435,6 +438,9 @@ void main() {
 }
 
 class _InventoryStub implements AgentInventoryPort {
+  String? lastDaemonTokenControllerDid;
+  String? lastDaemonTokenControllerHandle;
+  String? lastDaemonTokenClientPlatform;
   String? runtimeTokenDaemonDid;
   String? runtimeTokenHandle;
   String? runtimeTokenDisplayName;
@@ -446,9 +452,12 @@ class _InventoryStub implements AgentInventoryPort {
   @override
   Future<AgentRegistrationToken> issueDaemonToken({
     required String controllerDid,
+    required String controllerHandle,
     required String clientPlatform,
-    String? handle,
   }) async {
+    lastDaemonTokenControllerDid = controllerDid;
+    lastDaemonTokenControllerHandle = controllerHandle;
+    lastDaemonTokenClientPlatform = clientPlatform;
     return const AgentRegistrationToken(token: 'daemon-token');
   }
 

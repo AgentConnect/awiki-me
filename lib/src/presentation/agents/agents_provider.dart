@@ -7,6 +7,7 @@ import '../../app/app_services.dart';
 import '../../application/models/product_local_models.dart';
 import '../../core/app_error_classifier.dart';
 import '../../data/agent/user_service_agent_inventory_adapter.dart';
+import '../../data/services/awiki_onboarding_utility_client.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/agent/agent_command.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
@@ -410,11 +411,17 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(error: '请先登录。');
       return;
     }
+    final controllerHandle = session.handle?.trim().toLowerCase();
+    if (controllerHandle == null || controllerHandle.isEmpty) {
+      state = state.copyWith(error: '当前账号没有可用 handle，暂时不能生成 Daemon 安装命令。');
+      return;
+    }
     await _act(() async {
       final command = await ref
           .read(agentControlServiceProvider)
           .createDaemonInstallCommand(
             controllerDid: session.did,
+            controllerHandle: controllerHandle,
             clientPlatform: awikiClientPlatform(),
           );
       state = state.copyWith(installCommand: command, clearError: true);
@@ -1900,6 +1907,23 @@ DateTime? _dateTime(Object? value) {
 }
 
 String _agentErrorMessage(Object error) {
+  final reason = _agentErrorReason(error);
+  if (reason == 'daemon_controller_scope_mismatch' ||
+      reason == 'agent_controller_scope_mismatch') {
+    return '这台电脑已经绑定到另一个 handle 的 Daemon。请使用对应 handle 管理，或先卸载本机 Daemon 后重新安装。';
+  }
+  if (reason == 'controller_handle_mismatch') {
+    return '当前客户端身份和登录 handle 不一致，请切换到正确账号后重新复制安装命令。';
+  }
+  if (reason == 'controller_handle_required') {
+    return '当前账号没有可用 handle，暂时不能生成 Daemon 安装命令。';
+  }
+  if (reason == 'controller_scope_missing') {
+    return '安装命令缺少账号归属信息，请重新复制最新的 Daemon 安装命令。';
+  }
+  if (reason == 'used') {
+    return '这条安装命令已经使用过，请重新复制最新的 Daemon 安装命令。';
+  }
   switch (classifyAppError(error)) {
     case AppErrorKind.authentication:
       return '登录状态已失效，请重新登录后再查看智能体。';
@@ -1912,6 +1936,46 @@ String _agentErrorMessage(Object error) {
       break;
   }
   return '智能体信息暂时无法加载，请稍后重试。';
+}
+
+String? _agentErrorReason(Object error) {
+  if (error is AwikiOnboardingUtilityError) {
+    final data = error.data;
+    if (data is Map) {
+      final reason = data['reason']?.toString().trim();
+      if (reason != null && reason.isNotEmpty) {
+        return reason;
+      }
+    }
+    final message = error.message.trim();
+    if (message.isNotEmpty) {
+      return _knownAgentErrorReason(message);
+    }
+  }
+  return _knownAgentErrorReason(error.toString());
+}
+
+String? _knownAgentErrorReason(String raw) {
+  final normalized = raw.toLowerCase();
+  const reasons = <String>{
+    'daemon_controller_scope_mismatch',
+    'agent_controller_scope_mismatch',
+    'controller_handle_required',
+    'controller_handle_mismatch',
+    'controller_scope_missing',
+    'controller_scope_mismatch',
+    'scope_mismatch',
+    'used',
+  };
+  for (final reason in reasons) {
+    final pattern = RegExp(
+      '(^|[^a-z0-9_])${RegExp.escape(reason)}([^a-z0-9_]|\$)',
+    );
+    if (pattern.hasMatch(normalized)) {
+      return reason;
+    }
+  }
+  return null;
 }
 
 String _agentStatusRefreshErrorMessage(Object error) {

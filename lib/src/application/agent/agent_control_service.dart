@@ -16,6 +16,7 @@ abstract interface class AgentControlService {
   Future<List<AgentSummary>> listAgents({bool includeInactive = false});
   Future<InstallCommand> createDaemonInstallCommand({
     required String controllerDid,
+    required String controllerHandle,
     required String clientPlatform,
   });
   Future<void> refreshDaemonStatus(String daemonAgentDid);
@@ -124,10 +125,12 @@ class DefaultAgentControlService implements AgentControlService {
   @override
   Future<InstallCommand> createDaemonInstallCommand({
     required String controllerDid,
+    required String controllerHandle,
     required String clientPlatform,
   }) async {
     final token = await _inventory.issueDaemonToken(
       controllerDid: controllerDid,
+      controllerHandle: controllerHandle,
       clientPlatform: clientPlatform,
     );
     final installerUrl = '$downloadBaseUrl/install.sh';
