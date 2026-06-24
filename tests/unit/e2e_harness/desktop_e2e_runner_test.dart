@@ -195,6 +195,7 @@ daemon:
   binary: ../awiki-cli-rs2-message-agent/target/release/awiki-deamon
   stateRoot: .e2e/daemon-state
   readyFile: .e2e/daemon-ready.json
+  envFile: .e2e/agent-cli.env
   handle: daemon-from-file
   fakeHermesGatewayCommand: python3 fake_hermes_gateway.py
 messageAgent:
@@ -236,6 +237,7 @@ cliPeer:
       );
       expect(config.daemonStateRoot, '${root.path}/.e2e/daemon-state');
       expect(config.daemonReadyFile, '${root.path}/.e2e/daemon-ready.json');
+      expect(config.daemonEnvFile, '${root.path}/.e2e/agent-cli.env');
       expect(config.daemonHandle, 'daemon-from-file');
       expect(
         config.daemonFakeHermesGatewayCommand,
@@ -318,6 +320,7 @@ cliHandle: legacy-cli
           daemonBinary: '/tmp/awiki-deamon',
           daemonStateRoot: '/tmp/daemon-state',
           daemonReadyFile: '/tmp/daemon-ready.json',
+          daemonEnvFile: '/tmp/agent-cli.env',
           daemonHandle: 'daemon-from-file',
           daemonFakeHermesGatewayCommand: 'python3 fake_hermes_gateway.py',
           messageAgentEnabled: true,
@@ -345,6 +348,7 @@ cliHandle: legacy-cli
       expect(config.daemonBinary, '/tmp/awiki-deamon');
       expect(config.daemonStateRoot, '/tmp/daemon-state');
       expect(config.daemonReadyFile, '/tmp/daemon-ready.json');
+      expect(config.daemonEnvFile, '/tmp/agent-cli.env');
       expect(config.daemonHandle, 'daemon-from-file');
       expect(
         config.daemonFakeHermesGatewayCommand,
@@ -1353,6 +1357,7 @@ cliPeer:
           daemonBinary: '/tmp/awiki-deamon',
           daemonStateRoot: '.e2e/codex-daemon-state',
           daemonReadyFile: '.e2e/codex-daemon-ready.json',
+          daemonEnvFile: '.e2e/codex-agent-cli.env',
           daemonHandle: 'codex-agent-daemon',
           codexAgentEnabled: true,
           codexAgentRealBackend: true,
@@ -1423,6 +1428,7 @@ cliPeer:
           daemon['readyFile'],
           '${root.path}/.e2e/codex-daemon-ready.json',
         );
+        expect(daemon['envFile'], '${root.path}/.e2e/codex-agent-cli.env');
         final runCodexAgent =
             runConfigJson['codexAgent'] as Map<String, dynamic>;
         expect(runCodexAgent['enabled'], isTrue);
@@ -1456,6 +1462,7 @@ cliPeer:
           daemonBinary: '/tmp/awiki-deamon',
           daemonStateRoot: '.e2e/claude-code-daemon-state',
           daemonReadyFile: '.e2e/claude-code-daemon-ready.json',
+          daemonEnvFile: '.e2e/claude-code-agent-cli.env',
           daemonHandle: 'claude-code-agent-daemon',
           claudeCodeAgentEnabled: true,
           claudeCodeAgentRealBackend: true,
@@ -1530,6 +1537,10 @@ cliPeer:
         expect(
           daemon['readyFile'],
           '${root.path}/.e2e/claude-code-daemon-ready.json',
+        );
+        expect(
+          daemon['envFile'],
+          '${root.path}/.e2e/claude-code-agent-cli.env',
         );
         final runClaudeCodeAgent =
             runConfigJson['claudeCodeAgent'] as Map<String, dynamic>;
@@ -1640,6 +1651,7 @@ void _writeLocalConfig(
   String? daemonBinary,
   String? daemonStateRoot,
   String? daemonReadyFile,
+  String? daemonEnvFile,
   String? daemonHandle,
   String? fakeHermesGatewayCommand,
   bool messageAgentEnabled = false,
@@ -1667,12 +1679,13 @@ void _writeLocalConfig(
           daemonBinary == null &&
           daemonStateRoot == null &&
           daemonReadyFile == null &&
+          daemonEnvFile == null &&
           daemonHandle == null &&
           fakeHermesGatewayCommand == null
       ? ''
       : '''
 daemon:
-${daemonRustRepo == null ? '' : '  rustRepo: $daemonRustRepo\n'}${daemonBinary == null ? '' : '  binary: $daemonBinary\n'}${daemonStateRoot == null ? '' : '  stateRoot: $daemonStateRoot\n'}${daemonReadyFile == null ? '' : '  readyFile: $daemonReadyFile\n'}${daemonHandle == null ? '' : '  handle: $daemonHandle\n'}${fakeHermesGatewayCommand == null ? '' : '  fakeHermesGatewayCommand: $fakeHermesGatewayCommand\n'}
+${daemonRustRepo == null ? '' : '  rustRepo: $daemonRustRepo\n'}${daemonBinary == null ? '' : '  binary: $daemonBinary\n'}${daemonStateRoot == null ? '' : '  stateRoot: $daemonStateRoot\n'}${daemonReadyFile == null ? '' : '  readyFile: $daemonReadyFile\n'}${daemonEnvFile == null ? '' : '  envFile: $daemonEnvFile\n'}${daemonHandle == null ? '' : '  handle: $daemonHandle\n'}${fakeHermesGatewayCommand == null ? '' : '  fakeHermesGatewayCommand: $fakeHermesGatewayCommand\n'}
 ''';
   final messageAgent = includeMessageAgent
       ? '''

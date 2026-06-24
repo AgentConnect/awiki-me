@@ -50,6 +50,21 @@ Claude Code reply. CLI install/version probes or raw Claude Code output alone
 are not sufficient evidence because they do not prove the daemon-to-App
 delivery leg.
 
+When a real Claude Code or Codex CLI requires environment values that are
+available in an interactive shell but not in a daemon process, point the local
+E2E config at a local-only daemon env file:
+
+```yaml
+daemon:
+  envFile: .e2e/agent-cli.env
+```
+
+The file is loaded only into the temporary E2E daemon process. Keep it outside
+git and use `AWIKI_DAEMON_CLI_ENV_PASSTHROUGH` to explicitly allow the values
+that the CLI child process may inherit, for example
+`AWIKI_DAEMON_CLI_ENV_PASSTHROUGH=ANTHROPIC_*,CLAUDE_CODEX_MODEL`. Test logs and
+reports must never include the env file's secret values.
+
 Root `integration_test/*.dart` files are Flutter tooling shims only. Use them
 only for focused debugging of an individual Flutter test implementation:
 

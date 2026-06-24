@@ -26,6 +26,13 @@ cliPeer:
 
 daemon:
   rustRepo: ../awiki-cli-rs2
+  # Optional local-only env file loaded into the temporary E2E daemon process.
+  # Do not commit real tokens. Example content:
+  #   ANTHROPIC_BASE_URL=http://127.0.0.1:4000
+  #   ANTHROPIC_AUTH_TOKEN=...
+  #   CLAUDE_CODEX_MODEL=gpt-5.4-mini
+  #   AWIKI_DAEMON_CLI_ENV_PASSTHROUGH=ANTHROPIC_*,CLAUDE_CODEX_MODEL
+  # envFile: .e2e/agent-cli.env
 
 messageAgent:
   enabled: true

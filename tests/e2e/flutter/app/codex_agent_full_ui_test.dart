@@ -284,14 +284,89 @@ Future<Process> _startRealDaemon({
 }
 
 Map<String, String> _daemonEnvironment(_CodexAgentRealBackendConfig config) {
-  return <String, String>{
+  final environment = _loadDaemonEnvFile(config);
+  environment.addAll(<String, String>{
     'AWIKI_DAEMON_SERVICE_BASE_URL': config.environment.baseUrl,
     'AWIKI_DAEMON_USER_SERVICE_BASE_URL': config.environment.userServiceUrl,
     'AWIKI_DAEMON_MESSAGE_SERVICE_BASE_URL':
         config.environment.messageServiceUrl,
     'AWIKI_DAEMON_DID_DOMAIN': config.environment.didDomain,
     'AWIKI_DAEMON_ALLOW_PLAIN_CONTROL': '1',
-  };
+  });
+  return environment;
+}
+
+Map<String, String> _loadDaemonEnvFile(_CodexAgentRealBackendConfig config) {
+  final path = config.daemonEnvFile;
+  if (path == null || path.trim().isEmpty) {
+    return <String, String>{};
+  }
+  final file = File(path);
+  if (!file.existsSync()) {
+    throw StateError(
+      'daemon env file was configured but not found: '
+      '${_sanitizeDiagnostic(path, config)}',
+    );
+  }
+  return _parseDaemonEnvFile(file.readAsLinesSync(), path);
+}
+
+List<String> _daemonEnvFileSecretValues(String? path) {
+  if (path == null || path.trim().isEmpty) {
+    return const <String>[];
+  }
+  final file = File(path);
+  if (!file.existsSync()) {
+    return const <String>[];
+  }
+  return _parseDaemonEnvFile(
+    file.readAsLinesSync(),
+    path,
+  ).values.where((value) => value.trim().isNotEmpty).toList(growable: false);
+}
+
+Map<String, String> _parseDaemonEnvFile(List<String> lines, String path) {
+  final values = <String, String>{};
+  for (var index = 0; index < lines.length; index += 1) {
+    var line = lines[index].trim();
+    if (line.isEmpty || line.startsWith('#')) {
+      continue;
+    }
+    if (line.startsWith('export ')) {
+      line = line.substring('export '.length).trimLeft();
+    }
+    final equals = line.indexOf('=');
+    if (equals <= 0) {
+      throw StateError('Invalid daemon env file line ${index + 1} in $path.');
+    }
+    final key = line.substring(0, equals).trim();
+    if (!RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$').hasMatch(key)) {
+      throw StateError(
+        'Invalid daemon env variable name on line ${index + 1} in $path.',
+      );
+    }
+    values[key] = _decodeEnvValue(line.substring(equals + 1).trim());
+  }
+  return values;
+}
+
+String _decodeEnvValue(String value) {
+  if (value.length >= 2) {
+    final quote = value.codeUnitAt(0);
+    final last = value.codeUnitAt(value.length - 1);
+    if ((quote == 0x22 && last == 0x22) || (quote == 0x27 && last == 0x27)) {
+      final inner = value.substring(1, value.length - 1);
+      if (quote == 0x22) {
+        return inner
+            .replaceAll(r'\"', '"')
+            .replaceAll(r'\n', '\n')
+            .replaceAll(r'\t', '\t')
+            .replaceAll(r'\\', '\\');
+      }
+      return inner.replaceAll(r"'\''", "'");
+    }
+  }
+  return value;
 }
 
 Future<void> _waitForAgentInventoryEntry({
@@ -738,6 +813,7 @@ class _CodexAgentRealBackendConfig {
     required this.daemonStateRoot,
     required this.daemonReadyFile,
     required this.daemonHandle,
+    required this.daemonEnvFile,
     required this.enabled,
     required this.realBackend,
     required this.prompt,
@@ -807,6 +883,7 @@ class _CodexAgentRealBackendConfig {
       daemonHandle:
           _optionalConfig(daemon, 'handle') ??
           'codex-agent-daemon-${DateTime.now().millisecondsSinceEpoch}',
+      daemonEnvFile: _optionalConfig(daemon, 'envFile'),
       enabled: enabled,
       realBackend: realBackend,
       prompt:
@@ -826,6 +903,7 @@ class _CodexAgentRealBackendConfig {
   final String daemonStateRoot;
   final String daemonReadyFile;
   final String daemonHandle;
+  final String? daemonEnvFile;
   final bool enabled;
   final bool realBackend;
   final String prompt;
@@ -841,6 +919,8 @@ class _CodexAgentRealBackendConfig {
     appStateRoot,
     daemonStateRoot,
     daemonReadyFile,
+    if (daemonEnvFile != null) daemonEnvFile!,
+    ..._daemonEnvFileSecretValues(daemonEnvFile),
   ].where((value) => value.trim().isNotEmpty).toList(growable: false);
 }
 

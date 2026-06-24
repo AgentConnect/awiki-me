@@ -203,6 +203,7 @@ class DesktopE2eRunner {
     config = peerConfig;
     _addRuntimeSecret(peerConfig.otpPhone);
     _addRuntimeSecret(peerConfig.otpCode);
+    _addRuntimeSecret(peerConfig.daemonEnvFile ?? '');
     _section('AWiki Desktop App + CLI peer E2E $runId');
     _line('platform: ${peerConfig.platform.name}');
     _line('config: ${fileConfig.path ?? '<not found>'}');
@@ -210,6 +211,9 @@ class DesktopE2eRunner {
     _line('cli workspace: ${redactor.redact(cliWorkspaceDir.path)}');
     _line('cli home: ${redactor.redact(cliHomeDir.path)}');
     _line('app state: ${redactor.redact(appStateRootDir.path)}');
+    if (peerConfig.daemonEnvFile != null) {
+      _line('daemon env file: ${redactor.redact(peerConfig.daemonEnvFile!)}');
+    }
     _line('app handle: ${peerConfig.appHandle}');
     _line('cli handle: ${peerConfig.cliHandle}');
     _line('case: ${peerConfig.e2eCase.caseName}');
@@ -412,6 +416,7 @@ class DesktopE2eRunner {
         'stateRoot': peerConfig.daemonStateRoot,
         'readyFile': peerConfig.daemonReadyFile,
         'handle': peerConfig.daemonHandle,
+        'envFile': peerConfig.daemonEnvFile,
         'fakeHermesGatewayCommand': peerConfig.daemonFakeHermesGatewayCommand,
       },
       'messageAgent': <String, Object?>{
@@ -546,6 +551,10 @@ class DesktopE2eRunner {
           'daemonRustRepo': config!.daemonRustRepo == null
               ? null
               : '<redacted-daemon-repo>',
+        if (config != null)
+          'daemonEnvFile': config!.daemonEnvFile == null
+              ? null
+              : '<redacted-daemon-env-file>',
         if (config != null)
           'messageAgent': <String, Object?>{
             'enabled': config!.messageAgentEnabled,
@@ -838,6 +847,7 @@ class DesktopCliPeerConfig {
     this.daemonStateRoot,
     this.daemonReadyFile,
     this.daemonHandle,
+    this.daemonEnvFile,
     this.daemonFakeHermesGatewayCommand,
     this.messageAgentEnabled = false,
     this.messageAgentRuntimeProvider = 'hermes',
@@ -873,6 +883,7 @@ class DesktopCliPeerConfig {
   final String? daemonStateRoot;
   final String? daemonReadyFile;
   final String? daemonHandle;
+  final String? daemonEnvFile;
   final String? daemonFakeHermesGatewayCommand;
   final bool messageAgentEnabled;
   final String messageAgentRuntimeProvider;
@@ -951,6 +962,7 @@ class DesktopCliPeerConfig {
       daemonStateRoot: fileConfig.daemonStateRoot,
       daemonReadyFile: fileConfig.daemonReadyFile,
       daemonHandle: fileConfig.daemonHandle,
+      daemonEnvFile: fileConfig.daemonEnvFile,
       daemonFakeHermesGatewayCommand: fileConfig.daemonFakeHermesGatewayCommand,
       messageAgentEnabled: _effectiveMessageAgentEnabled(
         options,
@@ -1102,6 +1114,7 @@ class DesktopE2eFileConfig {
     this.daemonStateRoot,
     this.daemonReadyFile,
     this.daemonHandle,
+    this.daemonEnvFile,
     this.daemonFakeHermesGatewayCommand,
     this.messageAgentEnabled,
     this.messageAgentRuntimeProvider,
@@ -1138,6 +1151,7 @@ class DesktopE2eFileConfig {
       daemonStateRoot = null,
       daemonReadyFile = null,
       daemonHandle = null,
+      daemonEnvFile = null,
       daemonFakeHermesGatewayCommand = null,
       messageAgentEnabled = null,
       messageAgentRuntimeProvider = null,
@@ -1172,6 +1186,7 @@ class DesktopE2eFileConfig {
   final String? daemonStateRoot;
   final String? daemonReadyFile;
   final String? daemonHandle;
+  final String? daemonEnvFile;
   final String? daemonFakeHermesGatewayCommand;
   final bool? messageAgentEnabled;
   final String? messageAgentRuntimeProvider;
@@ -1244,6 +1259,7 @@ class DesktopE2eFileConfig {
         _stringAt(daemon, 'readyFile'),
       ),
       daemonHandle: _stringAt(daemon, 'handle'),
+      daemonEnvFile: _resolveOptionalPath(root, _stringAt(daemon, 'envFile')),
       daemonFakeHermesGatewayCommand: _stringAt(
         daemon,
         'fakeHermesGatewayCommand',
