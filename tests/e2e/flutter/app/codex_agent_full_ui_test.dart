@@ -5,6 +5,7 @@ import 'dart:ui' show Size;
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/app/e2e_semantics.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
@@ -565,11 +566,13 @@ Future<void> _waitForVisibleCodexReply({
   required WidgetTester tester,
   required String expectedReply,
 }) async {
+  final replyBubble = find.bySemanticsIdentifier(
+    e2eMessageIdentifier(expectedReply),
+  );
   await _pumpUntil(
     tester,
     () {
-      final found = find.text(expectedReply).evaluate().isNotEmpty;
-      return found;
+      return replyBubble.evaluate().isNotEmpty;
     },
     timeout: const Duration(seconds: 90),
     description: 'Codex reply bubble visible in App UI',
@@ -577,7 +580,7 @@ Future<void> _waitForVisibleCodexReply({
         'App history already contained the Codex reply; '
         'the visible chat bubble did not render in time.',
   );
-  expect(find.text(expectedReply), findsOneWidget);
+  expect(replyBubble, findsOneWidget);
 }
 
 String _chatHistoryDebugSummary(List<ChatMessage> messages) {
