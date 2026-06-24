@@ -407,12 +407,28 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     final resolvedAppInstanceId =
         appInstanceId ?? _defaultAppInstanceId(session.credentialName);
+    final existingMessageAgent = state.messageAgentRuntimeFor(daemonDid);
     await _act(() async {
       final subkeyPackage =
           userSubkeyPackage ??
           await ref
               .read(identityCorePortProvider)
               .ensureDaemonSubkeyPackage(session.credentialName);
+      if (existingMessageAgent != null) {
+        await ref
+            .read(messageAgentBindingPortProvider)
+            .ensureBinding(
+              userDid: subkeyPackage.userDid,
+              daemonAgentDid: daemonDid,
+              messageAgentDid: existingMessageAgent.agentDid,
+              runtimeProvider: appMessageHandlerRuntimeProvider,
+              runtimeProfile: const <String, Object?>{
+                'profile': appMessageHandlerRuntimeProfile,
+              },
+              delegatedKeyVerificationMethod: subkeyPackage.verificationMethod,
+            );
+        return;
+      }
       await ref
           .read(agentControlServiceProvider)
           .ensureMessageAgentBootstrap(

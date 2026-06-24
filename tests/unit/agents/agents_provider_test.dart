@@ -1,9 +1,11 @@
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
+import 'package:awiki_me/src/application/ports/message_agent_binding_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
+import 'package:awiki_me/src/domain/entities/agent/message_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
@@ -1065,6 +1067,72 @@ void main() {
   );
 
   test(
+    'bootstrapMessageAgent reuses existing Hermes message runtime for binding',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'ready',
+              diagnosticsSummary: <String, Object?>{
+                'bootstrap_key_id': 'did:agent:daemon#key-3',
+                'bootstrap_public_key_b64u':
+                    'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+                'bootstrap_key_algorithm': 'x25519',
+              },
+            ),
+          ),
+          AgentSummary(
+            agentDid: 'did:agent:message',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'hermes',
+            handle: 'hermes-msg-app-1',
+            displayName: 'Hermes Message Agent',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final identities = FakeIdentityCorePort(
+        daemonSubkeyPackage: const UserSubkeyPackage(
+          userDid: 'did:human:me',
+          verificationMethod: 'did:human:me#daemon-key-1',
+          publicKeyMultibase: 'zPublic',
+          privateKeyMultibase: 'zPrivate',
+        ),
+      );
+      final bindings = _MessageAgentBindingsStub();
+      final container = _container(
+        control,
+        identities: identities,
+        messageAgentBindings: bindings,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(agentsProvider.notifier)
+          .bootstrapMessageAgent(
+            daemonDid: 'did:agent:daemon',
+            appInstanceId: 'app_1',
+          );
+
+      expect(identities.lastEnsuredDaemonSubkeySelector, 'default');
+      expect(control.lastBootstrapDaemonDid, isNull);
+      expect(bindings.lastUserDid, 'did:human:me');
+      expect(bindings.lastDaemonAgentDid, 'did:agent:daemon');
+      expect(bindings.lastMessageAgentDid, 'did:agent:message');
+      expect(
+        bindings.lastDelegatedKeyVerificationMethod,
+        'did:human:me#daemon-key-1',
+      );
+    },
+  );
+
+  test(
     'bootstrapMessageAgent keeps raw diagnostic error while showing friendly text',
     () async {
       final control =
@@ -1136,7 +1204,11 @@ void main() {
           privateKeyMultibase: 'zPrivate',
         ),
       );
-      final container = _container(control, identities: identities);
+      final container = _container(
+        control,
+        identities: identities,
+        agentImEnabled: false,
+      );
       addTearDown(container.dispose);
 
       await container
@@ -1836,7 +1908,8 @@ ProviderContainer _container(
   FakeAgentControlService control, {
   FakeProductLocalStore? localStore,
   FakeIdentityCorePort? identities,
-  bool agentImEnabled = false,
+  MessageAgentBindingPort? messageAgentBindings,
+  bool agentImEnabled = true,
   SessionIdentity session = const SessionIdentity(
     did: 'did:human:me',
     credentialName: 'default',
@@ -1852,12 +1925,69 @@ ProviderContainer _container(
       productLocalStoreProvider.overrideWithValue(
         localStore ?? FakeProductLocalStore(),
       ),
+      if (messageAgentBindings != null)
+        messageAgentBindingPortProvider.overrideWithValue(messageAgentBindings),
       agentImEnabledProvider.overrideWithValue(agentImEnabled),
       sessionProvider.overrideWith((ref) {
         return SessionController()..setSession(session);
       }),
     ],
   );
+}
+
+class _MessageAgentBindingsStub implements MessageAgentBindingPort {
+  String? lastUserDid;
+  String? lastDaemonAgentDid;
+  String? lastMessageAgentDid;
+  String? lastRuntimeProvider;
+  Map<String, Object?>? lastRuntimeProfile;
+  String? lastDelegatedKeyVerificationMethod;
+
+  @override
+  Future<MessageAgentBinding> ensureBinding({
+    required String userDid,
+    required String daemonAgentDid,
+    required String messageAgentDid,
+    required String runtimeProvider,
+    required Map<String, Object?> runtimeProfile,
+    required String delegatedKeyVerificationMethod,
+  }) async {
+    lastUserDid = userDid;
+    lastDaemonAgentDid = daemonAgentDid;
+    lastMessageAgentDid = messageAgentDid;
+    lastRuntimeProvider = runtimeProvider;
+    lastRuntimeProfile = runtimeProfile;
+    lastDelegatedKeyVerificationMethod = delegatedKeyVerificationMethod;
+    return MessageAgentBinding(
+      id: 'binding-1',
+      userDid: userDid,
+      daemonAgentDid: daemonAgentDid,
+      messageAgentDid: messageAgentDid,
+      runtimeProvider: runtimeProvider,
+      runtimeProfile: runtimeProfile,
+      delegatedKeyVerificationMethod: delegatedKeyVerificationMethod,
+      status: 'active',
+    );
+  }
+
+  @override
+  Future<MessageAgentBinding?> getActiveBinding() async => null;
+
+  @override
+  Future<MessageAgentBinding> disableBinding({
+    String? bindingId,
+    String? messageAgentDid,
+  }) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<MessageAgentBinding> revokeBinding({
+    String? bindingId,
+    String? messageAgentDid,
+  }) async {
+    throw UnimplementedError();
+  }
 }
 
 class _FailingAgentControlService extends FakeAgentControlService {

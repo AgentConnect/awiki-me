@@ -2,7 +2,7 @@ import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('defaults to awiki.info service root', () {
+  test('defaults to awiki.info service root and Message Agent enabled', () {
     final config = AwikiEnvironmentConfig();
 
     expect(config.baseUrl, 'https://awiki.info');
@@ -13,7 +13,7 @@ void main() {
     expect(config.anpServiceUrl, 'https://awiki.info/anp-im/rpc');
     expect(config.anpServiceDid, 'did:wba:awiki.info');
     expect(config.daemonDownloadBaseUrl, 'https://awiki.info/daemon');
-    expect(config.agentImEnabled, isFalse);
+    expect(config.agentImEnabled, isTrue);
   });
 
   test('base URL derives backend endpoints and daemon download root', () {
@@ -27,6 +27,12 @@ void main() {
     expect(config.anpServiceUrl, 'https://anpclaw.com/anp-im/rpc');
     expect(config.anpServiceDid, 'did:wba:anpclaw.com');
     expect(config.daemonDownloadBaseUrl, 'https://anpclaw.com/daemon');
+  });
+
+  test('explicit Message Agent flag override can disable IM agent', () {
+    final config = AwikiEnvironmentConfig(agentImEnabled: false);
+
+    expect(config.agentImEnabled, isFalse);
   });
 
   test('advanced overrides win over base URL defaults', () {
