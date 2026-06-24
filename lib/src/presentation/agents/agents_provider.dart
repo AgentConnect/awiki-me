@@ -132,6 +132,13 @@ class DaemonUpgradeProgress {
     return const DaemonUpgradeProgress(stage: 'requested', message: '正在发送升级请求');
   }
 
+  static DaemonUpgradeProgress waitingForDaemonConfirmation() {
+    return const DaemonUpgradeProgress(
+      stage: 'waiting_for_daemon',
+      message: '升级请求已发送，正在等待代理确认',
+    );
+  }
+
   static DaemonUpgradeProgress? fromPayload(Map<String, Object?> payload) {
     final progress = _readMap(payload['progress']);
     if (progress.isEmpty) {
@@ -411,11 +418,25 @@ class AgentsController extends StateNotifier<AgentsState> {
         return;
       }
       final pendingRuntimeCreations = _pendingCreationsAfterAgents(agents);
+      final pendingDaemonUpgrades = _pendingDaemonUpgradesAfterAgents(agents);
+      final cancellingDaemonUpgrades = _cancellingDaemonUpgradesAfterAgents(
+        agents,
+        pendingDaemonUpgrades,
+      );
+      final daemonUpgradeErrors = _daemonUpgradeErrorsAfterAgents(agents);
+      final daemonUpgradeProgress = _daemonUpgradeProgressAfterAgents(
+        agents,
+        pendingDaemonUpgrades,
+      );
       state = state.copyWith(
         agents: agents,
         selectedAgentDid: _nextSelection(agents),
         isLoading: false,
         pendingRuntimeCreations: pendingRuntimeCreations,
+        pendingDaemonUpgrades: pendingDaemonUpgrades,
+        cancellingDaemonUpgrades: cancellingDaemonUpgrades,
+        daemonUpgradeErrors: daemonUpgradeErrors,
+        daemonUpgradeProgress: daemonUpgradeProgress,
         clearError: true,
       );
       _loadedCacheOwner = cacheOwner;
@@ -1092,25 +1113,13 @@ class AgentsController extends StateNotifier<AgentsState> {
       return;
     }
     state = state.copyWith(
-      pendingDaemonUpgrades: _withoutMapKey(
-        state.pendingDaemonUpgrades,
-        daemonDid,
-      ),
-      cancellingDaemonUpgrades: _withoutMapKey(
-        state.cancellingDaemonUpgrades,
-        daemonDid,
-      ),
-      daemonUpgradeProgress: _withoutDaemonUpgradeProgressKey(
-        state.daemonUpgradeProgress,
-        daemonDid,
-      ),
-      daemonUpgradeErrors: <String, String>{
-        ...state.daemonUpgradeErrors,
-        daemonDid: '升级请求已发送，但代理暂未响应。请刷新状态后重试。',
+      daemonUpgradeProgress: <String, DaemonUpgradeProgress>{
+        ...state.daemonUpgradeProgress,
+        daemonDid: DaemonUpgradeProgress.waitingForDaemonConfirmation(),
       },
       isActing: false,
     );
-    _cancelDaemonUpgradeCancelTimer(daemonDid);
+    unawaited(refreshDaemonStatus(daemonDid, fromAutoLoad: true));
   }
 
   void _scheduleDaemonUpgradeCancelAckTimeout(
@@ -1761,6 +1770,105 @@ class AgentsController extends StateNotifier<AgentsState> {
     return retained;
   }
 
+  Map<String, PendingDaemonUpgrade> _pendingDaemonUpgradesAfterAgents(
+    List<AgentSummary> agents,
+  ) {
+    if (state.pendingDaemonUpgrades.isEmpty) {
+      return state.pendingDaemonUpgrades;
+    }
+    final byDid = <String, AgentSummary>{
+      for (final agent in agents.where((agent) => agent.isDaemon))
+        agent.agentDid: agent,
+    };
+    final retained = <String, PendingDaemonUpgrade>{};
+    for (final entry in state.pendingDaemonUpgrades.entries) {
+      final daemon = byDid[entry.key];
+      if (daemon == null ||
+          _daemonAgentShowsUpgradeResolved(daemon) ||
+          _daemonAgentShowsUpgradeFailed(daemon)) {
+        continue;
+      }
+      retained[entry.key] = entry.value;
+    }
+    return retained;
+  }
+
+  Map<String, PendingDaemonUpgradeCancel> _cancellingDaemonUpgradesAfterAgents(
+    List<AgentSummary> agents,
+    Map<String, PendingDaemonUpgrade> nextPendingDaemonUpgrades,
+  ) {
+    if (state.cancellingDaemonUpgrades.isEmpty) {
+      return state.cancellingDaemonUpgrades;
+    }
+    final byDid = <String, AgentSummary>{
+      for (final agent in agents.where((agent) => agent.isDaemon))
+        agent.agentDid: agent,
+    };
+    final retained = <String, PendingDaemonUpgradeCancel>{};
+    for (final entry in state.cancellingDaemonUpgrades.entries) {
+      final daemon = byDid[entry.key];
+      if (!nextPendingDaemonUpgrades.containsKey(entry.key) ||
+          daemon == null ||
+          _daemonAgentShowsUpgradeResolved(daemon) ||
+          _daemonAgentShowsUpgradeFailed(daemon)) {
+        continue;
+      }
+      retained[entry.key] = entry.value;
+    }
+    return retained;
+  }
+
+  Map<String, String> _daemonUpgradeErrorsAfterAgents(
+    List<AgentSummary> agents,
+  ) {
+    if (state.daemonUpgradeErrors.isEmpty &&
+        state.pendingDaemonUpgrades.isEmpty) {
+      return state.daemonUpgradeErrors;
+    }
+    var next = state.daemonUpgradeErrors;
+    for (final daemon in agents.where((agent) => agent.isDaemon)) {
+      if (_daemonAgentShowsUpgradeResolved(daemon)) {
+        next = _withoutStringKey(next, daemon.agentDid);
+        continue;
+      }
+      if (state.pendingDaemonUpgrades.containsKey(daemon.agentDid) &&
+          _daemonAgentShowsUpgradeFailed(daemon)) {
+        next = <String, String>{
+          ...next,
+          daemon.agentDid: _daemonUpgradeFailureMessage(<String, Object?>{
+            'last_error_summary': daemon.latest.lastErrorSummary,
+          }),
+        };
+      }
+    }
+    return next;
+  }
+
+  Map<String, DaemonUpgradeProgress> _daemonUpgradeProgressAfterAgents(
+    List<AgentSummary> agents,
+    Map<String, PendingDaemonUpgrade> nextPendingDaemonUpgrades,
+  ) {
+    if (state.daemonUpgradeProgress.isEmpty) {
+      return state.daemonUpgradeProgress;
+    }
+    final byDid = <String, AgentSummary>{
+      for (final agent in agents.where((agent) => agent.isDaemon))
+        agent.agentDid: agent,
+    };
+    final retained = <String, DaemonUpgradeProgress>{};
+    for (final entry in state.daemonUpgradeProgress.entries) {
+      final daemon = byDid[entry.key];
+      if (!nextPendingDaemonUpgrades.containsKey(entry.key) ||
+          daemon == null ||
+          _daemonAgentShowsUpgradeResolved(daemon) ||
+          _daemonAgentShowsUpgradeFailed(daemon)) {
+        continue;
+      }
+      retained[entry.key] = entry.value;
+    }
+    return retained;
+  }
+
   AgentSummary _mergeRuntimeRunStatus(
     AgentSummary runtime,
     AgentRunStatus run,
@@ -2060,6 +2168,27 @@ bool _daemonStatusShowsUpgradeResolved(Map<String, Object?> payload) {
   final status = _string(daemon['status'])?.toLowerCase();
   final needsUpgrade = daemon['needs_upgrade'];
   return needsUpgrade == false && (status == null || status == 'ready');
+}
+
+bool _daemonAgentShowsUpgradeResolved(AgentSummary daemon) {
+  if (!daemon.isDaemon) {
+    return false;
+  }
+  final status = daemon.latest.status.trim().toLowerCase();
+  return !daemon.latest.needsUpgrade &&
+      status != 'upgrading' &&
+      status != 'restart_scheduled';
+}
+
+bool _daemonAgentShowsUpgradeFailed(AgentSummary daemon) {
+  if (!daemon.isDaemon) {
+    return false;
+  }
+  final status = daemon.latest.status.trim().toLowerCase();
+  return status == 'failed' ||
+      status == 'error' ||
+      status == 'gateway_error' ||
+      daemon.latest.lastErrorSummary != null;
 }
 
 bool _commandIdMatches(String? payloadCommandId, String expectedCommandId) {

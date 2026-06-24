@@ -821,7 +821,7 @@ void main() {
   );
 
   test(
-    'daemon upgrade ack timeout clears only pre-ack sending state',
+    'daemon upgrade ack timeout keeps request pending for status refresh',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -851,15 +851,82 @@ void main() {
       container
           .read(agentsProvider.notifier)
           .handleDaemonUpgradeAckTimeoutForTest('did:agent:daemon', commandId);
+      await Future<void>.delayed(Duration.zero);
+
+      final state = container.read(agentsProvider);
+      expect(
+        state.pendingDaemonUpgrades,
+        containsPair('did:agent:daemon', isA<PendingDaemonUpgrade>()),
+      );
+      expect(
+        state.daemonUpgradeProgress['did:agent:daemon']?.stage,
+        'waiting_for_daemon',
+      );
+      expect(
+        state.daemonUpgradeProgress['did:agent:daemon']?.displayMessage,
+        '升级请求已发送，正在等待代理确认',
+      );
+      expect(state.daemonUpgradeErrors, isEmpty);
+      expect(state.isActing, isFalse);
+      expect(control.lastRefreshedDaemonDid, 'did:agent:daemon');
+    },
+  );
+
+  test(
+    'load clears pending daemon upgrade when inventory shows latest ready',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'needs_upgrade',
+              version: '0.1.46',
+              latestVersion: '0.1.47',
+              needsUpgrade: true,
+            ),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      await container
+          .read(agentsProvider.notifier)
+          .upgradeDaemon('did:agent:daemon');
+      final commandId = container
+          .read(agentsProvider)
+          .pendingDaemonUpgrades['did:agent:daemon']!
+          .commandId;
+      container
+          .read(agentsProvider.notifier)
+          .handleDaemonUpgradeAckTimeoutForTest('did:agent:daemon', commandId);
+
+      control.agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'ready',
+            version: '0.1.47',
+            latestVersion: '0.1.47',
+            needsUpgrade: false,
+          ),
+        ),
+      ];
+      await container.read(agentsProvider.notifier).load();
 
       final state = container.read(agentsProvider);
       expect(state.pendingDaemonUpgrades, isEmpty);
       expect(state.daemonUpgradeProgress, isEmpty);
-      expect(
-        state.daemonUpgradeErrors['did:agent:daemon'],
-        '升级请求已发送，但代理暂未响应。请刷新状态后重试。',
-      );
-      expect(state.isActing, isFalse);
+      expect(state.daemonUpgradeErrors, isEmpty);
+      expect(state.agents.single.latest.status, 'ready');
+      expect(state.agents.single.latest.needsUpgrade, isFalse);
     },
   );
 
