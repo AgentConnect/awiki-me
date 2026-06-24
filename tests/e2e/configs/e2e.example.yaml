@@ -31,3 +31,11 @@ messageAgent:
   enabled: true
   runtimeProvider: hermes
   processingScope: all_conversations
+
+codexAgent:
+  enabled: false
+  realBackend: true
+
+claudeCodeAgent:
+  enabled: false
+  realBackend: true

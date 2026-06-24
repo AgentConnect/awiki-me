@@ -11,9 +11,12 @@ const String _messageAgentRunConfigPath =
     '.e2e/message-agent/current/run_config.json';
 const String _codexAgentRunConfigPath =
     '.e2e/codex-agent/current/run_config.json';
+const String _claudeCodeAgentRunConfigPath =
+    '.e2e/claude-code-agent/current/run_config.json';
 const String _desktopCliPeerScenario = 'desktop-app-cli-peer';
 const String _messageAgentScenario = 'message-agent-full-ui';
 const String _codexAgentScenario = 'codex-agent-full-ui';
+const String _claudeCodeAgentScenario = 'claude-code-agent-full-ui';
 const List<String> _desktopCliPeerCaseIds = <String>[
   'AUTH-E2E-001',
   'MSG-E2E-001',
@@ -72,6 +75,12 @@ const List<String> _codexAgentCaseIds = <String>[
   'CODEXAGENT-E2E-002', // App UI sends a deterministic prompt to Codex.
   'CODEXAGENT-E2E-003', // daemon records runtime_run + runtime_final_outbox sent.
   'CODEXAGENT-E2E-004', // App local history and visible UI show the Codex reply.
+];
+const List<String> _claudeCodeAgentCaseIds = <String>[
+  'CLAUDECODEAGENT-E2E-001', // App creates/selects a Claude Code runtime Agent.
+  'CLAUDECODEAGENT-E2E-002', // App UI sends a deterministic prompt to Claude Code.
+  'CLAUDECODEAGENT-E2E-003', // daemon records runtime_run + runtime_final_outbox sent.
+  'CLAUDECODEAGENT-E2E-004', // App local history and visible UI show the Claude Code reply.
 ];
 
 Future<void> main(List<String> args) async {
@@ -359,6 +368,7 @@ class DesktopE2eRunner {
     final peerConfig = _requireConfig();
     final flutterArgs = <String>[
       'test',
+      '--dart-define=AWIKI_E2E=true',
       peerConfig.e2eCase.testFile,
       '-d',
       peerConfig.platform.name,
@@ -418,6 +428,15 @@ class DesktopE2eRunner {
             peerConfig.codexAgentExpectedReply ??
             _defaultCodexExpectedReply(runId),
       },
+      'claudeCodeAgent': <String, Object?>{
+        'enabled': peerConfig.claudeCodeAgentEnabled,
+        'realBackend': peerConfig.claudeCodeAgentRealBackend,
+        'prompt':
+            peerConfig.claudeCodeAgentPrompt ?? _defaultClaudeCodePrompt(runId),
+        'expectedReply':
+            peerConfig.claudeCodeAgentExpectedReply ??
+            _defaultClaudeCodeExpectedReply(runId),
+      },
     };
     if (options.dryRun && !options.prepareOnly) {
       _line('would write Flutter E2E run config: ${runConfigFile.path}');
@@ -432,6 +451,7 @@ class DesktopE2eRunner {
   Future<void> _runFlutterTest(String testFile) {
     return _runFlutterArgs(<String>[
       'test',
+      '--dart-define=AWIKI_E2E=true',
       testFile,
       '-d',
       platform.name,
@@ -541,6 +561,15 @@ class DesktopE2eRunner {
             'expectedReply':
                 config!.codexAgentExpectedReply ??
                 _defaultCodexExpectedReply(runId),
+          },
+        if (config != null)
+          'claudeCodeAgent': <String, Object?>{
+            'enabled': config!.claudeCodeAgentEnabled,
+            'realBackend': config!.claudeCodeAgentRealBackend,
+            'prompt': '<redacted-deterministic-prompt>',
+            'expectedReply':
+                config!.claudeCodeAgentExpectedReply ??
+                _defaultClaudeCodeExpectedReply(runId),
           },
         'cliWorkspace': '<redacted-workspace>',
         'cliHome': '<redacted-home>',
@@ -768,17 +797,19 @@ Usage:
   dart run tests/e2e/runner.dart --case full
   dart run tests/e2e/runner.dart --case message-agent
   dart run tests/e2e/runner.dart --case codex-agent
+  dart run tests/e2e/runner.dart --case claude-code-agent
 
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|full|direct|group|attachment|contacts|message-agent|codex-agent
+  --case smoke|full|direct|group|attachment|contacts|message-agent|codex-agent|claude-code-agent
                                smoke runs local App/native checks. The other
                                cases run real App+CLI peer flows. The
                                message-agent case is the full UI acceptance
-                               gate for Message Agent; codex-agent is the
-                               user-visible Codex Agent reply gate. Probes are
-                               only lower level helpers.
+                               gate for Message Agent; codex-agent and
+                               claude-code-agent are user-visible runtime
+                               Agent reply gates. Probes are only lower level
+                               helpers.
   --prepare-only               Prepare CLI peer but do not start Flutter test.
   --dry-run                    Print planned commands without side effects.
 ''');
@@ -816,6 +847,10 @@ class DesktopCliPeerConfig {
     this.codexAgentRealBackend = false,
     this.codexAgentPrompt,
     this.codexAgentExpectedReply,
+    this.claudeCodeAgentEnabled = false,
+    this.claudeCodeAgentRealBackend = false,
+    this.claudeCodeAgentPrompt,
+    this.claudeCodeAgentExpectedReply,
   });
 
   final DesktopE2ePlatform platform;
@@ -847,6 +882,10 @@ class DesktopCliPeerConfig {
   final bool codexAgentRealBackend;
   final String? codexAgentPrompt;
   final String? codexAgentExpectedReply;
+  final bool claudeCodeAgentEnabled;
+  final bool claudeCodeAgentRealBackend;
+  final String? claudeCodeAgentPrompt;
+  final String? claudeCodeAgentExpectedReply;
 
   static DesktopCliPeerConfig from(
     DesktopE2eOptions options,
@@ -934,6 +973,17 @@ class DesktopCliPeerConfig {
       ),
       codexAgentPrompt: fileConfig.codexAgentPrompt,
       codexAgentExpectedReply: fileConfig.codexAgentExpectedReply,
+      claudeCodeAgentEnabled: _effectiveClaudeCodeAgentEnabled(
+        options,
+        fileConfig,
+        sourcePath,
+      ),
+      claudeCodeAgentRealBackend: _effectiveClaudeCodeAgentRealBackend(
+        options,
+        fileConfig,
+      ),
+      claudeCodeAgentPrompt: fileConfig.claudeCodeAgentPrompt,
+      claudeCodeAgentExpectedReply: fileConfig.claudeCodeAgentExpectedReply,
     );
   }
 }
@@ -982,6 +1032,33 @@ bool _effectiveCodexAgentRealBackend(
   return fileConfig.codexAgentRealBackend ?? false;
 }
 
+bool _effectiveClaudeCodeAgentEnabled(
+  DesktopE2eOptions options,
+  DesktopE2eFileConfig fileConfig,
+  String sourcePath,
+) {
+  final configured = fileConfig.claudeCodeAgentEnabled;
+  if (options.e2eCase != DesktopE2eCase.claudeCodeAgent) {
+    return configured ?? false;
+  }
+  if (configured == false) {
+    throw E2eFailure(
+      'claudeCodeAgent.enabled must be true for --case claude-code-agent in $sourcePath.',
+    );
+  }
+  return true;
+}
+
+bool _effectiveClaudeCodeAgentRealBackend(
+  DesktopE2eOptions options,
+  DesktopE2eFileConfig fileConfig,
+) {
+  if (options.e2eCase == DesktopE2eCase.claudeCodeAgent) {
+    return fileConfig.claudeCodeAgentRealBackend ?? true;
+  }
+  return fileConfig.claudeCodeAgentRealBackend ?? false;
+}
+
 String _defaultCodexExpectedReply(String runId) {
   final suffix = runId
       .toUpperCase()
@@ -993,6 +1070,19 @@ String _defaultCodexExpectedReply(String runId) {
 
 String _defaultCodexPrompt(String runId) {
   return 'Reply exactly ${_defaultCodexExpectedReply(runId)} and nothing else';
+}
+
+String _defaultClaudeCodeExpectedReply(String runId) {
+  final suffix = runId
+      .toUpperCase()
+      .replaceAll(RegExp(r'[^A-Z0-9]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-')
+      .replaceAll(RegExp(r'^-|-$'), '');
+  return 'OK-CLAUDE-CODE-${suffix.isEmpty ? 'E2E' : suffix}';
+}
+
+String _defaultClaudeCodePrompt(String runId) {
+  return 'Reply exactly ${_defaultClaudeCodeExpectedReply(runId)} and nothing else';
 }
 
 class DesktopE2eFileConfig {
@@ -1021,6 +1111,10 @@ class DesktopE2eFileConfig {
     this.codexAgentRealBackend,
     this.codexAgentPrompt,
     this.codexAgentExpectedReply,
+    this.claudeCodeAgentEnabled,
+    this.claudeCodeAgentRealBackend,
+    this.claudeCodeAgentPrompt,
+    this.claudeCodeAgentExpectedReply,
     this.otpPhone,
     this.otpCode,
     this.appHandle,
@@ -1053,6 +1147,10 @@ class DesktopE2eFileConfig {
       codexAgentRealBackend = null,
       codexAgentPrompt = null,
       codexAgentExpectedReply = null,
+      claudeCodeAgentEnabled = null,
+      claudeCodeAgentRealBackend = null,
+      claudeCodeAgentPrompt = null,
+      claudeCodeAgentExpectedReply = null,
       otpPhone = null,
       otpCode = null,
       appHandle = null,
@@ -1083,6 +1181,10 @@ class DesktopE2eFileConfig {
   final bool? codexAgentRealBackend;
   final String? codexAgentPrompt;
   final String? codexAgentExpectedReply;
+  final bool? claudeCodeAgentEnabled;
+  final bool? claudeCodeAgentRealBackend;
+  final String? claudeCodeAgentPrompt;
+  final String? claudeCodeAgentExpectedReply;
   final String? otpPhone;
   final String? otpCode;
   final String? appHandle;
@@ -1106,6 +1208,7 @@ class DesktopE2eFileConfig {
     final daemon = _mapAt(raw, 'daemon', optional: true);
     final messageAgent = _mapAt(raw, 'messageAgent', optional: true);
     final codexAgent = _mapAt(raw, 'codexAgent', optional: true);
+    final claudeCodeAgent = _mapAt(raw, 'claudeCodeAgent', optional: true);
     final otp = _mapAt(raw, 'otp', optional: true);
 
     final baseUrl = _stringAt(service, 'baseUrl');
@@ -1153,6 +1256,10 @@ class DesktopE2eFileConfig {
       codexAgentRealBackend: _boolAt(codexAgent, 'realBackend'),
       codexAgentPrompt: _stringAt(codexAgent, 'prompt'),
       codexAgentExpectedReply: _stringAt(codexAgent, 'expectedReply'),
+      claudeCodeAgentEnabled: _boolAt(claudeCodeAgent, 'enabled'),
+      claudeCodeAgentRealBackend: _boolAt(claudeCodeAgent, 'realBackend'),
+      claudeCodeAgentPrompt: _stringAt(claudeCodeAgent, 'prompt'),
+      claudeCodeAgentExpectedReply: _stringAt(claudeCodeAgent, 'expectedReply'),
       otpPhone: otpPhone,
       otpCode: otpCode,
       appHandle: appHandle,
@@ -1170,7 +1277,8 @@ enum DesktopE2eCase {
   attachment(_desktopCliPeerAttachmentCaseIds),
   contacts(_desktopCliPeerContactsCaseIds),
   messageAgent(_messageAgentCaseIds),
-  codexAgent(_codexAgentCaseIds);
+  codexAgent(_codexAgentCaseIds),
+  claudeCodeAgent(_claudeCodeAgentCaseIds);
 
   const DesktopE2eCase(this.caseIds);
 
@@ -1193,6 +1301,8 @@ enum DesktopE2eCase {
         'integration_test/message_agent_full_ui_test.dart',
       DesktopE2eCase.codexAgent =>
         'integration_test/codex_agent_full_ui_test.dart',
+      DesktopE2eCase.claudeCodeAgent =>
+        'integration_test/claude_code_agent_full_ui_test.dart',
     };
   }
 
@@ -1200,6 +1310,7 @@ enum DesktopE2eCase {
     return switch (this) {
       DesktopE2eCase.messageAgent => 'message-agent',
       DesktopE2eCase.codexAgent => 'codex-agent',
+      DesktopE2eCase.claudeCodeAgent => 'claude-code-agent',
       _ => name,
     };
   }
@@ -1211,6 +1322,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.smoke => 'smoke',
       DesktopE2eCase.messageAgent => 'message-agent',
       DesktopE2eCase.codexAgent => 'codex-agent',
+      DesktopE2eCase.claudeCodeAgent => 'claude-code-agent',
       _ => 'desktop-cli-peer',
     };
   }
@@ -1219,6 +1331,7 @@ enum DesktopE2eCase {
     return switch (this) {
       DesktopE2eCase.messageAgent => _messageAgentScenario,
       DesktopE2eCase.codexAgent => _codexAgentScenario,
+      DesktopE2eCase.claudeCodeAgent => _claudeCodeAgentScenario,
       _ => _desktopCliPeerScenario,
     };
   }
@@ -1227,6 +1340,7 @@ enum DesktopE2eCase {
     return switch (this) {
       DesktopE2eCase.messageAgent => _messageAgentRunConfigPath,
       DesktopE2eCase.codexAgent => _codexAgentRunConfigPath,
+      DesktopE2eCase.claudeCodeAgent => _claudeCodeAgentRunConfigPath,
       _ => _desktopCliPeerRunConfigPath,
     };
   }
@@ -1261,10 +1375,17 @@ enum DesktopE2eCase {
       'codexagent' ||
       'agent-codex' ||
       'agent_codex' => DesktopE2eCase.codexAgent,
+      'claude-code-agent' ||
+      'claude_code_agent' ||
+      'claudecodeagent' ||
+      'agent-claude-code' ||
+      'agent_claude_code' ||
+      'claude-agent' ||
+      'claude_agent' => DesktopE2eCase.claudeCodeAgent,
       _ => throw E2eFailure(
         'Unsupported E2E case "$value". '
         'Use smoke, full, direct, group, attachment, contacts, message-agent, '
-        'or codex-agent.',
+        'codex-agent, or claude-code-agent.',
       ),
     };
   }
