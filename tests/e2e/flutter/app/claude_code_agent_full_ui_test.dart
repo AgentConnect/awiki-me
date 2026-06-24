@@ -26,6 +26,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 const String _claudeCodeAgentRunConfigPath =
     '.e2e/claude-code-agent/current/run_config.json';
+const Duration _claudeCodeRuntimeFinalTimeout = Duration(minutes: 12);
+const String _claudeCodeDaemonMaxRuntimeMs = '780000';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -271,7 +273,7 @@ Future<Process> _startRealDaemon({
       '--ready-file',
       config.daemonReadyFile,
       '--max-runtime-ms',
-      '180000',
+      _claudeCodeDaemonMaxRuntimeMs,
       '--poll-interval-ms',
       '100',
     ],
@@ -526,6 +528,12 @@ Future<void> _waitForDaemonClaudeCodeFinalSent({
         }
         final row = rows.first;
         lastState = _runtimeRowDebugState(row);
+        if (_runtimeRowFailed(row)) {
+          fail(
+            'Claude Code runtime finished with failure before expected reply. '
+            'Last state: $lastState',
+          );
+        }
         return row['runtime_plugin_id'] == 'generic-cli' &&
             row['run_status'] == 'finished' &&
             row['final_status'] == 'sent' &&
@@ -535,7 +543,7 @@ Future<void> _waitForDaemonClaudeCodeFinalSent({
         await db.close();
       }
     },
-    timeout: const Duration(seconds: 150),
+    timeout: _claudeCodeRuntimeFinalTimeout,
     interval: const Duration(seconds: 1),
     lastError: () => lastState,
   );
@@ -554,6 +562,16 @@ String _runtimeRowDebugState(Map<String, Object?> row) {
     }
   }
   return jsonEncode(debug);
+}
+
+bool _runtimeRowFailed(Map<String, Object?> row) {
+  final runStatus = row['run_status']?.toString();
+  final finalStatus = row['final_status']?.toString();
+  final driverRunStatus = row['driver_run_status']?.toString();
+  return runStatus == 'failed' ||
+      finalStatus == 'failed' ||
+      finalStatus == 'dead_letter' ||
+      driverRunStatus == 'failed';
 }
 
 Future<ChatMessage> _waitForAppIncomingClaudeCodeReply({
@@ -686,6 +704,8 @@ Future<void> _poll({
       if (await action()) {
         return;
       }
+    } on TestFailure {
+      rethrow;
     } on Object catch (error) {
       caughtError = error;
     }

@@ -26,6 +26,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 const String _codexAgentRunConfigPath =
     '.e2e/codex-agent/current/run_config.json';
+const Duration _codexRuntimeFinalTimeout = Duration(minutes: 5);
+const String _codexDaemonMaxRuntimeMs = '780000';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -271,7 +273,7 @@ Future<Process> _startRealDaemon({
       '--ready-file',
       config.daemonReadyFile,
       '--max-runtime-ms',
-      '180000',
+      _codexDaemonMaxRuntimeMs,
       '--poll-interval-ms',
       '100',
     ],
@@ -499,10 +501,14 @@ Future<void> _waitForDaemonCodexFinalSent({
                  f.status AS final_status, f.final_text AS final_text,
                  f.message_id AS final_message_id,
                  f.recipient_did AS recipient_did,
-                 f.final_source AS final_source
+                 f.final_source AS final_source,
+                 c.driver_id AS driver_id,
+                 c.status AS driver_run_status,
+                 c.final_output_path AS driver_final_output_path
           FROM runtime_task t
           LEFT JOIN runtime_run r ON r.task_id = t.task_id
           LEFT JOIN runtime_final_outbox f ON f.run_id = r.run_id
+          LEFT JOIN cli_driver_run c ON c.run_id = r.run_id
           WHERE t.agent_did = ? AND t.task_text LIKE ?
           ORDER BY t.created_at_ms DESC
           LIMIT 1
@@ -514,7 +520,13 @@ Future<void> _waitForDaemonCodexFinalSent({
           return false;
         }
         final row = rows.first;
-        lastState = jsonEncode(row);
+        lastState = _runtimeRowDebugState(row);
+        if (_runtimeRowFailed(row)) {
+          fail(
+            'Codex runtime finished with failure before expected reply. '
+            'Last state: $lastState',
+          );
+        }
         return row['runtime_plugin_id'] == 'generic-cli' &&
             row['run_status'] == 'finished' &&
             row['final_status'] == 'sent' &&
@@ -524,7 +536,7 @@ Future<void> _waitForDaemonCodexFinalSent({
         await db.close();
       }
     },
-    timeout: const Duration(seconds: 150),
+    timeout: _codexRuntimeFinalTimeout,
     interval: const Duration(seconds: 1),
     lastError: () => lastState,
   );
@@ -560,6 +572,31 @@ Future<ChatMessage> _waitForAppIncomingCodexReply({
     lastError: () => lastState,
   );
   return matched!;
+}
+
+String _runtimeRowDebugState(Map<String, Object?> row) {
+  final debug = Map<String, Object?>.from(row);
+  final finalOutputPath = row['driver_final_output_path']?.toString();
+  if (finalOutputPath != null && finalOutputPath.trim().isNotEmpty) {
+    final file = File(finalOutputPath);
+    if (file.existsSync()) {
+      final text = file.readAsStringSync();
+      debug['driver_final_output_tail'] = text.length <= 600
+          ? text
+          : text.substring(text.length - 600);
+    }
+  }
+  return jsonEncode(debug);
+}
+
+bool _runtimeRowFailed(Map<String, Object?> row) {
+  final runStatus = row['run_status']?.toString();
+  final finalStatus = row['final_status']?.toString();
+  final driverRunStatus = row['driver_run_status']?.toString();
+  return runStatus == 'failed' ||
+      finalStatus == 'failed' ||
+      finalStatus == 'dead_letter' ||
+      driverRunStatus == 'failed';
 }
 
 Future<void> _waitForVisibleCodexReply({
@@ -660,6 +697,8 @@ Future<void> _poll({
       if (await action()) {
         return;
       }
+    } on TestFailure {
+      rethrow;
     } on Object catch (error) {
       caughtError = error;
     }

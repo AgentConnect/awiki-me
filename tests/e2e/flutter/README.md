@@ -39,7 +39,10 @@ prompt through the App chat UI, require `runtime_run.status = finished` and
 `runtime_final_outbox.status = sent`, then verify the App local message history
 and visible chat bubble contain the exact Codex reply. Runtime status probes or
 Codex CLI output files alone are not sufficient evidence because they do not
-prove the user-visible delivery leg.
+prove the user-visible delivery leg. The runner gives this case a longer
+Flutter timeout than the smoke tests and fails immediately with the daemon
+`cli_driver_run` / final-output diagnostic if the CLI run reaches a failed
+state before the expected reply.
 
 `--case claude-code-agent` is the equivalent durable acceptance entry for Claude
 Code Agent direct-chat behavior. It must create/select a Claude Code runtime
@@ -48,7 +51,10 @@ Agent, send a deterministic prompt through the App chat UI, require
 verify the App local message history and visible chat bubble contain the exact
 Claude Code reply. CLI install/version probes or raw Claude Code output alone
 are not sufficient evidence because they do not prove the daemon-to-App
-delivery leg.
+delivery leg. Claude Code can be slower than Codex on a cold profile, so the
+runner gives this case a longer Flutter timeout and keeps the temporary daemon
+alive long enough for the daemon-side runtime timeout to produce a deterministic
+success or failure record instead of leaving the test stuck in `pending`.
 
 When a real Claude Code or Codex CLI requires environment values that are
 available in an interactive shell but not in a daemon process, point the local

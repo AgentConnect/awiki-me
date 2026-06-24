@@ -203,6 +203,8 @@ class DesktopE2eRunner {
     config = peerConfig;
     _addRuntimeSecret(peerConfig.otpPhone);
     _addRuntimeSecret(peerConfig.otpCode);
+    _addRuntimeSecret(peerConfig.daemonStateRoot ?? '');
+    _addRuntimeSecret(peerConfig.daemonReadyFile ?? '');
     _addRuntimeSecret(peerConfig.daemonEnvFile ?? '');
     _section('AWiki Desktop App + CLI peer E2E $runId');
     _line('platform: ${peerConfig.platform.name}');
@@ -377,7 +379,11 @@ class DesktopE2eRunner {
       '-d',
       peerConfig.platform.name,
     ];
-    await _runFlutterArgs(flutterArgs, platform: peerConfig.platform);
+    await _runFlutterArgs(
+      flutterArgs,
+      platform: peerConfig.platform,
+      timeout: peerConfig.e2eCase.flutterTimeout,
+    );
   }
 
   Future<void> _writeFlutterRunConfig(DesktopCliPeerConfig peerConfig) async {
@@ -460,18 +466,23 @@ class DesktopE2eRunner {
       testFile,
       '-d',
       platform.name,
-    ], platform: platform);
+    ], platform: platform, timeout: options.e2eCase.flutterTimeout);
   }
 
   Future<void> _runFlutterArgs(
     List<String> flutterArgs, {
     required DesktopE2ePlatform platform,
+    Duration timeout = const Duration(minutes: 5),
   }) async {
     if (platform == DesktopE2ePlatform.linux) {
-      await commands.run('xvfb-run', <String>['-a', 'flutter', ...flutterArgs]);
+      await commands.run(
+        'xvfb-run',
+        <String>['-a', 'flutter', ...flutterArgs],
+        timeout: timeout,
+      );
       return;
     }
-    await commands.run('flutter', flutterArgs);
+    await commands.run('flutter', flutterArgs, timeout: timeout);
   }
 
   Future<DesktopCommandResult> _cli(
@@ -1340,6 +1351,15 @@ enum DesktopE2eCase {
       DesktopE2eCase.codexAgent => 'codex-agent',
       DesktopE2eCase.claudeCodeAgent => 'claude-code-agent',
       _ => 'desktop-cli-peer',
+    };
+  }
+
+  Duration get flutterTimeout {
+    return switch (this) {
+      DesktopE2eCase.claudeCodeAgent => const Duration(minutes: 15),
+      DesktopE2eCase.codexAgent => const Duration(minutes: 8),
+      DesktopE2eCase.messageAgent => const Duration(minutes: 10),
+      _ => const Duration(minutes: 5),
     };
   }
 
