@@ -1,5 +1,6 @@
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
+import 'package:awiki_me/src/domain/entities/agent/runtime_agent_kind.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -139,6 +140,29 @@ void main() {
     expect(args['handle'], 'alice-hermes');
     expect(args['display_name'], 'Alice Hermes');
     expect(args['client_request_id'], 'app_req_1');
+    expect(args.containsKey('driver_id'), isFalse);
+  });
+
+  test('runtime create command carries codex generic cli options', () {
+    final payload = runtimeAgentCreatePayload(
+      controllerDid: 'did:human:alice',
+      registrationToken: 'runtime-token',
+      clientRequestId: 'app_req_1',
+      runtime: 'codex',
+      driverId: 'codex',
+      displayName: 'Alice Codex',
+      handle: 'alice-codex',
+      workspaceMode: runtimeWorkspaceModeRouteRoot,
+      defaultSandbox: runtimeSandboxReadOnly,
+      driverConfig: const <String, Object?>{'ephemeral': false},
+    );
+
+    final args = payload['args'] as Map<String, Object?>;
+    expect(args['runtime'], 'codex');
+    expect(args['driver_id'], 'codex');
+    expect(args['workspace_mode'], runtimeWorkspaceModeRouteRoot);
+    expect(args['default_sandbox'], runtimeSandboxReadOnly);
+    expect(args['driver_config'], <String, Object?>{'ephemeral': false});
   });
 
   test('runtime create command allows explicit test runtime', () {

@@ -7,6 +7,7 @@ import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/agent/agent_command.dart';
 import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_summary.dart';
+import '../../domain/entities/agent/runtime_agent_kind.dart';
 import '../../domain/entities/agent/install_command.dart';
 import '../models/app_thread_ref.dart';
 import '../messaging_service.dart';
@@ -20,6 +21,12 @@ abstract interface class AgentControlService {
     required String clientPlatform,
   });
   Future<void> refreshDaemonStatus(String daemonAgentDid);
+  Future<void> createRuntimeAgent({
+    required String daemonAgentDid,
+    required String controllerDid,
+    required RuntimeAgentCreateOptions options,
+    String? clientRequestId,
+  });
   Future<void> createHermesRuntime({
     required String daemonAgentDid,
     required String controllerDid,
@@ -170,13 +177,39 @@ class DefaultAgentControlService implements AgentControlService {
     required String handle,
     required String displayName,
     String? clientRequestId,
+  }) {
+    return createRuntimeAgent(
+      daemonAgentDid: daemonAgentDid,
+      controllerDid: controllerDid,
+      options: RuntimeAgentCreateOptions(
+        kind: RuntimeAgentKind.hermes,
+        handle: handle,
+        displayName: displayName,
+      ),
+      clientRequestId: clientRequestId,
+    );
+  }
+
+  @override
+  Future<void> createRuntimeAgent({
+    required String daemonAgentDid,
+    required String controllerDid,
+    required RuntimeAgentCreateOptions options,
+    String? clientRequestId,
   }) async {
+    final kind = options.kind;
+    final driverConfig = options.driverConfig;
     final token = await _inventory.issueRuntimeToken(
       controllerDid: controllerDid,
       daemonAgentDid: daemonAgentDid,
-      runtime: 'hermes',
-      handle: handle,
-      displayName: displayName,
+      runtime: kind.runtime,
+      handle: options.handle,
+      displayName: options.displayName,
+      driverId: kind.driverId,
+      workspaceMode: kind.isGenericCli ? options.workspaceMode : null,
+      defaultSandbox: kind.isGenericCli ? options.sandbox : null,
+      defaultModel: kind.isGenericCli ? options.model : null,
+      driverConfig: driverConfig,
     );
     final requestId = clientRequestId ?? agentCommandId('app_req');
     await _sendDaemonPayload(
@@ -185,8 +218,14 @@ class DefaultAgentControlService implements AgentControlService {
         controllerDid: controllerDid,
         registrationToken: token.token,
         clientRequestId: requestId,
-        handle: handle,
-        displayName: displayName,
+        runtime: kind.runtime,
+        handle: options.handle,
+        displayName: options.displayName,
+        driverId: kind.driverId,
+        workspaceMode: kind.isGenericCli ? options.workspaceMode : null,
+        defaultSandbox: kind.isGenericCli ? options.sandbox : null,
+        defaultModel: kind.isGenericCli ? options.model : null,
+        driverConfig: driverConfig,
       ),
       idempotencyKey: 'runtime-create:$daemonAgentDid:$requestId',
     );

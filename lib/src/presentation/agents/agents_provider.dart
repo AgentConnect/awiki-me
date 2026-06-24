@@ -14,6 +14,7 @@ import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/agent_status.dart';
+import '../../domain/entities/agent/runtime_agent_kind.dart';
 import '../../domain/entities/agent/install_command.dart';
 import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/session_provider.dart';
@@ -553,6 +554,20 @@ class AgentsController extends StateNotifier<AgentsState> {
     String daemonDid, {
     required String handle,
     required String displayName,
+  }) {
+    return createRuntimeAgent(
+      daemonDid,
+      options: RuntimeAgentCreateOptions(
+        kind: RuntimeAgentKind.hermes,
+        handle: handle,
+        displayName: displayName,
+      ),
+    );
+  }
+
+  Future<void> createRuntimeAgent(
+    String daemonDid, {
+    required RuntimeAgentCreateOptions options,
   }) async {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
@@ -564,9 +579,9 @@ class AgentsController extends StateNotifier<AgentsState> {
       final pending = PendingRuntimeCreation(
         requestId: requestId,
         daemonAgentDid: daemonDid,
-        handle: handle,
-        displayName: displayName,
-        runtime: 'hermes',
+        handle: options.handle,
+        displayName: options.displayName,
+        runtime: options.kind.runtime,
         createdAt: DateTime.now().toUtc(),
       );
       _runtimeCreationTimeouts.remove(requestId)?.cancel();
@@ -582,11 +597,10 @@ class AgentsController extends StateNotifier<AgentsState> {
       try {
         await ref
             .read(agentControlServiceProvider)
-            .createHermesRuntime(
+            .createRuntimeAgent(
               daemonAgentDid: daemonDid,
               controllerDid: session.did,
-              handle: handle,
-              displayName: displayName,
+              options: options,
               clientRequestId: requestId,
             );
       } catch (_) {

@@ -8,6 +8,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart'
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
+import 'package:awiki_me/src/domain/entities/agent/runtime_agent_kind.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
 import 'package:awiki_me/src/app/app_services.dart';
@@ -257,7 +258,9 @@ void main() {
 
       expect(find.text('创建 Agent'), findsWidgets);
       expect(find.text('Agent 类型'), findsOneWidget);
-      expect(find.text('当前仅支持 Hermes Runtime Agent'), findsOneWidget);
+      expect(find.text('Hermes'), findsWidgets);
+      expect(find.text('Codex'), findsOneWidget);
+      expect(find.text('Claude Code'), findsOneWidget);
       final nameFieldFinder = find.byKey(const Key('agent-create-name-field'));
       final handleFieldFinder = find.byKey(
         const Key('agent-create-handle-field'),
@@ -286,6 +289,62 @@ void main() {
       expect(find.text('hermes · 创建状态暂未返回，可刷新查看'), findsOneWidget);
     },
   );
+
+  testWidgets('create Agent dialog can submit Codex runtime', (tester) async {
+    final control = _PendingRefreshAgentControlService()
+      ..agents = <AgentSummary>[
+        const AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready', platform: 'linux-amd64'),
+        ),
+      ];
+
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('创建 Agent'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Codex'));
+    await tester.pumpAndSettle();
+
+    final nameFieldFinder = find.byKey(const Key('agent-create-name-field'));
+    final handleFieldFinder = find.byKey(
+      const Key('agent-create-handle-field'),
+    );
+    final nameField = tester.widget<CupertinoTextField>(nameFieldFinder);
+    expect(nameField.controller?.text, 'Codex1');
+
+    await tester.enterText(handleFieldFinder, 'my-codex');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+    await tester.tap(find.text('创建').last);
+    await tester.pumpAndSettle();
+
+    expect(control.lastRuntimeCreateOptions?.kind, RuntimeAgentKind.codex);
+    expect(control.lastRuntimeCreateHandle, 'my-codex');
+    expect(control.lastRuntimeCreateDisplayName, 'Codex1');
+    expect(find.text('codex · 创建状态暂未返回，可刷新查看'), findsOneWidget);
+  });
 
   testWidgets('runtime detail updates access policy immediately', (
     tester,

@@ -13,6 +13,12 @@ Map<String, Object?> runtimeAgentCreatePayload({
   String displayName = 'Hermes',
   String? handle,
   String? workspace,
+  String? driverId,
+  String? workspaceMode,
+  String? defaultSandbox,
+  String? defaultModel,
+  Map<String, Object?>? driverConfig,
+  Map<String, Object?>? recipientPolicy,
 }) {
   return <String, Object?>{
     'schema': AgentControlPayloads.commandSchema,
@@ -27,6 +33,14 @@ Map<String, Object?> runtimeAgentCreatePayload({
       'client_request_id': clientRequestId,
       if (handle != null) 'handle': handle,
       if (workspace != null) 'workspace': workspace,
+      if (driverId != null) 'driver_id': driverId,
+      if (workspaceMode != null) 'workspace_mode': workspaceMode,
+      if (defaultSandbox != null) 'default_sandbox': defaultSandbox,
+      if (defaultModel != null) 'default_model': defaultModel,
+      if (driverConfig != null && driverConfig.isNotEmpty)
+        'driver_config': driverConfig,
+      if (recipientPolicy != null && recipientPolicy.isNotEmpty)
+        'recipient_policy': recipientPolicy,
     },
     'reply_policy': <String, Object?>{'progress': true, 'final': true},
   };

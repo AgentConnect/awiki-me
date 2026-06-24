@@ -5,6 +5,7 @@ import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
+import 'package:awiki_me/src/domain/entities/agent/runtime_agent_kind.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
@@ -51,6 +52,42 @@ void main() {
       );
     },
   );
+
+  test('createRuntimeAgent sends codex generic cli options', () async {
+    final inventory = _InventoryStub();
+    final messages = _MessagesStub();
+    final service = DefaultAgentControlService(
+      inventory: inventory,
+      messages: messages,
+      agentImEnabled: true,
+    );
+
+    await service.createRuntimeAgent(
+      daemonAgentDid: 'did:agent:daemon',
+      controllerDid: 'did:human:me',
+      clientRequestId: 'app_req_codex',
+      options: const RuntimeAgentCreateOptions(
+        kind: RuntimeAgentKind.codex,
+        handle: 'alice-codex',
+        displayName: 'Alice Codex',
+      ),
+    );
+
+    expect(inventory.runtimeTokenRuntime, 'codex');
+    expect(inventory.runtimeTokenDriverId, 'codex');
+    expect(inventory.runtimeTokenWorkspaceMode, runtimeWorkspaceModeRouteRoot);
+    expect(inventory.runtimeTokenDefaultSandbox, runtimeSandboxReadOnly);
+    expect(inventory.runtimeTokenDriverConfig, <String, Object?>{
+      'ephemeral': false,
+    });
+    final args = messages.lastPayload?['args'] as Map<String, Object?>;
+    expect(args['runtime'], 'codex');
+    expect(args['driver_id'], 'codex');
+    expect(args['workspace_mode'], runtimeWorkspaceModeRouteRoot);
+    expect(args['default_sandbox'], runtimeSandboxReadOnly);
+    expect(args['driver_config'], <String, Object?>{'ephemeral': false});
+    expect(args['client_request_id'], 'app_req_codex');
+  });
 
   test(
     'refreshDaemonStatus sends unique query payload for each refresh',
@@ -442,8 +479,14 @@ class _InventoryStub implements AgentInventoryPort {
   String? lastDaemonTokenControllerHandle;
   String? lastDaemonTokenClientPlatform;
   String? runtimeTokenDaemonDid;
+  String? runtimeTokenRuntime;
   String? runtimeTokenHandle;
   String? runtimeTokenDisplayName;
+  String? runtimeTokenDriverId;
+  String? runtimeTokenWorkspaceMode;
+  String? runtimeTokenDefaultSandbox;
+  String? runtimeTokenDefaultModel;
+  Map<String, Object?>? runtimeTokenDriverConfig;
   final Map<String, AgentInvocationPolicy> invocationPolicies =
       <String, AgentInvocationPolicy>{};
   String? lastInvocationPolicyAgentDid;
@@ -468,10 +511,21 @@ class _InventoryStub implements AgentInventoryPort {
     required String runtime,
     required String handle,
     required String displayName,
+    String? driverId,
+    String? workspaceMode,
+    String? defaultSandbox,
+    String? defaultModel,
+    Map<String, Object?>? driverConfig,
   }) async {
     runtimeTokenDaemonDid = daemonAgentDid;
+    runtimeTokenRuntime = runtime;
     runtimeTokenHandle = handle;
     runtimeTokenDisplayName = displayName;
+    runtimeTokenDriverId = driverId;
+    runtimeTokenWorkspaceMode = workspaceMode;
+    runtimeTokenDefaultSandbox = defaultSandbox;
+    runtimeTokenDefaultModel = defaultModel;
+    runtimeTokenDriverConfig = driverConfig;
     return const AgentRegistrationToken(token: 'runtime-token');
   }
 

@@ -3,6 +3,7 @@ import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
+import 'package:awiki_me/src/domain/entities/agent/runtime_agent_kind.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
@@ -520,6 +521,50 @@ void main() {
       expect(runtime.displayName, 'Alice Hermes');
       expect(runtime.handle, 'alice-hermes');
       expect(runtime.daemonAgentDid, 'did:agent:daemon');
+    },
+  );
+
+  test(
+    'createRuntimeAgent can create codex through unified runtime path',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            handle: 'awiki-daemon-test',
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      await container
+          .read(agentsProvider.notifier)
+          .createRuntimeAgent(
+            'did:agent:daemon',
+            options: const RuntimeAgentCreateOptions(
+              kind: RuntimeAgentKind.codex,
+              handle: 'alice-codex',
+              displayName: 'Alice Codex',
+            ),
+          );
+
+      final pending = container
+          .read(agentsProvider)
+          .pendingRuntimeCreations
+          .single;
+      expect(pending.runtime, 'codex');
+      expect(pending.handle, 'alice-codex');
+      expect(control.lastRuntimeCreateOptions?.kind, RuntimeAgentKind.codex);
+      expect(
+        control.lastRuntimeCreateOptions?.workspaceMode,
+        runtimeWorkspaceModeRouteRoot,
+      );
+      expect(control.lastRuntimeCreateOptions?.sandbox, runtimeSandboxReadOnly);
     },
   );
 

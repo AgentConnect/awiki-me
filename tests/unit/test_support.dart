@@ -34,6 +34,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart'
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
+import 'package:awiki_me/src/domain/entities/agent/runtime_agent_kind.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
@@ -1464,6 +1465,11 @@ class FakeAgentInventoryPort implements AgentInventoryPort {
     required String runtime,
     required String handle,
     required String displayName,
+    String? driverId,
+    String? workspaceMode,
+    String? defaultSandbox,
+    String? defaultModel,
+    Map<String, Object?>? driverConfig,
   }) async {
     return nextRuntimeToken;
   }
@@ -1549,6 +1555,7 @@ class FakeAgentControlService implements AgentControlService {
   String? lastRuntimeCreateHandle;
   String? lastRuntimeCreateDisplayName;
   String? lastRuntimeCreateClientRequestId;
+  RuntimeAgentCreateOptions? lastRuntimeCreateOptions;
   String? lastResetDaemonDid;
   String? lastResetRuntimeDid;
   String? lastRetryDaemonDid;
@@ -1604,12 +1611,32 @@ class FakeAgentControlService implements AgentControlService {
     required String handle,
     required String displayName,
     String? clientRequestId,
+  }) {
+    return createRuntimeAgent(
+      daemonAgentDid: daemonAgentDid,
+      controllerDid: controllerDid,
+      options: RuntimeAgentCreateOptions(
+        kind: RuntimeAgentKind.hermes,
+        handle: handle,
+        displayName: displayName,
+      ),
+      clientRequestId: clientRequestId,
+    );
+  }
+
+  @override
+  Future<void> createRuntimeAgent({
+    required String daemonAgentDid,
+    required String controllerDid,
+    required RuntimeAgentCreateOptions options,
+    String? clientRequestId,
   }) async {
     lastRuntimeCreateDaemonDid = daemonAgentDid;
     lastRuntimeCreateControllerDid = controllerDid;
-    lastRuntimeCreateHandle = handle;
-    lastRuntimeCreateDisplayName = displayName;
+    lastRuntimeCreateHandle = options.handle;
+    lastRuntimeCreateDisplayName = options.displayName;
     lastRuntimeCreateClientRequestId = clientRequestId;
+    lastRuntimeCreateOptions = options;
   }
 
   @override
