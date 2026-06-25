@@ -644,7 +644,7 @@ Future<_DaemonInstallResult> _installRealDaemon({
   final token = await inventory.issueDaemonToken(
     controllerDid: controllerDid,
     clientPlatform: 'linux',
-    controllerHandle: config.daemonHandle,
+    controllerHandle: config.appHandle,
   );
   final result = await _runProcess(
     config.daemonBinary,

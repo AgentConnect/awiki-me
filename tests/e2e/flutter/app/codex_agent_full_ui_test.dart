@@ -223,7 +223,7 @@ Future<_DaemonInstallResult> _installRealDaemon({
   final token = await inventory.issueDaemonToken(
     controllerDid: controllerDid,
     clientPlatform: 'linux',
-    controllerHandle: config.daemonHandle,
+    controllerHandle: config.appHandle,
   );
   final result = await _runProcess(
     config.daemonBinary,
@@ -445,7 +445,7 @@ Future<AgentSummary> _waitForRuntimeAgentByHandle({
       if (agent.isRuntime &&
           agent.daemonAgentDid == daemonDid &&
           agent.handle == handle &&
-          agent.runtime == 'generic-cli') {
+          (agent.runtime == 'codex' || agent.runtime == 'generic-cli')) {
         return agent;
       }
     }
