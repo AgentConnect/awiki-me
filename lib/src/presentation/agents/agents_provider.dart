@@ -534,14 +534,13 @@ class AgentsController extends StateNotifier<AgentsState> {
         clearError: true,
       );
       _scheduleStatusQueryTimeout(daemonDid);
-      state = state.copyWith(isActing: true, clearError: true);
     }
     try {
       await ref
           .read(agentControlServiceProvider)
           .refreshDaemonStatus(daemonDid);
       if (!fromAutoLoad) {
-        state = state.copyWith(isActing: false, clearError: true);
+        state = state.copyWith(clearError: true);
       }
     } catch (error) {
       _statusQueryTimeouts.remove(daemonDid)?.cancel();
@@ -552,7 +551,6 @@ class AgentsController extends StateNotifier<AgentsState> {
       if (!fromAutoLoad) {
         final isUpgrading = state.pendingDaemonUpgrades.containsKey(daemonDid);
         state = state.copyWith(
-          isActing: false,
           pendingStatusQueryAtByDaemon: nextPending,
           statusQueryErrors: isUpgrading
               ? state.statusQueryErrors
@@ -729,7 +727,6 @@ class AgentsController extends StateNotifier<AgentsState> {
         daemonDid,
       ),
       statusQueryErrors: _withoutStringKey(state.statusQueryErrors, daemonDid),
-      isActing: true,
       clearError: true,
     );
     _scheduleDaemonUpgradeAckTimeout(daemonDid, commandId);
@@ -740,12 +737,11 @@ class AgentsController extends StateNotifier<AgentsState> {
       if (!mounted || !state.pendingDaemonUpgrades.containsKey(daemonDid)) {
         return true;
       }
-      state = state.copyWith(isActing: false, clearError: true);
+      state = state.copyWith(clearError: true);
       return true;
     } catch (error) {
       _cancelDaemonUpgradeTimers(daemonDid);
       state = state.copyWith(
-        isActing: false,
         pendingDaemonUpgrades: _withoutMapKey(
           state.pendingDaemonUpgrades,
           daemonDid,
@@ -1149,7 +1145,6 @@ class AgentsController extends StateNotifier<AgentsState> {
         ...state.daemonUpgradeProgress,
         daemonDid: DaemonUpgradeProgress.waitingForDaemonConfirmation(),
       },
-      isActing: false,
     );
     unawaited(refreshDaemonStatus(daemonDid, fromAutoLoad: true));
   }

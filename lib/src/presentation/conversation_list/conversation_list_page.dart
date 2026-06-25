@@ -63,6 +63,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
       if (!mounted) {
         return;
       }
+      unawaited(ref.read(conversationListProvider.notifier).ensureLoaded());
       unawaited(ref.read(agentsProvider.notifier).ensureLoaded());
     });
   }

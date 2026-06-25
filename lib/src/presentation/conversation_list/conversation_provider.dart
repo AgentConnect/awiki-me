@@ -36,13 +36,46 @@ class ConversationListState {
 }
 
 class ConversationListController extends StateNotifier<ConversationListState> {
-  ConversationListController(this.ref) : super(const ConversationListState());
+  ConversationListController(
+    this.ref, {
+    this.refreshTimeout = _defaultRefreshTimeout,
+  }) : super(const ConversationListState());
+
+  static const Duration _defaultRefreshTimeout = Duration(seconds: 12);
 
   final Ref ref;
+  final Duration refreshTimeout;
+  Future<void>? _refreshOperation;
 
   NotificationFacade get _notification => ref.read(notificationFacadeProvider);
 
-  Future<void> refresh() async {
+  Future<void> ensureLoaded() {
+    if (state.conversations.isNotEmpty) {
+      return Future<void>.value();
+    }
+    final activeRefresh = _refreshOperation;
+    if (activeRefresh != null) {
+      return activeRefresh;
+    }
+    return refresh();
+  }
+
+  Future<void> refresh() {
+    final activeRefresh = _refreshOperation;
+    if (activeRefresh != null) {
+      return activeRefresh;
+    }
+    late final Future<void> operation;
+    operation = _refresh().whenComplete(() {
+      if (identical(_refreshOperation, operation)) {
+        _refreshOperation = null;
+      }
+    });
+    _refreshOperation = operation;
+    return operation;
+  }
+
+  Future<void> _refresh() async {
     final previousConversations = state.conversations;
     state = state.copyWith(isLoading: true);
     try {
@@ -57,7 +90,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       }
       final conversations = await ref
           .read(conversationServiceProvider)
-          .listConversations(ownerDid: session.did);
+          .listConversations(ownerDid: session.did)
+          .timeout(refreshTimeout);
       state = state.copyWith(
         conversations: _mergeConversationRefresh(
           refreshed: conversations,

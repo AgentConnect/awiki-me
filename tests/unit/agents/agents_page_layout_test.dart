@@ -1093,6 +1093,111 @@ void main() {
     },
   );
 
+  testWidgets('refresh timeout does not disable daemon upgrade action', (
+    tester,
+  ) async {
+    final control = _PendingRefreshAgentControlService()
+      ..agents = <AgentSummary>[
+        const AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'needs_upgrade',
+            needsUpgrade: true,
+            platform: 'darwin-arm64',
+          ),
+        ),
+      ];
+
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 250));
+
+    await tester.tap(_agentRefreshButton().first);
+    await tester.pump();
+    await tester.pump(agentStatusQueryTimeout);
+    await tester.pump();
+
+    expect(find.textContaining('未收到代理响应'), findsWidgets);
+    await tester.tap(find.text('升级').first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(find.text('升级').last);
+    await tester.pump();
+
+    expect(control.lastUpgradeDaemonDid, 'did:agent:daemon');
+  });
+
+  testWidgets(
+    'pending daemon upgrade request does not disable refresh action',
+    (tester) async {
+      final control = _PendingUpgradeAgentControlService()
+        ..agents = <AgentSummary>[
+          const AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            handle: 'awiki-daemon-test',
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'needs_upgrade',
+              needsUpgrade: true,
+              platform: 'darwin-arm64',
+            ),
+          ),
+        ];
+
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+          ),
+          providerOverrides: <Override>[
+            agentControlServiceProvider.overrideWithValue(control),
+          ],
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 250));
+
+      await tester.tap(find.text('升级').first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.tap(find.text('升级').last);
+      await tester.pump();
+
+      expect(control.lastUpgradeDaemonDid, 'did:agent:daemon');
+      await tester.tap(_agentRefreshButton().first);
+      await tester.pump();
+
+      expect(control.lastRefreshedDaemonDid, 'did:agent:daemon');
+    },
+  );
+
   testWidgets('repeated refresh while loading does not send duplicate query', (
     tester,
   ) async {
@@ -1294,6 +1399,16 @@ class _PendingRefreshAgentControlService extends FakeAgentControlService {
   Future<void> refreshDaemonStatus(String daemonAgentDid) {
     lastRefreshedDaemonDid = daemonAgentDid;
     return _pendingRefresh.future;
+  }
+}
+
+class _PendingUpgradeAgentControlService extends FakeAgentControlService {
+  final Completer<String> _pendingUpgrade = Completer<String>();
+
+  @override
+  Future<String> upgradeDaemon(String daemonAgentDid, {String? commandId}) {
+    lastUpgradeDaemonDid = daemonAgentDid;
+    return _pendingUpgrade.future;
   }
 }
 

@@ -510,6 +510,75 @@ void main() {
     expect(control.lastRefreshedDaemonDid, 'did:agent:daemon');
   });
 
+  test('status refresh uses daemon-scoped pending state', () async {
+    final control = _PendingRefreshAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+
+    unawaited(
+      container
+          .read(agentsProvider.notifier)
+          .refreshDaemonStatus('did:agent:daemon'),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    var state = container.read(agentsProvider);
+    expect(state.isActing, isFalse);
+    expect(state.pendingStatusQueryAtByDaemon, contains('did:agent:daemon'));
+
+    container
+        .read(agentsProvider.notifier)
+        .handleStatusQueryTimeoutForTest('did:agent:daemon');
+
+    state = container.read(agentsProvider);
+    expect(state.isActing, isFalse);
+    expect(state.pendingStatusQueryAtByDaemon, isEmpty);
+    expect(state.statusQueryErrors['did:agent:daemon'], '未收到代理响应，请稍后再刷新状态。');
+  });
+
+  test('daemon upgrade uses daemon-scoped pending state', () async {
+    final control = _PendingUpgradeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'needs_upgrade',
+            needsUpgrade: true,
+          ),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+
+    unawaited(
+      container.read(agentsProvider.notifier).upgradeDaemon('did:agent:daemon'),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    final state = container.read(agentsProvider);
+    expect(control.lastUpgradeDaemonDid, 'did:agent:daemon');
+    expect(state.isActing, isFalse);
+    expect(
+      state.pendingDaemonUpgrades,
+      containsPair('did:agent:daemon', isA<PendingDaemonUpgrade>()),
+    );
+    expect(state.daemonUpgradeProgress['did:agent:daemon']?.stage, 'requested');
+  });
+
   test('runtime create result adds runtime agent under daemon', () async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
@@ -2365,6 +2434,26 @@ class _FailingRefreshAgentControlService extends FakeAgentControlService {
   Future<void> refreshDaemonStatus(String daemonAgentDid) async {
     lastRefreshedDaemonDid = daemonAgentDid;
     throw error;
+  }
+}
+
+class _PendingRefreshAgentControlService extends FakeAgentControlService {
+  final Completer<void> pendingRefresh = Completer<void>();
+
+  @override
+  Future<void> refreshDaemonStatus(String daemonAgentDid) {
+    lastRefreshedDaemonDid = daemonAgentDid;
+    return pendingRefresh.future;
+  }
+}
+
+class _PendingUpgradeAgentControlService extends FakeAgentControlService {
+  final Completer<String> pendingUpgrade = Completer<String>();
+
+  @override
+  Future<String> upgradeDaemon(String daemonAgentDid, {String? commandId}) {
+    lastUpgradeDaemonDid = daemonAgentDid;
+    return pendingUpgrade.future;
   }
 }
 

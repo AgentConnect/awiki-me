@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../domain/entities/agent/agent_display_name.dart';
 import '../domain/entities/agent/agent_summary.dart';
 import '../domain/entities/conversation_summary.dart';
@@ -42,6 +44,7 @@ class ImCoreConversationService implements ConversationService {
     required ConversationCorePort conversations,
     required ProductLocalStore localStore,
     AgentInventoryPort? agentInventory,
+    this.agentProjectionTimeout = const Duration(seconds: 3),
   }) : _conversations = conversations,
        _agentInventory = agentInventory,
        _localStore = localStore;
@@ -49,12 +52,14 @@ class ImCoreConversationService implements ConversationService {
   final ConversationCorePort _conversations;
   final AgentInventoryPort? _agentInventory;
   final ProductLocalStore _localStore;
+  final Duration agentProjectionTimeout;
 
   ImCoreConversationService withAgentInventory(AgentInventoryPort inventory) {
     return ImCoreConversationService(
       conversations: _conversations,
       localStore: _localStore,
       agentInventory: inventory,
+      agentProjectionTimeout: agentProjectionTimeout,
     );
   }
 
@@ -163,7 +168,9 @@ class ImCoreConversationService implements ConversationService {
       return const _AgentConversationProjection();
     }
     try {
-      final agents = await inventory.listAgents(includeInactive: true);
+      final agents = await inventory
+          .listAgents(includeInactive: true)
+          .timeout(agentProjectionTimeout);
       return _AgentConversationProjection.fromAgents(agents);
     } on Object {
       return const _AgentConversationProjection();
@@ -278,8 +285,7 @@ ConversationSummary _mergeConversationDuplicate(
     unreadCount: first.unreadCount + second.unreadCount,
     unreadMentionCount: first.unreadMentionCount + second.unreadMentionCount,
     firstUnreadMentionMessageId:
-        first.firstUnreadMentionMessageId ??
-        second.firstUnreadMentionMessageId,
+        first.firstUnreadMentionMessageId ?? second.firstUnreadMentionMessageId,
     targetDid: identity.targetDid ?? latest.targetDid ?? other.targetDid,
     targetPeer:
         _preferredTargetPeer(first, second) ??

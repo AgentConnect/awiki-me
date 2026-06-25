@@ -1580,6 +1580,93 @@ void main() {
     expect(state.conversations.single.threadId, conversation.threadId);
   });
 
+  test('刷新最近会话请求卡住时超时退出加载态并保留现有列表', () async {
+    final timeoutGateway = FakeAwikiGateway()
+      ..listConversationsCompleter = Completer<List<ConversationSummary>>();
+    final timeoutContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(timeoutGateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(timeoutGateway),
+        conversationListProvider.overrideWith(
+          (ref) => ConversationListController(
+            ref,
+            refreshTimeout: const Duration(milliseconds: 1),
+          ),
+        ),
+      ],
+    );
+    addTearDown(timeoutContainer.dispose);
+    timeoutContainer
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:me',
+            credentialName: 'me.json',
+            displayName: 'Me',
+            handle: 'me',
+          ),
+        );
+    timeoutContainer
+        .read(conversationListProvider.notifier)
+        .upsertConversation(conversation);
+
+    await expectLater(
+      timeoutContainer.read(conversationListProvider.notifier).refresh(),
+      throwsA(isA<TimeoutException>()),
+    );
+
+    final state = timeoutContainer.read(conversationListProvider);
+    expect(state.isLoading, isFalse);
+    expect(state.conversations, hasLength(1));
+    expect(state.conversations.single.threadId, conversation.threadId);
+    expect(timeoutGateway.listConversationsCalls, 1);
+  });
+
+  test('最近会话 ensureLoaded 在空列表时触发一次加载并复用进行中的请求', () async {
+    final loadingGateway = FakeAwikiGateway()
+      ..listConversationsCompleter = Completer<List<ConversationSummary>>();
+    final loadingContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(loadingGateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(loadingGateway),
+      ],
+    );
+    addTearDown(loadingContainer.dispose);
+    loadingContainer
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:me',
+            credentialName: 'me.json',
+            displayName: 'Me',
+            handle: 'me',
+          ),
+        );
+
+    final firstLoad = loadingContainer
+        .read(conversationListProvider.notifier)
+        .ensureLoaded();
+    final secondLoad = loadingContainer
+        .read(conversationListProvider.notifier)
+        .ensureLoaded();
+
+    await Future<void>.delayed(Duration.zero);
+    expect(loadingContainer.read(conversationListProvider).isLoading, isTrue);
+    expect(loadingGateway.listConversationsCalls, 1);
+
+    loadingGateway.listConversationsCompleter!.complete(<ConversationSummary>[
+      conversation,
+    ]);
+    await Future.wait(<Future<void>>[firstLoad, secondLoad]);
+
+    final state = loadingContainer.read(conversationListProvider);
+    expect(state.isLoading, isFalse);
+    expect(state.conversations.single.threadId, conversation.threadId);
+    expect(loadingGateway.listConversationsCalls, 1);
+  });
+
   test('实时群消息不会把已知群名称降级成群 DID', () {
     const groupId = 'did:test:group:funding';
     container

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
@@ -345,6 +347,37 @@ void main() {
     );
 
     test(
+      'keeps base conversations available when agent projection times out',
+      () async {
+        final core = _FakeConversations(
+          items: <ConversationSummary>[
+            _conversation(
+              'dm:alice:runtime',
+              targetDid: 'did:agent:runtime',
+              minutesAgo: 1,
+              displayName: 'runtime handle',
+            ),
+          ],
+        );
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: InMemoryAwikiProductLocalStore(),
+          agentInventory: _HangingAgentInventory(),
+          agentProjectionTimeout: const Duration(milliseconds: 1),
+        );
+
+        final conversations = await service.listConversations(
+          ownerDid: 'did:alice',
+        );
+
+        expect(conversations, hasLength(1));
+        expect(conversations.single.threadId, 'dm:alice:runtime');
+        expect(conversations.single.displayName, 'runtime handle');
+        expect(core.listCount, 1);
+      },
+    );
+
+    test(
       'hides merged runtime conversation by agent key across DID and handle rows',
       () async {
         final didRow = _conversation(
@@ -661,6 +694,15 @@ class _FakeAgentInventory implements AgentInventoryPort {
     required String displayName,
   }) {
     throw UnimplementedError();
+  }
+}
+
+class _HangingAgentInventory extends _FakeAgentInventory {
+  _HangingAgentInventory() : super(agents: const <AgentSummary>[]);
+
+  @override
+  Future<List<AgentSummary>> listAgents({bool includeInactive = false}) {
+    return Completer<List<AgentSummary>>().future;
   }
 }
 

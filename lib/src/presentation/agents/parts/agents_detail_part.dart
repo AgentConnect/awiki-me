@@ -93,9 +93,7 @@ class _AgentDetailPane extends StatelessWidget {
                     _DaemonRefreshIconButton(
                       isLoading: isRefreshing,
                       size: responsive.displayScaled(34),
-                      onPressed: state.isActing || isRefreshing
-                          ? null
-                          : () => onRefresh(agent),
+                      onPressed: isRefreshing ? null : () => onRefresh(agent),
                     ),
                   if (agent.isDaemon)
                     _ActionButton(
@@ -138,16 +136,14 @@ class _AgentDetailPane extends StatelessWidget {
                     _ActionButton(
                       icon: CupertinoIcons.arrow_up_circle,
                       label: isUpgrading ? '升级中' : '升级',
-                      onPressed: state.isActing || isUpgrading
-                          ? null
-                          : () => onUpgrade(agent),
+                      onPressed: isUpgrading ? null : () => onUpgrade(agent),
                     ),
                   if (isUpgrading)
                     _ActionButton(
                       icon: CupertinoIcons.xmark_circle,
                       label: isCancelling ? '取消中' : '取消升级',
                       danger: true,
-                      onPressed: state.isActing || isCancelling
+                      onPressed: isCancelling
                           ? null
                           : () => onCancelUpgrade(agent),
                     ),

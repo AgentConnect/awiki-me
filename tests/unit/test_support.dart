@@ -352,6 +352,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   Map<String, List<ChatMessage>> groupHistoryByGroupId =
       <String, List<ChatMessage>>{};
   Completer<void>? fetchDmHistoryCompleter;
+  Completer<List<ConversationSummary>>? listConversationsCompleter;
   List<RelationshipSummary> followers = const <RelationshipSummary>[];
   List<RelationshipSummary> following = const <RelationshipSummary>[];
   List<GroupSummary> groups = const <GroupSummary>[];
@@ -723,6 +724,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   @override
   Future<List<ConversationSummary>> listConversations() async {
     listConversationsCalls += 1;
+    final completer = listConversationsCompleter;
+    if (completer != null) {
+      return completer.future;
+    }
     if (failNextListConversations) {
       failNextListConversations = false;
       throw StateError('conversation refresh failed');
