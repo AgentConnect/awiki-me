@@ -17,6 +17,11 @@ abstract interface class ConversationService {
     bool unreadOnly = false,
   });
 
+  Future<ConversationSummary?> normalizeConversationForRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+  });
+
   Future<void> markThreadRead(AppThreadRef thread);
 
   Future<void> setThreadHidden({
@@ -109,6 +114,38 @@ class ImCoreConversationService implements ConversationService {
   }
 
   @override
+  Future<ConversationSummary?> normalizeConversationForRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+  }) async {
+    final projection = await _loadAgentConversationProjection();
+    final merged = _mergeAgentConversationDuplicates(<ConversationSummary>[
+      conversation,
+    ], projection);
+    if (merged.isEmpty) {
+      return null;
+    }
+    final normalized = merged.single;
+    if (!shouldShowConversationForChatList(
+      normalized,
+      daemonAgentDids: projection.daemonAgentDids,
+    )) {
+      return null;
+    }
+    final overlays = await _localStore.loadConversationOverlays(
+      ownerDid: ownerDid,
+      threadIds: normalized.visibilityKeys,
+    );
+    if (_isConversationHidden(normalized, overlays)) {
+      return null;
+    }
+    return _applyOverlay(
+      _applyAgentLifecycleProjection(normalized, projection),
+      _preferredOverlayForConversation(normalized, overlays),
+    );
+  }
+
+  @override
   Future<void> markThreadRead(AppThreadRef thread) {
     return _conversations.markThreadRead(thread);
   }
@@ -135,7 +172,7 @@ class ImCoreConversationService implements ConversationService {
     DateTime? updatedAt,
   }) async {
     final normalized = await _conversationWithVisibilityKey(conversation);
-    return _localStore.setConversationHidden(
+    await _localStore.setConversationHidden(
       ownerDid: ownerDid,
       conversationKey: normalized.visibilityKey,
       hidden: true,
@@ -150,15 +187,12 @@ class ImCoreConversationService implements ConversationService {
     DateTime? updatedAt,
   }) async {
     final normalized = await _conversationWithVisibilityKey(conversation);
-    final now = updatedAt ?? DateTime.now().toUtc();
-    for (final key in normalized.visibilityKeys) {
-      await _localStore.setConversationHidden(
-        ownerDid: ownerDid,
-        conversationKey: key,
-        hidden: false,
-        updatedAt: now,
-      );
-    }
+    await _localStore.setConversationHidden(
+      ownerDid: ownerDid,
+      conversationKey: normalized.visibilityKey,
+      hidden: false,
+      updatedAt: updatedAt ?? DateTime.now().toUtc(),
+    );
   }
 
   Future<_AgentConversationProjection>
@@ -201,9 +235,8 @@ bool _isConversationHidden(
   ConversationSummary conversation,
   Map<String, ProductConversationOverlay> overlays,
 ) {
-  return conversation.visibilityKeys.any(
-    (key) => overlays[key]?.hidden == true,
-  );
+  return _preferredOverlayForConversation(conversation, overlays)?.hidden ==
+      true;
 }
 
 ProductConversationOverlay? _preferredOverlayForConversation(

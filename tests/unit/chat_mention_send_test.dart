@@ -223,6 +223,38 @@ void main() {
     expect(container.read(pendingAgentDidsProvider), isNot(contains(agentDid)));
   });
 
+  test('snapshot run status restores pending turn', () {
+    const agentDid = 'did:wba:awiki.info:agent:runtime:codex:e1_agent';
+
+    container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+      <String, Object?>{
+        'schema': 'awiki.agent.status.v1',
+        'status_scope': 'snapshot',
+        'runs': <Object?>[
+          <String, Object?>{
+            'run_id': 'run_snapshot_codex',
+            'message_id': 'msg_snapshot_codex',
+            'runtime_agent_did': agentDid,
+            'runtime_agent_handle': 'codex',
+            'conversation_id': conversation.threadId,
+            'status': 'running',
+            'started_at': DateTime(2026, 6, 14, 21, 30).toIso8601String(),
+          },
+        ],
+      },
+    );
+
+    final thread = container.read(chatThreadProvider(conversation.threadId));
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(thread.agentPendingTurns.single.agentDid, agentDid);
+    expect(thread.agentPendingTurns.single.agentHandle, 'codex');
+    expect(
+      thread.agentPendingTurns.single.remoteMessageId,
+      'msg_snapshot_codex',
+    );
+    expect(container.read(pendingAgentDidsProvider), contains(agentDid));
+  });
+
   test('controller activity status does not create chat pending turn', () {
     const agentDid = 'did:wba:awiki.info:agent:runtime:hermes:e1_agent';
 

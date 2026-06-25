@@ -61,6 +61,77 @@ void main() {
     expect(payload?['state'], 'running');
   });
 
+  test('finds matching daemon snapshot payload from message cache', () async {
+    await _withMessagesDatabase(databasePath, (db) async {
+      await _insertMessage(
+        db,
+        content: <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'snapshot',
+          'command_id': 'cmd-status-1',
+          'daemon_agent_did': 'did:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:daemon',
+            'version': '0.9.0',
+          },
+          'runtimes': <Object?>[],
+        },
+      );
+    });
+
+    final payload =
+        await AwikiImCoreAgentControlStatusStore(
+          sqlitePath: databasePath,
+        ).findDaemonStatusPayload(
+          daemonAgentDid: 'did:daemon',
+          requestId: 'cmd-status-1',
+        );
+
+    expect(payload, isNotNull);
+    expect(payload?['status_scope'], 'snapshot');
+    expect((payload?['daemon'] as Map?)?['version'], '0.9.0');
+  });
+
+  test('finds latest daemon status payload without request id', () async {
+    await _withMessagesDatabase(databasePath, (db) async {
+      await _insertMessage(
+        db,
+        sentAt: '2026-06-25T07:00:00Z',
+        content: <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'daemon',
+          'command_id': 'cmd-old',
+          'daemon_agent_did': 'did:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:daemon',
+            'version': '0.8.0',
+          },
+        },
+      );
+      await _insertMessage(
+        db,
+        sentAt: '2026-06-25T07:05:00Z',
+        content: <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'snapshot',
+          'command_id': 'cmd-new',
+          'daemon_agent_did': 'did:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:daemon',
+            'version': '0.9.0',
+          },
+        },
+      );
+    });
+
+    final payload = await AwikiImCoreAgentControlStatusStore(
+      sqlitePath: databasePath,
+    ).findLatestDaemonStatusPayload(daemonAgentDid: 'did:daemon');
+
+    expect(payload?['command_id'], 'cmd-new');
+    expect((payload?['daemon'] as Map?)?['version'], '0.9.0');
+  });
+
   test('skips malformed and unrelated cached messages', () async {
     await _withMessagesDatabase(databasePath, (db) async {
       await _insertMessage(db, content: 'not-json runtime.command cmd-1');
@@ -198,7 +269,9 @@ Future<void> _withMessagesDatabase(
           content_type TEXT NOT NULL,
           direction INTEGER NOT NULL,
           sender_did TEXT NOT NULL,
-          content TEXT
+          content TEXT,
+          sent_at TEXT,
+          stored_at TEXT
         )
       ''');
     },
@@ -215,6 +288,7 @@ Future<void> _insertMessage(
   String contentType = 'application/json',
   int direction = 0,
   String senderDid = 'did:daemon',
+  String sentAt = '2026-06-25T07:00:00Z',
   required Object content,
 }) async {
   await db.insert('messages', <String, Object?>{
@@ -222,5 +296,7 @@ Future<void> _insertMessage(
     'direction': direction,
     'sender_did': senderDid,
     'content': content is String ? content : jsonEncode(content),
+    'sent_at': sentAt,
+    'stored_at': sentAt,
   });
 }

@@ -261,12 +261,21 @@ void main() {
       expect(find.text('Hermes'), findsWidgets);
       expect(find.text('Codex'), findsOneWidget);
       expect(find.text('Claude Code'), findsOneWidget);
+      expect(find.text('暂未支持，敬请期待。'), findsOneWidget);
       final nameFieldFinder = find.byKey(const Key('agent-create-name-field'));
       final handleFieldFinder = find.byKey(
         const Key('agent-create-handle-field'),
       );
       final nameField = tester.widget<CupertinoTextField>(nameFieldFinder);
       expect(nameField.controller?.text, 'Hermes2');
+
+      await tester.tap(find.text('Claude Code'));
+      await tester.pumpAndSettle();
+
+      final unchangedNameField = tester.widget<CupertinoTextField>(
+        nameFieldFinder,
+      );
+      expect(unchangedNameField.controller?.text, 'Hermes2');
 
       await tester.enterText(handleFieldFinder, '@My-Agent');
       await tester.pump(const Duration(milliseconds: 500));
@@ -1386,9 +1395,12 @@ class _CountingRefreshAgentControlService extends FakeAgentControlService {
   int refreshCount = 0;
 
   @override
-  Future<void> refreshDaemonStatus(String daemonAgentDid) async {
+  Future<void> refreshDaemonStatus(
+    String daemonAgentDid, {
+    String? commandId,
+  }) async {
     refreshCount += 1;
-    await super.refreshDaemonStatus(daemonAgentDid);
+    await super.refreshDaemonStatus(daemonAgentDid, commandId: commandId);
   }
 }
 
@@ -1396,7 +1408,7 @@ class _PendingRefreshAgentControlService extends FakeAgentControlService {
   final Completer<void> _pendingRefresh = Completer<void>();
 
   @override
-  Future<void> refreshDaemonStatus(String daemonAgentDid) {
+  Future<void> refreshDaemonStatus(String daemonAgentDid, {String? commandId}) {
     lastRefreshedDaemonDid = daemonAgentDid;
     return _pendingRefresh.future;
   }

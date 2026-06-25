@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/agent/agent_control_status_store.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
@@ -536,15 +537,73 @@ void main() {
     expect(state.isActing, isFalse);
     expect(state.pendingStatusQueryAtByDaemon, contains('did:agent:daemon'));
 
-    container
+    await container
         .read(agentsProvider.notifier)
         .handleStatusQueryTimeoutForTest('did:agent:daemon');
 
     state = container.read(agentsProvider);
     expect(state.isActing, isFalse);
     expect(state.pendingStatusQueryAtByDaemon, isEmpty);
-    expect(state.statusQueryErrors['did:agent:daemon'], '未收到代理响应，请稍后再刷新状态。');
+    expect(state.statusQueryErrors['did:agent:daemon'], '状态同步仍在等待，请稍后刷新查看。');
   });
+
+  test(
+    'status refresh applies cached daemon snapshot before timeout',
+    () async {
+      final control = _PendingRefreshAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final statusStore = _FakeAgentControlStatusStore();
+      final container = _container(control, statusStore: statusStore);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      unawaited(
+        container
+            .read(agentsProvider.notifier)
+            .refreshDaemonStatus('did:agent:daemon'),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(control.lastRefreshCommandId, isA<String>());
+      statusStore.daemonPayloads[control.lastRefreshCommandId!] =
+          <String, Object?>{
+            'schema': AgentControlPayloads.statusSchema,
+            'status_scope': 'snapshot',
+            'command_id': control.lastRefreshCommandId,
+            'daemon_agent_did': 'did:agent:daemon',
+            'sent_at': '2026-06-25T07:30:00Z',
+            'daemon': <String, Object?>{
+              'agent_did': 'did:agent:daemon',
+              'status': 'ready',
+              'version': '0.9.0',
+            },
+            'runtimes': <Object?>[],
+            'result': <String, Object?>{
+              'command': 'agent.status.query',
+              'daemon_agent_did': 'did:agent:daemon',
+            },
+          };
+
+      await container
+          .read(agentsProvider.notifier)
+          .handleStatusQueryTimeoutForTest('did:agent:daemon');
+
+      final state = container.read(agentsProvider);
+      expect(state.pendingStatusQueryAtByDaemon, isEmpty);
+      expect(state.statusQueryErrors, isNot(contains('did:agent:daemon')));
+      final daemon = state.agents.singleWhere(
+        (agent) => agent.agentDid == 'did:agent:daemon',
+      );
+      expect(daemon.latest.version, '0.9.0');
+    },
+  );
 
   test('daemon upgrade uses daemon-scoped pending state', () async {
     final control = _PendingUpgradeAgentControlService()
@@ -2347,6 +2406,7 @@ ProviderContainer _container(
   FakeAgentControlService control, {
   FakeProductLocalStore? localStore,
   FakeIdentityCorePort? identities,
+  AgentControlStatusStore? statusStore,
   SessionIdentity session = const SessionIdentity(
     did: 'did:human:me',
     credentialName: 'default',
@@ -2363,6 +2423,8 @@ ProviderContainer _container(
       productLocalStoreProvider.overrideWithValue(
         localStore ?? FakeProductLocalStore(),
       ),
+      if (statusStore != null)
+        agentControlStatusStoreProvider.overrideWithValue(statusStore),
       sessionProvider.overrideWith((ref) {
         return SessionController()..setSession(session);
       }),
@@ -2431,7 +2493,10 @@ class _FailingRefreshAgentControlService extends FakeAgentControlService {
   final Object error;
 
   @override
-  Future<void> refreshDaemonStatus(String daemonAgentDid) async {
+  Future<void> refreshDaemonStatus(
+    String daemonAgentDid, {
+    String? commandId,
+  }) async {
     lastRefreshedDaemonDid = daemonAgentDid;
     throw error;
   }
@@ -2439,10 +2504,12 @@ class _FailingRefreshAgentControlService extends FakeAgentControlService {
 
 class _PendingRefreshAgentControlService extends FakeAgentControlService {
   final Completer<void> pendingRefresh = Completer<void>();
+  String? lastRefreshCommandId;
 
   @override
-  Future<void> refreshDaemonStatus(String daemonAgentDid) {
+  Future<void> refreshDaemonStatus(String daemonAgentDid, {String? commandId}) {
     lastRefreshedDaemonDid = daemonAgentDid;
+    lastRefreshCommandId = commandId;
     return pendingRefresh.future;
   }
 }
@@ -2468,5 +2535,43 @@ class _FailingAgentStateStore extends FakeProductLocalStore {
   @override
   Future<void> saveAgentState(LocalAgentState state) async {
     throw StateError('local cache unavailable');
+  }
+}
+
+class _FakeAgentControlStatusStore implements AgentControlStatusStore {
+  final daemonPayloads = <String, Map<String, Object?>>{};
+
+  @override
+  Future<Map<String, Object?>?> findLatestDaemonStatusPayload({
+    required String daemonAgentDid,
+  }) async {
+    for (final payload in daemonPayloads.values) {
+      if (payload['daemon_agent_did'] == daemonAgentDid) {
+        return payload;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findDaemonStatusPayload({
+    required String daemonAgentDid,
+    required String requestId,
+  }) async {
+    final payload = daemonPayloads[requestId];
+    if (payload == null || payload['daemon_agent_did'] != daemonAgentDid) {
+      return null;
+    }
+    return payload;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findStatusPayload({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    required String requestId,
+    required String statusScope,
+  }) async {
+    return null;
   }
 }

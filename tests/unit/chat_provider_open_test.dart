@@ -1623,6 +1623,121 @@ void main() {
     expect(timeoutGateway.listConversationsCalls, 1);
   });
 
+  test('刷新最近会话超时后底层结果晚到仍会填充空列表', () async {
+    final delayedCompleter = Completer<List<ConversationSummary>>();
+    final timeoutGateway = FakeAwikiGateway()
+      ..listConversationsCompleter = delayedCompleter;
+    final timeoutContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(timeoutGateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(timeoutGateway),
+        conversationListProvider.overrideWith(
+          (ref) => ConversationListController(
+            ref,
+            refreshTimeout: const Duration(milliseconds: 1),
+          ),
+        ),
+      ],
+    );
+    addTearDown(timeoutContainer.dispose);
+    timeoutContainer
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:me',
+            credentialName: 'me.json',
+            displayName: 'Me',
+            handle: 'me',
+          ),
+        );
+
+    await expectLater(
+      timeoutContainer.read(conversationListProvider.notifier).refresh(),
+      throwsA(isA<TimeoutException>()),
+    );
+    expect(
+      timeoutContainer.read(conversationListProvider).conversations,
+      isEmpty,
+    );
+
+    delayedCompleter.complete(<ConversationSummary>[conversation]);
+    await Future<void>.delayed(Duration.zero);
+
+    final state = timeoutContainer.read(conversationListProvider);
+    expect(state.isLoading, isFalse);
+    expect(state.conversations.single.threadId, conversation.threadId);
+    expect(timeoutGateway.listConversationsCalls, 1);
+  });
+
+  test('超时的旧刷新晚到不会覆盖更新的最近会话刷新', () async {
+    final staleCompleter = Completer<List<ConversationSummary>>();
+    final freshCompleter = Completer<List<ConversationSummary>>();
+    final staleConversation = conversation.copyWith(
+      lastMessagePreview: '旧刷新',
+      lastMessageAt: DateTime(2026, 5, 8, 9),
+    );
+    final freshConversation = conversation.copyWith(
+      lastMessagePreview: '新刷新',
+      lastMessageAt: DateTime(2026, 5, 8, 11),
+    );
+    final timeoutGateway = FakeAwikiGateway()
+      ..listConversationsCompleters = <Completer<List<ConversationSummary>>>[
+        staleCompleter,
+        freshCompleter,
+      ];
+    final timeoutContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(timeoutGateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(timeoutGateway),
+        conversationListProvider.overrideWith(
+          (ref) => ConversationListController(
+            ref,
+            refreshTimeout: const Duration(milliseconds: 1),
+          ),
+        ),
+      ],
+    );
+    addTearDown(timeoutContainer.dispose);
+    timeoutContainer
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:me',
+            credentialName: 'me.json',
+            displayName: 'Me',
+            handle: 'me',
+          ),
+        );
+
+    await expectLater(
+      timeoutContainer.read(conversationListProvider.notifier).refresh(),
+      throwsA(isA<TimeoutException>()),
+    );
+    final secondRefresh = timeoutContainer
+        .read(conversationListProvider.notifier)
+        .refresh();
+    freshCompleter.complete(<ConversationSummary>[freshConversation]);
+    await secondRefresh;
+    expect(
+      timeoutContainer
+          .read(conversationListProvider)
+          .conversations
+          .single
+          .lastMessagePreview,
+      '新刷新',
+    );
+
+    staleCompleter.complete(<ConversationSummary>[staleConversation]);
+    await Future<void>.delayed(Duration.zero);
+
+    final state = timeoutContainer.read(conversationListProvider);
+    expect(state.isLoading, isFalse);
+    expect(state.conversations.single.lastMessagePreview, '新刷新');
+    expect(timeoutGateway.listConversationsCalls, 2);
+  });
+
   test('最近会话 ensureLoaded 在空列表时触发一次加载并复用进行中的请求', () async {
     final loadingGateway = FakeAwikiGateway()
       ..listConversationsCompleter = Completer<List<ConversationSummary>>();
@@ -1769,8 +1884,38 @@ void main() {
     expect(container.read(conversationListProvider).conversations, isEmpty);
     expect(container.read(selectedConversationProvider), isNull);
     expect(notificationFacade.lastBadgeCount, 0);
-    expect(gateway.deleteLocalThreadCalls, 1);
-    expect(gateway.lastDeletedLocalThreadId, 'direct:did:peer');
+    expect(gateway.deletedLocalThreadIds, contains('direct:did:peer'));
+    expect(gateway.deletedLocalThreadIds, contains(conversation.threadId));
+  });
+
+  test('删除最近会话后刷新返回同一目标不会重新出现在列表', () async {
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:me',
+            credentialName: 'me.json',
+            displayName: 'Me',
+            handle: 'me',
+          ),
+        );
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(conversation);
+
+    await container
+        .read(conversationListProvider.notifier)
+        .deleteFromRecents(conversation);
+    gateway.conversations = <ConversationSummary>[
+      conversation.copyWith(
+        threadId: 'dm:canonical:did:peer',
+        targetPeer: 'did:peer',
+      ),
+    ];
+
+    await container.read(conversationListProvider.notifier).refresh();
+
+    expect(container.read(conversationListProvider).conversations, isEmpty);
   });
 
   test('本地 DID 会话和刷新的 full handle 会话会合并为同一个智能体会话', () async {

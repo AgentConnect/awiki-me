@@ -20,7 +20,7 @@ abstract interface class AgentControlService {
     required String controllerHandle,
     required String clientPlatform,
   });
-  Future<void> refreshDaemonStatus(String daemonAgentDid);
+  Future<void> refreshDaemonStatus(String daemonAgentDid, {String? commandId});
   Future<void> createRuntimeAgent({
     required String daemonAgentDid,
     required String controllerDid,
@@ -161,12 +161,12 @@ class DefaultAgentControlService implements AgentControlService {
   }
 
   @override
-  Future<void> refreshDaemonStatus(String daemonAgentDid) {
-    final commandId = agentCommandId('cmd_agent_status');
+  Future<void> refreshDaemonStatus(String daemonAgentDid, {String? commandId}) {
+    final resolvedCommandId = commandId ?? agentCommandId('cmd_agent_status');
     return _sendDaemonPayload(
       daemonAgentDid,
-      agentStatusQueryPayload(commandId: commandId),
-      idempotencyKey: 'agent-status:$daemonAgentDid:$commandId',
+      agentStatusQueryPayload(commandId: resolvedCommandId),
+      idempotencyKey: 'agent-status:$daemonAgentDid:$resolvedCommandId',
     );
   }
 

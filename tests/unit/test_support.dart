@@ -353,6 +353,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       <String, List<ChatMessage>>{};
   Completer<void>? fetchDmHistoryCompleter;
   Completer<List<ConversationSummary>>? listConversationsCompleter;
+  List<Completer<List<ConversationSummary>>> listConversationsCompleters =
+      <Completer<List<ConversationSummary>>>[];
   List<RelationshipSummary> followers = const <RelationshipSummary>[];
   List<RelationshipSummary> following = const <RelationshipSummary>[];
   List<GroupSummary> groups = const <GroupSummary>[];
@@ -439,6 +441,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int logoutCalls = 0;
   int deleteLocalThreadCalls = 0;
   String? lastDeletedLocalThreadId;
+  final List<String> deletedLocalThreadIds = <String>[];
   int deleteLocalCredentialCalls = 0;
   Completer<void>? logoutCompleter;
   Completer<void>? deleteLocalCredentialCompleter;
@@ -476,6 +479,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   Future<void> deleteLocalThread(String threadId) async {
     deleteLocalThreadCalls += 1;
     lastDeletedLocalThreadId = threadId;
+    deletedLocalThreadIds.add(threadId);
   }
 
   @override
@@ -724,6 +728,9 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   @override
   Future<List<ConversationSummary>> listConversations() async {
     listConversationsCalls += 1;
+    if (listConversationsCompleters.isNotEmpty) {
+      return listConversationsCompleters.removeAt(0).future;
+    }
     final completer = listConversationsCompleter;
     if (completer != null) {
       return completer.future;
@@ -1221,6 +1228,14 @@ class FakeConversationService implements ConversationService {
   }
 
   @override
+  Future<ConversationSummary?> normalizeConversationForRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+  }) async {
+    return conversation;
+  }
+
+  @override
   Future<void> markThreadRead(AppThreadRef thread) {
     return gateway.markRead(_threadIdForFakeGateway(thread));
   }
@@ -1240,8 +1255,10 @@ class FakeConversationService implements ConversationService {
     required String ownerDid,
     required ConversationSummary conversation,
     DateTime? updatedAt,
-  }) {
-    return gateway.deleteLocalThread(conversation.visibilityKey);
+  }) async {
+    for (final key in conversation.visibilityKeys) {
+      await gateway.deleteLocalThread(key);
+    }
   }
 
   @override
@@ -1687,7 +1704,10 @@ class FakeAgentControlService implements AgentControlService {
   }
 
   @override
-  Future<void> refreshDaemonStatus(String daemonAgentDid) async {
+  Future<void> refreshDaemonStatus(
+    String daemonAgentDid, {
+    String? commandId,
+  }) async {
     lastRefreshedDaemonDid = daemonAgentDid;
   }
 

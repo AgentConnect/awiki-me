@@ -1109,8 +1109,11 @@ class ChatThreadsController
   }
 
   void applyAgentRunStatusPayload(Map<String, Object?> payload) {
-    if (payload['schema'] != 'awiki.agent.status.v1' ||
-        payload['status_scope'] != 'run') {
+    if (payload['schema'] != 'awiki.agent.status.v1') {
+      return;
+    }
+    final scope = payload['status_scope']?.toString().trim();
+    if (scope != 'run' && scope != 'snapshot') {
       return;
     }
     final runs = payload['runs'];

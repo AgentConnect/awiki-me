@@ -36,6 +36,11 @@ extension RuntimeAgentKindInfo on RuntimeAgentKind {
 
   bool get isGenericCli => driverId != null;
 
+  bool get canCreate => switch (this) {
+    RuntimeAgentKind.hermes || RuntimeAgentKind.codex => true,
+    RuntimeAgentKind.claudeCode => false,
+  };
+
   Map<String, Object?> get defaultDriverConfig => switch (this) {
     RuntimeAgentKind.codex => const <String, Object?>{'ephemeral': false},
     RuntimeAgentKind.hermes ||
@@ -45,7 +50,7 @@ extension RuntimeAgentKindInfo on RuntimeAgentKind {
   String get description => switch (this) {
     RuntimeAgentKind.hermes => '适合通用任务和稳定对话',
     RuntimeAgentKind.codex => '使用本机 Codex CLI 处理代码任务',
-    RuntimeAgentKind.claudeCode => '结构已支持，暂不作为主要联调目标',
+    RuntimeAgentKind.claudeCode => '暂未支持，敬请期待。',
   };
 }
 

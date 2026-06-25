@@ -25,6 +25,8 @@ const agentRuntimeCreationTimeout = Duration(seconds: 45);
 const agentStatusRefreshMinimumIndicatorDuration = Duration(milliseconds: 1500);
 const agentDaemonUpgradeAckTimeout = Duration(seconds: 20);
 const agentDaemonUpgradeCancelAckTimeout = Duration(seconds: 12);
+const agentStatusQueryPollInterval = Duration(milliseconds: 700);
+const agentStatusQueryPollAttempts = 18;
 
 enum PendingRuntimeCreationState { creating, waitingForStatus }
 
@@ -358,6 +360,8 @@ class AgentsController extends StateNotifier<AgentsState> {
   final Ref ref;
   final Map<String, Timer> _statusQueryTimeouts = <String, Timer>{};
   final Map<String, Timer> _statusQueryClearTimers = <String, Timer>{};
+  final Map<String, Timer> _statusQueryPollTimers = <String, Timer>{};
+  final Map<String, String> _statusQueryCommandIds = <String, String>{};
   final Map<String, Timer> _runtimeCreationTimeouts = <String, Timer>{};
   final Map<String, Timer> _daemonUpgradeAckTimeouts = <String, Timer>{};
   final Map<String, Timer> _daemonUpgradeCancelAckTimeouts = <String, Timer>{};
@@ -430,7 +434,9 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     try {
       final agents = _stableAgentOrder(
-        await ref.read(agentControlServiceProvider).listAgents(),
+        await _mergeLatestDaemonStatusPayloads(
+          await ref.read(agentControlServiceProvider).listAgents(),
+        ),
       );
       if (!_isCurrentCacheOwner(cacheOwner, epoch: startedEpoch)) {
         return;
@@ -520,8 +526,10 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (state.isStatusQueryPending(daemonDid)) {
       return;
     }
+    final commandId = agentCommandId('cmd_agent_status');
     if (!fromAutoLoad) {
       _statusQueryClearTimers.remove(daemonDid)?.cancel();
+      _statusQueryCommandIds[daemonDid] = commandId;
       state = state.copyWith(
         pendingStatusQueryAtByDaemon: <String, DateTime>{
           ...state.pendingStatusQueryAtByDaemon,
@@ -533,18 +541,18 @@ class AgentsController extends StateNotifier<AgentsState> {
         ),
         clearError: true,
       );
-      _scheduleStatusQueryTimeout(daemonDid);
+      _scheduleStatusQueryTimeout(daemonDid, commandId);
+      _pollDaemonStatusPayload(daemonDid: daemonDid, commandId: commandId);
     }
     try {
       await ref
           .read(agentControlServiceProvider)
-          .refreshDaemonStatus(daemonDid);
+          .refreshDaemonStatus(daemonDid, commandId: commandId);
       if (!fromAutoLoad) {
         state = state.copyWith(clearError: true);
       }
     } catch (error) {
-      _statusQueryTimeouts.remove(daemonDid)?.cancel();
-      _statusQueryClearTimers.remove(daemonDid)?.cancel();
+      _cancelStatusQueryTracking(daemonDid);
       final nextPending = fromAutoLoad
           ? state.pendingStatusQueryAtByDaemon
           : _withoutKey(state.pendingStatusQueryAtByDaemon, daemonDid);
@@ -1000,6 +1008,8 @@ class AgentsController extends StateNotifier<AgentsState> {
     );
     if (daemonDid != null) {
       _statusQueryTimeouts.remove(daemonDid)?.cancel();
+      _statusQueryPollTimers.remove(daemonDid)?.cancel();
+      _statusQueryCommandIds.remove(daemonDid);
     }
     final nextDaemonUpgradeErrors = _daemonUpgradeErrorsAfterPayload(
       payload,
@@ -1068,24 +1078,56 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
   }
 
-  void _scheduleStatusQueryTimeout(String daemonDid) {
+  void _scheduleStatusQueryTimeout(String daemonDid, String commandId) {
     _statusQueryTimeouts.remove(daemonDid)?.cancel();
     _statusQueryTimeouts[daemonDid] = Timer(agentStatusQueryTimeout, () {
       _statusQueryTimeouts.remove(daemonDid);
-      _handleStatusQueryTimeout(daemonDid);
+      _handleStatusQueryTimeout(daemonDid, commandId);
     });
   }
 
-  void handleStatusQueryTimeoutForTest(String daemonDid) {
+  Future<void> handleStatusQueryTimeoutForTest(String daemonDid) {
     _statusQueryTimeouts.remove(daemonDid)?.cancel();
-    _handleStatusQueryTimeout(daemonDid);
+    return _handleStatusQueryTimeout(
+      daemonDid,
+      _statusQueryCommandIds[daemonDid],
+    );
   }
 
-  void _handleStatusQueryTimeout(String daemonDid) {
+  Future<void> _handleStatusQueryTimeout(
+    String daemonDid,
+    String? commandId,
+  ) async {
     if (!mounted ||
         !state.pendingStatusQueryAtByDaemon.containsKey(daemonDid)) {
       return;
     }
+    if (commandId != null) {
+      final applied = await _applyDaemonStatusPayloadFromStore(
+        daemonDid: daemonDid,
+        commandId: commandId,
+      );
+      if (applied) {
+        _statusQueryClearTimers.remove(daemonDid)?.cancel();
+        _statusQueryCommandIds.remove(daemonDid);
+        if (mounted &&
+            state.pendingStatusQueryAtByDaemon.containsKey(daemonDid)) {
+          state = state.copyWith(
+            pendingStatusQueryAtByDaemon: _withoutKey(
+              state.pendingStatusQueryAtByDaemon,
+              daemonDid,
+            ),
+          );
+        }
+        return;
+      }
+      if (!mounted ||
+          !state.pendingStatusQueryAtByDaemon.containsKey(daemonDid)) {
+        return;
+      }
+    }
+    _statusQueryPollTimers.remove(daemonDid)?.cancel();
+    _statusQueryCommandIds.remove(daemonDid);
     state = state.copyWith(
       pendingStatusQueryAtByDaemon: _withoutKey(
         state.pendingStatusQueryAtByDaemon,
@@ -1095,9 +1137,64 @@ class AgentsController extends StateNotifier<AgentsState> {
           ? state.statusQueryErrors
           : <String, String>{
               ...state.statusQueryErrors,
-              daemonDid: '未收到代理响应，请稍后再刷新状态。',
+              daemonDid: '状态同步仍在等待，请稍后刷新查看。',
             },
     );
+  }
+
+  void _pollDaemonStatusPayload({
+    required String daemonDid,
+    required String commandId,
+  }) {
+    _statusQueryPollTimers.remove(daemonDid)?.cancel();
+    var attempts = 0;
+    _statusQueryPollTimers[daemonDid] = Timer.periodic(
+      agentStatusQueryPollInterval,
+      (timer) async {
+        if (!mounted ||
+            !state.pendingStatusQueryAtByDaemon.containsKey(daemonDid)) {
+          timer.cancel();
+          if (identical(_statusQueryPollTimers[daemonDid], timer)) {
+            _statusQueryPollTimers.remove(daemonDid);
+          }
+          return;
+        }
+        attempts += 1;
+        final applied = await _applyDaemonStatusPayloadFromStore(
+          daemonDid: daemonDid,
+          commandId: commandId,
+        );
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        if (applied ||
+            !state.pendingStatusQueryAtByDaemon.containsKey(daemonDid) ||
+            attempts >= agentStatusQueryPollAttempts) {
+          timer.cancel();
+          if (identical(_statusQueryPollTimers[daemonDid], timer)) {
+            _statusQueryPollTimers.remove(daemonDid);
+          }
+        }
+      },
+    );
+  }
+
+  Future<bool> _applyDaemonStatusPayloadFromStore({
+    required String daemonDid,
+    required String commandId,
+  }) async {
+    final payload = await ref
+        .read(agentControlStatusStoreProvider)
+        .findDaemonStatusPayload(
+          daemonAgentDid: daemonDid,
+          requestId: commandId,
+        );
+    if (!mounted || payload == null) {
+      return false;
+    }
+    applyControlPayload(payload);
+    return true;
   }
 
   void _scheduleRuntimeCreationTimeout(String requestId) {
@@ -1467,6 +1564,13 @@ class AgentsController extends StateNotifier<AgentsState> {
     _cancelDaemonUpgradeCancelTimer(daemonDid);
   }
 
+  void _cancelStatusQueryTracking(String daemonDid) {
+    _statusQueryTimeouts.remove(daemonDid)?.cancel();
+    _statusQueryClearTimers.remove(daemonDid)?.cancel();
+    _statusQueryPollTimers.remove(daemonDid)?.cancel();
+    _statusQueryCommandIds.remove(daemonDid);
+  }
+
   @override
   void dispose() {
     _cancelStatusTimers();
@@ -1482,6 +1586,11 @@ class AgentsController extends StateNotifier<AgentsState> {
       timer.cancel();
     }
     _statusQueryClearTimers.clear();
+    for (final timer in _statusQueryPollTimers.values) {
+      timer.cancel();
+    }
+    _statusQueryPollTimers.clear();
+    _statusQueryCommandIds.clear();
     for (final timer in _runtimeCreationTimeouts.values) {
       timer.cancel();
     }
@@ -1583,6 +1692,23 @@ class AgentsController extends StateNotifier<AgentsState> {
         ),
       );
     }
+  }
+
+  Future<List<AgentSummary>> _mergeLatestDaemonStatusPayloads(
+    List<AgentSummary> agents,
+  ) async {
+    var merged = _stableAgentOrder(agents);
+    final store = ref.read(agentControlStatusStoreProvider);
+    for (final daemon in agents.where((agent) => agent.isDaemon)) {
+      final payload = await store.findLatestDaemonStatusPayload(
+        daemonAgentDid: daemon.agentDid,
+      );
+      if (payload == null) {
+        continue;
+      }
+      merged = _mergeControlPayload(merged, payload);
+    }
+    return _stableAgentOrder(merged);
   }
 
   String? _nextSelection(List<AgentSummary> agents) {

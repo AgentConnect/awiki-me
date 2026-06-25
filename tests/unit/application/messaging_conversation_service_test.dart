@@ -428,6 +428,108 @@ void main() {
 
         expect(merged.single.visibilityKey, 'runtime:did:agent:runtime');
         expect(conversations, isEmpty);
+        expect(
+          (await store.loadConversationOverlay(
+            ownerDid: 'did:human',
+            threadId: 'runtime:did:agent:runtime',
+          ))?.hidden,
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'normalizes raw runtime recents using the same agent projection as list refresh',
+      () async {
+        final rawConversation = _conversation(
+          'dm:did:human:did:agent:runtime',
+          targetDid: 'did:agent:runtime',
+          targetPeer: 'did:agent:runtime',
+          minutesAgo: 1,
+          displayName: 'did:agent:runtime',
+        );
+        final service = ImCoreConversationService(
+          conversations: _FakeConversations(
+            items: const <ConversationSummary>[],
+          ),
+          localStore: InMemoryAwikiProductLocalStore(),
+          agentInventory: const _FakeAgentInventory(
+            agents: <AgentSummary>[
+              AgentSummary(
+                agentDid: 'did:agent:runtime',
+                kind: AgentKind.runtime,
+                daemonAgentDid: 'did:agent:daemon',
+                runtime: 'hermes',
+                handle: 'zhuocheng-test-hermes',
+                displayName: '归档后的智能体',
+                activeState: 'archived',
+                latest: AgentLatestStatus(status: 'archived'),
+              ),
+            ],
+          ),
+        );
+
+        final normalized = await service.normalizeConversationForRecents(
+          ownerDid: 'did:human',
+          conversation: rawConversation,
+        );
+
+        expect(normalized, isNotNull);
+        expect(normalized!.displayName, '归档后的智能体');
+        expect(normalized.visibilityKey, 'runtime:did:agent:runtime');
+        expect(normalized.isDeletedAgentConversation, isTrue);
+      },
+    );
+
+    test(
+      'normalizing hidden runtime conversation returns null across equivalent keys',
+      () async {
+        final rawConversation = _conversation(
+          'dm:did:human:did:agent:runtime',
+          targetDid: 'did:agent:runtime',
+          targetPeer: 'did:agent:runtime',
+          minutesAgo: 1,
+          displayName: 'did:agent:runtime',
+        );
+        final store = InMemoryAwikiProductLocalStore();
+        final service = ImCoreConversationService(
+          conversations: _FakeConversations(
+            items: const <ConversationSummary>[],
+          ),
+          localStore: store,
+          agentInventory: const _FakeAgentInventory(
+            agents: <AgentSummary>[
+              AgentSummary(
+                agentDid: 'did:agent:runtime',
+                kind: AgentKind.runtime,
+                daemonAgentDid: 'did:agent:daemon',
+                runtime: 'hermes',
+                handle: 'zhuocheng-test-hermes',
+                displayName: '归档后的智能体',
+                activeState: 'archived',
+                latest: AgentLatestStatus(status: 'archived'),
+              ),
+            ],
+          ),
+        );
+        final normalized = await service.normalizeConversationForRecents(
+          ownerDid: 'did:human',
+          conversation: rawConversation,
+        );
+        await service.hideConversationFromRecents(
+          ownerDid: 'did:human',
+          conversation: normalized!,
+        );
+
+        final hiddenRaw = await service.normalizeConversationForRecents(
+          ownerDid: 'did:human',
+          conversation: rawConversation.copyWith(
+            threadId: 'dm:peer-scope:v1:runtime',
+            targetPeer: 'zhuocheng-test-hermes.anpclaw.com',
+          ),
+        );
+
+        expect(hiddenRaw, isNull);
       },
     );
 

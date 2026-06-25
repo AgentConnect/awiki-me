@@ -1,1 +1,16 @@
 include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - .dart_tool/**
+    - build/**
+    - dist/**
+    - android/**
+    - ios/**
+    - linux/**
+    - macos/**
+    - windows/**
+    - "**/.symlinks/**"
+    - "**/.plugin_symlinks/**"
+    - "**/ephemeral/**"
+    - "**/Pods/**"

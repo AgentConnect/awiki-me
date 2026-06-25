@@ -197,6 +197,9 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
   }
 
   void _selectKind(RuntimeAgentKind kind) {
+    if (!kind.canCreate) {
+      return;
+    }
     if (_kind == kind) {
       return;
     }
@@ -296,6 +299,9 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
   }
 
   void _submit() {
+    if (!_kind.canCreate) {
+      return;
+    }
     final displayName = _nameController.text.trim();
     final handle = _handleController.text.trim();
     final nameError = _validateAgentDisplayName(displayName);
@@ -337,6 +343,7 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
         _softValidateAgentHandle(handle) ??
         remoteError;
     final canSubmit =
+        _kind.canCreate &&
         _validateAgentDisplayName(displayName) == null &&
         _validateAgentHandle(handle) == null &&
         !_remoteHandleChecking &&
@@ -513,7 +520,7 @@ class _AgentTypeSelector extends StatelessWidget {
               _AgentTypeOption(
                 kind: kind,
                 selected: selected == kind,
-                onTap: () => onChanged(kind),
+                onTap: kind.canCreate ? () => onChanged(kind) : null,
               ),
               if (kind != kinds.last) SizedBox(height: responsive.spacing(8)),
             ],
@@ -533,16 +540,27 @@ class _AgentTypeOption extends StatelessWidget {
 
   final RuntimeAgentKind kind;
   final bool selected;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final enabled = kind.canCreate;
     final accent = switch (kind) {
       RuntimeAgentKind.hermes => const Color(0xFF0B65F8),
       RuntimeAgentKind.codex => const Color(0xFF157F5B),
       RuntimeAgentKind.claudeCode => const Color(0xFF8C5B2F),
     };
+    final effectiveAccent = enabled ? accent : const Color(0xFF98A4B5);
+    final titleColor = enabled
+        ? const Color(0xFF17213A)
+        : const Color(0xFF98A4B5);
+    final descriptionColor = enabled
+        ? const Color(0xFF66728A)
+        : const Color(0xFFAAB3C2);
+    final iconBackground = enabled
+        ? CupertinoColors.white
+        : const Color(0xFFF1F4F8);
     final icon = switch (kind) {
       RuntimeAgentKind.hermes => CupertinoIcons.sparkles,
       RuntimeAgentKind.codex => CupertinoIcons.chevron_left_slash_chevron_right,
@@ -550,17 +568,23 @@ class _AgentTypeOption extends StatelessWidget {
     };
     return AppPressable(
       onTap: onTap,
-      semanticLabel: '选择 ${kind.displayLabel}',
+      semanticLabel: enabled
+          ? '选择 ${kind.displayLabel}'
+          : '${kind.displayLabel} 暂未支持',
       borderRadius: BorderRadius.circular(responsive.radius(10)),
       child: Container(
         padding: EdgeInsets.all(responsive.spacing(12)),
         decoration: BoxDecoration(
-          color: selected
+          color: !enabled
+              ? const Color(0xFFF4F6FA)
+              : selected
               ? accent.withValues(alpha: 0.08)
               : const Color(0xFFF7F9FD),
           borderRadius: BorderRadius.circular(responsive.radius(10)),
           border: Border.all(
-            color: selected
+            color: !enabled
+                ? const Color(0xFFE0E5EE)
+                : selected
                 ? accent.withValues(alpha: 0.42)
                 : const Color(0xFFE4E9F2),
           ),
@@ -572,10 +596,14 @@ class _AgentTypeOption extends StatelessWidget {
               height: responsive.displayScaled(32),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: CupertinoColors.white,
+                color: iconBackground,
                 borderRadius: BorderRadius.circular(responsive.radius(8)),
               ),
-              child: Icon(icon, color: accent, size: responsive.iconSm),
+              child: Icon(
+                icon,
+                color: effectiveAccent,
+                size: responsive.iconSm,
+              ),
             ),
             SizedBox(width: responsive.spacing(10)),
             Expanded(
@@ -585,7 +613,7 @@ class _AgentTypeOption extends StatelessWidget {
                   Text(
                     kind.displayLabel,
                     style: TextStyle(
-                      color: const Color(0xFF17213A),
+                      color: titleColor,
                       fontSize: responsive.bodyMd,
                       fontWeight: FontWeight.w700,
                     ),
@@ -596,7 +624,7 @@ class _AgentTypeOption extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: const Color(0xFF66728A),
+                      color: descriptionColor,
                       fontSize: responsive.metaSm,
                       height: 1.25,
                     ),
@@ -605,13 +633,20 @@ class _AgentTypeOption extends StatelessWidget {
               ),
             ),
             SizedBox(width: responsive.spacing(8)),
-            Icon(
-              selected
-                  ? CupertinoIcons.check_mark_circled_solid
-                  : CupertinoIcons.circle,
-              color: selected ? accent : const Color(0xFFC1CAD8),
-              size: responsive.iconMd,
-            ),
+            if (enabled)
+              Icon(
+                selected
+                    ? CupertinoIcons.check_mark_circled_solid
+                    : CupertinoIcons.circle,
+                color: selected ? accent : const Color(0xFFC1CAD8),
+                size: responsive.iconMd,
+              )
+            else
+              Icon(
+                CupertinoIcons.lock,
+                color: const Color(0xFFB3BDCA),
+                size: responsive.iconSm,
+              ),
           ],
         ),
       ),

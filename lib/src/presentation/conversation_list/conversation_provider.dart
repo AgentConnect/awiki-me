@@ -46,6 +46,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   final Ref ref;
   final Duration refreshTimeout;
   Future<void>? _refreshOperation;
+  int _refreshGeneration = 0;
+  final Set<String> _locallyHiddenConversationKeys = <String>{};
 
   NotificationFacade get _notification => ref.read(notificationFacadeProvider);
 
@@ -53,20 +55,33 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     if (state.conversations.isNotEmpty) {
       return Future<void>.value();
     }
-    final activeRefresh = _refreshOperation;
-    if (activeRefresh != null) {
-      return activeRefresh;
-    }
-    return refresh();
+    return refresh().catchError((_) {});
   }
 
   Future<void> refresh() {
-    final activeRefresh = _refreshOperation;
-    if (activeRefresh != null) {
-      return activeRefresh;
+    final activeRefresh = _refreshOperation ?? _startRefresh();
+    if (!state.isLoading) {
+      state = state.copyWith(isLoading: true);
     }
+    return _waitForRefresh(activeRefresh);
+  }
+
+  Future<void> _waitForRefresh(Future<void> operation) async {
+    try {
+      await operation.timeout(refreshTimeout);
+    } on TimeoutException {
+      if (identical(_refreshOperation, operation)) {
+        _refreshOperation = null;
+        state = state.copyWith(isLoading: false);
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _startRefresh() {
+    final generation = ++_refreshGeneration;
     late final Future<void> operation;
-    operation = _refresh().whenComplete(() {
+    operation = _refresh(generation).whenComplete(() {
       if (identical(_refreshOperation, operation)) {
         _refreshOperation = null;
       }
@@ -75,12 +90,14 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     return operation;
   }
 
-  Future<void> _refresh() async {
-    final previousConversations = state.conversations;
+  Future<void> _refresh(int generation) async {
     state = state.copyWith(isLoading: true);
     try {
       final session = ref.read(sessionProvider).session;
       if (session == null) {
+        if (generation != _refreshGeneration) {
+          return;
+        }
         state = state.copyWith(
           conversations: const <ConversationSummary>[],
           isLoading: false,
@@ -90,26 +107,66 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       }
       final conversations = await ref
           .read(conversationServiceProvider)
-          .listConversations(ownerDid: session.did)
-          .timeout(refreshTimeout);
+          .listConversations(ownerDid: session.did);
+      if (generation != _refreshGeneration) {
+        return;
+      }
+      final currentConversations = state.conversations;
       state = state.copyWith(
-        conversations: _mergeConversationRefresh(
-          refreshed: conversations,
-          local: previousConversations,
+        conversations: _filterLocallyHiddenConversations(
+          _mergeConversationRefresh(
+            refreshed: conversations,
+            local: currentConversations,
+          ),
         ),
         isLoading: false,
       );
       await _updateBadgeCountBestEffort(state.unreadCount);
     } catch (_) {
-      state = state.copyWith(
-        conversations: previousConversations,
-        isLoading: false,
-      );
+      if (generation == _refreshGeneration) {
+        state = state.copyWith(isLoading: false);
+      }
       rethrow;
     }
   }
 
   void upsertConversation(ConversationSummary conversation) {
+    if (_isLocallyHidden(conversation)) {
+      return;
+    }
+    _upsertConversation(conversation, preferLocalTitle: true);
+    unawaited(_normalizeAndUpsertConversation(conversation).catchError((_) {}));
+  }
+
+  Future<void> _normalizeAndUpsertConversation(
+    ConversationSummary conversation,
+  ) async {
+    final normalized = await _normalizeConversationForRecents(conversation);
+    if (normalized == null) {
+      _removeConversationLocally(conversation);
+      return;
+    }
+    if (_isLocallyHidden(normalized)) {
+      return;
+    }
+    _upsertConversation(normalized);
+  }
+
+  void upsertConversationBestEffort(ConversationSummary conversation) {
+    try {
+      upsertConversation(conversation);
+    } catch (_) {
+      // Best-effort upserts are used by background realtime/navigation paths.
+    }
+  }
+
+  void _upsertConversation(
+    ConversationSummary conversation, {
+    bool preferLocalTitle = false,
+  }) {
+    if (_isLocallyHidden(conversation)) {
+      return;
+    }
     final existing = _matchingConversationForUpsert(
       state.conversations,
       conversation,
@@ -117,10 +174,14 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final titledConversation = _mergeConversationTitle(
       refreshed: conversation,
       local: existing,
+      preferLocalTitle: preferLocalTitle,
     );
-    final mergedConversation = _mergeConversationReadState(
-      refreshed: _mergeConversationLastMessage(
-        refreshed: titledConversation,
+    final mergedConversation = _mergeConversationLifecycle(
+      refreshed: _mergeConversationReadState(
+        refreshed: _mergeConversationLastMessage(
+          refreshed: titledConversation,
+          local: existing,
+        ),
         local: existing,
       ),
       local: existing,
@@ -141,6 +202,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     if (session == null) {
       return;
     }
+    _removeHiddenKeysFor(conversation);
     await ref
         .read(conversationServiceProvider)
         .restoreConversationToRecents(
@@ -150,6 +212,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   }
 
   void restoreConversationBestEffort(ConversationSummary conversation) {
+    _removeHiddenKeysFor(conversation);
     unawaited(restoreConversation(conversation).catchError((_) {}));
   }
 
@@ -158,16 +221,20 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     if (session == null) {
       throw StateError('No active awiki session. Please sign in first.');
     }
-    await ref
-        .read(conversationServiceProvider)
-        .hideConversationFromRecents(
-          ownerDid: session.did,
-          conversation: conversation,
-        );
-    final next = state.conversations
-        .where((item) => !sameConversationTarget(item, conversation))
-        .toList(growable: false);
-    state = state.copyWith(conversations: next);
+    _addHiddenKeysFor(conversation);
+    _removeConversationLocally(conversation);
+    try {
+      await ref
+          .read(conversationServiceProvider)
+          .hideConversationFromRecents(
+            ownerDid: session.did,
+            conversation: conversation,
+          );
+    } catch (_) {
+      _removeHiddenKeysFor(conversation);
+      _upsertConversation(conversation, preferLocalTitle: true);
+      rethrow;
+    }
     final selected = ref.read(selectedConversationProvider);
     if (selected != null && sameConversationTarget(selected, conversation)) {
       ref.read(selectedConversationProvider.notifier).clearSelection();
@@ -228,7 +295,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   void markConversationReadLocal(ConversationSummary conversation) {
     final next = state.conversations.map((item) {
       if ((item.unreadCount == 0 && item.unreadMentionCount == 0) ||
-          !sameConversationTarget(item, conversation)) {
+          !_sameConversationForList(item, conversation)) {
         return item;
       }
       return item.copyWith(
@@ -242,8 +309,65 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   }
 
   Future<void> clear() async {
+    _refreshGeneration += 1;
+    _refreshOperation = null;
+    _locallyHiddenConversationKeys.clear();
     state = const ConversationListState();
     await _updateBadgeCountBestEffort(0);
+  }
+
+  Future<ConversationSummary?> _normalizeConversationForRecents(
+    ConversationSummary conversation,
+  ) async {
+    final session = ref.read(sessionProvider).session;
+    if (session == null) {
+      return conversation;
+    }
+    return ref
+        .read(conversationServiceProvider)
+        .normalizeConversationForRecents(
+          ownerDid: session.did,
+          conversation: conversation,
+        );
+  }
+
+  void _addHiddenKeysFor(ConversationSummary conversation) {
+    _locallyHiddenConversationKeys.addAll(conversation.visibilityKeys);
+  }
+
+  void _removeHiddenKeysFor(ConversationSummary conversation) {
+    for (final key in conversation.visibilityKeys) {
+      _locallyHiddenConversationKeys.remove(key);
+    }
+  }
+
+  bool _isLocallyHidden(ConversationSummary conversation) {
+    return conversation.visibilityKeys.any(
+      _locallyHiddenConversationKeys.contains,
+    );
+  }
+
+  void _removeConversationLocally(ConversationSummary conversation) {
+    final next = state.conversations
+        .where((item) => !_sameConversationForList(item, conversation))
+        .toList(growable: false);
+    state = state.copyWith(conversations: next);
+    unawaited(_updateBadgeCountBestEffort(state.unreadCount));
+  }
+
+  List<ConversationSummary> _filterLocallyHiddenConversations(
+    List<ConversationSummary> conversations,
+  ) {
+    if (_locallyHiddenConversationKeys.isEmpty) {
+      return conversations;
+    }
+    return conversations
+        .where(
+          (conversation) => !conversation.visibilityKeys.any(
+            _locallyHiddenConversationKeys.contains,
+          ),
+        )
+        .toList(growable: false);
   }
 
   Future<void> _updateBadgeCountBestEffort(int count) async {
@@ -273,9 +397,12 @@ List<ConversationSummary> _mergeConversationRefresh({
       refreshed: conversation,
       local: matchedLocal,
     );
-    return _mergeConversationReadState(
-      refreshed: _mergeConversationLastMessage(
-        refreshed: titledConversation,
+    return _mergeConversationLifecycle(
+      refreshed: _mergeConversationReadState(
+        refreshed: _mergeConversationLastMessage(
+          refreshed: titledConversation,
+          local: matchedLocal,
+        ),
         local: matchedLocal,
       ),
       local: matchedLocal,
@@ -330,15 +457,28 @@ ConversationSummary? _matchingConversationForUpsert(
   return null;
 }
 
+bool _sameConversationForList(
+  ConversationSummary first,
+  ConversationSummary second,
+) {
+  return _matchingConversationForUpsert(<ConversationSummary>[first], second) !=
+      null;
+}
+
 ConversationSummary _mergeConversationTitle({
   required ConversationSummary refreshed,
   required ConversationSummary? local,
+  bool preferLocalTitle = false,
 }) {
   if (local == null) {
     return refreshed;
   }
   if (!refreshed.isGroup) {
-    return _mergeDirectConversationTitle(refreshed: refreshed, local: local);
+    return _mergeDirectConversationTitle(
+      refreshed: refreshed,
+      local: local,
+      preferLocalTitle: preferLocalTitle,
+    );
   }
   if (local.groupId?.trim() != refreshed.groupId?.trim()) {
     return refreshed;
@@ -376,6 +516,19 @@ ConversationSummary _mergeConversationReadState({
   );
 }
 
+ConversationSummary _mergeConversationLifecycle({
+  required ConversationSummary refreshed,
+  required ConversationSummary? local,
+}) {
+  if (local?.isDeletedAgentConversation == true &&
+      !refreshed.isDeletedAgentConversation) {
+    return refreshed.copyWith(
+      peerLifecycleState: ConversationPeerLifecycleState.deletedAgent,
+    );
+  }
+  return refreshed;
+}
+
 ConversationSummary _mergeConversationLastMessage({
   required ConversationSummary refreshed,
   required ConversationSummary? local,
@@ -393,12 +546,22 @@ ConversationSummary _mergeConversationLastMessage({
 ConversationSummary _mergeDirectConversationTitle({
   required ConversationSummary refreshed,
   required ConversationSummary local,
+  bool preferLocalTitle = false,
 }) {
   if (local.isGroup || !sameDirectConversationTarget(local, refreshed)) {
     return refreshed;
   }
   final localName = local.displayName.trim();
   final refreshedName = refreshed.displayName.trim();
+  if (preferLocalTitle &&
+      localName.isNotEmpty &&
+      _isBetterDirectConversationTitle(localName, refreshedName)) {
+    return refreshed.copyWith(
+      displayName: local.displayName,
+      avatarSeed: refreshed.avatarSeed ?? local.avatarSeed,
+      peerLifecycleState: local.peerLifecycleState,
+    );
+  }
   if (localName.isEmpty ||
       localName == refreshedName ||
       !_isBetterDirectConversationTitle(localName, refreshedName)) {
