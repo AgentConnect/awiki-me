@@ -379,6 +379,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   bool failNextSendOtp = false;
   bool failListFollowing = false;
   bool failListFollowers = false;
+  bool failNextListGroups = false;
   bool failNextJoinGroup = false;
   bool failNextAddGroupMember = false;
   bool includeLocalPathInSentAttachment = true;
@@ -752,6 +753,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
 
   @override
   Future<List<GroupSummary>> listGroups() async {
+    if (failNextListGroups) {
+      failNextListGroups = false;
+      throw StateError('group list unavailable');
+    }
     return groups;
   }
 

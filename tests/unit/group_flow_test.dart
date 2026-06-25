@@ -8,6 +8,7 @@ import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/group/create_group_page.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
+import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,6 +25,37 @@ void main() {
     handle: 'me',
     jwtToken: 'token',
   );
+
+  test('群组列表刷新失败时保留已有列表并退出加载态', () async {
+    final gateway = FakeAwikiGateway()
+      ..groups = <GroupSummary>[
+        GroupSummary(
+          groupId: 'group-1',
+          name: '融资协作群',
+          description: '',
+          memberCount: 2,
+          lastMessageAt: DateTime(2026, 5, 17, 10),
+          myRole: 'member',
+        ),
+      ];
+    final container = ProviderContainer(
+      overrides: fakeApplicationServiceOverrides(gateway),
+    );
+    addTearDown(container.dispose);
+
+    await container.read(groupProvider.notifier).refresh();
+    gateway.failNextListGroups = true;
+
+    await expectLater(
+      container.read(groupProvider.notifier).refresh(),
+      throwsA(isA<StateError>()),
+    );
+
+    final state = container.read(groupProvider);
+    expect(state.isLoading, isFalse);
+    expect(state.groups.map((group) => group.groupId), ['group-1']);
+    expect(state.groups.single.displayName, '融资协作群');
+  });
 
   testWidgets('macOS 创建群成功后直接进入群聊', (tester) async {
     final gateway = FakeAwikiGateway()..loginResult = session;

@@ -52,7 +52,7 @@ class GroupListPage extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   TopBarActionButton(
-                    onTap: () => ref.read(groupProvider.notifier).refresh(),
+                    onTap: () => _refreshGroups(context, ref),
                     child: Icon(
                       CupertinoIcons.refresh,
                       color: theme.title,
@@ -140,6 +140,19 @@ class GroupListPage extends ConsumerWidget {
         child: content,
       ),
     );
+  }
+
+  Future<void> _refreshGroups(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref.read(groupProvider.notifier).refresh();
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
+    }
   }
 
   void _showJoinDialog(BuildContext context, WidgetRef ref) {
