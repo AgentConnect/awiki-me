@@ -1746,6 +1746,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       for (final agent in current) agent.agentDid: agent,
     };
     final snapshotRuntimeDids = <String>{};
+    final snapshotAtByRuntimeDid = <String, DateTime?>{};
     final daemonPayload = _readMap(payload['daemon']);
     if (daemonPayload.isNotEmpty) {
       final daemonDid = _string(daemonPayload['agent_did']) ?? payloadDaemonDid;
@@ -1786,6 +1787,10 @@ class AgentsController extends StateNotifier<AgentsState> {
         if ((_string(runtimePayload['daemon_agent_did']) ?? payloadDaemonDid) ==
             payloadDaemonDid) {
           snapshotRuntimeDids.add(runtimeDid);
+          snapshotAtByRuntimeDid[runtimeDid] = _agentStatusTimestamp(
+            runtimePayload,
+            eventAt,
+          );
         }
       }
     }
@@ -1868,6 +1873,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       }
     }
     final runs = payload['runs'];
+    final snapshotActiveRunIdsByRuntime = <String, Set<String>>{};
     if (runs is List) {
       for (final item in runs) {
         final runPayload = _readMap(item);
@@ -1876,12 +1882,33 @@ class AgentsController extends StateNotifier<AgentsState> {
         if (runtimeDid == null || runId == null) {
           continue;
         }
+        final runStatus = _string(runPayload['status']);
+        if (statusScope == 'snapshot' &&
+            runStatus != null &&
+            isActiveAgentRunStatus(runStatus)) {
+          snapshotActiveRunIdsByRuntime
+              .putIfAbsent(runtimeDid, () => <String>{})
+              .add(runId);
+        }
         final current = byDid[runtimeDid];
         if (current == null || !current.isRuntime) {
           continue;
         }
         final run = AgentRunStatus.fromJson(runPayload);
         byDid[runtimeDid] = _mergeRuntimeRunStatus(current, run);
+      }
+    }
+    if (statusScope == 'snapshot' && payloadDaemonDid != null) {
+      for (final entry in byDid.entries.toList()) {
+        final agent = entry.value;
+        if (!agent.isRuntime || agent.daemonAgentDid != payloadDaemonDid) {
+          continue;
+        }
+        byDid[entry.key] = _reconcileRuntimeRunsWithSnapshot(
+          agent,
+          snapshotActiveRunIdsByRuntime[agent.agentDid] ?? const <String>{},
+          snapshotAtByRuntimeDid[agent.agentDid],
+        );
       }
     }
     return _stableAgentOrder(byDid.values);
@@ -2059,6 +2086,45 @@ class AgentsController extends StateNotifier<AgentsState> {
       latest: runtime.latest,
       recentRuns: recentRuns.take(50).toList(),
     );
+  }
+
+  AgentSummary _reconcileRuntimeRunsWithSnapshot(
+    AgentSummary runtime,
+    Set<String> activeRunIds,
+    DateTime? snapshotAt,
+  ) {
+    if (runtime.recentRuns.isEmpty) {
+      return runtime;
+    }
+    final recentRuns = <AgentRunStatus>[
+      for (final run in runtime.recentRuns)
+        if (!isActiveAgentRunStatus(run.status) ||
+            activeRunIds.contains(run.runId) ||
+            _runStatusIsNewerThanSnapshot(run, snapshotAt))
+          run,
+    ];
+    if (recentRuns.length == runtime.recentRuns.length) {
+      return runtime;
+    }
+    return AgentSummary(
+      agentDid: runtime.agentDid,
+      kind: runtime.kind,
+      daemonAgentDid: runtime.daemonAgentDid,
+      runtime: runtime.runtime,
+      handle: runtime.handle,
+      displayName: runtime.displayName,
+      activeState: runtime.activeState,
+      latest: runtime.latest,
+      recentRuns: recentRuns,
+    );
+  }
+
+  bool _runStatusIsNewerThanSnapshot(AgentRunStatus run, DateTime? snapshotAt) {
+    if (snapshotAt == null) {
+      return false;
+    }
+    final runAt = run.updatedAt ?? run.startedAt;
+    return runAt != null && runAt.isAfter(snapshotAt);
   }
 
   bool _isNewerRunStatus(AgentRunStatus next, AgentRunStatus current) {

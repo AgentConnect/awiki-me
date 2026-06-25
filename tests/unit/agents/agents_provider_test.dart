@@ -2400,6 +2400,232 @@ void main() {
       expect(runtime.recentRuns.single.triggerKind, 'external_direct');
     },
   );
+
+  test('snapshot clears stale active runtime runs for the daemon', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:runtime:codex',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'generic-cli',
+          displayName: 'CodeX',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+
+    container.read(agentsProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'status_scope': 'runtime_activity',
+        'daemon_agent_did': 'did:agent:daemon',
+        'runs': <Object?>[
+          <String, Object?>{
+            'run_id': 'run_stale_codex',
+            'runtime_agent_did': 'did:agent:runtime:codex',
+            'status': 'running',
+            'updated_at': '2026-06-03T09:01:00Z',
+          },
+        ],
+      },
+    );
+
+    var runtime = container
+        .read(agentsProvider)
+        .agents
+        .singleWhere((agent) => agent.agentDid == 'did:agent:runtime:codex');
+    expect(runtime.recentRuns.single.status, 'running');
+
+    container.read(agentsProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'status_scope': 'snapshot',
+        'daemon_agent_did': 'did:agent:daemon',
+        'daemon': <String, Object?>{
+          'agent_did': 'did:agent:daemon',
+          'status': 'ready',
+          'last_seen_at': '2026-06-03T09:02:00Z',
+        },
+        'runtimes': <Object?>[
+          <String, Object?>{
+            'agent_did': 'did:agent:runtime:codex',
+            'daemon_agent_did': 'did:agent:daemon',
+            'runtime': 'generic-cli',
+            'status': 'ready',
+            'last_seen_at': '2026-06-03T09:02:00Z',
+          },
+        ],
+        'runs': <Object?>[],
+      },
+    );
+
+    runtime = container
+        .read(agentsProvider)
+        .agents
+        .singleWhere((agent) => agent.agentDid == 'did:agent:runtime:codex');
+    expect(runtime.recentRuns, isEmpty);
+  });
+
+  test(
+    'snapshot keeps matching active runtime run and finished history',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+          AgentSummary(
+            agentDid: 'did:agent:runtime:hermes',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'hermes',
+            displayName: 'Hermes',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'run',
+          'daemon_agent_did': 'did:agent:daemon',
+          'runs': <Object?>[
+            <String, Object?>{
+              'run_id': 'run_active',
+              'runtime_agent_did': 'did:agent:runtime:hermes',
+              'status': 'running',
+              'updated_at': '2026-06-03T09:01:00Z',
+            },
+            <String, Object?>{
+              'run_id': 'run_finished',
+              'runtime_agent_did': 'did:agent:runtime:hermes',
+              'status': 'finished',
+              'updated_at': '2026-06-03T09:00:00Z',
+            },
+          ],
+        },
+      );
+
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'snapshot',
+          'daemon_agent_did': 'did:agent:daemon',
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': 'did:agent:runtime:hermes',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'hermes',
+              'status': 'ready',
+              'last_seen_at': '2026-06-03T09:02:00Z',
+            },
+          ],
+          'runs': <Object?>[
+            <String, Object?>{
+              'run_id': 'run_active',
+              'runtime_agent_did': 'did:agent:runtime:hermes',
+              'status': 'running',
+              'updated_at': '2026-06-03T09:02:00Z',
+            },
+          ],
+        },
+      );
+
+      final runtime = container
+          .read(agentsProvider)
+          .agents
+          .singleWhere((agent) => agent.agentDid == 'did:agent:runtime:hermes');
+      expect(runtime.recentRuns.map((run) => run.runId), [
+        'run_active',
+        'run_finished',
+      ]);
+    },
+  );
+
+  test('older snapshot does not clear newer active runtime run', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:runtime:codex',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'generic-cli',
+          displayName: 'CodeX',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+
+    container.read(agentsProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'status_scope': 'run',
+        'daemon_agent_did': 'did:agent:daemon',
+        'runs': <Object?>[
+          <String, Object?>{
+            'run_id': 'run_newer_codex',
+            'runtime_agent_did': 'did:agent:runtime:codex',
+            'status': 'running',
+            'updated_at': '2026-06-03T09:03:00Z',
+          },
+        ],
+      },
+    );
+
+    container.read(agentsProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'status_scope': 'snapshot',
+        'daemon_agent_did': 'did:agent:daemon',
+        'runtimes': <Object?>[
+          <String, Object?>{
+            'agent_did': 'did:agent:runtime:codex',
+            'daemon_agent_did': 'did:agent:daemon',
+            'runtime': 'generic-cli',
+            'status': 'ready',
+            'last_seen_at': '2026-06-03T09:02:00Z',
+          },
+        ],
+        'runs': <Object?>[],
+      },
+    );
+
+    final runtime = container
+        .read(agentsProvider)
+        .agents
+        .singleWhere((agent) => agent.agentDid == 'did:agent:runtime:codex');
+    expect(runtime.recentRuns.single.runId, 'run_newer_codex');
+    expect(runtime.recentRuns.single.status, 'running');
+  });
 }
 
 ProviderContainer _container(

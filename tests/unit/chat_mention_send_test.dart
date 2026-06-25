@@ -255,6 +255,194 @@ void main() {
     expect(container.read(pendingAgentDidsProvider), contains(agentDid));
   });
 
+  test('empty snapshot clears stale pending agent turn', () {
+    const agentDid = 'did:wba:awiki.info:agent:runtime:codex:e1_agent';
+
+    container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+      <String, Object?>{
+        'schema': 'awiki.agent.status.v1',
+        'status_scope': 'run',
+        'conversation_id': conversation.threadId,
+        'runs': <Object?>[
+          <String, Object?>{
+            'run_id': 'run_stale_codex',
+            'message_id': 'msg_stale_codex',
+            'runtime_agent_did': agentDid,
+            'conversation_id': conversation.threadId,
+            'status': 'running',
+            'started_at': DateTime(2026, 6, 14, 21, 30).toIso8601String(),
+          },
+        ],
+      },
+    );
+
+    var thread = container.read(chatThreadProvider(conversation.threadId));
+    expect(thread.pendingAgentReplyCount, 1);
+
+    container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+      const <String, Object?>{
+        'schema': 'awiki.agent.status.v1',
+        'status_scope': 'snapshot',
+        'daemon_agent_did': 'did:wba:awiki.info:agent:daemon:one',
+        'runtimes': <Object?>[
+          <String, Object?>{
+            'agent_did': agentDid,
+            'daemon_agent_did': 'did:wba:awiki.info:agent:daemon:one',
+            'status': 'ready',
+          },
+        ],
+        'runs': <Object?>[],
+      },
+    );
+
+    thread = container.read(chatThreadProvider(conversation.threadId));
+    expect(thread.pendingAgentReplyCount, 0);
+    expect(container.read(pendingAgentDidsProvider), isNot(contains(agentDid)));
+  });
+
+  test(
+    'snapshot keeps matching active pending turn and clears stale sibling',
+    () {
+      const agentDid = 'did:wba:awiki.info:agent:runtime:codex:e1_agent';
+
+      for (final messageId in const <String>[
+        'msg_active_codex',
+        'msg_stale_codex',
+      ]) {
+        container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+          <String, Object?>{
+            'schema': 'awiki.agent.status.v1',
+            'status_scope': 'run',
+            'conversation_id': conversation.threadId,
+            'runs': <Object?>[
+              <String, Object?>{
+                'run_id': 'run_$messageId',
+                'message_id': messageId,
+                'runtime_agent_did': agentDid,
+                'conversation_id': conversation.threadId,
+                'status': 'running',
+                'started_at': DateTime(2026, 6, 14, 21, 30).toIso8601String(),
+              },
+            ],
+          },
+        );
+      }
+
+      var thread = container.read(chatThreadProvider(conversation.threadId));
+      expect(thread.pendingAgentReplyCount, 2);
+
+      container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+        <String, Object?>{
+          'schema': 'awiki.agent.status.v1',
+          'status_scope': 'snapshot',
+          'daemon_agent_did': 'did:wba:awiki.info:agent:daemon:one',
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': agentDid,
+              'daemon_agent_did': 'did:wba:awiki.info:agent:daemon:one',
+              'status': 'ready',
+            },
+          ],
+          'runs': <Object?>[
+            <String, Object?>{
+              'run_id': 'run_msg_active_codex',
+              'message_id': 'msg_active_codex',
+              'runtime_agent_did': agentDid,
+              'conversation_id': conversation.threadId,
+              'status': 'running',
+            },
+          ],
+        },
+      );
+
+      thread = container.read(chatThreadProvider(conversation.threadId));
+      expect(thread.pendingAgentReplyCount, 1);
+      expect(
+        thread.agentPendingTurns.single.remoteMessageId,
+        'msg_active_codex',
+      );
+      expect(container.read(pendingAgentDidsProvider), contains(agentDid));
+    },
+  );
+
+  test('snapshot without runtime scope does not clear pending turn', () {
+    const agentDid = 'did:wba:awiki.info:agent:runtime:codex:e1_agent';
+
+    container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+      <String, Object?>{
+        'schema': 'awiki.agent.status.v1',
+        'status_scope': 'run',
+        'conversation_id': conversation.threadId,
+        'runs': <Object?>[
+          <String, Object?>{
+            'run_id': 'run_scoped_codex',
+            'message_id': 'msg_scoped_codex',
+            'runtime_agent_did': agentDid,
+            'conversation_id': conversation.threadId,
+            'status': 'running',
+          },
+        ],
+      },
+    );
+
+    container
+        .read(chatThreadsProvider.notifier)
+        .applyAgentRunStatusPayload(const <String, Object?>{
+          'schema': 'awiki.agent.status.v1',
+          'status_scope': 'snapshot',
+          'daemon_agent_did': 'did:wba:awiki.info:agent:daemon:other',
+          'runs': <Object?>[],
+        });
+
+    final thread = container.read(chatThreadProvider(conversation.threadId));
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(container.read(pendingAgentDidsProvider), contains(agentDid));
+  });
+
+  test('older snapshot does not clear newer pending turn', () {
+    const agentDid = 'did:wba:awiki.info:agent:runtime:codex:e1_agent';
+
+    container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+      <String, Object?>{
+        'schema': 'awiki.agent.status.v1',
+        'status_scope': 'run',
+        'conversation_id': conversation.threadId,
+        'runs': <Object?>[
+          <String, Object?>{
+            'run_id': 'run_newer_codex',
+            'message_id': 'msg_newer_codex',
+            'runtime_agent_did': agentDid,
+            'conversation_id': conversation.threadId,
+            'status': 'running',
+            'started_at': '2026-06-14T21:30:00Z',
+          },
+        ],
+      },
+    );
+
+    container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+      const <String, Object?>{
+        'schema': 'awiki.agent.status.v1',
+        'status_scope': 'snapshot',
+        'daemon_agent_did': 'did:wba:awiki.info:agent:daemon:one',
+        'runtimes': <Object?>[
+          <String, Object?>{
+            'agent_did': agentDid,
+            'daemon_agent_did': 'did:wba:awiki.info:agent:daemon:one',
+            'status': 'ready',
+            'last_seen_at': '2026-06-14T21:29:59Z',
+          },
+        ],
+        'runs': <Object?>[],
+      },
+    );
+
+    final thread = container.read(chatThreadProvider(conversation.threadId));
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(thread.agentPendingTurns.single.remoteMessageId, 'msg_newer_codex');
+    expect(container.read(pendingAgentDidsProvider), contains(agentDid));
+  });
+
   test('controller activity status does not create chat pending turn', () {
     const agentDid = 'did:wba:awiki.info:agent:runtime:hermes:e1_agent';
 

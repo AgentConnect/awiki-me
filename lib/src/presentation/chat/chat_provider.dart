@@ -11,6 +11,7 @@ import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
+import '../../domain/entities/agent/agent_status.dart';
 import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
 import '../app_shell/providers/session_provider.dart';
@@ -1120,6 +1121,51 @@ class ChatThreadsController
     if (runs is! List) {
       return;
     }
+    if (scope == 'snapshot') {
+      final payloadAt = _parseRunTimestamp(payload['sent_at']);
+      final activeRunsByAgent = <String, List<Map<String, Object?>>>{};
+      final snapshotRuntimeDids = <String>{};
+      final snapshotAtByRuntimeDid = <String, DateTime?>{};
+      final runtimes = payload['runtimes'];
+      if (runtimes is List) {
+        for (final item in runtimes) {
+          if (item is! Map) {
+            continue;
+          }
+          final runtimeDid = _stringKeyMap(
+            item,
+          )['agent_did']?.toString().trim().ifNotEmpty;
+          if (runtimeDid != null) {
+            snapshotRuntimeDids.add(runtimeDid);
+            snapshotAtByRuntimeDid[runtimeDid] =
+                _parseRunTimestamp(_stringKeyMap(item)['last_seen_at']) ??
+                _parseRunTimestamp(_stringKeyMap(item)['updated_at']) ??
+                payloadAt;
+          }
+        }
+      }
+      for (final item in runs) {
+        if (item is! Map) {
+          continue;
+        }
+        final run = _stringKeyMap(item);
+        final status = run['status']?.toString().trim();
+        final agentDid =
+            run['runtime_agent_did']?.toString().trim().ifNotEmpty ??
+            run['agent_did']?.toString().trim().ifNotEmpty;
+        if (status == null || agentDid == null || !_isActiveRunStatus(status)) {
+          continue;
+        }
+        snapshotRuntimeDids.add(agentDid);
+        activeRunsByAgent.putIfAbsent(agentDid, () => <Map<String, Object?>>[]);
+        activeRunsByAgent[agentDid]!.add(run);
+      }
+      _reconcileAgentPendingTurnsWithSnapshot(
+        activeRunsByAgent: activeRunsByAgent,
+        snapshotRuntimeDids: snapshotRuntimeDids,
+        snapshotAtByRuntimeDid: snapshotAtByRuntimeDid,
+      );
+    }
     for (final item in runs) {
       if (item is Map) {
         _applyAgentRunStatus(_stringKeyMap(item), payload);
@@ -1223,11 +1269,89 @@ class ChatThreadsController
     }
   }
 
+  void _reconcileAgentPendingTurnsWithSnapshot({
+    required Map<String, List<Map<String, Object?>>> activeRunsByAgent,
+    required Set<String> snapshotRuntimeDids,
+    required Map<String, DateTime?> snapshotAtByRuntimeDid,
+  }) {
+    if (state.isEmpty || snapshotRuntimeDids.isEmpty) {
+      return;
+    }
+    final nextState = Map<String, ChatThreadState>.from(state);
+    final changedThreadIds = <String>[];
+    for (final entry in state.entries) {
+      final thread = entry.value;
+      if (thread.agentPendingTurns.isEmpty) {
+        continue;
+      }
+      final nextTurns = <AgentPendingTurn>[
+        for (final turn in thread.agentPendingTurns)
+          if (!snapshotRuntimeDids.contains(turn.agentDid.trim()) ||
+              _pendingTurnIsNewerThanSnapshot(
+                turn,
+                snapshotAtByRuntimeDid[turn.agentDid.trim()],
+              ) ||
+              _pendingTurnStillActiveInSnapshot(turn, activeRunsByAgent))
+            turn,
+      ];
+      if (nextTurns.length == thread.agentPendingTurns.length) {
+        continue;
+      }
+      nextState[entry.key] = thread.copyWith(agentPendingTurns: nextTurns);
+      changedThreadIds.add(entry.key);
+    }
+    if (changedThreadIds.isEmpty) {
+      return;
+    }
+    state = nextState;
+    for (final threadId in changedThreadIds) {
+      if (state[threadId]?.agentPendingTurns.isEmpty ?? true) {
+        _cancelAgentProcessingTimer(threadId);
+      } else {
+        _scheduleAgentProcessingOverdue(threadId);
+      }
+    }
+  }
+
+  bool _pendingTurnIsNewerThanSnapshot(
+    AgentPendingTurn turn,
+    DateTime? snapshotAt,
+  ) {
+    return snapshotAt != null && turn.startedAt.isAfter(snapshotAt);
+  }
+
+  bool _pendingTurnStillActiveInSnapshot(
+    AgentPendingTurn turn,
+    Map<String, List<Map<String, Object?>>> activeRunsByAgent,
+  ) {
+    final runs = activeRunsByAgent[turn.agentDid.trim()];
+    if (runs == null || runs.isEmpty) {
+      return false;
+    }
+    for (final run in runs) {
+      final sourceMessageId = run['source_message_id']
+          ?.toString()
+          .trim()
+          .ifNotEmpty;
+      final messageId =
+          run['message_id']?.toString().trim().ifNotEmpty ??
+          run['task_id']?.toString().trim().ifNotEmpty;
+      final mentionId = run['mention_id']?.toString().trim().ifNotEmpty;
+      if (_runStatusMatchesPendingTurn(
+        turn,
+        agentDid: turn.agentDid,
+        sourceMessageId: sourceMessageId,
+        messageId: messageId,
+        mentionId: mentionId,
+      )) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   bool _isActiveRunStatus(String status) {
-    return status == 'queued' ||
-        status == 'pending' ||
-        status == 'running' ||
-        status == 'in_progress';
+    return isActiveAgentRunStatus(status);
   }
 
   bool _isTerminalRunStatus(String status) {
