@@ -40,7 +40,7 @@ class AwikiEnvironmentConfig {
       daemonDownloadBaseUrl,
       fallback: _joinUrl(normalizedBase, '/daemon'),
     );
-    this.agentImEnabled = agentImEnabled ?? false;
+    this.agentImEnabled = agentImEnabled ?? true;
   }
 
   factory AwikiEnvironmentConfig.fromEnvironment() {
@@ -57,7 +57,10 @@ class AwikiEnvironmentConfig {
       daemonDownloadBaseUrl: const String.fromEnvironment(
         'AWIKI_DAEMON_DOWNLOAD_BASE_URL',
       ),
-      agentImEnabled: const bool.fromEnvironment('AWIKI_AGENT_IM_ENABLED'),
+      agentImEnabled: const bool.fromEnvironment(
+        'AWIKI_AGENT_IM_ENABLED',
+        defaultValue: true,
+      ),
     );
   }
 

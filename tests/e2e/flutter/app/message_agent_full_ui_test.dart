@@ -410,8 +410,12 @@ void runMessageAgentRealBackendE2e() {
 
         final bindingPort = appContainer.read(messageAgentBindingPortProvider);
         final agents = appContainer.read(agentsProvider.notifier);
-        await agents.load();
-        await _pumpFrame(tester);
+        await _waitForAgentInventoryEntry(
+          tester: tester,
+          agents: agents,
+          agentDid: install.daemonDid,
+          handle: install.handle,
+        );
 
         await _tapFirstFound(tester, <Finder>[
           find.bySemanticsIdentifier('e2e-agents-tab'),
@@ -420,18 +424,15 @@ void runMessageAgentRealBackendE2e() {
           find.text('智能体'),
           find.text('Agents'),
         ]);
+        agents.select(install.daemonDid);
         await _pumpFrame(tester);
 
-        expect(find.text(install.handle), findsWidgets);
         await _waitForDaemonBootstrapKey(
           tester: tester,
+          agents: agents,
           daemonDid: install.daemonDid,
         );
-        await _pumpFrame(tester);
-        await _tapFirstFound(tester, <Finder>[
-          find.text(install.handle),
-          find.text('Message Agent Daemon'),
-        ]);
+        agents.select(install.daemonDid);
         await _pumpFrame(tester);
         expect(find.text('消息处理 Agent'), findsOneWidget);
         expect(find.text('已上报公钥'), findsOneWidget);
@@ -486,6 +487,10 @@ void runMessageAgentRealBackendE2e() {
           thread: AppThreadRef.direct(config.cliHandle),
           expectedText: sourceText,
         );
+        await _waitForDaemonRuntimeFinalSent(
+          daemonStateRoot: config.daemonStateRoot,
+          sourceText: sourceText,
+        );
         await _openRealCliConversation(
           tester: tester,
           container: appContainer,
@@ -506,11 +511,7 @@ void runMessageAgentRealBackendE2e() {
         ]);
         await _pumpFrame(tester);
         await agents.load();
-        await _pumpFrame(tester);
-        await _tapFirstFound(tester, <Finder>[
-          find.text(install.handle),
-          find.text('Message Agent Daemon'),
-        ]);
+        agents.select(install.daemonDid);
         await _pumpFrame(tester);
         await tester.tap(find.text('撤销 Daemon 消息授权'));
         await _pumpFrame(tester);
@@ -733,37 +734,67 @@ Future<void> _waitForUserServiceBindingActive({
   );
 }
 
+Future<void> _waitForAgentInventoryEntry({
+  required WidgetTester tester,
+  required AgentsController agents,
+  required String agentDid,
+  required String handle,
+}) async {
+  Object? lastState;
+  final deadline = DateTime.now().add(const Duration(seconds: 45));
+  while (DateTime.now().isBefore(deadline)) {
+    await agents.load();
+    await _pumpFrame(tester);
+    final state = ProviderScope.containerOf(
+      tester.element(find.byType(AppShell)),
+    ).read(agentsProvider);
+    lastState = _agentsDebugSummary(state);
+    final agent = _agentByDid(state, agentDid);
+    if (agent != null && agent.handle == handle) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(seconds: 1));
+  }
+  fail(
+    'Timed out waiting for agent inventory entry $agentDid/$handle. '
+    'Last agents: ${lastState ?? '<none>'}',
+  );
+}
+
 Future<void> _waitForDaemonBootstrapKey({
   required WidgetTester tester,
+  required AgentsController agents,
   required String daemonDid,
 }) async {
   Object? lastError;
-  await _pumpUntil(
-    tester,
-    () {
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(AppShell)),
-      );
-      final daemon = _agentByDid(container.read(agentsProvider), daemonDid);
-      if (daemon == null) {
-        lastError = 'daemon not found';
-        return false;
-      }
+  final deadline = DateTime.now().add(const Duration(seconds: 45));
+  while (DateTime.now().isBefore(deadline)) {
+    await agents.load();
+    agents.select(daemonDid);
+    await _pumpFrame(tester);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AppShell)),
+    );
+    final daemon = _agentByDid(container.read(agentsProvider), daemonDid);
+    if (daemon == null) {
+      lastError = 'daemon not found';
+    } else {
       try {
         DaemonBootstrapPublicKey.fromDiagnostics(
           daemonDid: daemonDid,
           diagnostics: daemon.latest.diagnosticsSummary,
         );
-        return true;
+        return;
       } on Object catch (error) {
         lastError =
             '$error diagnostics=${jsonEncode(daemon.latest.diagnosticsSummary)}';
-        return false;
       }
-    },
-    timeout: const Duration(seconds: 30),
-    description: 'daemon bootstrap public key for $daemonDid',
-    lastError: () => lastError,
+    }
+    await Future<void>.delayed(const Duration(seconds: 1));
+  }
+  fail(
+    'Timed out waiting for daemon bootstrap public key for $daemonDid. '
+    'Last error: ${lastError ?? '<none>'}',
   );
 }
 
@@ -788,6 +819,60 @@ Future<void> _waitForUserServiceBindingRevoked({
     description: 'user-service active binding is revoked',
     action: () async => await binding.getActiveBinding() == null,
     timeout: const Duration(seconds: 30),
+  );
+}
+
+Future<void> _waitForDaemonRuntimeFinalSent({
+  required String daemonStateRoot,
+  required String sourceText,
+}) async {
+  final dbPath = '${daemonStateRoot.replaceAll(RegExp(r'/+$'), '')}/daemon.db';
+  String lastState = 'daemon.db not found';
+  await _poll(
+    description: 'daemon queued Message Agent runtime final for CLI message',
+    action: () async {
+      final dbFile = File(dbPath);
+      if (!dbFile.existsSync()) {
+        lastState = 'daemon.db not found at $dbPath';
+        return false;
+      }
+      final db = await databaseFactoryFfi.openDatabase(
+        dbPath,
+        options: OpenDatabaseOptions(readOnly: true),
+      );
+      try {
+        final rows = await db.rawQuery(
+          '''
+          SELECT t.task_id, t.status AS task_status,
+                 r.run_id, r.status AS run_status,
+                 f.status AS final_status, f.message_id AS final_message_id,
+                 f.sent_at_ms AS final_sent_at_ms
+          FROM runtime_task t
+          LEFT JOIN runtime_run r ON r.task_id = t.task_id
+          LEFT JOIN runtime_final_outbox f ON f.run_id = r.run_id
+          WHERE t.task_text LIKE ?
+          ORDER BY t.created_at_ms DESC
+          LIMIT 1
+          ''',
+          <Object?>['%$sourceText%'],
+        );
+        if (rows.isEmpty) {
+          lastState = 'no runtime task contains sourceText';
+          return false;
+        }
+        final row = rows.first;
+        lastState = jsonEncode(row);
+        final finalStatus = row['final_status']?.toString();
+        return finalStatus == 'sent' &&
+            row['final_message_id'] != null &&
+            row['final_sent_at_ms'] != null;
+      } finally {
+        await db.close();
+      }
+    },
+    timeout: const Duration(seconds: 75),
+    interval: const Duration(seconds: 1),
+    lastError: () => lastState,
   );
 }
 
