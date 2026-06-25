@@ -11,6 +11,8 @@ import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
+import '../../l10n/app_message.dart';
+import '../../app/ui_feedback.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../conversation_list/conversation_provider.dart';
 
@@ -249,10 +251,15 @@ class ChatComposerDraftsController
 }
 
 class _PendingHistorySync {
-  const _PendingHistorySync({required this.conversation, required this.force});
+  const _PendingHistorySync({
+    required this.conversation,
+    required this.force,
+    required this.reportFailure,
+  });
 
   final ConversationSummary conversation;
   final bool force;
+  final bool reportFailure;
 }
 
 class ChatThreadsController
@@ -285,7 +292,11 @@ class ChatThreadsController
   }) async {
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
     unawaited(
-      syncHistoryForConversation(conversation, displayThreadId: targetThreadId),
+      syncHistoryForConversation(
+        conversation,
+        displayThreadId: targetThreadId,
+        reportFailure: true,
+      ),
     );
     if (conversation.unreadCount > 0) {
       ref
@@ -311,6 +322,7 @@ class ChatThreadsController
   Future<void> _loadHistory(
     ConversationSummary conversation, {
     String? intoThreadId,
+    bool reportFailure = false,
   }) async {
     if (!mounted) {
       return;
@@ -334,11 +346,16 @@ class ChatThreadsController
         isLoading: false,
         resolveStaleSending: true,
       );
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
       _setThreadLoading(targetThreadId, false);
+      if (reportFailure) {
+        ref
+            .read(uiFeedbackProvider.notifier)
+            .showError(AppMessage.fromError(error));
+      }
     } finally {
       if (mounted) {
         _runPendingHistorySyncIfNeeded(targetThreadId);
@@ -741,6 +758,7 @@ class ChatThreadsController
       _refreshedConversationFor(conversation),
       displayThreadId: displayThreadId ?? conversation.threadId,
       force: true,
+      reportFailure: true,
     );
   }
 
@@ -748,19 +766,29 @@ class ChatThreadsController
     ConversationSummary conversation, {
     String? displayThreadId,
     bool force = false,
+    bool reportFailure = false,
   }) {
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
     final current = thread(targetThreadId);
     if (current.isLoading) {
       if (force || _shouldLoadHistory(current, conversation)) {
-        _queuePendingHistorySync(targetThreadId, conversation, force: force);
+        _queuePendingHistorySync(
+          targetThreadId,
+          conversation,
+          force: force,
+          reportFailure: reportFailure,
+        );
       }
       return Future<void>.value();
     }
     if (!force && !_shouldLoadHistory(current, conversation)) {
       return Future<void>.value();
     }
-    return _loadHistory(conversation, intoThreadId: targetThreadId);
+    return _loadHistory(
+      conversation,
+      intoThreadId: targetThreadId,
+      reportFailure: reportFailure,
+    );
   }
 
   Future<void> _refreshConversationsBestEffort() async {
@@ -783,16 +811,22 @@ class ChatThreadsController
     String threadId,
     ConversationSummary conversation, {
     required bool force,
+    required bool reportFailure,
   }) {
     final existing = _pendingHistorySyncs[threadId];
     _pendingHistorySyncs[threadId] = existing == null
-        ? _PendingHistorySync(conversation: conversation, force: force)
+        ? _PendingHistorySync(
+            conversation: conversation,
+            force: force,
+            reportFailure: reportFailure,
+          )
         : _PendingHistorySync(
             conversation: _newerConversation(
               conversation,
               existing.conversation,
             ),
             force: existing.force || force,
+            reportFailure: existing.reportFailure || reportFailure,
           );
   }
 
@@ -808,6 +842,7 @@ class ChatThreadsController
         pending.conversation,
         displayThreadId: threadId,
         force: pending.force,
+        reportFailure: pending.reportFailure,
       ),
     );
   }
