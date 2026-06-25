@@ -21,8 +21,8 @@ abstract interface class AgentInventoryPort {
 
   Future<AgentRegistrationToken> issueDaemonToken({
     required String controllerDid,
+    required String controllerHandle,
     required String clientPlatform,
-    String? handle,
   });
 
   Future<AgentRegistrationToken> issueRuntimeToken({

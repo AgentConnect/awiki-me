@@ -282,16 +282,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
       if (updated == null) {
         return;
       }
-      final currentThread = ref.read(
-        chatThreadProvider(widget.conversation.threadId),
-      );
-      if (!_threadNeedsHistorySync(currentThread, updated)) {
-        return;
-      }
       unawaited(
         ref
             .read(chatThreadsProvider.notifier)
-            .openConversation(
+            .syncHistoryForConversation(
               updated,
               displayThreadId: widget.conversation.threadId,
             ),
@@ -483,7 +477,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                                 )
                                                 .retryMessage(
                                                   conversation:
-                                                      widget.conversation,
+                                                      currentConversation,
                                                   message: message,
                                                   expectedAgentReplyDid:
                                                       _expectedAgentReplyDidForConversation(
@@ -493,6 +487,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                                         classification:
                                                             peerClassification,
                                                       ),
+                                                  displayThreadId: widget
+                                                      .conversation
+                                                      .threadId,
                                                 );
                                           }
                                         : null)
@@ -717,6 +714,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
             attachment: attachment,
             caption: content.isEmpty ? null : content,
             expectedAgentReplyDid: expectedAgentReplyDid,
+            displayThreadId: widget.conversation.threadId,
           );
       return;
     }
@@ -727,6 +725,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
           content: messageContent,
           mentions: validMentionDrafts,
           expectedAgentReplyDid: expectedAgentReplyDid,
+          displayThreadId: widget.conversation.threadId,
         );
   }
 
@@ -1113,22 +1112,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return '当前群聊暂时不能发送消息';
     }
     return null;
-  }
-
-  bool _threadNeedsHistorySync(
-    ChatThreadState thread,
-    ConversationSummary conversation,
-  ) {
-    if (thread.isLoading) {
-      return false;
-    }
-    if (thread.messages.isEmpty || conversation.unreadCount > 0) {
-      return true;
-    }
-    final latestLocalAt = thread.messages
-        .map((message) => message.createdAt)
-        .reduce((a, b) => a.isAfter(b) ? a : b);
-    return conversation.lastMessageAt.isAfter(latestLocalAt);
   }
 
   String _dateLabel(DateTime date) {

@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/e2e_semantics.dart';
 import '../../app/app_services.dart';
@@ -29,6 +30,11 @@ const int _macSettingsTabIndex = 6;
 const _macRailActiveColor = Color(0xFF0B65F8);
 const _macRailInactiveColor = Color(0xFF7A879C);
 const _macRailActiveBackground = Color(0xFFEAF2FF);
+const double _macRailWidth = 72;
+const double _macRailMinWidth = 56;
+const MethodChannel _macWindowChromeChannel = MethodChannel(
+  'ai.awiki.awikime/window_chrome',
+);
 
 String? _formatUnreadBadge(int count) {
   if (count <= 0) {
@@ -253,23 +259,82 @@ class _MacDesktopShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return Row(
-      children: <Widget>[
-        SizedBox(
-          key: const Key('mac-desktop-rail-slot'),
-          width: responsive.displayScaled(72),
-          child: _MacDesktopRail(
-            currentIndex: currentIndex,
-            unreadCount: unreadCount,
-            session: session,
-            onTap: onTap,
-            onOpenSettings: onOpenSettings,
+    final railWidth = responsive
+        .displayScaled(_macRailWidth)
+        .clamp(_macRailMinWidth, double.infinity)
+        .toDouble();
+    return _MacWindowChromeSync(
+      railWidth: railWidth,
+      child: Row(
+        children: <Widget>[
+          SizedBox(
+            key: const Key('mac-desktop-rail-slot'),
+            width: railWidth,
+            child: _MacDesktopRail(
+              currentIndex: currentIndex,
+              unreadCount: unreadCount,
+              session: session,
+              onTap: onTap,
+              onOpenSettings: onOpenSettings,
+            ),
           ),
-        ),
-        Container(width: 1, color: const Color(0xFFE5EAF2)),
-        Expanded(child: child),
-      ],
+          Container(width: 1, color: const Color(0xFFE5EAF2)),
+          Expanded(child: child),
+        ],
+      ),
     );
+  }
+}
+
+class _MacWindowChromeSync extends StatefulWidget {
+  const _MacWindowChromeSync({required this.railWidth, required this.child});
+
+  final double railWidth;
+  final Widget child;
+
+  @override
+  State<_MacWindowChromeSync> createState() => _MacWindowChromeSyncState();
+}
+
+class _MacWindowChromeSyncState extends State<_MacWindowChromeSync> {
+  double? _lastSyncedRailWidth;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleSync();
+  }
+
+  @override
+  void didUpdateWidget(_MacWindowChromeSync oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if ((oldWidget.railWidth - widget.railWidth).abs() >= 0.5) {
+      _scheduleSync();
+    }
+  }
+
+  void _scheduleSync() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final railWidth = widget.railWidth;
+      if (_lastSyncedRailWidth != null &&
+          (_lastSyncedRailWidth! - railWidth).abs() < 0.5) {
+        return;
+      }
+      _lastSyncedRailWidth = railWidth;
+      _macWindowChromeChannel
+          .invokeMethod<void>('setTrafficLightRailWidth', <String, Object?>{
+            'width': railWidth,
+          })
+          .catchError((Object _) {});
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.child;
   }
 }
 

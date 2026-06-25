@@ -363,6 +363,13 @@ class ChatComposerDraftsController
   }
 }
 
+class _PendingHistorySync {
+  const _PendingHistorySync({required this.conversation, required this.force});
+
+  final ConversationSummary conversation;
+  final bool force;
+}
+
 class ChatThreadsController
     extends StateNotifier<Map<String, ChatThreadState>> {
   ChatThreadsController(this.ref) : super(const <String, ChatThreadState>{});
@@ -380,6 +387,8 @@ class ChatThreadsController
   static const Duration _agentProcessingReplyClockSkew = Duration(seconds: 2);
 
   final Map<String, Timer> _agentProcessingTimers = <String, Timer>{};
+  final Map<String, _PendingHistorySync> _pendingHistorySyncs =
+      <String, _PendingHistorySync>{};
 
   ChatThreadState thread(String threadId) {
     return state[threadId] ?? ChatThreadState(threadId: threadId);
@@ -390,10 +399,9 @@ class ChatThreadsController
     String? displayThreadId,
   }) async {
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
-    final current = thread(targetThreadId);
-    if (_shouldLoadHistory(current, conversation)) {
-      unawaited(_loadHistory(conversation, intoThreadId: targetThreadId));
-    }
+    unawaited(
+      syncHistoryForConversation(conversation, displayThreadId: targetThreadId),
+    );
     if (conversation.unreadCount > 0) {
       ref
           .read(conversationListProvider.notifier)
@@ -446,6 +454,10 @@ class ChatThreadsController
         return;
       }
       _setThreadLoading(targetThreadId, false);
+    } finally {
+      if (mounted) {
+        _runPendingHistorySyncIfNeeded(targetThreadId);
+      }
     }
   }
 
@@ -454,11 +466,13 @@ class ChatThreadsController
     required String content,
     List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? expectedAgentReplyDid,
+    String? displayThreadId,
   }) async {
     final session = ref.read(sessionProvider).session;
     if (session == null || content.trim().isEmpty) {
       return;
     }
+    final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
     final validMentionDrafts = conversation.isGroup
         ? mentions
               .where(
@@ -476,7 +490,7 @@ class ChatThreadsController
           );
     final pending = ChatMessage(
       localId: 'pending-${DateTime.now().microsecondsSinceEpoch}',
-      threadId: conversation.threadId,
+      threadId: targetThreadId,
       senderDid: session.did,
       senderName: session.handle ?? session.displayName,
       receiverDid: conversation.targetDid,
@@ -492,10 +506,9 @@ class ChatThreadsController
           ChatMessageMention.fromDraft(mention),
       ],
     );
-    final current = List<ChatMessage>.from(
-      thread(conversation.threadId).messages,
-    )..add(pending);
-    _setMessages(conversation.threadId, current);
+    final current = List<ChatMessage>.from(thread(targetThreadId).messages)
+      ..add(pending);
+    _setMessages(targetThreadId, current);
     final pendingConversation = _withConversationPreview(conversation, pending);
     ref
         .read(conversationListProvider.notifier)
@@ -521,10 +534,11 @@ class ChatThreadsController
                   idempotencyKey: pending.localId,
                 )
                 .timeout(_sendTimeout);
-      final sentInThread = _withThreadId(sent, conversation.threadId);
-      _replaceMessage(conversation.threadId, pending.localId, sentInThread);
+      final sentInThread = _withThreadId(sent, targetThreadId);
+      _replaceMessage(targetThreadId, pending.localId, sentInThread);
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
+        displayThreadId: targetThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
         mentions: validMentionDrafts,
         deliveredMessage: sentInThread,
@@ -535,7 +549,7 @@ class ChatThreadsController
           .upsertConversation(latestConversation);
     } catch (_) {
       final failed = pending.copyWith(sendState: MessageSendState.failed);
-      _replaceMessage(conversation.threadId, pending.localId, failed);
+      _replaceMessage(targetThreadId, pending.localId, failed);
       latestConversation = _withConversationPreview(conversation, failed);
       ref
           .read(conversationListProvider.notifier)
@@ -550,7 +564,11 @@ class ChatThreadsController
         .read(conversationListProvider.notifier)
         .upsertConversation(refreshedConversation);
     unawaited(
-      _loadHistory(refreshedConversation, intoThreadId: conversation.threadId),
+      syncHistoryForConversation(
+        refreshedConversation,
+        displayThreadId: targetThreadId,
+        force: true,
+      ),
     );
   }
 
@@ -559,11 +577,13 @@ class ChatThreadsController
     required AttachmentDraft attachment,
     String? caption,
     String? expectedAgentReplyDid,
+    String? displayThreadId,
   }) async {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
       return;
     }
+    final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
     final normalizedCaption = _normalizedOptionalText(caption);
     final pendingId = 'pending-${DateTime.now().microsecondsSinceEpoch}';
     final pendingAttachment = ChatAttachment(
@@ -577,7 +597,7 @@ class ChatThreadsController
     );
     final pending = ChatMessage(
       localId: pendingId,
-      threadId: conversation.threadId,
+      threadId: targetThreadId,
       senderDid: session.did,
       senderName: session.handle ?? session.displayName,
       receiverDid: conversation.targetDid,
@@ -589,10 +609,9 @@ class ChatThreadsController
       sendState: MessageSendState.sending,
       attachment: pendingAttachment,
     );
-    final current = List<ChatMessage>.from(
-      thread(conversation.threadId).messages,
-    )..add(pending);
-    _setMessages(conversation.threadId, current);
+    final current = List<ChatMessage>.from(thread(targetThreadId).messages)
+      ..add(pending);
+    _setMessages(targetThreadId, current);
     final pendingConversation = _withConversationPreview(conversation, pending);
     ref
         .read(conversationListProvider.notifier)
@@ -612,12 +631,13 @@ class ChatThreadsController
           )
           .timeout(_attachmentSendTimeout);
       final sentInThread = await _withCachedSentAttachment(
-        sent: _withThreadId(sent, conversation.threadId),
+        sent: _withThreadId(sent, targetThreadId),
         originalAttachment: attachment,
       );
-      _replaceMessage(conversation.threadId, pending.localId, sentInThread);
+      _replaceMessage(targetThreadId, pending.localId, sentInThread);
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
+        displayThreadId: targetThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
         mentions: const <ChatMentionDraft>[],
         deliveredMessage: sentInThread,
@@ -628,7 +648,7 @@ class ChatThreadsController
           .upsertConversation(latestConversation);
     } catch (_) {
       final failed = pending.copyWith(sendState: MessageSendState.failed);
-      _replaceMessage(conversation.threadId, pending.localId, failed);
+      _replaceMessage(targetThreadId, pending.localId, failed);
       latestConversation = _withConversationPreview(conversation, failed);
       ref
           .read(conversationListProvider.notifier)
@@ -643,7 +663,11 @@ class ChatThreadsController
         .read(conversationListProvider.notifier)
         .upsertConversation(refreshedConversation);
     unawaited(
-      _loadHistory(refreshedConversation, intoThreadId: conversation.threadId),
+      syncHistoryForConversation(
+        refreshedConversation,
+        displayThreadId: targetThreadId,
+        force: true,
+      ),
     );
   }
 
@@ -669,19 +693,22 @@ class ChatThreadsController
     required ConversationSummary conversation,
     required ChatMessage message,
     String? expectedAgentReplyDid,
+    String? displayThreadId,
   }) async {
     if (message.isAttachmentMessage) {
       await retryAttachment(
         conversation: conversation,
         message: message,
         expectedAgentReplyDid: expectedAgentReplyDid,
+        displayThreadId: displayThreadId,
       );
       return;
     }
+    final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
     final retrying = message.copyWith(sendState: MessageSendState.sending);
     _setMessages(
-      conversation.threadId,
-      thread(conversation.threadId).messages
+      targetThreadId,
+      thread(targetThreadId).messages
           .map((item) => item.localId == message.localId ? retrying : item)
           .toList(),
     );
@@ -690,10 +717,11 @@ class ChatThreadsController
           .read(messagingServiceProvider)
           .retryByResendOriginalContent(retrying)
           .timeout(_sendTimeout);
-      final retriedInThread = _withThreadId(retried, conversation.threadId);
-      _replaceMessage(conversation.threadId, message.localId, retriedInThread);
+      final retriedInThread = _withThreadId(retried, targetThreadId);
+      _replaceMessage(targetThreadId, message.localId, retriedInThread);
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
+        displayThreadId: targetThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
         mentions: retrying.mentions
             .map(
@@ -711,13 +739,14 @@ class ChatThreadsController
       );
     } catch (_) {
       final failed = retrying.copyWith(sendState: MessageSendState.failed);
-      _replaceMessage(conversation.threadId, message.localId, failed);
+      _replaceMessage(targetThreadId, message.localId, failed);
     }
     await _refreshConversationsBestEffort();
     unawaited(
-      _loadHistory(
+      syncHistoryForConversation(
         _refreshedConversationFor(conversation),
-        intoThreadId: conversation.threadId,
+        displayThreadId: targetThreadId,
+        force: true,
       ),
     );
   }
@@ -726,18 +755,20 @@ class ChatThreadsController
     required ConversationSummary conversation,
     required ChatMessage message,
     String? expectedAgentReplyDid,
+    String? displayThreadId,
   }) async {
+    final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
     final attachment = message.attachment;
     final localPath = attachment?.localPath?.trim();
     if (attachment == null || localPath == null || localPath.isEmpty) {
       final failed = message.copyWith(sendState: MessageSendState.failed);
-      _replaceMessage(conversation.threadId, message.localId, failed);
+      _replaceMessage(targetThreadId, message.localId, failed);
       return;
     }
     final retrying = message.copyWith(sendState: MessageSendState.sending);
     _setMessages(
-      conversation.threadId,
-      thread(conversation.threadId).messages
+      targetThreadId,
+      thread(targetThreadId).messages
           .map((item) => item.localId == message.localId ? retrying : item)
           .toList(),
     );
@@ -757,7 +788,7 @@ class ChatThreadsController
           )
           .timeout(_attachmentSendTimeout);
       final retriedInThread = await _withCachedSentAttachment(
-        sent: _withThreadId(retried, conversation.threadId),
+        sent: _withThreadId(retried, targetThreadId),
         originalAttachment: AttachmentDraft(
           filename: attachment.filename,
           mimeType: attachment.mimeType,
@@ -765,22 +796,24 @@ class ChatThreadsController
           sizeBytes: attachment.sizeBytes,
         ),
       );
-      _replaceMessage(conversation.threadId, message.localId, retriedInThread);
+      _replaceMessage(targetThreadId, message.localId, retriedInThread);
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
+        displayThreadId: targetThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
         mentions: const <ChatMentionDraft>[],
         deliveredMessage: retriedInThread,
       );
     } catch (_) {
       final failed = retrying.copyWith(sendState: MessageSendState.failed);
-      _replaceMessage(conversation.threadId, message.localId, failed);
+      _replaceMessage(targetThreadId, message.localId, failed);
     }
     await _refreshConversationsBestEffort();
     unawaited(
-      _loadHistory(
+      syncHistoryForConversation(
         _refreshedConversationFor(conversation),
-        intoThreadId: conversation.threadId,
+        displayThreadId: targetThreadId,
+        force: true,
       ),
     );
   }
@@ -819,10 +852,30 @@ class ChatThreadsController
     String? displayThreadId,
   }) async {
     await ref.read(conversationListProvider.notifier).refresh();
-    await _loadHistory(
+    await syncHistoryForConversation(
       _refreshedConversationFor(conversation),
-      intoThreadId: displayThreadId ?? conversation.threadId,
+      displayThreadId: displayThreadId ?? conversation.threadId,
+      force: true,
     );
+  }
+
+  Future<void> syncHistoryForConversation(
+    ConversationSummary conversation, {
+    String? displayThreadId,
+    bool force = false,
+  }) {
+    final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
+    final current = thread(targetThreadId);
+    if (current.isLoading) {
+      if (force || _shouldLoadHistory(current, conversation)) {
+        _queuePendingHistorySync(targetThreadId, conversation, force: force);
+      }
+      return Future<void>.value();
+    }
+    if (!force && !_shouldLoadHistory(current, conversation)) {
+      return Future<void>.value();
+    }
+    return _loadHistory(conversation, intoThreadId: targetThreadId);
   }
 
   Future<void> _refreshConversationsBestEffort() async {
@@ -837,7 +890,41 @@ class ChatThreadsController
 
   void clear() {
     _cancelAgentProcessingTimers();
+    _pendingHistorySyncs.clear();
     state = const <String, ChatThreadState>{};
+  }
+
+  void _queuePendingHistorySync(
+    String threadId,
+    ConversationSummary conversation, {
+    required bool force,
+  }) {
+    final existing = _pendingHistorySyncs[threadId];
+    _pendingHistorySyncs[threadId] = existing == null
+        ? _PendingHistorySync(conversation: conversation, force: force)
+        : _PendingHistorySync(
+            conversation: _newerConversation(
+              conversation,
+              existing.conversation,
+            ),
+            force: existing.force || force,
+          );
+  }
+
+  void _runPendingHistorySyncIfNeeded(String threadId) {
+    final pending = _pendingHistorySyncs.remove(threadId);
+    if (pending == null ||
+        (!pending.force &&
+            !_shouldLoadHistory(thread(threadId), pending.conversation))) {
+      return;
+    }
+    unawaited(
+      syncHistoryForConversation(
+        pending.conversation,
+        displayThreadId: threadId,
+        force: pending.force,
+      ),
+    );
   }
 
   void _setThreadLoading(String threadId, bool isLoading) {
@@ -1052,6 +1139,7 @@ class ChatThreadsController
 
   void _startAgentProcessingForDeliveredMessage({
     required ConversationSummary conversation,
+    required String displayThreadId,
     required String? expectedAgentReplyDid,
     required List<ChatMentionDraft> mentions,
     required ChatMessage deliveredMessage,
@@ -1077,7 +1165,7 @@ class ChatThreadsController
     if (pendingTargets.isEmpty) {
       return;
     }
-    final threadId = conversation.threadId;
+    final threadId = displayThreadId;
     final current = thread(threadId);
     final nextTurns = <AgentPendingTurn>[
       ...current.agentPendingTurns.where(
@@ -2028,9 +2116,6 @@ class ChatThreadsController
     ChatThreadState current,
     ConversationSummary conversation,
   ) {
-    if (current.isLoading) {
-      return false;
-    }
     if (current.messages.isEmpty) {
       return true;
     }

@@ -308,6 +308,9 @@ void main() {
       expect(control.lastRuntimeCreateDisplayName, '写作助手');
       expect(control.lastRuntimeCreateWorkspaceMode, 'route-root');
       expect(control.lastRuntimeCreateSandbox, 'read-only');
+      expect(control.lastRuntimeCreateClientRequestId, isNotNull);
+      expect(find.text('写作助手'), findsWidgets);
+      expect(find.text('codex · 创建状态暂未返回，可刷新查看'), findsOneWidget);
     },
   );
 
@@ -1534,6 +1537,7 @@ void main() {
           did: 'did:human:me',
           credentialName: 'default',
           displayName: 'Me',
+          handle: 'me.anpclaw.com',
         ),
         providerOverrides: <Override>[
           agentControlServiceProvider.overrideWithValue(control),

@@ -3,6 +3,18 @@ import FlutterMacOS
 import UniformTypeIdentifiers
 
 class MainFlutterWindow: NSWindow {
+  private enum TrafficLightLayout {
+    // Keep this aligned with the Flutter macOS rail width in app_shell.dart.
+    static let railWidth: CGFloat = 72
+    static let minimumRailWidth: CGFloat = 56
+    static let minimumLeading: CGFloat = 6
+    static let preferredLeading: CGFloat = 8
+    static let minimumGap: CGFloat = 4
+    static let preferredGap: CGFloat = 8
+  }
+
+  private var trafficLightRailWidth: CGFloat = TrafficLightLayout.railWidth
+
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
     let windowFrame = self.frame
@@ -11,9 +23,16 @@ class MainFlutterWindow: NSWindow {
     self.setFrame(windowFrame, display: true)
 
     RegisterGeneratedPlugins(registry: flutterViewController)
+    registerWindowChromeChannel(flutterViewController: flutterViewController)
     registerAttachmentChannel(flutterViewController: flutterViewController)
 
     super.awakeFromNib()
+    scheduleTrafficLightLayout()
+  }
+
+  override func setFrame(_ frameRect: NSRect, display flag: Bool) {
+    super.setFrame(frameRect, display: flag)
+    scheduleTrafficLightLayout()
   }
 
   private func configureChrome() {
@@ -21,6 +40,100 @@ class MainFlutterWindow: NSWindow {
     titlebarAppearsTransparent = true
     styleMask.insert(.fullSizeContentView)
     isMovableByWindowBackground = true
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleWindowFrameChanged),
+      name: NSWindow.didResizeNotification,
+      object: self
+    )
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleWindowFrameChanged),
+      name: NSWindow.didEndLiveResizeNotification,
+      object: self
+    )
+    scheduleTrafficLightLayout()
+  }
+
+  deinit {
+    NotificationCenter.default.removeObserver(self)
+  }
+
+  @objc private func handleWindowFrameChanged() {
+    scheduleTrafficLightLayout()
+  }
+
+  private func scheduleTrafficLightLayout() {
+    DispatchQueue.main.async { [weak self] in
+      self?.layoutTrafficLightButtons()
+    }
+  }
+
+  private func layoutTrafficLightButtons() {
+    guard
+      let closeButton = standardWindowButton(.closeButton),
+      let minimizeButton = standardWindowButton(.miniaturizeButton),
+      let zoomButton = standardWindowButton(.zoomButton)
+    else {
+      return
+    }
+
+    let buttons = [closeButton, minimizeButton, zoomButton]
+    let contentWidth = contentView?.bounds.width ?? frame.width
+    let railWidth = min(
+      max(TrafficLightLayout.minimumRailWidth, trafficLightRailWidth),
+      max(TrafficLightLayout.minimumRailWidth, contentWidth)
+    )
+    let totalButtonWidth = buttons.reduce(CGFloat(0)) { result, button in
+      result + button.frame.width
+    }
+    let maxGapForRail =
+      (railWidth - totalButtonWidth - TrafficLightLayout.preferredLeading * 2) /
+      CGFloat(buttons.count - 1)
+    let gap = min(
+      TrafficLightLayout.preferredGap,
+      max(TrafficLightLayout.minimumGap, floor(maxGapForRail))
+    )
+    let groupWidth = totalButtonWidth + gap * CGFloat(buttons.count - 1)
+    let leading = max(
+      TrafficLightLayout.minimumLeading,
+      floor((railWidth - groupWidth) / 2)
+    )
+
+    var x = leading
+    for button in buttons {
+      button.setFrameOrigin(NSPoint(x: x, y: button.frame.origin.y))
+      x += button.frame.width + gap
+    }
+  }
+
+  private func registerWindowChromeChannel(flutterViewController: FlutterViewController) {
+    let channel = FlutterMethodChannel(
+      name: "ai.awiki.awikime/window_chrome",
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else { return }
+      switch call.method {
+      case "setTrafficLightRailWidth":
+        self.setTrafficLightRailWidth(arguments: call.arguments, result: result)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private func setTrafficLightRailWidth(arguments: Any?, result: @escaping FlutterResult) {
+    guard
+      let args = arguments as? [String: Any],
+      let width = args["width"] as? NSNumber
+    else {
+      result(FlutterError(code: "bad_args", message: "width is required", details: nil))
+      return
+    }
+    trafficLightRailWidth = CGFloat(truncating: width)
+    scheduleTrafficLightLayout()
+    result(nil)
   }
 
   private func registerAttachmentChannel(flutterViewController: FlutterViewController) {

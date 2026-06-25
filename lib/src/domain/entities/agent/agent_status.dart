@@ -9,14 +9,7 @@ enum DaemonStatus {
   needsUpgrade,
 }
 
-enum RuntimeStatus {
-  creating,
-  ready,
-  failed,
-  disabled,
-  needsConfig,
-  needsUpgrade,
-}
+enum RuntimeStatus { creating, ready, failed, disabled, needsConfig }
 
 enum RunStatus { queued, running, succeeded, failed }
 

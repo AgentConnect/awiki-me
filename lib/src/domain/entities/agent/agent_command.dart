@@ -226,13 +226,31 @@ Map<String, Object?> runtimeInboxThreadQueryPayload({
   };
 }
 
-Map<String, Object?> daemonUpgradePayload({String targetVersion = 'latest'}) {
+Map<String, Object?> daemonUpgradePayload({
+  String targetVersion = 'latest',
+  String? commandId,
+}) {
   return <String, Object?>{
     'schema': AgentControlPayloads.commandSchema,
-    'command_id': agentCommandId(),
+    'command_id': commandId ?? agentCommandId('cmd_daemon_upgrade'),
     'command': 'daemon.upgrade',
     'target_agent_kind': 'daemon',
     'args': <String, Object?>{'target_version': targetVersion},
+  };
+}
+
+Map<String, Object?> daemonUpgradeCancelPayload({
+  String? upgradeCommandId,
+  String? commandId,
+}) {
+  return <String, Object?>{
+    'schema': AgentControlPayloads.commandSchema,
+    'command_id': commandId ?? agentCommandId('cmd_daemon_upgrade_cancel'),
+    'command': 'daemon.upgrade.cancel',
+    'target_agent_kind': 'daemon',
+    'args': <String, Object?>{
+      if (upgradeCommandId != null) 'upgrade_command_id': upgradeCommandId,
+    },
   };
 }
 

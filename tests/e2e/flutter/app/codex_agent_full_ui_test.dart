@@ -223,7 +223,7 @@ Future<_DaemonInstallResult> _installRealDaemon({
   final token = await inventory.issueDaemonToken(
     controllerDid: controllerDid,
     clientPlatform: 'linux',
-    handle: config.daemonHandle,
+    controllerHandle: config.daemonHandle,
   );
   final result = await _runProcess(
     config.daemonBinary,

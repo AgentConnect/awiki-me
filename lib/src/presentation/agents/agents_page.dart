@@ -98,6 +98,8 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
       onResetRuntime: (agent) =>
           _confirmResetRuntimeSession(context, ref, agent),
       onUpgrade: (agent) => _confirmUpgradeDaemon(context, ref, agent),
+      onCancelUpgrade: (agent) =>
+          ref.read(agentsProvider.notifier).cancelDaemonUpgrade(agent.agentDid),
       onDelete: (agent) => _confirmDeleteAgent(context, ref, agent),
       messageAgentEnabled: messageAgentEnabled,
       onBootstrapMessageAgent: (agent) => ref

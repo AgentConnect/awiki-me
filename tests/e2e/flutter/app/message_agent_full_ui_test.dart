@@ -644,7 +644,7 @@ Future<_DaemonInstallResult> _installRealDaemon({
   final token = await inventory.issueDaemonToken(
     controllerDid: controllerDid,
     clientPlatform: 'linux',
-    handle: config.daemonHandle,
+    controllerHandle: config.daemonHandle,
   );
   final result = await _runProcess(
     config.daemonBinary,
@@ -1500,7 +1500,7 @@ class _UiAgentInventoryPort implements AgentInventoryPort {
   Future<AgentRegistrationToken> issueDaemonToken({
     required String controllerDid,
     required String clientPlatform,
-    String? handle,
+    required String controllerHandle,
   }) async {
     return const AgentRegistrationToken(token: 'daemon-token');
   }

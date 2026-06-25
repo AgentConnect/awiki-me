@@ -435,8 +435,11 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   List<ConversationSummary> conversations = const <ConversationSummary>[];
   Map<String, List<ChatMessage>> dmHistoryByPeerDid =
       <String, List<ChatMessage>>{};
+  Map<String, List<List<ChatMessage>>> dmHistoryBatchesByPeerDid =
+      <String, List<List<ChatMessage>>>{};
   Map<String, List<ChatMessage>> groupHistoryByGroupId =
       <String, List<ChatMessage>>{};
+  Completer<void>? fetchDmHistoryCompleter;
   List<RelationshipSummary> followers = const <RelationshipSummary>[];
   List<RelationshipSummary> following = const <RelationshipSummary>[];
   List<GroupSummary> groups = const <GroupSummary>[];
@@ -570,6 +573,15 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   @override
   Future<List<ChatMessage>> fetchDmHistory(String peerDid) async {
     fetchDmHistoryCalls += 1;
+    final completer = fetchDmHistoryCompleter;
+    if (completer != null) {
+      await completer.future;
+      fetchDmHistoryCompleter = null;
+    }
+    final batches = dmHistoryBatchesByPeerDid[peerDid];
+    if (batches != null && batches.isNotEmpty) {
+      return batches.removeAt(0);
+    }
     return dmHistoryByPeerDid[peerDid] ?? const <ChatMessage>[];
   }
 
@@ -1528,8 +1540,8 @@ class FakeAgentInventoryPort implements AgentInventoryPort {
   @override
   Future<AgentRegistrationToken> issueDaemonToken({
     required String controllerDid,
+    required String controllerHandle,
     required String clientPlatform,
-    String? handle,
   }) async {
     return nextDaemonToken;
   }
@@ -1619,8 +1631,12 @@ class FakeAgentControlService implements AgentControlService {
         'https://awiki.info/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
   );
   String? lastRefreshedDaemonDid;
+  String? lastInstallControllerDid;
+  String? lastInstallControllerHandle;
+  String? lastInstallClientPlatform;
   String? lastRuntimeCreateDaemonDid;
   RuntimeAgentKind? lastRuntimeCreateKind;
+  String? lastRuntimeCreateControllerDid;
   String? lastBootstrapDaemonDid;
   String? lastBootstrapControllerDid;
   String? lastBootstrapAppInstanceId;
@@ -1630,6 +1646,7 @@ class FakeAgentControlService implements AgentControlService {
   String? lastRuntimeCreateWorkspaceMode;
   String? lastRuntimeCreateSandbox;
   String? lastRuntimeCreateModel;
+  String? lastRuntimeCreateClientRequestId;
   String? lastResetDaemonDid;
   String? lastResetRuntimeDid;
   String? lastRetryDaemonDid;
@@ -1662,6 +1679,11 @@ class FakeAgentControlService implements AgentControlService {
   String? lastRenamedAgentDid;
   String? lastDisplayName;
   String? lastUpgradeDaemonDid;
+  String nextUpgradeCommandId = 'cmd_daemon_upgrade_test';
+  String? lastCancelledUpgradeDaemonDid;
+  String? lastCancelledUpgradeCommandId;
+  String? lastCancelledUpgradeTargetCommandId;
+  String nextCancelUpgradeCommandId = 'cmd_daemon_upgrade_cancel_test';
   Map<String, AgentInvocationPolicy> invocationPolicies =
       <String, AgentInvocationPolicy>{};
   String? lastInvocationPolicyAgentDid;
@@ -1671,8 +1693,12 @@ class FakeAgentControlService implements AgentControlService {
   @override
   Future<InstallCommand> createDaemonInstallCommand({
     required String controllerDid,
+    required String controllerHandle,
     required String clientPlatform,
   }) async {
+    lastInstallControllerDid = controllerDid;
+    lastInstallControllerHandle = controllerHandle;
+    lastInstallClientPlatform = clientPlatform;
     return lastInstallCommand = nextInstallCommand;
   }
 
@@ -1682,6 +1708,7 @@ class FakeAgentControlService implements AgentControlService {
     required String controllerDid,
     required String handle,
     required String displayName,
+    String? clientRequestId,
   }) {
     return createRuntimeAgent(
       daemonAgentDid: daemonAgentDid,
@@ -1691,6 +1718,7 @@ class FakeAgentControlService implements AgentControlService {
         handle: handle,
         displayName: displayName,
       ),
+      clientRequestId: clientRequestId,
     );
   }
 
@@ -1699,14 +1727,17 @@ class FakeAgentControlService implements AgentControlService {
     required String daemonAgentDid,
     required String controllerDid,
     required RuntimeAgentCreateOptions options,
+    String? clientRequestId,
   }) async {
     lastRuntimeCreateDaemonDid = daemonAgentDid;
+    lastRuntimeCreateControllerDid = controllerDid;
     lastRuntimeCreateKind = options.kind;
     lastRuntimeCreateHandle = options.handle;
     lastRuntimeCreateDisplayName = options.displayName;
     lastRuntimeCreateWorkspaceMode = options.workspaceMode;
     lastRuntimeCreateSandbox = options.sandbox;
     lastRuntimeCreateModel = options.model;
+    lastRuntimeCreateClientRequestId = clientRequestId;
   }
 
   @override
@@ -1908,8 +1939,24 @@ class FakeAgentControlService implements AgentControlService {
   }
 
   @override
-  Future<void> upgradeDaemon(String daemonAgentDid) async {
+  Future<String> upgradeDaemon(
+    String daemonAgentDid, {
+    String? commandId,
+  }) async {
     lastUpgradeDaemonDid = daemonAgentDid;
+    return commandId ?? nextUpgradeCommandId;
+  }
+
+  @override
+  Future<String> cancelDaemonUpgrade(
+    String daemonAgentDid, {
+    String? commandId,
+    String? upgradeCommandId,
+  }) async {
+    lastCancelledUpgradeDaemonDid = daemonAgentDid;
+    lastCancelledUpgradeCommandId = commandId;
+    lastCancelledUpgradeTargetCommandId = upgradeCommandId;
+    return commandId ?? nextCancelUpgradeCommandId;
   }
 }
 

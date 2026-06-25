@@ -72,9 +72,13 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       state.conversations,
       conversation,
     );
+    final titledConversation = _mergeConversationTitle(
+      refreshed: conversation,
+      local: existing,
+    );
     final mergedConversation = _mergeConversationReadState(
-      refreshed: _mergeConversationTitle(
-        refreshed: conversation,
+      refreshed: _mergeConversationLastMessage(
+        refreshed: titledConversation,
         local: existing,
       ),
       local: existing,
@@ -214,9 +218,13 @@ List<ConversationSummary> _mergeConversationRefresh({
     if (matchedLocal != null) {
       consumedLocalThreadIds.add(matchedLocal.threadId);
     }
+    final titledConversation = _mergeConversationTitle(
+      refreshed: conversation,
+      local: matchedLocal,
+    );
     return _mergeConversationReadState(
-      refreshed: _mergeConversationTitle(
-        refreshed: conversation,
+      refreshed: _mergeConversationLastMessage(
+        refreshed: titledConversation,
         local: matchedLocal,
       ),
       local: matchedLocal,
@@ -247,6 +255,17 @@ ConversationSummary? _matchingConversationForUpsert(
   for (final item in conversations) {
     if (item.threadId == incoming.threadId) {
       return item;
+    }
+  }
+  final incomingKeys = incoming.visibilityKeys
+      .map((key) => key.trim())
+      .where((key) => key.isNotEmpty)
+      .toSet();
+  if (incomingKeys.isNotEmpty) {
+    for (final item in conversations) {
+      if (item.visibilityKeys.any(incomingKeys.contains)) {
+        return item;
+      }
     }
   }
   if (incoming.isGroup) {
@@ -303,6 +322,20 @@ ConversationSummary _mergeConversationReadState({
     unreadCount: 0,
     unreadMentionCount: 0,
     firstUnreadMentionMessageId: null,
+  );
+}
+
+ConversationSummary _mergeConversationLastMessage({
+  required ConversationSummary refreshed,
+  required ConversationSummary? local,
+}) {
+  if (local == null || !local.lastMessageAt.isAfter(refreshed.lastMessageAt)) {
+    return refreshed;
+  }
+  return refreshed.copyWith(
+    lastMessagePreview: local.lastMessagePreview,
+    lastMessageAt: local.lastMessageAt,
+    lastMessagePayloadJson: local.lastMessagePayloadJson,
   );
 }
 

@@ -20,6 +20,7 @@ abstract interface class AgentControlService {
   Future<List<AgentSummary>> listAgents({bool includeInactive = false});
   Future<InstallCommand> createDaemonInstallCommand({
     required String controllerDid,
+    required String controllerHandle,
     required String clientPlatform,
   });
   Future<void> refreshDaemonStatus(String daemonAgentDid);
@@ -27,12 +28,14 @@ abstract interface class AgentControlService {
     required String daemonAgentDid,
     required String controllerDid,
     required RuntimeAgentCreateOptions options,
+    String? clientRequestId,
   });
   Future<void> createHermesRuntime({
     required String daemonAgentDid,
     required String controllerDid,
     required String handle,
     required String displayName,
+    String? clientRequestId,
   });
   Future<void> ensureMessageAgentBootstrap({
     required String daemonAgentDid,
@@ -72,7 +75,12 @@ abstract interface class AgentControlService {
     int limit = 20,
     String? cursor,
   });
-  Future<void> upgradeDaemon(String daemonAgentDid);
+  Future<String> upgradeDaemon(String daemonAgentDid, {String? commandId});
+  Future<String> cancelDaemonUpgrade(
+    String daemonAgentDid, {
+    String? commandId,
+    String? upgradeCommandId,
+  });
   Future<void> deleteDaemon(String daemonAgentDid);
   Future<void> deleteRuntimeAgent({
     required String daemonAgentDid,
@@ -146,12 +154,8 @@ class DefaultAgentControlService implements AgentControlService {
   final AwikiEnvironmentConfig _environment;
   final bool _agentImEnabled;
   final String downloadBaseUrl;
-  static const Duration _messageAgentRuntimeWaitTimeout = Duration(
-    seconds: 90,
-  );
-  static const Duration _messageAgentRuntimeWaitInterval = Duration(
-    seconds: 2,
-  );
+  static const Duration _messageAgentRuntimeWaitTimeout = Duration(seconds: 90);
+  static const Duration _messageAgentRuntimeWaitInterval = Duration(seconds: 2);
 
   @override
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) {
@@ -161,10 +165,12 @@ class DefaultAgentControlService implements AgentControlService {
   @override
   Future<InstallCommand> createDaemonInstallCommand({
     required String controllerDid,
+    required String controllerHandle,
     required String clientPlatform,
   }) async {
     final token = await _inventory.issueDaemonToken(
       controllerDid: controllerDid,
+      controllerHandle: controllerHandle,
       clientPlatform: clientPlatform,
     );
     final installerUrl = '$downloadBaseUrl/install.sh';
@@ -198,6 +204,7 @@ class DefaultAgentControlService implements AgentControlService {
     required String controllerDid,
     required String handle,
     required String displayName,
+    String? clientRequestId,
   }) {
     return createRuntimeAgent(
       daemonAgentDid: daemonAgentDid,
@@ -207,6 +214,7 @@ class DefaultAgentControlService implements AgentControlService {
         handle: handle,
         displayName: displayName,
       ),
+      clientRequestId: clientRequestId,
     );
   }
 
@@ -215,6 +223,7 @@ class DefaultAgentControlService implements AgentControlService {
     required String daemonAgentDid,
     required String controllerDid,
     required RuntimeAgentCreateOptions options,
+    String? clientRequestId,
   }) async {
     final kind = options.kind;
     final driverConfig = options.driverConfig;
@@ -230,7 +239,7 @@ class DefaultAgentControlService implements AgentControlService {
       defaultModel: kind.isGenericCli ? options.model : null,
       driverConfig: driverConfig,
     );
-    final requestId = agentCommandId('app_req');
+    final requestId = clientRequestId ?? agentCommandId('app_req');
     await _sendDaemonPayload(
       daemonAgentDid,
       runtimeAgentCreatePayload(
@@ -413,8 +422,38 @@ class DefaultAgentControlService implements AgentControlService {
   }
 
   @override
-  Future<void> upgradeDaemon(String daemonAgentDid) {
-    return _sendDaemonPayload(daemonAgentDid, daemonUpgradePayload());
+  Future<String> upgradeDaemon(
+    String daemonAgentDid, {
+    String? commandId,
+  }) async {
+    final effectiveCommandId =
+        commandId ?? agentCommandId('cmd_daemon_upgrade');
+    await _sendDaemonPayload(
+      daemonAgentDid,
+      daemonUpgradePayload(commandId: effectiveCommandId),
+      idempotencyKey: 'daemon-upgrade:$daemonAgentDid:$effectiveCommandId',
+    );
+    return effectiveCommandId;
+  }
+
+  @override
+  Future<String> cancelDaemonUpgrade(
+    String daemonAgentDid, {
+    String? commandId,
+    String? upgradeCommandId,
+  }) async {
+    final effectiveCommandId =
+        commandId ?? agentCommandId('cmd_daemon_upgrade_cancel');
+    await _sendDaemonPayload(
+      daemonAgentDid,
+      daemonUpgradeCancelPayload(
+        commandId: effectiveCommandId,
+        upgradeCommandId: upgradeCommandId,
+      ),
+      idempotencyKey:
+          'daemon-upgrade-cancel:$daemonAgentDid:$effectiveCommandId',
+    );
+    return effectiveCommandId;
   }
 
   @override
@@ -615,7 +654,8 @@ class DefaultAgentControlService implements AgentControlService {
         return agent;
       }
       if (runtime == appMessageHandlerRuntime &&
-          (agent.displayName == defaultMessageAgentRuntimeProvider.runtimeDisplayName ||
+          (agent.displayName ==
+                  defaultMessageAgentRuntimeProvider.runtimeDisplayName ||
               handle?.startsWith(messageAgentProviderHermesHandlePrefix) ==
                   true)) {
         return agent;

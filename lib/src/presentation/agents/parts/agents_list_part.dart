@@ -112,7 +112,7 @@ class _AgentHierarchyList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selectedDid = state.selectedAgent?.agentDid;
-    final groups = _AgentTreeGroup.fromAgents(state.agents);
+    final groups = _AgentTreeGroup.fromState(state);
     return Column(
       children: <Widget>[
         for (final group in groups) ...<Widget>[
@@ -131,12 +131,18 @@ class _AgentHierarchyList extends StatelessWidget {
 }
 
 class _AgentTreeGroup {
-  const _AgentTreeGroup({required this.daemon, required this.runtimes});
+  const _AgentTreeGroup({
+    required this.daemon,
+    required this.runtimes,
+    required this.pendingRuntimeCreations,
+  });
 
   final AgentSummary? daemon;
   final List<AgentSummary> runtimes;
+  final List<PendingRuntimeCreation> pendingRuntimeCreations;
 
-  static List<_AgentTreeGroup> fromAgents(List<AgentSummary> agents) {
+  static List<_AgentTreeGroup> fromState(AgentsState state) {
+    final agents = state.agents;
     final daemons = agents.where((agent) => agent.isDaemon).toList();
     final groupedRuntimes = <String, List<AgentSummary>>{};
     final orphanRuntimes = <AgentSummary>[];
@@ -156,9 +162,16 @@ class _AgentTreeGroup {
         _AgentTreeGroup(
           daemon: daemon,
           runtimes: groupedRuntimes[daemon.agentDid] ?? const <AgentSummary>[],
+          pendingRuntimeCreations: state.pendingRuntimeCreationsFor(
+            daemon.agentDid,
+          ),
         ),
       if (orphanRuntimes.isNotEmpty)
-        _AgentTreeGroup(daemon: null, runtimes: orphanRuntimes),
+        _AgentTreeGroup(
+          daemon: null,
+          runtimes: orphanRuntimes,
+          pendingRuntimeCreations: const <PendingRuntimeCreation>[],
+        ),
     ];
   }
 }
@@ -185,6 +198,7 @@ class _AgentDaemonGroup extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final daemon = group.daemon;
     final runtimes = group.runtimes;
+    final pendingRuntimeCreations = group.pendingRuntimeCreations;
     if (daemon == null) {
       return Padding(
         padding: EdgeInsets.only(bottom: responsive.spacing(10)),
@@ -204,27 +218,36 @@ class _AgentDaemonGroup extends StatelessWidget {
             agent: daemon,
             pendingAgentDids: pendingAgentDids,
             pendingDaemonUpgrades: state.pendingDaemonUpgrades,
+            cancellingDaemonUpgrades: state.cancellingDaemonUpgrades,
+            daemonUpgradeErrors: state.daemonUpgradeErrors,
+            daemonUpgradeProgress: state.daemonUpgradeProgress,
             selected: selectedAgentDid == daemon.agentDid,
             onTap: () => onSelect(daemon.agentDid),
-            runtimeCount: runtimes.length,
+            runtimeCount: runtimes.length + pendingRuntimeCreations.length,
             onRefresh:
                 state.isActing || state.isStatusQueryPending(daemon.agentDid)
                 ? null
                 : () => onRefreshDaemon(daemon),
             isRefreshing: state.isStatusQueryPending(daemon.agentDid),
           ),
-          if (runtimes.isEmpty)
+          if (runtimes.isEmpty && pendingRuntimeCreations.isEmpty)
             _EmptyRuntimeHint()
-          else
+          else ...<Widget>[
             for (final runtime in runtimes)
               _AgentListTile(
                 agent: runtime,
                 pendingAgentDids: pendingAgentDids,
                 pendingDaemonUpgrades: state.pendingDaemonUpgrades,
+                cancellingDaemonUpgrades: state.cancellingDaemonUpgrades,
+                daemonUpgradeErrors: state.daemonUpgradeErrors,
+                daemonUpgradeProgress: state.daemonUpgradeProgress,
                 selected: selectedAgentDid == runtime.agentDid,
                 onTap: () => onSelect(runtime.agentDid),
                 depth: 1,
               ),
+            for (final pending in pendingRuntimeCreations)
+              _PendingRuntimeCreationTile(pending: pending),
+          ],
         ],
       ),
     );
@@ -270,7 +293,10 @@ class _OrphanRuntimeGroup extends StatelessWidget {
           _AgentListTile(
             agent: runtime,
             pendingAgentDids: pendingAgentDids,
-            pendingDaemonUpgrades: const <String>{},
+            pendingDaemonUpgrades: const <String, PendingDaemonUpgrade>{},
+            cancellingDaemonUpgrades:
+                const <String, PendingDaemonUpgradeCancel>{},
+            daemonUpgradeProgress: const <String, DaemonUpgradeProgress>{},
             selected: selectedAgentDid == runtime.agentDid,
             onTap: () => onSelect(runtime.agentDid),
           ),
@@ -323,13 +349,121 @@ class _EmptyRuntimeHint extends StatelessWidget {
   }
 }
 
+class _PendingRuntimeCreationTile extends StatelessWidget {
+  const _PendingRuntimeCreationTile({required this.pending});
+
+  final PendingRuntimeCreation pending;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final waiting = pending.isWaitingForStatus;
+    final visualStatus = waiting
+        ? const AgentVisualStatus(AgentVisualStatusKind.unknown)
+        : const AgentVisualStatus(
+            AgentVisualStatusKind.processing,
+            rawStatus: 'creating',
+          );
+    return Padding(
+      padding: EdgeInsets.only(
+        left: responsive.spacing(30),
+        bottom: responsive.spacing(6),
+      ),
+      child: Row(
+        children: <Widget>[
+          SizedBox(
+            width: responsive.spacing(12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                width: 1,
+                height: responsive.displayScaled(50),
+                color: const Color(0xFFDDE5F0),
+              ),
+            ),
+          ),
+          SizedBox(width: responsive.spacing(8)),
+          Expanded(
+            child: Container(
+              padding: EdgeInsets.all(responsive.spacing(10)),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFAFBFE),
+                borderRadius: BorderRadius.circular(responsive.radius(8)),
+                border: Border.all(color: const Color(0xFFE8EDF5)),
+              ),
+              child: Row(
+                children: <Widget>[
+                  Container(
+                    width: responsive.displayScaled(28),
+                    height: responsive.displayScaled(28),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF7C4DFF).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(responsive.radius(8)),
+                    ),
+                    child: Center(
+                      child: waiting
+                          ? Icon(
+                              CupertinoIcons.clock,
+                              color: const Color(0xFF66728A),
+                              size: responsive.iconSm,
+                            )
+                          : CupertinoActivityIndicator(
+                              radius: responsive.displayScaled(7),
+                            ),
+                    ),
+                  ),
+                  SizedBox(width: responsive.spacing(10)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          pending.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: const Color(0xFF101B32),
+                            fontSize: responsive.bodySm,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SizedBox(height: responsive.spacing(3)),
+                        Text(
+                          waiting
+                              ? '${pending.runtime} · 创建状态暂未返回，可刷新查看'
+                              : '${pending.runtime} · 创建中',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: const Color(0xFF66728A),
+                            fontSize: responsive.metaSm,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(width: responsive.spacing(8)),
+                  AgentStatusDot(status: visualStatus),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AgentListTile extends StatelessWidget {
   const _AgentListTile({
     required this.agent,
     required this.pendingAgentDids,
     required this.pendingDaemonUpgrades,
+    required this.cancellingDaemonUpgrades,
     required this.selected,
     required this.onTap,
+    this.daemonUpgradeErrors = const <String, String>{},
+    this.daemonUpgradeProgress = const <String, DaemonUpgradeProgress>{},
     this.depth = 0,
     this.runtimeCount,
     this.onRefresh,
@@ -338,7 +472,10 @@ class _AgentListTile extends StatelessWidget {
 
   final AgentSummary agent;
   final Set<String> pendingAgentDids;
-  final Set<String> pendingDaemonUpgrades;
+  final Map<String, PendingDaemonUpgrade> pendingDaemonUpgrades;
+  final Map<String, PendingDaemonUpgradeCancel> cancellingDaemonUpgrades;
+  final Map<String, String> daemonUpgradeErrors;
+  final Map<String, DaemonUpgradeProgress> daemonUpgradeProgress;
   final bool selected;
   final VoidCallback onTap;
   final int depth;
@@ -351,10 +488,15 @@ class _AgentListTile extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final isChild = depth > 0;
     final title = AgentDisplayName.title(agent);
+    final daemonUpgradeError = daemonUpgradeErrors[agent.agentDid];
+    final daemonUpgradeProgress = this.daemonUpgradeProgress[agent.agentDid];
     final visualStatus = AgentVisualStatus.fromAgent(
       agent,
       hasPendingTurn: pendingAgentDids.contains(agent.agentDid),
-      isPendingUpgrade: pendingDaemonUpgrades.contains(agent.agentDid),
+      isPendingUpgrade: pendingDaemonUpgrades.containsKey(agent.agentDid),
+      hasUpgradeError: pendingDaemonUpgrades.containsKey(agent.agentDid)
+          ? false
+          : daemonUpgradeError != null,
     );
     return Padding(
       padding: EdgeInsets.only(
@@ -428,6 +570,13 @@ class _AgentListTile extends StatelessWidget {
                               agent,
                               runtimeCount,
                               visualStatus,
+                              isUpgrading: pendingDaemonUpgrades.containsKey(
+                                agent.agentDid,
+                              ),
+                              isCancelling: cancellingDaemonUpgrades
+                                  .containsKey(agent.agentDid),
+                              upgradeProgress: daemonUpgradeProgress,
+                              upgradeError: daemonUpgradeError,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -522,12 +671,58 @@ class _DaemonRefreshIconButton extends StatelessWidget {
 String _agentListSubtitle(
   AgentSummary agent,
   int? runtimeCount,
-  AgentVisualStatus visualStatus,
-) {
+  AgentVisualStatus visualStatus, {
+  bool isUpgrading = false,
+  bool isCancelling = false,
+  DaemonUpgradeProgress? upgradeProgress,
+  String? upgradeError,
+}) {
   if (agent.isDaemon) {
     final count = runtimeCount ?? 0;
-    return 'Daemon · $count 个 Agent · ${visualStatus.label}';
+    final statusLabel = upgradeError != null
+        ? '升级失败'
+        : isCancelling
+        ? '正在取消升级'
+        : isUpgrading
+        ? upgradeProgress?.compactLabel ?? '正在升级'
+        : visualStatus.label;
+    return 'Daemon · $count 个 Agent · $statusLabel';
   }
   final runtime = agent.runtime ?? 'Runtime';
   return '$runtime · ${visualStatus.label}';
+}
+
+String _formatBytes(int bytes) {
+  const units = <String>['B', 'KB', 'MB', 'GB'];
+  var value = bytes.toDouble();
+  var unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  if (unit == 0) {
+    return '${bytes}B';
+  }
+  return '${value.toStringAsFixed(value >= 10 ? 1 : 2)}${units[unit]}';
+}
+
+String _upgradeSourceLabel(DaemonUpgradeProgress progress) {
+  final parts = <String>[
+    if (progress.sourceUrl != null) progress.sourceUrl!,
+    if (progress.route != null) _upgradeRouteLabel(progress.route!),
+  ];
+  return parts.isEmpty ? '正在准备下载' : parts.join(' · ');
+}
+
+String _upgradeRouteLabel(String route) {
+  if (route == 'direct') {
+    return '直连';
+  }
+  if (route == 'environment_proxy') {
+    return '代理';
+  }
+  if (route.startsWith('local_proxy:')) {
+    return '本机代理 ${route.substring('local_proxy:'.length)}';
+  }
+  return route;
 }

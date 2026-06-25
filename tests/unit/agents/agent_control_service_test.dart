@@ -49,6 +49,7 @@ void main() {
         controllerDid: 'did:human:me',
         handle: 'alice-hermes',
         displayName: 'Alice Hermes',
+        clientRequestId: 'app_req_test',
       );
 
       expect(inventory.runtimeTokenDaemonDid, 'did:agent:daemon');
@@ -64,6 +65,11 @@ void main() {
       expect(args['runtime'], 'hermes');
       expect(args['handle'], 'alice-hermes');
       expect(args['display_name'], 'Alice Hermes');
+      expect(args['client_request_id'], 'app_req_test');
+      expect(
+        messages.lastIdempotencyKey,
+        'runtime-create:did:agent:daemon:app_req_test',
+      );
     },
   );
 
@@ -717,16 +723,19 @@ void main() {
   });
 
   test('createDaemonInstallCommand returns token-only main command', () async {
+    final inventory = _InventoryStub();
     final service = DefaultAgentControlService(
-      inventory: _InventoryStub(),
+      inventory: inventory,
       messages: _MessagesStub(),
     );
 
     final command = await service.createDaemonInstallCommand(
       controllerDid: 'did:human:me',
+      controllerHandle: 'alice.anpclaw.com',
       clientPlatform: 'macos',
     );
 
+    expect(inventory.lastDaemonTokenControllerHandle, 'alice.anpclaw.com');
     expect(command.command, contains('--token daemon-token'));
     expect(command.command, isNot(contains('did:human:me')));
     expect(command.command, isNot(contains('--base-url')));
@@ -768,6 +777,9 @@ void main() {
 
 class _InventoryStub implements AgentInventoryPort {
   List<AgentSummary> agents = const <AgentSummary>[];
+  String? lastDaemonTokenControllerDid;
+  String? lastDaemonTokenControllerHandle;
+  String? lastDaemonTokenClientPlatform;
   String? runtimeTokenDaemonDid;
   String? runtimeTokenHandle;
   String? runtimeTokenDisplayName;
@@ -785,9 +797,12 @@ class _InventoryStub implements AgentInventoryPort {
   @override
   Future<AgentRegistrationToken> issueDaemonToken({
     required String controllerDid,
+    required String controllerHandle,
     required String clientPlatform,
-    String? handle,
   }) async {
+    lastDaemonTokenControllerDid = controllerDid;
+    lastDaemonTokenControllerHandle = controllerHandle;
+    lastDaemonTokenClientPlatform = clientPlatform;
     return const AgentRegistrationToken(token: 'daemon-token');
   }
 

@@ -8,6 +8,7 @@ import '../../application/config/awiki_environment_config.dart';
 import '../../application/models/product_local_models.dart';
 import '../../core/app_error_classifier.dart';
 import '../../data/agent/user_service_agent_inventory_adapter.dart';
+import '../../data/services/awiki_onboarding_utility_client.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/agent/agent_command.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
@@ -21,8 +22,181 @@ import '../app_shell/providers/session_provider.dart';
 import 'agent_display_name.dart';
 
 const agentStatusQueryTimeout = Duration(seconds: 10);
-const agentDaemonUpgradeTimeout = Duration(seconds: 45);
+const agentRuntimeCreationTimeout = Duration(seconds: 45);
 const agentStatusRefreshMinimumIndicatorDuration = Duration(milliseconds: 1500);
+const agentDaemonUpgradeAckTimeout = Duration(seconds: 20);
+const agentDaemonUpgradeCancelAckTimeout = Duration(seconds: 12);
+
+enum PendingRuntimeCreationState { creating, waitingForStatus }
+
+class PendingRuntimeCreation {
+  const PendingRuntimeCreation({
+    required this.requestId,
+    required this.daemonAgentDid,
+    required this.handle,
+    required this.displayName,
+    required this.runtime,
+    required this.createdAt,
+    this.state = PendingRuntimeCreationState.creating,
+  });
+
+  final String requestId;
+  final String daemonAgentDid;
+  final String handle;
+  final String displayName;
+  final String runtime;
+  final DateTime createdAt;
+  final PendingRuntimeCreationState state;
+
+  bool get isWaitingForStatus =>
+      state == PendingRuntimeCreationState.waitingForStatus;
+
+  PendingRuntimeCreation copyWith({PendingRuntimeCreationState? state}) {
+    return PendingRuntimeCreation(
+      requestId: requestId,
+      daemonAgentDid: daemonAgentDid,
+      handle: handle,
+      displayName: displayName,
+      runtime: runtime,
+      createdAt: createdAt,
+      state: state ?? this.state,
+    );
+  }
+}
+
+class DaemonUpgradeProgress {
+  const DaemonUpgradeProgress({
+    required this.stage,
+    required this.message,
+    this.targetVersion,
+    this.sourceUrl,
+    this.route,
+    this.attempt,
+    this.sourceIndex,
+    this.sourceCount,
+    this.downloadedBytes,
+    this.totalBytes,
+    this.percent,
+    this.speedBytesPerSecond,
+  });
+
+  final String stage;
+  final String message;
+  final String? targetVersion;
+  final String? sourceUrl;
+  final String? route;
+  final int? attempt;
+  final int? sourceIndex;
+  final int? sourceCount;
+  final int? downloadedBytes;
+  final int? totalBytes;
+  final double? percent;
+  final int? speedBytesPerSecond;
+
+  String get displayMessage {
+    final text = message.trim();
+    if (text.isNotEmpty) {
+      return text;
+    }
+    return switch (stage) {
+      'manifest' => '正在获取版本信息',
+      'selecting_source' => '正在选择下载线路',
+      'downloading' => '正在下载安装包',
+      'retrying_source' => '下载中断，正在重试',
+      'verifying' => '正在校验安装包',
+      'extracting' => '正在解压安装包',
+      'installing' => '正在安装新版本',
+      'restarting' => '正在重启代理服务',
+      _ => '正在升级',
+    };
+  }
+
+  String get compactLabel {
+    final p = percent;
+    if (p != null && p > 0 && p < 100) {
+      return '$displayMessage ${p.round()}%';
+    }
+    if (p != null && p >= 100) {
+      return '$displayMessage 100%';
+    }
+    return displayMessage;
+  }
+
+  bool get hasDownloadDetail {
+    return downloadedBytes != null ||
+        totalBytes != null ||
+        speedBytesPerSecond != null ||
+        sourceUrl != null ||
+        route != null;
+  }
+
+  static DaemonUpgradeProgress started() {
+    return const DaemonUpgradeProgress(stage: 'requested', message: '正在发送升级请求');
+  }
+
+  static DaemonUpgradeProgress waitingForDaemonConfirmation() {
+    return const DaemonUpgradeProgress(
+      stage: 'waiting_for_daemon',
+      message: '升级请求已发送，正在等待代理确认',
+    );
+  }
+
+  static DaemonUpgradeProgress? fromPayload(Map<String, Object?> payload) {
+    final progress = _readMap(payload['progress']);
+    if (progress.isEmpty) {
+      return null;
+    }
+    final stage = _string(progress['stage']) ?? 'upgrading';
+    final message = _string(progress['message']) ?? '';
+    return DaemonUpgradeProgress(
+      stage: stage,
+      message: message,
+      targetVersion: _string(progress['target_version']),
+      sourceUrl: _string(progress['source_url']),
+      route: _string(progress['route']),
+      attempt: _int(progress['attempt']),
+      sourceIndex: _int(progress['source_index']),
+      sourceCount: _int(progress['source_count']),
+      downloadedBytes: _int(progress['downloaded_bytes']),
+      totalBytes: _int(progress['total_bytes']),
+      percent: _double(progress['percent']),
+      speedBytesPerSecond: _int(progress['speed_bytes_per_sec']),
+    );
+  }
+}
+
+class PendingDaemonUpgrade {
+  const PendingDaemonUpgrade({
+    required this.commandId,
+    required this.requestedAt,
+    this.acknowledged = false,
+  });
+
+  final String commandId;
+  final DateTime requestedAt;
+  final bool acknowledged;
+
+  PendingDaemonUpgrade acknowledge() {
+    if (acknowledged) {
+      return this;
+    }
+    return PendingDaemonUpgrade(
+      commandId: commandId,
+      requestedAt: requestedAt,
+      acknowledged: true,
+    );
+  }
+}
+
+class PendingDaemonUpgradeCancel {
+  const PendingDaemonUpgradeCancel({
+    required this.commandId,
+    this.upgradeCommandId,
+  });
+
+  final String commandId;
+  final String? upgradeCommandId;
+}
 
 final agentImEnabledProvider = Provider<bool>(
   (ref) => AwikiEnvironmentConfig.fromEnvironment().agentImEnabled,
@@ -37,7 +211,9 @@ class AgentsState {
     this.installCommand,
     this.error,
     this.pendingStatusQueryAtByDaemon = const <String, DateTime>{},
-    this.pendingDaemonUpgrades = const <String>{},
+    this.pendingDaemonUpgrades = const <String, PendingDaemonUpgrade>{},
+    this.cancellingDaemonUpgrades =
+        const <String, PendingDaemonUpgradeCancel>{},
     this.seenControlEventIds = const <String>{},
     this.invocationPolicies = const <String, AgentInvocationPolicy>{},
     this.loadingInvocationPolicies = const <String>{},
@@ -45,6 +221,9 @@ class AgentsState {
     this.invocationPolicyErrors = const <String, String>{},
     this.statusQueryErrors = const <String, String>{},
     this.debugLastError,
+    this.daemonUpgradeErrors = const <String, String>{},
+    this.daemonUpgradeProgress = const <String, DaemonUpgradeProgress>{},
+    this.pendingRuntimeCreations = const <PendingRuntimeCreation>[],
   });
 
   final List<AgentSummary> agents;
@@ -54,7 +233,8 @@ class AgentsState {
   final InstallCommand? installCommand;
   final String? error;
   final Map<String, DateTime> pendingStatusQueryAtByDaemon;
-  final Set<String> pendingDaemonUpgrades;
+  final Map<String, PendingDaemonUpgrade> pendingDaemonUpgrades;
+  final Map<String, PendingDaemonUpgradeCancel> cancellingDaemonUpgrades;
   final Set<String> seenControlEventIds;
   final Map<String, AgentInvocationPolicy> invocationPolicies;
   final Set<String> loadingInvocationPolicies;
@@ -62,6 +242,9 @@ class AgentsState {
   final Map<String, String> invocationPolicyErrors;
   final Map<String, String> statusQueryErrors;
   final String? debugLastError;
+  final Map<String, String> daemonUpgradeErrors;
+  final Map<String, DaemonUpgradeProgress> daemonUpgradeProgress;
+  final List<PendingRuntimeCreation> pendingRuntimeCreations;
 
   AgentSummary? get selectedAgent {
     final selectedDid = selectedAgentDid;
@@ -92,6 +275,11 @@ class AgentsState {
     return null;
   }
 
+  List<PendingRuntimeCreation> pendingRuntimeCreationsFor(String daemonDid) =>
+      pendingRuntimeCreations
+          .where((item) => item.daemonAgentDid == daemonDid)
+          .toList();
+
   AgentSummary? daemonForRuntime(AgentSummary runtime) {
     final daemonDid = runtime.daemonAgentDid;
     if (daemonDid == null) {
@@ -118,7 +306,11 @@ class AgentsState {
   }
 
   bool isDaemonUpgradePending(String daemonDid) {
-    return pendingDaemonUpgrades.contains(daemonDid);
+    return pendingDaemonUpgrades.containsKey(daemonDid);
+  }
+
+  bool isDaemonUpgradeCancelling(String daemonDid) {
+    return cancellingDaemonUpgrades.containsKey(daemonDid);
   }
 
   AgentsState copyWith({
@@ -132,7 +324,8 @@ class AgentsState {
     String? error,
     bool clearError = false,
     Map<String, DateTime>? pendingStatusQueryAtByDaemon,
-    Set<String>? pendingDaemonUpgrades,
+    Map<String, PendingDaemonUpgrade>? pendingDaemonUpgrades,
+    Map<String, PendingDaemonUpgradeCancel>? cancellingDaemonUpgrades,
     Set<String>? seenControlEventIds,
     Map<String, AgentInvocationPolicy>? invocationPolicies,
     Set<String>? loadingInvocationPolicies,
@@ -140,6 +333,9 @@ class AgentsState {
     Map<String, String>? invocationPolicyErrors,
     Map<String, String>? statusQueryErrors,
     String? debugLastError,
+    Map<String, String>? daemonUpgradeErrors,
+    Map<String, DaemonUpgradeProgress>? daemonUpgradeProgress,
+    List<PendingRuntimeCreation>? pendingRuntimeCreations,
   }) {
     return AgentsState(
       agents: agents ?? this.agents,
@@ -156,6 +352,8 @@ class AgentsState {
           pendingStatusQueryAtByDaemon ?? this.pendingStatusQueryAtByDaemon,
       pendingDaemonUpgrades:
           pendingDaemonUpgrades ?? this.pendingDaemonUpgrades,
+      cancellingDaemonUpgrades:
+          cancellingDaemonUpgrades ?? this.cancellingDaemonUpgrades,
       seenControlEventIds: seenControlEventIds ?? this.seenControlEventIds,
       invocationPolicies: invocationPolicies ?? this.invocationPolicies,
       loadingInvocationPolicies:
@@ -168,6 +366,11 @@ class AgentsState {
       debugLastError: clearError
           ? null
           : (debugLastError ?? this.debugLastError),
+      daemonUpgradeErrors: daemonUpgradeErrors ?? this.daemonUpgradeErrors,
+      daemonUpgradeProgress:
+          daemonUpgradeProgress ?? this.daemonUpgradeProgress,
+      pendingRuntimeCreations:
+          pendingRuntimeCreations ?? this.pendingRuntimeCreations,
     );
   }
 }
@@ -178,7 +381,9 @@ class AgentsController extends StateNotifier<AgentsState> {
   final Ref ref;
   final Map<String, Timer> _statusQueryTimeouts = <String, Timer>{};
   final Map<String, Timer> _statusQueryClearTimers = <String, Timer>{};
-  final Map<String, Timer> _daemonUpgradeTimeouts = <String, Timer>{};
+  final Map<String, Timer> _runtimeCreationTimeouts = <String, Timer>{};
+  final Map<String, Timer> _daemonUpgradeAckTimeouts = <String, Timer>{};
+  final Map<String, Timer> _daemonUpgradeCancelAckTimeouts = <String, Timer>{};
   Future<void>? _loadOperation;
   String? _loadedCacheOwner;
 
@@ -236,10 +441,26 @@ class AgentsController extends StateNotifier<AgentsState> {
       if (!_isCurrentCacheOwner(cacheOwner)) {
         return;
       }
+      final pendingRuntimeCreations = _pendingCreationsAfterAgents(agents);
+      final pendingDaemonUpgrades = _pendingDaemonUpgradesAfterAgents(agents);
+      final cancellingDaemonUpgrades = _cancellingDaemonUpgradesAfterAgents(
+        agents,
+        pendingDaemonUpgrades,
+      );
+      final daemonUpgradeErrors = _daemonUpgradeErrorsAfterAgents(agents);
+      final daemonUpgradeProgress = _daemonUpgradeProgressAfterAgents(
+        agents,
+        pendingDaemonUpgrades,
+      );
       state = state.copyWith(
         agents: agents,
         selectedAgentDid: _nextSelection(agents),
         isLoading: false,
+        pendingRuntimeCreations: pendingRuntimeCreations,
+        pendingDaemonUpgrades: pendingDaemonUpgrades,
+        cancellingDaemonUpgrades: cancellingDaemonUpgrades,
+        daemonUpgradeErrors: daemonUpgradeErrors,
+        daemonUpgradeProgress: daemonUpgradeProgress,
         clearError: true,
       );
       _loadedCacheOwner = cacheOwner;
@@ -281,11 +502,17 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(error: '请先登录。');
       return;
     }
+    final controllerHandle = session.handle?.trim().toLowerCase();
+    if (controllerHandle == null || controllerHandle.isEmpty) {
+      state = state.copyWith(error: '当前账号没有可用 handle，暂时不能生成 Daemon 安装命令。');
+      return;
+    }
     await _act(() async {
       final command = await ref
           .read(agentControlServiceProvider)
           .createDaemonInstallCommand(
             controllerDid: session.did,
+            controllerHandle: controllerHandle,
             clientPlatform: awikiClientPlatform(),
           );
       state = state.copyWith(installCommand: command, clearError: true);
@@ -330,13 +557,16 @@ class AgentsController extends StateNotifier<AgentsState> {
           ? state.pendingStatusQueryAtByDaemon
           : _withoutKey(state.pendingStatusQueryAtByDaemon, daemonDid);
       if (!fromAutoLoad) {
+        final isUpgrading = state.pendingDaemonUpgrades.containsKey(daemonDid);
         state = state.copyWith(
           isActing: false,
           pendingStatusQueryAtByDaemon: nextPending,
-          statusQueryErrors: <String, String>{
-            ...state.statusQueryErrors,
-            daemonDid: _agentStatusRefreshErrorMessage(error),
-          },
+          statusQueryErrors: isUpgrading
+              ? state.statusQueryErrors
+              : <String, String>{
+                  ...state.statusQueryErrors,
+                  daemonDid: _agentStatusRefreshErrorMessage(error),
+                },
         );
       } else if (!identical(nextPending, state.pendingStatusQueryAtByDaemon)) {
         state = state.copyWith(pendingStatusQueryAtByDaemon: nextPending);
@@ -369,14 +599,51 @@ class AgentsController extends StateNotifier<AgentsState> {
       return;
     }
     await _act(() async {
-      await ref
-          .read(agentControlServiceProvider)
-          .createRuntimeAgent(
-            daemonAgentDid: daemonDid,
-            controllerDid: session.did,
-            options: options,
-          );
-      await load();
+      final requestId = agentCommandId('app_req');
+      final pending = PendingRuntimeCreation(
+        requestId: requestId,
+        daemonAgentDid: daemonDid,
+        handle: options.handle,
+        displayName: options.displayName,
+        runtime: options.kind.runtime,
+        createdAt: DateTime.now().toUtc(),
+      );
+      _runtimeCreationTimeouts.remove(requestId)?.cancel();
+      state = state.copyWith(
+        pendingRuntimeCreations: _upsertPendingRuntimeCreation(
+          state.pendingRuntimeCreations,
+          pending,
+        ),
+        selectedAgentDid: daemonDid,
+        clearError: true,
+      );
+      _scheduleRuntimeCreationTimeout(requestId);
+      try {
+        await ref
+            .read(agentControlServiceProvider)
+            .createRuntimeAgent(
+              daemonAgentDid: daemonDid,
+              controllerDid: session.did,
+              options: options,
+              clientRequestId: requestId,
+            );
+      } catch (_) {
+        _runtimeCreationTimeouts.remove(requestId)?.cancel();
+        state = state.copyWith(
+          pendingRuntimeCreations: _removePendingRuntimeCreation(
+            state.pendingRuntimeCreations,
+            requestId,
+          ),
+        );
+        rethrow;
+      }
+      state = state.copyWith(
+        pendingRuntimeCreations: _markPendingRuntimeCreationWaiting(
+          state.pendingRuntimeCreations,
+          requestId,
+        ),
+      );
+      unawaited(load());
     });
   }
 
@@ -478,29 +745,107 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (state.isDaemonUpgradePending(daemonDid)) {
       return false;
     }
+    final requestedAt = DateTime.now().toUtc();
+    final commandId = agentCommandId('cmd_daemon_upgrade');
     state = state.copyWith(
-      pendingDaemonUpgrades: <String>{
+      pendingDaemonUpgrades: <String, PendingDaemonUpgrade>{
         ...state.pendingDaemonUpgrades,
-        daemonDid,
+        daemonDid: PendingDaemonUpgrade(
+          commandId: commandId,
+          requestedAt: requestedAt,
+        ),
       },
+      cancellingDaemonUpgrades: _withoutMapKey(
+        state.cancellingDaemonUpgrades,
+        daemonDid,
+      ),
+      daemonUpgradeProgress: <String, DaemonUpgradeProgress>{
+        ...state.daemonUpgradeProgress,
+        daemonDid: DaemonUpgradeProgress.started(),
+      },
+      daemonUpgradeErrors: _withoutStringKey(
+        state.daemonUpgradeErrors,
+        daemonDid,
+      ),
+      statusQueryErrors: _withoutStringKey(state.statusQueryErrors, daemonDid),
       isActing: true,
       clearError: true,
     );
+    _scheduleDaemonUpgradeAckTimeout(daemonDid, commandId);
     try {
-      await ref.read(agentControlServiceProvider).upgradeDaemon(daemonDid);
-      _scheduleDaemonUpgradeTimeout(daemonDid);
+      await ref
+          .read(agentControlServiceProvider)
+          .upgradeDaemon(daemonDid, commandId: commandId);
+      if (!mounted || !state.pendingDaemonUpgrades.containsKey(daemonDid)) {
+        return true;
+      }
       state = state.copyWith(isActing: false, clearError: true);
       return true;
     } catch (error) {
+      _cancelDaemonUpgradeTimers(daemonDid);
       state = state.copyWith(
         isActing: false,
-        pendingDaemonUpgrades: _withoutSetValue(
+        pendingDaemonUpgrades: _withoutMapKey(
           state.pendingDaemonUpgrades,
           daemonDid,
         ),
+        daemonUpgradeProgress: _withoutDaemonUpgradeProgressKey(
+          state.daemonUpgradeProgress,
+          daemonDid,
+        ),
+        daemonUpgradeErrors: <String, String>{
+          ...state.daemonUpgradeErrors,
+          daemonDid: _agentErrorMessage(error),
+        },
         error: _agentErrorMessage(error),
       );
-      _daemonUpgradeTimeouts.remove(daemonDid)?.cancel();
+      return false;
+    }
+  }
+
+  Future<bool> cancelDaemonUpgrade(String daemonDid) async {
+    if (!state.isDaemonUpgradePending(daemonDid) ||
+        state.isDaemonUpgradeCancelling(daemonDid)) {
+      return false;
+    }
+    final pendingUpgrade = state.pendingDaemonUpgrades[daemonDid];
+    final commandId = agentCommandId('cmd_daemon_upgrade_cancel');
+    state = state.copyWith(
+      cancellingDaemonUpgrades: <String, PendingDaemonUpgradeCancel>{
+        ...state.cancellingDaemonUpgrades,
+        daemonDid: PendingDaemonUpgradeCancel(
+          commandId: commandId,
+          upgradeCommandId: pendingUpgrade?.commandId,
+        ),
+      },
+      clearError: true,
+    );
+    _scheduleDaemonUpgradeCancelAckTimeout(daemonDid, commandId);
+    try {
+      await ref
+          .read(agentControlServiceProvider)
+          .cancelDaemonUpgrade(
+            daemonDid,
+            commandId: commandId,
+            upgradeCommandId: pendingUpgrade?.commandId,
+          );
+      if (!mounted || !state.cancellingDaemonUpgrades.containsKey(daemonDid)) {
+        return true;
+      }
+      return true;
+    } catch (error) {
+      _cancelDaemonUpgradeCancelTimer(daemonDid);
+      state = state.copyWith(
+        cancellingDaemonUpgrades: _withoutMapKey(
+          state.cancellingDaemonUpgrades,
+          daemonDid,
+        ),
+        daemonUpgradeErrors: <String, String>{
+          ...state.daemonUpgradeErrors,
+          daemonDid: _agentErrorMessage(error),
+        },
+        error: _agentErrorMessage(error),
+      );
       return false;
     }
   }
@@ -736,9 +1081,18 @@ class AgentsController extends StateNotifier<AgentsState> {
       return;
     }
     final merged = _mergeControlPayload(state.agents, payload);
+    final pendingRuntimeCreations =
+        _pendingCreationsAfterControlPayloadAndAgents(
+          state.pendingRuntimeCreations,
+          payload,
+          merged,
+        );
     final daemonDid =
         _string(payload['daemon_agent_did']) ??
         _string(_readMap(payload['daemon'])['agent_did']);
+    if (_isStaleDaemonUpgradeCommandPayload(payload, daemonDid)) {
+      return;
+    }
     final nextPending = _pendingAfterStatusPayload(daemonDid);
     final nextPendingDaemonUpgrades = _pendingDaemonUpgradesAfterPayload(
       payload,
@@ -747,15 +1101,29 @@ class AgentsController extends StateNotifier<AgentsState> {
     );
     if (daemonDid != null) {
       _statusQueryTimeouts.remove(daemonDid)?.cancel();
-      if (!nextPendingDaemonUpgrades.contains(daemonDid)) {
-        _daemonUpgradeTimeouts.remove(daemonDid)?.cancel();
-      }
     }
+    final nextDaemonUpgradeErrors = _daemonUpgradeErrorsAfterPayload(
+      payload,
+      daemonDid,
+    );
+    final nextDaemonUpgradeProgress = _daemonUpgradeProgressAfterPayload(
+      payload,
+      daemonDid,
+      nextPendingDaemonUpgrades,
+    );
     state = state.copyWith(
       agents: merged,
       selectedAgentDid: _nextSelection(merged),
+      pendingRuntimeCreations: pendingRuntimeCreations,
       pendingStatusQueryAtByDaemon: nextPending,
       pendingDaemonUpgrades: nextPendingDaemonUpgrades,
+      cancellingDaemonUpgrades: _cancellingDaemonUpgradesAfterPayload(
+        payload,
+        daemonDid,
+        nextPendingDaemonUpgrades,
+      ),
+      daemonUpgradeErrors: nextDaemonUpgradeErrors,
+      daemonUpgradeProgress: nextDaemonUpgradeProgress,
       statusQueryErrors: daemonDid == null
           ? state.statusQueryErrors
           : _withoutStringKey(state.statusQueryErrors, daemonDid),
@@ -768,6 +1136,27 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (session != null) {
       unawaited(_saveCacheBestEffort(_agentCacheOwner(session), merged));
     }
+  }
+
+  bool _isStaleDaemonUpgradeCommandPayload(
+    Map<String, Object?> payload,
+    String? daemonDid,
+  ) {
+    if (daemonDid == null) {
+      return false;
+    }
+    final result = _readMap(payload['result']);
+    if (_string(result['command']) != 'daemon.upgrade') {
+      return false;
+    }
+    final pending = state.pendingDaemonUpgrades[daemonDid];
+    if (pending == null) {
+      return false;
+    }
+    return !_commandIdMatches(
+      _string(payload['command_id']),
+      pending.commandId,
+    );
   }
 
   Future<void> _act(Future<void> Function() action) async {
@@ -788,37 +1177,135 @@ class AgentsController extends StateNotifier<AgentsState> {
     _statusQueryTimeouts.remove(daemonDid)?.cancel();
     _statusQueryTimeouts[daemonDid] = Timer(agentStatusQueryTimeout, () {
       _statusQueryTimeouts.remove(daemonDid);
-      if (!mounted ||
-          !state.pendingStatusQueryAtByDaemon.containsKey(daemonDid)) {
-        return;
-      }
-      state = state.copyWith(
-        pendingStatusQueryAtByDaemon: _withoutKey(
-          state.pendingStatusQueryAtByDaemon,
-          daemonDid,
-        ),
-        statusQueryErrors: <String, String>{
-          ...state.statusQueryErrors,
-          daemonDid: '未收到代理响应，请稍后再刷新状态。',
-        },
-      );
+      _handleStatusQueryTimeout(daemonDid);
     });
   }
 
-  void _scheduleDaemonUpgradeTimeout(String daemonDid) {
-    _daemonUpgradeTimeouts.remove(daemonDid)?.cancel();
-    _daemonUpgradeTimeouts[daemonDid] = Timer(agentDaemonUpgradeTimeout, () {
-      _daemonUpgradeTimeouts.remove(daemonDid);
-      if (!mounted || !state.pendingDaemonUpgrades.contains(daemonDid)) {
-        return;
-      }
-      state = state.copyWith(
-        pendingDaemonUpgrades: _withoutSetValue(
-          state.pendingDaemonUpgrades,
-          daemonDid,
-        ),
-      );
-    });
+  void handleStatusQueryTimeoutForTest(String daemonDid) {
+    _statusQueryTimeouts.remove(daemonDid)?.cancel();
+    _handleStatusQueryTimeout(daemonDid);
+  }
+
+  void _handleStatusQueryTimeout(String daemonDid) {
+    if (!mounted ||
+        !state.pendingStatusQueryAtByDaemon.containsKey(daemonDid)) {
+      return;
+    }
+    state = state.copyWith(
+      pendingStatusQueryAtByDaemon: _withoutKey(
+        state.pendingStatusQueryAtByDaemon,
+        daemonDid,
+      ),
+      statusQueryErrors: state.pendingDaemonUpgrades.containsKey(daemonDid)
+          ? state.statusQueryErrors
+          : <String, String>{
+              ...state.statusQueryErrors,
+              daemonDid: '未收到代理响应，请稍后再刷新状态。',
+            },
+    );
+  }
+
+  void _scheduleRuntimeCreationTimeout(String requestId) {
+    _runtimeCreationTimeouts.remove(requestId)?.cancel();
+    _runtimeCreationTimeouts[requestId] = Timer(
+      agentRuntimeCreationTimeout,
+      () {
+        _runtimeCreationTimeouts.remove(requestId);
+        if (!mounted) {
+          return;
+        }
+        state = state.copyWith(
+          pendingRuntimeCreations: _markPendingRuntimeCreationWaiting(
+            state.pendingRuntimeCreations,
+            requestId,
+          ),
+        );
+      },
+    );
+  }
+
+  void _scheduleDaemonUpgradeAckTimeout(String daemonDid, String commandId) {
+    _daemonUpgradeAckTimeouts.remove(daemonDid)?.cancel();
+    _daemonUpgradeAckTimeouts[daemonDid] = Timer(
+      agentDaemonUpgradeAckTimeout,
+      () {
+        _daemonUpgradeAckTimeouts.remove(daemonDid);
+        _handleDaemonUpgradeAckTimeout(daemonDid, commandId);
+      },
+    );
+  }
+
+  void _handleDaemonUpgradeAckTimeout(String daemonDid, String commandId) {
+    if (!mounted) {
+      return;
+    }
+    final pending = state.pendingDaemonUpgrades[daemonDid];
+    if (pending == null ||
+        pending.commandId != commandId ||
+        pending.acknowledged) {
+      return;
+    }
+    state = state.copyWith(
+      daemonUpgradeProgress: <String, DaemonUpgradeProgress>{
+        ...state.daemonUpgradeProgress,
+        daemonDid: DaemonUpgradeProgress.waitingForDaemonConfirmation(),
+      },
+      isActing: false,
+    );
+    unawaited(refreshDaemonStatus(daemonDid, fromAutoLoad: true));
+  }
+
+  void _scheduleDaemonUpgradeCancelAckTimeout(
+    String daemonDid,
+    String commandId,
+  ) {
+    _daemonUpgradeCancelAckTimeouts.remove(daemonDid)?.cancel();
+    _daemonUpgradeCancelAckTimeouts[daemonDid] = Timer(
+      agentDaemonUpgradeCancelAckTimeout,
+      () {
+        _daemonUpgradeCancelAckTimeouts.remove(daemonDid);
+        _handleDaemonUpgradeCancelAckTimeout(daemonDid, commandId);
+      },
+    );
+  }
+
+  void _handleDaemonUpgradeCancelAckTimeout(
+    String daemonDid,
+    String commandId,
+  ) {
+    if (!mounted) {
+      return;
+    }
+    final cancelling = state.cancellingDaemonUpgrades[daemonDid];
+    if (cancelling == null || cancelling.commandId != commandId) {
+      return;
+    }
+    state = state.copyWith(
+      cancellingDaemonUpgrades: _withoutMapKey(
+        state.cancellingDaemonUpgrades,
+        daemonDid,
+      ),
+      daemonUpgradeErrors: <String, String>{
+        ...state.daemonUpgradeErrors,
+        daemonDid: '取消请求已发送，但代理暂未响应。请刷新状态确认升级结果。',
+      },
+    );
+  }
+
+  void handleDaemonUpgradeAckTimeoutForTest(
+    String daemonDid,
+    String commandId,
+  ) {
+    _daemonUpgradeAckTimeouts.remove(daemonDid)?.cancel();
+    _handleDaemonUpgradeAckTimeout(daemonDid, commandId);
+  }
+
+  void handleDaemonUpgradeCancelAckTimeoutForTest(
+    String daemonDid,
+    String commandId,
+  ) {
+    _daemonUpgradeCancelAckTimeouts.remove(daemonDid)?.cancel();
+    _handleDaemonUpgradeCancelAckTimeout(daemonDid, commandId);
   }
 
   Map<String, DateTime> _pendingAfterStatusPayload(String? daemonDid) {
@@ -840,31 +1327,47 @@ class AgentsController extends StateNotifier<AgentsState> {
     return _withoutKey(state.pendingStatusQueryAtByDaemon, daemonDid);
   }
 
-  Set<String> _pendingDaemonUpgradesAfterPayload(
+  Map<String, PendingDaemonUpgrade> _pendingDaemonUpgradesAfterPayload(
     Map<String, Object?> payload,
     String? daemonDid,
     List<AgentSummary> merged,
   ) {
-    if (daemonDid == null || !state.pendingDaemonUpgrades.contains(daemonDid)) {
+    if (daemonDid == null ||
+        !state.pendingDaemonUpgrades.containsKey(daemonDid)) {
       return state.pendingDaemonUpgrades;
     }
     final result = _readMap(payload['result']);
     final command = _string(result['command']);
+    final commandId = _string(payload['command_id']);
     final payloadState = _string(payload['state'])?.toLowerCase();
     final resultStatus = _string(result['status'])?.toLowerCase();
     if (command == 'daemon.upgrade') {
-      if (payloadState == 'failed' ||
+      final pending = state.pendingDaemonUpgrades[daemonDid];
+      if (pending != null && !_commandIdMatches(commandId, pending.commandId)) {
+        return state.pendingDaemonUpgrades;
+      }
+      if (pending != null) {
+        _cancelDaemonUpgradeAckTimer(daemonDid);
+      }
+      if (payloadState == 'cancelled' ||
+          resultStatus == 'cancelled' ||
+          payloadState == 'failed' ||
           resultStatus == 'failed' ||
           result['error_code'] != null) {
-        return _withoutSetValue(state.pendingDaemonUpgrades, daemonDid);
+        return _withoutMapKey(state.pendingDaemonUpgrades, daemonDid);
       }
       if (_isFinalDaemonUpgradeSuccess(payload, result)) {
-        return _withoutSetValue(state.pendingDaemonUpgrades, daemonDid);
+        return _withoutMapKey(state.pendingDaemonUpgrades, daemonDid);
       }
+      return _acknowledgePendingDaemonUpgrade(
+        state.pendingDaemonUpgrades,
+        daemonDid,
+        commandId,
+      );
     }
     final daemon = merged.where((agent) => agent.agentDid == daemonDid);
     if (daemon.isEmpty) {
-      return _withoutSetValue(state.pendingDaemonUpgrades, daemonDid);
+      return _withoutMapKey(state.pendingDaemonUpgrades, daemonDid);
     }
     final latest = daemon.first.latest;
     final latestStatus = latest.status.trim().toLowerCase();
@@ -874,9 +1377,166 @@ class AgentsController extends StateNotifier<AgentsState> {
         (!latest.needsUpgrade &&
             latestStatus != 'upgrading' &&
             latestStatus != 'restart_scheduled')) {
-      return _withoutSetValue(state.pendingDaemonUpgrades, daemonDid);
+      return _withoutMapKey(state.pendingDaemonUpgrades, daemonDid);
     }
     return state.pendingDaemonUpgrades;
+  }
+
+  Map<String, PendingDaemonUpgradeCancel> _cancellingDaemonUpgradesAfterPayload(
+    Map<String, Object?> payload,
+    String? daemonDid,
+    Map<String, PendingDaemonUpgrade> nextPendingDaemonUpgrades,
+  ) {
+    if (daemonDid == null ||
+        !state.cancellingDaemonUpgrades.containsKey(daemonDid)) {
+      return state.cancellingDaemonUpgrades;
+    }
+    final result = _readMap(payload['result']);
+    final command = _string(result['command']);
+    if (command == 'daemon.upgrade.cancel') {
+      final commandId = _string(payload['command_id']);
+      final cancelling = state.cancellingDaemonUpgrades[daemonDid];
+      if (cancelling != null &&
+          !_commandIdMatches(commandId, cancelling.commandId)) {
+        return state.cancellingDaemonUpgrades;
+      }
+      _cancelDaemonUpgradeCancelTimer(daemonDid);
+      final status = _string(result['status'])?.toLowerCase();
+      final payloadState = _string(payload['state'])?.toLowerCase();
+      if (status == 'not_running' ||
+          status == 'not_cancellable' ||
+          status == 'cancelled' ||
+          payloadState == 'failed' ||
+          payloadState == 'cancelled' ||
+          result['error_code'] != null) {
+        return _withoutMapKey(state.cancellingDaemonUpgrades, daemonDid);
+      }
+      return state.cancellingDaemonUpgrades;
+    }
+    if (command == 'daemon.upgrade') {
+      final commandId = _string(payload['command_id']);
+      final pending = state.pendingDaemonUpgrades[daemonDid];
+      if (pending != null && !_commandIdMatches(commandId, pending.commandId)) {
+        return state.cancellingDaemonUpgrades;
+      }
+      final status = _string(result['status'])?.toLowerCase();
+      final payloadState = _string(payload['state'])?.toLowerCase();
+      if (!nextPendingDaemonUpgrades.containsKey(daemonDid) ||
+          status == 'cancelled' ||
+          status == 'failed' ||
+          payloadState == 'cancelled' ||
+          payloadState == 'failed' ||
+          result['error_code'] != null ||
+          _isFinalDaemonUpgradeSuccess(payload, result)) {
+        _cancelDaemonUpgradeCancelTimer(daemonDid);
+        return _withoutMapKey(state.cancellingDaemonUpgrades, daemonDid);
+      }
+    }
+    if (_daemonStatusShowsUpgradeResolved(payload)) {
+      _cancelDaemonUpgradeCancelTimer(daemonDid);
+      return _withoutMapKey(state.cancellingDaemonUpgrades, daemonDid);
+    }
+    return state.cancellingDaemonUpgrades;
+  }
+
+  Map<String, String> _daemonUpgradeErrorsAfterPayload(
+    Map<String, Object?> payload,
+    String? daemonDid,
+  ) {
+    if (daemonDid == null) {
+      return state.daemonUpgradeErrors;
+    }
+    final result = _readMap(payload['result']);
+    if (_string(result['command']) == 'daemon.upgrade.cancel') {
+      final commandId = _string(payload['command_id']);
+      final cancelling = state.cancellingDaemonUpgrades[daemonDid];
+      if (cancelling != null &&
+          !_commandIdMatches(commandId, cancelling.commandId)) {
+        return state.daemonUpgradeErrors;
+      }
+      final payloadState = _string(payload['state'])?.toLowerCase();
+      final resultStatus = _string(result['status'])?.toLowerCase();
+      if (payloadState == 'failed' ||
+          resultStatus == 'not_cancellable' ||
+          result['error_code'] != null) {
+        return <String, String>{
+          ...state.daemonUpgradeErrors,
+          daemonDid: _daemonUpgradeCancelFailureMessage(result),
+        };
+      }
+      return state.daemonUpgradeErrors;
+    }
+    if (_string(result['command']) != 'daemon.upgrade') {
+      if (_daemonStatusShowsUpgradeResolved(payload)) {
+        return _withoutStringKey(state.daemonUpgradeErrors, daemonDid);
+      }
+      return state.daemonUpgradeErrors;
+    }
+    final commandId = _string(payload['command_id']);
+    final pending = state.pendingDaemonUpgrades[daemonDid];
+    if (pending != null && !_commandIdMatches(commandId, pending.commandId)) {
+      return state.daemonUpgradeErrors;
+    }
+    if (_isFinalDaemonUpgradeSuccess(payload, result)) {
+      return _withoutStringKey(state.daemonUpgradeErrors, daemonDid);
+    }
+    final payloadState = _string(payload['state'])?.toLowerCase();
+    final resultStatus = _string(result['status'])?.toLowerCase();
+    if (payloadState == 'cancelled' ||
+        resultStatus == 'cancelled' ||
+        _string(result['error_code']) == 'upgrade_cancelled') {
+      return _withoutStringKey(state.daemonUpgradeErrors, daemonDid);
+    }
+    final failed =
+        payloadState == 'failed' ||
+        resultStatus == 'failed' ||
+        result['error_code'] != null;
+    if (!failed) {
+      return state.daemonUpgradeErrors;
+    }
+    return <String, String>{
+      ...state.daemonUpgradeErrors,
+      daemonDid: _daemonUpgradeFailureMessage(result),
+    };
+  }
+
+  Map<String, DaemonUpgradeProgress> _daemonUpgradeProgressAfterPayload(
+    Map<String, Object?> payload,
+    String? daemonDid,
+    Map<String, PendingDaemonUpgrade> nextPendingDaemonUpgrades,
+  ) {
+    if (daemonDid == null) {
+      return state.daemonUpgradeProgress;
+    }
+    final result = _readMap(payload['result']);
+    if (_string(result['command']) != 'daemon.upgrade') {
+      if (_daemonStatusShowsUpgradeResolved(payload)) {
+        return _withoutDaemonUpgradeProgressKey(
+          state.daemonUpgradeProgress,
+          daemonDid,
+        );
+      }
+      return state.daemonUpgradeProgress;
+    }
+    final commandId = _string(payload['command_id']);
+    final pending = state.pendingDaemonUpgrades[daemonDid];
+    if (pending != null && !_commandIdMatches(commandId, pending.commandId)) {
+      return state.daemonUpgradeProgress;
+    }
+    if (!nextPendingDaemonUpgrades.containsKey(daemonDid)) {
+      return _withoutDaemonUpgradeProgressKey(
+        state.daemonUpgradeProgress,
+        daemonDid,
+      );
+    }
+    final progress = DaemonUpgradeProgress.fromPayload(result);
+    if (progress == null) {
+      return state.daemonUpgradeProgress;
+    }
+    return <String, DaemonUpgradeProgress>{
+      ...state.daemonUpgradeProgress,
+      daemonDid: progress,
+    };
   }
 
   void _scheduleStatusQueryClear(
@@ -900,6 +1560,19 @@ class AgentsController extends StateNotifier<AgentsState> {
     });
   }
 
+  void _cancelDaemonUpgradeAckTimer(String daemonDid) {
+    _daemonUpgradeAckTimeouts.remove(daemonDid)?.cancel();
+  }
+
+  void _cancelDaemonUpgradeCancelTimer(String daemonDid) {
+    _daemonUpgradeCancelAckTimeouts.remove(daemonDid)?.cancel();
+  }
+
+  void _cancelDaemonUpgradeTimers(String daemonDid) {
+    _cancelDaemonUpgradeAckTimer(daemonDid);
+    _cancelDaemonUpgradeCancelTimer(daemonDid);
+  }
+
   @override
   void dispose() {
     _cancelStatusTimers();
@@ -915,10 +1588,18 @@ class AgentsController extends StateNotifier<AgentsState> {
       timer.cancel();
     }
     _statusQueryClearTimers.clear();
-    for (final timer in _daemonUpgradeTimeouts.values) {
+    for (final timer in _runtimeCreationTimeouts.values) {
       timer.cancel();
     }
-    _daemonUpgradeTimeouts.clear();
+    _runtimeCreationTimeouts.clear();
+    for (final timer in _daemonUpgradeAckTimeouts.values) {
+      timer.cancel();
+    }
+    _daemonUpgradeAckTimeouts.clear();
+    for (final timer in _daemonUpgradeCancelAckTimeouts.values) {
+      timer.cancel();
+    }
+    _daemonUpgradeCancelAckTimeouts.clear();
   }
 
   Future<void> _loadCached(String ownerDid) async {
@@ -963,6 +1644,9 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   bool _isCurrentCacheOwner(String ownerDid) {
+    if (!mounted) {
+      return false;
+    }
     final session = ref.read(sessionProvider).session;
     return session != null && _agentCacheOwner(session) == ownerDid;
   }
@@ -1201,6 +1885,144 @@ class AgentsController extends StateNotifier<AgentsState> {
     return _stableAgentOrder(byDid.values);
   }
 
+  List<PendingRuntimeCreation> _pendingCreationsAfterAgents(
+    List<AgentSummary> agents,
+  ) {
+    return _pendingCreationsAfterControlPayloadAndAgents(
+      state.pendingRuntimeCreations,
+      const <String, Object?>{},
+      agents,
+    );
+  }
+
+  List<PendingRuntimeCreation> _pendingCreationsAfterControlPayloadAndAgents(
+    List<PendingRuntimeCreation> current,
+    Map<String, Object?> payload,
+    List<AgentSummary> agents,
+  ) {
+    final completedRequestIds = <String>{};
+    final result = _readMap(payload['result']);
+    if (_string(result['command']) == 'runtime.agent.create') {
+      final clientRequestId =
+          _string(result['client_request_id']) ??
+          _string(result['request_id']) ??
+          _string(_readMap(result['args'])['client_request_id']);
+      if (clientRequestId != null) {
+        completedRequestIds.add(clientRequestId);
+      }
+    }
+
+    final retained = <PendingRuntimeCreation>[];
+    for (final pending in current) {
+      if (completedRequestIds.contains(pending.requestId) ||
+          _hasMatchingRuntimeAgent(agents, pending)) {
+        _runtimeCreationTimeouts.remove(pending.requestId)?.cancel();
+        continue;
+      }
+      retained.add(pending);
+    }
+    return retained;
+  }
+
+  Map<String, PendingDaemonUpgrade> _pendingDaemonUpgradesAfterAgents(
+    List<AgentSummary> agents,
+  ) {
+    if (state.pendingDaemonUpgrades.isEmpty) {
+      return state.pendingDaemonUpgrades;
+    }
+    final byDid = <String, AgentSummary>{
+      for (final agent in agents.where((agent) => agent.isDaemon))
+        agent.agentDid: agent,
+    };
+    final retained = <String, PendingDaemonUpgrade>{};
+    for (final entry in state.pendingDaemonUpgrades.entries) {
+      final daemon = byDid[entry.key];
+      if (daemon == null ||
+          _daemonAgentShowsUpgradeResolved(daemon) ||
+          _daemonAgentShowsUpgradeFailed(daemon)) {
+        continue;
+      }
+      retained[entry.key] = entry.value;
+    }
+    return retained;
+  }
+
+  Map<String, PendingDaemonUpgradeCancel> _cancellingDaemonUpgradesAfterAgents(
+    List<AgentSummary> agents,
+    Map<String, PendingDaemonUpgrade> nextPendingDaemonUpgrades,
+  ) {
+    if (state.cancellingDaemonUpgrades.isEmpty) {
+      return state.cancellingDaemonUpgrades;
+    }
+    final byDid = <String, AgentSummary>{
+      for (final agent in agents.where((agent) => agent.isDaemon))
+        agent.agentDid: agent,
+    };
+    final retained = <String, PendingDaemonUpgradeCancel>{};
+    for (final entry in state.cancellingDaemonUpgrades.entries) {
+      final daemon = byDid[entry.key];
+      if (!nextPendingDaemonUpgrades.containsKey(entry.key) ||
+          daemon == null ||
+          _daemonAgentShowsUpgradeResolved(daemon) ||
+          _daemonAgentShowsUpgradeFailed(daemon)) {
+        continue;
+      }
+      retained[entry.key] = entry.value;
+    }
+    return retained;
+  }
+
+  Map<String, String> _daemonUpgradeErrorsAfterAgents(
+    List<AgentSummary> agents,
+  ) {
+    if (state.daemonUpgradeErrors.isEmpty &&
+        state.pendingDaemonUpgrades.isEmpty) {
+      return state.daemonUpgradeErrors;
+    }
+    var next = state.daemonUpgradeErrors;
+    for (final daemon in agents.where((agent) => agent.isDaemon)) {
+      if (_daemonAgentShowsUpgradeResolved(daemon)) {
+        next = _withoutStringKey(next, daemon.agentDid);
+        continue;
+      }
+      if (state.pendingDaemonUpgrades.containsKey(daemon.agentDid) &&
+          _daemonAgentShowsUpgradeFailed(daemon)) {
+        next = <String, String>{
+          ...next,
+          daemon.agentDid: _daemonUpgradeFailureMessage(<String, Object?>{
+            'last_error_summary': daemon.latest.lastErrorSummary,
+          }),
+        };
+      }
+    }
+    return next;
+  }
+
+  Map<String, DaemonUpgradeProgress> _daemonUpgradeProgressAfterAgents(
+    List<AgentSummary> agents,
+    Map<String, PendingDaemonUpgrade> nextPendingDaemonUpgrades,
+  ) {
+    if (state.daemonUpgradeProgress.isEmpty) {
+      return state.daemonUpgradeProgress;
+    }
+    final byDid = <String, AgentSummary>{
+      for (final agent in agents.where((agent) => agent.isDaemon))
+        agent.agentDid: agent,
+    };
+    final retained = <String, DaemonUpgradeProgress>{};
+    for (final entry in state.daemonUpgradeProgress.entries) {
+      final daemon = byDid[entry.key];
+      if (!nextPendingDaemonUpgrades.containsKey(entry.key) ||
+          daemon == null ||
+          _daemonAgentShowsUpgradeResolved(daemon) ||
+          _daemonAgentShowsUpgradeFailed(daemon)) {
+        continue;
+      }
+      retained[entry.key] = entry.value;
+    }
+    return retained;
+  }
+
   AgentSummary _mergeRuntimeRunStatus(
     AgentSummary runtime,
     AgentRunStatus run,
@@ -1262,11 +2084,14 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     final resolvedAgentDid =
         _string(payload['agent_did']) ?? current?.agentDid ?? agentDid;
-    final latest = _latestFromPayload(
-      current?.latest,
-      payload,
-      fallbackStatus: fallbackStatus,
-      fallbackEventAt: incomingEventAt,
+    final latest = normalizeAgentLatestStatusForKind(
+      kind,
+      _latestFromPayload(
+        current?.latest,
+        payload,
+        fallbackStatus: fallbackStatus,
+        fallbackEventAt: incomingEventAt,
+      ),
     );
     return AgentSummary(
       agentDid: resolvedAgentDid,
@@ -1447,8 +2272,11 @@ Map<String, Object?> _daemonUpgradeStatusPayload(
     'state': payloadState,
   }, result);
   final status = switch ((payloadStatus, resultStatus)) {
+    (_, _) when _string(result['error_code']) == 'upgrade_cancelled' =>
+      'needs_upgrade',
     (_, _) when result['error_code'] != null => 'failed',
     (_, _) when isFinalSuccess => 'ready',
+    ('cancelled', _) || (_, 'cancelled') => 'needs_upgrade',
     ('failed', _) || (_, 'failed') => 'failed',
     ('upgrading', _) ||
     (_, 'in_progress') ||
@@ -1494,11 +2322,107 @@ bool _isFinalDaemonUpgradeSuccess(
       resultStatus == 'succeeded';
 }
 
+String _daemonUpgradeFailureMessage(Map<String, Object?> result) {
+  final summary = _string(result['last_error_summary']);
+  if (summary == null) {
+    return '升级没有完成，请检查网络后重试。';
+  }
+  final normalized = summary.toLowerCase();
+  final looksLikeDownload =
+      normalized.contains('download daemon package') ||
+      normalized.contains('timed out') ||
+      normalized.contains('timeout') ||
+      normalized.contains('network') ||
+      normalized.contains('connection');
+  if (!looksLikeDownload) {
+    return summary;
+  }
+  return '安装包下载失败，请检查网络后重试。$summary';
+}
+
+bool _daemonStatusShowsUpgradeResolved(Map<String, Object?> payload) {
+  final daemon = _readMap(payload['daemon']);
+  if (daemon.isEmpty) {
+    return false;
+  }
+  final status = _string(daemon['status'])?.toLowerCase();
+  final needsUpgrade = daemon['needs_upgrade'];
+  return needsUpgrade == false && (status == null || status == 'ready');
+}
+
+bool _daemonAgentShowsUpgradeResolved(AgentSummary daemon) {
+  if (!daemon.isDaemon) {
+    return false;
+  }
+  final status = daemon.latest.status.trim().toLowerCase();
+  return !daemon.latest.needsUpgrade &&
+      status != 'upgrading' &&
+      status != 'restart_scheduled';
+}
+
+bool _daemonAgentShowsUpgradeFailed(AgentSummary daemon) {
+  if (!daemon.isDaemon) {
+    return false;
+  }
+  final status = daemon.latest.status.trim().toLowerCase();
+  return status == 'failed' ||
+      status == 'error' ||
+      status == 'gateway_error' ||
+      daemon.latest.lastErrorSummary != null;
+}
+
+bool _commandIdMatches(String? payloadCommandId, String expectedCommandId) {
+  return payloadCommandId == null || payloadCommandId == expectedCommandId;
+}
+
+Map<String, PendingDaemonUpgrade> _acknowledgePendingDaemonUpgrade(
+  Map<String, PendingDaemonUpgrade> input,
+  String daemonDid,
+  String? commandId,
+) {
+  final pending = input[daemonDid];
+  if (pending == null) {
+    return input;
+  }
+  if (commandId != null && commandId != pending.commandId) {
+    return input;
+  }
+  final acknowledged = pending.acknowledge();
+  if (identical(acknowledged, pending)) {
+    return input;
+  }
+  return <String, PendingDaemonUpgrade>{...input, daemonDid: acknowledged};
+}
+
+String _daemonUpgradeCancelFailureMessage(Map<String, Object?> result) {
+  final errorCode = _string(result['error_code']);
+  if (errorCode == 'upgrade_not_cancellable' ||
+      errorCode == 'upgrade_cancel_unavailable' ||
+      _string(result['status']) == 'not_cancellable') {
+    return '当前升级已经进入重启阶段，无法取消。请稍后刷新状态确认结果。';
+  }
+  final summary = _string(result['last_error_summary']);
+  if (summary != null && summary.trim().isNotEmpty) {
+    return summary;
+  }
+  return '取消升级失败，请刷新状态后重试。';
+}
+
 Map<String, DateTime> _withoutKey(Map<String, DateTime> input, String key) {
   if (!input.containsKey(key)) {
     return input;
   }
   return <String, DateTime>{
+    for (final entry in input.entries)
+      if (entry.key != key) entry.key: entry.value,
+  };
+}
+
+Map<K, V> _withoutMapKey<K, V>(Map<K, V> input, K key) {
+  if (!input.containsKey(key)) {
+    return input;
+  }
+  return <K, V>{
     for (final entry in input.entries)
       if (entry.key != key) entry.key: entry.value,
   };
@@ -1514,6 +2438,19 @@ Map<String, String> _withoutStringKey(Map<String, String> input, String key) {
   };
 }
 
+Map<String, DaemonUpgradeProgress> _withoutDaemonUpgradeProgressKey(
+  Map<String, DaemonUpgradeProgress> input,
+  String key,
+) {
+  if (!input.containsKey(key)) {
+    return input;
+  }
+  return <String, DaemonUpgradeProgress>{
+    for (final entry in input.entries)
+      if (entry.key != key) entry.key: entry.value,
+  };
+}
+
 Set<String> _withoutSetValue(Set<String> input, String value) {
   if (!input.contains(value)) {
     return input;
@@ -1522,6 +2459,84 @@ Set<String> _withoutSetValue(Set<String> input, String value) {
     for (final item in input)
       if (item != value) item,
   };
+}
+
+List<PendingRuntimeCreation> _upsertPendingRuntimeCreation(
+  List<PendingRuntimeCreation> input,
+  PendingRuntimeCreation pending,
+) {
+  return <PendingRuntimeCreation>[
+    for (final item in input)
+      if (item.requestId != pending.requestId &&
+          !_samePendingRuntimeTarget(item, pending))
+        item,
+    pending,
+  ];
+}
+
+List<PendingRuntimeCreation> _markPendingRuntimeCreationWaiting(
+  List<PendingRuntimeCreation> input,
+  String requestId,
+) {
+  var changed = false;
+  final next = <PendingRuntimeCreation>[
+    for (final item in input)
+      if (item.requestId == requestId)
+        () {
+          changed = true;
+          return item.copyWith(
+            state: PendingRuntimeCreationState.waitingForStatus,
+          );
+        }()
+      else
+        item,
+  ];
+  return changed ? next : input;
+}
+
+List<PendingRuntimeCreation> _removePendingRuntimeCreation(
+  List<PendingRuntimeCreation> input,
+  String requestId,
+) {
+  if (!input.any((item) => item.requestId == requestId)) {
+    return input;
+  }
+  return <PendingRuntimeCreation>[
+    for (final item in input)
+      if (item.requestId != requestId) item,
+  ];
+}
+
+bool _samePendingRuntimeTarget(
+  PendingRuntimeCreation left,
+  PendingRuntimeCreation right,
+) {
+  return left.daemonAgentDid == right.daemonAgentDid &&
+      _normalizedAgentHandle(left.handle) ==
+          _normalizedAgentHandle(right.handle);
+}
+
+bool _hasMatchingRuntimeAgent(
+  List<AgentSummary> agents,
+  PendingRuntimeCreation pending,
+) {
+  return agents.any((agent) {
+    if (!agent.isRuntime || agent.daemonAgentDid != pending.daemonAgentDid) {
+      return false;
+    }
+    final agentHandle = _normalizedAgentHandle(agent.handle);
+    final pendingHandle = _normalizedAgentHandle(pending.handle);
+    if (agentHandle != null && pendingHandle != null) {
+      return agentHandle == pendingHandle;
+    }
+    final agentName = agent.displayName.trim();
+    return agentName.isNotEmpty && agentName == pending.displayName.trim();
+  });
+}
+
+String? _normalizedAgentHandle(String? value) {
+  final text = value?.trim().toLowerCase();
+  return text == null || text.isEmpty ? null : text;
 }
 
 Map<String, Object?> _readMap(Object? value) {
@@ -1536,6 +2551,26 @@ Map<String, Object?> _readMap(Object? value) {
 String? _string(Object? value) {
   final text = value?.toString().trim();
   return text == null || text.isEmpty ? null : text;
+}
+
+int? _int(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.round();
+  }
+  return int.tryParse(value?.toString().trim() ?? '');
+}
+
+double? _double(Object? value) {
+  if (value is double) {
+    return value;
+  }
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value?.toString().trim() ?? '');
 }
 
 String _defaultAppInstanceId(String credentialName) {
@@ -1559,6 +2594,23 @@ DateTime? _dateTime(Object? value) {
 }
 
 String _agentErrorMessage(Object error) {
+  final reason = _agentErrorReason(error);
+  if (reason == 'daemon_controller_scope_mismatch' ||
+      reason == 'agent_controller_scope_mismatch') {
+    return '这台电脑已经绑定到另一个 handle 的 Daemon。请使用对应 handle 管理，或先卸载本机 Daemon 后重新安装。';
+  }
+  if (reason == 'controller_handle_mismatch') {
+    return '当前客户端身份和登录 handle 不一致，请切换到正确账号后重新复制安装命令。';
+  }
+  if (reason == 'controller_handle_required') {
+    return '当前账号没有可用 handle，暂时不能生成 Daemon 安装命令。';
+  }
+  if (reason == 'controller_scope_missing') {
+    return '安装命令缺少账号归属信息，请重新复制最新的 Daemon 安装命令。';
+  }
+  if (reason == 'used') {
+    return '这条安装命令已经使用过，请重新复制最新的 Daemon 安装命令。';
+  }
   switch (classifyAppError(error)) {
     case AppErrorKind.authentication:
       return '登录状态已失效，请重新登录后再查看智能体。';
@@ -1571,6 +2623,46 @@ String _agentErrorMessage(Object error) {
       break;
   }
   return '智能体信息暂时无法加载，请稍后重试。';
+}
+
+String? _agentErrorReason(Object error) {
+  if (error is AwikiOnboardingUtilityError) {
+    final data = error.data;
+    if (data is Map) {
+      final reason = data['reason']?.toString().trim();
+      if (reason != null && reason.isNotEmpty) {
+        return reason;
+      }
+    }
+    final message = error.message.trim();
+    if (message.isNotEmpty) {
+      return _knownAgentErrorReason(message);
+    }
+  }
+  return _knownAgentErrorReason(error.toString());
+}
+
+String? _knownAgentErrorReason(String raw) {
+  final normalized = raw.toLowerCase();
+  const reasons = <String>{
+    'daemon_controller_scope_mismatch',
+    'agent_controller_scope_mismatch',
+    'controller_handle_required',
+    'controller_handle_mismatch',
+    'controller_scope_missing',
+    'controller_scope_mismatch',
+    'scope_mismatch',
+    'used',
+  };
+  for (final reason in reasons) {
+    final pattern = RegExp(
+      '(^|[^a-z0-9_])${RegExp.escape(reason)}([^a-z0-9_]|\$)',
+    );
+    if (pattern.hasMatch(normalized)) {
+      return reason;
+    }
+  }
+  return null;
 }
 
 String _agentStatusRefreshErrorMessage(Object error) {

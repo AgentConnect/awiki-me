@@ -161,8 +161,8 @@ class _FakeAgentInventory implements AgentInventoryPort {
   @override
   Future<AgentRegistrationToken> issueDaemonToken({
     required String controllerDid,
+    required String controllerHandle,
     required String clientPlatform,
-    String? handle,
   }) {
     throw UnimplementedError();
   }
