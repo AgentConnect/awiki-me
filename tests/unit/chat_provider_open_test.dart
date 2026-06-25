@@ -1553,6 +1553,33 @@ void main() {
     expect(refreshed.unreadCount, 3);
   });
 
+  test('刷新最近会话失败时保留现有列表并退出加载态', () async {
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:me',
+            credentialName: 'me.json',
+            displayName: 'Me',
+            handle: 'me',
+          ),
+        );
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(conversation);
+    gateway.failNextListConversations = true;
+
+    await expectLater(
+      container.read(conversationListProvider.notifier).refresh(),
+      throwsA(isA<StateError>()),
+    );
+
+    final state = container.read(conversationListProvider);
+    expect(state.isLoading, isFalse);
+    expect(state.conversations, hasLength(1));
+    expect(state.conversations.single.threadId, conversation.threadId);
+  });
+
   test('实时群消息不会把已知群名称降级成群 DID', () {
     const groupId = 'did:test:group:funding';
     container

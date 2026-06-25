@@ -45,26 +45,34 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   Future<void> refresh() async {
     final previousConversations = state.conversations;
     state = state.copyWith(isLoading: true);
-    final session = ref.read(sessionProvider).session;
-    if (session == null) {
+    try {
+      final session = ref.read(sessionProvider).session;
+      if (session == null) {
+        state = state.copyWith(
+          conversations: const <ConversationSummary>[],
+          isLoading: false,
+        );
+        await _updateBadgeCountBestEffort(0);
+        return;
+      }
+      final conversations = await ref
+          .read(conversationServiceProvider)
+          .listConversations(ownerDid: session.did);
       state = state.copyWith(
-        conversations: const <ConversationSummary>[],
+        conversations: _mergeConversationRefresh(
+          refreshed: conversations,
+          local: previousConversations,
+        ),
         isLoading: false,
       );
-      await _notification.updateBadgeCount(0);
-      return;
+      await _updateBadgeCountBestEffort(state.unreadCount);
+    } catch (_) {
+      state = state.copyWith(
+        conversations: previousConversations,
+        isLoading: false,
+      );
+      rethrow;
     }
-    final conversations = await ref
-        .read(conversationServiceProvider)
-        .listConversations(ownerDid: session.did);
-    state = state.copyWith(
-      conversations: _mergeConversationRefresh(
-        refreshed: conversations,
-        local: previousConversations,
-      ),
-      isLoading: false,
-    );
-    await _notification.updateBadgeCount(state.unreadCount);
   }
 
   void upsertConversation(ConversationSummary conversation) {
@@ -91,7 +99,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final merged = byThread.values.toList()
       ..sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
     state = state.copyWith(conversations: merged);
-    _notification.updateBadgeCount(state.unreadCount);
+    unawaited(_updateBadgeCountBestEffort(state.unreadCount));
   }
 
   Future<void> restoreConversation(ConversationSummary conversation) async {
@@ -180,7 +188,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       );
     }).toList();
     state = state.copyWith(conversations: next);
-    _notification.updateBadgeCount(state.unreadCount);
+    unawaited(_updateBadgeCountBestEffort(state.unreadCount));
   }
 
   void markConversationReadLocal(ConversationSummary conversation) {
@@ -196,12 +204,21 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       );
     }).toList();
     state = state.copyWith(conversations: next);
-    _notification.updateBadgeCount(state.unreadCount);
+    unawaited(_updateBadgeCountBestEffort(state.unreadCount));
   }
 
   Future<void> clear() async {
     state = const ConversationListState();
-    await _notification.updateBadgeCount(0);
+    await _updateBadgeCountBestEffort(0);
+  }
+
+  Future<void> _updateBadgeCountBestEffort(int count) async {
+    try {
+      await _notification.updateBadgeCount(count);
+    } catch (_) {
+      // Badge updates are a platform integration detail. They should not make
+      // the conversation list look failed when the list data itself is valid.
+    }
   }
 }
 
