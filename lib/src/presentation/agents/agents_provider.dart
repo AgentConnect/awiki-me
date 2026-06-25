@@ -362,18 +362,24 @@ class AgentsController extends StateNotifier<AgentsState> {
   final Map<String, Timer> _daemonUpgradeAckTimeouts = <String, Timer>{};
   final Map<String, Timer> _daemonUpgradeCancelAckTimeouts = <String, Timer>{};
   Future<void>? _loadOperation;
+  String? _loadOperationOwner;
+  int? _loadOperationEpoch;
   String? _loadedCacheOwner;
+  int _stateEpoch = 0;
 
   Future<void> ensureLoaded() {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
       state = const AgentsState();
       _loadedCacheOwner = null;
+      _stateEpoch += 1;
       return Future<void>.value();
     }
     final cacheOwner = _agentCacheOwner(session);
     final activeLoad = _loadOperation;
-    if (activeLoad != null) {
+    if (activeLoad != null &&
+        _loadOperationOwner == cacheOwner &&
+        _loadOperationEpoch == _stateEpoch) {
       return activeLoad;
     }
     if (_loadedCacheOwner == cacheOwner) {
@@ -383,17 +389,26 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<void> load() async {
+    final session = ref.read(sessionProvider).session;
+    final cacheOwner = session == null ? null : _agentCacheOwner(session);
+    final epoch = _stateEpoch;
     final activeLoad = _loadOperation;
-    if (activeLoad != null) {
+    if (activeLoad != null &&
+        _loadOperationOwner == cacheOwner &&
+        _loadOperationEpoch == epoch) {
       return activeLoad;
     }
     final operation = _load();
     _loadOperation = operation;
+    _loadOperationOwner = cacheOwner;
+    _loadOperationEpoch = epoch;
     try {
       await operation;
     } finally {
       if (identical(_loadOperation, operation)) {
         _loadOperation = null;
+        _loadOperationOwner = null;
+        _loadOperationEpoch = null;
       }
     }
   }
@@ -403,19 +418,21 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (session == null) {
       state = const AgentsState();
       _loadedCacheOwner = null;
+      _stateEpoch += 1;
       return;
     }
+    final startedEpoch = _stateEpoch;
     final cacheOwner = _agentCacheOwner(session);
     state = state.copyWith(isLoading: true, clearError: true);
     await _loadCached(cacheOwner);
-    if (!_isCurrentCacheOwner(cacheOwner)) {
+    if (!_isCurrentCacheOwner(cacheOwner, epoch: startedEpoch)) {
       return;
     }
     try {
       final agents = _stableAgentOrder(
         await ref.read(agentControlServiceProvider).listAgents(),
       );
-      if (!_isCurrentCacheOwner(cacheOwner)) {
+      if (!_isCurrentCacheOwner(cacheOwner, epoch: startedEpoch)) {
         return;
       }
       final pendingRuntimeCreations = _pendingCreationsAfterAgents(agents);
@@ -452,7 +469,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         }
       }
     } catch (error) {
-      if (_isCurrentCacheOwner(cacheOwner)) {
+      if (_isCurrentCacheOwner(cacheOwner, epoch: startedEpoch)) {
         state = state.copyWith(
           isLoading: false,
           error: _agentErrorMessage(error),
@@ -953,6 +970,7 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   void clear() {
     _loadedCacheOwner = null;
+    _stateEpoch += 1;
     _cancelStatusTimers();
     state = const AgentsState();
   }
@@ -1524,8 +1542,11 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
   }
 
-  bool _isCurrentCacheOwner(String ownerDid) {
+  bool _isCurrentCacheOwner(String ownerDid, {int? epoch}) {
     if (!mounted) {
+      return false;
+    }
+    if (epoch != null && epoch != _stateEpoch) {
       return false;
     }
     final session = ref.read(sessionProvider).session;

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
@@ -82,6 +84,98 @@ void main() {
       expect(control.listAgentsCalls, 2);
     },
   );
+
+  test(
+    'clear prevents an in-flight load from restoring stale agents',
+    () async {
+      final control = _BlockingAgentControlService();
+      final container = _container(control);
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+
+      final loadFuture = controller.load();
+      await control.firstStarted.future;
+
+      controller.clear();
+      control.completeFirst(const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon-old',
+          kind: AgentKind.daemon,
+          displayName: '旧代理',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ]);
+      await loadFuture;
+
+      expect(container.read(agentsProvider).agents, isEmpty);
+      expect(container.read(agentsProvider).selectedAgentDid, isNull);
+    },
+  );
+
+  test('new session load is not blocked by previous session load', () async {
+    final control = _BlockingAgentControlService();
+    final container = _container(
+      control,
+      session: const SessionIdentity(
+        did: 'did:human:old',
+        credentialName: 'old',
+        displayName: 'Old',
+        handle: 'old.anpclaw.com',
+      ),
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(agentsProvider.notifier);
+
+    final oldLoad = controller.load();
+    await control.firstStarted.future;
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:human:new',
+            credentialName: 'new',
+            displayName: 'New',
+            handle: 'new.anpclaw.com',
+          ),
+        );
+
+    final newLoad = controller.load();
+    await control.secondStarted.future;
+    control.completeSecond(const <AgentSummary>[
+      AgentSummary(
+        agentDid: 'did:agent:daemon-new',
+        kind: AgentKind.daemon,
+        displayName: '新代理',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      ),
+    ]);
+    await newLoad;
+
+    var state = container.read(agentsProvider);
+    expect(state.agents.map((agent) => agent.agentDid), [
+      'did:agent:daemon-new',
+    ]);
+    expect(state.selectedAgentDid, 'did:agent:daemon-new');
+
+    control.completeFirst(const <AgentSummary>[
+      AgentSummary(
+        agentDid: 'did:agent:daemon-old',
+        kind: AgentKind.daemon,
+        displayName: '旧代理',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      ),
+    ]);
+    await oldLoad;
+
+    state = container.read(agentsProvider);
+    expect(state.agents.map((agent) => agent.agentDid), [
+      'did:agent:daemon-new',
+    ]);
+    expect(state.selectedAgentDid, 'did:agent:daemon-new');
+  });
 
   test('load applies stable daemon and runtime ordering', () async {
     final control = FakeAgentControlService()
@@ -2225,6 +2319,40 @@ class _CountingAgentControlService extends FakeAgentControlService {
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
     listAgentsCalls += 1;
     return super.listAgents(includeInactive: includeInactive);
+  }
+}
+
+class _BlockingAgentControlService extends FakeAgentControlService {
+  final Completer<void> firstStarted = Completer<void>();
+  final Completer<void> secondStarted = Completer<void>();
+  final Completer<List<AgentSummary>> _first = Completer<List<AgentSummary>>();
+  final Completer<List<AgentSummary>> _second = Completer<List<AgentSummary>>();
+  int listAgentsCalls = 0;
+
+  @override
+  Future<List<AgentSummary>> listAgents({bool includeInactive = false}) {
+    listAgentsCalls += 1;
+    if (listAgentsCalls == 1) {
+      firstStarted.complete();
+      return _first.future;
+    }
+    if (listAgentsCalls == 2) {
+      secondStarted.complete();
+      return _second.future;
+    }
+    return super.listAgents(includeInactive: includeInactive);
+  }
+
+  void completeFirst(List<AgentSummary> agents) {
+    if (!_first.isCompleted) {
+      _first.complete(agents);
+    }
+  }
+
+  void completeSecond(List<AgentSummary> agents) {
+    if (!_second.isCompleted) {
+      _second.complete(agents);
+    }
   }
 }
 
