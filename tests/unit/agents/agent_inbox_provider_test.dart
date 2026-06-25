@@ -735,6 +735,21 @@ class _FakeAgentControlStatusStore implements AgentControlStatusStore {
   final payloads = <String, Map<String, Object?>>{};
 
   @override
+  Future<Map<String, Object?>?> findLatestDaemonStatusPayload({
+    required String daemonAgentDid,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findDaemonStatusPayload({
+    required String daemonAgentDid,
+    required String requestId,
+  }) async {
+    return null;
+  }
+
+  @override
   Future<Map<String, Object?>?> findStatusPayload({
     required String daemonAgentDid,
     required String runtimeAgentDid,

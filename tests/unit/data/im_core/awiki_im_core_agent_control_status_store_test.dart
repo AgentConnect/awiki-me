@@ -198,7 +198,9 @@ Future<void> _withMessagesDatabase(
           content_type TEXT NOT NULL,
           direction INTEGER NOT NULL,
           sender_did TEXT NOT NULL,
-          content TEXT
+          content TEXT,
+          sent_at TEXT,
+          stored_at TEXT
         )
       ''');
     },
@@ -215,6 +217,8 @@ Future<void> _insertMessage(
   String contentType = 'application/json',
   int direction = 0,
   String senderDid = 'did:daemon',
+  String? sentAt,
+  String? storedAt,
   required Object content,
 }) async {
   await db.insert('messages', <String, Object?>{
@@ -222,5 +226,7 @@ Future<void> _insertMessage(
     'direction': direction,
     'sender_did': senderDid,
     'content': content is String ? content : jsonEncode(content),
+    'sent_at': sentAt,
+    'stored_at': storedAt,
   });
 }

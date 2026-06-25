@@ -820,6 +820,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
       if (elapsed < minimumVisibleTime) {
         await Future<void>.delayed(minimumVisibleTime - elapsed);
       }
+    } catch (error) {
+      if (mounted) {
+        ref
+            .read(uiFeedbackProvider.notifier)
+            .showError(AppMessage.fromError(error));
+      }
     } finally {
       if (mounted) {
         setState(() {

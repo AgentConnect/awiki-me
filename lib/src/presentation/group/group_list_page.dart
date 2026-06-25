@@ -29,6 +29,19 @@ class GroupListPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(groupProvider);
     final theme = context.awikiTheme;
+    Future<void> refreshGroups() async {
+      try {
+        await ref.read(groupProvider.notifier).refresh();
+      } catch (error) {
+        if (!context.mounted) {
+          return;
+        }
+        ref
+            .read(uiFeedbackProvider.notifier)
+            .showError(AppMessage.fromError(error));
+      }
+    }
+
     final content = Stack(
       children: <Widget>[
         ListView(
@@ -52,7 +65,7 @@ class GroupListPage extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   TopBarActionButton(
-                    onTap: () => ref.read(groupProvider.notifier).refresh(),
+                    onTap: refreshGroups,
                     child: Icon(
                       CupertinoIcons.refresh,
                       color: theme.title,

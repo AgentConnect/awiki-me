@@ -7,11 +7,14 @@ import '../../app/app_services.dart';
 import '../../application/models/attachment_models.dart';
 import '../../application/models/app_thread_ref.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
+import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/chat_attachment.dart';
 import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
+import '../../l10n/app_message.dart';
+import '../../app/ui_feedback.dart';
 import '../agents/agents_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../conversation_list/conversation_provider.dart';
@@ -364,10 +367,15 @@ class ChatComposerDraftsController
 }
 
 class _PendingHistorySync {
-  const _PendingHistorySync({required this.conversation, required this.force});
+  const _PendingHistorySync({
+    required this.conversation,
+    required this.force,
+    required this.reportFailure,
+  });
 
   final ConversationSummary conversation;
   final bool force;
+  final bool reportFailure;
 }
 
 class ChatThreadsController
@@ -400,7 +408,11 @@ class ChatThreadsController
   }) async {
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
     unawaited(
-      syncHistoryForConversation(conversation, displayThreadId: targetThreadId),
+      syncHistoryForConversation(
+        conversation,
+        displayThreadId: targetThreadId,
+        reportFailure: true,
+      ),
     );
     if (conversation.unreadCount > 0) {
       ref
@@ -426,6 +438,7 @@ class ChatThreadsController
   Future<void> _loadHistory(
     ConversationSummary conversation, {
     String? intoThreadId,
+    bool reportFailure = false,
   }) async {
     if (!mounted) {
       return;
@@ -449,11 +462,16 @@ class ChatThreadsController
         isLoading: false,
         resolveStaleSending: true,
       );
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
       _setThreadLoading(targetThreadId, false);
+      if (reportFailure) {
+        ref
+            .read(uiFeedbackProvider.notifier)
+            .showError(AppMessage.fromError(error));
+      }
     } finally {
       if (mounted) {
         _runPendingHistorySyncIfNeeded(targetThreadId);
@@ -856,6 +874,7 @@ class ChatThreadsController
       _refreshedConversationFor(conversation),
       displayThreadId: displayThreadId ?? conversation.threadId,
       force: true,
+      reportFailure: true,
     );
   }
 
@@ -863,19 +882,29 @@ class ChatThreadsController
     ConversationSummary conversation, {
     String? displayThreadId,
     bool force = false,
+    bool reportFailure = false,
   }) {
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
     final current = thread(targetThreadId);
     if (current.isLoading) {
       if (force || _shouldLoadHistory(current, conversation)) {
-        _queuePendingHistorySync(targetThreadId, conversation, force: force);
+        _queuePendingHistorySync(
+          targetThreadId,
+          conversation,
+          force: force,
+          reportFailure: reportFailure,
+        );
       }
       return Future<void>.value();
     }
     if (!force && !_shouldLoadHistory(current, conversation)) {
       return Future<void>.value();
     }
-    return _loadHistory(conversation, intoThreadId: targetThreadId);
+    return _loadHistory(
+      conversation,
+      intoThreadId: targetThreadId,
+      reportFailure: reportFailure,
+    );
   }
 
   Future<void> _refreshConversationsBestEffort() async {
@@ -898,16 +927,22 @@ class ChatThreadsController
     String threadId,
     ConversationSummary conversation, {
     required bool force,
+    required bool reportFailure,
   }) {
     final existing = _pendingHistorySyncs[threadId];
     _pendingHistorySyncs[threadId] = existing == null
-        ? _PendingHistorySync(conversation: conversation, force: force)
+        ? _PendingHistorySync(
+            conversation: conversation,
+            force: force,
+            reportFailure: reportFailure,
+          )
         : _PendingHistorySync(
             conversation: _newerConversation(
               conversation,
               existing.conversation,
             ),
             force: existing.force || force,
+            reportFailure: existing.reportFailure || reportFailure,
           );
   }
 
@@ -923,6 +958,7 @@ class ChatThreadsController
         pending.conversation,
         displayThreadId: threadId,
         force: pending.force,
+        reportFailure: pending.reportFailure,
       ),
     );
   }
@@ -1191,13 +1227,61 @@ class ChatThreadsController
   }
 
   void applyAgentRunStatusPayload(Map<String, Object?> payload) {
-    if (payload['schema'] != 'awiki.agent.status.v1' ||
-        payload['status_scope'] != 'run') {
+    if (payload['schema'] != 'awiki.agent.status.v1') {
+      return;
+    }
+    final scope = payload['status_scope']?.toString().trim();
+    if (scope != 'run' && scope != 'snapshot') {
       return;
     }
     final runs = payload['runs'];
     if (runs is! List) {
       return;
+    }
+    if (scope == 'snapshot') {
+      final payloadAt = _parseRunTimestamp(payload['sent_at']);
+      final activeRunsByAgent = <String, List<Map<String, Object?>>>{};
+      final snapshotRuntimeDids = <String>{};
+      final snapshotAtByRuntimeDid = <String, DateTime?>{};
+      final runtimes = payload['runtimes'];
+      if (runtimes is List) {
+        for (final item in runtimes) {
+          if (item is! Map) {
+            continue;
+          }
+          final runtime = _stringKeyMap(item);
+          final runtimeDid = runtime['agent_did']?.toString().trim().ifNotEmpty;
+          if (runtimeDid == null) {
+            continue;
+          }
+          snapshotRuntimeDids.add(runtimeDid);
+          snapshotAtByRuntimeDid[runtimeDid] =
+              _parseRunTimestamp(runtime['last_seen_at']) ??
+              _parseRunTimestamp(runtime['updated_at']) ??
+              payloadAt;
+        }
+      }
+      for (final item in runs) {
+        if (item is! Map) {
+          continue;
+        }
+        final run = _stringKeyMap(item);
+        final status = run['status']?.toString().trim();
+        final agentDid =
+            run['runtime_agent_did']?.toString().trim().ifNotEmpty ??
+            run['agent_did']?.toString().trim().ifNotEmpty;
+        if (status == null || agentDid == null || !_isActiveRunStatus(status)) {
+          continue;
+        }
+        snapshotRuntimeDids.add(agentDid);
+        activeRunsByAgent.putIfAbsent(agentDid, () => <Map<String, Object?>>[]);
+        activeRunsByAgent[agentDid]!.add(run);
+      }
+      _reconcileAgentPendingTurnsWithSnapshot(
+        activeRunsByAgent: activeRunsByAgent,
+        snapshotRuntimeDids: snapshotRuntimeDids,
+        snapshotAtByRuntimeDid: snapshotAtByRuntimeDid,
+      );
     }
     for (final item in runs) {
       if (item is Map) {
@@ -1721,11 +1805,89 @@ class ChatThreadsController
     }
   }
 
+  void _reconcileAgentPendingTurnsWithSnapshot({
+    required Map<String, List<Map<String, Object?>>> activeRunsByAgent,
+    required Set<String> snapshotRuntimeDids,
+    required Map<String, DateTime?> snapshotAtByRuntimeDid,
+  }) {
+    if (state.isEmpty || snapshotRuntimeDids.isEmpty) {
+      return;
+    }
+    final nextState = Map<String, ChatThreadState>.from(state);
+    final changedThreadIds = <String>[];
+    for (final entry in state.entries) {
+      final thread = entry.value;
+      if (thread.agentPendingTurns.isEmpty) {
+        continue;
+      }
+      final nextTurns = <AgentPendingTurn>[
+        for (final turn in thread.agentPendingTurns)
+          if (!snapshotRuntimeDids.contains(turn.agentDid.trim()) ||
+              _pendingTurnIsNewerThanSnapshot(
+                turn,
+                snapshotAtByRuntimeDid[turn.agentDid.trim()],
+              ) ||
+              _pendingTurnStillActiveInSnapshot(turn, activeRunsByAgent))
+            turn,
+      ];
+      if (nextTurns.length == thread.agentPendingTurns.length) {
+        continue;
+      }
+      nextState[entry.key] = thread.copyWith(agentPendingTurns: nextTurns);
+      changedThreadIds.add(entry.key);
+    }
+    if (changedThreadIds.isEmpty) {
+      return;
+    }
+    state = nextState;
+    for (final threadId in changedThreadIds) {
+      if (state[threadId]?.agentPendingTurns.isEmpty ?? true) {
+        _cancelAgentProcessingTimer(threadId);
+      } else {
+        _scheduleAgentProcessingOverdue(threadId);
+      }
+    }
+  }
+
+  bool _pendingTurnIsNewerThanSnapshot(
+    AgentPendingTurn turn,
+    DateTime? snapshotAt,
+  ) {
+    return snapshotAt != null && turn.startedAt.isAfter(snapshotAt);
+  }
+
+  bool _pendingTurnStillActiveInSnapshot(
+    AgentPendingTurn turn,
+    Map<String, List<Map<String, Object?>>> activeRunsByAgent,
+  ) {
+    final runs = activeRunsByAgent[turn.agentDid.trim()];
+    if (runs == null || runs.isEmpty) {
+      return false;
+    }
+    for (final run in runs) {
+      final sourceMessageId = run['source_message_id']
+          ?.toString()
+          .trim()
+          .ifNotEmpty;
+      final messageId =
+          run['message_id']?.toString().trim().ifNotEmpty ??
+          run['task_id']?.toString().trim().ifNotEmpty;
+      final mentionId = run['mention_id']?.toString().trim().ifNotEmpty;
+      if (_runStatusMatchesPendingTurn(
+        turn,
+        agentDid: turn.agentDid,
+        sourceMessageId: sourceMessageId,
+        messageId: messageId,
+        mentionId: mentionId,
+      )) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   bool _isActiveRunStatus(String status) {
-    return status == 'queued' ||
-        status == 'pending' ||
-        status == 'running' ||
-        status == 'in_progress';
+    return isActiveAgentRunStatus(status);
   }
 
   bool _isTerminalRunStatus(String status) {

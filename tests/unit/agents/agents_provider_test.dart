@@ -2865,7 +2865,10 @@ class _FailingRefreshAgentControlService extends FakeAgentControlService {
   final Object error;
 
   @override
-  Future<void> refreshDaemonStatus(String daemonAgentDid) async {
+  Future<void> refreshDaemonStatus(
+    String daemonAgentDid, {
+    String? commandId,
+  }) async {
     lastRefreshedDaemonDid = daemonAgentDid;
     throw error;
   }

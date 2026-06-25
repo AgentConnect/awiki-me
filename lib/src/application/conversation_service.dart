@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../domain/entities/agent/agent_display_name.dart';
 import '../domain/entities/agent/agent_summary.dart';
 import '../domain/entities/conversation_summary.dart';
@@ -13,6 +15,11 @@ abstract interface class ConversationService {
     required String ownerDid,
     int limit = 100,
     bool unreadOnly = false,
+  });
+
+  Future<ConversationSummary?> normalizeConversationForRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
   });
 
   Future<void> markThreadRead(AppThreadRef thread);
@@ -42,6 +49,7 @@ class ImCoreConversationService implements ConversationService {
     required ConversationCorePort conversations,
     required ProductLocalStore localStore,
     AgentInventoryPort? agentInventory,
+    this.agentProjectionTimeout = const Duration(seconds: 3),
   }) : _conversations = conversations,
        _agentInventory = agentInventory,
        _localStore = localStore;
@@ -49,12 +57,14 @@ class ImCoreConversationService implements ConversationService {
   final ConversationCorePort _conversations;
   final AgentInventoryPort? _agentInventory;
   final ProductLocalStore _localStore;
+  final Duration agentProjectionTimeout;
 
   ImCoreConversationService withAgentInventory(AgentInventoryPort inventory) {
     return ImCoreConversationService(
       conversations: _conversations,
       localStore: _localStore,
       agentInventory: inventory,
+      agentProjectionTimeout: agentProjectionTimeout,
     );
   }
 
@@ -101,6 +111,38 @@ class ImCoreConversationService implements ConversationService {
       return b.lastMessageAt.compareTo(a.lastMessageAt);
     });
     return visible;
+  }
+
+  @override
+  Future<ConversationSummary?> normalizeConversationForRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+  }) async {
+    final projection = await _loadAgentConversationProjection();
+    final merged = _mergeAgentConversationDuplicates(<ConversationSummary>[
+      conversation,
+    ], projection);
+    if (merged.isEmpty) {
+      return null;
+    }
+    final normalized = merged.single;
+    if (!shouldShowConversationForChatList(
+      normalized,
+      daemonAgentDids: projection.daemonAgentDids,
+    )) {
+      return null;
+    }
+    final overlays = await _localStore.loadConversationOverlays(
+      ownerDid: ownerDid,
+      threadIds: normalized.visibilityKeys,
+    );
+    if (_isConversationHidden(normalized, overlays)) {
+      return null;
+    }
+    return _applyOverlay(
+      _applyAgentLifecycleProjection(normalized, projection),
+      _preferredOverlayForConversation(normalized, overlays),
+    );
   }
 
   @override
@@ -163,7 +205,9 @@ class ImCoreConversationService implements ConversationService {
       return const _AgentConversationProjection();
     }
     try {
-      final agents = await inventory.listAgents(includeInactive: true);
+      final agents = await inventory
+          .listAgents(includeInactive: true)
+          .timeout(agentProjectionTimeout);
       return _AgentConversationProjection.fromAgents(agents);
     } on Object {
       return const _AgentConversationProjection();
@@ -278,8 +322,7 @@ ConversationSummary _mergeConversationDuplicate(
     unreadCount: first.unreadCount + second.unreadCount,
     unreadMentionCount: first.unreadMentionCount + second.unreadMentionCount,
     firstUnreadMentionMessageId:
-        first.firstUnreadMentionMessageId ??
-        second.firstUnreadMentionMessageId,
+        first.firstUnreadMentionMessageId ?? second.firstUnreadMentionMessageId,
     targetDid: identity.targetDid ?? latest.targetDid ?? other.targetDid,
     targetPeer:
         _preferredTargetPeer(first, second) ??

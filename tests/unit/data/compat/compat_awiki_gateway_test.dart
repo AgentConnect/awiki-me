@@ -268,6 +268,14 @@ class _FakeConversations implements ConversationService {
   }
 
   @override
+  Future<ConversationSummary?> normalizeConversationForRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+  }) async {
+    return conversation;
+  }
+
+  @override
   Future<void> markThreadRead(AppThreadRef thread) async {}
 
   @override

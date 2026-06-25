@@ -1624,7 +1624,7 @@ void main() {
       await tester.pump(const Duration(seconds: 10));
       await tester.pump();
 
-      expect(find.textContaining('未收到代理响应'), findsWidgets);
+      expect(find.textContaining('状态同步仍在等待'), findsWidgets);
       expect(find.text('刷新中'), findsNothing);
     },
   );
@@ -1898,9 +1898,12 @@ class _CountingRefreshAgentControlService extends FakeAgentControlService {
   int refreshCount = 0;
 
   @override
-  Future<void> refreshDaemonStatus(String daemonAgentDid) async {
+  Future<void> refreshDaemonStatus(
+    String daemonAgentDid, {
+    String? commandId,
+  }) async {
     refreshCount += 1;
-    await super.refreshDaemonStatus(daemonAgentDid);
+    await super.refreshDaemonStatus(daemonAgentDid, commandId: commandId);
   }
 }
 
@@ -1959,7 +1962,7 @@ class _PendingRefreshAgentControlService extends FakeAgentControlService {
   final Completer<void> _pendingRefresh = Completer<void>();
 
   @override
-  Future<void> refreshDaemonStatus(String daemonAgentDid) {
+  Future<void> refreshDaemonStatus(String daemonAgentDid, {String? commandId}) {
     lastRefreshedDaemonDid = daemonAgentDid;
     return _pendingRefresh.future;
   }

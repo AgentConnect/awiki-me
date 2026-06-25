@@ -1299,6 +1299,14 @@ class FakeConversationService implements ConversationService {
   }
 
   @override
+  Future<ConversationSummary?> normalizeConversationForRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+  }) async {
+    return conversation;
+  }
+
+  @override
   Future<void> markThreadRead(AppThreadRef thread) {
     return gateway.markRead(_threadIdForFakeGateway(thread));
   }
@@ -1780,7 +1788,10 @@ class FakeAgentControlService implements AgentControlService {
   }
 
   @override
-  Future<void> refreshDaemonStatus(String daemonAgentDid) async {
+  Future<void> refreshDaemonStatus(
+    String daemonAgentDid, {
+    String? commandId,
+  }) async {
     lastRefreshedDaemonDid = daemonAgentDid;
   }
 

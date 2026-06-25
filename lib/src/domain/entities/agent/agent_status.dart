@@ -77,6 +77,14 @@ class AgentRunStatus {
   }
 }
 
+bool isActiveAgentRunStatus(String status) {
+  final normalized = status.trim().toLowerCase();
+  return normalized == 'queued' ||
+      normalized == 'pending' ||
+      normalized == 'running' ||
+      normalized == 'in_progress';
+}
+
 class AgentLatestStatus {
   const AgentLatestStatus({
     required this.status,

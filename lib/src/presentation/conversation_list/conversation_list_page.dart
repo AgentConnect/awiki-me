@@ -72,13 +72,26 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
     final state = ref.watch(conversationListProvider);
     final composerDrafts = ref.watch(chatComposerDraftsProvider);
     final responsive = context.awikiResponsive;
+    Future<void> refreshConversations() async {
+      try {
+        await ref.read(conversationListProvider.notifier).refresh();
+      } catch (error) {
+        if (!context.mounted) {
+          return;
+        }
+        ref
+            .read(uiFeedbackProvider.notifier)
+            .showError(AppMessage.fromError(error));
+      }
+    }
+
     if (widget.macStyle && responsive.isMacDesktop) {
       return _MacConversationList(
         conversations: state.conversations,
         composerDrafts: composerDrafts,
         selectedThreadId: widget.selectedThreadId,
         bottomInset: widget.bottomInset,
-        onRefresh: () => ref.read(conversationListProvider.notifier).refresh(),
+        onRefresh: refreshConversations,
         onOpen: (item) => _openConversation(context, ref, item),
         onDelete: (item) => _deleteConversationFromRecents(context, ref, item),
         onShowActions: () => showCommonQuickActionsMenu(context, ref),
@@ -100,7 +113,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
         selectedThreadId: widget.selectedThreadId,
         embedded: widget.embedded,
         bottomInset: widget.bottomInset,
-        onRefresh: () => ref.read(conversationListProvider.notifier).refresh(),
+        onRefresh: refreshConversations,
         onOpen: (item) => _openConversation(context, ref, item),
         onDelete: (item) => _deleteConversationFromRecents(context, ref, item),
       ),

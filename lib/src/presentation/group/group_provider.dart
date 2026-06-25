@@ -38,14 +38,21 @@ class GroupController extends StateNotifier<GroupState> {
 
   Future<void> refresh() async {
     state = state.copyWith(isLoading: true);
-    final groups = await ref.read(groupApplicationServiceProvider).listGroups();
-    final merged = _mergeGroupList(
-      local: state.groups,
-      incoming: groups,
-      keepLocalOnly: false,
-    );
-    state = state.copyWith(groups: merged, isLoading: false);
-    _applyGroupsToConversations(merged);
+    try {
+      final groups = await ref
+          .read(groupApplicationServiceProvider)
+          .listGroups();
+      final merged = _mergeGroupList(
+        local: state.groups,
+        incoming: groups,
+        keepLocalOnly: false,
+      );
+      state = state.copyWith(groups: merged, isLoading: false);
+      _applyGroupsToConversations(merged);
+    } catch (_) {
+      state = state.copyWith(isLoading: false);
+      rethrow;
+    }
   }
 
   Future<List<GroupMemberSummary>> loadGroupMembers(String groupId) async {

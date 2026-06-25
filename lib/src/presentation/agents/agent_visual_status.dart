@@ -155,8 +155,7 @@ class AgentVisualStatus {
   String get semanticLabel => '智能体状态：$label';
 
   static bool isActiveRun(AgentRunStatus run) {
-    final status = run.status.trim().toLowerCase();
-    return status == 'queued' || status == 'pending' || status == 'running';
+    return isActiveAgentRunStatus(run.status);
   }
 
   static AgentVisualStatus? _fromRuntimeCard(
