@@ -514,6 +514,7 @@ void main() {
       final service = DefaultAgentControlService(
         inventory: inventory,
         messages: messages,
+        agentImEnabled: false,
       );
 
       await expectLater(

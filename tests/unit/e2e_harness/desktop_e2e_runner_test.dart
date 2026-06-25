@@ -77,6 +77,44 @@ void main() {
       expect(hyphen.e2eCase.runConfigPath, contains('message-agent'));
     });
 
+    test('parses codex-agent case aliases', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'codex-agent',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'codex_agent',
+        '--dry-run',
+      ]);
+
+      expect(hyphen.e2eCase, DesktopE2eCase.codexAgent);
+      expect(underscore.e2eCase, DesktopE2eCase.codexAgent);
+      expect(hyphen.e2eCase.caseName, 'codex-agent');
+      expect(hyphen.e2eCase.reportScope, 'codex-agent');
+      expect(hyphen.e2eCase.runConfigPath, contains('codex-agent'));
+    });
+
+    test('parses claude-code-agent case aliases', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'claude-code-agent',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'claude_code_agent',
+        '--dry-run',
+      ]);
+
+      expect(hyphen.e2eCase, DesktopE2eCase.claudeCodeAgent);
+      expect(underscore.e2eCase, DesktopE2eCase.claudeCodeAgent);
+      expect(hyphen.e2eCase.caseName, 'claude-code-agent');
+      expect(hyphen.e2eCase.reportScope, 'claude-code-agent');
+      expect(hyphen.e2eCase.runConfigPath, contains('claude-code-agent'));
+    });
+
     test('rejects unsupported case', () {
       expect(
         () => DesktopE2eOptions.parse(const <String>['--case', 'unknown']),
@@ -86,7 +124,7 @@ void main() {
             'message',
             'Unsupported E2E case "unknown". '
                 'Use smoke, full, direct, group, attachment, contacts, '
-                'or message-agent.',
+                'message-agent, codex-agent, or claude-code-agent.',
           ),
         ),
       );
@@ -157,6 +195,7 @@ daemon:
   binary: ../awiki-cli-rs2-message-agent/target/release/awiki-deamon
   stateRoot: .e2e/daemon-state
   readyFile: .e2e/daemon-ready.json
+  envFile: .e2e/agent-cli.env
   handle: daemon-from-file
   fakeHermesGatewayCommand: python3 fake_hermes_gateway.py
 messageAgent:
@@ -198,6 +237,7 @@ cliPeer:
       );
       expect(config.daemonStateRoot, '${root.path}/.e2e/daemon-state');
       expect(config.daemonReadyFile, '${root.path}/.e2e/daemon-ready.json');
+      expect(config.daemonEnvFile, '${root.path}/.e2e/agent-cli.env');
       expect(config.daemonHandle, 'daemon-from-file');
       expect(
         config.daemonFakeHermesGatewayCommand,
@@ -280,6 +320,7 @@ cliHandle: legacy-cli
           daemonBinary: '/tmp/awiki-deamon',
           daemonStateRoot: '/tmp/daemon-state',
           daemonReadyFile: '/tmp/daemon-ready.json',
+          daemonEnvFile: '/tmp/agent-cli.env',
           daemonHandle: 'daemon-from-file',
           daemonFakeHermesGatewayCommand: 'python3 fake_hermes_gateway.py',
           messageAgentEnabled: true,
@@ -307,6 +348,7 @@ cliHandle: legacy-cli
       expect(config.daemonBinary, '/tmp/awiki-deamon');
       expect(config.daemonStateRoot, '/tmp/daemon-state');
       expect(config.daemonReadyFile, '/tmp/daemon-ready.json');
+      expect(config.daemonEnvFile, '/tmp/agent-cli.env');
       expect(config.daemonHandle, 'daemon-from-file');
       expect(
         config.daemonFakeHermesGatewayCommand,
@@ -448,6 +490,105 @@ cliHandle: legacy-cli
 
       expect(config.messageAgentEnabled, isFalse);
     });
+
+    test('defaults codex-agent case to enabled real backend', () {
+      final config = DesktopCliPeerConfig.from(
+        DesktopE2eOptions.parse(const <String>['--case', 'codex-agent']),
+        const DesktopE2eFileConfig(
+          path: '/tmp/e2e.local.yaml',
+          platform: DesktopE2ePlatform.linux,
+          serviceBaseUrl: 'https://service.example.test',
+          didDomain: 'example.test',
+          otpPhone: 'test-phone-secret',
+          otpCode: 'test-otp-secret',
+          appHandle: 'app-from-file',
+          cliHandle: 'cli-from-file',
+          cliBin: '/tmp/file-awiki-cli',
+        ),
+      );
+
+      expect(config.codexAgentEnabled, isTrue);
+      expect(config.codexAgentRealBackend, isTrue);
+    });
+
+    test('rejects codex-agent case when YAML disables it', () {
+      expect(
+        () => DesktopCliPeerConfig.from(
+          DesktopE2eOptions.parse(const <String>['--case', 'codex-agent']),
+          const DesktopE2eFileConfig(
+            path: '/tmp/e2e.local.yaml',
+            platform: DesktopE2ePlatform.linux,
+            serviceBaseUrl: 'https://service.example.test',
+            didDomain: 'example.test',
+            codexAgentEnabled: false,
+            otpPhone: 'test-phone-secret',
+            otpCode: 'test-otp-secret',
+            appHandle: 'app-from-file',
+            cliHandle: 'cli-from-file',
+            cliBin: '/tmp/file-awiki-cli',
+          ),
+        ),
+        throwsA(
+          isA<E2eFailure>().having(
+            (error) => error.message,
+            'message',
+            'codexAgent.enabled must be true for --case codex-agent '
+                'in /tmp/e2e.local.yaml.',
+          ),
+        ),
+      );
+    });
+
+    test('defaults claude-code-agent case to enabled real backend', () {
+      final config = DesktopCliPeerConfig.from(
+        DesktopE2eOptions.parse(const <String>['--case', 'claude-code-agent']),
+        const DesktopE2eFileConfig(
+          path: '/tmp/e2e.local.yaml',
+          platform: DesktopE2ePlatform.linux,
+          serviceBaseUrl: 'https://service.example.test',
+          didDomain: 'example.test',
+          otpPhone: 'test-phone-secret',
+          otpCode: 'test-otp-secret',
+          appHandle: 'app-from-file',
+          cliHandle: 'cli-from-file',
+          cliBin: '/tmp/file-awiki-cli',
+        ),
+      );
+
+      expect(config.claudeCodeAgentEnabled, isTrue);
+      expect(config.claudeCodeAgentRealBackend, isTrue);
+    });
+
+    test('rejects claude-code-agent case when YAML disables it', () {
+      expect(
+        () => DesktopCliPeerConfig.from(
+          DesktopE2eOptions.parse(const <String>[
+            '--case',
+            'claude-code-agent',
+          ]),
+          const DesktopE2eFileConfig(
+            path: '/tmp/e2e.local.yaml',
+            platform: DesktopE2ePlatform.linux,
+            serviceBaseUrl: 'https://service.example.test',
+            didDomain: 'example.test',
+            claudeCodeAgentEnabled: false,
+            otpPhone: 'test-phone-secret',
+            otpCode: 'test-otp-secret',
+            appHandle: 'app-from-file',
+            cliHandle: 'cli-from-file',
+            cliBin: '/tmp/file-awiki-cli',
+          ),
+        ),
+        throwsA(
+          isA<E2eFailure>().having(
+            (error) => error.message,
+            'message',
+            'claudeCodeAgent.enabled must be true for --case '
+                'claude-code-agent in /tmp/e2e.local.yaml.',
+          ),
+        ),
+      );
+    });
   });
 
   group('DesktopE2eRunner dry-run', () {
@@ -513,11 +654,10 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_smoke_test.dart -d linux',
         ),
       );
       expect(log, contains('would write Flutter E2E run config: <redacted>'));
-      expect(log, isNot(contains('--dart-define=')));
       expect(log, isNot(contains('test-phone-secret')));
       expect(log, isNot(contains('test-otp-secret')));
 
@@ -568,26 +708,26 @@ cliPeer:
         expect(
           log,
           contains(
-            r'$ xvfb-run -a flutter test integration_test/app_smoke_test.dart -d linux',
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/app_smoke_test.dart -d linux',
           ),
         );
         expect(
           log,
           contains(
-            r'$ xvfb-run -a flutter test integration_test/im_core_open_smoke_test.dart -d linux',
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/im_core_open_smoke_test.dart -d linux',
           ),
         );
       } else {
         expect(
           log,
           contains(
-            r'$ flutter test integration_test/app_smoke_test.dart -d macos',
+            r'$ flutter test --dart-define=AWIKI_E2E=true integration_test/app_smoke_test.dart -d macos',
           ),
         );
         expect(
           log,
           contains(
-            r'$ flutter test integration_test/im_core_open_smoke_test.dart -d macos',
+            r'$ flutter test --dart-define=AWIKI_E2E=true integration_test/im_core_open_smoke_test.dart -d macos',
           ),
         );
       }
@@ -664,11 +804,10 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test integration_test/desktop_cli_peer_smoke_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_smoke_test.dart -d linux',
         ),
       );
       expect(log, contains('would write Flutter E2E run config: <redacted>'));
-      expect(log, isNot(contains('--dart-define=')));
       expect(
         log,
         contains('message_service_endpoint=https://messages.example.test'),
@@ -795,7 +934,6 @@ cliPeer:
           'e2e-cli',
         );
         final log = lines.join('\n');
-        expect(log, isNot(contains('--dart-define=')));
         expect(log, isNot(contains('test-phone-secret')));
         expect(log, isNot(contains('test-otp-secret')));
       },
@@ -838,10 +976,9 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ flutter test integration_test/desktop_cli_peer_group_test.dart -d macos',
+          r'$ flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_group_test.dart -d macos',
         ),
       );
-      expect(log, isNot(contains('--dart-define=')));
       final timings = File(
         '${root.path}/.e2e/desktop-cli-peer/run-group/reports/timings.json',
       );
@@ -895,10 +1032,9 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test integration_test/desktop_cli_peer_direct_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_direct_test.dart -d linux',
         ),
       );
-      expect(log, isNot(contains('--dart-define=')));
       final timings = File(
         '${root.path}/.e2e/desktop-cli-peer/run-direct/reports/timings.json',
       );
@@ -950,10 +1086,9 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ flutter test integration_test/desktop_cli_peer_attachment_test.dart -d macos',
+          r'$ flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_attachment_test.dart -d macos',
         ),
       );
-      expect(log, isNot(contains('--dart-define=')));
       final timings = File(
         '${root.path}/.e2e/desktop-cli-peer/run-attachment/reports/timings.json',
       );
@@ -1005,10 +1140,9 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test integration_test/desktop_cli_peer_contacts_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_contacts_test.dart -d linux',
         ),
       );
-      expect(log, isNot(contains('--dart-define=')));
       final timings = File(
         '${root.path}/.e2e/desktop-cli-peer/run-contacts/reports/timings.json',
       );
@@ -1076,10 +1210,9 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test integration_test/message_agent_full_ui_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/message_agent_full_ui_test.dart -d linux',
         ),
       );
-      expect(log, isNot(contains('--dart-define=')));
       expect(log, isNot(contains('test-phone-secret')));
       expect(log, isNot(contains('test-otp-secret')));
 
@@ -1203,6 +1336,224 @@ cliPeer:
       },
     );
 
+    test(
+      'writes Codex Agent runner report and deterministic run config',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'awiki_codex_agent_runner_test_',
+        );
+        addTearDown(() async {
+          if (await root.exists()) {
+            await root.delete(recursive: true);
+          }
+        });
+        _writeLocalConfig(
+          root,
+          platform: 'linux',
+          appHandle: 'codex-agent-app',
+          cliHandle: 'codex-agent-cli',
+          cliBin: '/tmp/fake-awiki-cli',
+          daemonRustRepo: '../awiki-cli-rs2-codex-agent',
+          daemonBinary: '/tmp/awiki-deamon',
+          daemonStateRoot: '.e2e/codex-daemon-state',
+          daemonReadyFile: '.e2e/codex-daemon-ready.json',
+          daemonEnvFile: '.e2e/codex-agent-cli.env',
+          daemonHandle: 'codex-agent-daemon',
+          codexAgentEnabled: true,
+          codexAgentRealBackend: true,
+          codexAgentPrompt: 'Reply exactly OK-CODEX-UNIT and nothing else',
+          codexAgentExpectedReply: 'OK-CODEX-UNIT',
+        );
+        final lines = <String>[];
+        final runner = DesktopE2eRunner(
+          root: root,
+          options: DesktopE2eOptions.parse(const <String>[
+            '--case',
+            'codex-agent',
+            '--run-id',
+            'run-codex-agent',
+          ]),
+          commands: DesktopCommandRunner(
+            root: root,
+            dryRun: true,
+            redactor: DesktopSecretRedactor(const <String>[
+              'test-phone-secret',
+              'test-otp-secret',
+            ]),
+            logLine: lines.add,
+          ),
+        );
+
+        await runner.run();
+
+        final log = lines.join('\n');
+        expect(log, contains('case: codex-agent'));
+        expect(
+          log,
+          contains(
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/codex_agent_full_ui_test.dart -d linux',
+          ),
+        );
+
+        final timings = File(
+          '${root.path}/.e2e/codex-agent/run-codex-agent/reports/timings.json',
+        );
+        final decoded =
+            jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
+        expect(decoded['scenario'], 'codex-agent-full-ui');
+        expect(decoded['case'], 'codex-agent');
+        expect(decoded['caseIds'], <dynamic>[
+          'CODEXAGENT-E2E-001',
+          'CODEXAGENT-E2E-002',
+          'CODEXAGENT-E2E-003',
+          'CODEXAGENT-E2E-004',
+        ]);
+        final codexAgent = decoded['codexAgent'] as Map<String, dynamic>;
+        expect(codexAgent['enabled'], isTrue);
+        expect(codexAgent['realBackend'], isTrue);
+        expect(codexAgent['expectedReply'], 'OK-CODEX-UNIT');
+        expect(codexAgent['prompt'], '<redacted-deterministic-prompt>');
+
+        final runConfig = File(
+          '${root.path}/.e2e/codex-agent/current/run_config.json',
+        );
+        expect(runConfig.existsSync(), isTrue);
+        final runConfigJson =
+            jsonDecode(await runConfig.readAsString()) as Map<String, dynamic>;
+        expect(runConfigJson['case'], 'codex-agent');
+        final daemon = runConfigJson['daemon'] as Map<String, dynamic>;
+        expect(daemon['binary'], '/tmp/awiki-deamon');
+        expect(daemon['stateRoot'], '${root.path}/.e2e/codex-daemon-state');
+        expect(
+          daemon['readyFile'],
+          '${root.path}/.e2e/codex-daemon-ready.json',
+        );
+        expect(daemon['envFile'], '${root.path}/.e2e/codex-agent-cli.env');
+        final runCodexAgent =
+            runConfigJson['codexAgent'] as Map<String, dynamic>;
+        expect(runCodexAgent['enabled'], isTrue);
+        expect(runCodexAgent['realBackend'], isTrue);
+        expect(
+          runCodexAgent['prompt'],
+          'Reply exactly OK-CODEX-UNIT and nothing else',
+        );
+        expect(runCodexAgent['expectedReply'], 'OK-CODEX-UNIT');
+      },
+    );
+
+    test(
+      'writes Claude Code Agent runner report and deterministic run config',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'awiki_claude_code_agent_runner_test_',
+        );
+        addTearDown(() async {
+          if (await root.exists()) {
+            await root.delete(recursive: true);
+          }
+        });
+        _writeLocalConfig(
+          root,
+          platform: 'linux',
+          appHandle: 'claude-code-agent-app',
+          cliHandle: 'claude-code-agent-cli',
+          cliBin: '/tmp/fake-awiki-cli',
+          daemonRustRepo: '../awiki-cli-rs2-claude-code-agent',
+          daemonBinary: '/tmp/awiki-deamon',
+          daemonStateRoot: '.e2e/claude-code-daemon-state',
+          daemonReadyFile: '.e2e/claude-code-daemon-ready.json',
+          daemonEnvFile: '.e2e/claude-code-agent-cli.env',
+          daemonHandle: 'claude-code-agent-daemon',
+          claudeCodeAgentEnabled: true,
+          claudeCodeAgentRealBackend: true,
+          claudeCodeAgentPrompt:
+              'Reply exactly OK-CLAUDE-CODE-UNIT and nothing else',
+          claudeCodeAgentExpectedReply: 'OK-CLAUDE-CODE-UNIT',
+        );
+        final lines = <String>[];
+        final runner = DesktopE2eRunner(
+          root: root,
+          options: DesktopE2eOptions.parse(const <String>[
+            '--case',
+            'claude-code-agent',
+            '--run-id',
+            'run-claude-code-agent',
+          ]),
+          commands: DesktopCommandRunner(
+            root: root,
+            dryRun: true,
+            redactor: DesktopSecretRedactor(const <String>[
+              'test-phone-secret',
+              'test-otp-secret',
+            ]),
+            logLine: lines.add,
+          ),
+        );
+
+        await runner.run();
+
+        final log = lines.join('\n');
+        expect(log, contains('case: claude-code-agent'));
+        expect(
+          log,
+          contains(
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/claude_code_agent_full_ui_test.dart -d linux',
+          ),
+        );
+
+        final timings = File(
+          '${root.path}/.e2e/claude-code-agent/run-claude-code-agent/reports/timings.json',
+        );
+        final decoded =
+            jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
+        expect(decoded['scenario'], 'claude-code-agent-full-ui');
+        expect(decoded['case'], 'claude-code-agent');
+        expect(decoded['caseIds'], <dynamic>[
+          'CLAUDECODEAGENT-E2E-001',
+          'CLAUDECODEAGENT-E2E-002',
+          'CLAUDECODEAGENT-E2E-003',
+          'CLAUDECODEAGENT-E2E-004',
+        ]);
+        final claudeCodeAgent =
+            decoded['claudeCodeAgent'] as Map<String, dynamic>;
+        expect(claudeCodeAgent['enabled'], isTrue);
+        expect(claudeCodeAgent['realBackend'], isTrue);
+        expect(claudeCodeAgent['expectedReply'], 'OK-CLAUDE-CODE-UNIT');
+        expect(claudeCodeAgent['prompt'], '<redacted-deterministic-prompt>');
+
+        final runConfig = File(
+          '${root.path}/.e2e/claude-code-agent/current/run_config.json',
+        );
+        expect(runConfig.existsSync(), isTrue);
+        final runConfigJson =
+            jsonDecode(await runConfig.readAsString()) as Map<String, dynamic>;
+        expect(runConfigJson['case'], 'claude-code-agent');
+        final daemon = runConfigJson['daemon'] as Map<String, dynamic>;
+        expect(daemon['binary'], '/tmp/awiki-deamon');
+        expect(
+          daemon['stateRoot'],
+          '${root.path}/.e2e/claude-code-daemon-state',
+        );
+        expect(
+          daemon['readyFile'],
+          '${root.path}/.e2e/claude-code-daemon-ready.json',
+        );
+        expect(
+          daemon['envFile'],
+          '${root.path}/.e2e/claude-code-agent-cli.env',
+        );
+        final runClaudeCodeAgent =
+            runConfigJson['claudeCodeAgent'] as Map<String, dynamic>;
+        expect(runClaudeCodeAgent['enabled'], isTrue);
+        expect(runClaudeCodeAgent['realBackend'], isTrue);
+        expect(
+          runClaudeCodeAgent['prompt'],
+          'Reply exactly OK-CLAUDE-CODE-UNIT and nothing else',
+        );
+        expect(runClaudeCodeAgent['expectedReply'], 'OK-CLAUDE-CODE-UNIT');
+      },
+    );
+
     test('generates macOS Flutter command without Xvfb', () async {
       final root = await Directory.systemTemp.createTemp(
         'awiki_desktop_cli_peer_runner_macos_test_',
@@ -1240,7 +1591,7 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ flutter test integration_test/desktop_cli_peer_smoke_test.dart -d macos',
+          r'$ flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_smoke_test.dart -d macos',
         ),
       );
       expect(log, isNot(contains(r'$ xvfb-run')));
@@ -1300,11 +1651,22 @@ void _writeLocalConfig(
   String? daemonBinary,
   String? daemonStateRoot,
   String? daemonReadyFile,
+  String? daemonEnvFile,
   String? daemonHandle,
   String? fakeHermesGatewayCommand,
   bool messageAgentEnabled = false,
   bool messageAgentRealBackend = false,
   bool includeMessageAgent = true,
+  bool codexAgentEnabled = false,
+  bool codexAgentRealBackend = false,
+  String? codexAgentPrompt,
+  String? codexAgentExpectedReply,
+  bool includeCodexAgent = true,
+  bool claudeCodeAgentEnabled = false,
+  bool claudeCodeAgentRealBackend = false,
+  String? claudeCodeAgentPrompt,
+  String? claudeCodeAgentExpectedReply,
+  bool includeClaudeCodeAgent = true,
 }) {
   final messageService = messageServiceUrl == null
       ? ''
@@ -1317,12 +1679,13 @@ void _writeLocalConfig(
           daemonBinary == null &&
           daemonStateRoot == null &&
           daemonReadyFile == null &&
+          daemonEnvFile == null &&
           daemonHandle == null &&
           fakeHermesGatewayCommand == null
       ? ''
       : '''
 daemon:
-${daemonRustRepo == null ? '' : '  rustRepo: $daemonRustRepo\n'}${daemonBinary == null ? '' : '  binary: $daemonBinary\n'}${daemonStateRoot == null ? '' : '  stateRoot: $daemonStateRoot\n'}${daemonReadyFile == null ? '' : '  readyFile: $daemonReadyFile\n'}${daemonHandle == null ? '' : '  handle: $daemonHandle\n'}${fakeHermesGatewayCommand == null ? '' : '  fakeHermesGatewayCommand: $fakeHermesGatewayCommand\n'}
+${daemonRustRepo == null ? '' : '  rustRepo: $daemonRustRepo\n'}${daemonBinary == null ? '' : '  binary: $daemonBinary\n'}${daemonStateRoot == null ? '' : '  stateRoot: $daemonStateRoot\n'}${daemonReadyFile == null ? '' : '  readyFile: $daemonReadyFile\n'}${daemonEnvFile == null ? '' : '  envFile: $daemonEnvFile\n'}${daemonHandle == null ? '' : '  handle: $daemonHandle\n'}${fakeHermesGatewayCommand == null ? '' : '  fakeHermesGatewayCommand: $fakeHermesGatewayCommand\n'}
 ''';
   final messageAgent = includeMessageAgent
       ? '''
@@ -1331,6 +1694,34 @@ messageAgent:
   runtimeProvider: hermes
   processingScope: all_conversations
   realBackend: $messageAgentRealBackend
+'''
+      : '';
+  final codexPromptLine = codexAgentPrompt == null
+      ? ''
+      : '  prompt: "$codexAgentPrompt"\n';
+  final codexExpectedReplyLine = codexAgentExpectedReply == null
+      ? ''
+      : '  expectedReply: "$codexAgentExpectedReply"\n';
+  final codexAgent = includeCodexAgent
+      ? '''
+codexAgent:
+  enabled: $codexAgentEnabled
+  realBackend: $codexAgentRealBackend
+$codexPromptLine$codexExpectedReplyLine
+'''
+      : '';
+  final claudeCodePromptLine = claudeCodeAgentPrompt == null
+      ? ''
+      : '  prompt: "$claudeCodeAgentPrompt"\n';
+  final claudeCodeExpectedReplyLine = claudeCodeAgentExpectedReply == null
+      ? ''
+      : '  expectedReply: "$claudeCodeAgentExpectedReply"\n';
+  final claudeCodeAgent = includeClaudeCodeAgent
+      ? '''
+claudeCodeAgent:
+  enabled: $claudeCodeAgentEnabled
+  realBackend: $claudeCodeAgentRealBackend
+$claudeCodePromptLine$claudeCodeExpectedReplyLine
 '''
       : '';
   File('${root.path}/tests/e2e/configs/e2e.local.yaml')
@@ -1342,7 +1733,7 @@ service:
   didDomain: example.test
 $messageService
 $messageServiceWs
-$daemon$messageAgent
+$daemon$messageAgent$codexAgent$claudeCodeAgent
 otp:
   phone: test-phone-secret
   code: test-otp-secret

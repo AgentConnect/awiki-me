@@ -106,6 +106,9 @@ class AgentsState {
   }
 
   bool canDeleteAgent(AgentSummary agent) {
+    if (_canUnbindUnfinishedDaemonInstall(agent)) {
+      return true;
+    }
     final daemon = agent.isDaemon ? agent : daemonForRuntime(agent);
     return daemon != null && _daemonAcceptsControlCommands(daemon);
   }
@@ -404,12 +407,28 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     final resolvedAppInstanceId =
         appInstanceId ?? _defaultAppInstanceId(session.credentialName);
+    final existingMessageAgent = state.messageAgentRuntimeFor(daemonDid);
     await _act(() async {
       final subkeyPackage =
           userSubkeyPackage ??
           await ref
               .read(identityCorePortProvider)
               .ensureDaemonSubkeyPackage(session.credentialName);
+      if (existingMessageAgent != null) {
+        await ref
+            .read(messageAgentBindingPortProvider)
+            .ensureBinding(
+              userDid: subkeyPackage.userDid,
+              daemonAgentDid: daemonDid,
+              messageAgentDid: existingMessageAgent.agentDid,
+              runtimeProvider: appMessageHandlerRuntimeProvider,
+              runtimeProfile: const <String, Object?>{
+                'profile': appMessageHandlerRuntimeProfile,
+              },
+              delegatedKeyVerificationMethod: subkeyPackage.verificationMethod,
+            );
+        return;
+      }
       await ref
           .read(agentControlServiceProvider)
           .ensureMessageAgentBootstrap(
@@ -502,6 +521,15 @@ class AgentsController extends StateNotifier<AgentsState> {
   Future<void> deleteSelected() async {
     final selected = state.selectedAgent;
     if (selected == null) {
+      return;
+    }
+    if (selected.isDaemon && _canUnbindUnfinishedDaemonInstall(selected)) {
+      await _act(() async {
+        await ref
+            .read(agentControlServiceProvider)
+            .unbindAgent(selected.agentDid);
+        await load();
+      });
       return;
     }
     final daemon = selected.isDaemon
@@ -1375,6 +1403,17 @@ bool _daemonAcceptsControlCommands(AgentSummary daemon) {
     'archiving' => true,
     _ => false,
   };
+}
+
+bool _canUnbindUnfinishedDaemonInstall(AgentSummary agent) {
+  if (!agent.isDaemon || agent.activeState != 'active') {
+    return false;
+  }
+  final status = agent.latest.status.trim().toLowerCase();
+  if (status != 'registering') {
+    return false;
+  }
+  return agent.latest.lastSeenAt == null;
 }
 
 bool _isMessageAgentRuntime(AgentSummary agent) {
