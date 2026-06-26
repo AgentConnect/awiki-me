@@ -2,16 +2,13 @@ import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
-import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
-import 'package:awiki_me/src/domain/entities/agent/message_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
-import 'package:awiki_me/src/application/ports/message_agent_binding_port.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -342,9 +339,9 @@ void main() {
 
       await tester.tap(find.text('Codex'));
       await tester.pumpAndSettle();
-      expect(find.text('工作目录策略'), findsOneWidget);
-      expect(find.text('宿主机全权限'), findsOneWidget);
-      expect(find.text('按会话目录'), findsOneWidget);
+      expect(find.text('工作目录策略'), findsNothing);
+      expect(find.text('宿主机全权限'), findsNothing);
+      expect(find.text('按会话目录'), findsNothing);
       final codexNameField = tester.widget<CupertinoTextField>(nameFieldFinder);
       expect(codexNameField.controller?.text, 'Codex1');
 
@@ -374,7 +371,7 @@ void main() {
   );
 
   testWidgets(
-    'create Agent dialog scrolls generic CLI options on compact height',
+    'create Agent dialog hides generic CLI advanced options on compact height',
     (tester) async {
       final control = _PendingRefreshAgentControlService()
         ..agents = const <AgentSummary>[
@@ -415,8 +412,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(find.byKey(const Key('agent-create-scroll-body')), findsOneWidget);
-      expect(find.text('工作目录策略'), findsOneWidget);
-      expect(find.text('宿主机全权限'), findsOneWidget);
+      expect(find.text('工作目录策略'), findsNothing);
+      expect(find.text('宿主机全权限'), findsNothing);
 
       await tester.ensureVisible(
         find.byKey(const Key('agent-create-handle-field')),
@@ -746,7 +743,7 @@ void main() {
     expect(control.lastInvocationPolicyAgentDid, isNull);
   });
 
-  testWidgets('message Agent panel is closed when feature flag is off', (
+  testWidgets('message Agent panel is hidden when feature flag is off', (
     tester,
   ) async {
     final control = FakeAgentControlService()
@@ -790,33 +787,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const Key('message-agent-settings-panel')),
-      findsOneWidget,
-    );
-    expect(find.text('消息处理 Agent'), findsOneWidget);
-    expect(find.text('实验功能关闭'), findsOneWidget);
-    expect(find.text('未就绪'), findsOneWidget);
-    expect(find.text('运行 Daemon'), findsOneWidget);
-    expect(find.text('Hermes'), findsOneWidget);
-    expect(find.text('所有可处理会话'), findsOneWidget);
-    expect(find.text('可用能力'), findsOneWidget);
-    expect(find.text('Hermes message runtime'), findsOneWidget);
-    expect(find.text('已上报公钥'), findsOneWidget);
-    expect(
-      find.text('启用 AWIKI_AGENT_IM_ENABLED 后可配置消息处理 Agent。'),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.text('启用消息处理 Agent'));
-    await tester.pumpAndSettle();
-
+    expect(find.byKey(const Key('message-agent-settings-panel')), findsNothing);
+    expect(find.text('消息处理 Agent'), findsNothing);
+    expect(find.text('启用消息处理 Agent'), findsNothing);
+    expect(find.text('暂停处理消息'), findsNothing);
+    expect(find.text('删除消息处理 Agent'), findsNothing);
+    expect(find.text('撤销 Daemon 消息授权'), findsNothing);
     expect(control.lastBootstrapDaemonDid, isNull);
     expect(find.textContaining('自动回复'), findsNothing);
     expect(find.textContaining('代发'), findsNothing);
   });
 
-  testWidgets('message Agent panel blocks enable until daemon publishes key', (
+  testWidgets('message Agent panel is hidden when daemon lacks bootstrap key', (
     tester,
   ) async {
     final control = FakeAgentControlService()
@@ -853,162 +835,89 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const Key('message-agent-settings-panel')),
-      findsOneWidget,
-    );
-    expect(find.text('运行 Daemon 内创建 Hermes runtime'), findsOneWidget);
-    expect(find.text('等待刷新状态'), findsOneWidget);
-    expect(find.text('未就绪'), findsOneWidget);
-
-    await tester.tap(find.text('启用消息处理 Agent'));
-    await tester.pumpAndSettle();
-
+    expect(find.byKey(const Key('message-agent-settings-panel')), findsNothing);
+    expect(find.text('运行 Daemon 内创建 Hermes runtime'), findsNothing);
+    expect(find.text('等待刷新状态'), findsNothing);
+    expect(find.text('启用消息处理 Agent'), findsNothing);
     expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
     expect(control.lastBootstrapDaemonDid, isNull);
     expect(find.textContaining('尚未上报安全 bootstrap 公钥'), findsNothing);
   });
 
-  testWidgets('message Agent enable reuses existing runtime binding', (
-    tester,
-  ) async {
-    final control = FakeAgentControlService()
-      ..agents = const <AgentSummary>[
-        AgentSummary(
-          agentDid: 'did:agent:daemon',
-          kind: AgentKind.daemon,
-          handle: 'awiki-daemon-test',
-          displayName: '运行 Daemon 1',
-          activeState: 'active',
-          latest: AgentLatestStatus(
-            status: 'ready',
-            version: '0.5.26',
-            platform: 'linux-amd64',
-            diagnosticsSummary: <String, Object?>{
-              'config_summary': <String, Object?>{
-                'bootstrap_key_status': 'ready',
-                'bootstrap_key_id': 'did:agent:daemon#key-3',
-                'bootstrap_public_key_b64u':
-                    'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-                'bootstrap_key_algorithm': 'x25519',
+  testWidgets(
+    'message Agent management panel is hidden with existing runtime',
+    (tester) async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            handle: 'awiki-daemon-test',
+            displayName: '运行 Daemon 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'ready',
+              version: '0.5.26',
+              platform: 'linux-amd64',
+              diagnosticsSummary: <String, Object?>{
+                'config_summary': <String, Object?>{
+                  'bootstrap_key_status': 'ready',
+                  'bootstrap_key_id': 'did:agent:daemon#key-3',
+                  'bootstrap_public_key_b64u':
+                      'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+                  'bootstrap_key_algorithm': 'x25519',
+                },
               },
-            },
+            ),
           ),
+          AgentSummary(
+            agentDid: 'did:agent:message',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'hermes',
+            handle: 'hermes-msg-app-default',
+            displayName: 'Hermes Message Agent',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+            handle: 'me',
+          ),
+          providerOverrides: <Override>[
+            agentControlServiceProvider.overrideWithValue(control),
+            agentImEnabledProvider.overrideWithValue(true),
+          ],
         ),
-        AgentSummary(
-          agentDid: 'did:agent:message',
-          kind: AgentKind.runtime,
-          daemonAgentDid: 'did:agent:daemon',
-          runtime: 'hermes',
-          handle: 'hermes-msg-app-default',
-          displayName: 'Hermes Message Agent',
-          activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
-        ),
-      ];
-    final identities = FakeIdentityCorePort(
-      daemonSubkeyPackage: const UserSubkeyPackage(
-        userDid: 'did:human:me',
-        verificationMethod: 'did:human:me#daemon-key-1',
-        publicKeyMultibase: 'zPublic',
-        privateKeyMultibase: 'zPrivate',
-      ),
-    );
-    final bindings = _MessageAgentBindingsStub();
+      );
+      await tester.pumpAndSettle();
 
-    tester.view.physicalSize = const Size(1200, 900);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const AgentsWorkspacePage(),
-        session: const SessionIdentity(
-          did: 'did:human:me',
-          credentialName: 'default',
-          displayName: 'Me',
-          handle: 'me',
-        ),
-        providerOverrides: <Override>[
-          agentControlServiceProvider.overrideWithValue(control),
-          identityCorePortProvider.overrideWithValue(identities),
-          messageAgentBindingPortProvider.overrideWithValue(bindings),
-          agentImEnabledProvider.overrideWithValue(true),
-        ],
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const Key('message-agent-settings-panel')),
-      findsOneWidget,
-    );
-    expect(find.text('消息处理 Agent'), findsOneWidget);
-    expect(find.text('运行 Daemon'), findsOneWidget);
-    expect(find.text('运行 Daemon 1'), findsWidgets);
-    expect(find.text('Hermes'), findsOneWidget);
-    expect(find.text('所有可处理会话'), findsOneWidget);
-    expect(find.text('0.5.26 · linux-amd64'), findsOneWidget);
-    expect(find.text('Hermes message runtime'), findsOneWidget);
-    expect(find.text('已上报公钥'), findsOneWidget);
-    expect(find.text('可启用'), findsOneWidget);
-    expect(
-      find.text('权限摘要：读取普通消息，分析、总结、生成草稿，并向 App 请求需要确认的 action。'),
-      findsOneWidget,
-    );
-    expect(find.text('暂停处理消息'), findsOneWidget);
-    expect(find.text('删除消息处理 Agent'), findsOneWidget);
-    expect(find.text('撤销 Daemon 消息授权'), findsOneWidget);
-    expect(find.textContaining('自动回复'), findsNothing);
-    expect(find.textContaining('代发'), findsNothing);
-
-    await tester.tap(find.text('启用消息处理 Agent'));
-    await tester.pumpAndSettle();
-
-    expect(identities.lastEnsuredDaemonSubkeySelector, 'default');
-    expect(control.lastBootstrapDaemonDid, isNull);
-    expect(bindings.lastUserDid, 'did:human:me');
-    expect(bindings.lastDaemonAgentDid, 'did:agent:daemon');
-    expect(bindings.lastMessageAgentDid, 'did:agent:message');
-    expect(
-      bindings.lastDelegatedKeyVerificationMethod,
-      'did:human:me#daemon-key-1',
-    );
-
-    await tester.tap(find.text('暂停处理消息'));
-    await tester.pumpAndSettle();
-    expect(
-      find.text('暂停后，消息处理 Agent 不再读取和处理新消息；runtime 和授权仍会保留，可以重新启用。'),
-      findsOneWidget,
-    );
-    await tester.tap(find.text('暂停'));
-    await tester.pumpAndSettle();
-    expect(control.lastPausedMessageAgentDid, 'did:agent:message');
-
-    await tester.tap(find.text('删除消息处理 Agent'));
-    await tester.pumpAndSettle();
-    expect(
-      find.text('删除前会先暂停消息处理，然后归档对应 runtime。Daemon 和授权不会被删除。'),
-      findsOneWidget,
-    );
-    await tester.tap(
-      find
-          .descendant(
-            of: find.byType(CupertinoAlertDialog),
-            matching: find.text('删除'),
-          )
-          .last,
-    );
-    await tester.pumpAndSettle();
-    expect(control.lastDeletedMessageAgentDid, 'did:agent:message');
-
-    await tester.tap(find.text('撤销 Daemon 消息授权'));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('签名 DID Document 更新'), findsOneWidget);
-    await tester.tap(find.text('撤销授权'));
-    await tester.pumpAndSettle();
-    expect(control.lastRevokedMessageAgentDid, 'did:agent:message');
-  });
+      expect(
+        find.byKey(const Key('message-agent-settings-panel')),
+        findsNothing,
+      );
+      expect(find.text('消息处理 Agent'), findsNothing);
+      expect(find.text('运行 Daemon 1'), findsWidgets);
+      expect(find.text('Hermes Message Agent'), findsWidgets);
+      expect(find.text('启用消息处理 Agent'), findsNothing);
+      expect(find.text('暂停处理消息'), findsNothing);
+      expect(find.text('删除消息处理 Agent'), findsNothing);
+      expect(find.text('撤销 Daemon 消息授权'), findsNothing);
+      expect(find.textContaining('自动回复'), findsNothing);
+      expect(find.textContaining('代发'), findsNothing);
+    },
+  );
 
   testWidgets('create Agent dialog blocks unavailable handle', (tester) async {
     final gateway = FakeAwikiGateway()
@@ -1963,57 +1872,6 @@ class _CountingRefreshAgentControlService extends FakeAgentControlService {
   }) async {
     refreshCount += 1;
     await super.refreshDaemonStatus(daemonAgentDid, commandId: commandId);
-  }
-}
-
-class _MessageAgentBindingsStub implements MessageAgentBindingPort {
-  String? lastUserDid;
-  String? lastDaemonAgentDid;
-  String? lastMessageAgentDid;
-  String? lastDelegatedKeyVerificationMethod;
-
-  @override
-  Future<MessageAgentBinding> ensureBinding({
-    required String userDid,
-    required String daemonAgentDid,
-    required String messageAgentDid,
-    required String runtimeProvider,
-    required Map<String, Object?> runtimeProfile,
-    required String delegatedKeyVerificationMethod,
-  }) async {
-    lastUserDid = userDid;
-    lastDaemonAgentDid = daemonAgentDid;
-    lastMessageAgentDid = messageAgentDid;
-    lastDelegatedKeyVerificationMethod = delegatedKeyVerificationMethod;
-    return MessageAgentBinding(
-      id: 'binding-1',
-      userDid: userDid,
-      daemonAgentDid: daemonAgentDid,
-      messageAgentDid: messageAgentDid,
-      runtimeProvider: runtimeProvider,
-      runtimeProfile: runtimeProfile,
-      delegatedKeyVerificationMethod: delegatedKeyVerificationMethod,
-      status: 'active',
-    );
-  }
-
-  @override
-  Future<MessageAgentBinding?> getActiveBinding() async => null;
-
-  @override
-  Future<MessageAgentBinding> disableBinding({
-    String? bindingId,
-    String? messageAgentDid,
-  }) async {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<MessageAgentBinding> revokeBinding({
-    String? bindingId,
-    String? messageAgentDid,
-  }) async {
-    throw UnimplementedError();
   }
 }
 
