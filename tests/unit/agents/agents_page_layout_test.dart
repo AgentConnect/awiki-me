@@ -117,6 +117,68 @@ void main() {
     expect(find.text('安装命令'), findsNothing);
   });
 
+  testWidgets(
+    'unrelated pending agent action does not disable daemon actions',
+    (tester) async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            handle: 'awiki-daemon-test',
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: readyDaemonStatusWithGenericCliCapability,
+          ),
+        ];
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+          ),
+          providerOverrides: <Override>[
+            agentControlServiceProvider.overrideWithValue(control),
+            agentsProvider.overrideWith((ref) {
+              return _SeededAgentsController(
+                ref,
+                AgentsState(
+                  agents: control.agents,
+                  selectedAgentDid: 'did:agent:daemon',
+                  pendingActionKeys: <String>{
+                    AgentActionKeys.resetRuntime('did:agent:other-runtime'),
+                  },
+                ),
+              );
+            }),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(_agentRefreshButton().first);
+      await tester.pump();
+      expect(control.lastRefreshedDaemonDid, 'did:agent:daemon');
+
+      await tester.tap(find.text('改名'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('agent-rename-field')), findsOneWidget);
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('创建 Agent'));
+      await tester.pumpAndSettle();
+      expect(find.text('Agent 类型'), findsOneWidget);
+    },
+  );
+
   testWidgets('runtime actions open chat and send control commands', (
     tester,
   ) async {
@@ -1972,6 +2034,12 @@ class _FailingListAgentControlService extends FakeAgentControlService {
       throw StateError('agent inventory failed');
     }
     return agents;
+  }
+}
+
+class _SeededAgentsController extends AgentsController {
+  _SeededAgentsController(super.ref, AgentsState initialState) {
+    state = initialState;
   }
 }
 

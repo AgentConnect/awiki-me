@@ -75,6 +75,47 @@ void main() {
     expect(thread.isLoading, isFalse);
   });
 
+  test('有稳定 DID 的 handle 会话打开历史时优先按 DID 拉取', () async {
+    const agentDid = 'did:agent:runtime';
+    const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
+    final agentConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:zhuocheng-test-hermes',
+      displayName: 'Hermes',
+      lastMessagePreview: '我在',
+      lastMessageAt: DateTime(2026, 5, 8, 10),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentHandle,
+    );
+    final outgoing = ChatMessage(
+      localId: 'msg-user',
+      remoteId: 'msg-user',
+      threadId: 'dm:did:human:$agentDid',
+      senderDid: 'did:human',
+      receiverDid: agentDid,
+      content: '在吗',
+      createdAt: DateTime(2026, 5, 8, 10),
+      isMine: true,
+      sendState: MessageSendState.sent,
+    );
+    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
+      agentDid: <ChatMessage>[outgoing],
+      agentHandle: const <ChatMessage>[],
+    };
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(agentConversation);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(gateway.lastFetchedDmPeerDid, agentDid);
+    final thread = container.read(
+      chatThreadProvider(agentConversation.threadId),
+    );
+    expect(thread.messages.map((item) => item.content), contains('在吗'));
+  });
+
   test('已加载线程再次打开不重复拉历史', () async {
     await container
         .read(chatThreadsProvider.notifier)

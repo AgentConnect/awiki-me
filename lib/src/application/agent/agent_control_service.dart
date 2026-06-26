@@ -156,6 +156,7 @@ class DefaultAgentControlService implements AgentControlService {
   final String downloadBaseUrl;
   static const Duration _messageAgentRuntimeWaitTimeout = Duration(seconds: 90);
   static const Duration _messageAgentRuntimeWaitInterval = Duration(seconds: 2);
+  static const Duration _daemonPayloadSendTimeout = Duration(seconds: 12);
 
   @override
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) {
@@ -584,12 +585,14 @@ class DefaultAgentControlService implements AgentControlService {
     String? idempotencyKey,
     bool secure = false,
   }) async {
-    await _messages.sendPayload(
-      thread: AppThreadRef.direct(daemonAgentDid),
-      payload: payload,
-      secure: secure,
-      idempotencyKey: idempotencyKey,
-    );
+    await _messages
+        .sendPayload(
+          thread: AppThreadRef.direct(daemonAgentDid),
+          payload: payload,
+          secure: secure,
+          idempotencyKey: idempotencyKey,
+        )
+        .timeout(_daemonPayloadSendTimeout);
   }
 
   MessageAgentBindingPort _requireMessageAgentBindings() {

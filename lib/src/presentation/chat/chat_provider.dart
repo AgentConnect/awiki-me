@@ -2392,11 +2392,11 @@ AppThreadRef _historyThreadRefFor(ConversationSummary conversation) {
   }
   final peerDid = conversation.targetDid?.trim();
   final peer = conversation.targetPeer?.trim();
-  if (!conversation.isGroup && peer != null && peer.isNotEmpty) {
-    return AppThreadRef.direct(peer);
-  }
   if (!conversation.isGroup && peerDid != null && peerDid.isNotEmpty) {
     return AppThreadRef.direct(peerDid);
+  }
+  if (!conversation.isGroup && peer != null && peer.isNotEmpty) {
+    return AppThreadRef.direct(peer);
   }
   return AppThreadRef.thread(conversation.threadId);
 }

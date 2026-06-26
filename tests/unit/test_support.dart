@@ -514,6 +514,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int loginCalls = 0;
   int refreshSessionCalls = 0;
   int fetchDmHistoryCalls = 0;
+  String? lastFetchedDmPeerDid;
   int fetchGroupHistoryCalls = 0;
   int markReadCalls = 0;
   String? lastMarkReadThreadId;
@@ -577,6 +578,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   @override
   Future<List<ChatMessage>> fetchDmHistory(String peerDid) async {
     fetchDmHistoryCalls += 1;
+    lastFetchedDmPeerDid = peerDid;
     final completer = fetchDmHistoryCompleter;
     if (completer != null) {
       await completer.future;

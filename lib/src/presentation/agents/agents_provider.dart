@@ -30,11 +30,45 @@ const agentListLoadTimeout = Duration(seconds: 15);
 const agentLocalCacheReadTimeout = Duration(milliseconds: 1200);
 const agentLocalCacheWriteTimeout = Duration(milliseconds: 2500);
 const agentStatusRequestSendTimeout = Duration(seconds: 8);
+const agentActionTimeout = Duration(seconds: 15);
+const agentMessageAgentBootstrapActionTimeout = Duration(seconds: 105);
 const agentStatusQueryPollInterval = Duration(milliseconds: 700);
 const agentStatusQueryPollAttempts = 18;
 const agentStatusPayloadLookupTimeout = Duration(milliseconds: 1200);
 const agentDeletionRefreshAttempts = 4;
 const agentDeletionRefreshDelay = Duration(seconds: 2);
+
+final class AgentActionKeys {
+  const AgentActionKeys._();
+
+  static const installCommand = 'install-command';
+
+  static String createRuntime(String daemonDid) => 'create-runtime:$daemonDid';
+
+  static String bootstrapMessageAgent(String daemonDid) =>
+      'message-agent-bootstrap:$daemonDid';
+
+  static String pauseMessageAgent(String daemonDid) =>
+      'message-agent-pause:$daemonDid';
+
+  static String deleteMessageAgent(String daemonDid) =>
+      'message-agent-delete:$daemonDid';
+
+  static String revokeMessageAgent(String daemonDid) =>
+      'message-agent-revoke:$daemonDid';
+
+  static String resetRuntime(String runtimeDid) => 'runtime-reset:$runtimeDid';
+
+  static String retryRun(String runtimeDid) => 'runtime-retry:$runtimeDid';
+
+  static String rename(String agentDid) => 'rename:$agentDid';
+
+  static String delete(String agentDid) => 'delete:$agentDid';
+
+  static String upgradeDaemon(String daemonDid) => 'daemon-upgrade:$daemonDid';
+
+  static String unbind(String agentDid) => 'unbind:$agentDid';
+}
 
 enum PendingRuntimeCreationState { creating, waitingForStatus }
 
@@ -216,7 +250,7 @@ class AgentsState {
     this.agents = const <AgentSummary>[],
     this.selectedAgentDid,
     this.isLoading = false,
-    this.isActing = false,
+    this.pendingActionKeys = const <String>{},
     this.installCommand,
     this.error,
     this.pendingStatusQueryAtByDaemon = const <String, DateTime>{},
@@ -239,7 +273,7 @@ class AgentsState {
   final List<AgentSummary> agents;
   final String? selectedAgentDid;
   final bool isLoading;
-  final bool isActing;
+  final Set<String> pendingActionKeys;
   final InstallCommand? installCommand;
   final String? error;
   final Map<String, DateTime> pendingStatusQueryAtByDaemon;
@@ -268,6 +302,12 @@ class AgentsState {
       }
     }
     return agents.isEmpty ? null : agents.first;
+  }
+
+  bool get isActing => pendingActionKeys.isNotEmpty;
+
+  bool isActionPending(String actionKey) {
+    return pendingActionKeys.contains(actionKey);
   }
 
   List<AgentSummary> get daemonAgents =>
@@ -333,7 +373,7 @@ class AgentsState {
     String? selectedAgentDid,
     bool clearSelection = false,
     bool? isLoading,
-    bool? isActing,
+    Set<String>? pendingActionKeys,
     InstallCommand? installCommand,
     bool clearInstallCommand = false,
     String? error,
@@ -359,7 +399,7 @@ class AgentsState {
           ? null
           : (selectedAgentDid ?? this.selectedAgentDid),
       isLoading: isLoading ?? this.isLoading,
-      isActing: isActing ?? this.isActing,
+      pendingActionKeys: pendingActionKeys ?? this.pendingActionKeys,
       installCommand: clearInstallCommand
           ? null
           : (installCommand ?? this.installCommand),
@@ -552,7 +592,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(error: '当前账号没有可用 handle，暂时不能生成 Daemon 安装命令。');
       return;
     }
-    await _act(() async {
+    await _runAction(AgentActionKeys.installCommand, () async {
       final command = await ref
           .read(agentControlServiceProvider)
           .createDaemonInstallCommand(
@@ -644,7 +684,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(error: '请先登录。');
       return;
     }
-    await _act(() async {
+    await _runAction(AgentActionKeys.createRuntime(daemonDid), () async {
       final requestId = agentCommandId('app_req');
       final pending = PendingRuntimeCreation(
         requestId: requestId,
@@ -721,38 +761,43 @@ class AgentsController extends StateNotifier<AgentsState> {
     final resolvedAppInstanceId =
         appInstanceId ?? _defaultAppInstanceId(session.credentialName);
     final existingMessageAgent = state.messageAgentRuntimeFor(daemonDid);
-    await _act(() async {
-      final subkeyPackage =
-          userSubkeyPackage ??
+    await _runAction(
+      AgentActionKeys.bootstrapMessageAgent(daemonDid),
+      () async {
+        final subkeyPackage =
+            userSubkeyPackage ??
+            await ref
+                .read(identityCorePortProvider)
+                .ensureDaemonSubkeyPackage(session.credentialName);
+        if (existingMessageAgent != null) {
           await ref
-              .read(identityCorePortProvider)
-              .ensureDaemonSubkeyPackage(session.credentialName);
-      if (existingMessageAgent != null) {
+              .read(messageAgentBindingPortProvider)
+              .ensureBinding(
+                userDid: subkeyPackage.userDid,
+                daemonAgentDid: daemonDid,
+                messageAgentDid: existingMessageAgent.agentDid,
+                runtimeProvider: appMessageHandlerRuntimeProvider,
+                runtimeProfile: const <String, Object?>{
+                  'profile': appMessageHandlerRuntimeProfile,
+                },
+                delegatedKeyVerificationMethod:
+                    subkeyPackage.verificationMethod,
+              );
+          return;
+        }
         await ref
-            .read(messageAgentBindingPortProvider)
-            .ensureBinding(
-              userDid: subkeyPackage.userDid,
+            .read(agentControlServiceProvider)
+            .ensureMessageAgentBootstrap(
               daemonAgentDid: daemonDid,
-              messageAgentDid: existingMessageAgent.agentDid,
-              runtimeProvider: appMessageHandlerRuntimeProvider,
-              runtimeProfile: const <String, Object?>{
-                'profile': appMessageHandlerRuntimeProfile,
-              },
-              delegatedKeyVerificationMethod: subkeyPackage.verificationMethod,
+              controllerDid: session.did,
+              appInstanceId: resolvedAppInstanceId,
+              userSubkeyPackage: subkeyPackage,
+              daemonBootstrapPublicKey: daemonBootstrapPublicKey,
+              userHandle: session.handle,
             );
-        return;
-      }
-      await ref
-          .read(agentControlServiceProvider)
-          .ensureMessageAgentBootstrap(
-            daemonAgentDid: daemonDid,
-            controllerDid: session.did,
-            appInstanceId: resolvedAppInstanceId,
-            userSubkeyPackage: subkeyPackage,
-            daemonBootstrapPublicKey: daemonBootstrapPublicKey,
-            userHandle: session.handle,
-          );
-    });
+      },
+      timeout: agentMessageAgentBootstrapActionTimeout,
+    );
   }
 
   Future<void> resetRuntimeSession(AgentSummary runtime) async {
@@ -760,7 +805,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (daemonDid == null) {
       return;
     }
-    await _act(() {
+    await _runAction(AgentActionKeys.resetRuntime(runtime.agentDid), () {
       return ref
           .read(agentControlServiceProvider)
           .resetRuntimeSession(
@@ -776,7 +821,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (daemonDid == null || normalizedRunId.isEmpty) {
       return;
     }
-    await _act(() {
+    await _runAction(AgentActionKeys.retryRun(runtime.agentDid), () {
       return ref
           .read(agentControlServiceProvider)
           .retryRun(
@@ -789,6 +834,10 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   Future<bool> upgradeDaemon(String daemonDid) async {
     if (state.isDaemonUpgradePending(daemonDid)) {
+      return false;
+    }
+    final actionKey = AgentActionKeys.upgradeDaemon(daemonDid);
+    if (state.isActionPending(actionKey)) {
       return false;
     }
     final requestedAt = DateTime.now().toUtc();
@@ -814,23 +863,27 @@ class AgentsController extends StateNotifier<AgentsState> {
         daemonDid,
       ),
       statusQueryErrors: _withoutStringKey(state.statusQueryErrors, daemonDid),
-      isActing: true,
+      pendingActionKeys: _withSetValue(state.pendingActionKeys, actionKey),
       clearError: true,
     );
     _scheduleDaemonUpgradeAckTimeout(daemonDid, commandId);
     try {
       await ref
           .read(agentControlServiceProvider)
-          .upgradeDaemon(daemonDid, commandId: commandId);
+          .upgradeDaemon(daemonDid, commandId: commandId)
+          .timeout(agentActionTimeout);
       if (!mounted || !state.pendingDaemonUpgrades.containsKey(daemonDid)) {
         return true;
       }
-      state = state.copyWith(isActing: false, clearError: true);
+      state = state.copyWith(
+        pendingActionKeys: _withoutSetValue(state.pendingActionKeys, actionKey),
+        clearError: true,
+      );
       return true;
     } catch (error) {
       _cancelDaemonUpgradeTimers(daemonDid);
       state = state.copyWith(
-        isActing: false,
+        pendingActionKeys: _withoutSetValue(state.pendingActionKeys, actionKey),
         pendingDaemonUpgrades: _withoutMapKey(
           state.pendingDaemonUpgrades,
           daemonDid,
@@ -846,6 +899,15 @@ class AgentsController extends StateNotifier<AgentsState> {
         error: _agentErrorMessage(error),
       );
       return false;
+    } finally {
+      if (mounted && state.isActionPending(actionKey)) {
+        state = state.copyWith(
+          pendingActionKeys: _withoutSetValue(
+            state.pendingActionKeys,
+            actionKey,
+          ),
+        );
+      }
     }
   }
 
@@ -874,7 +936,8 @@ class AgentsController extends StateNotifier<AgentsState> {
             daemonDid,
             commandId: commandId,
             upgradeCommandId: pendingUpgrade?.commandId,
-          );
+          )
+          .timeout(agentActionTimeout);
       if (!mounted || !state.cancellingDaemonUpgrades.containsKey(daemonDid)) {
         return true;
       }
@@ -901,7 +964,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (selected == null) {
       return;
     }
-    await _act(() async {
+    await _runAction(AgentActionKeys.unbind(selected.agentDid), () async {
       await ref
           .read(agentControlServiceProvider)
           .unbindAgent(selected.agentDid);
@@ -918,12 +981,16 @@ class AgentsController extends StateNotifier<AgentsState> {
       return;
     }
     if (selected.isDaemon && _canUnbindUnfinishedDaemonInstall(selected)) {
-      await _act(() async {
+      await _runAction(AgentActionKeys.unbind(selected.agentDid), () async {
         await ref
             .read(agentControlServiceProvider)
             .unbindAgent(selected.agentDid);
         await load();
       });
+      return;
+    }
+    final actionKey = AgentActionKeys.delete(selected.agentDid);
+    if (state.isActionPending(actionKey)) {
       return;
     }
     final daemon = selected.isDaemon
@@ -942,7 +1009,7 @@ class AgentsController extends StateNotifier<AgentsState> {
           }
         : {selected.agentDid};
     state = state.copyWith(
-      isActing: true,
+      pendingActionKeys: _withSetValue(state.pendingActionKeys, actionKey),
       pendingDeletionAgentDids: <String>{
         ...state.pendingDeletionAgentDids,
         ...deletingDids,
@@ -953,26 +1020,31 @@ class AgentsController extends StateNotifier<AgentsState> {
       if (selected.isDaemon) {
         await ref
             .read(agentControlServiceProvider)
-            .deleteDaemon(selected.agentDid);
+            .deleteDaemon(selected.agentDid)
+            .timeout(agentActionTimeout);
       } else {
         await ref
             .read(agentControlServiceProvider)
             .deleteRuntimeAgent(
               daemonAgentDid: daemon.agentDid,
               runtimeAgentDid: selected.agentDid,
-            );
+            )
+            .timeout(agentActionTimeout);
       }
       if (!mounted) {
         return;
       }
-      state = state.copyWith(isActing: false, clearError: true);
+      state = state.copyWith(
+        pendingActionKeys: _withoutSetValue(state.pendingActionKeys, actionKey),
+        clearError: true,
+      );
       _scheduleDeletionRefresh(daemon.agentDid);
     } catch (error) {
       if (!mounted) {
         return;
       }
       state = state.copyWith(
-        isActing: false,
+        pendingActionKeys: _withoutSetValue(state.pendingActionKeys, actionKey),
         pendingDeletionAgentDids: _withoutStringKeys(
           state.pendingDeletionAgentDids,
           deletingDids,
@@ -980,6 +1052,15 @@ class AgentsController extends StateNotifier<AgentsState> {
         error: _agentErrorMessage(error),
         debugLastError: error.toString(),
       );
+    } finally {
+      if (mounted && state.isActionPending(actionKey)) {
+        state = state.copyWith(
+          pendingActionKeys: _withoutSetValue(
+            state.pendingActionKeys,
+            actionKey,
+          ),
+        );
+      }
     }
   }
 
@@ -989,7 +1070,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(error: '当前 Daemon 尚未创建消息处理 Agent。');
       return;
     }
-    await _act(() async {
+    await _runAction(AgentActionKeys.pauseMessageAgent(daemonDid), () async {
       await ref
           .read(agentControlServiceProvider)
           .pauseMessageAgent(
@@ -1008,8 +1089,12 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (state.isDeletingAgent(target.agentDid)) {
       return;
     }
+    final actionKey = AgentActionKeys.deleteMessageAgent(daemonDid);
+    if (state.isActionPending(actionKey)) {
+      return;
+    }
     state = state.copyWith(
-      isActing: true,
+      pendingActionKeys: _withSetValue(state.pendingActionKeys, actionKey),
       pendingDeletionAgentDids: <String>{
         ...state.pendingDeletionAgentDids,
         target.agentDid,
@@ -1022,18 +1107,22 @@ class AgentsController extends StateNotifier<AgentsState> {
           .deleteMessageAgent(
             daemonAgentDid: daemonDid,
             messageAgentDid: target.agentDid,
-          );
+          )
+          .timeout(agentActionTimeout);
       if (!mounted) {
         return;
       }
-      state = state.copyWith(isActing: false, clearError: true);
+      state = state.copyWith(
+        pendingActionKeys: _withoutSetValue(state.pendingActionKeys, actionKey),
+        clearError: true,
+      );
       _scheduleDeletionRefresh(daemonDid);
     } catch (error) {
       if (!mounted) {
         return;
       }
       state = state.copyWith(
-        isActing: false,
+        pendingActionKeys: _withoutSetValue(state.pendingActionKeys, actionKey),
         pendingDeletionAgentDids: _withoutStringKeys(
           state.pendingDeletionAgentDids,
           {target.agentDid},
@@ -1041,6 +1130,15 @@ class AgentsController extends StateNotifier<AgentsState> {
         error: _agentErrorMessage(error),
         debugLastError: error.toString(),
       );
+    } finally {
+      if (mounted && state.isActionPending(actionKey)) {
+        state = state.copyWith(
+          pendingActionKeys: _withoutSetValue(
+            state.pendingActionKeys,
+            actionKey,
+          ),
+        );
+      }
     }
   }
 
@@ -1052,7 +1150,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(error: '当前 Daemon 尚未创建消息处理 Agent。');
       return;
     }
-    await _act(() async {
+    await _runAction(AgentActionKeys.revokeMessageAgent(daemonDid), () async {
       await ref
           .read(agentControlServiceProvider)
           .revokeMessageAgentAuthorization(
@@ -1067,7 +1165,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (selected == null) {
       return;
     }
-    await _act(() async {
+    await _runAction(AgentActionKeys.rename(selected.agentDid), () async {
       await ref
           .read(agentControlServiceProvider)
           .updateDisplayName(
@@ -1276,17 +1374,45 @@ class AgentsController extends StateNotifier<AgentsState> {
     );
   }
 
-  Future<void> _act(Future<void> Function() action) async {
-    state = state.copyWith(isActing: true, clearError: true);
+  Future<void> _runAction(
+    String actionKey,
+    Future<void> Function() action, {
+    Duration timeout = agentActionTimeout,
+  }) async {
+    if (state.isActionPending(actionKey)) {
+      return;
+    }
+    state = state.copyWith(
+      pendingActionKeys: _withSetValue(state.pendingActionKeys, actionKey),
+      clearError: true,
+    );
     try {
-      await action();
-      state = state.copyWith(isActing: false, clearError: true);
-    } catch (error) {
+      await action().timeout(timeout);
+      if (!mounted) {
+        return;
+      }
       state = state.copyWith(
-        isActing: false,
+        pendingActionKeys: _withoutSetValue(state.pendingActionKeys, actionKey),
+        clearError: true,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      state = state.copyWith(
+        pendingActionKeys: _withoutSetValue(state.pendingActionKeys, actionKey),
         error: _agentErrorMessage(error),
         debugLastError: error.toString(),
       );
+    } finally {
+      if (mounted && state.isActionPending(actionKey)) {
+        state = state.copyWith(
+          pendingActionKeys: _withoutSetValue(
+            state.pendingActionKeys,
+            actionKey,
+          ),
+        );
+      }
     }
   }
 
@@ -1502,7 +1628,10 @@ class AgentsController extends StateNotifier<AgentsState> {
         ...state.daemonUpgradeProgress,
         daemonDid: DaemonUpgradeProgress.waitingForDaemonConfirmation(),
       },
-      isActing: false,
+      pendingActionKeys: _withoutSetValue(
+        state.pendingActionKeys,
+        AgentActionKeys.upgradeDaemon(daemonDid),
+      ),
     );
     unawaited(refreshDaemonStatus(daemonDid, fromAutoLoad: true));
   }
@@ -2767,6 +2896,13 @@ Set<String> _withoutSetValue(Set<String> input, String value) {
     for (final item in input)
       if (item != value) item,
   };
+}
+
+Set<String> _withSetValue(Set<String> input, String value) {
+  if (input.contains(value)) {
+    return input;
+  }
+  return <String>{...input, value};
 }
 
 Set<String> _withoutStringKeys(Set<String> input, Set<String> keys) {

@@ -46,7 +46,10 @@ class _AgentListPane extends StatelessWidget {
                   ),
                 ),
                 AppIconButton(
-                  onPressed: state.isActing ? null : onCreateDaemon,
+                  onPressed:
+                      state.isActionPending(AgentActionKeys.installCommand)
+                      ? null
+                      : onCreateDaemon,
                   semanticLabel: '创建 Daemon',
                   tooltip: '创建 Daemon',
                   size: responsive.displayScaled(34),
@@ -225,8 +228,7 @@ class _AgentDaemonGroup extends StatelessWidget {
             selected: selectedAgentDid == daemon.agentDid,
             onTap: () => onSelect(daemon.agentDid),
             runtimeCount: runtimes.length + pendingRuntimeCreations.length,
-            onRefresh:
-                state.isActing || state.isStatusQueryPending(daemon.agentDid)
+            onRefresh: state.isStatusQueryPending(daemon.agentDid)
                 ? null
                 : () => onRefreshDaemon(daemon),
             isRefreshing: state.isStatusQueryPending(daemon.agentDid),

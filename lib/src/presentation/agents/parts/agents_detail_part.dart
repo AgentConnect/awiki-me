@@ -56,6 +56,24 @@ class _AgentDetailPane extends StatelessWidget {
     final isCancelling =
         agent.isDaemon && state.isDaemonUpgradeCancelling(agent.agentDid);
     final isDeleting = state.isDeletingAgent(agent.agentDid);
+    final isCreatingRuntime =
+        agent.isDaemon &&
+        state.isActionPending(AgentActionKeys.createRuntime(agent.agentDid));
+    final isRenaming = state.isActionPending(
+      AgentActionKeys.rename(agent.agentDid),
+    );
+    final isResetting =
+        agent.isRuntime &&
+        state.isActionPending(AgentActionKeys.resetRuntime(agent.agentDid));
+    final isRetrying =
+        agent.isRuntime &&
+        state.isActionPending(AgentActionKeys.retryRun(agent.agentDid));
+    final isDeleteSending = state.isActionPending(
+      AgentActionKeys.delete(agent.agentDid),
+    );
+    final isUpgradeSending =
+        agent.isDaemon &&
+        state.isActionPending(AgentActionKeys.upgradeDaemon(agent.agentDid));
     final title = AgentDisplayName.title(agent);
     final visualStatus = AgentVisualStatus.fromAgent(
       agent,
@@ -104,16 +122,14 @@ class _AgentDetailPane extends StatelessWidget {
                     _DaemonRefreshIconButton(
                       isLoading: isRefreshing,
                       size: responsive.displayScaled(34),
-                      onPressed: state.isActing || isRefreshing
-                          ? null
-                          : () => onRefresh(agent),
+                      onPressed: isRefreshing ? null : () => onRefresh(agent),
                     ),
                   if (agent.isDaemon)
                     _ActionButton(
                       icon: CupertinoIcons.sparkles,
                       label: '创建 Agent',
                       onPressed:
-                          state.isActing ||
+                          isCreatingRuntime ||
                               (agent.isDaemon && agent.latest.needsUpgrade)
                           ? null
                           : () => onCreateRuntime(agent),
@@ -127,13 +143,13 @@ class _AgentDetailPane extends StatelessWidget {
                   _ActionButton(
                     icon: CupertinoIcons.pencil,
                     label: '改名',
-                    onPressed: state.isActing ? null : () => onRename(agent),
+                    onPressed: isRenaming ? null : () => onRename(agent),
                   ),
                   if (agent.isRuntime)
                     _ActionButton(
                       icon: CupertinoIcons.arrow_counterclockwise,
                       label: '重置 Session',
-                      onPressed: state.isActing
+                      onPressed: isResetting
                           ? null
                           : () => onResetRuntime(agent),
                     ),
@@ -141,15 +157,13 @@ class _AgentDetailPane extends StatelessWidget {
                     _ActionButton(
                       icon: CupertinoIcons.play_arrow,
                       label: '重试 Run',
-                      onPressed: state.isActing
-                          ? null
-                          : () => onRetryRun(agent),
+                      onPressed: isRetrying ? null : () => onRetryRun(agent),
                     ),
                   if (agent.isDaemon && agent.latest.needsUpgrade)
                     _ActionButton(
                       icon: CupertinoIcons.arrow_up_circle,
                       label: isUpgrading ? '升级中' : '升级',
-                      onPressed: state.isActing || isUpgrading
+                      onPressed: isUpgradeSending || isUpgrading
                           ? null
                           : () => onUpgrade(agent),
                     ),
@@ -158,7 +172,7 @@ class _AgentDetailPane extends StatelessWidget {
                       icon: CupertinoIcons.xmark_circle,
                       label: isCancelling ? '取消中' : '取消升级',
                       danger: true,
-                      onPressed: state.isActing || isCancelling
+                      onPressed: isCancelling
                           ? null
                           : () => onCancelUpgrade(agent),
                     ),
@@ -171,7 +185,7 @@ class _AgentDetailPane extends StatelessWidget {
                         : '删除智能体',
                     danger: true,
                     onPressed:
-                        state.isActing ||
+                        isDeleteSending ||
                             isDeleting ||
                             !state.canDeleteAgent(agent)
                         ? null
@@ -234,7 +248,19 @@ class _AgentDetailPane extends StatelessWidget {
                 daemon: agent,
                 messageAgent: state.messageAgentRuntimeFor(agent.agentDid),
                 enabled: messageAgentEnabled,
-                isActing: state.isActing,
+                isEnablePending: state.isActionPending(
+                  AgentActionKeys.bootstrapMessageAgent(agent.agentDid),
+                ),
+                isManagementPending:
+                    state.isActionPending(
+                      AgentActionKeys.pauseMessageAgent(agent.agentDid),
+                    ) ||
+                    state.isActionPending(
+                      AgentActionKeys.deleteMessageAgent(agent.agentDid),
+                    ) ||
+                    state.isActionPending(
+                      AgentActionKeys.revokeMessageAgent(agent.agentDid),
+                    ),
                 onEnable: () => onBootstrapMessageAgent(agent),
                 onPause: () => onPauseMessageAgent(agent),
                 onDelete: () => onDeleteMessageAgent(agent),
@@ -297,7 +323,8 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
     required this.daemon,
     required this.messageAgent,
     required this.enabled,
-    required this.isActing,
+    required this.isEnablePending,
+    required this.isManagementPending,
     required this.onEnable,
     required this.onPause,
     required this.onDelete,
@@ -307,7 +334,8 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
   final AgentSummary daemon;
   final AgentSummary? messageAgent;
   final bool enabled;
-  final bool isActing;
+  final bool isEnablePending;
+  final bool isManagementPending;
   final VoidCallback onEnable;
   final VoidCallback onPause;
   final VoidCallback onDelete;
@@ -322,9 +350,10 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
         daemon.latest.status.trim().toLowerCase() == 'ready' ||
         daemon.latest.status.trim().toLowerCase() == 'needs_upgrade';
     const provider = defaultMessageAgentRuntimeProvider;
-    final canEnable = enabled && daemonReady && hasBootstrapKey && !isActing;
+    final isBusy = isEnablePending || isManagementPending;
+    final canEnable = enabled && daemonReady && hasBootstrapKey && !isBusy;
     final canManage =
-        enabled && daemonReady && messageAgent != null && !isActing;
+        enabled && daemonReady && messageAgent != null && !isBusy;
     return Container(
       key: const Key('message-agent-settings-panel'),
       padding: EdgeInsets.all(responsive.spacing(16)),
@@ -409,7 +438,7 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
               children: <Widget>[
                 _ActionButton(
                   icon: CupertinoIcons.check_mark_circled,
-                  label: isActing ? '启用中' : '启用消息处理 Agent',
+                  label: isEnablePending ? '启用中' : '启用消息处理 Agent',
                   onPressed: canEnable ? onEnable : null,
                 ),
                 _ActionButton(
