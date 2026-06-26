@@ -95,7 +95,7 @@ void main() {
     expect(inventory.runtimeTokenRuntime, 'codex');
     expect(inventory.runtimeTokenDriverId, 'codex');
     expect(inventory.runtimeTokenWorkspaceMode, 'route-root');
-    expect(inventory.runtimeTokenDefaultSandbox, 'read-only');
+    expect(inventory.runtimeTokenDefaultSandbox, 'danger-full-access');
     expect(inventory.runtimeTokenDriverConfig, <String, Object?>{
       'ephemeral': false,
     });
@@ -105,7 +105,7 @@ void main() {
     expect(args['runtime'], 'codex');
     expect(args['driver_id'], 'codex');
     expect(args['workspace_mode'], 'route-root');
-    expect(args['default_sandbox'], 'read-only');
+    expect(args['default_sandbox'], 'danger-full-access');
     expect(args['driver_config'], <String, Object?>{'ephemeral': false});
     expect(args.containsKey('binary_path'), isFalse);
     expect(

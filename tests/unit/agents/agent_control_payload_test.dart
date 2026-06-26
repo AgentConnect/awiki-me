@@ -219,7 +219,7 @@ void main() {
       displayName: 'Alice Codex',
       handle: 'alice-codex',
       workspaceMode: runtimeWorkspaceModeRouteRoot,
-      defaultSandbox: runtimeSandboxReadOnly,
+      defaultSandbox: runtimeSandboxDangerFullAccess,
       driverConfig: const <String, Object?>{'ephemeral': false},
     );
 
@@ -227,7 +227,7 @@ void main() {
     expect(args['runtime'], 'codex');
     expect(args['driver_id'], 'codex');
     expect(args['workspace_mode'], 'route-root');
-    expect(args['default_sandbox'], 'read-only');
+    expect(args['default_sandbox'], 'danger-full-access');
     expect(args['driver_config'], <String, Object?>{'ephemeral': false});
     expect(args.containsKey('binary_path'), isFalse);
     expect(
@@ -248,7 +248,7 @@ void main() {
       displayName: 'Alice Claude',
       handle: 'alice-claude',
       workspaceMode: runtimeWorkspaceModeRouteRoot,
-      defaultSandbox: runtimeSandboxReadOnly,
+      defaultSandbox: runtimeSandboxDangerFullAccess,
       defaultModel: 'claude-sonnet-test',
       driverConfig: const <String, Object?>{
         'binary_path': '/tmp/fake-claude',
@@ -260,7 +260,7 @@ void main() {
     expect(args['runtime'], 'claude-code');
     expect(args['driver_id'], 'claude-code');
     expect(args['workspace_mode'], 'route-root');
-    expect(args['default_sandbox'], 'read-only');
+    expect(args['default_sandbox'], 'danger-full-access');
     expect(args['default_model'], 'claude-sonnet-test');
     expect(args['driver_config'], <String, Object?>{
       'binary_path': '/tmp/fake-claude',

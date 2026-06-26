@@ -8,6 +8,7 @@ const runtimeWorkspaceModeWorktreePerTask = 'worktree-per-task';
 
 const runtimeSandboxReadOnly = 'read-only';
 const runtimeSandboxWorkspaceWrite = 'workspace-write';
+const runtimeSandboxDangerFullAccess = 'danger-full-access';
 
 enum RuntimeAgentKind { hermes, codex, claudeCode }
 
@@ -51,7 +52,7 @@ class RuntimeAgentCreateOptions {
     required this.handle,
     required this.displayName,
     this.workspaceMode = runtimeWorkspaceModeRouteRoot,
-    this.sandbox = runtimeSandboxReadOnly,
+    this.sandbox = runtimeSandboxDangerFullAccess,
     this.model,
   });
 

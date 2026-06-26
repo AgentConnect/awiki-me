@@ -2341,7 +2341,6 @@ void main() {
               handle: 'alice-codex',
               displayName: 'Alice Codex',
               workspaceMode: runtimeWorkspaceModeRouteRoot,
-              sandbox: runtimeSandboxWorkspaceWrite,
             ),
           );
 
@@ -2350,7 +2349,7 @@ void main() {
       expect(control.lastRuntimeCreateHandle, 'alice-codex');
       expect(control.lastRuntimeCreateDisplayName, 'Alice Codex');
       expect(control.lastRuntimeCreateWorkspaceMode, 'route-root');
-      expect(control.lastRuntimeCreateSandbox, 'workspace-write');
+      expect(control.lastRuntimeCreateSandbox, 'danger-full-access');
     },
   );
 

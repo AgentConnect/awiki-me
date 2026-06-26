@@ -75,7 +75,11 @@ const Map<String, Object?> genericCliCapabilityDiagnostics = <String, Object?>{
         'shared-root',
         'worktree-per-task',
       ],
-      'supported_sandbox_modes': <String>['read-only', 'workspace-write'],
+      'supported_sandbox_modes': <String>[
+        'read-only',
+        'workspace-write',
+        'danger-full-access',
+      ],
       'supported_runtime_create_args': <String>[
         'runtime',
         'driver_id',

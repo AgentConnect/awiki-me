@@ -106,7 +106,6 @@ void main() {
             handle: runtimeHandle,
             displayName: 'Claude Code E2E',
             workspaceMode: runtimeWorkspaceModeRouteRoot,
-            sandbox: runtimeSandboxReadOnly,
           ),
         );
         await _pumpUntil(

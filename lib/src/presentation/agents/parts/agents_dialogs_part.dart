@@ -114,18 +114,6 @@ Future<void> _showCreateRuntimeDialog(
   if (!context.mounted) {
     return;
   }
-  if (result.sandbox == runtimeSandboxWorkspaceWrite) {
-    final confirmed = await _confirm(
-      context,
-      title: '确认 workspace-write',
-      message: '该权限允许 runtime 修改它的 route workspace 或 worktree 文件。它不是安全隔离边界。',
-      actionLabel: '继续创建',
-      destructive: true,
-    );
-    if (!confirmed) {
-      return;
-    }
-  }
   await ref
       .read(agentsProvider.notifier)
       .createRuntimeAgent(
@@ -184,7 +172,7 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
   bool _normalizingHandle = false;
   RuntimeAgentKind _kind = RuntimeAgentKind.hermes;
   String _workspaceMode = runtimeWorkspaceModeRouteRoot;
-  String _sandbox = runtimeSandboxReadOnly;
+  String _sandbox = runtimeSandboxDangerFullAccess;
   String? _submittedNameError;
   String? _submittedHandleError;
   String? _remoteHandle;
@@ -226,7 +214,7 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
       );
       if (kind == RuntimeAgentKind.hermes) {
         _workspaceMode = runtimeWorkspaceModeRouteRoot;
-        _sandbox = runtimeSandboxReadOnly;
+        _sandbox = runtimeSandboxDangerFullAccess;
       }
     });
   }
@@ -480,27 +468,7 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
                                     },
                                   ),
                                   SizedBox(height: responsive.spacing(12)),
-                                  _RuntimeOptionSelector(
-                                    title: '权限模式',
-                                    value: _sandbox,
-                                    options: const <_RuntimeOption>[
-                                      _RuntimeOption(
-                                        value: runtimeSandboxReadOnly,
-                                        label: '只读',
-                                        description:
-                                            '默认模式，不允许修改 route workspace。',
-                                      ),
-                                      _RuntimeOption(
-                                        value: runtimeSandboxWorkspaceWrite,
-                                        label: 'workspace-write',
-                                        description:
-                                            '允许修改 route workspace 或 worktree 文件。',
-                                      ),
-                                    ],
-                                    onChanged: (value) {
-                                      setState(() => _sandbox = value);
-                                    },
-                                  ),
+                                  const _RuntimePermissionSummary(),
                                   SizedBox(height: responsive.spacing(12)),
                                 ],
                                 _AgentDialogField(
@@ -844,16 +812,78 @@ class _RuntimeCreateCapability {
         reasonLabel: '需升级',
       );
     }
-    if (!supportedSandboxModes.contains(runtimeSandboxReadOnly)) {
+    if (!supportedSandboxModes.contains(runtimeSandboxDangerFullAccess)) {
       return _RuntimeKindStatus(
         enabled: false,
-        description: '${kind.displayLabel} 需要只读权限模式。',
+        description: '${kind.displayLabel} 需要 daemon 支持宿主机全权限模式。',
         reasonLabel: '需升级',
       );
     }
     return _RuntimeKindStatus(
       enabled: true,
       description: '需要 daemon 上已安装并登录的 ${kind.displayLabel} CLI。',
+    );
+  }
+}
+
+class _RuntimePermissionSummary extends StatelessWidget {
+  const _RuntimePermissionSummary();
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(responsive.spacing(12)),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFD),
+        borderRadius: BorderRadius.circular(responsive.radius(10)),
+        border: Border.all(color: const Color(0xFFDDE5F1)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: responsive.displayScaled(28),
+            height: responsive.displayScaled(28),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: CupertinoColors.white,
+              borderRadius: BorderRadius.circular(responsive.radius(8)),
+            ),
+            child: Icon(
+              CupertinoIcons.command,
+              color: const Color(0xFF0B65F8),
+              size: responsive.iconSm,
+            ),
+          ),
+          SizedBox(width: responsive.spacing(10)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  '宿主机全权限',
+                  style: TextStyle(
+                    color: const Color(0xFF17213A),
+                    fontSize: responsive.bodyMd,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                SizedBox(height: responsive.spacing(3)),
+                Text(
+                  '可按用户指令使用本机文件、命令、工具和网络。',
+                  style: TextStyle(
+                    color: const Color(0xFF66728A),
+                    fontSize: responsive.metaSm,
+                    height: 1.25,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

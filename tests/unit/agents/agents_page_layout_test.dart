@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
@@ -283,9 +281,8 @@ void main() {
       await tester.tap(find.text('Codex'));
       await tester.pumpAndSettle();
       expect(find.text('工作目录策略'), findsOneWidget);
-      expect(find.text('权限模式'), findsOneWidget);
+      expect(find.text('宿主机全权限'), findsOneWidget);
       expect(find.text('按会话目录'), findsOneWidget);
-      expect(find.text('只读'), findsOneWidget);
       final codexNameField = tester.widget<CupertinoTextField>(nameFieldFinder);
       expect(codexNameField.controller?.text, 'Codex1');
 
@@ -307,7 +304,7 @@ void main() {
       expect(control.lastRuntimeCreateHandle, 'my-agent');
       expect(control.lastRuntimeCreateDisplayName, '写作助手');
       expect(control.lastRuntimeCreateWorkspaceMode, 'route-root');
-      expect(control.lastRuntimeCreateSandbox, 'read-only');
+      expect(control.lastRuntimeCreateSandbox, 'danger-full-access');
       expect(control.lastRuntimeCreateClientRequestId, isNotNull);
       expect(find.text('写作助手'), findsWidgets);
       expect(find.text('codex · 创建状态暂未返回，可刷新查看'), findsOneWidget);
@@ -357,7 +354,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byKey(const Key('agent-create-scroll-body')), findsOneWidget);
       expect(find.text('工作目录策略'), findsOneWidget);
-      expect(find.text('权限模式'), findsOneWidget);
+      expect(find.text('宿主机全权限'), findsOneWidget);
 
       await tester.ensureVisible(
         find.byKey(const Key('agent-create-handle-field')),
@@ -373,7 +370,7 @@ void main() {
     },
   );
 
-  testWidgets('create Agent dialog confirms workspace-write before submit', (
+  testWidgets('create Agent dialog submits generic CLI full-access directly', (
     tester,
   ) async {
     final control = _PendingRefreshAgentControlService()
@@ -411,29 +408,24 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Codex'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('workspace-write'));
-    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('agent-create-handle-field')),
-      'write-agent',
+      'full-access-agent',
     );
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump();
     await tester.enterText(
       find.byKey(const Key('agent-create-name-field')),
-      '写入助手',
+      '宿主机助手',
     );
 
     await tester.tap(find.text('创建').last);
     await tester.pumpAndSettle();
-    expect(find.text('确认 workspace-write'), findsOneWidget);
-    expect(control.lastRuntimeCreateDaemonDid, isNull);
-
-    await tester.tap(find.text('继续创建'));
-    await tester.pumpAndSettle();
 
     expect(control.lastRuntimeCreateKind, RuntimeAgentKind.codex);
-    expect(control.lastRuntimeCreateSandbox, 'workspace-write');
+    expect(control.lastRuntimeCreateHandle, 'full-access-agent');
+    expect(control.lastRuntimeCreateDisplayName, '宿主机助手');
+    expect(control.lastRuntimeCreateSandbox, 'danger-full-access');
   });
 
   testWidgets(
@@ -1306,6 +1298,7 @@ void main() {
           activeState: 'active',
           latest: AgentLatestStatus(
             status: 'ready',
+            lastSeenAt: DateTime.now().toUtc(),
             diagnosticsSummary: genericCliRuntimeCardDiagnostics(
               lifecycleState: 'queued',
               driverId: 'claude-code',
@@ -1831,6 +1824,7 @@ Map<String, Object?> _genericCliCapability({
   List<String> supportedSandboxModes = const <String>[
     'read-only',
     'workspace-write',
+    'danger-full-access',
   ],
   bool routeSessionSupported = true,
   bool nativeResumeSupported = true,
@@ -1962,12 +1956,10 @@ class _MessageAgentBindingsStub implements MessageAgentBindingPort {
 }
 
 class _PendingRefreshAgentControlService extends FakeAgentControlService {
-  final Completer<void> _pendingRefresh = Completer<void>();
-
   @override
   Future<void> refreshDaemonStatus(String daemonAgentDid, {String? commandId}) {
     lastRefreshedDaemonDid = daemonAgentDid;
-    return _pendingRefresh.future;
+    return Future<void>.value();
   }
 }
 

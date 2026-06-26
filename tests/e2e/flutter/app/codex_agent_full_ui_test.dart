@@ -106,7 +106,6 @@ void main() {
             handle: runtimeHandle,
             displayName: 'Codex E2E',
             workspaceMode: runtimeWorkspaceModeRouteRoot,
-            sandbox: runtimeSandboxReadOnly,
           ),
         );
         await _pumpUntil(
