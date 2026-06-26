@@ -424,9 +424,16 @@ class ChatThreadsController
       ),
     );
     if (conversation.unreadCount > 0) {
+      final localClearWatch = Stopwatch()..start();
       ref
           .read(conversationListProvider.notifier)
           .markConversationReadLocal(conversation);
+      localClearWatch.stop();
+      AwikiPerformanceLogger.log(
+        'chat.mark_read.local_clear',
+        elapsed: localClearWatch.elapsed,
+        fields: AwikiPerformanceLogger.threadField(conversation.threadId),
+      );
       _markConversationReadBestEffort(conversation);
     }
   }
@@ -448,9 +455,8 @@ class ChatThreadsController
           });
       unawaited(operation.catchError((_) {}));
     } catch (_) {
-      // IM Core does not expose thread-level read-state yet, and the adapter can
-      // throw UnsupportedError synchronously. Opening a conversation must still
-      // clear unread locally and continue rendering messages.
+      // Thread-level mark-read is best effort. Opening a conversation must
+      // still clear unread locally and continue rendering messages.
     }
   }
 

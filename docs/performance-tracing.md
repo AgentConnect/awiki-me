@@ -35,7 +35,7 @@ flutter run -d macos \
 | `agents.load*` | Agent 清单与 daemon status 本地投影 | 判断 Agent 投影是否拖慢会话列表 |
 | `chat.open_conversation` | 点击进入会话 | 进入会话起点 |
 | `chat.history.*` / `im_core_messages.history*` | 消息历史拉取、Dart 映射、merge/sort | 判断消息列表 5-8 秒延迟卡在哪一层 |
-| `chat.mark_read*` | 打开未读会话后的已读同步 | 判断 mark read 是否额外分页拉历史导致 CPU/IO |
+| `chat.mark_read*` | 打开未读会话后的本地清未读与已读同步 | 判断本地清 unread 和 SDK thread mark-read ack 是否慢 |
 | `chat_page.build.*` / `conversation_list_page.*build.*` | Flutter build 准备阶段 | 判断是否是 UI 构建/重算慢 |
 | `frame.slow` | Flutter 慢帧 build/raster 时间 | 判断是否出现明显 UI jank |
 
@@ -44,7 +44,10 @@ flutter run -d macos \
 1. 如果 `im_core_conversations.native_list` 或 `im_core_messages.history_native` 很慢，优先怀疑 im-core native、SQLite/WAL、本地库版本或网络历史读取。
 2. 如果 `conversation_service.agent_projection` 或 `agents.load.*` 很慢，优先怀疑 Agent inventory / daemon status 投影造成启动列表慢。
 3. 如果 `conversation_service.filter_sort`、`conversation_list.refresh.merge` 或 `chat.messages.sort` 很慢，优先看 Dart 侧列表规模、O(n²) 匹配和排序。
-4. 如果 `chat.mark_read` 很慢，说明进入未读会话时额外 mark-read 流程可能在分页拉历史。
+4. 如果 `chat.mark_read` 很慢，优先看 `im_core_conversations.mark_read.native` 的
+   `local_candidates`、`remote_ack`、`partial` 和 `warnings`；旧的
+   `im_core_conversations.mark_read.history_page` 不应再出现，出现则说明回归到了
+   history 分页找 unread ids。
 5. 如果 `frame.slow` 很多而数据层日志不慢，说明主要是 Flutter build/raster 或大量 widget 重建。
 
 ## 隐私说明

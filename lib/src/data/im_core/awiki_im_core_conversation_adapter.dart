@@ -8,9 +8,6 @@ import '../../domain/entities/conversation_summary.dart';
 import 'awiki_im_core_mappers.dart';
 import 'awiki_im_core_runtime.dart';
 
-const int _markThreadReadPageSize = 100;
-const int _markThreadReadMaxPages = 10;
-
 class AwikiImCoreConversationAdapter implements ConversationCorePort {
   AwikiImCoreConversationAdapter({
     required AwikiImCoreRuntime runtime,
@@ -71,62 +68,24 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
       final totalWatch = Stopwatch()..start();
       final ownerDid = (await client.identity.current()).did;
       final coreThread = coreThreadRefForMarkRead(thread, ownerDid);
-      final messageIds = <String>{};
-      String? cursor;
-      var pages = 0;
-
-      for (
-        var pageIndex = 0;
-        pageIndex < _markThreadReadMaxPages;
-        pageIndex++
-      ) {
-        final page = await AwikiPerformanceLogger.async(
-          'im_core_conversations.mark_read.history_page',
-          () => client.messages.history(
-            coreThread,
-            limit: _markThreadReadPageSize,
-            cursor: cursor,
-          ),
-          fields: <String, Object?>{
-            'page': pageIndex + 1,
-            'cursor': cursor != null,
-          },
-        );
-        pages += 1;
-        messageIds.addAll(
-          unreadIncomingMessageIdsForMarkRead(page.items, ownerDid: ownerDid),
-        );
-        final nextCursor = page.nextCursor?.trim();
-        if (!page.hasMore ||
-            nextCursor == null ||
-            nextCursor.isEmpty ||
-            nextCursor == cursor) {
-          break;
-        }
-        cursor = nextCursor;
-      }
-
-      if (messageIds.isEmpty) {
-        totalWatch.stop();
-        AwikiPerformanceLogger.log(
-          'im_core_conversations.mark_read',
-          elapsed: totalWatch.elapsed,
-          fields: <String, Object?>{'pages': pages, 'message_ids': 0},
-        );
-        return;
-      }
-      await AwikiPerformanceLogger.async(
+      final result = await AwikiPerformanceLogger.async(
         'im_core_conversations.mark_read.native',
-        () => client.messages.markRead(messageIds.toList(growable: false)),
-        fields: <String, Object?>{'message_ids': messageIds.length},
+        () => client.messages.markThreadRead(coreThread),
+        fields: <String, Object?>{'thread_kind': coreThreadKind(coreThread)},
       );
       totalWatch.stop();
       AwikiPerformanceLogger.log(
         'im_core_conversations.mark_read',
         elapsed: totalWatch.elapsed,
         fields: <String, Object?>{
-          'pages': pages,
-          'message_ids': messageIds.length,
+          'message_ids': result.messageIds.length,
+          'updated': result.updatedCount,
+          'local_candidates': result.localCandidateCount,
+          'local_updated': result.localUpdatedCount,
+          'remote_updated': result.remoteUpdatedCount,
+          'remote_ack': result.remoteAcknowledged,
+          'partial': result.partial,
+          'warnings': result.warnings.length,
         },
       );
     });
@@ -154,16 +113,12 @@ core.ThreadRef coreThreadRefForMarkRead(AppThreadRef thread, String ownerDid) {
   };
 }
 
-List<String> unreadIncomingMessageIdsForMarkRead(
-  Iterable<core.Message> messages, {
-  required String ownerDid,
-}) {
-  return messages
-      .where((message) => _shouldMarkMessageRead(message, ownerDid))
-      .map((message) => message.id.trim())
-      .where((messageId) => messageId.isNotEmpty)
-      .toSet()
-      .toList(growable: false);
+String coreThreadKind(core.ThreadRef thread) {
+  return switch (thread) {
+    core.DirectThreadRef() => 'direct',
+    core.GroupThreadRef() => 'group',
+    core.MessageThreadRef() => 'thread',
+  };
 }
 
 core.ThreadRef _coreThreadRefFromThreadId(String threadId, String ownerDid) {
@@ -171,11 +126,14 @@ core.ThreadRef _coreThreadRefFromThreadId(String threadId, String ownerDid) {
   if (raw.startsWith('group:')) {
     return core.ThreadRef.group(_stripGroupPrefix(raw));
   }
+  if (raw.startsWith('dm:peer-scope:')) {
+    return core.ThreadRef.thread(raw);
+  }
   final peer = _directPeerFromThreadId(ownerDid, raw);
   if (peer != null) {
     return core.ThreadRef.direct(peer);
   }
-  throw UnsupportedError('Cannot mark unread messages for thread $threadId.');
+  return core.ThreadRef.thread(raw);
 }
 
 String _stripGroupPrefix(String groupDid) {
@@ -185,7 +143,7 @@ String _stripGroupPrefix(String groupDid) {
 
 String? _directPeerFromThreadId(String ownerDid, String threadId) {
   final raw = threadId.trim();
-  if (!raw.startsWith('dm:') || raw.startsWith('dm:peer-scope:')) {
+  if (!raw.startsWith('dm:')) {
     return null;
   }
   final body = raw.substring('dm:'.length);
@@ -198,28 +156,6 @@ String? _directPeerFromThreadId(String ownerDid, String threadId) {
   }
   if (body.endsWith(':$owner')) {
     return _nonEmpty(body.substring(0, body.length - owner.length - 1));
-  }
-  return null;
-}
-
-bool _shouldMarkMessageRead(core.Message message, String ownerDid) {
-  if (message.direction == core.MessageDirection.outgoing ||
-      message.sender.trim() == ownerDid.trim()) {
-    return false;
-  }
-  return _messageReadState(message) != true;
-}
-
-bool? _messageReadState(core.Message message) {
-  for (final attribute in message.metadata.attributes) {
-    if (attribute.key != 'is_read') {
-      continue;
-    }
-    return switch (attribute.value.trim().toLowerCase()) {
-      'true' || '1' => true,
-      'false' || '0' => false,
-      _ => null,
-    };
   }
   return null;
 }
