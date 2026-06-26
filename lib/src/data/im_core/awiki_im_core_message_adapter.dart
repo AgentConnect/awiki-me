@@ -43,15 +43,25 @@ class AwikiImCoreMessageAdapter implements MessageCorePort {
     required AppThreadRef thread,
     required AttachmentDraft attachment,
     String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? idempotencyKey,
   }) async {
     return _runtime.withCurrentClient((client) async {
       final ownerDid = (await client.identity.current()).did;
+      final mentionPayloadJson = mentions.isEmpty || caption == null
+          ? null
+          : jsonEncode(
+              ChatMentionPayload.toP9Json(
+                text: caption,
+                draftMentions: mentions,
+              ),
+            );
       final result = await client.attachments.send(
         core.AttachmentSendRequest(
           target: _mappers.messageTargetToCore(thread),
           input: _attachmentInputToCore(attachment),
           caption: caption,
+          mentionPayloadJson: mentionPayloadJson,
           filename: attachment.filename,
           mimeType: attachment.mimeType,
           idempotencyKey: idempotencyKey,

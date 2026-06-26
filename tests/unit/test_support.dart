@@ -30,6 +30,7 @@ import 'package:awiki_me/src/domain/entities/bridge_capabilities.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
+import 'package:awiki_me/src/domain/entities/conversation_identity.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
@@ -584,11 +585,32 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       await completer.future;
       fetchDmHistoryCompleter = null;
     }
-    final batches = dmHistoryBatchesByPeerDid[peerDid];
+    final resolvedPeerDid = _resolveDirectHistoryPeer(peerDid);
+    final batches = resolvedPeerDid == peerDid
+        ? dmHistoryBatchesByPeerDid[peerDid]
+        : dmHistoryBatchesByPeerDid[resolvedPeerDid] ??
+              dmHistoryBatchesByPeerDid[peerDid];
     if (batches != null && batches.isNotEmpty) {
       return batches.removeAt(0);
     }
+    if (resolvedPeerDid != peerDid) {
+      return dmHistoryByPeerDid[resolvedPeerDid] ??
+          dmHistoryByPeerDid[peerDid] ??
+          const <ChatMessage>[];
+    }
     return dmHistoryByPeerDid[peerDid] ?? const <ChatMessage>[];
+  }
+
+  String _resolveDirectHistoryPeer(String peerDidOrHandle) {
+    final normalized = normalizeTestIdentity(peerDidOrHandle);
+    final profile =
+        publicProfilesByQuery[peerDidOrHandle] ??
+        publicProfilesByQuery[normalized];
+    final did = profile?.did.trim();
+    if (did != null && did.isNotEmpty) {
+      return did;
+    }
+    return peerDidOrHandle;
   }
 
   @override
@@ -1109,6 +1131,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     String? groupId,
     required AttachmentDraft attachment,
     String? caption,
+    String? payloadJson,
+    List<ChatMessageMention> mentions = const <ChatMessageMention>[],
   }) async {
     lastSentThreadId = threadId;
     lastSentPeerDid = peerDid;
@@ -1148,6 +1172,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
             ? attachment.localPath
             : null,
       ),
+      payloadJson: payloadJson,
+      mentions: mentions,
     );
   }
 
@@ -1333,7 +1359,9 @@ class FakeConversationService implements ConversationService {
     required ConversationSummary conversation,
     DateTime? updatedAt,
   }) {
-    return gateway.deleteLocalThread(conversation.visibilityKey);
+    return gateway.deleteLocalThread(
+      conversationVisibilityIdentity(conversation).primaryKey,
+    );
   }
 
   @override
@@ -1434,9 +1462,19 @@ class FakeMessagingService implements MessagingService {
     required AppThreadRef thread,
     required AttachmentDraft attachment,
     String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? idempotencyKey,
   }) {
     gateway.lastSentAttachmentIdempotencyKey = idempotencyKey;
+    final mentionPayload = mentions.isEmpty || caption == null
+        ? null
+        : ChatMentionPayload.toP9Json(text: caption, draftMentions: mentions);
+    final payloadJson = mentionPayload == null
+        ? null
+        : jsonEncode(mentionPayload);
+    final messageMentions = <ChatMessageMention>[
+      for (final mention in mentions) ChatMessageMention.fromDraft(mention),
+    ];
     return switch (thread) {
       AppDirectThreadRef(:final peerDidOrHandle) =>
         gateway.sendAttachmentMessage(
@@ -1444,12 +1482,16 @@ class FakeMessagingService implements MessagingService {
           peerDid: peerDidOrHandle,
           attachment: attachment,
           caption: caption,
+          payloadJson: payloadJson,
+          mentions: messageMentions,
         ),
       AppGroupThreadRef(:final groupDid) => gateway.sendAttachmentMessage(
         threadId: _groupThreadId(groupDid),
         groupId: groupDid,
         attachment: attachment,
         caption: caption,
+        payloadJson: payloadJson,
+        mentions: messageMentions,
       ),
       AppMessageThreadRef(:final threadId) => throw StateError(
         'Cannot send through test IM Core without peerDid or groupId: $threadId',

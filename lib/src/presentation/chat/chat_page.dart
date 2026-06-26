@@ -5,6 +5,7 @@ import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:markdown/markdown.dart' as md;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/app_router.dart';
@@ -306,6 +307,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
           (turn) => !messages.any((message) => turn.matchesMessage(message)),
         )
         .toList(growable: false);
+    final messageListItemCount =
+        messages.length +
+        unmatchedPendingTurns.length +
+        messageAgentItems.length;
     final page = SafeArea(
       bottom: false,
       child: Column(
@@ -350,15 +355,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
                           : (widget.embedded
                                 ? responsive.spacing(32)
                                 : responsive.tabContentHorizontalPadding),
-                      macStyle
-                          ? responsive.displayScaled(92)
-                          : responsive.spacing(widget.embedded ? 124 : 140),
+                      0,
                     ),
-                    itemCount:
-                        messages.length +
-                        unmatchedPendingTurns.length +
-                        messageAgentItems.length,
+                    itemCount: messageListItemCount,
                     itemBuilder: (_, index) {
+                      final isLastItem = index == messageListItemCount - 1;
                       if (index >= messages.length) {
                         final recoveryIndex =
                             index -
@@ -368,7 +369,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
                           final item = messageAgentItems[recoveryIndex];
                           return Padding(
                             padding: EdgeInsets.only(
-                              bottom: macStyle
+                              bottom: isLastItem
+                                  ? 0
+                                  : macStyle
                                   ? responsive.displayScaled(16)
                                   : responsive.spacing(18),
                             ),
@@ -406,7 +409,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
                             unmatchedPendingTurns[index - messages.length];
                         return Padding(
                           padding: EdgeInsets.only(
-                            bottom: macStyle
+                            bottom: isLastItem
+                                ? 0
+                                : macStyle
                                 ? responsive.displayScaled(16)
                                 : responsive.spacing(24),
                           ),
@@ -451,81 +456,87 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                 messageIdsWithAgentProcessing.contains(
                                   next.localId,
                                 ),
+                            isLastItem: isLastItem,
                           ),
                         ),
-                        child: Column(
-                          children: <Widget>[
-                            if (_shouldShowDivider(previous, message))
-                              _DateDivider(
-                                label: _timeDividerLabel(
-                                  message.createdAt,
-                                  previous: previous?.createdAt,
+                        child: KeyedSubtree(
+                          key: Key('chat-message-content:${message.localId}'),
+                          child: Column(
+                            children: <Widget>[
+                              if (_shouldShowDivider(previous, message))
+                                _DateDivider(
+                                  label: _timeDividerLabel(
+                                    message.createdAt,
+                                    previous: previous?.createdAt,
+                                  ),
                                 ),
-                              ),
-                            _MessageBubble(
-                              message: message,
-                              senderLabel: senderLabel,
-                              showSenderLabel: showSenderLabel,
-                              macStyle: macStyle,
-                              onRetry:
-                                  message.sendState == MessageSendState.failed
-                                  ? (_canRetryMessage(message)
-                                        ? () async {
-                                            await ref
-                                                .read(
-                                                  chatThreadsProvider.notifier,
-                                                )
-                                                .retryMessage(
-                                                  conversation:
-                                                      currentConversation,
-                                                  message: message,
-                                                  expectedAgentReplyDid:
-                                                      _expectedAgentReplyDidForConversation(
-                                                        currentConversation,
-                                                        runtimeAgent:
-                                                            runtimeAgent,
-                                                        classification:
-                                                            peerClassification,
-                                                      ),
-                                                  displayThreadId: widget
-                                                      .conversation
-                                                      .threadId,
-                                                );
-                                          }
-                                        : null)
-                                  : null,
-                              onDownload:
-                                  message.attachment != null &&
-                                      message.sendState == MessageSendState.sent
-                                  ? () => _openAttachment(
-                                      currentConversation,
-                                      message,
-                                    )
-                                  : null,
-                              isDownloading: _downloadingAttachmentMessageIds
-                                  .contains(message.localId),
-                              onPeerInfoTap: _peerInfoTapForMessage(
-                                currentConversation,
-                                message,
-                                senderLabel,
-                              ),
-                            ),
-                            if (pendingTurns.isNotEmpty) ...<Widget>[
-                              SizedBox(
-                                height: macStyle
-                                    ? responsive.displayScaled(7)
-                                    : responsive.spacing(7),
-                              ),
-                              _MessageAgentProcessingStatus(
-                                label: _agentProcessingLabel(pendingTurns),
-                                overdue: pendingTurns.any(
-                                  (turn) => turn.isOverdue,
-                                ),
+                              _MessageBubble(
+                                message: message,
+                                senderLabel: senderLabel,
+                                showSenderLabel: showSenderLabel,
                                 macStyle: macStyle,
-                                alignEnd: message.isMine,
+                                onRetry:
+                                    message.sendState == MessageSendState.failed
+                                    ? (_canRetryMessage(message)
+                                          ? () async {
+                                              await ref
+                                                  .read(
+                                                    chatThreadsProvider
+                                                        .notifier,
+                                                  )
+                                                  .retryMessage(
+                                                    conversation:
+                                                        currentConversation,
+                                                    message: message,
+                                                    expectedAgentReplyDid:
+                                                        _expectedAgentReplyDidForConversation(
+                                                          currentConversation,
+                                                          runtimeAgent:
+                                                              runtimeAgent,
+                                                          classification:
+                                                              peerClassification,
+                                                        ),
+                                                    displayThreadId: widget
+                                                        .conversation
+                                                        .threadId,
+                                                  );
+                                            }
+                                          : null)
+                                    : null,
+                                onDownload:
+                                    message.attachment != null &&
+                                        message.sendState ==
+                                            MessageSendState.sent
+                                    ? () => _openAttachment(
+                                        currentConversation,
+                                        message,
+                                      )
+                                    : null,
+                                isDownloading: _downloadingAttachmentMessageIds
+                                    .contains(message.localId),
+                                onPeerInfoTap: _peerInfoTapForMessage(
+                                  currentConversation,
+                                  message,
+                                  senderLabel,
+                                ),
                               ),
+                              if (pendingTurns.isNotEmpty) ...<Widget>[
+                                SizedBox(
+                                  height: macStyle
+                                      ? responsive.displayScaled(7)
+                                      : responsive.spacing(7),
+                                ),
+                                _MessageAgentProcessingStatus(
+                                  label: _agentProcessingLabel(pendingTurns),
+                                  overdue: pendingTurns.any(
+                                    (turn) => turn.isOverdue,
+                                  ),
+                                  macStyle: macStyle,
+                                  alignEnd: message.isMine,
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
                       );
                     },
@@ -687,7 +698,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final draft = ref
         .read(chatComposerDraftsProvider.notifier)
         .draftFor(conversation);
-    final validMentionDrafts = attachment == null && conversation.isGroup
+    final validMentionDrafts = conversation.isGroup
         ? draft.validMentions
         : const <ChatMentionDraft>[];
     final messageContent = validMentionDrafts.isEmpty ? content : rawContent;
@@ -712,7 +723,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
           .sendAttachment(
             conversation: conversation,
             attachment: attachment,
-            caption: content.isEmpty ? null : content,
+            caption: messageContent.trim().isEmpty ? null : messageContent,
+            mentions: validMentionDrafts,
             expectedAgentReplyDid: expectedAgentReplyDid,
             displayThreadId: widget.conversation.threadId,
           );
@@ -1157,7 +1169,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
     required ChatMessage? next,
     required bool hasAgentProcessing,
     required bool nextHasAgentProcessing,
+    required bool isLastItem,
   }) {
+    if (isLastItem) {
+      return 0;
+    }
     final defaultSpacing = macStyle
         ? responsive.displayScaled(16)
         : responsive.spacing(24);

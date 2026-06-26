@@ -559,6 +559,7 @@ class ChatThreadsController
         displayThreadId: targetThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
         mentions: validMentionDrafts,
+        submittedLocalMessageId: pending.localId,
         deliveredMessage: sentInThread,
       );
       latestConversation = _withConversationPreview(conversation, sentInThread);
@@ -594,6 +595,7 @@ class ChatThreadsController
     required ConversationSummary conversation,
     required AttachmentDraft attachment,
     String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? expectedAgentReplyDid,
     String? displayThreadId,
   }) async {
@@ -603,6 +605,22 @@ class ChatThreadsController
     }
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
     final normalizedCaption = _normalizedOptionalText(caption);
+    final captionText = normalizedCaption ?? '';
+    final validMentionDrafts = conversation.isGroup
+        ? mentions
+              .where(
+                (mention) =>
+                    mention.rangeMatches(captionText) &&
+                    mention.target.isP9Sendable,
+              )
+              .toList()
+        : const <ChatMentionDraft>[];
+    final mentionPayload = validMentionDrafts.isEmpty
+        ? null
+        : ChatMentionPayload.toP9Json(
+            text: captionText,
+            draftMentions: validMentionDrafts,
+          );
     final pendingId = 'pending-${DateTime.now().microsecondsSinceEpoch}';
     final pendingAttachment = ChatAttachment(
       attachmentId: pendingId,
@@ -626,6 +644,11 @@ class ChatThreadsController
       isMine: true,
       sendState: MessageSendState.sending,
       attachment: pendingAttachment,
+      payloadJson: mentionPayload == null ? null : jsonEncode(mentionPayload),
+      mentions: <ChatMessageMention>[
+        for (final mention in validMentionDrafts)
+          ChatMessageMention.fromDraft(mention),
+      ],
     );
     final current = List<ChatMessage>.from(thread(targetThreadId).messages)
       ..add(pending);
@@ -645,6 +668,7 @@ class ChatThreadsController
             thread: _sendThreadRefFor(conversation),
             attachment: attachment,
             caption: normalizedCaption,
+            mentions: validMentionDrafts,
             idempotencyKey: pending.localId,
           )
           .timeout(_attachmentSendTimeout);
@@ -657,7 +681,8 @@ class ChatThreadsController
         conversation: conversation,
         displayThreadId: targetThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
-        mentions: const <ChatMentionDraft>[],
+        mentions: validMentionDrafts,
+        submittedLocalMessageId: pending.localId,
         deliveredMessage: sentInThread,
       );
       latestConversation = _withConversationPreview(conversation, sentInThread);
@@ -741,18 +766,8 @@ class ChatThreadsController
         conversation: conversation,
         displayThreadId: targetThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
-        mentions: retrying.mentions
-            .map(
-              (mention) => ChatMentionDraft(
-                localId: mention.id,
-                surface: mention.surface,
-                start: mention.start,
-                end: mention.end,
-                target: mention.target,
-                role: mention.role,
-              ),
-            )
-            .toList(),
+        mentions: _messageMentionsToDrafts(retrying.mentions),
+        submittedLocalMessageId: retrying.localId,
         deliveredMessage: retriedInThread,
       );
     } catch (_) {
@@ -802,6 +817,7 @@ class ChatThreadsController
               sizeBytes: attachment.sizeBytes,
             ),
             caption: attachment.caption,
+            mentions: _messageMentionsToDrafts(retrying.mentions),
             idempotencyKey: message.localId,
           )
           .timeout(_attachmentSendTimeout);
@@ -819,7 +835,8 @@ class ChatThreadsController
         conversation: conversation,
         displayThreadId: targetThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
-        mentions: const <ChatMentionDraft>[],
+        mentions: _messageMentionsToDrafts(retrying.mentions),
+        submittedLocalMessageId: retrying.localId,
         deliveredMessage: retriedInThread,
       );
     } catch (_) {
@@ -1178,25 +1195,26 @@ class ChatThreadsController
     required String displayThreadId,
     required String? expectedAgentReplyDid,
     required List<ChatMentionDraft> mentions,
+    required String submittedLocalMessageId,
     required ChatMessage deliveredMessage,
   }) {
     final remoteMessageId = deliveredMessage.remoteId?.trim().isNotEmpty == true
         ? deliveredMessage.remoteId!.trim()
         : deliveredMessage.localId.trim();
+    final localMessageId = submittedLocalMessageId.trim().isNotEmpty
+        ? submittedLocalMessageId.trim()
+        : deliveredMessage.localId.trim();
     if (!deliveredMessage.isMine ||
         deliveredMessage.sendState != MessageSendState.sent ||
-        deliveredMessage.localId.trim().isEmpty) {
+        localMessageId.isEmpty) {
       return;
     }
     final pendingTargets = conversation.isGroup
         ? _agentMentionPendingTargets(mentions)
         : <_AgentPendingTarget>[
-            if ((expectedAgentReplyDid ?? '').trim().isNotEmpty)
-              _AgentPendingTarget(
-                agentDid: expectedAgentReplyDid!.trim(),
-                agentHandle: null,
-                mentionId: null,
-              ),
+            if (_directAgentPendingTarget(conversation, expectedAgentReplyDid)
+                case final target?)
+              target,
           ];
     if (pendingTargets.isEmpty) {
       return;
@@ -1206,13 +1224,13 @@ class ChatThreadsController
     final nextTurns = <AgentPendingTurn>[
       ...current.agentPendingTurns.where(
         (turn) =>
-            turn.localMessageId != deliveredMessage.localId &&
+            turn.localMessageId != localMessageId &&
             turn.remoteMessageId != remoteMessageId,
       ),
       for (final target in pendingTargets)
         AgentPendingTurn(
           agentDid: target.agentDid,
-          localMessageId: deliveredMessage.localId,
+          localMessageId: localMessageId,
           remoteMessageId: remoteMessageId,
           mentionId: target.mentionId,
           agentHandle: target.agentHandle,
@@ -1224,6 +1242,32 @@ class ChatThreadsController
       threadId: current.copyWith(agentPendingTurns: nextTurns),
     };
     _scheduleAgentProcessingOverdue(threadId);
+  }
+
+  _AgentPendingTarget? _directAgentPendingTarget(
+    ConversationSummary conversation,
+    String? expectedAgentReplyDid,
+  ) {
+    final agentDid = expectedAgentReplyDid?.trim();
+    if (agentDid == null || agentDid.isEmpty) {
+      return null;
+    }
+    return _AgentPendingTarget(
+      agentDid: agentDid,
+      agentHandle: _directAgentPendingHandle(conversation, agentDid),
+      mentionId: null,
+    );
+  }
+
+  String? _directAgentPendingHandle(
+    ConversationSummary conversation,
+    String agentDid,
+  ) {
+    final peer = conversation.targetPeer?.trim();
+    if (peer != null && peer.isNotEmpty && !peer.startsWith('did:')) {
+      return _handleLocalPart(peer);
+    }
+    return null;
   }
 
   void applyAgentRunStatusPayload(Map<String, Object?> payload) {
@@ -2392,11 +2436,11 @@ AppThreadRef _historyThreadRefFor(ConversationSummary conversation) {
   }
   final peerDid = conversation.targetDid?.trim();
   final peer = conversation.targetPeer?.trim();
-  if (!conversation.isGroup && peerDid != null && peerDid.isNotEmpty) {
-    return AppThreadRef.direct(peerDid);
-  }
   if (!conversation.isGroup && peer != null && peer.isNotEmpty) {
     return AppThreadRef.direct(peer);
+  }
+  if (!conversation.isGroup && peerDid != null && peerDid.isNotEmpty) {
+    return AppThreadRef.direct(peerDid);
   }
   return AppThreadRef.thread(conversation.threadId);
 }
@@ -2466,10 +2510,39 @@ String? _normalizedOptionalText(String? value) {
   return normalized;
 }
 
+List<ChatMentionDraft> _messageMentionsToDrafts(
+  Iterable<ChatMessageMention> mentions,
+) {
+  return mentions
+      .map(
+        (mention) => ChatMentionDraft(
+          localId: mention.id,
+          surface: mention.surface,
+          start: mention.start,
+          end: mention.end,
+          target: mention.target,
+          role: mention.role,
+        ),
+      )
+      .toList();
+}
+
 Map<String, Object?> _stringKeyMap(Map<dynamic, dynamic> value) {
   return <String, Object?>{
     for (final entry in value.entries) entry.key.toString(): entry.value,
   };
+}
+
+String _handleLocalPart(String value) {
+  final normalized = value.trim();
+  final withoutAt = normalized.startsWith('@')
+      ? normalized.substring(1).trimLeft()
+      : normalized;
+  final dotIndex = withoutAt.indexOf('.');
+  if (dotIndex <= 0) {
+    return withoutAt;
+  }
+  return withoutAt.substring(0, dotIndex);
 }
 
 extension _NonEmptyStringExtension on String {

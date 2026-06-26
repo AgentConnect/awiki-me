@@ -1,4 +1,5 @@
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/chat_mention.dart';
 import '../models/attachment_models.dart';
 import '../models/app_thread_ref.dart';
 
@@ -12,6 +13,7 @@ abstract interface class MessageCorePort {
     required AppThreadRef thread,
     required AttachmentDraft attachment,
     String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? idempotencyKey,
   });
 

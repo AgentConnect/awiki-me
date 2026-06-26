@@ -5,6 +5,7 @@ import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/ports/message_core_port.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_agent_control_status_store.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
+import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -215,6 +216,7 @@ class _FakeMessages implements MessageCorePort {
     required AppThreadRef thread,
     required AttachmentDraft attachment,
     String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? idempotencyKey,
   }) {
     throw UnimplementedError();
