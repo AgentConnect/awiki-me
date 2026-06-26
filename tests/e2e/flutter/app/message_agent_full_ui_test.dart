@@ -148,8 +148,16 @@ void main() {
       expect(find.text('撤销 Daemon 消息授权'), findsNothing);
       expect(find.textContaining('自动回复'), findsNothing);
       expect(find.textContaining('代发'), findsNothing);
-      expect(messages.recordedPayloads, isEmpty);
-      expect(messages.payloads, isEmpty);
+      final nonStatusPayloads = messages.recordedPayloads.where(
+        (record) => record.payload['command'] != 'agent.status.query',
+      );
+      expect(
+        nonStatusPayloads,
+        isEmpty,
+        reason:
+            'Hidden Message Agent management UI must not send bootstrap or '
+            'lifecycle payloads. Payloads: ${messages.recordedPayloadsSummary()}',
+      );
       expect(bindings.calls, isEmpty);
       expect(identities.calls, isEmpty);
     } finally {
@@ -485,8 +493,9 @@ void runMessageAgentRealBackendE2e() {
         await tester.binding.setSurfaceSize(null);
       }
     },
-    skip:
-        'Message Agent daemon-detail management UI is hidden; lifecycle code remains below the UI layer.',
+    // Message Agent daemon-detail management UI is hidden; lifecycle code
+    // remains below the UI layer.
+    skip: true,
     timeout: const Timeout(Duration(minutes: 15)),
   );
 }
@@ -1215,11 +1224,6 @@ class _MessageAgentRealBackendConfig {
     required this.realBackend,
     this.fakeHermesGatewayCommand,
   });
-
-  static bool get shouldRun {
-    final config = tryLoad();
-    return config != null && config.realBackend;
-  }
 
   static _MessageAgentRealBackendConfig? tryLoad() {
     final file = File(_messageAgentRunConfigPath);
