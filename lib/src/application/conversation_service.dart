@@ -12,6 +12,17 @@ import 'ports/conversation_core_port.dart';
 import 'product_local_store.dart';
 
 abstract interface class ConversationService {
+  Future<List<ConversationSummary>> listConversationSummariesFast({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  });
+
+  Future<List<ConversationSummary>> enrichConversationSummaries({
+    required String ownerDid,
+    required List<ConversationSummary> conversations,
+  });
+
   Future<List<ConversationSummary>> listConversations({
     required String ownerDid,
     int limit = 100,
@@ -46,7 +57,7 @@ abstract interface class ConversationService {
 }
 
 class ImCoreConversationService implements ConversationService {
-  const ImCoreConversationService({
+  ImCoreConversationService({
     required ConversationCorePort conversations,
     required ProductLocalStore localStore,
     AgentInventoryPort? agentInventory,
@@ -59,6 +70,7 @@ class ImCoreConversationService implements ConversationService {
   final AgentInventoryPort? _agentInventory;
   final ProductLocalStore _localStore;
   final Duration agentProjectionTimeout;
+  _AgentConversationProjection? _cachedAgentProjection;
 
   ImCoreConversationService withAgentInventory(AgentInventoryPort inventory) {
     return ImCoreConversationService(
@@ -70,30 +82,81 @@ class ImCoreConversationService implements ConversationService {
   }
 
   @override
-  Future<List<ConversationSummary>> listConversations({
+  Future<List<ConversationSummary>> listConversationSummariesFast({
     required String ownerDid,
     int limit = 100,
     bool unreadOnly = false,
   }) async {
-    final totalWatch = Stopwatch()..start();
     final items = await AwikiPerformanceLogger.async(
-      'conversation_service.core_list',
+      'conversation_service.fast_local.core_list',
       () => _conversations.listConversations(
         limit: limit,
         unreadOnly: unreadOnly,
       ),
       fields: <String, Object?>{'limit': limit, 'unread_only': unreadOnly},
     );
+    final projection =
+        _cachedAgentProjection ?? const _AgentConversationProjection();
+    final mergedItems = AwikiPerformanceLogger.sync(
+      'conversation_service.fast_local.merge_cached_agents',
+      () => _mergeAgentConversationDuplicates(items, projection),
+      fields: <String, Object?>{
+        'items': items.length,
+        'cache_hit': _cachedAgentProjection != null,
+        'agents': projection.agentCount,
+        'runtime_agents': projection.runtimeAgents.length,
+      },
+    );
+    final visible = AwikiPerformanceLogger.sync(
+      'conversation_service.fast_local.filter_sort',
+      () {
+        final result = mergedItems
+            .where(
+              (item) => shouldShowConversationForChatList(
+                item,
+                daemonAgentDids: projection.daemonAgentDids,
+              ),
+            )
+            .map((item) => _applyAgentLifecycleProjection(item, projection))
+            .toList();
+        result.sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
+        return result;
+      },
+      fields: <String, Object?>{
+        'merged': mergedItems.length,
+        'cache_hit': _cachedAgentProjection != null,
+      },
+    );
+    AwikiPerformanceLogger.log(
+      'conversation_service.fast_local',
+      fields: <String, Object?>{
+        'items': items.length,
+        'visible': visible.length,
+        'agent_projection_cache_hit': _cachedAgentProjection != null,
+      },
+    );
+    return visible;
+  }
+
+  @override
+  Future<List<ConversationSummary>> enrichConversationSummaries({
+    required String ownerDid,
+    required List<ConversationSummary> conversations,
+  }) async {
+    final totalWatch = Stopwatch()..start();
+    if (conversations.isEmpty) {
+      return conversations;
+    }
     final agentProjection = await AwikiPerformanceLogger.async(
       'conversation_service.agent_projection',
-      _loadAgentConversationProjection,
-      fields: <String, Object?>{'items': items.length},
+      () => _loadAgentConversationProjection(),
+      fields: <String, Object?>{'items': conversations.length},
     );
     final mergedItems = AwikiPerformanceLogger.sync(
       'conversation_service.merge_agents',
-      () => _mergeAgentConversationDuplicates(items, agentProjection),
+      () => _mergeAgentConversationDuplicates(conversations, agentProjection),
       fields: <String, Object?>{
-        'items': items.length,
+        'items': conversations.length,
         'agents': agentProjection.agentCount,
         'runtime_agents': agentProjection.runtimeAgents.length,
       },
@@ -144,11 +207,39 @@ class ImCoreConversationService implements ConversationService {
     );
     totalWatch.stop();
     AwikiPerformanceLogger.log(
+      'conversation_service.enrich',
+      elapsed: totalWatch.elapsed,
+      fields: <String, Object?>{
+        'items': conversations.length,
+        'merged': mergedItems.length,
+        'visible': visible.length,
+      },
+    );
+    return visible;
+  }
+
+  @override
+  Future<List<ConversationSummary>> listConversations({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) async {
+    final totalWatch = Stopwatch()..start();
+    final base = await listConversationSummariesFast(
+      ownerDid: ownerDid,
+      limit: limit,
+      unreadOnly: unreadOnly,
+    );
+    final visible = await enrichConversationSummaries(
+      ownerDid: ownerDid,
+      conversations: base,
+    );
+    totalWatch.stop();
+    AwikiPerformanceLogger.log(
       'conversation_service.list',
       elapsed: totalWatch.elapsed,
       fields: <String, Object?>{
-        'items': items.length,
-        'merged': mergedItems.length,
+        'items': base.length,
         'visible': visible.length,
       },
     );
@@ -253,10 +344,12 @@ class ImCoreConversationService implements ConversationService {
             .listAgents(includeInactive: true)
             .timeout(agentProjectionTimeout),
       );
-      return _AgentConversationProjection.fromAgents(agents);
+      final projection = _AgentConversationProjection.fromAgents(agents);
+      _cachedAgentProjection = projection;
+      return projection;
     } on Object {
       AwikiPerformanceLogger.log('conversation_service.agent_projection.error');
-      return const _AgentConversationProjection();
+      return _cachedAgentProjection ?? const _AgentConversationProjection();
     }
   }
 

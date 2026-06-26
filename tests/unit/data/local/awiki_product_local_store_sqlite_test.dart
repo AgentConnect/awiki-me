@@ -279,6 +279,30 @@ void main() {
       'did:agent',
     ]);
   });
+
+  test(
+    'warmUp opens the database once and keeps later reads available',
+    () async {
+      final store = _store(databaseDir);
+
+      await Future.wait(<Future<void>>[store.warmUp(), store.warmUp()]);
+      await store.upsertConversationOverlay(
+        ProductConversationOverlay(
+          ownerDid: 'did:alice',
+          threadId: 'dm:alice:bob',
+          customTitle: 'Bob',
+          updatedAt: DateTime.utc(2026, 6, 27),
+        ),
+      );
+
+      final overlays = await store.loadConversationOverlays(
+        ownerDid: 'did:alice',
+        threadIds: const <String>['dm:alice:bob'],
+      );
+
+      expect(overlays['dm:alice:bob']?.customTitle, 'Bob');
+    },
+  );
 }
 
 Future<void> _createVersion1Schema(DatabaseExecutor db) async {

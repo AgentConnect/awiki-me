@@ -1,4 +1,9 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/conversation_service.dart';
+import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
@@ -6,6 +11,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
@@ -203,6 +209,87 @@ void main() {
 
       expect(notificationFacade.lastSystemTitle, 'alice');
       expect(notificationFacade.lastSystemBody, 'hello');
+    });
+
+    test('激活身份先刷新本地会话列表，不等待 profile/agents/friends/groups', () async {
+      final slowProfile = Completer<void>();
+      gateway.myProfile = null;
+      final conversations = _RecordingConversationService(<ConversationSummary>[
+        buildUpdate().conversation!,
+      ]);
+      container.dispose();
+      container = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+          ),
+          conversationServiceProvider.overrideWithValue(conversations),
+          profileApplicationServiceProvider.overrideWithValue(
+            _BlockingProfileService(slowProfile),
+          ),
+          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+        ],
+      );
+
+      await activate();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(conversations.fastCalls, 1);
+      expect(conversations.enrichCalls, 1);
+      expect(
+        container.read(conversationListProvider).conversations.single.threadId,
+        'dm:1',
+      );
+      slowProfile.complete();
+      await Future<void>.delayed(Duration.zero);
+    });
+
+    test('恢复和重连短时间重复触发时复用同一次后台刷新', () async {
+      final slowProfile = Completer<void>();
+      gateway.myProfile = null;
+      final conversations = _RecordingConversationService(<ConversationSummary>[
+        buildUpdate().conversation!,
+      ]);
+      container.dispose();
+      container = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+          ),
+          conversationServiceProvider.overrideWithValue(conversations),
+          profileApplicationServiceProvider.overrideWithValue(
+            _BlockingProfileService(slowProfile),
+          ),
+          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+        ],
+      );
+
+      await activate();
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(conversations.fastCalls, 1);
+      slowProfile.complete();
+      await Future<void>.delayed(Duration.zero);
     });
 
     test('实时附件消息通知使用附件预览', () async {
@@ -592,4 +679,104 @@ void main() {
       expect(realtimeGateway.connectionStatus, RealtimeConnectionStatus.failed);
     });
   });
+}
+
+class _RecordingConversationService implements ConversationService {
+  _RecordingConversationService(this.items);
+
+  final List<ConversationSummary> items;
+  int fastCalls = 0;
+  int enrichCalls = 0;
+  int listCalls = 0;
+
+  @override
+  Future<List<ConversationSummary>> listConversationSummariesFast({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) async {
+    fastCalls += 1;
+    return items;
+  }
+
+  @override
+  Future<List<ConversationSummary>> enrichConversationSummaries({
+    required String ownerDid,
+    required List<ConversationSummary> conversations,
+  }) async {
+    enrichCalls += 1;
+    return conversations;
+  }
+
+  @override
+  Future<List<ConversationSummary>> listConversations({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) async {
+    listCalls += 1;
+    return items;
+  }
+
+  @override
+  Future<void> markThreadRead(AppThreadRef thread) async {}
+
+  @override
+  Future<ConversationSummary?> normalizeConversationForRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+  }) async {
+    return conversation;
+  }
+
+  @override
+  Future<void> setThreadHidden({
+    required String ownerDid,
+    required String threadId,
+    required bool hidden,
+    DateTime? updatedAt,
+  }) async {}
+
+  @override
+  Future<void> hideConversationFromRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+    DateTime? updatedAt,
+  }) async {}
+
+  @override
+  Future<void> restoreConversationToRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+    DateTime? updatedAt,
+  }) async {}
+}
+
+class _BlockingProfileService implements ProfileApplicationService {
+  _BlockingProfileService(this.completer);
+
+  final Completer<void> completer;
+
+  @override
+  Future<UserProfile> loadMyProfile() async {
+    await completer.future;
+    return const UserProfile(
+      did: 'did:test:me',
+      nickName: 'Me',
+      bio: '',
+      tags: <String>[],
+      profileMarkdown: '',
+      handle: 'me',
+    );
+  }
+
+  @override
+  Future<UserProfile> loadPublicProfile(String didOrHandle) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<UserProfile> updateProfile(ProfilePatch patch) {
+    throw UnimplementedError();
+  }
 }

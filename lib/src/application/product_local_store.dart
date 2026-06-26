@@ -1,6 +1,8 @@
 import 'models/product_local_models.dart';
 
 abstract interface class ProductLocalStore {
+  Future<void> warmUp();
+
   Future<ProductConversationOverlay?> loadConversationOverlay({
     required String ownerDid,
     required String threadId,

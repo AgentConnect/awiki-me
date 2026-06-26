@@ -23,14 +23,37 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
   static const int databaseVersion = 2;
 
   Database? _database;
+  Future<Database>? _databaseOpening;
   final String? _databasePath;
   final String? _legacyDatabasePath;
+
+  @override
+  Future<void> warmUp() async {
+    await AwikiPerformanceLogger.async('product_store.warm_up', () async {
+      await _db;
+    });
+  }
 
   Future<Database> get _db async {
     final existing = _database;
     if (existing != null) {
       return existing;
     }
+    final opening = _databaseOpening;
+    if (opening != null) {
+      return opening;
+    }
+    late final Future<Database> operation;
+    operation = _openDatabase().whenComplete(() {
+      if (identical(_databaseOpening, operation)) {
+        _databaseOpening = null;
+      }
+    });
+    _databaseOpening = operation;
+    return operation;
+  }
+
+  Future<Database> _openDatabase() async {
     AwikiPerformanceLogger.sync(
       'product_store.ensure_sqflite_desktop_initialized',
       ensureSqfliteDesktopInitialized,
@@ -41,7 +64,7 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
     );
     try {
       await AwikiPerformanceLogger.async(
-        'product_store.migrate_legacy',
+        'product_store.legacy_migration',
         () => _migrateLegacyDatabaseIfNeeded(path),
       );
     } catch (_) {
@@ -49,7 +72,7 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
       // prevent the current product store from opening at the new app path.
     }
     _database = await AwikiPerformanceLogger.async(
-      'product_store.open',
+      'product_store.open_database',
       () => openDatabase(
         path,
         version: databaseVersion,

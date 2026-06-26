@@ -10,6 +10,9 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
   final Map<String, LocalAgentState> _agentStates = <String, LocalAgentState>{};
 
   @override
+  Future<void> warmUp() async {}
+
+  @override
   Future<ProductConversationOverlay?> loadConversationOverlay({
     required String ownerDid,
     required String threadId,

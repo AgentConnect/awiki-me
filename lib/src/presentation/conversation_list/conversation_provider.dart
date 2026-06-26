@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
+import '../../application/conversation_service.dart';
 import '../../core/group_display_name.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_display_name.dart';
@@ -47,6 +48,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   final Ref ref;
   final Duration refreshTimeout;
   Future<void>? _refreshOperation;
+  bool _refreshOperationFastLocal = false;
   int _refreshGeneration = 0;
   final Set<String> _locallyHiddenConversationKeys = <String>{};
 
@@ -56,14 +58,31 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     if (state.conversations.isNotEmpty) {
       return Future<void>.value();
     }
-    return refresh().catchError((_) {});
+    return refreshFastLocal().catchError((_) {});
   }
 
   Future<void> refresh() {
-    final reused = _refreshOperation != null;
-    final activeRefresh = _refreshOperation ?? _startRefresh();
+    final active = _refreshOperation;
+    final reused = active != null && !_refreshOperationFastLocal;
+    final activeRefresh = reused ? active : _startRefresh(fastLocal: false);
     AwikiPerformanceLogger.log(
       'conversation_list.refresh.request',
+      fields: <String, Object?>{
+        'reused': reused,
+        'current': state.conversations.length,
+      },
+    );
+    if (!state.isLoading) {
+      state = state.copyWith(isLoading: true);
+    }
+    return _waitForRefresh(activeRefresh);
+  }
+
+  Future<void> refreshFastLocal() {
+    final reused = _refreshOperation != null;
+    final activeRefresh = _refreshOperation ?? _startRefresh(fastLocal: true);
+    AwikiPerformanceLogger.log(
+      'conversation_list.refresh_fast_local.request',
       fields: <String, Object?>{
         'reused': reused,
         'current': state.conversations.length,
@@ -81,25 +100,28 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     } on TimeoutException {
       if (identical(_refreshOperation, operation)) {
         _refreshOperation = null;
+        _refreshOperationFastLocal = false;
         state = state.copyWith(isLoading: false);
       }
       rethrow;
     }
   }
 
-  Future<void> _startRefresh() {
+  Future<void> _startRefresh({required bool fastLocal}) {
     final generation = ++_refreshGeneration;
     late final Future<void> operation;
-    operation = _refresh(generation).whenComplete(() {
+    operation = _refresh(generation, fastLocal: fastLocal).whenComplete(() {
       if (identical(_refreshOperation, operation)) {
         _refreshOperation = null;
+        _refreshOperationFastLocal = false;
       }
     });
     _refreshOperation = operation;
+    _refreshOperationFastLocal = fastLocal;
     return operation;
   }
 
-  Future<void> _refresh(int generation) async {
+  Future<void> _refresh(int generation, {required bool fastLocal}) async {
     final totalWatch = Stopwatch()..start();
     state = state.copyWith(isLoading: true);
     try {
@@ -115,42 +137,61 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         await _updateBadgeCountBestEffort(0);
         return;
       }
+      final conversationService = ref.read(conversationServiceProvider);
+      if (!fastLocal) {
+        final conversations = await AwikiPerformanceLogger.async(
+          'conversation_list.refresh.service',
+          () => conversationService.listConversations(ownerDid: session.did),
+        );
+        if (generation != _refreshGeneration) {
+          return;
+        }
+        await _applyConversationRefresh(
+          conversations,
+          generation: generation,
+          label: 'conversation_list.refresh',
+        );
+        totalWatch.stop();
+        AwikiPerformanceLogger.log(
+          'conversation_list.refresh',
+          elapsed: totalWatch.elapsed,
+          fields: <String, Object?>{
+            'items': state.conversations.length,
+            'unread': state.unreadCount,
+          },
+        );
+        return;
+      }
       final conversations = await AwikiPerformanceLogger.async(
-        'conversation_list.refresh.service',
-        () => ref
-            .read(conversationServiceProvider)
-            .listConversations(ownerDid: session.did),
+        'conversation_list.refresh_fast_local.service',
+        () => conversationService.listConversationSummariesFast(
+          ownerDid: session.did,
+        ),
       );
       if (generation != _refreshGeneration) {
         return;
       }
-      final currentConversations = state.conversations;
-      final nextConversations = AwikiPerformanceLogger.sync(
-        'conversation_list.refresh.merge',
-        () => _filterLocallyHiddenConversations(
-          _mergeConversationRefresh(
-            refreshed: conversations,
-            local: currentConversations,
-          ),
-        ),
-        fields: <String, Object?>{
-          'refreshed': conversations.length,
-          'local': currentConversations.length,
-        },
+      await _applyConversationRefresh(
+        conversations,
+        generation: generation,
+        label: 'conversation_list.refresh_fast_local',
       );
-      state = state.copyWith(
-        conversations: nextConversations,
-        isLoading: false,
-      );
-      await _updateBadgeCountBestEffort(state.unreadCount);
       totalWatch.stop();
       AwikiPerformanceLogger.log(
-        'conversation_list.refresh',
+        'conversation_list.refresh_fast_local',
         elapsed: totalWatch.elapsed,
         fields: <String, Object?>{
           'items': state.conversations.length,
           'unread': state.unreadCount,
         },
+      );
+      unawaited(
+        _enrichRefresh(
+          generation: generation,
+          ownerDid: session.did,
+          base: conversations,
+          conversationService: conversationService,
+        ).catchError((_) {}),
       );
     } catch (_) {
       if (generation == _refreshGeneration) {
@@ -158,6 +199,66 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       }
       rethrow;
     }
+  }
+
+  Future<void> _enrichRefresh({
+    required int generation,
+    required String ownerDid,
+    required List<ConversationSummary> base,
+    required ConversationService conversationService,
+  }) async {
+    final totalWatch = Stopwatch()..start();
+    final enriched = await AwikiPerformanceLogger.async(
+      'conversation_list.refresh_enrich.service',
+      () => conversationService.enrichConversationSummaries(
+        ownerDid: ownerDid,
+        conversations: base,
+      ),
+      fields: <String, Object?>{'base': base.length},
+    );
+    if (generation != _refreshGeneration) {
+      return;
+    }
+    await _applyConversationRefresh(
+      enriched,
+      generation: generation,
+      label: 'conversation_list.refresh_enrich',
+    );
+    totalWatch.stop();
+    AwikiPerformanceLogger.log(
+      'conversation_list.refresh_enrich',
+      elapsed: totalWatch.elapsed,
+      fields: <String, Object?>{
+        'items': state.conversations.length,
+        'unread': state.unreadCount,
+      },
+    );
+  }
+
+  Future<void> _applyConversationRefresh(
+    List<ConversationSummary> refreshed, {
+    required int generation,
+    required String label,
+  }) async {
+    if (generation != _refreshGeneration) {
+      return;
+    }
+    final currentConversations = state.conversations;
+    final nextConversations = AwikiPerformanceLogger.sync(
+      '$label.merge',
+      () => _filterLocallyHiddenConversations(
+        _mergeConversationRefresh(
+          refreshed: refreshed,
+          local: currentConversations,
+        ),
+      ),
+      fields: <String, Object?>{
+        'refreshed': refreshed.length,
+        'local': currentConversations.length,
+      },
+    );
+    state = state.copyWith(conversations: nextConversations, isLoading: false);
+    await _updateBadgeCountBestEffort(state.unreadCount);
   }
 
   void upsertConversation(ConversationSummary conversation) {
@@ -341,6 +442,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   Future<void> clear() async {
     _refreshGeneration += 1;
     _refreshOperation = null;
+    _refreshOperationFastLocal = false;
     _locallyHiddenConversationKeys.clear();
     state = const ConversationListState();
     await _updateBadgeCountBestEffort(0);

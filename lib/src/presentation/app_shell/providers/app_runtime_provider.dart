@@ -59,8 +59,11 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   final Ref ref;
   static const Duration _requestTimeout = Duration(seconds: 20);
+  static const Duration _refreshDebounceWindow = Duration(seconds: 2);
   bool _isRecoveringRealtimeSession = false;
   bool _isLoggingOut = false;
+  Future<void>? _authenticatedRefreshOperation;
+  DateTime? _lastAuthenticatedRefreshStartedAt;
   late final ProviderSubscription<AppLifecycleState> _lifecycleSubscription;
   late final ProviderSubscription<AsyncValue<RealtimeConnectionStatus>>
   _realtimeStatusSubscription;
@@ -107,7 +110,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         () => ref.read(e2eeFacadeProvider).initialize(session),
       );
       state = state.copyWith(isBusy: false, isInitialized: true);
-      unawaited(_refreshAuthenticatedDataInBackground());
+      unawaited(_refreshAuthenticatedDataInBackground(debounce: false));
       _ensureRealtimeConnected();
     } finally {
       state = state.copyWith(isBusy: false, isInitialized: true);
@@ -201,51 +204,43 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   Future<void> _refreshAuthenticatedData() async {
     final totalWatch = Stopwatch()..start();
-    if (!mounted ||
-        _isLoggingOut ||
-        ref.read(sessionProvider).session == null) {
+    if (!_canRefreshAuthenticatedData) {
       return;
     }
-    await AwikiPerformanceLogger.async(
-      'app_refresh.profile',
-      () => ref.read(profileProvider.notifier).refresh(),
+
+    unawaited(
+      AwikiPerformanceLogger.async(
+        'app_refresh.product_store_warm_up',
+        () => ref.read(productLocalStoreProvider).warmUp(),
+      ).catchError((_) {}),
     );
-    if (!mounted ||
-        _isLoggingOut ||
-        ref.read(sessionProvider).session == null) {
+
+    await AwikiPerformanceLogger.async(
+      'app_refresh.conversation_fast_local',
+      () => ref.read(conversationListProvider.notifier).refreshFastLocal(),
+    );
+    if (!_canRefreshAuthenticatedData) {
       return;
     }
-    await AwikiPerformanceLogger.async(
-      'app_refresh.conversations',
-      () => ref.read(conversationListProvider.notifier).refresh(),
-    );
-    if (!mounted ||
-        _isLoggingOut ||
-        ref.read(sessionProvider).session == null) {
-      return;
-    }
-    await AwikiPerformanceLogger.async(
-      'app_refresh.agents',
-      () => ref.read(agentsProvider.notifier).load(),
-    );
-    if (!mounted ||
-        _isLoggingOut ||
-        ref.read(sessionProvider).session == null) {
-      return;
-    }
-    await AwikiPerformanceLogger.async(
-      'app_refresh.friends',
-      () => ref.read(friendsProvider.notifier).refresh(),
-    );
-    if (!mounted ||
-        _isLoggingOut ||
-        ref.read(sessionProvider).session == null) {
-      return;
-    }
-    await AwikiPerformanceLogger.async(
-      'app_refresh.groups',
-      () => ref.read(groupProvider.notifier).refresh(),
-    );
+
+    await Future.wait<void>(<Future<void>>[
+      AwikiPerformanceLogger.async(
+        'app_refresh.profile',
+        () => ref.read(profileProvider.notifier).refresh(),
+      ),
+      AwikiPerformanceLogger.async(
+        'app_refresh.agents',
+        () => ref.read(agentsProvider.notifier).load(),
+      ),
+      AwikiPerformanceLogger.async(
+        'app_refresh.friends',
+        () => ref.read(friendsProvider.notifier).refresh(),
+      ),
+      AwikiPerformanceLogger.async(
+        'app_refresh.groups',
+        () => ref.read(groupProvider.notifier).refresh(),
+      ),
+    ]);
     totalWatch.stop();
     AwikiPerformanceLogger.log(
       'app_refresh.authenticated_data',
@@ -253,24 +248,65 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     );
   }
 
-  Future<void> _refreshAuthenticatedDataInBackground() async {
-    try {
-      await _refreshAuthenticatedData().timeout(_requestTimeout);
-    } on TimeoutException {
-      return;
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      if (_isLoggingOut || ref.read(sessionProvider).session == null) {
-        return;
-      }
-      final message = AppMessage.fromError(error);
-      if (message == AppMessage.sessionExpiredRelogin()) {
-        ref.read(uiFeedbackProvider.notifier).showError(message);
-        await logout();
-      }
+  bool get _canRefreshAuthenticatedData =>
+      mounted && !_isLoggingOut && ref.read(sessionProvider).session != null;
+
+  Future<void> _refreshAuthenticatedDataInBackground({bool debounce = true}) {
+    final active = _authenticatedRefreshOperation;
+    if (active != null) {
+      AwikiPerformanceLogger.log(
+        'app_refresh.authenticated_data.request',
+        fields: const <String, Object?>{'reused': true},
+      );
+      return active;
     }
+    final now = DateTime.now();
+    final lastStarted = _lastAuthenticatedRefreshStartedAt;
+    final delay = debounce && lastStarted != null
+        ? _refreshDebounceWindow - now.difference(lastStarted)
+        : Duration.zero;
+    late final Future<void> operation;
+    operation =
+        (() async {
+          if (delay > Duration.zero) {
+            AwikiPerformanceLogger.log(
+              'app_refresh.authenticated_data.debounce',
+              fields: <String, Object?>{'delay_ms': delay.inMilliseconds},
+            );
+            await Future<void>.delayed(delay);
+          }
+          _lastAuthenticatedRefreshStartedAt = DateTime.now();
+          try {
+            await _refreshAuthenticatedData().timeout(_requestTimeout);
+          } on TimeoutException {
+            return;
+          } catch (error) {
+            if (!mounted) {
+              return;
+            }
+            if (_isLoggingOut || ref.read(sessionProvider).session == null) {
+              return;
+            }
+            final message = AppMessage.fromError(error);
+            if (message == AppMessage.sessionExpiredRelogin()) {
+              ref.read(uiFeedbackProvider.notifier).showError(message);
+              await logout();
+            }
+          }
+        })().whenComplete(() {
+          if (identical(_authenticatedRefreshOperation, operation)) {
+            _authenticatedRefreshOperation = null;
+          }
+        });
+    _authenticatedRefreshOperation = operation;
+    AwikiPerformanceLogger.log(
+      'app_refresh.authenticated_data.request',
+      fields: <String, Object?>{
+        'reused': false,
+        'debounce_ms': delay > Duration.zero ? delay.inMilliseconds : 0,
+      },
+    );
+    return operation;
   }
 
   void _handleLifecycleChanged(

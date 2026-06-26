@@ -1296,6 +1296,23 @@ class FakeConversationService implements ConversationService {
   final FakeAwikiGateway gateway;
 
   @override
+  Future<List<ConversationSummary>> listConversationSummariesFast({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) {
+    return gateway.listConversations();
+  }
+
+  @override
+  Future<List<ConversationSummary>> enrichConversationSummaries({
+    required String ownerDid,
+    required List<ConversationSummary> conversations,
+  }) async {
+    return conversations;
+  }
+
+  @override
   Future<List<ConversationSummary>> listConversations({
     required String ownerDid,
     int limit = 100,
@@ -1989,6 +2006,9 @@ class FakeProductLocalStore implements ProductLocalStore {
   final Map<String, LocalAgentState> agentStates = <String, LocalAgentState>{};
 
   String _key(String ownerDid, String id) => '$ownerDid::$id';
+
+  @override
+  Future<void> warmUp() async {}
 
   @override
   Future<void> deleteAgentState({

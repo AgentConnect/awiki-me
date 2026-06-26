@@ -258,6 +258,24 @@ class _FakeConversations implements ConversationService {
   final List<String> hiddenThreads = <String>[];
 
   @override
+  Future<List<ConversationSummary>> listConversationSummariesFast({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) async {
+    ownerDids.add(ownerDid);
+    return <ConversationSummary>[_conversation()];
+  }
+
+  @override
+  Future<List<ConversationSummary>> enrichConversationSummaries({
+    required String ownerDid,
+    required List<ConversationSummary> conversations,
+  }) async {
+    return conversations;
+  }
+
+  @override
   Future<List<ConversationSummary>> listConversations({
     required String ownerDid,
     int limit = 100,
