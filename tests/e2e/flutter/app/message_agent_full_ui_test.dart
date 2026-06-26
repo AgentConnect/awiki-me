@@ -43,6 +43,7 @@ import '../support/fake_app_bootstrap.dart';
 
 const String _messageAgentRunConfigPath =
     '.e2e/message-agent/current/run_config.json';
+const String _messageAgentE2eExpectedReply = 'MESSAGE_AGENT_E2E_REPLY_OK';
 
 class _StaticConversationListController extends ConversationListController {
   _StaticConversationListController(
@@ -100,16 +101,6 @@ void main() {
           },
         ),
       ),
-      AgentSummary(
-        agentDid: 'did:test:agent:message',
-        kind: AgentKind.runtime,
-        daemonAgentDid: 'did:test:daemon:message',
-        runtime: 'hermes',
-        handle: 'hermes-msg-app-default',
-        displayName: 'Hermes Message Agent',
-        activeState: 'active',
-        latest: AgentLatestStatus(status: 'ready'),
-      ),
     ];
 
     try {
@@ -165,10 +156,48 @@ void main() {
       await tester.tap(find.text('启用消息处理 Agent'));
       await _pumpFrame(tester);
 
+      final bootstrapPayload = messages.recordedPayloads.firstWhere(
+        (record) =>
+            record.payload['schema'] == 'awiki.daemon.bootstrap.secure.v1',
+        orElse: () => fail(
+          'Expected Message Agent bootstrap payload. '
+          'Recorded payloads: ${messages.recordedPayloadsSummary()}',
+        ),
+      );
       expect(
-        messages.lastIdempotencyKey,
+        bootstrapPayload.idempotencyKey,
         startsWith('message-agent-bootstrap:'),
       );
+      expect(bindings.calls, isNot(contains('ensure:did:test:agent:message')));
+
+      control.agents = <AgentSummary>[
+        ...control.agents,
+        const AgentSummary(
+          agentDid: 'did:test:agent:message',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:test:daemon:message',
+          runtime: 'hermes',
+          handle: 'hermes-msg-app-default',
+          displayName: 'Hermes Message Agent',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+      await _pumpUntil(
+        tester,
+        () => bindings.calls.contains('ensure:did:test:agent:message'),
+        timeout: const Duration(seconds: 95),
+        description:
+            'fake Message Agent bootstrap waits for runtime publication',
+      );
+      await ProviderScope.containerOf(
+        tester.element(find.byType(AppShell)),
+      ).read(agentsProvider.notifier).load();
+      await _pumpFrame(tester);
+      expect(find.text('Hermes Message Agent'), findsWidgets);
+      expect(find.text('暂停处理消息'), findsOneWidget);
+      expect(find.text('删除消息处理 Agent'), findsOneWidget);
+      expect(find.text('撤销 Daemon 消息授权'), findsOneWidget);
 
       await tester.tap(find.text('暂停处理消息'));
       await _pumpFrame(tester);
@@ -487,10 +516,12 @@ void runMessageAgentRealBackendE2e() {
           thread: AppThreadRef.direct(config.cliHandle),
           expectedText: sourceText,
         );
-        await _waitForDaemonRuntimeFinalSent(
+        final finalText = await _waitForDaemonRuntimeFinalSent(
           daemonStateRoot: config.daemonStateRoot,
           sourceText: sourceText,
+          expectedFinalText: _messageAgentE2eExpectedReply,
         );
+        expect(finalText, _messageAgentE2eExpectedReply);
         await _openRealCliConversation(
           tester: tester,
           container: appContainer,
@@ -822,14 +853,17 @@ Future<void> _waitForUserServiceBindingRevoked({
   );
 }
 
-Future<void> _waitForDaemonRuntimeFinalSent({
+Future<String> _waitForDaemonRuntimeFinalSent({
   required String daemonStateRoot,
   required String sourceText,
+  required String expectedFinalText,
 }) async {
   final dbPath = '${daemonStateRoot.replaceAll(RegExp(r'/+$'), '')}/daemon.db';
   String lastState = 'daemon.db not found';
+  String? matchedFinalText;
   await _poll(
-    description: 'daemon queued Message Agent runtime final for CLI message',
+    description:
+        'daemon queued Message Agent runtime final for CLI message with expected content',
     action: () async {
       final dbFile = File(dbPath);
       if (!dbFile.existsSync()) {
@@ -846,7 +880,10 @@ Future<void> _waitForDaemonRuntimeFinalSent({
           SELECT t.task_id, t.status AS task_status,
                  r.run_id, r.status AS run_status,
                  f.status AS final_status, f.message_id AS final_message_id,
-                 f.sent_at_ms AS final_sent_at_ms
+                 f.sent_at_ms AS final_sent_at_ms,
+                 f.final_text AS final_text,
+                 f.recipient_did AS recipient_did,
+                 f.final_source AS final_source
           FROM runtime_task t
           LEFT JOIN runtime_run r ON r.task_id = t.task_id
           LEFT JOIN runtime_final_outbox f ON f.run_id = r.run_id
@@ -863,9 +900,11 @@ Future<void> _waitForDaemonRuntimeFinalSent({
         final row = rows.first;
         lastState = jsonEncode(row);
         final finalStatus = row['final_status']?.toString();
+        matchedFinalText = row['final_text']?.toString();
         return finalStatus == 'sent' &&
             row['final_message_id'] != null &&
-            row['final_sent_at_ms'] != null;
+            row['final_sent_at_ms'] != null &&
+            row['final_text'] == expectedFinalText;
       } finally {
         await db.close();
       }
@@ -874,6 +913,7 @@ Future<void> _waitForDaemonRuntimeFinalSent({
     interval: const Duration(seconds: 1),
     lastError: () => lastState,
   );
+  return matchedFinalText!;
 }
 
 Future<void> _waitForDaemonBindingRevoked({
@@ -1719,13 +1759,29 @@ class _UiIdentityCorePort implements IdentityCorePort {
 
 class _UiMessagingService implements MessagingService {
   final List<Map<String, Object?>> payloads = <Map<String, Object?>>[];
+  final List<_RecordedPayload> recordedPayloads = <_RecordedPayload>[];
   Map<String, Object?>? lastPayload;
   String? lastIdempotencyKey;
 
   void resetRecordedPayloads() {
     payloads.clear();
+    recordedPayloads.clear();
     lastPayload = null;
     lastIdempotencyKey = null;
+  }
+
+  String recordedPayloadsSummary() {
+    return jsonEncode(
+      recordedPayloads
+          .map(
+            (record) => <String, Object?>{
+              'idempotencyKey': record.idempotencyKey,
+              'schema': record.payload['schema'],
+              'command': record.payload['command'],
+            },
+          )
+          .toList(),
+    );
   }
 
   @override
@@ -1736,6 +1792,9 @@ class _UiMessagingService implements MessagingService {
     String? idempotencyKey,
   }) async {
     payloads.add(payload);
+    recordedPayloads.add(
+      _RecordedPayload(payload: payload, idempotencyKey: idempotencyKey),
+    );
     lastPayload = payload;
     lastIdempotencyKey = idempotencyKey;
     return ChatMessage(
@@ -1801,6 +1860,13 @@ class _UiMessagingService implements MessagingService {
   }) {
     throw UnimplementedError();
   }
+}
+
+class _RecordedPayload {
+  const _RecordedPayload({required this.payload, required this.idempotencyKey});
+
+  final Map<String, Object?> payload;
+  final String? idempotencyKey;
 }
 
 Future<void> _pumpFrame(WidgetTester tester) async {

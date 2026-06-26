@@ -32,6 +32,10 @@ enabling the Message Agent, recovering `message.sync` / `runtime_final` /
 pause/delete/revoke lifecycle entries. Lower-level probes such as
 `tool/daemon_control_probe.dart` and daemon pytest probes may support payload,
 security, or backend diagnostics, but they do not replace this full UI E2E gate.
+The real-backend branch must also prove the received/returned/content contract:
+the App local history contains the exact CLI source message, the daemon records
+a sent `runtime_final_outbox` row with a non-null message id and sent timestamp,
+and the final text equals the deterministic expected reply.
 
 `--case codex-agent` is the durable acceptance entry for Codex Agent direct-chat
 behavior. It must create/select a Codex runtime Agent, send a deterministic

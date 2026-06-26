@@ -1714,16 +1714,16 @@ class ChatThreadsController
   }
 
   String? _threadIdForMessageAgentSync(MessageAgentSyncRecord record) {
-    return _threadIdForConversationControl(record.conversationId) ??
-        _threadIdForSourceMessage(record.messageId) ??
+    return _threadIdForSourceMessage(record.messageId) ??
+        _threadIdForConversationControl(record.conversationId) ??
         (record.runtimeAgentDid == null
             ? null
             : _threadIdForAgentDid(record.runtimeAgentDid!));
   }
 
   String? _threadIdForAppActionRequest(AppActionRequestPayload request) {
-    return _threadIdForConversationControl(request.conversationId) ??
-        _threadIdForSourceMessage(request.sourceMessageId) ??
+    return _threadIdForSourceMessage(request.sourceMessageId) ??
+        _threadIdForConversationControl(request.conversationId) ??
         (request.runtimeAgentDid == null
             ? null
             : _threadIdForAgentDid(request.runtimeAgentDid!));

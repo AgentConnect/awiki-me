@@ -174,6 +174,45 @@ void main() {
   );
 
   test(
+    'runtime final with peer-scope route attaches to loaded source message thread',
+    () async {
+      container.read(chatThreadsProvider.notifier).applyRealtimeUpdate(message);
+
+      container
+          .read(chatThreadsProvider.notifier)
+          .applyMessageAgentControlPayload(const <String, Object?>{
+            'schema': 'awiki.message.sync.v1',
+            'sync_type': 'runtime_final',
+            'binding_id': 'binding_1',
+            'runtime_agent_did': 'did:agent:runtime',
+            'runtime_profile_id': 'profile_1',
+            'run_id': 'run_peer_scope',
+            'source_message_id': 'msg_1',
+            'source_conversation_id': 'dm:peer-scope:v1:stable-bob',
+            'state': 'finished',
+            'has_text': true,
+            'retention_class': 'hash_only',
+          });
+
+      final sourceThread = container.read(
+        chatThreadProvider(conversation.threadId),
+      );
+      expect(sourceThread.messages.single.remoteId, 'msg_1');
+      expect(sourceThread.messageAgentSyncs.single.type, 'runtime_final');
+      expect(
+        sourceThread.messageAgentSyncs.single.conversationId,
+        'dm:peer-scope:v1:stable-bob',
+      );
+      expect(
+        container
+            .read(chatThreadProvider('dm:peer-scope:v1:stable-bob'))
+            .messageAgentSyncs,
+        isEmpty,
+      );
+    },
+  );
+
+  test(
     'confirm create draft writes composer and sends result to daemon',
     () async {
       container.read(chatThreadsProvider.notifier).applyRealtimeUpdate(message);
