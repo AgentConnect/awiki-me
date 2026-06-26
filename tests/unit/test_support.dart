@@ -287,6 +287,37 @@ String normalizeTestIdentity(String rawValue) {
   return value;
 }
 
+List<ChatMessage>? _directHistoryForPeer(
+  Map<String, List<ChatMessage>> histories,
+  String peer,
+) {
+  final direct = histories[peer];
+  if (direct != null) {
+    return direct;
+  }
+  final normalizedPeer = normalizeTestIdentity(peer);
+  for (final entry in histories.entries) {
+    if (entry.value.isNotEmpty &&
+        _historyTargetsPeer(entry.value, normalizedPeer)) {
+      return entry.value;
+    }
+  }
+  return null;
+}
+
+bool _historyTargetsPeer(List<ChatMessage> messages, String peer) {
+  for (final message in messages) {
+    if (normalizeTestIdentity(message.senderDid) == peer) {
+      return true;
+    }
+    final receiverDid = message.receiverDid;
+    if (receiverDid != null && normalizeTestIdentity(receiverDid) == peer) {
+      return true;
+    }
+  }
+  return false;
+}
+
 class FakeUpdateService implements UpdateService {
   AppVersion currentVersion = const AppVersion(
     version: '0.1.0',
@@ -602,7 +633,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     if (batches != null && batches.isNotEmpty) {
       return batches.removeAt(0);
     }
-    return dmHistoryByPeerDid[peerDid] ?? const <ChatMessage>[];
+    return _directHistoryForPeer(dmHistoryByPeerDid, peerDid) ??
+        const <ChatMessage>[];
   }
 
   @override
@@ -623,7 +655,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       await completer.future;
       fetchLocalDmHistoryCompleter = null;
     }
-    return localDmHistoryByPeerDid[peerDid] ?? const <ChatMessage>[];
+    return _directHistoryForPeer(localDmHistoryByPeerDid, peerDid) ??
+        const <ChatMessage>[];
   }
 
   Future<List<ChatMessage>> fetchLocalGroupHistory(String groupId) async {
