@@ -38,6 +38,7 @@ flutter run -d macos \
 | `chat.local_history.*` / `im_core_messages.local_history*` | 进入会话时本地 projection 历史读取、Dart 映射、merge/sort | 判断本地已有消息是否能先于远端 history 快速渲染 |
 | `chat.remote_history.*` / `im_core_messages.remote_history*` | 后台远端 history reconcile、Dart 映射、merge/sort | 判断远端补齐、E2EE projection 和 native persist/merge 是否仍拖慢进入会话 |
 | `chat.history.*` / `im_core_messages.history*` | 兼容旧日志名的消息历史边界 | 新链路优先看 `local_history` / `remote_history`；旧名只用于兼容对比 |
+| `chat.messages.merge_loop` / `chat.messages.merge` | 消息列表 merge、pending 匹配和排序前准备 | `indexed=true` 表示当前 merge 已用 remoteId/localId/pending 索引，避免每条 incoming 反复 `indexWhere` 扫描 current |
 | `chat.mark_read*` | 打开未读会话后的本地清未读与已读同步 | 判断本地清 unread 和 SDK thread mark-read ack 是否慢 |
 | `chat_page.build.*` / `conversation_list_page.*build.*` | Flutter build 准备阶段 | 判断是否是 UI 构建/重算慢 |
 | `frame.slow` | Flutter 慢帧 build/raster 时间 | 判断是否出现明显 UI jank |
@@ -49,7 +50,7 @@ flutter run -d macos \
 3. 如果 `chat.local_history.load` 本身慢，优先检查本地 projection 查询、SQLite/WAL、消息数量和 `chat.messages.merge` / `chat.messages.sort`。
 4. 如果 `conversation_service.fast_local` 很快但 `conversation_service.enrich`、`conversation_service.agent_projection` 或 `agents.load.*` 很慢，说明首屏已经脱离远端 Agent inventory，慢点在后台补齐链路。
 5. 如果 `product_store.legacy_migration` 或 `product_store.open_database` 很慢，优先看首次 DB open、旧库迁移和 WAL/SHM 拷贝；这些应通过 `app_refresh.product_store_warm_up` 后台预热，不能阻塞 `conversation_fast_local`。
-6. 如果 `conversation_service.filter_sort`、`conversation_list.refresh_fast_local.merge`、`conversation_list.refresh_enrich.merge` 或 `chat.messages.sort` 很慢，优先看 Dart 侧列表规模、O(n²) 匹配和排序。
+6. 如果 `conversation_service.filter_sort`、`conversation_list.refresh_fast_local.merge`、`conversation_list.refresh_enrich.merge` 或 `chat.messages.sort` 很慢，优先看 Dart 侧列表规模、索引命中和排序。`conversation_list.*.merge` 与 `chat.messages.merge_loop` 应带 `indexed=true`，否则说明回归到线性扫描路径。
 7. 如果 `chat.mark_read` 很慢，优先看 `im_core_conversations.mark_read.native` 的
    `local_candidates`、`remote_ack`、`partial` 和 `warnings`；旧的
    `im_core_conversations.mark_read.history_page` 不应再出现，出现则说明回归到了
@@ -63,6 +64,7 @@ flutter run -d macos \
 - `product_store.open_database` / `product_store.legacy_migration` 可在后台 warm-up 中出现，但不应成为 `conversation_list.refresh_fast_local` 的直接子链路。
 - 进入已有本地 projection 的会话时，应先看到 `chat.local_history.load`，消息立即出现；`chat.remote_history.load` 只作为后台 reconcile，失败不应清空已显示的本地消息。
 - 打开未读会话时只允许看到一次远端 `chat.remote_history.*` reconcile；`chat.mark_read*` 不应再触发 history 分页。
+- 发送/重试/附件成功后允许本地立刻 upsert 会话 row；全量 `conversation_list.refresh` 和强制 remote history reconcile 必须经过 debounce 合并，连续发送不应逐条触发全量刷新。
 
 ## 隐私说明
 

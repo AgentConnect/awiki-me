@@ -412,6 +412,12 @@ class ChatThreadsController
       <String, _PendingHistorySync>{};
   final Set<String> _activeLocalHistoryLoads = <String>{};
   final Set<String> _activeRemoteHistorySyncs = <String>{};
+  final Map<String, Timer> _conversationRefreshDebounceTimers =
+      <String, Timer>{};
+  final Map<String, ConversationSummary> _pendingConversationRefreshFallbacks =
+      <String, ConversationSummary>{};
+
+  static const Duration postSendReconcileDebounce = Duration(seconds: 1);
 
   ChatThreadState thread(String threadId) {
     return state[threadId] ?? ChatThreadState(threadId: threadId);
@@ -769,20 +775,9 @@ class ChatThreadsController
           .read(conversationListProvider.notifier)
           .upsertConversation(latestConversation);
     }
-    await _refreshConversationsBestEffort();
-    final refreshedConversation = _newerConversation(
-      _refreshedConversationFor(latestConversation),
+    _scheduleConversationRefreshBestEffort(
       latestConversation,
-    );
-    ref
-        .read(conversationListProvider.notifier)
-        .upsertConversation(refreshedConversation);
-    unawaited(
-      syncHistoryForConversation(
-        refreshedConversation,
-        displayThreadId: targetThreadId,
-        force: true,
-      ),
+      displayThreadId: targetThreadId,
     );
   }
 
@@ -868,20 +863,9 @@ class ChatThreadsController
           .read(conversationListProvider.notifier)
           .upsertConversation(latestConversation);
     }
-    await _refreshConversationsBestEffort();
-    final refreshedConversation = _newerConversation(
-      _refreshedConversationFor(latestConversation),
+    _scheduleConversationRefreshBestEffort(
       latestConversation,
-    );
-    ref
-        .read(conversationListProvider.notifier)
-        .upsertConversation(refreshedConversation);
-    unawaited(
-      syncHistoryForConversation(
-        refreshedConversation,
-        displayThreadId: targetThreadId,
-        force: true,
-      ),
+      displayThreadId: targetThreadId,
     );
   }
 
@@ -955,13 +939,9 @@ class ChatThreadsController
       final failed = retrying.copyWith(sendState: MessageSendState.failed);
       _replaceMessage(targetThreadId, message.localId, failed);
     }
-    await _refreshConversationsBestEffort();
-    unawaited(
-      syncHistoryForConversation(
-        _refreshedConversationFor(conversation),
-        displayThreadId: targetThreadId,
-        force: true,
-      ),
+    _scheduleConversationRefreshBestEffort(
+      conversation,
+      displayThreadId: targetThreadId,
     );
   }
 
@@ -1022,13 +1002,9 @@ class ChatThreadsController
       final failed = retrying.copyWith(sendState: MessageSendState.failed);
       _replaceMessage(targetThreadId, message.localId, failed);
     }
-    await _refreshConversationsBestEffort();
-    unawaited(
-      syncHistoryForConversation(
-        _refreshedConversationFor(conversation),
-        displayThreadId: targetThreadId,
-        force: true,
-      ),
+    _scheduleConversationRefreshBestEffort(
+      conversation,
+      displayThreadId: targetThreadId,
     );
   }
 
@@ -1107,9 +1083,65 @@ class ChatThreadsController
     );
   }
 
-  Future<void> _refreshConversationsBestEffort() async {
+  void _scheduleConversationRefreshBestEffort(
+    ConversationSummary fallback, {
+    required String displayThreadId,
+  }) {
+    final pendingFallback =
+        _pendingConversationRefreshFallbacks[displayThreadId];
+    _pendingConversationRefreshFallbacks[displayThreadId] =
+        pendingFallback == null
+        ? fallback
+        : _newerConversation(pendingFallback, fallback);
+    _conversationRefreshDebounceTimers[displayThreadId]?.cancel();
+    _conversationRefreshDebounceTimers[displayThreadId] = Timer(
+      postSendReconcileDebounce,
+      () {
+        if (!mounted) {
+          return;
+        }
+        _conversationRefreshDebounceTimers.remove(displayThreadId);
+        final reconcileFallback =
+            _pendingConversationRefreshFallbacks.remove(displayThreadId) ??
+            fallback;
+        unawaited(
+          _refreshConversationsBestEffort(
+            reconcileFallback,
+            displayThreadId: displayThreadId,
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _refreshConversationsBestEffort(
+    ConversationSummary fallback, {
+    required String displayThreadId,
+  }) async {
+    if (!mounted) {
+      return;
+    }
     try {
       await ref.read(conversationListProvider.notifier).refresh();
+      if (!mounted) {
+        return;
+      }
+      final remoteConversation = _refreshedConversationFor(fallback);
+      final refreshedConversation = _newerConversation(
+        remoteConversation,
+        fallback,
+      );
+      ref
+          .read(conversationListProvider.notifier)
+          .upsertConversation(refreshedConversation);
+      unawaited(
+        syncHistoryForConversation(
+          remoteConversation,
+          displayThreadId: displayThreadId,
+          force: true,
+          showLoading: false,
+        ),
+      );
     } catch (_) {
       // The local thread has already been updated with the send result. A
       // follow-up conversation-list refresh should not turn a completed send
@@ -1119,6 +1151,7 @@ class ChatThreadsController
 
   void clear() {
     _cancelAgentProcessingTimers();
+    _cancelConversationRefreshTimer();
     _pendingHistorySyncs.clear();
     _activeLocalHistoryLoads.clear();
     _activeRemoteHistorySyncs.clear();
@@ -1234,6 +1267,7 @@ class ChatThreadsController
   }) {
     final totalWatch = Stopwatch()..start();
     final current = List<ChatMessage>.from(thread(threadId).messages);
+    final indexes = _MessageMergeIndexes(current);
     final newlyMergedMessages = <ChatMessage>[];
     AwikiPerformanceLogger.sync(
       'chat.messages.merge_loop',
@@ -1241,14 +1275,18 @@ class ChatThreadsController
         for (final message in incoming.where(
           (message) => message.hasRenderableContent,
         )) {
-          final index = _matchingMessageIndex(current, message);
+          final index = indexes.matchingIndex(
+            current,
+            message,
+            _isMatchingPending,
+          );
           if (index >= 0) {
-            current[index] = _withPreservedAttachmentState(
-              message,
-              current[index],
-            );
+            final previous = current[index];
+            current[index] = _withPreservedAttachmentState(message, previous);
+            indexes.replace(index, current[index]);
           } else {
             current.add(message);
+            indexes.add(current.length - 1, message);
             newlyMergedMessages.add(message);
           }
         }
@@ -1257,6 +1295,7 @@ class ChatThreadsController
         ...AwikiPerformanceLogger.threadField(threadId),
         'current': current.length,
         'incoming': incoming.length,
+        'indexed': true,
       },
       minMs: 1,
     );
@@ -2467,6 +2506,14 @@ class ChatThreadsController
     _agentProcessingTimers.clear();
   }
 
+  void _cancelConversationRefreshTimer() {
+    for (final timer in _conversationRefreshDebounceTimers.values) {
+      timer.cancel();
+    }
+    _conversationRefreshDebounceTimers.clear();
+    _pendingConversationRefreshFallbacks.clear();
+  }
+
   String _displayThreadIdFor(ConversationSummary conversation, String? value) {
     final displayThreadId = value?.trim();
     if (displayThreadId == null || displayThreadId.isEmpty) {
@@ -2478,6 +2525,7 @@ class ChatThreadsController
   @override
   void dispose() {
     _cancelAgentProcessingTimers();
+    _cancelConversationRefreshTimer();
     super.dispose();
   }
 
@@ -2500,25 +2548,9 @@ class ChatThreadsController
   }
 
   int _matchingMessageIndex(List<ChatMessage> current, ChatMessage incoming) {
-    final remoteId = incoming.remoteId;
-    if (remoteId != null && remoteId.isNotEmpty) {
-      final remoteIndex = current.indexWhere(
-        (item) => item.remoteId == remoteId,
-      );
-      if (remoteIndex >= 0) {
-        return remoteIndex;
-      }
-    }
-    final localIndex = current.indexWhere(
-      (item) => item.localId == incoming.localId,
-    );
-    if (localIndex >= 0) {
-      return localIndex;
-    }
-    if (!incoming.isMine || incoming.sendState != MessageSendState.sent) {
-      return -1;
-    }
-    return current.indexWhere((item) => _isMatchingPending(item, incoming));
+    return _MessageMergeIndexes(
+      current,
+    ).matchingIndex(current, incoming, _isMatchingPending);
   }
 
   bool _isMatchingPending(ChatMessage pending, ChatMessage sent) {
@@ -2621,6 +2653,111 @@ class ChatThreadsController
       return a.createdAt.compareTo(b.createdAt);
     });
     return sorted;
+  }
+}
+
+class _MessageMergeIndexes {
+  _MessageMergeIndexes(List<ChatMessage> messages) {
+    for (var i = 0; i < messages.length; i += 1) {
+      add(i, messages[i]);
+    }
+  }
+
+  final Map<String, List<int>> _byRemoteId = <String, List<int>>{};
+  final Map<String, List<int>> _byLocalId = <String, List<int>>{};
+  final Set<int> _pendingIndexes = <int>{};
+
+  int matchingIndex(
+    List<ChatMessage> current,
+    ChatMessage incoming,
+    bool Function(ChatMessage pending, ChatMessage sent) isMatchingPending,
+  ) {
+    final remoteId = _nonEmptyKey(incoming.remoteId);
+    if (remoteId != null) {
+      final remoteIndex = _firstMatchingIndex(
+        _byRemoteId[remoteId],
+        current,
+        (message) => message.remoteId == remoteId,
+      );
+      if (remoteIndex != null) {
+        return remoteIndex;
+      }
+    }
+    final localId = _nonEmptyKey(incoming.localId);
+    if (localId != null) {
+      final localIndex = _firstMatchingIndex(
+        _byLocalId[localId],
+        current,
+        (message) => message.localId == localId,
+      );
+      if (localIndex != null) {
+        return localIndex;
+      }
+    }
+    if (!incoming.isMine || incoming.sendState != MessageSendState.sent) {
+      return -1;
+    }
+    for (final index in _pendingIndexes) {
+      if (index >= current.length) {
+        continue;
+      }
+      if (isMatchingPending(current[index], incoming)) {
+        return index;
+      }
+    }
+    return -1;
+  }
+
+  void add(int index, ChatMessage message) {
+    final remoteId = _nonEmptyKey(message.remoteId);
+    if (remoteId != null) {
+      _addIndex(_byRemoteId.putIfAbsent(remoteId, () => <int>[]), index);
+    }
+    final localId = _nonEmptyKey(message.localId);
+    if (localId != null) {
+      _addIndex(_byLocalId.putIfAbsent(localId, () => <int>[]), index);
+    }
+    if (_isPendingCandidate(message)) {
+      _pendingIndexes.add(index);
+    }
+  }
+
+  void replace(int index, ChatMessage next) {
+    _pendingIndexes.remove(index);
+    add(index, next);
+  }
+
+  static int? _firstMatchingIndex(
+    List<int>? indexes,
+    List<ChatMessage> current,
+    bool Function(ChatMessage message) matches,
+  ) {
+    if (indexes == null) {
+      return null;
+    }
+    for (final index in indexes) {
+      if (index < current.length && matches(current[index])) {
+        return index;
+      }
+    }
+    return null;
+  }
+
+  static void _addIndex(List<int> indexes, int index) {
+    if (!indexes.contains(index)) {
+      indexes.add(index);
+    }
+  }
+
+  static bool _isPendingCandidate(ChatMessage message) {
+    return message.isMine && message.sendState != MessageSendState.sent;
+  }
+
+  static String? _nonEmptyKey(String? value) {
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    return value;
   }
 }
 

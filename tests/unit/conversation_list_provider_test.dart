@@ -82,12 +82,97 @@ void main() {
       );
     },
   );
+
+  test(
+    'refresh merge uses indexed identity and keeps one local row per target',
+    () async {
+      final baseTime = DateTime.utc(2026, 6, 27, 2);
+      final local = <ConversationSummary>[
+        for (var i = 0; i < 500; i += 1)
+          _conversation(
+            threadId: 'dm:local:$i',
+            displayName: 'Local $i',
+            targetDid: 'did:local:$i',
+          ).copyWith(
+            lastMessagePreview: 'local $i',
+            lastMessageAt: baseTime.subtract(Duration(minutes: i + 1)),
+          ),
+        _conversation(
+          threadId: 'dm:did:human:did:agent',
+          displayName: 'Hermes',
+          targetDid: 'did:agent',
+          targetPeer: 'did:agent',
+        ).copyWith(
+          lastMessagePreview: '旧回复',
+          lastMessageAt: baseTime,
+          unreadCount: 0,
+        ),
+      ];
+      final refreshed = <ConversationSummary>[
+        _conversation(
+          threadId: 'dm:peer-scope:v1:hermes',
+          displayName: 'Hermes Remote',
+          targetDid: 'did:agent',
+          targetPeer: 'hermes.awiki.example',
+        ).copyWith(
+          lastMessagePreview: '新回复',
+          lastMessageAt: baseTime.add(const Duration(minutes: 1)),
+          unreadCount: 1,
+        ),
+      ];
+      final service = _StaticConversationService(conversations: refreshed);
+      final container = ProviderContainer(
+        overrides: <Override>[
+          conversationServiceProvider.overrideWithValue(service),
+          notificationFacadeProvider.overrideWithValue(
+            FakeNotificationFacade(),
+          ),
+          sessionProvider.overrideWith((ref) {
+            final controller = SessionController();
+            controller.setSession(
+              const SessionIdentity(
+                did: 'did:human',
+                credentialName: 'human',
+                displayName: 'Human',
+              ),
+            );
+            return controller;
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      for (final conversation in local) {
+        notifier.upsertConversation(conversation);
+      }
+
+      await notifier.refresh();
+
+      final conversations = container
+          .read(conversationListProvider)
+          .conversations;
+      expect(
+        conversations.where((item) => item.targetDid == 'did:agent'),
+        hasLength(1),
+      );
+      final merged = conversations.singleWhere(
+        (item) => item.targetDid == 'did:agent',
+      );
+      expect(merged.threadId, 'dm:peer-scope:v1:hermes');
+      expect(merged.lastMessagePreview, '新回复');
+      expect(conversations.length, local.length);
+      expect(service.listCalls, 1);
+    },
+  );
 }
 
 ConversationSummary _conversation({
   required String threadId,
   required String displayName,
   int unreadCount = 0,
+  String targetDid = 'did:bob',
+  String? targetPeer,
 }) {
   return ConversationSummary(
     threadId: threadId,
@@ -96,7 +181,8 @@ ConversationSummary _conversation({
     lastMessageAt: DateTime.utc(2026, 6, 27, 2),
     unreadCount: unreadCount,
     isGroup: false,
-    targetDid: 'did:bob',
+    targetDid: targetDid,
+    targetPeer: targetPeer,
   );
 }
 
@@ -142,6 +228,73 @@ class _SlowEnrichConversationService implements ConversationService {
     bool unreadOnly = false,
   }) async {
     return base;
+  }
+
+  @override
+  Future<void> markThreadRead(AppThreadRef thread) async {}
+
+  @override
+  Future<ConversationSummary?> normalizeConversationForRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+  }) async {
+    return conversation;
+  }
+
+  @override
+  Future<void> setThreadHidden({
+    required String ownerDid,
+    required String threadId,
+    required bool hidden,
+    DateTime? updatedAt,
+  }) async {}
+
+  @override
+  Future<void> hideConversationFromRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+    DateTime? updatedAt,
+  }) async {}
+
+  @override
+  Future<void> restoreConversationToRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+    DateTime? updatedAt,
+  }) async {}
+}
+
+class _StaticConversationService implements ConversationService {
+  _StaticConversationService({required this.conversations});
+
+  final List<ConversationSummary> conversations;
+  int listCalls = 0;
+
+  @override
+  Future<List<ConversationSummary>> listConversations({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) async {
+    listCalls += 1;
+    return conversations;
+  }
+
+  @override
+  Future<List<ConversationSummary>> listConversationSummariesFast({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) async {
+    return conversations;
+  }
+
+  @override
+  Future<List<ConversationSummary>> enrichConversationSummaries({
+    required String ownerDid,
+    required List<ConversationSummary> conversations,
+  }) async {
+    return conversations;
   }
 
   @override

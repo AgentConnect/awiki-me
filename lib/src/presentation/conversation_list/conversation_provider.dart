@@ -255,6 +255,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       fields: <String, Object?>{
         'refreshed': refreshed.length,
         'local': currentConversations.length,
+        'indexed': true,
       },
     );
     state = state.copyWith(conversations: nextConversations, isLoading: false);
@@ -515,11 +516,12 @@ List<ConversationSummary> _mergeConversationRefresh({
   required List<ConversationSummary> refreshed,
   required List<ConversationSummary> local,
 }) {
+  final localIndex = _ConversationMergeIndex(local);
   final consumedLocalThreadIds = <String>{};
   final mergedRefreshed = refreshed.map((conversation) {
-    final matchedLocal = _matchingConversationForUpsert(
-      local.where((item) => !consumedLocalThreadIds.contains(item.threadId)),
+    final matchedLocal = localIndex.match(
       conversation,
+      consumedThreadIds: consumedLocalThreadIds,
     );
     if (matchedLocal != null) {
       consumedLocalThreadIds.add(matchedLocal.threadId);
@@ -557,10 +559,109 @@ List<ConversationSummary> _mergeConversationRefresh({
     ..sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
 }
 
+class _ConversationMergeIndex {
+  _ConversationMergeIndex(List<ConversationSummary> conversations) {
+    for (final conversation in conversations) {
+      final threadId = _nonEmptyKey(conversation.threadId);
+      if (threadId != null) {
+        _byThreadId.putIfAbsent(threadId, () => conversation);
+      }
+      for (final key in conversation.visibilityKeys) {
+        final normalized = _nonEmptyKey(key);
+        if (normalized != null) {
+          _byVisibilityKey.putIfAbsent(normalized, () => conversation);
+        }
+      }
+      for (final key in _directTargetKeys(conversation)) {
+        _byDirectTarget.putIfAbsent(key, () => conversation);
+      }
+    }
+  }
+
+  final Map<String, ConversationSummary> _byThreadId =
+      <String, ConversationSummary>{};
+  final Map<String, ConversationSummary> _byVisibilityKey =
+      <String, ConversationSummary>{};
+  final Map<String, ConversationSummary> _byDirectTarget =
+      <String, ConversationSummary>{};
+
+  ConversationSummary? match(
+    ConversationSummary incoming, {
+    Set<String> consumedThreadIds = const <String>{},
+  }) {
+    ConversationSummary? candidate = _candidateIfAvailable(
+      _byThreadId[_nonEmptyKey(incoming.threadId)],
+      consumedThreadIds,
+    );
+    if (candidate != null) {
+      return candidate;
+    }
+    for (final key in incoming.visibilityKeys) {
+      candidate = _candidateIfAvailable(
+        _byVisibilityKey[_nonEmptyKey(key)],
+        consumedThreadIds,
+      );
+      if (candidate != null) {
+        return candidate;
+      }
+    }
+    if (incoming.isGroup) {
+      return null;
+    }
+    for (final key in _directTargetKeys(incoming)) {
+      candidate = _candidateIfAvailable(
+        _byDirectTarget[key],
+        consumedThreadIds,
+      );
+      if (candidate != null) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  static ConversationSummary? _candidateIfAvailable(
+    ConversationSummary? candidate,
+    Set<String> consumedThreadIds,
+  ) {
+    if (candidate == null || consumedThreadIds.contains(candidate.threadId)) {
+      return null;
+    }
+    return candidate;
+  }
+
+  static Iterable<String> _directTargetKeys(ConversationSummary conversation) {
+    if (conversation.isGroup) {
+      return const <String>[];
+    }
+    final keys = <String>[];
+    final did = _nonEmptyKey(conversation.targetDid);
+    if (did != null) {
+      keys.add('did:$did');
+    }
+    final peer = normalizedDirectPeer(conversation.targetPeer);
+    if (peer != null) {
+      keys.add('peer:$peer');
+    }
+    return keys;
+  }
+
+  static String? _nonEmptyKey(String? value) {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
+}
+
 ConversationSummary? _matchingConversationForUpsert(
   Iterable<ConversationSummary> conversations,
   ConversationSummary incoming,
 ) {
+  if (conversations is List<ConversationSummary>) {
+    return _ConversationMergeIndex(conversations).match(incoming);
+  }
   for (final item in conversations) {
     if (item.threadId == incoming.threadId) {
       return item;
