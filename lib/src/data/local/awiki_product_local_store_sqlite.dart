@@ -6,6 +6,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../../application/models/product_local_models.dart';
 import '../../application/product_local_store.dart';
+import '../../core/performance_logger.dart';
 import '../im_core/awiki_im_core_paths.dart';
 import 'sqflite_desktop_init.dart';
 
@@ -30,23 +31,35 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
     if (existing != null) {
       return existing;
     }
-    ensureSqfliteDesktopInitialized();
-    final path = await _resolveDatabasePath();
+    AwikiPerformanceLogger.sync(
+      'product_store.ensure_sqflite_desktop_initialized',
+      ensureSqfliteDesktopInitialized,
+    );
+    final path = await AwikiPerformanceLogger.async(
+      'product_store.resolve_path',
+      _resolveDatabasePath,
+    );
     try {
-      await _migrateLegacyDatabaseIfNeeded(path);
+      await AwikiPerformanceLogger.async(
+        'product_store.migrate_legacy',
+        () => _migrateLegacyDatabaseIfNeeded(path),
+      );
     } catch (_) {
       // Legacy cache migration is best-effort. A broken old cache must not
       // prevent the current product store from opening at the new app path.
     }
-    _database = await openDatabase(
-      path,
-      version: databaseVersion,
-      onCreate: (db, _) => _createSchema(db),
-      onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) {
-          await _createAgentStatesTable(db);
-        }
-      },
+    _database = await AwikiPerformanceLogger.async(
+      'product_store.open',
+      () => openDatabase(
+        path,
+        version: databaseVersion,
+        onCreate: (db, _) => _createSchema(db),
+        onUpgrade: (db, oldVersion, newVersion) async {
+          if (oldVersion < 2) {
+            await _createAgentStatesTable(db);
+          }
+        },
+      ),
     );
     return _database!;
   }
@@ -174,23 +187,32 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
     Iterable<String>? threadIds,
   }) async {
     final ids = threadIds?.toList(growable: false);
-    final rows = ids == null || ids.isEmpty
-        ? await (await _db).query(
-            'conversation_overlays',
-            where: 'owner_did = ?',
-            whereArgs: <Object?>[ownerDid],
-          )
-        : await (await _db).query(
-            'conversation_overlays',
-            where:
-                'owner_did = ? AND thread_id IN (${List.filled(ids.length, '?').join(',')})',
-            whereArgs: <Object?>[ownerDid, ...ids],
-          );
-    return Map<String, ProductConversationOverlay>.fromEntries(
-      rows.map((row) {
-        final overlay = _overlayFromRow(row);
-        return MapEntry(overlay.threadId, overlay);
-      }),
+    final db = await _db;
+    final rows = await AwikiPerformanceLogger.async(
+      'product_store.conversation_overlays.query',
+      () => ids == null || ids.isEmpty
+          ? db.query(
+              'conversation_overlays',
+              where: 'owner_did = ?',
+              whereArgs: <Object?>[ownerDid],
+            )
+          : db.query(
+              'conversation_overlays',
+              where:
+                  'owner_did = ? AND thread_id IN (${List.filled(ids.length, '?').join(',')})',
+              whereArgs: <Object?>[ownerDid, ...ids],
+            ),
+      fields: <String, Object?>{'keys': ids?.length ?? 0},
+    );
+    return AwikiPerformanceLogger.sync(
+      'product_store.conversation_overlays.decode',
+      () => Map<String, ProductConversationOverlay>.fromEntries(
+        rows.map((row) {
+          final overlay = _overlayFromRow(row);
+          return MapEntry(overlay.threadId, overlay);
+        }),
+      ),
+      fields: <String, Object?>{'rows': rows.length},
     );
   }
 

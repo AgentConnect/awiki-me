@@ -52,6 +52,7 @@ import '../domain/services/e2ee_facade.dart';
 import '../domain/services/notification_facade.dart';
 import '../domain/services/realtime_gateway.dart';
 import '../domain/services/update_service.dart';
+import '../core/performance_logger.dart';
 
 class AppBootstrap {
   AppBootstrap({
@@ -110,19 +111,23 @@ class AppBootstrap {
     AwikiEnvironmentConfig? environment,
     String? appStateRoot,
   }) async {
+    final totalWatch = Stopwatch()..start();
     final effectiveEnvironment =
         environment ?? AwikiEnvironmentConfig.fromEnvironment();
-    final preferenceStorage = await _buildPreferenceStore(
-      appStateRoot: appStateRoot,
+    final preferenceStorage = await AwikiPerformanceLogger.async(
+      'bootstrap.preference_store',
+      () => _buildPreferenceStore(appStateRoot: appStateRoot),
     );
 
+    final pathLayout = await AwikiPerformanceLogger.async(
+      'bootstrap.im_core_paths',
+      () => AwikiImCorePathLayout.fromPlatform(appStateRoot: appStateRoot),
+    );
     final runtime = AwikiImCoreRuntime(
       config: AwikiImCoreEnvironmentConfig.fromAwikiEnvironment(
         effectiveEnvironment,
       ),
-      paths: await AwikiImCorePathLayout.fromPlatform(
-        appStateRoot: appStateRoot,
-      ),
+      paths: pathLayout,
     );
     final productLocalStore = AwikiProductLocalStoreSqlite();
 
@@ -216,7 +221,7 @@ class AppBootstrap {
       storage: preferenceStorage,
     );
     final updateService = AppUpdateService(storage: preferenceStorage);
-    return AppBootstrap(
+    final bootstrap = AppBootstrap(
       accountGateway: accountGateway,
       gateway: gateway,
       realtimeGateway: realtimeGateway,
@@ -242,6 +247,15 @@ class AppBootstrap {
       productLocalStore: productLocalStore,
       peerIdentityService: peerIdentityService,
     );
+    totalWatch.stop();
+    AwikiPerformanceLogger.log(
+      'bootstrap.create',
+      elapsed: totalWatch.elapsed,
+      fields: <String, Object?>{
+        'custom_state_root': appStateRoot?.trim().isNotEmpty == true,
+      },
+    );
+    return bootstrap;
   }
 
   @visibleForTesting

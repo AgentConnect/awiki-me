@@ -2,6 +2,7 @@ import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
 import '../../application/models/app_thread_ref.dart';
 import '../../application/ports/conversation_core_port.dart';
+import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../../domain/entities/conversation_summary.dart';
 import 'awiki_im_core_mappers.dart';
@@ -26,39 +27,72 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
     bool unreadOnly = false,
   }) async {
     return _runtime.withCurrentClient((client) async {
-      final ownerDid = (await client.identity.current()).did;
-      final page = await client.messages.conversations(
-        limit: limit,
-        unreadOnly: unreadOnly,
+      final totalWatch = Stopwatch()..start();
+      final ownerDid = (await AwikiPerformanceLogger.async(
+        'im_core_conversations.identity_current',
+        client.identity.current,
+      )).did;
+      final page = await AwikiPerformanceLogger.async(
+        'im_core_conversations.native_list',
+        () =>
+            client.messages.conversations(limit: limit, unreadOnly: unreadOnly),
+        fields: <String, Object?>{'limit': limit, 'unread_only': unreadOnly},
       );
-      return page.items
-          .where((conversation) => !_hasControlLastMessage(conversation))
-          .map(
-            (conversation) =>
-                _mappers.conversationFromCore(conversation, ownerDid: ownerDid),
-          )
-          .toList();
+      final conversations = AwikiPerformanceLogger.sync(
+        'im_core_conversations.map',
+        () => page.items
+            .where((conversation) => !_hasControlLastMessage(conversation))
+            .map(
+              (conversation) => _mappers.conversationFromCore(
+                conversation,
+                ownerDid: ownerDid,
+              ),
+            )
+            .toList(),
+        fields: <String, Object?>{'items': page.items.length},
+      );
+      totalWatch.stop();
+      AwikiPerformanceLogger.log(
+        'im_core_conversations.list',
+        elapsed: totalWatch.elapsed,
+        fields: <String, Object?>{
+          'items': page.items.length,
+          'mapped': conversations.length,
+          'has_more': page.hasMore,
+        },
+      );
+      return conversations;
     });
   }
 
   @override
   Future<void> markThreadRead(AppThreadRef thread) async {
     await _runtime.withCurrentClient((client) async {
+      final totalWatch = Stopwatch()..start();
       final ownerDid = (await client.identity.current()).did;
       final coreThread = coreThreadRefForMarkRead(thread, ownerDid);
       final messageIds = <String>{};
       String? cursor;
+      var pages = 0;
 
       for (
         var pageIndex = 0;
         pageIndex < _markThreadReadMaxPages;
         pageIndex++
       ) {
-        final page = await client.messages.history(
-          coreThread,
-          limit: _markThreadReadPageSize,
-          cursor: cursor,
+        final page = await AwikiPerformanceLogger.async(
+          'im_core_conversations.mark_read.history_page',
+          () => client.messages.history(
+            coreThread,
+            limit: _markThreadReadPageSize,
+            cursor: cursor,
+          ),
+          fields: <String, Object?>{
+            'page': pageIndex + 1,
+            'cursor': cursor != null,
+          },
         );
+        pages += 1;
         messageIds.addAll(
           unreadIncomingMessageIdsForMarkRead(page.items, ownerDid: ownerDid),
         );
@@ -73,9 +107,28 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
       }
 
       if (messageIds.isEmpty) {
+        totalWatch.stop();
+        AwikiPerformanceLogger.log(
+          'im_core_conversations.mark_read',
+          elapsed: totalWatch.elapsed,
+          fields: <String, Object?>{'pages': pages, 'message_ids': 0},
+        );
         return;
       }
-      await client.messages.markRead(messageIds.toList(growable: false));
+      await AwikiPerformanceLogger.async(
+        'im_core_conversations.mark_read.native',
+        () => client.messages.markRead(messageIds.toList(growable: false)),
+        fields: <String, Object?>{'message_ids': messageIds.length},
+      );
+      totalWatch.stop();
+      AwikiPerformanceLogger.log(
+        'im_core_conversations.mark_read',
+        elapsed: totalWatch.elapsed,
+        fields: <String, Object?>{
+          'pages': pages,
+          'message_ids': messageIds.length,
+        },
+      );
     });
   }
 }

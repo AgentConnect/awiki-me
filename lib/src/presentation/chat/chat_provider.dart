@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_services.dart';
 import '../../application/models/attachment_models.dart';
 import '../../application/models/app_thread_ref.dart';
+import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/chat_attachment.dart';
@@ -407,6 +408,14 @@ class ChatThreadsController
     String? displayThreadId,
   }) async {
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
+    AwikiPerformanceLogger.log(
+      'chat.open_conversation',
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(targetThreadId),
+        'unread': conversation.unreadCount,
+        'is_group': conversation.isGroup,
+      },
+    );
     unawaited(
       syncHistoryForConversation(
         conversation,
@@ -424,9 +433,19 @@ class ChatThreadsController
 
   void _markConversationReadBestEffort(ConversationSummary conversation) {
     try {
+      final thread = _readThreadRefFor(conversation);
+      final watch = Stopwatch()..start();
       final operation = ref
           .read(conversationServiceProvider)
-          .markThreadRead(_readThreadRefFor(conversation));
+          .markThreadRead(thread)
+          .whenComplete(() {
+            watch.stop();
+            AwikiPerformanceLogger.log(
+              'chat.mark_read',
+              elapsed: watch.elapsed,
+              fields: AwikiPerformanceLogger.threadField(conversation.threadId),
+            );
+          });
       unawaited(operation.catchError((_) {}));
     } catch (_) {
       // IM Core does not expose thread-level read-state yet, and the adapter can
@@ -444,15 +463,27 @@ class ChatThreadsController
       return;
     }
     final targetThreadId = _displayThreadIdFor(conversation, intoThreadId);
+    final totalWatch = Stopwatch()..start();
     _setThreadLoading(targetThreadId, true);
     try {
-      final history =
-          (await ref
-                  .read(messagingServiceProvider)
-                  .loadHistory(_historyThreadRefFor(conversation)))
-              .map((message) => _withThreadId(message, targetThreadId))
-              .where((message) => message.hasRenderableContent)
-              .toList();
+      final loadedHistory = await AwikiPerformanceLogger.async(
+        'chat.history.service',
+        () => ref
+            .read(messagingServiceProvider)
+            .loadHistory(_historyThreadRefFor(conversation)),
+        fields: AwikiPerformanceLogger.threadField(targetThreadId),
+      );
+      final history = AwikiPerformanceLogger.sync(
+        'chat.history.prepare',
+        () => loadedHistory
+            .map((message) => _withThreadId(message, targetThreadId))
+            .where((message) => message.hasRenderableContent)
+            .toList(),
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'items': loadedHistory.length,
+        },
+      );
       if (!mounted) {
         return;
       }
@@ -461,6 +492,15 @@ class ChatThreadsController
         history,
         isLoading: false,
         resolveStaleSending: true,
+      );
+      totalWatch.stop();
+      AwikiPerformanceLogger.log(
+        'chat.history.load',
+        elapsed: totalWatch.elapsed,
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'items': history.length,
+        },
       );
     } catch (error) {
       if (!mounted) {
@@ -1026,39 +1066,92 @@ class ChatThreadsController
     bool resolveStaleSending = false,
     bool trustIncomingAgentReply = false,
   }) {
+    final totalWatch = Stopwatch()..start();
     final current = List<ChatMessage>.from(thread(threadId).messages);
     final newlyMergedMessages = <ChatMessage>[];
-    for (final message in incoming.where(
-      (message) => message.hasRenderableContent,
-    )) {
-      final index = _matchingMessageIndex(current, message);
-      if (index >= 0) {
-        current[index] = _withPreservedAttachmentState(message, current[index]);
-      } else {
-        current.add(message);
-        newlyMergedMessages.add(message);
-      }
-    }
+    AwikiPerformanceLogger.sync(
+      'chat.messages.merge_loop',
+      () {
+        for (final message in incoming.where(
+          (message) => message.hasRenderableContent,
+        )) {
+          final index = _matchingMessageIndex(current, message);
+          if (index >= 0) {
+            current[index] = _withPreservedAttachmentState(
+              message,
+              current[index],
+            );
+          } else {
+            current.add(message);
+            newlyMergedMessages.add(message);
+          }
+        }
+      },
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(threadId),
+        'current': current.length,
+        'incoming': incoming.length,
+      },
+      minMs: 1,
+    );
     final messages = resolveStaleSending
-        ? _markStaleSendingFailed(current)
+        ? AwikiPerformanceLogger.sync(
+            'chat.messages.resolve_stale',
+            () => _markStaleSendingFailed(current),
+            fields: <String, Object?>{
+              ...AwikiPerformanceLogger.threadField(threadId),
+              'items': current.length,
+            },
+            minMs: 1,
+          )
         : current;
     final previous = thread(threadId);
-    final nextAgentPendingTurns = _nextAgentPendingTurnsAfterMerge(
-      previous.agentPendingTurns,
-      newlyMergedMessages,
-      trustIncomingAgentReply: trustIncomingAgentReply,
+    final nextAgentPendingTurns = AwikiPerformanceLogger.sync(
+      'chat.messages.pending_turns',
+      () => _nextAgentPendingTurnsAfterMerge(
+        previous.agentPendingTurns,
+        newlyMergedMessages,
+        trustIncomingAgentReply: trustIncomingAgentReply,
+      ),
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(threadId),
+        'new': newlyMergedMessages.length,
+        'pending': previous.agentPendingTurns.length,
+      },
+      minMs: 1,
+    );
+    final sortedMessages = AwikiPerformanceLogger.sync(
+      'chat.messages.sort',
+      () => _sortMessages(messages),
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(threadId),
+        'items': messages.length,
+      },
+      minMs: 1,
     );
     state = <String, ChatThreadState>{
       ...state,
       threadId: ChatThreadState(
         threadId: threadId,
-        messages: _sortMessages(messages),
+        messages: sortedMessages,
         isLoading: isLoading ?? previous.isLoading,
         agentPendingTurns: nextAgentPendingTurns,
         messageAgentSyncs: previous.messageAgentSyncs,
         appActionRecords: previous.appActionRecords,
       ),
     };
+    totalWatch.stop();
+    AwikiPerformanceLogger.log(
+      'chat.messages.merge',
+      elapsed: totalWatch.elapsed,
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(threadId),
+        'incoming': incoming.length,
+        'new': newlyMergedMessages.length,
+        'total': sortedMessages.length,
+      },
+      minMs: 1,
+    );
     if (nextAgentPendingTurns.isEmpty) {
       _cancelAgentProcessingTimer(threadId);
     } else {

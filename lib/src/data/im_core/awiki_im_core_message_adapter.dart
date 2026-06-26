@@ -6,6 +6,7 @@ import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import '../../application/models/attachment_models.dart';
 import '../../application/models/app_thread_ref.dart';
 import '../../application/ports/message_core_port.dart';
+import '../../core/performance_logger.dart';
 import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
 import 'awiki_im_core_mappers.dart';
@@ -134,21 +135,50 @@ class AwikiImCoreMessageAdapter implements MessageCorePort {
     bool includeControlPayloads = false,
   }) async {
     return _runtime.withCurrentClient((client) async {
-      final ownerDid = (await client.identity.current()).did;
-      final page = await client.messages.history(
-        _mappers.threadRefToCore(thread),
-        limit: limit,
-        cursor: cursor,
+      final totalWatch = Stopwatch()..start();
+      final ownerDid = (await AwikiPerformanceLogger.async(
+        'im_core_messages.identity_current',
+        client.identity.current,
+      )).did;
+      final coreThread = _mappers.threadRefToCore(thread);
+      final page = await AwikiPerformanceLogger.async(
+        'im_core_messages.history_native',
+        () => client.messages.history(coreThread, limit: limit, cursor: cursor),
+        fields: <String, Object?>{
+          'limit': limit,
+          'cursor': cursor != null,
+          'thread_kind': thread.runtimeType.toString(),
+        },
       );
-      return page.items
-          .map(
-            (message) =>
-                _mappers.chatMessageFromCore(message, ownerDid: ownerDid),
-          )
-          .where(
-            (message) => includeControlPayloads || message.hasRenderableContent,
-          )
-          .toList();
+      final messages = AwikiPerformanceLogger.sync(
+        'im_core_messages.history_map',
+        () => page.items
+            .map(
+              (message) =>
+                  _mappers.chatMessageFromCore(message, ownerDid: ownerDid),
+            )
+            .where(
+              (message) =>
+                  includeControlPayloads || message.hasRenderableContent,
+            )
+            .toList(),
+        fields: <String, Object?>{
+          'items': page.items.length,
+          'include_control_payloads': includeControlPayloads,
+        },
+      );
+      totalWatch.stop();
+      AwikiPerformanceLogger.log(
+        'im_core_messages.history',
+        elapsed: totalWatch.elapsed,
+        fields: <String, Object?>{
+          'items': page.items.length,
+          'returned': messages.length,
+          'has_more': page.hasMore,
+          'include_control_payloads': includeControlPayloads,
+        },
+      );
+      return messages;
     });
   }
 

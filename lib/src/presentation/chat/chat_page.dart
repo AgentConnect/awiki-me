@@ -13,6 +13,7 @@ import '../../app/app_services.dart';
 import '../../application/attachment_preview_service.dart';
 import '../../application/models/attachment_models.dart';
 import '../../core/group_display_name.dart';
+import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
@@ -241,6 +242,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   @override
   Widget build(BuildContext context) {
+    final buildWatch = Stopwatch()..start();
     final responsive = context.awikiResponsive;
     final macStyle = widget.macStyle && responsive.isMacDesktop;
     final thread = ref.watch(chatThreadProvider(widget.conversation.threadId));
@@ -306,6 +308,18 @@ class _ChatViewState extends ConsumerState<ChatView> {
           (turn) => !messages.any((message) => turn.matchesMessage(message)),
         )
         .toList(growable: false);
+    buildWatch.stop();
+    AwikiPerformanceLogger.log(
+      'chat_page.build.prepare',
+      elapsed: buildWatch.elapsed,
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(currentConversation.threadId),
+        'messages': messages.length,
+        'pending': activePendingTurns.length,
+        'timeline': messageAgentItems.length,
+      },
+      minMs: 1,
+    );
     final page = SafeArea(
       bottom: false,
       child: Column(

@@ -7,6 +7,7 @@ import '../../app/app_services.dart';
 import '../../application/config/awiki_environment_config.dart';
 import '../../application/models/product_local_models.dart';
 import '../../core/app_error_classifier.dart';
+import '../../core/performance_logger.dart';
 import '../../data/agent/user_service_agent_inventory_adapter.dart';
 import '../../data/services/awiki_onboarding_utility_client.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
@@ -454,6 +455,7 @@ class AgentsController extends StateNotifier<AgentsState> {
   Future<void> ensureLoaded() {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
+      AwikiPerformanceLogger.log('agents.ensure_loaded.no_session');
       state = const AgentsState();
       _loadedCacheOwner = null;
       _stateEpoch += 1;
@@ -464,11 +466,14 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (activeLoad != null &&
         _loadOperationOwner == cacheOwner &&
         _loadOperationEpoch == _stateEpoch) {
+      AwikiPerformanceLogger.log('agents.ensure_loaded.reuse');
       return activeLoad;
     }
     if (_loadedCacheOwner == cacheOwner) {
+      AwikiPerformanceLogger.log('agents.ensure_loaded.cached');
       return Future<void>.value();
     }
+    AwikiPerformanceLogger.log('agents.ensure_loaded.load');
     return load();
   }
 
@@ -498,6 +503,7 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<void> _load() async {
+    final totalWatch = Stopwatch()..start();
     final session = ref.read(sessionProvider).session;
     if (session == null) {
       state = const AgentsState();
@@ -508,18 +514,27 @@ class AgentsController extends StateNotifier<AgentsState> {
     final startedEpoch = _stateEpoch;
     final cacheOwner = _agentCacheOwner(session);
     state = state.copyWith(isLoading: true, clearError: true);
-    await _loadCached(cacheOwner);
+    await AwikiPerformanceLogger.async(
+      'agents.load.cache',
+      () => _loadCached(cacheOwner),
+    );
     if (!_isCurrentCacheOwner(cacheOwner, epoch: startedEpoch)) {
       return;
     }
     try {
-      final agents = _stableAgentOrder(
-        await _mergeLatestDaemonStatusPayloads(
-          await ref
-              .read(agentControlServiceProvider)
-              .listAgents()
-              .timeout(agentListLoadTimeout),
+      final remoteAgents = await AwikiPerformanceLogger.async(
+        'agents.load.remote_list',
+        () => ref
+            .read(agentControlServiceProvider)
+            .listAgents()
+            .timeout(agentListLoadTimeout),
+      );
+      final agents = await AwikiPerformanceLogger.async(
+        'agents.load.order',
+        () async => _stableAgentOrder(
+          await _mergeLatestDaemonStatusPayloads(remoteAgents),
         ),
+        fields: <String, Object?>{'remote': remoteAgents.length},
       );
       if (!_isCurrentCacheOwner(cacheOwner, epoch: startedEpoch)) {
         return;
@@ -559,6 +574,12 @@ class AgentsController extends StateNotifier<AgentsState> {
           unawaited(refreshDaemonStatus(daemon.agentDid, fromAutoLoad: true));
         }
       }
+      totalWatch.stop();
+      AwikiPerformanceLogger.log(
+        'agents.load',
+        elapsed: totalWatch.elapsed,
+        fields: <String, Object?>{'agents': agents.length},
+      );
     } catch (error) {
       if (_isCurrentCacheOwner(cacheOwner, epoch: startedEpoch)) {
         state = state.copyWith(
@@ -2092,23 +2113,45 @@ class AgentsController extends StateNotifier<AgentsState> {
   Future<List<AgentSummary>> _mergeLatestDaemonStatusPayloads(
     List<AgentSummary> agents,
   ) async {
+    final totalWatch = Stopwatch()..start();
     var merged = _stableAgentOrder(agents);
     final store = ref.read(agentControlStatusStoreProvider);
+    var daemonCount = 0;
+    var payloadCount = 0;
     for (final daemon in agents.where((agent) => agent.isDaemon)) {
       final Map<String, Object?>? payload;
+      daemonCount += 1;
       try {
-        payload = await store
-            .findLatestDaemonStatusPayload(daemonAgentDid: daemon.agentDid)
-            .timeout(agentStatusPayloadLookupTimeout, onTimeout: () => null);
+        payload = await AwikiPerformanceLogger.async(
+          'agents.load.daemon_status_payload',
+          () => store
+              .findLatestDaemonStatusPayload(daemonAgentDid: daemon.agentDid)
+              .timeout(agentStatusPayloadLookupTimeout, onTimeout: () => null),
+          fields: <String, Object?>{
+            'daemon_hash': AwikiPerformanceLogger.safeHash(daemon.agentDid),
+          },
+        );
       } catch (_) {
         continue;
       }
       if (payload == null) {
         continue;
       }
+      payloadCount += 1;
       merged = _mergeControlPayload(merged, payload);
     }
-    return _stableAgentOrder(merged);
+    final ordered = _stableAgentOrder(merged);
+    totalWatch.stop();
+    AwikiPerformanceLogger.log(
+      'agents.load.merge_daemon_status',
+      elapsed: totalWatch.elapsed,
+      fields: <String, Object?>{
+        'agents': agents.length,
+        'daemons': daemonCount,
+        'payloads': payloadCount,
+      },
+    );
+    return ordered;
   }
 
   String? _nextSelection(List<AgentSummary> agents) {

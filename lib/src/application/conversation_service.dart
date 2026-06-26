@@ -3,6 +3,7 @@ import 'dart:async';
 import '../domain/entities/agent/agent_display_name.dart';
 import '../domain/entities/agent/agent_summary.dart';
 import '../domain/entities/conversation_summary.dart';
+import '../core/performance_logger.dart';
 import 'agent/agent_control_projection.dart';
 import 'models/app_thread_ref.dart';
 import 'models/product_local_models.dart';
@@ -74,42 +75,83 @@ class ImCoreConversationService implements ConversationService {
     int limit = 100,
     bool unreadOnly = false,
   }) async {
-    final items = await _conversations.listConversations(
-      limit: limit,
-      unreadOnly: unreadOnly,
+    final totalWatch = Stopwatch()..start();
+    final items = await AwikiPerformanceLogger.async(
+      'conversation_service.core_list',
+      () => _conversations.listConversations(
+        limit: limit,
+        unreadOnly: unreadOnly,
+      ),
+      fields: <String, Object?>{'limit': limit, 'unread_only': unreadOnly},
     );
-    final agentProjection = await _loadAgentConversationProjection();
-    final mergedItems = _mergeAgentConversationDuplicates(
-      items,
-      agentProjection,
+    final agentProjection = await AwikiPerformanceLogger.async(
+      'conversation_service.agent_projection',
+      _loadAgentConversationProjection,
+      fields: <String, Object?>{'items': items.length},
     );
-    final overlays = await _localStore.loadConversationOverlays(
-      ownerDid: ownerDid,
-      threadIds: _overlayKeysForConversations(mergedItems),
+    final mergedItems = AwikiPerformanceLogger.sync(
+      'conversation_service.merge_agents',
+      () => _mergeAgentConversationDuplicates(items, agentProjection),
+      fields: <String, Object?>{
+        'items': items.length,
+        'agents': agentProjection.agentCount,
+        'runtime_agents': agentProjection.runtimeAgents.length,
+      },
     );
-    final visible = mergedItems
-        .where(
-          (item) => shouldShowConversationForChatList(
-            item,
-            daemonAgentDids: agentProjection.daemonAgentDids,
-          ),
-        )
-        .where((item) => !_isConversationHidden(item, overlays))
-        .map(
-          (item) => _applyOverlay(
-            _applyAgentLifecycleProjection(item, agentProjection),
-            _preferredOverlayForConversation(item, overlays),
-          ),
-        )
-        .toList();
-    visible.sort((a, b) {
-      final aPinned = overlays[a.threadId]?.pinned == true;
-      final bPinned = overlays[b.threadId]?.pinned == true;
-      if (aPinned != bPinned) {
-        return aPinned ? -1 : 1;
-      }
-      return b.lastMessageAt.compareTo(a.lastMessageAt);
-    });
+    final overlayKeys = _overlayKeysForConversations(
+      mergedItems,
+    ).toList(growable: false);
+    final overlays = await AwikiPerformanceLogger.async(
+      'conversation_service.overlays',
+      () => _localStore.loadConversationOverlays(
+        ownerDid: ownerDid,
+        threadIds: overlayKeys,
+      ),
+      fields: <String, Object?>{'keys': overlayKeys.length},
+    );
+    final visible = AwikiPerformanceLogger.sync(
+      'conversation_service.filter_sort',
+      () {
+        final result = mergedItems
+            .where(
+              (item) => shouldShowConversationForChatList(
+                item,
+                daemonAgentDids: agentProjection.daemonAgentDids,
+              ),
+            )
+            .where((item) => !_isConversationHidden(item, overlays))
+            .map(
+              (item) => _applyOverlay(
+                _applyAgentLifecycleProjection(item, agentProjection),
+                _preferredOverlayForConversation(item, overlays),
+              ),
+            )
+            .toList();
+        result.sort((a, b) {
+          final aPinned = overlays[a.threadId]?.pinned == true;
+          final bPinned = overlays[b.threadId]?.pinned == true;
+          if (aPinned != bPinned) {
+            return aPinned ? -1 : 1;
+          }
+          return b.lastMessageAt.compareTo(a.lastMessageAt);
+        });
+        return result;
+      },
+      fields: <String, Object?>{
+        'merged': mergedItems.length,
+        'overlays': overlays.length,
+      },
+    );
+    totalWatch.stop();
+    AwikiPerformanceLogger.log(
+      'conversation_service.list',
+      elapsed: totalWatch.elapsed,
+      fields: <String, Object?>{
+        'items': items.length,
+        'merged': mergedItems.length,
+        'visible': visible.length,
+      },
+    );
     return visible;
   }
 
@@ -205,11 +247,15 @@ class ImCoreConversationService implements ConversationService {
       return const _AgentConversationProjection();
     }
     try {
-      final agents = await inventory
-          .listAgents(includeInactive: true)
-          .timeout(agentProjectionTimeout);
+      final agents = await AwikiPerformanceLogger.async(
+        'conversation_service.agent_projection.list_agents',
+        () => inventory
+            .listAgents(includeInactive: true)
+            .timeout(agentProjectionTimeout),
+      );
       return _AgentConversationProjection.fromAgents(agents);
     } on Object {
+      AwikiPerformanceLogger.log('conversation_service.agent_projection.error');
       return const _AgentConversationProjection();
     }
   }
@@ -477,6 +523,8 @@ class _AgentConversationProjection {
   final Set<String> deletedRuntimeAgentDids;
   final Map<String, AgentSummary> agentByDid;
   final Map<String, AgentSummary> runtimeAgentByHandle;
+
+  int get agentCount => agentByDid.length;
 
   List<AgentSummary> get runtimeAgents =>
       agentByDid.values.where((agent) => agent.isRuntime).toList();

@@ -5,23 +5,39 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'src/app/awiki_me_app.dart';
 import 'src/app/app_locale.dart';
 import 'src/app/bootstrap.dart';
+import 'src/core/performance_logger.dart';
 import 'src/presentation/shared/awiki_me_design.dart';
 
 Future<void> main() async {
+  final startupWatch = Stopwatch()..start();
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: AwikiMeColors.background,
-      statusBarIconBrightness: Brightness.dark,
-      statusBarBrightness: Brightness.light,
-      systemNavigationBarColor: AwikiMeColors.background,
-      systemNavigationBarIconBrightness: Brightness.dark,
-      systemNavigationBarDividerColor: AwikiMeColors.background,
+  AwikiPerformanceLogger.registerFrameTimings();
+  AwikiPerformanceLogger.log('main.start');
+  await AwikiPerformanceLogger.async(
+    'main.system_ui',
+    () => SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge),
+  );
+  AwikiPerformanceLogger.sync(
+    'main.system_ui_overlay',
+    () => SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: AwikiMeColors.background,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+        systemNavigationBarColor: AwikiMeColors.background,
+        systemNavigationBarIconBrightness: Brightness.dark,
+        systemNavigationBarDividerColor: AwikiMeColors.background,
+      ),
     ),
   );
-  final bootstrap = await AppBootstrap.create();
-  final localeMode = await bootstrap.localePreferenceService.loadMode();
+  final bootstrap = await AwikiPerformanceLogger.async(
+    'main.bootstrap_create',
+    AppBootstrap.create,
+  );
+  final localeMode = await AwikiPerformanceLogger.async(
+    'main.load_locale',
+    bootstrap.localePreferenceService.loadMode,
+  );
   runApp(
     AwikiMeApp(
       bootstrap: bootstrap,
@@ -30,4 +46,14 @@ Future<void> main() async {
       ],
     ),
   );
+  AwikiPerformanceLogger.log('main.run_app', elapsed: startupWatch.elapsed);
+  if (AwikiPerformanceLogger.enabled) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      startupWatch.stop();
+      AwikiPerformanceLogger.log(
+        'main.first_frame',
+        elapsed: startupWatch.elapsed,
+      );
+    });
+  }
 }

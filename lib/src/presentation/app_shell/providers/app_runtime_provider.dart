@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/app_services.dart';
 import '../../../app/ui_feedback.dart';
+import '../../../core/performance_logger.dart';
 import '../../../application/models/app_session.dart';
 import '../../../application/agent/agent_control_projection.dart';
 import '../../../domain/entities/bridge_capabilities.dart';
@@ -96,16 +97,25 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   Future<void> activateSession(SessionIdentity session) async {
+    final totalWatch = Stopwatch()..start();
     state = state.copyWith(isBusy: true);
     try {
       ref.read(selectedConversationProvider.notifier).clearSelection();
       ref.read(sessionProvider.notifier).setSession(session);
-      await ref.read(e2eeFacadeProvider).initialize(session);
+      await AwikiPerformanceLogger.async(
+        'app_runtime.activate_session.e2ee',
+        () => ref.read(e2eeFacadeProvider).initialize(session),
+      );
       state = state.copyWith(isBusy: false, isInitialized: true);
       unawaited(_refreshAuthenticatedDataInBackground());
       _ensureRealtimeConnected();
     } finally {
       state = state.copyWith(isBusy: false, isInitialized: true);
+      totalWatch.stop();
+      AwikiPerformanceLogger.log(
+        'app_runtime.activate_session',
+        elapsed: totalWatch.elapsed,
+      );
     }
   }
 
@@ -190,36 +200,57 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   Future<void> _refreshAuthenticatedData() async {
+    final totalWatch = Stopwatch()..start();
     if (!mounted ||
         _isLoggingOut ||
         ref.read(sessionProvider).session == null) {
       return;
     }
-    await ref.read(profileProvider.notifier).refresh();
+    await AwikiPerformanceLogger.async(
+      'app_refresh.profile',
+      () => ref.read(profileProvider.notifier).refresh(),
+    );
     if (!mounted ||
         _isLoggingOut ||
         ref.read(sessionProvider).session == null) {
       return;
     }
-    await ref.read(conversationListProvider.notifier).refresh();
+    await AwikiPerformanceLogger.async(
+      'app_refresh.conversations',
+      () => ref.read(conversationListProvider.notifier).refresh(),
+    );
     if (!mounted ||
         _isLoggingOut ||
         ref.read(sessionProvider).session == null) {
       return;
     }
-    await ref.read(agentsProvider.notifier).load();
+    await AwikiPerformanceLogger.async(
+      'app_refresh.agents',
+      () => ref.read(agentsProvider.notifier).load(),
+    );
     if (!mounted ||
         _isLoggingOut ||
         ref.read(sessionProvider).session == null) {
       return;
     }
-    await ref.read(friendsProvider.notifier).refresh();
+    await AwikiPerformanceLogger.async(
+      'app_refresh.friends',
+      () => ref.read(friendsProvider.notifier).refresh(),
+    );
     if (!mounted ||
         _isLoggingOut ||
         ref.read(sessionProvider).session == null) {
       return;
     }
-    await ref.read(groupProvider.notifier).refresh();
+    await AwikiPerformanceLogger.async(
+      'app_refresh.groups',
+      () => ref.read(groupProvider.notifier).refresh(),
+    );
+    totalWatch.stop();
+    AwikiPerformanceLogger.log(
+      'app_refresh.authenticated_data',
+      elapsed: totalWatch.elapsed,
+    );
   }
 
   Future<void> _refreshAuthenticatedDataInBackground() async {

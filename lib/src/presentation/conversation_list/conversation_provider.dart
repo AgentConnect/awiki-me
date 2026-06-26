@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
 import '../../core/group_display_name.dart';
+import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_display_name.dart';
 import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
@@ -59,7 +60,15 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   }
 
   Future<void> refresh() {
+    final reused = _refreshOperation != null;
     final activeRefresh = _refreshOperation ?? _startRefresh();
+    AwikiPerformanceLogger.log(
+      'conversation_list.refresh.request',
+      fields: <String, Object?>{
+        'reused': reused,
+        'current': state.conversations.length,
+      },
+    );
     if (!state.isLoading) {
       state = state.copyWith(isLoading: true);
     }
@@ -91,6 +100,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   }
 
   Future<void> _refresh(int generation) async {
+    final totalWatch = Stopwatch()..start();
     state = state.copyWith(isLoading: true);
     try {
       final session = ref.read(sessionProvider).session;
@@ -105,23 +115,43 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         await _updateBadgeCountBestEffort(0);
         return;
       }
-      final conversations = await ref
-          .read(conversationServiceProvider)
-          .listConversations(ownerDid: session.did);
+      final conversations = await AwikiPerformanceLogger.async(
+        'conversation_list.refresh.service',
+        () => ref
+            .read(conversationServiceProvider)
+            .listConversations(ownerDid: session.did),
+      );
       if (generation != _refreshGeneration) {
         return;
       }
       final currentConversations = state.conversations;
-      state = state.copyWith(
-        conversations: _filterLocallyHiddenConversations(
+      final nextConversations = AwikiPerformanceLogger.sync(
+        'conversation_list.refresh.merge',
+        () => _filterLocallyHiddenConversations(
           _mergeConversationRefresh(
             refreshed: conversations,
             local: currentConversations,
           ),
         ),
+        fields: <String, Object?>{
+          'refreshed': conversations.length,
+          'local': currentConversations.length,
+        },
+      );
+      state = state.copyWith(
+        conversations: nextConversations,
         isLoading: false,
       );
       await _updateBadgeCountBestEffort(state.unreadCount);
+      totalWatch.stop();
+      AwikiPerformanceLogger.log(
+        'conversation_list.refresh',
+        elapsed: totalWatch.elapsed,
+        fields: <String, Object?>{
+          'items': state.conversations.length,
+          'unread': state.unreadCount,
+        },
+      );
     } catch (_) {
       if (generation == _refreshGeneration) {
         state = state.copyWith(isLoading: false);

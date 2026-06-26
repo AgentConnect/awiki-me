@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_router.dart';
 import '../../app/ui_feedback.dart';
 import '../../core/date_time_formatter.dart';
+import '../../core/performance_logger.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/peer_agent_identity.dart';
 import '../../l10n/app_message.dart';
@@ -69,9 +70,21 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
 
   @override
   Widget build(BuildContext context) {
+    final buildWatch = Stopwatch()..start();
     final state = ref.watch(conversationListProvider);
     final composerDrafts = ref.watch(chatComposerDraftsProvider);
     final responsive = context.awikiResponsive;
+    buildWatch.stop();
+    AwikiPerformanceLogger.log(
+      'conversation_list_page.build.prepare',
+      elapsed: buildWatch.elapsed,
+      fields: <String, Object?>{
+        'items': state.conversations.length,
+        'loading': state.isLoading,
+        'mac_style': widget.macStyle && responsive.isMacDesktop,
+      },
+      minMs: 1,
+    );
     Future<void> refreshConversations() async {
       try {
         await ref.read(conversationListProvider.notifier).refresh();
@@ -221,9 +234,21 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
 
   @override
   Widget build(BuildContext context) {
+    final buildWatch = Stopwatch()..start();
     final responsive = context.awikiResponsive;
     final visibleConversations = _filterConversations(context);
     final hasQuery = _query.trim().isNotEmpty;
+    buildWatch.stop();
+    AwikiPerformanceLogger.log(
+      'conversation_list_page.mac_build.prepare',
+      elapsed: buildWatch.elapsed,
+      fields: <String, Object?>{
+        'items': widget.conversations.length,
+        'visible': visibleConversations.length,
+        'query': hasQuery,
+      },
+      minMs: 1,
+    );
     return DecoratedBox(
       decoration: const BoxDecoration(color: Color(0xFFF8FAFD)),
       child: Column(
