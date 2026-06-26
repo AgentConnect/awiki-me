@@ -128,6 +128,7 @@ void main() {
   });
 
   test('generic CLI runtime card lifecycle maps to visual states', () {
+    final now = DateTime.utc(2026, 1, 1, 12);
     final expectations = <String, AgentVisualStatusKind>{
       'needs_setup': AgentVisualStatusKind.needsConfig,
       'queued': AgentVisualStatusKind.processing,
@@ -142,9 +143,9 @@ void main() {
     };
 
     for (final entry in expectations.entries) {
-      final agent = _runtimeWithCard(entry.key);
+      final agent = _runtimeWithCard(entry.key, lastSeenAt: now);
 
-      final status = AgentVisualStatus.fromAgent(agent);
+      final status = AgentVisualStatus.fromAgent(agent, now: now);
 
       expect(status.kind, entry.value, reason: entry.key);
       expect(status.rawStatus, 'runtime_card:${entry.key}');
@@ -205,8 +206,10 @@ void main() {
   test(
     'noncritical runtime card does not override local active run signal',
     () {
+      final now = DateTime.utc(2026, 1, 1, 12);
       final agent = _runtimeWithCard(
         'created',
+        lastSeenAt: now,
         recentRuns: const <AgentRunStatus>[
           AgentRunStatus(
             runId: 'run_1',
@@ -217,7 +220,7 @@ void main() {
         ],
       );
 
-      final status = AgentVisualStatus.fromAgent(agent);
+      final status = AgentVisualStatus.fromAgent(agent, now: now);
 
       expect(status.kind, AgentVisualStatusKind.processing);
       expect(status.rawStatus, isNull);
@@ -319,6 +322,38 @@ void main() {
       expect(serialized['service'], isNull);
     },
   );
+
+  test(
+    'stale generic CLI running runtime card falls back to latest health',
+    () {
+      final now = DateTime.utc(2026, 1, 1, 12);
+      final agent = _runtimeWithCard(
+        'running',
+        latestStatus: 'ready',
+        lastSeenAt: now.subtract(const Duration(minutes: 11)),
+      );
+
+      final status = AgentVisualStatus.fromAgent(agent, now: now);
+
+      expect(status.kind, AgentVisualStatusKind.ready);
+      expect(status.rawStatus, 'ready');
+    },
+  );
+
+  test(
+    'missing last-seen generic CLI running card does not show processing',
+    () {
+      final agent = _runtimeWithCard('running', latestStatus: 'ready');
+
+      final status = AgentVisualStatus.fromAgent(
+        agent,
+        now: DateTime.utc(2026, 1, 1, 12),
+      );
+
+      expect(status.kind, AgentVisualStatusKind.ready);
+      expect(status.rawStatus, 'ready');
+    },
+  );
 }
 
 AgentSummary _runtimeWithCard(
@@ -326,6 +361,7 @@ AgentSummary _runtimeWithCard(
   String latestStatus = 'offline',
   Map<String, Object?>? diagnosticsSummary,
   List<AgentRunStatus> recentRuns = const <AgentRunStatus>[],
+  DateTime? lastSeenAt,
 }) {
   return AgentSummary(
     agentDid: 'did:agent:runtime',
@@ -336,6 +372,7 @@ AgentSummary _runtimeWithCard(
     activeState: 'active',
     latest: AgentLatestStatus(
       status: latestStatus,
+      lastSeenAt: lastSeenAt,
       diagnosticsSummary:
           diagnosticsSummary ??
           genericCliRuntimeCardDiagnostics(lifecycleState: lifecycleState),

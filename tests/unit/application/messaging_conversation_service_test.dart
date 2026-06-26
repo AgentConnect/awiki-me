@@ -559,6 +559,7 @@ class _FakeMessages implements MessageCorePort {
     AppThreadRef thread, {
     int limit = 100,
     String? cursor,
+    bool includeControlPayloads = false,
   }) async {
     historyRequests.add(_HistoryRequest(limit: limit, cursor: cursor));
     return <ChatMessage>[];

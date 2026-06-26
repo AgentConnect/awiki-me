@@ -1506,9 +1506,12 @@ void main() {
     await tester.tap(find.text('删除代理'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('删除').last);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(control.lastDeletedDaemonDid, 'did:agent:daemon');
     expect(control.lastUnboundAgentDid, isNull);
+    expect(find.text('删除中'), findsWidgets);
+    expect(find.text('删除请求已发送，正在等待代理同步。'), findsOneWidget);
   });
 
   testWidgets('install command opens a compact host-install dialog', (

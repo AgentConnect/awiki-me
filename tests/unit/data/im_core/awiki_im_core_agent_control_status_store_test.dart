@@ -1,41 +1,20 @@
 import 'dart:convert';
-import 'dart:io';
 
+import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/attachment_models.dart';
+import 'package:awiki_me/src/application/ports/message_core_port.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_agent_control_status_store.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
+import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  late Directory databaseDir;
-  late String databasePath;
-
-  setUpAll(() {
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
-  });
-
-  setUp(() async {
-    databaseDir = await Directory.systemTemp.createTemp(
-      'awiki_agent_control_status_store_test_',
-    );
-    await databaseFactory.setDatabasesPath(databaseDir.path);
-    databasePath = '${databaseDir.path}/messages.db';
-  });
-
-  tearDown(() async {
-    if (await databaseDir.exists()) {
-      await databaseDir.delete(recursive: true);
-    }
-  });
-
-  test('finds matching daemon status payload from message cache', () async {
-    await _withMessagesDatabase(databasePath, (db) async {
-      await _insertMessage(
-        db,
-        content: <String, Object?>{
+  test('finds matching daemon status payload from message history', () async {
+    final messages = _FakeMessages(<ChatMessage>[
+      _message(
+        payload: <String, Object?>{
           'schema': AgentControlPayloads.statusSchema,
           'status_scope': 'runtime.command',
           'command_id': 'cmd-1',
@@ -43,73 +22,52 @@ void main() {
           'runtime_agent_did': 'did:runtime',
           'state': 'running',
         },
-      );
-    });
+      ),
+    ]);
 
-    final payload =
-        await AwikiImCoreAgentControlStatusStore(
-          sqlitePath: databasePath,
-        ).findStatusPayload(
+    final payload = await AwikiImCoreAgentControlStatusStore(messages: messages)
+        .findStatusPayload(
           daemonAgentDid: 'did:daemon',
           runtimeAgentDid: 'did:runtime',
           requestId: 'cmd-1',
           statusScope: 'runtime.command',
         );
 
+    expect(messages.requests.single.includeControlPayloads, isTrue);
+    expect(messages.requests.single.thread, isA<AppDirectThreadRef>());
+    expect(
+      (messages.requests.single.thread as AppDirectThreadRef).peerDidOrHandle,
+      'did:daemon',
+    );
     expect(payload, isNotNull);
     expect(payload?['schema'], AgentControlPayloads.statusSchema);
     expect(payload?['state'], 'running');
   });
 
   test('skips malformed and unrelated cached messages', () async {
-    await _withMessagesDatabase(databasePath, (db) async {
-      await _insertMessage(db, content: 'not-json runtime.command cmd-1');
-      await _insertMessage(
-        db,
+    final messages = _FakeMessages(<ChatMessage>[
+      _message(rawPayload: 'not-json runtime.command cmd-1'),
+      _message(
         senderDid: 'did:other-daemon',
-        content: <String, Object?>{
+        payload: <String, Object?>{
           'schema': AgentControlPayloads.statusSchema,
           'status_scope': 'runtime.command',
           'request_id': 'cmd-1',
           'daemon_agent_did': 'did:other-daemon',
           'runtime_agent_did': 'did:runtime',
         },
-      );
-      await _insertMessage(
-        db,
-        direction: 1,
-        content: <String, Object?>{
-          'schema': AgentControlPayloads.statusSchema,
-          'status_scope': 'runtime.command',
-          'request_id': 'cmd-1',
-          'daemon_agent_did': 'did:daemon',
-          'runtime_agent_did': 'did:runtime',
-        },
-      );
-      await _insertMessage(
-        db,
-        contentType: 'text/plain',
-        content: <String, Object?>{
-          'schema': AgentControlPayloads.statusSchema,
-          'status_scope': 'runtime.command',
-          'request_id': 'cmd-1',
-          'daemon_agent_did': 'did:daemon',
-          'runtime_agent_did': 'did:runtime',
-        },
-      );
-      await _insertMessage(
-        db,
-        content: <String, Object?>{
+      ),
+      _message(
+        payload: <String, Object?>{
           'schema': AgentControlPayloads.statusSchema,
           'status_scope': 'runtime.command',
           'request_id': 'cmd-1',
           'daemon_agent_did': 'did:daemon',
           'runtime_agent_did': 'did:other-runtime',
         },
-      );
-      await _insertMessage(
-        db,
-        content: <String, Object?>{
+      ),
+      _message(
+        payload: <String, Object?>{
           'schema': AgentControlPayloads.statusSchema,
           'status_scope': 'runtime.command',
           'request_id': 'cmd-1',
@@ -117,13 +75,11 @@ void main() {
           'runtime_agent_did': 'did:runtime',
           'state': 'done',
         },
-      );
-    });
+      ),
+    ]);
 
-    final payload =
-        await AwikiImCoreAgentControlStatusStore(
-          sqlitePath: databasePath,
-        ).findStatusPayload(
+    final payload = await AwikiImCoreAgentControlStatusStore(messages: messages)
+        .findStatusPayload(
           daemonAgentDid: 'did:daemon',
           runtimeAgentDid: 'did:runtime',
           requestId: 'cmd-1',
@@ -134,33 +90,29 @@ void main() {
   });
 
   test('returns null when no status payload matches', () async {
-    await _withMessagesDatabase(databasePath, (db) async {
-      await _insertMessage(
-        db,
-        content: <String, Object?>{
+    final messages = _FakeMessages(<ChatMessage>[
+      _message(
+        payload: <String, Object?>{
           'schema': AgentControlPayloads.commandSchema,
           'status_scope': 'runtime.command',
           'request_id': 'cmd-1',
           'daemon_agent_did': 'did:daemon',
           'runtime_agent_did': 'did:runtime',
         },
-      );
-      await _insertMessage(
-        db,
-        content: <String, Object?>{
+      ),
+      _message(
+        payload: <String, Object?>{
           'schema': AgentControlPayloads.statusSchema,
           'status_scope': 'runtime.other',
           'request_id': 'cmd-1',
           'daemon_agent_did': 'did:daemon',
           'runtime_agent_did': 'did:runtime',
         },
-      );
-    });
+      ),
+    ]);
 
-    final payload =
-        await AwikiImCoreAgentControlStatusStore(
-          sqlitePath: databasePath,
-        ).findStatusPayload(
+    final payload = await AwikiImCoreAgentControlStatusStore(messages: messages)
+        .findStatusPayload(
           daemonAgentDid: 'did:daemon',
           runtimeAgentDid: 'did:runtime',
           requestId: 'cmd-1',
@@ -170,10 +122,10 @@ void main() {
     expect(payload, isNull);
   });
 
-  test('returns null when sqlite cache cannot be opened', () async {
+  test('returns null when message history cannot be loaded', () async {
     final payload =
         await AwikiImCoreAgentControlStatusStore(
-          sqlitePath: databasePath,
+          messages: _ThrowingMessages(),
         ).findStatusPayload(
           daemonAgentDid: 'did:daemon',
           runtimeAgentDid: 'did:runtime',
@@ -185,48 +137,118 @@ void main() {
   });
 }
 
-Future<void> _withMessagesDatabase(
-  String path,
-  Future<void> Function(Database db) callback,
-) async {
-  final db = await openDatabase(
-    path,
-    version: 1,
-    onCreate: (database, _) async {
-      await database.execute('''
-        CREATE TABLE messages (
-          content_type TEXT NOT NULL,
-          direction INTEGER NOT NULL,
-          sender_did TEXT NOT NULL,
-          content TEXT,
-          sent_at TEXT,
-          stored_at TEXT
-        )
-      ''');
-    },
+ChatMessage _message({
+  String senderDid = 'did:daemon',
+  Map<String, Object?>? payload,
+  String? rawPayload,
+}) {
+  final payloadJson = rawPayload ?? jsonEncode(payload);
+  return ChatMessage(
+    localId: 'msg-${payloadJson.hashCode}',
+    threadId: 'dm:did:daemon',
+    senderDid: senderDid,
+    receiverDid: 'did:controller',
+    content: '',
+    originalType: 'application/json',
+    payloadJson: payloadJson,
+    createdAt: DateTime.now().toUtc(),
+    isMine: false,
+    sendState: MessageSendState.sent,
   );
-  try {
-    await callback(db);
-  } finally {
-    await db.close();
+}
+
+class _HistoryRequest {
+  const _HistoryRequest({
+    required this.thread,
+    required this.limit,
+    required this.cursor,
+    required this.includeControlPayloads,
+  });
+
+  final AppThreadRef thread;
+  final int limit;
+  final String? cursor;
+  final bool includeControlPayloads;
+}
+
+class _FakeMessages implements MessageCorePort {
+  _FakeMessages(this.history);
+
+  final List<ChatMessage> history;
+  final List<_HistoryRequest> requests = <_HistoryRequest>[];
+
+  @override
+  Future<List<ChatMessage>> loadHistory(
+    AppThreadRef thread, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  }) async {
+    requests.add(
+      _HistoryRequest(
+        thread: thread,
+        limit: limit,
+        cursor: cursor,
+        includeControlPayloads: includeControlPayloads,
+      ),
+    );
+    return history;
+  }
+
+  @override
+  Future<AttachmentDownloadResult> downloadAttachment({
+    required AppThreadRef thread,
+    required String messageId,
+    String? attachmentId,
+    String? localPath,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ChatMessage> sendAttachment({
+    required AppThreadRef thread,
+    required AttachmentDraft attachment,
+    String? caption,
+    String? idempotencyKey,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ChatMessage> sendPayload({
+    required AppThreadRef thread,
+    required Map<String, Object?> payload,
+    bool secure = true,
+    String? idempotencyKey,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ChatMessage> sendText({
+    required AppThreadRef thread,
+    required String content,
+  }) {
+    throw UnimplementedError();
   }
 }
 
-Future<void> _insertMessage(
-  Database db, {
-  String contentType = 'application/json',
-  int direction = 0,
-  String senderDid = 'did:daemon',
-  String? sentAt,
-  String? storedAt,
-  required Object content,
-}) async {
-  await db.insert('messages', <String, Object?>{
-    'content_type': contentType,
-    'direction': direction,
-    'sender_did': senderDid,
-    'content': content is String ? content : jsonEncode(content),
-    'sent_at': sentAt,
-    'stored_at': storedAt,
-  });
+class _ThrowingMessages extends _FakeMessages {
+  _ThrowingMessages() : super(const <ChatMessage>[]);
+
+  @override
+  Future<List<ChatMessage>> loadHistory(
+    AppThreadRef thread, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  }) async {
+    throw StateError('history unavailable');
+  }
 }

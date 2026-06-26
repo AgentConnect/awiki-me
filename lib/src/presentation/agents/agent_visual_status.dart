@@ -1,6 +1,8 @@
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 
+const Duration _runtimeCardActiveFreshnessWindow = Duration(minutes: 10);
+
 enum AgentVisualStatusKind {
   processing,
   ready,
@@ -20,6 +22,7 @@ class AgentVisualStatus {
     bool hasPendingTurn = false,
     bool isPendingUpgrade = false,
     bool hasUpgradeError = false,
+    DateTime? now,
   }) {
     if (agent == null) {
       return const AgentVisualStatus(AgentVisualStatusKind.unknown);
@@ -56,7 +59,13 @@ class AgentVisualStatus {
       return const AgentVisualStatus(AgentVisualStatusKind.processing);
     }
     if (agent.isRuntime) {
-      final runtimeStatus = _fromRuntimeCard(agent.latest.runtimeCard);
+      final runtimeStatus = _fromRuntimeCard(
+        agent.latest.runtimeCard,
+        processingAllowed: _hasFreshRuntimeCardActiveState(
+          agent.latest,
+          now ?? DateTime.now(),
+        ),
+      );
       if (runtimeStatus != null) {
         return runtimeStatus;
       }
@@ -161,6 +170,7 @@ class AgentVisualStatus {
   static AgentVisualStatus? _fromRuntimeCard(
     AgentRuntimeCardStatus? card, {
     bool criticalOnly = false,
+    bool processingAllowed = true,
   }) {
     if (card == null) {
       return null;
@@ -179,6 +189,7 @@ class AgentVisualStatus {
         rawStatus: rawStatus,
       ),
       _ when criticalOnly => null,
+      'queued' || 'running' when !processingAllowed => null,
       'queued' || 'running' => AgentVisualStatus(
         AgentVisualStatusKind.processing,
         rawStatus: rawStatus,
@@ -194,4 +205,25 @@ class AgentVisualStatus {
       _ => null,
     };
   }
+}
+
+bool _hasFreshRuntimeCardActiveState(AgentLatestStatus latest, DateTime now) {
+  final card = latest.runtimeCard;
+  if (card == null) {
+    return true;
+  }
+  final lifecycle = card.lifecycleState.trim().toLowerCase();
+  if (lifecycle != 'queued' && lifecycle != 'running') {
+    return true;
+  }
+  final lastSeenAt = latest.lastSeenAt;
+  if (lastSeenAt == null) {
+    return false;
+  }
+  return now
+          .toUtc()
+          .difference(lastSeenAt.toUtc())
+          .abs()
+          .compareTo(_runtimeCardActiveFreshnessWindow) <=
+      0;
 }

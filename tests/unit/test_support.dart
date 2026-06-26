@@ -1366,6 +1366,7 @@ class FakeMessagingService implements MessagingService {
     AppThreadRef thread, {
     int limit = 100,
     String? cursor,
+    bool includeControlPayloads = false,
   }) {
     final history = switch (thread) {
       AppDirectThreadRef(:final peerDidOrHandle) => gateway.fetchDmHistory(
@@ -1376,7 +1377,9 @@ class FakeMessagingService implements MessagingService {
     };
     return history.then(
       (messages) => messages
-          .where((message) => message.hasRenderableContent)
+          .where(
+            (message) => includeControlPayloads || message.hasRenderableContent,
+          )
           .toList(growable: false),
     );
   }

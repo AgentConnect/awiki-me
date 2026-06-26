@@ -324,6 +324,7 @@ class _FakeMessages implements MessagingService {
     AppThreadRef thread, {
     int limit = 100,
     String? cursor,
+    bool includeControlPayloads = false,
   }) async => <ChatMessage>[];
 
   @override

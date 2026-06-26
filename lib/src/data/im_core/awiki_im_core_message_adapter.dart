@@ -131,6 +131,7 @@ class AwikiImCoreMessageAdapter implements MessageCorePort {
     AppThreadRef thread, {
     int limit = 100,
     String? cursor,
+    bool includeControlPayloads = false,
   }) async {
     return _runtime.withCurrentClient((client) async {
       final ownerDid = (await client.identity.current()).did;
@@ -144,7 +145,9 @@ class AwikiImCoreMessageAdapter implements MessageCorePort {
             (message) =>
                 _mappers.chatMessageFromCore(message, ownerDid: ownerDid),
           )
-          .where((message) => message.hasRenderableContent)
+          .where(
+            (message) => includeControlPayloads || message.hasRenderableContent,
+          )
           .toList();
     });
   }

@@ -26,8 +26,15 @@ const agentRuntimeCreationTimeout = Duration(seconds: 45);
 const agentStatusRefreshMinimumIndicatorDuration = Duration(milliseconds: 1500);
 const agentDaemonUpgradeAckTimeout = Duration(seconds: 20);
 const agentDaemonUpgradeCancelAckTimeout = Duration(seconds: 12);
+const agentListLoadTimeout = Duration(seconds: 15);
+const agentLocalCacheReadTimeout = Duration(milliseconds: 1200);
+const agentLocalCacheWriteTimeout = Duration(milliseconds: 2500);
+const agentStatusRequestSendTimeout = Duration(seconds: 8);
 const agentStatusQueryPollInterval = Duration(milliseconds: 700);
 const agentStatusQueryPollAttempts = 18;
+const agentStatusPayloadLookupTimeout = Duration(milliseconds: 1200);
+const agentDeletionRefreshAttempts = 4;
+const agentDeletionRefreshDelay = Duration(seconds: 2);
 
 enum PendingRuntimeCreationState { creating, waitingForStatus }
 
@@ -226,6 +233,7 @@ class AgentsState {
     this.daemonUpgradeErrors = const <String, String>{},
     this.daemonUpgradeProgress = const <String, DaemonUpgradeProgress>{},
     this.pendingRuntimeCreations = const <PendingRuntimeCreation>[],
+    this.pendingDeletionAgentDids = const <String>{},
   });
 
   final List<AgentSummary> agents;
@@ -247,6 +255,7 @@ class AgentsState {
   final Map<String, String> daemonUpgradeErrors;
   final Map<String, DaemonUpgradeProgress> daemonUpgradeProgress;
   final List<PendingRuntimeCreation> pendingRuntimeCreations;
+  final Set<String> pendingDeletionAgentDids;
 
   AgentSummary? get selectedAgent {
     final selectedDid = selectedAgentDid;
@@ -315,6 +324,10 @@ class AgentsState {
     return cancellingDaemonUpgrades.containsKey(daemonDid);
   }
 
+  bool isDeletingAgent(String agentDid) {
+    return pendingDeletionAgentDids.contains(agentDid);
+  }
+
   AgentsState copyWith({
     List<AgentSummary>? agents,
     String? selectedAgentDid,
@@ -338,6 +351,7 @@ class AgentsState {
     Map<String, String>? daemonUpgradeErrors,
     Map<String, DaemonUpgradeProgress>? daemonUpgradeProgress,
     List<PendingRuntimeCreation>? pendingRuntimeCreations,
+    Set<String>? pendingDeletionAgentDids,
   }) {
     return AgentsState(
       agents: agents ?? this.agents,
@@ -373,6 +387,8 @@ class AgentsState {
           daemonUpgradeProgress ?? this.daemonUpgradeProgress,
       pendingRuntimeCreations:
           pendingRuntimeCreations ?? this.pendingRuntimeCreations,
+      pendingDeletionAgentDids:
+          pendingDeletionAgentDids ?? this.pendingDeletionAgentDids,
     );
   }
 }
@@ -388,6 +404,7 @@ class AgentsController extends StateNotifier<AgentsState> {
   final Map<String, Timer> _runtimeCreationTimeouts = <String, Timer>{};
   final Map<String, Timer> _daemonUpgradeAckTimeouts = <String, Timer>{};
   final Map<String, Timer> _daemonUpgradeCancelAckTimeouts = <String, Timer>{};
+  final Map<String, Timer> _deletionRefreshTimers = <String, Timer>{};
   Future<void>? _loadOperation;
   String? _loadOperationOwner;
   int? _loadOperationEpoch;
@@ -458,7 +475,10 @@ class AgentsController extends StateNotifier<AgentsState> {
     try {
       final agents = _stableAgentOrder(
         await _mergeLatestDaemonStatusPayloads(
-          await ref.read(agentControlServiceProvider).listAgents(),
+          await ref
+              .read(agentControlServiceProvider)
+              .listAgents()
+              .timeout(agentListLoadTimeout),
         ),
       );
       if (!_isCurrentCacheOwner(cacheOwner, epoch: startedEpoch)) {
@@ -475,6 +495,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         agents,
         pendingDaemonUpgrades,
       );
+      final pendingDeletionAgentDids = _pendingDeletionAfterAgents(agents);
       state = state.copyWith(
         agents: agents,
         selectedAgentDid: _nextSelection(agents),
@@ -484,6 +505,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         cancellingDaemonUpgrades: cancellingDaemonUpgrades,
         daemonUpgradeErrors: daemonUpgradeErrors,
         daemonUpgradeProgress: daemonUpgradeProgress,
+        pendingDeletionAgentDids: pendingDeletionAgentDids,
         clearError: true,
       );
       _loadedCacheOwner = cacheOwner;
@@ -571,7 +593,8 @@ class AgentsController extends StateNotifier<AgentsState> {
     try {
       await ref
           .read(agentControlServiceProvider)
-          .refreshDaemonStatus(daemonDid, commandId: commandId);
+          .refreshDaemonStatus(daemonDid, commandId: commandId)
+          .timeout(agentStatusRequestSendTimeout);
       if (!fromAutoLoad) {
         state = state.copyWith(clearError: true);
       }
@@ -891,6 +914,9 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (selected == null) {
       return;
     }
+    if (state.isDeletingAgent(selected.agentDid)) {
+      return;
+    }
     if (selected.isDaemon && _canUnbindUnfinishedDaemonInstall(selected)) {
       await _act(() async {
         await ref
@@ -907,7 +933,23 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(error: '代理当前不可达，暂时不能删除。');
       return;
     }
-    await _act(() async {
+    final deletingDids = selected.isDaemon
+        ? {
+            selected.agentDid,
+            ...state
+                .runtimesFor(selected.agentDid)
+                .map((agent) => agent.agentDid),
+          }
+        : {selected.agentDid};
+    state = state.copyWith(
+      isActing: true,
+      pendingDeletionAgentDids: <String>{
+        ...state.pendingDeletionAgentDids,
+        ...deletingDids,
+      },
+      clearError: true,
+    );
+    try {
       if (selected.isDaemon) {
         await ref
             .read(agentControlServiceProvider)
@@ -920,7 +962,25 @@ class AgentsController extends StateNotifier<AgentsState> {
               runtimeAgentDid: selected.agentDid,
             );
       }
-    });
+      if (!mounted) {
+        return;
+      }
+      state = state.copyWith(isActing: false, clearError: true);
+      _scheduleDeletionRefresh(daemon.agentDid);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      state = state.copyWith(
+        isActing: false,
+        pendingDeletionAgentDids: _withoutStringKeys(
+          state.pendingDeletionAgentDids,
+          deletingDids,
+        ),
+        error: _agentErrorMessage(error),
+        debugLastError: error.toString(),
+      );
+    }
   }
 
   Future<void> pauseMessageAgentForDaemon(String daemonDid) async {
@@ -945,14 +1005,43 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(error: '当前 Daemon 尚未创建消息处理 Agent。');
       return;
     }
-    await _act(() async {
+    if (state.isDeletingAgent(target.agentDid)) {
+      return;
+    }
+    state = state.copyWith(
+      isActing: true,
+      pendingDeletionAgentDids: <String>{
+        ...state.pendingDeletionAgentDids,
+        target.agentDid,
+      },
+      clearError: true,
+    );
+    try {
       await ref
           .read(agentControlServiceProvider)
           .deleteMessageAgent(
             daemonAgentDid: daemonDid,
             messageAgentDid: target.agentDid,
           );
-    });
+      if (!mounted) {
+        return;
+      }
+      state = state.copyWith(isActing: false, clearError: true);
+      _scheduleDeletionRefresh(daemonDid);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      state = state.copyWith(
+        isActing: false,
+        pendingDeletionAgentDids: _withoutStringKeys(
+          state.pendingDeletionAgentDids,
+          {target.agentDid},
+        ),
+        error: _agentErrorMessage(error),
+        debugLastError: error.toString(),
+      );
+    }
   }
 
   Future<void> revokeMessageAgentAuthorizationForDaemon(
@@ -1137,6 +1226,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       daemonDid,
       nextPendingDaemonUpgrades,
     );
+    final nextPendingDeletionAgentDids = _pendingDeletionAfterAgents(merged);
     state = state.copyWith(
       agents: merged,
       selectedAgentDid: _nextSelection(merged),
@@ -1150,6 +1240,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       ),
       daemonUpgradeErrors: nextDaemonUpgradeErrors,
       daemonUpgradeProgress: nextDaemonUpgradeProgress,
+      pendingDeletionAgentDids: nextPendingDeletionAgentDids,
       statusQueryErrors: daemonDid == null
           ? state.statusQueryErrors
           : _withoutStringKey(state.statusQueryErrors, daemonDid),
@@ -1199,6 +1290,57 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
   }
 
+  void _scheduleDeletionRefresh(String daemonDid, {int attempt = 0}) {
+    _deletionRefreshTimers.remove(daemonDid)?.cancel();
+    if (!mounted ||
+        attempt >= agentDeletionRefreshAttempts ||
+        !_hasPendingDeletionForDaemon(daemonDid)) {
+      _finishDeletionRefresh(daemonDid);
+      return;
+    }
+    final delay = attempt == 0 ? Duration.zero : agentDeletionRefreshDelay;
+    _deletionRefreshTimers[daemonDid] = Timer(delay, () {
+      _deletionRefreshTimers.remove(daemonDid);
+      unawaited(_runDeletionRefreshAttempt(daemonDid, attempt));
+    });
+  }
+
+  Future<void> _runDeletionRefreshAttempt(String daemonDid, int attempt) async {
+    if (!mounted || !_hasPendingDeletionForDaemon(daemonDid)) {
+      return;
+    }
+    try {
+      await refreshDaemonStatus(daemonDid, fromAutoLoad: true);
+    } catch (_) {
+      // Refresh errors are surfaced by refreshDaemonStatus when user-facing.
+    }
+    if (!mounted || !_hasPendingDeletionForDaemon(daemonDid)) {
+      return;
+    }
+    _scheduleDeletionRefresh(daemonDid, attempt: attempt + 1);
+  }
+
+  void _finishDeletionRefresh(String daemonDid) {
+    if (!mounted) {
+      return;
+    }
+    final remaining = _pendingDeletionAfterAgents(state.agents);
+    if (!identical(remaining, state.pendingDeletionAgentDids)) {
+      state = state.copyWith(pendingDeletionAgentDids: remaining);
+    }
+  }
+
+  bool _hasPendingDeletionForDaemon(String daemonDid) {
+    if (state.pendingDeletionAgentDids.contains(daemonDid)) {
+      return true;
+    }
+    return state
+        .runtimesFor(daemonDid)
+        .any(
+          (agent) => state.pendingDeletionAgentDids.contains(agent.agentDid),
+        );
+  }
+
   void _scheduleStatusQueryTimeout(String daemonDid, String commandId) {
     _statusQueryTimeouts.remove(daemonDid)?.cancel();
     _statusQueryTimeouts[daemonDid] = Timer(agentStatusQueryTimeout, () {
@@ -1223,30 +1365,6 @@ class AgentsController extends StateNotifier<AgentsState> {
         !state.pendingStatusQueryAtByDaemon.containsKey(daemonDid)) {
       return;
     }
-    if (commandId != null) {
-      final applied = await _applyDaemonStatusPayloadFromStore(
-        daemonDid: daemonDid,
-        commandId: commandId,
-      );
-      if (applied) {
-        _statusQueryClearTimers.remove(daemonDid)?.cancel();
-        _statusQueryCommandIds.remove(daemonDid);
-        if (mounted &&
-            state.pendingStatusQueryAtByDaemon.containsKey(daemonDid)) {
-          state = state.copyWith(
-            pendingStatusQueryAtByDaemon: _withoutKey(
-              state.pendingStatusQueryAtByDaemon,
-              daemonDid,
-            ),
-          );
-        }
-        return;
-      }
-      if (!mounted ||
-          !state.pendingStatusQueryAtByDaemon.containsKey(daemonDid)) {
-        return;
-      }
-    }
     _statusQueryPollTimers.remove(daemonDid)?.cancel();
     _statusQueryCommandIds.remove(daemonDid);
     state = state.copyWith(
@@ -1261,6 +1379,14 @@ class AgentsController extends StateNotifier<AgentsState> {
               daemonDid: '状态同步仍在等待，请稍后刷新查看。',
             },
     );
+    if (commandId != null) {
+      unawaited(
+        _applyDaemonStatusPayloadFromStore(
+          daemonDid: daemonDid,
+          commandId: commandId,
+        ),
+      );
+    }
   }
 
   void _pollDaemonStatusPayload({
@@ -1269,6 +1395,7 @@ class AgentsController extends StateNotifier<AgentsState> {
   }) {
     _statusQueryPollTimers.remove(daemonDid)?.cancel();
     var attempts = 0;
+    var lookupInFlight = false;
     _statusQueryPollTimers[daemonDid] = Timer.periodic(
       agentStatusQueryPollInterval,
       (timer) async {
@@ -1280,21 +1407,32 @@ class AgentsController extends StateNotifier<AgentsState> {
           }
           return;
         }
+        if (lookupInFlight) {
+          return;
+        }
+        lookupInFlight = true;
         attempts += 1;
-        final applied = await _applyDaemonStatusPayloadFromStore(
-          daemonDid: daemonDid,
-          commandId: commandId,
-        );
+        final applied =
+            await _applyDaemonStatusPayloadFromStore(
+              daemonDid: daemonDid,
+              commandId: commandId,
+            ).whenComplete(() {
+              lookupInFlight = false;
+            });
         if (!mounted) {
           timer.cancel();
           return;
         }
+        final exhausted = attempts >= agentStatusQueryPollAttempts;
         if (applied ||
             !state.pendingStatusQueryAtByDaemon.containsKey(daemonDid) ||
-            attempts >= agentStatusQueryPollAttempts) {
+            exhausted) {
           timer.cancel();
           if (identical(_statusQueryPollTimers[daemonDid], timer)) {
             _statusQueryPollTimers.remove(daemonDid);
+          }
+          if (!applied && exhausted) {
+            unawaited(_handleStatusQueryTimeout(daemonDid, commandId));
           }
         }
       },
@@ -1310,7 +1448,8 @@ class AgentsController extends StateNotifier<AgentsState> {
         .findDaemonStatusPayload(
           daemonAgentDid: daemonDid,
           requestId: commandId,
-        );
+        )
+        .timeout(agentStatusPayloadLookupTimeout, onTimeout: () => null);
     if (!mounted || payload == null) {
       return false;
     }
@@ -1725,6 +1864,10 @@ class AgentsController extends StateNotifier<AgentsState> {
       timer.cancel();
     }
     _daemonUpgradeCancelAckTimeouts.clear();
+    for (final timer in _deletionRefreshTimers.values) {
+      timer.cancel();
+    }
+    _deletionRefreshTimers.clear();
   }
 
   Future<void> _loadCached(String ownerDid) async {
@@ -1732,7 +1875,8 @@ class AgentsController extends StateNotifier<AgentsState> {
     try {
       cached = await ref
           .read(productLocalStoreProvider)
-          .loadAgentStates(ownerDid: ownerDid);
+          .loadAgentStates(ownerDid: ownerDid)
+          .timeout(agentLocalCacheReadTimeout);
     } catch (_) {
       return;
     }
@@ -1784,7 +1928,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     List<AgentSummary> agents,
   ) async {
     try {
-      await _saveCache(ownerDid, agents);
+      await _saveCache(ownerDid, agents).timeout(agentLocalCacheWriteTimeout);
     } catch (_) {
       // Local cache is only a fast-start snapshot; remote inventory remains
       // the source of truth for the Agent page.
@@ -1822,9 +1966,14 @@ class AgentsController extends StateNotifier<AgentsState> {
     var merged = _stableAgentOrder(agents);
     final store = ref.read(agentControlStatusStoreProvider);
     for (final daemon in agents.where((agent) => agent.isDaemon)) {
-      final payload = await store.findLatestDaemonStatusPayload(
-        daemonAgentDid: daemon.agentDid,
-      );
+      final Map<String, Object?>? payload;
+      try {
+        payload = await store
+            .findLatestDaemonStatusPayload(daemonAgentDid: daemon.agentDid)
+            .timeout(agentStatusPayloadLookupTimeout, onTimeout: () => null);
+      } catch (_) {
+        continue;
+      }
       if (payload == null) {
         continue;
       }
@@ -2065,6 +2214,20 @@ class AgentsController extends StateNotifier<AgentsState> {
         continue;
       }
       retained.add(pending);
+    }
+    return retained;
+  }
+
+  Set<String> _pendingDeletionAfterAgents(List<AgentSummary> agents) {
+    if (state.pendingDeletionAgentDids.isEmpty) {
+      return state.pendingDeletionAgentDids;
+    }
+    final agentDids = agents.map((agent) => agent.agentDid).toSet();
+    final retained = state.pendingDeletionAgentDids
+        .where(agentDids.contains)
+        .toSet();
+    if (retained.length == state.pendingDeletionAgentDids.length) {
+      return state.pendingDeletionAgentDids;
     }
     return retained;
   }
@@ -2603,6 +2766,16 @@ Set<String> _withoutSetValue(Set<String> input, String value) {
   return <String>{
     for (final item in input)
       if (item != value) item,
+  };
+}
+
+Set<String> _withoutStringKeys(Set<String> input, Set<String> keys) {
+  if (keys.isEmpty || !keys.any(input.contains)) {
+    return input;
+  }
+  return <String>{
+    for (final item in input)
+      if (!keys.contains(item)) item,
   };
 }
 

@@ -55,10 +55,11 @@ class _AgentDetailPane extends StatelessWidget {
         agent.isDaemon && state.isDaemonUpgradePending(agent.agentDid);
     final isCancelling =
         agent.isDaemon && state.isDaemonUpgradeCancelling(agent.agentDid);
+    final isDeleting = state.isDeletingAgent(agent.agentDid);
     final title = AgentDisplayName.title(agent);
     final visualStatus = AgentVisualStatus.fromAgent(
       agent,
-      hasPendingTurn: pendingAgentDids.contains(agent.agentDid),
+      hasPendingTurn: isDeleting || pendingAgentDids.contains(agent.agentDid),
       isPendingUpgrade: isUpgrading,
       hasUpgradeError: state.daemonUpgradeErrors.containsKey(agent.agentDid),
     );
@@ -163,15 +164,26 @@ class _AgentDetailPane extends StatelessWidget {
                     ),
                   _ActionButton(
                     icon: CupertinoIcons.trash,
-                    label: agent.isDaemon ? '删除代理' : '删除智能体',
+                    label: isDeleting
+                        ? '删除中'
+                        : agent.isDaemon
+                        ? '删除代理'
+                        : '删除智能体',
                     danger: true,
-                    onPressed: state.isActing || !state.canDeleteAgent(agent)
+                    onPressed:
+                        state.isActing ||
+                            isDeleting ||
+                            !state.canDeleteAgent(agent)
                         ? null
                         : () => onDelete(agent),
                   ),
                 ],
               ),
             ),
+            if (isDeleting) ...<Widget>[
+              SizedBox(height: responsive.spacing(10)),
+              const _AgentDeletingNotice(),
+            ],
             if (state.error != null) ...<Widget>[
               SizedBox(height: responsive.spacing(10)),
               _AgentErrorBanner(message: state.error!),
@@ -236,6 +248,45 @@ class _AgentDetailPane extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _AgentDeletingNotice extends StatelessWidget {
+  const _AgentDeletingNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.spacing(12),
+        vertical: responsive.spacing(10),
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F7FF),
+        borderRadius: BorderRadius.circular(responsive.radius(8)),
+        border: Border.all(color: const Color(0xFFDCE8FF)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: <Widget>[
+          CupertinoActivityIndicator(radius: responsive.displayScaled(7)),
+          SizedBox(width: responsive.spacing(9)),
+          Expanded(
+            child: Text(
+              '删除请求已发送，正在等待代理同步。',
+              style: TextStyle(
+                color: const Color(0xFF31527A),
+                fontSize: responsive.bodySm,
+                height: 1.35,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

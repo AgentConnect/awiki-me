@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/agent/agent_control_status_store.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/ports/message_agent_binding_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
@@ -1476,6 +1479,69 @@ void main() {
     },
   );
 
+  test(
+    'status refresh timeout clears pending when local status lookup hangs',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final container = _container(
+        control,
+        statusStore: const _HangingAgentControlStatusStore(),
+      );
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      await container
+          .read(agentsProvider.notifier)
+          .refreshDaemonStatus('did:agent:daemon');
+      expect(
+        container.read(agentsProvider).pendingStatusQueryAtByDaemon,
+        contains('did:agent:daemon'),
+      );
+
+      await container
+          .read(agentsProvider.notifier)
+          .handleStatusQueryTimeoutForTest('did:agent:daemon');
+
+      final state = container.read(agentsProvider);
+      expect(state.pendingStatusQueryAtByDaemon, isEmpty);
+      expect(state.statusQueryErrors['did:agent:daemon'], '状态同步仍在等待，请稍后刷新查看。');
+    },
+  );
+
+  test('status refresh send timeout clears pending', () async {
+    final control = _HangingRefreshAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+
+    await container
+        .read(agentsProvider.notifier)
+        .refreshDaemonStatus('did:agent:daemon');
+
+    final state = container.read(agentsProvider);
+    expect(control.lastRefreshedDaemonDid, 'did:agent:daemon');
+    expect(state.pendingStatusQueryAtByDaemon, isEmpty);
+    expect(state.statusQueryErrors['did:agent:daemon'], '刷新状态超时，当前数据已保留。');
+  });
+
   test('deleteSelected sends runtime delete through owning daemon', () async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
@@ -1507,6 +1573,61 @@ void main() {
     expect(control.lastDeletedRuntimeDid, 'did:agent:runtime');
     expect(control.lastDeletedDaemonDid, isNull);
     expect(control.lastUnboundAgentDid, isNull);
+    expect(
+      container.read(agentsProvider).pendingDeletionAgentDids,
+      contains('did:agent:runtime'),
+    );
+  });
+
+  test('runtime delete pending clears when archive status arrives', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:runtime',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'hermes',
+          displayName: 'Hermes',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+    container.read(agentsProvider.notifier).select('did:agent:runtime');
+
+    await container.read(agentsProvider.notifier).deleteSelected();
+    expect(
+      container.read(agentsProvider).pendingDeletionAgentDids,
+      contains('did:agent:runtime'),
+    );
+
+    container.read(agentsProvider.notifier).applyControlPayload(
+      <String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'state': 'archived',
+        'daemon_agent_did': 'did:agent:daemon',
+        'result': <String, Object?>{
+          'command': 'runtime.agent.delete',
+          'runtime_agent_did': 'did:agent:runtime',
+          'daemon_agent_did': 'did:agent:daemon',
+        },
+      },
+    );
+
+    expect(container.read(agentsProvider).pendingDeletionAgentDids, isEmpty);
+    expect(
+      container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+      ['did:agent:daemon'],
+    );
   });
 
   test(
@@ -2736,6 +2857,7 @@ ProviderContainer _container(
   FakeProductLocalStore? localStore,
   FakeIdentityCorePort? identities,
   MessageAgentBindingPort? messageAgentBindings,
+  AgentControlStatusStore? statusStore,
   bool agentImEnabled = true,
   SessionIdentity session = const SessionIdentity(
     did: 'did:human:me',
@@ -2755,12 +2877,43 @@ ProviderContainer _container(
       ),
       if (messageAgentBindings != null)
         messageAgentBindingPortProvider.overrideWithValue(messageAgentBindings),
+      if (statusStore != null)
+        agentControlStatusStoreProvider.overrideWithValue(statusStore),
       agentImEnabledProvider.overrideWithValue(agentImEnabled),
       sessionProvider.overrideWith((ref) {
         return SessionController()..setSession(session);
       }),
     ],
   );
+}
+
+class _HangingAgentControlStatusStore implements AgentControlStatusStore {
+  const _HangingAgentControlStatusStore();
+
+  @override
+  Future<Map<String, Object?>?> findLatestDaemonStatusPayload({
+    required String daemonAgentDid,
+  }) {
+    return Completer<Map<String, Object?>?>().future;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findDaemonStatusPayload({
+    required String daemonAgentDid,
+    required String requestId,
+  }) {
+    return Completer<Map<String, Object?>?>().future;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findStatusPayload({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    required String requestId,
+    required String statusScope,
+  }) {
+    return Completer<Map<String, Object?>?>().future;
+  }
 }
 
 class _MessageAgentBindingsStub implements MessageAgentBindingPort {
@@ -2871,6 +3024,14 @@ class _FailingRefreshAgentControlService extends FakeAgentControlService {
   }) async {
     lastRefreshedDaemonDid = daemonAgentDid;
     throw error;
+  }
+}
+
+class _HangingRefreshAgentControlService extends FakeAgentControlService {
+  @override
+  Future<void> refreshDaemonStatus(String daemonAgentDid, {String? commandId}) {
+    lastRefreshedDaemonDid = daemonAgentDid;
+    return Completer<void>().future;
   }
 }
 

@@ -158,7 +158,7 @@ class AppBootstrap {
       identities: identityAdapter,
     );
     final agentControlStatusStore = AwikiImCoreAgentControlStatusStore(
-      sqlitePath: runtime.paths.sqlitePath,
+      messages: messageAdapter,
     );
     final groupApplicationService = ImCoreGroupApplicationService(
       groups: groupAdapter,

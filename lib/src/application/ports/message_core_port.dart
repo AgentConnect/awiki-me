@@ -33,6 +33,7 @@ abstract interface class MessageCorePort {
     AppThreadRef thread, {
     int limit = 100,
     String? cursor,
+    bool includeControlPayloads = false,
   });
 
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed);

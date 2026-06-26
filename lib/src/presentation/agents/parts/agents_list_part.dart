@@ -221,6 +221,7 @@ class _AgentDaemonGroup extends StatelessWidget {
             cancellingDaemonUpgrades: state.cancellingDaemonUpgrades,
             daemonUpgradeErrors: state.daemonUpgradeErrors,
             daemonUpgradeProgress: state.daemonUpgradeProgress,
+            isDeleting: state.isDeletingAgent(daemon.agentDid),
             selected: selectedAgentDid == daemon.agentDid,
             onTap: () => onSelect(daemon.agentDid),
             runtimeCount: runtimes.length + pendingRuntimeCreations.length,
@@ -241,6 +242,7 @@ class _AgentDaemonGroup extends StatelessWidget {
                 cancellingDaemonUpgrades: state.cancellingDaemonUpgrades,
                 daemonUpgradeErrors: state.daemonUpgradeErrors,
                 daemonUpgradeProgress: state.daemonUpgradeProgress,
+                isDeleting: state.isDeletingAgent(runtime.agentDid),
                 selected: selectedAgentDid == runtime.agentDid,
                 onTap: () => onSelect(runtime.agentDid),
                 depth: 1,
@@ -297,6 +299,7 @@ class _OrphanRuntimeGroup extends StatelessWidget {
             cancellingDaemonUpgrades:
                 const <String, PendingDaemonUpgradeCancel>{},
             daemonUpgradeProgress: const <String, DaemonUpgradeProgress>{},
+            isDeleting: false,
             selected: selectedAgentDid == runtime.agentDid,
             onTap: () => onSelect(runtime.agentDid),
           ),
@@ -468,6 +471,7 @@ class _AgentListTile extends StatelessWidget {
     this.runtimeCount,
     this.onRefresh,
     this.isRefreshing = false,
+    this.isDeleting = false,
   });
 
   final AgentSummary agent;
@@ -482,6 +486,7 @@ class _AgentListTile extends StatelessWidget {
   final int? runtimeCount;
   final VoidCallback? onRefresh;
   final bool isRefreshing;
+  final bool isDeleting;
 
   @override
   Widget build(BuildContext context) {
@@ -492,7 +497,7 @@ class _AgentListTile extends StatelessWidget {
     final daemonUpgradeProgress = this.daemonUpgradeProgress[agent.agentDid];
     final visualStatus = AgentVisualStatus.fromAgent(
       agent,
-      hasPendingTurn: pendingAgentDids.contains(agent.agentDid),
+      hasPendingTurn: isDeleting || pendingAgentDids.contains(agent.agentDid),
       isPendingUpgrade: pendingDaemonUpgrades.containsKey(agent.agentDid),
       hasUpgradeError: pendingDaemonUpgrades.containsKey(agent.agentDid)
           ? false
@@ -577,6 +582,7 @@ class _AgentListTile extends StatelessWidget {
                                   .containsKey(agent.agentDid),
                               upgradeProgress: daemonUpgradeProgress,
                               upgradeError: daemonUpgradeError,
+                              isDeleting: isDeleting,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -676,7 +682,11 @@ String _agentListSubtitle(
   bool isCancelling = false,
   DaemonUpgradeProgress? upgradeProgress,
   String? upgradeError,
+  bool isDeleting = false,
 }) {
+  if (isDeleting) {
+    return '删除中 · 等待同步';
+  }
   if (agent.isDaemon) {
     final count = runtimeCount ?? 0;
     final statusLabel = upgradeError != null

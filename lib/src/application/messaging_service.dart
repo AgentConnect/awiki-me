@@ -42,6 +42,7 @@ abstract interface class MessagingService {
     AppThreadRef thread, {
     int limit = 100,
     String? cursor,
+    bool includeControlPayloads = false,
   });
 
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed);
@@ -126,8 +127,14 @@ class ImCoreMessagingService implements MessagingService {
     AppThreadRef thread, {
     int limit = 100,
     String? cursor,
+    bool includeControlPayloads = false,
   }) {
-    return _messages.loadHistory(thread, limit: limit, cursor: cursor);
+    return _messages.loadHistory(
+      thread,
+      limit: limit,
+      cursor: cursor,
+      includeControlPayloads: includeControlPayloads,
+    );
   }
 
   @override

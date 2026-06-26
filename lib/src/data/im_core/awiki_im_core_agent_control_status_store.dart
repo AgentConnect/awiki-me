@@ -1,15 +1,22 @@
 import 'dart:convert';
 
-import 'package:sqflite/sqflite.dart';
-
 import '../../application/agent/agent_control_status_store.dart';
-import '../local/sqflite_desktop_init.dart';
+import '../../application/models/app_thread_ref.dart';
+import '../../application/ports/message_core_port.dart';
+import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
 
-class AwikiImCoreAgentControlStatusStore implements AgentControlStatusStore {
-  const AwikiImCoreAgentControlStatusStore({required this.sqlitePath});
+const _defaultControlStatusLookupTimeout = Duration(milliseconds: 1200);
 
-  final String sqlitePath;
+class AwikiImCoreAgentControlStatusStore implements AgentControlStatusStore {
+  const AwikiImCoreAgentControlStatusStore({
+    required MessageCorePort messages,
+    Duration lookupTimeout = _defaultControlStatusLookupTimeout,
+  }) : _messages = messages,
+       _lookupTimeout = lookupTimeout;
+
+  final MessageCorePort _messages;
+  final Duration _lookupTimeout;
 
   @override
   Future<Map<String, Object?>?> findLatestDaemonStatusPayload({
@@ -64,31 +71,28 @@ class AwikiImCoreAgentControlStatusStore implements AgentControlStatusStore {
     required Set<String> statusScopes,
     required bool Function(Map<String, Object?> payload) matches,
   }) async {
-    Database? db;
     try {
-      ensureSqfliteDesktopInitialized();
-      db = await openReadOnlyDatabase(sqlitePath);
-      final rows = await db.query(
-        'messages',
-        columns: const <String>['content'],
-        where:
-            '''
-content_type = ?
-AND direction = ?
-AND sender_did = ?
-${requestId == null ? '' : 'AND content LIKE ?'}
-''',
-        whereArgs: <Object?>[
-          'application/json',
-          0,
-          daemonAgentDid,
-          if (requestId != null) '%$requestId%',
-        ],
-        orderBy: 'COALESCE(sent_at, stored_at) DESC',
-        limit: 50,
-      );
-      for (final row in rows) {
-        final payload = _decodePayload(row['content']);
+      final history = await _messages
+          .loadHistory(
+            AppThreadRef.direct(daemonAgentDid),
+            limit: 100,
+            includeControlPayloads: true,
+          )
+          .timeout(_lookupTimeout);
+      final messages =
+          history
+              .where((message) => message.senderDid == daemonAgentDid)
+              .toList()
+            ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
+      for (final message in messages) {
+        final rawPayload = _controlPayloadJson(message);
+        if (rawPayload == null) {
+          continue;
+        }
+        if (requestId != null && !rawPayload.contains(requestId)) {
+          continue;
+        }
+        final payload = _decodePayload(rawPayload);
         if (payload == null) {
           continue;
         }
@@ -107,14 +111,24 @@ ${requestId == null ? '' : 'AND content LIKE ?'}
       return null;
     } on Object {
       return null;
-    } finally {
-      await db?.close();
     }
   }
 }
 
-Map<String, Object?>? _decodePayload(Object? content) {
-  final raw = content?.toString();
+String? _controlPayloadJson(ChatMessage message) {
+  final payloadJson = message.payloadJson?.trim();
+  if (payloadJson != null && payloadJson.isNotEmpty) {
+    return payloadJson;
+  }
+  final originalType = message.originalType.trim().toLowerCase();
+  if (!originalType.contains('json')) {
+    return null;
+  }
+  final content = message.content.trim();
+  return content.isEmpty ? null : content;
+}
+
+Map<String, Object?>? _decodePayload(String? raw) {
   if (raw == null || raw.trim().isEmpty) {
     return null;
   }

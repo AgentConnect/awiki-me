@@ -1824,6 +1824,7 @@ class _UiMessagingService implements MessagingService {
     AppThreadRef thread, {
     int limit = 100,
     String? cursor,
+    bool includeControlPayloads = false,
   }) {
     throw UnimplementedError();
   }
