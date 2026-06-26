@@ -243,7 +243,8 @@ class _AgentDetailPane extends StatelessWidget {
               ),
               SizedBox(height: responsive.spacing(18)),
             ],
-            if (agent.isDaemon) ...<Widget>[
+            if (_shouldShowMessageAgentSettingsPanel() &&
+                agent.isDaemon) ...<Widget>[
               _MessageAgentSettingsPanel(
                 daemon: agent,
                 messageAgent: state.messageAgentRuntimeFor(agent.agentDid),
@@ -277,6 +278,12 @@ class _AgentDetailPane extends StatelessWidget {
       ),
     );
   }
+}
+
+bool _shouldShowMessageAgentSettingsPanel() {
+  // Keep the Message Agent management implementation available for future
+  // rollout, but hide the daemon detail entry from the current product UI.
+  return false;
 }
 
 class _AgentDeletingNotice extends StatelessWidget {
@@ -352,8 +359,7 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
     const provider = defaultMessageAgentRuntimeProvider;
     final isBusy = isEnablePending || isManagementPending;
     final canEnable = enabled && daemonReady && hasBootstrapKey && !isBusy;
-    final canManage =
-        enabled && daemonReady && messageAgent != null && !isBusy;
+    final canManage = enabled && daemonReady && messageAgent != null && !isBusy;
     return Container(
       key: const Key('message-agent-settings-panel'),
       padding: EdgeInsets.all(responsive.spacing(16)),

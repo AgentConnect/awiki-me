@@ -118,6 +118,7 @@ Settings / Message Agent
 如果 `AWIKI_AGENT_IM_ENABLED=false`：
 
 - UI 应隐藏 Message Agent 设置入口，或只显示「实验功能未开启」。
+- 当前产品 UI 已先隐藏 Agent/daemon 详情页内的 Message Agent 设置面板；底层 bootstrap、binding、revoke 能力保留，等待独立设置页或后续灰度入口重新开放。
 - 不展示半成品创建、绑定、配置入口。
 - 不能让用户进入会失败或不可完成的流程。
 
@@ -547,8 +548,8 @@ MVP 完成时，应能验证：
 截至 2026-06-19，MVP 已按以下仓库切片落地：
 
 - `awiki-me-message-agent`
-  - Message Agent 设置入口已接入 Agent/daemon 页面，UI 区分「运行 Daemon」和「消息处理 Agent」。
-  - `AWIKI_AGENT_IM_ENABLED` 关闭时阻断入口和 bootstrap action。
+  - Message Agent 设置能力已在 Agent/daemon 页面完成过接入验证，但当前产品 UI 隐藏 daemon 详情页的 Message Agent 面板；底层 bootstrap、binding、revoke 与 App 回收能力保留。
+  - `AWIKI_AGENT_IM_ENABLED` 关闭时阻断 bootstrap action；当前 UI 不再展示半成品入口。
   - App 能从 daemon diagnostics 读取 `bootstrap_key_id`、`bootstrap_public_key_b64u`、`bootstrap_key_algorithm`，并使用 daemon `#key-3` X25519 公钥生成 `awiki.daemon.bootstrap.secure.v1`。
   - App 回收 `awiki.message.sync.v1`、`awiki.app.action.v1`、`awiki.app.action.result.v1`，在聊天中展示处理状态、草稿和确认 / 拒绝 UI；raw JSON 不作为普通消息显示。
   - MVP 只允许 `message.create_draft` 写入草稿；用户确认后的发送仍由 Human App 发送链路负责。
@@ -571,7 +572,7 @@ MVP 完成时，应能验证：
 
 发布建议：
 
-- 默认保持 `AWIKI_AGENT_IM_ENABLED=true`，让消息处理 Agent 入口随默认构建开放；如需回滚或灰度关闭，可在构建时显式设置 `AWIKI_AGENT_IM_ENABLED=false`。
+- 当前默认构建保留 Message Agent 底层能力，但不展示 daemon 详情页入口；后续独立设置页或灰度入口开放前，无需依赖用户手工点击启用。
 - 发布默认开启构建前确认 daemon 版本包含 secure bootstrap、bootstrap public key diagnostics、no-send enforcement 和 App outbox 回收。
 - 发布默认开启构建前确认 user-service 已部署 `/user-service/message-agent/rpc`，并且 delegated key 默认 scope 不包含 `message.send.plain`。
 - 发布默认开启构建前确认 message-service 能接受 Human DID `#daemon-key-1` 作为当前 DID Document authentication 中的 delegated client。

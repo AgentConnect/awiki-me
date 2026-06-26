@@ -62,7 +62,7 @@ void main() {
 
   runMessageAgentRealBackendE2e();
 
-  testWidgets('Message Agent full UI enables Hermes runtime and lifecycle', (
+  testWidgets('Message Agent management UI is hidden on daemon detail', (
     tester,
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -139,115 +139,19 @@ void main() {
       await _pumpFrame(tester);
 
       expect(find.text('Message Daemon'), findsWidgets);
-      expect(find.text('消息处理 Agent'), findsOneWidget);
-      expect(find.text('运行 Daemon'), findsOneWidget);
-      expect(find.text('Hermes'), findsOneWidget);
-      expect(find.text('所有可处理会话'), findsOneWidget);
-      expect(find.text('0.5.26 · linux-amd64'), findsOneWidget);
-      expect(find.text('Hermes message runtime'), findsOneWidget);
-      expect(find.text('已上报公钥'), findsOneWidget);
-      expect(find.text('启用消息处理 Agent'), findsOneWidget);
-      expect(find.text('暂停处理消息'), findsOneWidget);
-      expect(find.text('删除消息处理 Agent'), findsOneWidget);
-      expect(find.text('撤销 Daemon 消息授权'), findsOneWidget);
+      expect(find.text('消息处理 Agent'), findsNothing);
+      expect(find.text('所有可处理会话'), findsNothing);
+      expect(find.text('Hermes message runtime'), findsNothing);
+      expect(find.text('启用消息处理 Agent'), findsNothing);
+      expect(find.text('暂停处理消息'), findsNothing);
+      expect(find.text('删除消息处理 Agent'), findsNothing);
+      expect(find.text('撤销 Daemon 消息授权'), findsNothing);
       expect(find.textContaining('自动回复'), findsNothing);
       expect(find.textContaining('代发'), findsNothing);
-
-      await tester.tap(find.text('启用消息处理 Agent'));
-      await _pumpFrame(tester);
-
-      final bootstrapPayload = messages.recordedPayloads.firstWhere(
-        (record) =>
-            record.payload['schema'] == 'awiki.daemon.bootstrap.secure.v1',
-        orElse: () => fail(
-          'Expected Message Agent bootstrap payload. '
-          'Recorded payloads: ${messages.recordedPayloadsSummary()}',
-        ),
-      );
-      expect(
-        bootstrapPayload.idempotencyKey,
-        startsWith('message-agent-bootstrap:'),
-      );
-      expect(bindings.calls, isNot(contains('ensure:did:test:agent:message')));
-
-      control.agents = <AgentSummary>[
-        ...control.agents,
-        const AgentSummary(
-          agentDid: 'did:test:agent:message',
-          kind: AgentKind.runtime,
-          daemonAgentDid: 'did:test:daemon:message',
-          runtime: 'hermes',
-          handle: 'hermes-msg-app-default',
-          displayName: 'Hermes Message Agent',
-          activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
-        ),
-      ];
-      await _pumpUntil(
-        tester,
-        () => bindings.calls.contains('ensure:did:test:agent:message'),
-        timeout: const Duration(seconds: 95),
-        description:
-            'fake Message Agent bootstrap waits for runtime publication',
-      );
-      await ProviderScope.containerOf(
-        tester.element(find.byType(AppShell)),
-      ).read(agentsProvider.notifier).load();
-      await _pumpFrame(tester);
-      expect(find.text('Hermes Message Agent'), findsWidgets);
-      expect(find.text('暂停处理消息'), findsOneWidget);
-      expect(find.text('删除消息处理 Agent'), findsOneWidget);
-      expect(find.text('撤销 Daemon 消息授权'), findsOneWidget);
-
-      await tester.tap(find.text('暂停处理消息'));
-      await _pumpFrame(tester);
-      expect(
-        find.text('暂停后，消息处理 Agent 不再读取和处理新消息；runtime 和授权仍会保留，可以重新启用。'),
-        findsOneWidget,
-      );
-      await tester.tap(find.text('暂停'));
-      await _pumpFrame(tester);
-      expect(messages.lastPayload?['command'], 'message_agent.binding.disable');
-
-      await tester.tap(find.text('删除消息处理 Agent'));
-      await _pumpFrame(tester);
-      expect(
-        find.text('删除前会先暂停消息处理，然后归档对应 runtime。Daemon 和授权不会被删除。'),
-        findsOneWidget,
-      );
-      await tester.tap(
-        find
-            .descendant(
-              of: find.byType(CupertinoAlertDialog),
-              matching: find.text('删除'),
-            )
-            .last,
-      );
-      await _pumpFrame(tester);
-      expect(
-        messages.payloads.map((payload) => payload['command']),
-        contains('runtime.agent.delete'),
-      );
-
-      bindings.calls.clear();
-      identities.calls.clear();
-      messages.resetRecordedPayloads();
-      await tester.tap(find.text('撤销 Daemon 消息授权'));
-      await _pumpFrame(tester);
-      expect(find.textContaining('签名 DID Document 更新'), findsOneWidget);
-      await tester.tap(find.text('撤销授权'));
-      await _pumpFrame(tester);
-      expect(identities.calls, <String>['revoke:did:test:me']);
-      expect(bindings.calls, <String>['get_active', 'revoke:binding_1']);
-      expect(messages.lastPayload?['command'], 'message_agent.binding.disable');
-      expect(
-        messages.lastIdempotencyKey,
-        'message-agent-revoke:did:test:agent:message',
-      );
-      final revokeArgs = messages.lastPayload?['args'] as Map<String, Object?>;
-      expect(revokeArgs['binding_id'], 'binding_1');
-      expect(revokeArgs['message_agent_did'], 'did:test:agent:message');
-      expect(revokeArgs['lifecycle_action'], 'revoke');
+      expect(messages.recordedPayloads, isEmpty);
+      expect(messages.payloads, isEmpty);
+      expect(bindings.calls, isEmpty);
+      expect(identities.calls, isEmpty);
     } finally {
       debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);
@@ -581,7 +485,8 @@ void runMessageAgentRealBackendE2e() {
         await tester.binding.setSurfaceSize(null);
       }
     },
-    skip: !_MessageAgentRealBackendConfig.shouldRun,
+    skip:
+        'Message Agent daemon-detail management UI is hidden; lifecycle code remains below the UI layer.',
     timeout: const Timeout(Duration(minutes: 15)),
   );
 }

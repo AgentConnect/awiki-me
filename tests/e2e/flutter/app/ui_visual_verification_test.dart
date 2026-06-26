@@ -140,9 +140,9 @@ void main() {
       expect(find.text('Claude Code'), findsOneWidget);
       await tester.tap(find.text('Codex'));
       await tester.pumpAndSettle();
-      expect(find.text('工作目录策略'), findsOneWidget);
-      expect(find.text('宿主机全权限'), findsOneWidget);
-      expect(find.text('按会话目录'), findsOneWidget);
+      expect(find.text('工作目录策略'), findsNothing);
+      expect(find.text('宿主机全权限'), findsNothing);
+      expect(find.text('按会话目录'), findsNothing);
       await _captureScreenshot(tester, '07-agent-create-agent-type');
     } finally {
       debugDefaultTargetPlatformOverride = null;

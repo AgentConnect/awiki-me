@@ -212,10 +212,8 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
         widget.existingRuntimes,
         kind,
       );
-      if (kind == RuntimeAgentKind.hermes) {
-        _workspaceMode = runtimeWorkspaceModeRouteRoot;
-        _sandbox = runtimeSandboxDangerFullAccess;
-      }
+      _workspaceMode = runtimeWorkspaceModeRouteRoot;
+      _sandbox = runtimeSandboxDangerFullAccess;
     });
   }
 
@@ -441,7 +439,10 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
                                   onSelected: _selectKind,
                                 ),
                                 SizedBox(height: responsive.spacing(12)),
-                                if (_kind.isGenericCli) ...<Widget>[
+                                if (_kind.isGenericCli &&
+                                    _shouldShowRuntimeAdvancedOptions()) ...<
+                                  Widget
+                                >[
                                   _RuntimeOptionSelector(
                                     title: '工作目录策略',
                                     value: _workspaceMode,
@@ -560,6 +561,12 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
     }
     return _remoteAvailability;
   }
+}
+
+bool _shouldShowRuntimeAdvancedOptions() {
+  // Generic CLI runtime creation still uses the existing option model, but the
+  // product UI no longer asks users to choose these advanced settings.
+  return false;
 }
 
 class _AgentTypeSelector extends StatelessWidget {

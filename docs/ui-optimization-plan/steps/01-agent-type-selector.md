@@ -20,7 +20,7 @@ Step index：01
 ## 2. 目标
 
 - 结果：创建 Runtime Agent / 安装宿主代理流程明确展示 Agent 类型。
-- 用户 / 系统可见行为：创建对话框中出现“Agent 类型”，当前只可选 Hermes；宿主安装命令对话框提示“支持的 Agent 类型：Hermes”。
+- 用户 / 系统可见行为：创建对话框中出现“Agent 类型”；工作目录策略和宿主机全权限等高级选项不再展示，generic-cli 创建默认使用按会话目录与宿主机全权限参数。
 - 非目标：不新增 Hermes 以外的 runtime，不改 Daemon / SDK 协议。
 - 完成标准：用户能看到 Hermes 类型选择，提交仍走原 Hermes 创建链路，测试覆盖文案和创建参数。
 
@@ -54,7 +54,7 @@ Step index：01
 ## 7. 验收标准
 
 - [x] 创建 Runtime Agent 对话框展示“Agent 类型”。
-- [x] 仅 Hermes 可用。
+- [x] generic-cli 高级工作目录 / 权限选项不展示，默认参数保持按会话目录与宿主机全权限。
 - [x] 安装命令对话框提示 Hermes 支持范围。
 - [x] Review 发现已经修复或明确记录。
 - [x] 本步骤纳入统一集成提交；用户已要求推送并合并到 `release/0526`。

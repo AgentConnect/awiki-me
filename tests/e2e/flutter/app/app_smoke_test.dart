@@ -139,7 +139,7 @@ void main() {
     }
   });
 
-  testWidgets('AwikiMeApp authenticated smoke opens Message Agent settings', (
+  testWidgets('AwikiMeApp authenticated smoke hides Message Agent settings', (
     tester,
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -199,29 +199,18 @@ void main() {
       await _pumpSmokeFrame(tester);
 
       expect(find.text('Message Daemon'), findsWidgets);
-      expect(find.text('消息处理 Agent'), findsOneWidget);
-      expect(find.text('运行 Daemon'), findsOneWidget);
-      expect(find.text('Hermes'), findsOneWidget);
-      expect(find.text('所有可处理会话'), findsOneWidget);
-      expect(find.text('0.5.26 · linux-amd64'), findsOneWidget);
-      expect(find.text('Hermes message runtime'), findsOneWidget);
-      expect(find.text('已上报公钥'), findsOneWidget);
-      expect(find.text('启用消息处理 Agent'), findsOneWidget);
-      expect(find.text('暂停处理消息'), findsOneWidget);
-      expect(find.text('删除消息处理 Agent'), findsOneWidget);
-      expect(find.text('撤销 Daemon 消息授权'), findsOneWidget);
+      expect(find.text('消息处理 Agent'), findsNothing);
+      expect(find.text('所有可处理会话'), findsNothing);
+      expect(find.text('Hermes message runtime'), findsNothing);
+      expect(find.text('启用消息处理 Agent'), findsNothing);
+      expect(find.text('暂停处理消息'), findsNothing);
+      expect(find.text('删除消息处理 Agent'), findsNothing);
+      expect(find.text('撤销 Daemon 消息授权'), findsNothing);
       expect(find.textContaining('自动回复'), findsNothing);
       expect(find.textContaining('代发'), findsNothing);
-
-      await tester.tap(find.text('启用消息处理 Agent'));
-      await _pumpSmokeFrame(tester);
-
-      expect(control.lastBootstrapDaemonDid, 'did:test:daemon:message');
-      expect(control.lastBootstrapControllerDid, 'did:test:me');
-      expect(
-        control.lastBootstrapDaemonPublicKey?.keyId,
-        'did:test:daemon:message#key-3',
-      );
+      expect(control.lastBootstrapDaemonDid, isNull);
+      expect(control.lastBootstrapControllerDid, isNull);
+      expect(control.lastBootstrapDaemonPublicKey, isNull);
     } finally {
       debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);
