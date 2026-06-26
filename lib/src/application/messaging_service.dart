@@ -48,7 +48,17 @@ abstract interface class MessagingService {
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed);
 }
 
-class ImCoreMessagingService implements MessagingService {
+abstract interface class LocalHistoryMessagingService {
+  Future<List<ChatMessage>> loadLocalHistory(
+    AppThreadRef thread, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  });
+}
+
+class ImCoreMessagingService
+    implements MessagingService, LocalHistoryMessagingService {
   const ImCoreMessagingService({required MessageCorePort messages})
     : _messages = messages;
 
@@ -130,6 +140,25 @@ class ImCoreMessagingService implements MessagingService {
     bool includeControlPayloads = false,
   }) {
     return _messages.loadHistory(
+      thread,
+      limit: limit,
+      cursor: cursor,
+      includeControlPayloads: includeControlPayloads,
+    );
+  }
+
+  @override
+  Future<List<ChatMessage>> loadLocalHistory(
+    AppThreadRef thread, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  }) {
+    final messages = _messages;
+    if (messages is! LocalHistoryMessageCorePort) {
+      throw UnsupportedError('Message core does not expose local history.');
+    }
+    return (messages as LocalHistoryMessageCorePort).loadLocalHistory(
       thread,
       limit: limit,
       cursor: cursor,

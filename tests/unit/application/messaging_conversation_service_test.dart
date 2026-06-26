@@ -578,19 +578,29 @@ void main() {
   });
 
   group('ImCoreMessagingService', () {
-    test('delegates send history and retry to message port', () async {
-      final messages = _FakeMessages();
-      final service = ImCoreMessagingService(messages: messages);
-      const thread = AppThreadRef.direct('did:bob');
+    test(
+      'delegates send history local history and retry to message port',
+      () async {
+        final messages = _FakeMessages();
+        final service = ImCoreMessagingService(messages: messages);
+        const thread = AppThreadRef.direct('did:bob');
 
-      await service.sendText(thread: thread, content: 'hello');
-      await service.loadHistory(thread, limit: 20, cursor: 'cursor-1');
-      await service.retryByResendOriginalContent(_message('failed'));
+        await service.sendText(thread: thread, content: 'hello');
+        await service.loadHistory(thread, limit: 20, cursor: 'cursor-1');
+        await service.loadLocalHistory(
+          thread,
+          limit: 10,
+          cursor: 'cursor-local',
+        );
+        await service.retryByResendOriginalContent(_message('failed'));
 
-      expect(messages.sentContents, ['hello']);
-      expect(messages.historyRequests.single.limit, 20);
-      expect(messages.retriedIds, ['failed']);
-    });
+        expect(messages.sentContents, ['hello']);
+        expect(messages.historyRequests.single.limit, 20);
+        expect(messages.localHistoryRequests.single.limit, 10);
+        expect(messages.localHistoryRequests.single.cursor, 'cursor-local');
+        expect(messages.retriedIds, ['failed']);
+      },
+    );
   });
 }
 
@@ -653,9 +663,10 @@ class _FakeConversations implements ConversationCorePort {
   }
 }
 
-class _FakeMessages implements MessageCorePort {
+class _FakeMessages implements MessageCorePort, LocalHistoryMessageCorePort {
   final List<String> sentContents = <String>[];
   final List<_HistoryRequest> historyRequests = <_HistoryRequest>[];
+  final List<_HistoryRequest> localHistoryRequests = <_HistoryRequest>[];
   final List<String> retriedIds = <String>[];
 
   @override
@@ -675,6 +686,17 @@ class _FakeMessages implements MessageCorePort {
     bool includeControlPayloads = false,
   }) async {
     historyRequests.add(_HistoryRequest(limit: limit, cursor: cursor));
+    return <ChatMessage>[];
+  }
+
+  @override
+  Future<List<ChatMessage>> loadLocalHistory(
+    AppThreadRef thread, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  }) async {
+    localHistoryRequests.add(_HistoryRequest(limit: limit, cursor: cursor));
     return <ChatMessage>[];
   }
 

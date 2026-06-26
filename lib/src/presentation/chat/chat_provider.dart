@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_services.dart';
 import '../../application/models/attachment_models.dart';
 import '../../application/models/app_thread_ref.dart';
+import '../../application/messaging_service.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../../domain/entities/agent/agent_status.dart';
@@ -372,11 +373,22 @@ class _PendingHistorySync {
     required this.conversation,
     required this.force,
     required this.reportFailure,
+    required this.showLoading,
   });
 
   final ConversationSummary conversation;
   final bool force;
   final bool reportFailure;
+  final bool showLoading;
+}
+
+class _HistoryLoadResult {
+  const _HistoryLoadResult({required this.loadedCount, required this.failed});
+
+  final int loadedCount;
+  final bool failed;
+
+  bool get loadedAny => loadedCount > 0;
 }
 
 class ChatThreadsController
@@ -398,6 +410,8 @@ class ChatThreadsController
   final Map<String, Timer> _agentProcessingTimers = <String, Timer>{};
   final Map<String, _PendingHistorySync> _pendingHistorySyncs =
       <String, _PendingHistorySync>{};
+  final Set<String> _activeLocalHistoryLoads = <String>{};
+  final Set<String> _activeRemoteHistorySyncs = <String>{};
 
   ChatThreadState thread(String threadId) {
     return state[threadId] ?? ChatThreadState(threadId: threadId);
@@ -417,10 +431,9 @@ class ChatThreadsController
       },
     );
     unawaited(
-      syncHistoryForConversation(
+      _openConversationLocalFirst(
         conversation,
         displayThreadId: targetThreadId,
-        reportFailure: true,
       ),
     );
     if (conversation.unreadCount > 0) {
@@ -436,6 +449,51 @@ class ChatThreadsController
       );
       _markConversationReadBestEffort(conversation);
     }
+  }
+
+  Future<void> _openConversationLocalFirst(
+    ConversationSummary conversation, {
+    required String displayThreadId,
+  }) async {
+    final currentBeforeLocal = thread(displayThreadId);
+    if (currentBeforeLocal.isLoading ||
+        _activeLocalHistoryLoads.contains(displayThreadId) ||
+        _activeRemoteHistorySyncs.contains(displayThreadId)) {
+      return;
+    }
+    if (!_shouldLoadHistory(currentBeforeLocal, conversation)) {
+      return;
+    }
+    final localResult = await _loadLocalHistory(
+      conversation,
+      intoThreadId: displayThreadId,
+    );
+    if (!mounted) {
+      return;
+    }
+    final shouldReconcileRemote =
+        currentBeforeLocal.messages.isEmpty ||
+        localResult.failed ||
+        _shouldLoadHistory(thread(displayThreadId), conversation);
+    if (!shouldReconcileRemote) {
+      return;
+    }
+    if (_activeRemoteHistorySyncs.contains(displayThreadId)) {
+      return;
+    }
+    final hadLocalMessagesBefore = currentBeforeLocal.messages.isNotEmpty;
+    final shouldShowRemoteFailure =
+        localResult.failed ||
+        (!localResult.loadedAny && !hadLocalMessagesBefore);
+    unawaited(
+      syncHistoryForConversation(
+        conversation,
+        displayThreadId: displayThreadId,
+        force: currentBeforeLocal.messages.isEmpty || localResult.failed,
+        reportFailure: shouldShowRemoteFailure,
+        showLoading: !localResult.loadedAny && !hadLocalMessagesBefore,
+      ),
+    );
   }
 
   void _markConversationReadBestEffort(ConversationSummary conversation) {
@@ -460,33 +518,122 @@ class ChatThreadsController
     }
   }
 
-  Future<void> _loadHistory(
+  Future<_HistoryLoadResult> _loadLocalHistory(
     ConversationSummary conversation, {
     String? intoThreadId,
-    bool reportFailure = false,
   }) async {
     if (!mounted) {
-      return;
+      return const _HistoryLoadResult(loadedCount: 0, failed: false);
     }
     final targetThreadId = _displayThreadIdFor(conversation, intoThreadId);
     final totalWatch = Stopwatch()..start();
-    _setThreadLoading(targetThreadId, true);
+    _activeLocalHistoryLoads.add(targetThreadId);
+    final shouldShowLoading = thread(targetThreadId).messages.isEmpty;
+    if (shouldShowLoading) {
+      _setThreadLoading(targetThreadId, true);
+    }
+    final messaging = ref.read(messagingServiceProvider);
     try {
+      if (messaging is! LocalHistoryMessagingService) {
+        if (shouldShowLoading && mounted) {
+          _setThreadLoading(targetThreadId, false);
+        }
+        AwikiPerformanceLogger.log(
+          'chat.local_history.unsupported',
+          fields: AwikiPerformanceLogger.threadField(targetThreadId),
+        );
+        return const _HistoryLoadResult(loadedCount: 0, failed: true);
+      }
+      final localMessaging = messaging as LocalHistoryMessagingService;
       final loadedHistory = await AwikiPerformanceLogger.async(
-        'chat.history.service',
-        () => ref
-            .read(messagingServiceProvider)
-            .loadHistory(_historyThreadRefFor(conversation)),
+        'chat.local_history.service',
+        () =>
+            localMessaging.loadLocalHistory(_historyThreadRefFor(conversation)),
         fields: AwikiPerformanceLogger.threadField(targetThreadId),
       );
       final history = AwikiPerformanceLogger.sync(
-        'chat.history.prepare',
+        'chat.local_history.prepare',
         () => loadedHistory
             .map((message) => _withThreadId(message, targetThreadId))
             .where((message) => message.hasRenderableContent)
             .toList(),
         fields: <String, Object?>{
           ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'items': loadedHistory.length,
+        },
+      );
+      if (!mounted) {
+        return _HistoryLoadResult(loadedCount: history.length, failed: false);
+      }
+      _mergeMessages(targetThreadId, history, isLoading: false);
+      totalWatch.stop();
+      AwikiPerformanceLogger.log(
+        'chat.local_history.load',
+        elapsed: totalWatch.elapsed,
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'items': history.length,
+        },
+      );
+      return _HistoryLoadResult(loadedCount: history.length, failed: false);
+    } catch (_) {
+      if (shouldShowLoading && mounted) {
+        _setThreadLoading(targetThreadId, false);
+      }
+      totalWatch.stop();
+      AwikiPerformanceLogger.log(
+        'chat.local_history.failed',
+        elapsed: totalWatch.elapsed,
+        fields: AwikiPerformanceLogger.threadField(targetThreadId),
+      );
+      return const _HistoryLoadResult(loadedCount: 0, failed: true);
+    } finally {
+      _activeLocalHistoryLoads.remove(targetThreadId);
+      if (mounted) {
+        _runPendingHistorySyncIfNeeded(targetThreadId);
+      }
+    }
+  }
+
+  Future<void> _loadHistory(
+    ConversationSummary conversation, {
+    String? intoThreadId,
+    bool reportFailure = false,
+    bool showLoading = true,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+    final targetThreadId = _displayThreadIdFor(conversation, intoThreadId);
+    final totalWatch = Stopwatch()..start();
+    _activeRemoteHistorySyncs.add(targetThreadId);
+    if (showLoading) {
+      _setThreadLoading(targetThreadId, true);
+    }
+    try {
+      final loadedHistory = await AwikiPerformanceLogger.async(
+        'chat.remote_history.service',
+        () => ref
+            .read(messagingServiceProvider)
+            .loadHistory(_historyThreadRefFor(conversation)),
+        fields: AwikiPerformanceLogger.threadField(targetThreadId),
+      );
+      final history = AwikiPerformanceLogger.sync(
+        'chat.remote_history.prepare',
+        () => loadedHistory
+            .map((message) => _withThreadId(message, targetThreadId))
+            .where((message) => message.hasRenderableContent)
+            .toList(),
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'items': loadedHistory.length,
+        },
+      );
+      AwikiPerformanceLogger.log(
+        'chat.history.service',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'compat': true,
           'items': loadedHistory.length,
         },
       );
@@ -501,7 +648,7 @@ class ChatThreadsController
       );
       totalWatch.stop();
       AwikiPerformanceLogger.log(
-        'chat.history.load',
+        'chat.remote_history.load',
         elapsed: totalWatch.elapsed,
         fields: <String, Object?>{
           ...AwikiPerformanceLogger.threadField(targetThreadId),
@@ -512,13 +659,16 @@ class ChatThreadsController
       if (!mounted) {
         return;
       }
-      _setThreadLoading(targetThreadId, false);
+      if (showLoading) {
+        _setThreadLoading(targetThreadId, false);
+      }
       if (reportFailure) {
         ref
             .read(uiFeedbackProvider.notifier)
             .showError(AppMessage.fromError(error));
       }
     } finally {
+      _activeRemoteHistorySyncs.remove(targetThreadId);
       if (mounted) {
         _runPendingHistorySyncIfNeeded(targetThreadId);
       }
@@ -929,16 +1079,19 @@ class ChatThreadsController
     String? displayThreadId,
     bool force = false,
     bool reportFailure = false,
+    bool showLoading = true,
   }) {
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
     final current = thread(targetThreadId);
-    if (current.isLoading) {
+    if (current.isLoading ||
+        _activeRemoteHistorySyncs.contains(targetThreadId)) {
       if (force || _shouldLoadHistory(current, conversation)) {
         _queuePendingHistorySync(
           targetThreadId,
           conversation,
           force: force,
           reportFailure: reportFailure,
+          showLoading: showLoading,
         );
       }
       return Future<void>.value();
@@ -950,6 +1103,7 @@ class ChatThreadsController
       conversation,
       intoThreadId: targetThreadId,
       reportFailure: reportFailure,
+      showLoading: showLoading,
     );
   }
 
@@ -966,6 +1120,8 @@ class ChatThreadsController
   void clear() {
     _cancelAgentProcessingTimers();
     _pendingHistorySyncs.clear();
+    _activeLocalHistoryLoads.clear();
+    _activeRemoteHistorySyncs.clear();
     state = const <String, ChatThreadState>{};
   }
 
@@ -974,6 +1130,7 @@ class ChatThreadsController
     ConversationSummary conversation, {
     required bool force,
     required bool reportFailure,
+    required bool showLoading,
   }) {
     final existing = _pendingHistorySyncs[threadId];
     _pendingHistorySyncs[threadId] = existing == null
@@ -981,6 +1138,7 @@ class ChatThreadsController
             conversation: conversation,
             force: force,
             reportFailure: reportFailure,
+            showLoading: showLoading,
           )
         : _PendingHistorySync(
             conversation: _newerConversation(
@@ -989,6 +1147,7 @@ class ChatThreadsController
             ),
             force: existing.force || force,
             reportFailure: existing.reportFailure || reportFailure,
+            showLoading: existing.showLoading || showLoading,
           );
   }
 
@@ -1005,6 +1164,7 @@ class ChatThreadsController
         displayThreadId: threadId,
         force: pending.force,
         reportFailure: pending.reportFailure,
+        showLoading: pending.showLoading,
       ),
     );
   }

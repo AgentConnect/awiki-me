@@ -439,11 +439,16 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   List<ConversationSummary> conversations = const <ConversationSummary>[];
   Map<String, List<ChatMessage>> dmHistoryByPeerDid =
       <String, List<ChatMessage>>{};
+  Map<String, List<ChatMessage>> localDmHistoryByPeerDid =
+      <String, List<ChatMessage>>{};
   Map<String, List<List<ChatMessage>>> dmHistoryBatchesByPeerDid =
       <String, List<List<ChatMessage>>>{};
   Map<String, List<ChatMessage>> groupHistoryByGroupId =
       <String, List<ChatMessage>>{};
+  Map<String, List<ChatMessage>> localGroupHistoryByGroupId =
+      <String, List<ChatMessage>>{};
   Completer<void>? fetchDmHistoryCompleter;
+  Completer<void>? fetchLocalDmHistoryCompleter;
   List<RelationshipSummary> followers = const <RelationshipSummary>[];
   List<RelationshipSummary> following = const <RelationshipSummary>[];
   List<GroupSummary> groups = const <GroupSummary>[];
@@ -468,6 +473,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   bool failNextSend = false;
   bool failNextFollow = false;
   bool failNextListConversations = false;
+  bool failNextFetchDmHistory = false;
+  bool failNextFetchLocalDmHistory = false;
   bool failNextSendOtp = false;
   bool failListFollowing = false;
   bool failListFollowers = false;
@@ -515,7 +522,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int refreshSessionCalls = 0;
   int fetchDmHistoryCalls = 0;
   String? lastFetchedDmPeerDid;
+  int fetchLocalDmHistoryCalls = 0;
+  String? lastFetchedLocalDmPeerDid;
   int fetchGroupHistoryCalls = 0;
+  int fetchLocalGroupHistoryCalls = 0;
   int markReadCalls = 0;
   String? lastMarkReadThreadId;
   int listConversationsCalls = 0;
@@ -579,6 +589,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   Future<List<ChatMessage>> fetchDmHistory(String peerDid) async {
     fetchDmHistoryCalls += 1;
     lastFetchedDmPeerDid = peerDid;
+    if (failNextFetchDmHistory) {
+      failNextFetchDmHistory = false;
+      throw StateError('fetch history failed');
+    }
     final completer = fetchDmHistoryCompleter;
     if (completer != null) {
       await completer.future;
@@ -595,6 +609,26 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   Future<List<ChatMessage>> fetchGroupHistory(String groupId) async {
     fetchGroupHistoryCalls += 1;
     return groupHistoryByGroupId[groupId] ?? const <ChatMessage>[];
+  }
+
+  Future<List<ChatMessage>> fetchLocalDmHistory(String peerDid) async {
+    fetchLocalDmHistoryCalls += 1;
+    lastFetchedLocalDmPeerDid = peerDid;
+    if (failNextFetchLocalDmHistory) {
+      failNextFetchLocalDmHistory = false;
+      throw StateError('fetch local history failed');
+    }
+    final completer = fetchLocalDmHistoryCompleter;
+    if (completer != null) {
+      await completer.future;
+      fetchLocalDmHistoryCompleter = null;
+    }
+    return localDmHistoryByPeerDid[peerDid] ?? const <ChatMessage>[];
+  }
+
+  Future<List<ChatMessage>> fetchLocalGroupHistory(String groupId) async {
+    fetchLocalGroupHistoryCalls += 1;
+    return localGroupHistoryByGroupId[groupId] ?? const <ChatMessage>[];
   }
 
   @override
@@ -1363,7 +1397,8 @@ class FakeConversationService implements ConversationService {
   }
 }
 
-class FakeMessagingService implements MessagingService {
+class FakeMessagingService
+    implements MessagingService, LocalHistoryMessagingService {
   const FakeMessagingService(this.gateway);
 
   final FakeAwikiGateway gateway;
@@ -1397,6 +1432,31 @@ class FakeMessagingService implements MessagingService {
       ),
       AppGroupThreadRef(:final groupDid) => gateway.fetchGroupHistory(groupDid),
       AppMessageThreadRef(:final threadId) => _loadThreadHistory(threadId),
+    };
+    return history.then(
+      (messages) => messages
+          .where(
+            (message) => includeControlPayloads || message.hasRenderableContent,
+          )
+          .toList(growable: false),
+    );
+  }
+
+  @override
+  Future<List<ChatMessage>> loadLocalHistory(
+    AppThreadRef thread, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  }) {
+    final history = switch (thread) {
+      AppDirectThreadRef(:final peerDidOrHandle) => gateway.fetchLocalDmHistory(
+        peerDidOrHandle,
+      ),
+      AppGroupThreadRef(:final groupDid) => gateway.fetchLocalGroupHistory(
+        groupDid,
+      ),
+      AppMessageThreadRef(:final threadId) => _loadLocalThreadHistory(threadId),
     };
     return history.then(
       (messages) => messages
@@ -1555,6 +1615,18 @@ class FakeMessagingService implements MessagingService {
     }
     if (threadId.startsWith('dm:')) {
       return gateway.fetchDmHistory(threadId.substring('dm:'.length));
+    }
+    return Future<List<ChatMessage>>.value(const <ChatMessage>[]);
+  }
+
+  Future<List<ChatMessage>> _loadLocalThreadHistory(String threadId) {
+    if (threadId.startsWith('group:')) {
+      return gateway.fetchLocalGroupHistory(
+        threadId.substring('group:'.length),
+      );
+    }
+    if (threadId.startsWith('dm:')) {
+      return gateway.fetchLocalDmHistory(threadId.substring('dm:'.length));
     }
     return Future<List<ChatMessage>>.value(const <ChatMessage>[]);
   }

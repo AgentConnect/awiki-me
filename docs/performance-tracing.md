@@ -35,28 +35,34 @@ flutter run -d macos \
 | `im_core_conversations.*` | Dart -> im-core native 会话查询边界 | 判断是否卡在 native/SQLite/SDK 查询 |
 | `agents.load*` | Agent 清单与 daemon status 本地投影 | 判断 Agent 投影是否拖慢会话列表 |
 | `chat.open_conversation` | 点击进入会话 | 进入会话起点 |
-| `chat.history.*` / `im_core_messages.history*` | 消息历史拉取、Dart 映射、merge/sort | 判断消息列表 5-8 秒延迟卡在哪一层 |
+| `chat.local_history.*` / `im_core_messages.local_history*` | 进入会话时本地 projection 历史读取、Dart 映射、merge/sort | 判断本地已有消息是否能先于远端 history 快速渲染 |
+| `chat.remote_history.*` / `im_core_messages.remote_history*` | 后台远端 history reconcile、Dart 映射、merge/sort | 判断远端补齐、E2EE projection 和 native persist/merge 是否仍拖慢进入会话 |
+| `chat.history.*` / `im_core_messages.history*` | 兼容旧日志名的消息历史边界 | 新链路优先看 `local_history` / `remote_history`；旧名只用于兼容对比 |
 | `chat.mark_read*` | 打开未读会话后的本地清未读与已读同步 | 判断本地清 unread 和 SDK thread mark-read ack 是否慢 |
 | `chat_page.build.*` / `conversation_list_page.*build.*` | Flutter build 准备阶段 | 判断是否是 UI 构建/重算慢 |
 | `frame.slow` | Flutter 慢帧 build/raster 时间 | 判断是否出现明显 UI jank |
 
 ## 如何解读
 
-1. 如果 `im_core_conversations.native_list` 或 `im_core_messages.history_native` 很慢，优先怀疑 im-core native、SQLite/WAL、本地库版本或网络历史读取。
-2. 如果 `conversation_service.fast_local` 很快但 `conversation_service.enrich`、`conversation_service.agent_projection` 或 `agents.load.*` 很慢，说明首屏已经脱离远端 Agent inventory，慢点在后台补齐链路。
-3. 如果 `product_store.legacy_migration` 或 `product_store.open_database` 很慢，优先看首次 DB open、旧库迁移和 WAL/SHM 拷贝；这些应通过 `app_refresh.product_store_warm_up` 后台预热，不能阻塞 `conversation_fast_local`。
-4. 如果 `conversation_service.filter_sort`、`conversation_list.refresh_fast_local.merge`、`conversation_list.refresh_enrich.merge` 或 `chat.messages.sort` 很慢，优先看 Dart 侧列表规模、O(n²) 匹配和排序。
-5. 如果 `chat.mark_read` 很慢，优先看 `im_core_conversations.mark_read.native` 的
+1. 如果 `im_core_conversations.native_list` 很慢，优先怀疑 im-core native、SQLite/WAL、本地库版本。
+2. 如果 `chat.local_history.load` 很快但 `chat.remote_history.load` / `im_core_messages.remote_history_native` 很慢，说明进入会话首屏已 local-first，剩余慢点在远端 history reconcile、E2EE projection persist 或 native local merge。
+3. 如果 `chat.local_history.load` 本身慢，优先检查本地 projection 查询、SQLite/WAL、消息数量和 `chat.messages.merge` / `chat.messages.sort`。
+4. 如果 `conversation_service.fast_local` 很快但 `conversation_service.enrich`、`conversation_service.agent_projection` 或 `agents.load.*` 很慢，说明首屏已经脱离远端 Agent inventory，慢点在后台补齐链路。
+5. 如果 `product_store.legacy_migration` 或 `product_store.open_database` 很慢，优先看首次 DB open、旧库迁移和 WAL/SHM 拷贝；这些应通过 `app_refresh.product_store_warm_up` 后台预热，不能阻塞 `conversation_fast_local`。
+6. 如果 `conversation_service.filter_sort`、`conversation_list.refresh_fast_local.merge`、`conversation_list.refresh_enrich.merge` 或 `chat.messages.sort` 很慢，优先看 Dart 侧列表规模、O(n²) 匹配和排序。
+7. 如果 `chat.mark_read` 很慢，优先看 `im_core_conversations.mark_read.native` 的
    `local_candidates`、`remote_ack`、`partial` 和 `warnings`；旧的
    `im_core_conversations.mark_read.history_page` 不应再出现，出现则说明回归到了
    history 分页找 unread ids。
-6. 如果 `frame.slow` 很多而数据层日志不慢，说明主要是 Flutter build/raster 或大量 widget 重建。
+8. 如果 `frame.slow` 很多而数据层日志不慢，说明主要是 Flutter build/raster 或大量 widget 重建。
 
 ## 当前性能门禁
 
 - 启动或恢复时，应先看到 `app_refresh.conversation_fast_local` 与 `conversation_list.refresh_fast_local`，再看到 `conversation_list.refresh_enrich`、`app_refresh.agents`、`app_refresh.friends` 和 `app_refresh.groups`。
 - `conversation_service.fast_local` 不应等待 `conversation_service.agent_projection.list_agents`；如果二者耗时同步增长，说明会话首屏又被 Agent RPC 绑定。
 - `product_store.open_database` / `product_store.legacy_migration` 可在后台 warm-up 中出现，但不应成为 `conversation_list.refresh_fast_local` 的直接子链路。
+- 进入已有本地 projection 的会话时，应先看到 `chat.local_history.load`，消息立即出现；`chat.remote_history.load` 只作为后台 reconcile，失败不应清空已显示的本地消息。
+- 打开未读会话时只允许看到一次远端 `chat.remote_history.*` reconcile；`chat.mark_read*` 不应再触发 history 分页。
 
 ## 隐私说明
 

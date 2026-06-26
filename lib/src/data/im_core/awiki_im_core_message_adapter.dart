@@ -12,7 +12,8 @@ import '../../domain/entities/chat_message.dart';
 import 'awiki_im_core_mappers.dart';
 import 'awiki_im_core_runtime.dart';
 
-class AwikiImCoreMessageAdapter implements MessageCorePort {
+class AwikiImCoreMessageAdapter
+    implements MessageCorePort, LocalHistoryMessageCorePort {
   AwikiImCoreMessageAdapter({
     required AwikiImCoreRuntime runtime,
     AwikiImCoreMappers mappers = const AwikiImCoreMappers(),
@@ -142,8 +143,17 @@ class AwikiImCoreMessageAdapter implements MessageCorePort {
       )).did;
       final coreThread = _mappers.threadRefToCore(thread);
       final page = await AwikiPerformanceLogger.async(
-        'im_core_messages.history_native',
-        () => client.messages.history(coreThread, limit: limit, cursor: cursor),
+        'im_core_messages.remote_history_native',
+        () => AwikiPerformanceLogger.async(
+          'im_core_messages.history_native',
+          () =>
+              client.messages.history(coreThread, limit: limit, cursor: cursor),
+          fields: <String, Object?>{
+            'limit': limit,
+            'cursor': cursor != null,
+            'thread_kind': thread.runtimeType.toString(),
+          },
+        ),
         fields: <String, Object?>{
           'limit': limit,
           'cursor': cursor != null,
@@ -170,6 +180,65 @@ class AwikiImCoreMessageAdapter implements MessageCorePort {
       totalWatch.stop();
       AwikiPerformanceLogger.log(
         'im_core_messages.history',
+        elapsed: totalWatch.elapsed,
+        fields: <String, Object?>{
+          'items': page.items.length,
+          'returned': messages.length,
+          'has_more': page.hasMore,
+          'include_control_payloads': includeControlPayloads,
+        },
+      );
+      return messages;
+    });
+  }
+
+  @override
+  Future<List<ChatMessage>> loadLocalHistory(
+    AppThreadRef thread, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  }) async {
+    return _runtime.withCurrentClient((client) async {
+      final totalWatch = Stopwatch()..start();
+      final ownerDid = (await AwikiPerformanceLogger.async(
+        'im_core_messages.identity_current',
+        client.identity.current,
+      )).did;
+      final coreThread = _mappers.threadRefToCore(thread);
+      final page = await AwikiPerformanceLogger.async(
+        'im_core_messages.local_history_native',
+        () => client.messages.localHistory(
+          coreThread,
+          limit: limit,
+          cursor: cursor,
+        ),
+        fields: <String, Object?>{
+          'limit': limit,
+          'cursor': cursor != null,
+          'thread_kind': thread.runtimeType.toString(),
+        },
+      );
+      final messages = AwikiPerformanceLogger.sync(
+        'im_core_messages.local_history_map',
+        () => page.items
+            .map(
+              (message) =>
+                  _mappers.chatMessageFromCore(message, ownerDid: ownerDid),
+            )
+            .where(
+              (message) =>
+                  includeControlPayloads || message.hasRenderableContent,
+            )
+            .toList(),
+        fields: <String, Object?>{
+          'items': page.items.length,
+          'include_control_payloads': includeControlPayloads,
+        },
+      );
+      totalWatch.stop();
+      AwikiPerformanceLogger.log(
+        'im_core_messages.local_history',
         elapsed: totalWatch.elapsed,
         fields: <String, Object?>{
           'items': page.items.length,

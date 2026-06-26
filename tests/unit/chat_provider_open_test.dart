@@ -60,18 +60,72 @@ void main() {
     addTearDown(container.dispose);
   });
 
-  test('首次打开空线程时后台加载历史，不阻塞 openConversation', () async {
+  test('首次打开空线程时先显示本地历史，再后台远端 reconcile', () async {
+    final remoteCompleter = Completer<void>();
+    gateway
+      ..fetchDmHistoryCompleter = remoteCompleter
+      ..localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+        'did:peer': <ChatMessage>[message],
+      };
+
     await container
         .read(chatThreadsProvider.notifier)
         .openConversation(conversation);
 
+    await pumpEventQueue();
+
+    expect(gateway.fetchLocalDmHistoryCalls, 1);
     expect(gateway.fetchDmHistoryCalls, 1);
     expect(gateway.listConversationsCalls, 0);
 
-    await Future<void>.delayed(Duration.zero);
-
     final thread = container.read(chatThreadProvider(conversation.threadId));
     expect(thread.messages, hasLength(1));
+    expect(thread.messages.single.content, 'hello');
+    expect(thread.isLoading, isFalse);
+
+    remoteCompleter.complete();
+    await pumpEventQueue();
+
+    final reconciled = container.read(
+      chatThreadProvider(conversation.threadId),
+    );
+    expect(reconciled.messages, hasLength(1));
+    expect(reconciled.messages.single.remoteId, 'msg-1');
+    expect(reconciled.isLoading, isFalse);
+  });
+
+  test('本地历史为空时仍回退远端 history', () async {
+    gateway.localDmHistoryByPeerDid = const <String, List<ChatMessage>>{};
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await pumpEventQueue();
+
+    expect(gateway.fetchLocalDmHistoryCalls, 1);
+    expect(gateway.fetchDmHistoryCalls, 1);
+    final thread = container.read(chatThreadProvider(conversation.threadId));
+    expect(thread.messages.map((item) => item.content), contains('hello'));
+    expect(thread.isLoading, isFalse);
+  });
+
+  test('远端 reconcile 失败不会清空本地历史', () async {
+    gateway
+      ..failNextFetchDmHistory = true
+      ..localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+        'did:peer': <ChatMessage>[message],
+      };
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await pumpEventQueue();
+
+    expect(gateway.fetchLocalDmHistoryCalls, 1);
+    expect(gateway.fetchDmHistoryCalls, 1);
+    final thread = container.read(chatThreadProvider(conversation.threadId));
+    expect(thread.messages, hasLength(1));
+    expect(thread.messages.single.content, 'hello');
     expect(thread.isLoading, isFalse);
   });
 
@@ -103,12 +157,17 @@ void main() {
       agentDid: <ChatMessage>[outgoing],
       agentHandle: const <ChatMessage>[],
     };
+    gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+      agentDid: <ChatMessage>[outgoing],
+      agentHandle: const <ChatMessage>[],
+    };
 
     await container
         .read(chatThreadsProvider.notifier)
         .openConversation(agentConversation);
-    await Future<void>.delayed(Duration.zero);
+    await pumpEventQueue();
 
+    expect(gateway.lastFetchedLocalDmPeerDid, agentDid);
     expect(gateway.lastFetchedDmPeerDid, agentDid);
     final thread = container.read(
       chatThreadProvider(agentConversation.threadId),
@@ -120,12 +179,13 @@ void main() {
     await container
         .read(chatThreadsProvider.notifier)
         .openConversation(conversation);
-    await Future<void>.delayed(Duration.zero);
+    await pumpEventQueue();
 
     await container
         .read(chatThreadsProvider.notifier)
         .openConversation(conversation);
 
+    expect(gateway.fetchLocalDmHistoryCalls, 1);
     expect(gateway.fetchDmHistoryCalls, 1);
     expect(gateway.listConversationsCalls, 0);
   });

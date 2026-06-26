@@ -38,3 +38,12 @@ abstract interface class MessageCorePort {
 
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed);
 }
+
+abstract interface class LocalHistoryMessageCorePort {
+  Future<List<ChatMessage>> loadLocalHistory(
+    AppThreadRef thread, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  });
+}
