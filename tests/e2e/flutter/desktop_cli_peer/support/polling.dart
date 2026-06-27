@@ -4,12 +4,18 @@ Future<void> _waitForGroupMessages({
   required GroupApplicationService groups,
   required String groupDid,
   required String expectedText,
+  String? expectedMessageId,
 }) async {
   await _poll(
-    description: 'App group messages contain "$expectedText"',
+    description: 'App group messages contain exact message "$expectedText"',
     action: () async {
       final messages = await groups.listMessages(groupDid, limit: 20);
-      return messages.any((message) => message._matchesText(expectedText));
+      return messages.any(
+        (message) => message._matchesText(
+          expectedText,
+          expectedMessageId: expectedMessageId,
+        ),
+      );
     },
   );
 }
@@ -18,12 +24,18 @@ Future<void> _waitForAppHistory({
   required MessagingService messaging,
   required AppThreadRef thread,
   required String expectedText,
+  String? expectedMessageId,
 }) async {
   await _poll(
-    description: 'App history contains "$expectedText"',
+    description: 'App history contains exact message "$expectedText"',
     action: () async {
       final messages = await messaging.loadHistory(thread, limit: 20);
-      return messages.any((message) => message._matchesText(expectedText));
+      return messages.any(
+        (message) => message._matchesText(
+          expectedText,
+          expectedMessageId: expectedMessageId,
+        ),
+      );
     },
   );
 }
@@ -33,6 +45,8 @@ Future<ChatMessage> _waitForAppAttachment({
   required AppThreadRef thread,
   required String expectedCaption,
   required String expectedFilename,
+  String? expectedMessageId,
+  String? expectedAttachmentId,
 }) async {
   ChatMessage? matched;
   await _poll(
@@ -45,8 +59,12 @@ Future<ChatMessage> _waitForAppAttachment({
         if (attachment == null) {
           continue;
         }
+        final messageId = message.remoteId ?? message.localId;
         if (message.content == expectedCaption &&
-            attachment.filename == expectedFilename) {
+            attachment.filename == expectedFilename &&
+            (expectedMessageId == null || messageId == expectedMessageId) &&
+            (expectedAttachmentId == null ||
+                attachment.attachmentId == expectedAttachmentId)) {
           matched = message;
           return true;
         }
@@ -125,5 +143,11 @@ Future<void> _poll({
 }
 
 extension on ChatMessage {
-  bool _matchesText(String expectedText) => content == expectedText;
+  bool _matchesText(String expectedText, {String? expectedMessageId}) {
+    if (content != expectedText) {
+      return false;
+    }
+    final id = remoteId ?? localId;
+    return expectedMessageId == null || id == expectedMessageId;
+  }
 }

@@ -37,16 +37,19 @@ Future<void> _verifyGroupTextRegression({
     content: appGroupText,
   );
   expect(appGroupMessage.content, appGroupText);
+  final appGroupMessageId = appGroupMessage.remoteId ?? appGroupMessage.localId;
 
   await _waitForGroupMessages(
     groups: groups,
     groupDid: group.groupId,
     expectedText: appGroupText,
+    expectedMessageId: appGroupMessageId,
   );
   await _waitForCliGroupMessages(
     config: config,
     groupDid: group.groupId,
     expectedText: appGroupText,
+    expectedMessageId: appGroupMessageId,
   );
 
   final cliMentionMember = await _findGroupMember(
@@ -77,6 +80,7 @@ Future<void> _verifyGroupTextRegression({
   );
   expect(mentionMessage.content, appGroupMentionText);
   expect(mentionMessage.mentions, hasLength(1));
+  final mentionMessageId = mentionMessage.remoteId ?? mentionMessage.localId;
   expect(
     mentionMessage.payloadJson,
     allOf(
@@ -90,11 +94,13 @@ Future<void> _verifyGroupTextRegression({
     groups: groups,
     groupDid: group.groupId,
     expectedText: appGroupMentionText,
+    expectedMessageId: mentionMessageId,
   );
   await _waitForCliGroupMessages(
     config: config,
     groupDid: group.groupId,
     expectedText: appGroupMentionText,
+    expectedMessageId: mentionMessageId,
   );
 
   final cliMember = await _findGroupMember(
@@ -123,6 +129,8 @@ Future<void> _verifyGroupTextRegression({
   );
   expect(memberMentionMessage.content, appGroupMemberMentionText);
   expect(memberMentionMessage.mentions, hasLength(1));
+  final memberMentionMessageId =
+      memberMentionMessage.remoteId ?? memberMentionMessage.localId;
   expect(
     memberMentionMessage.payloadJson,
     allOf(
@@ -136,11 +144,13 @@ Future<void> _verifyGroupTextRegression({
     groups: groups,
     groupDid: group.groupId,
     expectedText: appGroupMemberMentionText,
+    expectedMessageId: memberMentionMessageId,
   );
   await _waitForCliGroupMessages(
     config: config,
     groupDid: group.groupId,
     expectedText: appGroupMemberMentionText,
+    expectedMessageId: memberMentionMessageId,
   );
 
   final cliGroupSend = await _runCli(config, <String>[
@@ -156,11 +166,17 @@ Future<void> _verifyGroupTextRegression({
   if (cliGroupSend.exitCode != 0) {
     fail('CLI group msg send failed: ${_summarizeCliResult(cliGroupSend)}');
   }
+  final cliGroupSentMessageId = _jsonStringAt(
+    cliGroupSend.stdout,
+    const <Object>['data', 'message', 'id'],
+  );
+  expect(cliGroupSentMessageId, isNotNull);
 
   await _waitForGroupMessages(
     groups: groups,
     groupDid: group.groupId,
     expectedText: cliGroupText,
+    expectedMessageId: cliGroupSentMessageId,
   );
   await _expectAppHistoryContainsExactlyOnce(
     messaging: messaging,

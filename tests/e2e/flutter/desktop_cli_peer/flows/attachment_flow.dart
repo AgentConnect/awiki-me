@@ -15,6 +15,8 @@ Future<void> _verifyAttachmentRegression({
   final appAttachmentFilename = 'awiki-e2e-app-$nonce.txt';
   final appAttachmentCaption = 'e2e app attachment ${config.runId} $nonce';
   final appAttachmentBytes = Uint8List.fromList(utf8.encode(appAttachmentText));
+  final appAttachmentSha256Hex = _sha256Hex(appAttachmentBytes);
+  final appAttachmentDigestB64u = _sha256B64u(appAttachmentBytes);
 
   final appAttachmentMessage = await messaging.sendAttachment(
     thread: thread,
@@ -33,12 +35,18 @@ Future<void> _verifyAttachmentRegression({
   expect(appAttachment.mimeType, 'text/plain');
   expect(appAttachment.sizeBytes, appAttachmentBytes.length);
   expect(appAttachmentMessage.content, appAttachmentCaption);
+  final appAttachmentMessageId =
+      appAttachmentMessage.remoteId ?? appAttachmentMessage.localId;
 
-  await _waitForCliHistory(
+  final cliAppAttachment = await _waitForCliAttachmentMessage(
     config: config,
     peerHandle: config.appHandle,
     expectedText: appAttachmentCaption,
+    expectedMessageId: appAttachmentMessageId,
+    expectedAttachmentId: appAttachment.attachmentId,
+    expectedFilename: appAttachmentFilename,
   );
+  expect(cliAppAttachment.digestB64u, appAttachmentDigestB64u);
 
   final cliDownload = File('${downloadDir.path}/from-app-$nonce.txt');
   final cliDownloadResult = await _runCli(config, <String>[
@@ -63,9 +71,22 @@ Future<void> _verifyAttachmentRegression({
     );
   }
   expect(await cliDownload.readAsString(), appAttachmentText);
+  expect(await _fileSha256Hex(cliDownload), appAttachmentSha256Hex);
+  expect(
+    _jsonStringAt(cliDownloadResult.stdout, const <Object>[
+      'data',
+      'attachment',
+      'digest',
+      'value_b64u',
+    ]),
+    appAttachmentDigestB64u,
+  );
 
   final cliAttachmentFilename = 'awiki-e2e-cli-$nonce.txt';
   final cliAttachmentText = 'AWiki E2E CLI attachment ${config.runId} $nonce\n';
+  final cliAttachmentBytes = Uint8List.fromList(utf8.encode(cliAttachmentText));
+  final cliAttachmentSha256Hex = _sha256Hex(cliAttachmentBytes);
+  final cliAttachmentDigestB64u = _sha256B64u(cliAttachmentBytes);
   final cliAttachmentFile = File('${fixtureDir.path}/$cliAttachmentFilename')
     ..writeAsStringSync(cliAttachmentText);
   final cliAttachmentCaption = 'e2e cli attachment ${config.runId} $nonce';
@@ -98,16 +119,29 @@ Future<void> _verifyAttachmentRegression({
   );
   expect(cliSentMessageId, isNotNull);
   expect(cliSentAttachmentId, isNotNull);
+  expect(
+    _jsonStringAt(cliAttachmentSend.stdout, const <Object>[
+      'data',
+      'attachment',
+      'digest',
+      'value_b64u',
+    ]),
+    cliAttachmentDigestB64u,
+  );
 
   final cliAttachmentMessage = await _waitForAppAttachment(
     messaging: messaging,
     thread: thread,
     expectedCaption: cliAttachmentCaption,
     expectedFilename: cliAttachmentFilename,
+    expectedMessageId: cliSentMessageId,
+    expectedAttachmentId: cliSentAttachmentId,
   );
   final receivedAttachment = cliAttachmentMessage.attachment!;
+  expect(cliAttachmentMessage.remoteId, cliSentMessageId);
+  expect(receivedAttachment.attachmentId, cliSentAttachmentId);
   expect(receivedAttachment.mimeType, 'text/plain');
-  expect(receivedAttachment.sizeBytes, utf8.encode(cliAttachmentText).length);
+  expect(receivedAttachment.sizeBytes, cliAttachmentBytes.length);
 
   final appDownload = File('${downloadDir.path}/from-cli-$nonce.txt');
   final downloadResult = await messaging.downloadAttachment(
@@ -118,6 +152,20 @@ Future<void> _verifyAttachmentRegression({
   );
   expect(downloadResult.filename, cliAttachmentFilename);
   expect(downloadResult.mimeType, 'text/plain');
-  expect(downloadResult.sizeBytes, utf8.encode(cliAttachmentText).length);
+  expect(downloadResult.sizeBytes, cliAttachmentBytes.length);
   expect(await appDownload.readAsString(), cliAttachmentText);
+  expect(await _fileSha256Hex(appDownload), cliAttachmentSha256Hex);
+  if (downloadResult.bytes != null) {
+    expect(_sha256Hex(downloadResult.bytes!), cliAttachmentSha256Hex);
+  }
+}
+
+String _sha256Hex(List<int> bytes) => sha256.convert(bytes).toString();
+
+String _sha256B64u(List<int> bytes) {
+  return base64UrlEncode(sha256.convert(bytes).bytes).replaceAll('=', '');
+}
+
+Future<String> _fileSha256Hex(File file) async {
+  return sha256.bind(file.openRead()).first.then((digest) => digest.toString());
 }

@@ -178,7 +178,7 @@ Future<void> _waitForCliRelationshipList({
       if (result.exitCode != 0) {
         return false;
       }
-      return _jsonContainsText(result.stdout, expectedRef);
+      return _cliRelationshipListContainsRef(result.stdout, expectedRef);
     },
   );
 }
@@ -201,7 +201,7 @@ Future<void> _waitForCliRelationshipStatus({
       if (result.exitCode != 0) {
         return false;
       }
-      return _jsonContainsText(result.stdout, expectedRef);
+      return _cliRelationshipStatusMatchesRef(result.stdout, expectedRef);
     },
   );
 }
@@ -216,6 +216,45 @@ bool _relationshipMatchesRef(RelationshipSummary item, String ref) {
     item.handle ?? '',
     item.displayName,
   ].map(_normalizeIdentityRef).where((field) => field.isNotEmpty);
+  return fields.any(
+    (field) =>
+        field == expected ||
+        field.contains(expected) ||
+        expected.contains(field),
+  );
+}
+
+bool _cliRelationshipListContainsRef(String output, String expectedRef) {
+  final expected = _normalizeIdentityRef(expectedRef);
+  if (expected.isEmpty) {
+    return false;
+  }
+  final items = _jsonValueAt(output, const <Object>['data', 'items']);
+  if (items is! List) {
+    return false;
+  }
+  return items.whereType<Map>().any((item) {
+    final map = _cliStringKeyMap(item);
+    return _cliIdentityMapMatchesRef(map, expected);
+  });
+}
+
+bool _cliRelationshipStatusMatchesRef(String output, String expectedRef) {
+  final expected = _normalizeIdentityRef(expectedRef);
+  if (expected.isEmpty) {
+    return false;
+  }
+  final status = _jsonValueAt(output, const <Object>['data']);
+  if (status is! Map) {
+    return false;
+  }
+  return _cliIdentityMapMatchesRef(_cliStringKeyMap(status), expected);
+}
+
+bool _cliIdentityMapMatchesRef(Map<String, Object?> map, String expected) {
+  final fields = <Object?>[map['did'], map['handle']]
+      .map((value) => _normalizeIdentityRef(value?.toString() ?? ''))
+      .where((field) => field.isNotEmpty);
   return fields.any(
     (field) =>
         field == expected ||
