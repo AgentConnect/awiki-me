@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
 import '../../application/conversation_service.dart';
+import '../../application/models/conversation_patch.dart';
 import '../../core/group_display_name.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_display_name.dart';
@@ -52,6 +53,11 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   bool _snapshotBootstrapActive = false;
   int? _snapshotBootstrapAllowedGeneration;
   int _refreshGeneration = 0;
+  StreamSubscription<ConversationListPatch>? _patchSubscription;
+  String? _patchSubscriptionOwnerDid;
+  int _patchSubscriptionToken = 0;
+  int _lastPatchVersion = 0;
+  Future<void>? _patchRepairOperation;
   final Map<String, DateTime> _locallyHiddenConversationKeys =
       <String, DateTime>{};
 
@@ -79,6 +85,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     if (!state.isLoading) {
       state = state.copyWith(isLoading: true);
     }
+    _ensurePatchSubscriptionForCurrentSession();
     return _waitForRefresh(activeRefresh);
   }
 
@@ -108,6 +115,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     if (!state.isLoading) {
       state = state.copyWith(isLoading: true);
     }
+    _ensurePatchSubscriptionForCurrentSession();
     return _waitForRefresh(activeRefresh);
   }
 
@@ -144,6 +152,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     try {
       final session = ref.read(sessionProvider).session;
       if (session == null) {
+        await _cancelPatchSubscription();
         if (generation != _refreshGeneration) {
           return;
         }
@@ -154,6 +163,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         await _updateBadgeCountBestEffort(0);
         return;
       }
+      _ensurePatchSubscription(ownerDid: session.did, generation: generation);
       final conversationService = ref.read(conversationServiceProvider);
       if (!fastLocal) {
         final conversations = await AwikiPerformanceLogger.async(
@@ -294,6 +304,253 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         'unread': state.unreadCount,
       },
       level: AwikiPerformanceLogLevel.verbose,
+    );
+  }
+
+  void _ensurePatchSubscriptionForCurrentSession() {
+    final session = ref.read(sessionProvider).session;
+    if (session == null) {
+      unawaited(_cancelPatchSubscription());
+      return;
+    }
+    _ensurePatchSubscription(
+      ownerDid: session.did,
+      generation: _refreshGeneration,
+    );
+  }
+
+  void _ensurePatchSubscription({
+    required String ownerDid,
+    required int generation,
+  }) {
+    if (_patchSubscriptionOwnerDid == ownerDid && _patchSubscription != null) {
+      return;
+    }
+    unawaited(_cancelPatchSubscription());
+    _patchSubscriptionOwnerDid = ownerDid;
+    final token = ++_patchSubscriptionToken;
+    _lastPatchVersion = 0;
+    _patchSubscription = ref
+        .read(conversationServiceProvider)
+        .watchConversationPatches(ownerDid: ownerDid)
+        .listen(
+          (patch) => _handleConversationPatch(
+            patch,
+            ownerDid: ownerDid,
+            token: token,
+          ),
+          onError: (_) => _schedulePatchRepair(
+            ownerDid: ownerDid,
+            generation: generation,
+            token: token,
+            reason: 'stream_error',
+          ),
+          onDone: () => _schedulePatchRepair(
+            ownerDid: ownerDid,
+            generation: generation,
+            token: token,
+            reason: 'stream_closed',
+          ),
+        );
+  }
+
+  Future<void> _cancelPatchSubscription() async {
+    final subscription = _patchSubscription;
+    _patchSubscription = null;
+    _patchSubscriptionOwnerDid = null;
+    _patchSubscriptionToken += 1;
+    _lastPatchVersion = 0;
+    await subscription?.cancel();
+  }
+
+  void _handleConversationPatch(
+    ConversationListPatch patch, {
+    required String ownerDid,
+    required int token,
+  }) {
+    if (!_canApplyPatch(
+      patch,
+      ownerDid: ownerDid,
+      token: token,
+    )) {
+      return;
+    }
+    if (patch.version <= _lastPatchVersion) {
+      return;
+    }
+    if (_lastPatchVersion != 0 && patch.version != _lastPatchVersion + 1) {
+      _schedulePatchRepair(
+        ownerDid: ownerDid,
+        generation: _refreshGeneration,
+        token: token,
+        reason: 'version_gap',
+      );
+      _lastPatchVersion = patch.version;
+      return;
+    }
+    _lastPatchVersion = patch.version;
+    switch (patch.kind) {
+      case ConversationListPatchKind.reset:
+        _applyPatchReset(patch);
+      case ConversationListPatchKind.upsert:
+        final item = patch.item;
+        if (item == null) {
+          _schedulePatchRepair(
+            ownerDid: ownerDid,
+            generation: _refreshGeneration,
+            token: token,
+            reason: 'missing_upsert_item',
+          );
+          return;
+        }
+        _applyPatchUpsert(item);
+      case ConversationListPatchKind.remove:
+        _applyPatchRemove(patch);
+      case ConversationListPatchKind.reorder:
+        if (!_applyPatchReorder(patch)) {
+          _schedulePatchRepair(
+            ownerDid: ownerDid,
+            generation: _refreshGeneration,
+            token: token,
+            reason: 'missing_reorder_item',
+          );
+        }
+      case ConversationListPatchKind.repairRequired:
+        _schedulePatchRepair(
+          ownerDid: ownerDid,
+          generation: _refreshGeneration,
+          token: token,
+          reason: patch.reason ?? 'repair_required',
+        );
+    }
+  }
+
+  bool _canApplyPatch(
+    ConversationListPatch patch, {
+    required String ownerDid,
+    required int token,
+  }) {
+    return token == _patchSubscriptionToken &&
+        patch.ownerDid == ownerDid &&
+        _patchSubscriptionOwnerDid == ownerDid &&
+        ref.read(sessionProvider).session?.did == ownerDid;
+  }
+
+  void _applyPatchReset(ConversationListPatch patch) {
+    state = state.copyWith(
+      conversations: _filterLocallyHiddenConversations(
+        _mergeConversationRefresh(
+          refreshed: patch.items,
+          local: state.conversations,
+          keepLocalOnly: false,
+        ),
+      ),
+      isLoading: false,
+    );
+    _snapshotBootstrapActive = false;
+    unawaited(_updateBadgeCountBestEffort(state.unreadCount));
+  }
+
+  void _applyPatchUpsert(ConversationSummary conversation) {
+    if (_isLocallyHidden(conversation)) {
+      return;
+    }
+    _snapshotBootstrapActive = false;
+    _upsertConversation(conversation);
+  }
+
+  void _applyPatchRemove(ConversationListPatch patch) {
+    final threadId = patch.threadId?.trim();
+    final conversationKey = patch.conversationKey?.trim();
+    final next = state.conversations.where((item) {
+      if (threadId != null && threadId.isNotEmpty && item.threadId == threadId) {
+        return false;
+      }
+      if (conversationKey != null &&
+          conversationKey.isNotEmpty &&
+          item.visibilityKeys.contains(conversationKey)) {
+        return false;
+      }
+      return true;
+    }).toList(growable: false);
+    if (next.length == state.conversations.length) {
+      return;
+    }
+    state = state.copyWith(conversations: next);
+    _snapshotBootstrapActive = false;
+    unawaited(_updateBadgeCountBestEffort(state.unreadCount));
+  }
+
+  bool _applyPatchReorder(ConversationListPatch patch) {
+    final threadId = patch.threadId?.trim();
+    if (threadId == null || threadId.isEmpty) {
+      return false;
+    }
+    final current = state.conversations.toList(growable: true);
+    final currentIndex = current.indexWhere((item) => item.threadId == threadId);
+    if (currentIndex < 0) {
+      return false;
+    }
+    final item = current.removeAt(currentIndex);
+    final targetIndex = (patch.index ?? 0).clamp(0, current.length);
+    current.insert(targetIndex, item);
+    state = state.copyWith(conversations: current);
+    _snapshotBootstrapActive = false;
+    unawaited(_updateBadgeCountBestEffort(state.unreadCount));
+    return true;
+  }
+
+  void _schedulePatchRepair({
+    required String ownerDid,
+    required int generation,
+    required int token,
+    required String reason,
+  }) {
+    if (_patchRepairOperation != null) {
+      return;
+    }
+    _patchRepairOperation = _repairFromPatchStream(
+      ownerDid: ownerDid,
+      generation: generation,
+      token: token,
+      reason: reason,
+    ).whenComplete(() {
+      _patchRepairOperation = null;
+    });
+  }
+
+  Future<void> _repairFromPatchStream({
+    required String ownerDid,
+    required int generation,
+    required int token,
+    required String reason,
+  }) async {
+    if (token != _patchSubscriptionToken ||
+        generation != _refreshGeneration ||
+        ref.read(sessionProvider).session?.did != ownerDid) {
+      return;
+    }
+    final repair = await AwikiPerformanceLogger.async(
+      'conversation_list.patch_repair.service',
+      () => ref
+          .read(conversationServiceProvider)
+          .repairConversationStore(ownerDid: ownerDid),
+      fields: <String, Object?>{'reason': reason},
+      level: AwikiPerformanceLogLevel.verbose,
+    );
+    if (token != _patchSubscriptionToken ||
+        generation != _refreshGeneration ||
+        ref.read(sessionProvider).session?.did != ownerDid) {
+      return;
+    }
+    if (repair.version > _lastPatchVersion) {
+      _lastPatchVersion = repair.version;
+    }
+    await _applyConversationRefresh(
+      repair.conversations,
+      generation: generation,
+      label: 'conversation_list.patch_repair',
+      keepLocalOnly: false,
     );
   }
 
@@ -526,9 +783,16 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     _refreshOperationFastLocal = false;
     _snapshotBootstrapActive = false;
     _snapshotBootstrapAllowedGeneration = null;
+    await _cancelPatchSubscription();
     _locallyHiddenConversationKeys.clear();
     state = const ConversationListState();
     await _updateBadgeCountBestEffort(0);
+  }
+
+  @override
+  void dispose() {
+    unawaited(_cancelPatchSubscription());
+    super.dispose();
   }
 
   Future<ConversationSummary?> _normalizeConversationForRecents(

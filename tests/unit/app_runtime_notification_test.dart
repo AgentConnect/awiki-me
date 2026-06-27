@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -747,6 +748,22 @@ class _RecordingConversationService implements ConversationService {
     required String ownerDid,
   }) async {
     return const <ConversationSummary>[];
+  }
+
+  @override
+  Stream<ConversationListPatch> watchConversationPatches({
+    required String ownerDid,
+  }) {
+    return StreamController<ConversationListPatch>().stream;
+  }
+
+  @override
+  Future<ConversationStoreRepairResult> repairConversationStore({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) async {
+    return ConversationStoreRepairResult(conversations: items, version: 1);
   }
 
   @override

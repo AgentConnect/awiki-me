@@ -7,6 +7,7 @@ import '../domain/entities/conversation_summary.dart';
 import '../core/performance_logger.dart';
 import 'agent/agent_control_projection.dart';
 import 'models/app_thread_ref.dart';
+import 'models/conversation_patch.dart';
 import 'models/product_local_models.dart';
 import 'ports/agent_inventory_port.dart';
 import 'ports/conversation_core_port.dart';
@@ -15,6 +16,16 @@ import 'product_local_store.dart';
 abstract interface class ConversationService {
   Future<List<ConversationSummary>> loadConversationSnapshot({
     required String ownerDid,
+  });
+
+  Stream<ConversationListPatch> watchConversationPatches({
+    required String ownerDid,
+  });
+
+  Future<ConversationStoreRepairResult> repairConversationStore({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
   });
 
   Future<List<ConversationSummary>> listConversationSummariesFast({
@@ -156,6 +167,133 @@ class ImCoreConversationService implements ConversationService {
       level: AwikiPerformanceLogLevel.verbose,
     );
     return visible;
+  }
+
+  @override
+  Stream<ConversationListPatch> watchConversationPatches({
+    required String ownerDid,
+  }) async* {
+    await for (final patch in _conversations.watchConversationPatches()) {
+      if (patch.ownerDid != ownerDid) {
+        continue;
+      }
+      switch (patch.kind) {
+        case CoreConversationPatchKind.reset:
+          yield await _normalizePatchReset(ownerDid: ownerDid, patch: patch);
+        case CoreConversationPatchKind.upsert:
+          final item = patch.item;
+          if (item == null) {
+            yield _repairPatch(
+              ownerDid: ownerDid,
+              version: patch.version,
+              unreadTotal: patch.unreadTotal,
+              reason: 'missing_upsert_item',
+            );
+            continue;
+          }
+          final normalized = await normalizeConversationForRecents(
+            ownerDid: ownerDid,
+            conversation: item,
+          );
+          if (normalized == null) {
+            yield ConversationListPatch(
+              kind: ConversationListPatchKind.remove,
+              ownerDid: ownerDid,
+              version: patch.version,
+              unreadTotal: patch.unreadTotal,
+              threadId: item.threadId,
+              conversationKey: item.conversationKey,
+            );
+            continue;
+          }
+          yield ConversationListPatch(
+            kind: ConversationListPatchKind.upsert,
+            ownerDid: ownerDid,
+            version: patch.version,
+            unreadTotal: patch.unreadTotal,
+            item: normalized,
+          );
+        case CoreConversationPatchKind.remove:
+          yield ConversationListPatch(
+            kind: ConversationListPatchKind.remove,
+            ownerDid: ownerDid,
+            version: patch.version,
+            unreadTotal: patch.unreadTotal,
+            threadId: patch.threadId,
+          );
+        case CoreConversationPatchKind.reorder:
+          yield ConversationListPatch(
+            kind: ConversationListPatchKind.reorder,
+            ownerDid: ownerDid,
+            version: patch.version,
+            unreadTotal: patch.unreadTotal,
+            threadId: patch.threadId,
+            index: patch.index,
+          );
+        case CoreConversationPatchKind.repairRequired:
+          yield _repairPatch(
+            ownerDid: ownerDid,
+            version: patch.version,
+            unreadTotal: patch.unreadTotal,
+            reason: patch.reason ?? 'repair_required',
+          );
+      }
+    }
+  }
+
+  Future<ConversationListPatch> _normalizePatchReset({
+    required String ownerDid,
+    required CoreConversationPatch patch,
+  }) async {
+    final visible = await enrichConversationSummaries(
+      ownerDid: ownerDid,
+      conversations: patch.items,
+    );
+    return ConversationListPatch(
+      kind: ConversationListPatchKind.reset,
+      ownerDid: ownerDid,
+      version: patch.version,
+      unreadTotal: patch.unreadTotal,
+      items: visible,
+    );
+  }
+
+  ConversationListPatch _repairPatch({
+    required String ownerDid,
+    required int version,
+    required int unreadTotal,
+    required String reason,
+  }) {
+    return ConversationListPatch(
+      kind: ConversationListPatchKind.repairRequired,
+      ownerDid: ownerDid,
+      version: version,
+      unreadTotal: unreadTotal,
+      reason: reason,
+    );
+  }
+
+  @override
+  Future<ConversationStoreRepairResult> repairConversationStore({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) async {
+    final patch = await AwikiPerformanceLogger.async(
+      'conversation_service.repair_store.core',
+      _conversations.repairConversationStore,
+      fields: <String, Object?>{'limit': limit, 'unread_only': unreadOnly},
+      level: AwikiPerformanceLogLevel.verbose,
+    );
+    final conversations = await listConversations(
+      ownerDid: ownerDid,
+      limit: limit,
+      unreadOnly: unreadOnly,
+    );
+    return ConversationStoreRepairResult(
+      conversations: conversations,
+      version: patch.version,
+    );
   }
 
   @override

@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_config.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_conversation_adapter.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_paths.dart';
@@ -77,6 +80,79 @@ void main() {
       );
     },
   );
+
+  test('watchConversationPatches maps SDK upsert patch to app core patch', () async {
+    final client = _FakeClient();
+    final adapter = AwikiImCoreConversationAdapter(
+      runtime: _FakeRuntime(client),
+    );
+    final patchFuture = adapter.watchConversationPatches().first;
+    await Future<void>.delayed(Duration.zero);
+
+    client.messages.emitPatch(
+      const core.ConversationStorePatch(
+        kind: core.ConversationStorePatchKind.upsert,
+        ownerIdentityId: 'alice-id',
+        ownerDid: 'did:alice',
+        version: 1,
+        unreadTotal: 2,
+        item: core.ConversationSnapshotItem(
+          threadKind: 'direct',
+          threadId: 'did:bob',
+          participants: <String>['did:bob'],
+          unreadCount: 2,
+          messageCount: 1,
+          lastMessageAt: '2026-06-27T00:00:00Z',
+          lastMessage: core.ConversationSnapshotMessage(
+            id: 'msg-1',
+            threadKind: 'direct',
+            threadId: 'did:bob',
+            direction: 'incoming',
+            sender: 'did:bob',
+            body: core.ConversationSnapshotMessageBody(
+              text: 'hello',
+              kind: 'text',
+            ),
+            sentAt: '2026-06-27T00:00:00Z',
+          ),
+        ),
+      ),
+    );
+
+    final patch = await patchFuture.timeout(const Duration(seconds: 1));
+    expect(patch.kind.name, 'upsert');
+    expect(patch.ownerDid, 'did:alice');
+    expect(patch.item?.threadId, 'dm:did:alice:did:bob');
+    expect(patch.item?.lastMessagePreview, 'hello');
+    expect(patch.item?.unreadCount, 2);
+  });
+
+  test('watchConversationPatches maps SDK reorder patch without removing row', () async {
+    final client = _FakeClient();
+    final adapter = AwikiImCoreConversationAdapter(
+      runtime: _FakeRuntime(client),
+    );
+    final patchFuture = adapter.watchConversationPatches().first;
+    await Future<void>.delayed(Duration.zero);
+
+    client.messages.emitPatch(
+      const core.ConversationStorePatch(
+        kind: core.ConversationStorePatchKind.reorder,
+        ownerIdentityId: 'alice-id',
+        ownerDid: 'did:alice',
+        version: 2,
+        unreadTotal: 0,
+        threadKind: 'direct',
+        threadId: 'did:bob',
+        index: 0,
+      ),
+    );
+
+    final patch = await patchFuture.timeout(const Duration(seconds: 1));
+    expect(patch.kind, CoreConversationPatchKind.reorder);
+    expect(patch.threadId, 'did:bob');
+    expect(patch.index, 0);
+  });
 }
 
 class _FakeRuntime extends AwikiImCoreRuntime {
@@ -100,6 +176,11 @@ class _FakeRuntime extends AwikiImCoreRuntime {
     Future<T> Function(core.AwikiImClient client) action,
   ) {
     return action(client);
+  }
+
+  @override
+  Future<core.AwikiImClient> currentClient() async {
+    return client;
   }
 }
 
@@ -133,10 +214,33 @@ class _FakeIdentityApi implements core.IdentityApi {
 }
 
 class _FakeMessageApi implements core.MessageApi {
+  final StreamController<core.ConversationStorePatch> _patches =
+      StreamController<core.ConversationStorePatch>.broadcast(sync: true);
   int markThreadReadCalls = 0;
   int historyCalls = 0;
   int markReadCalls = 0;
   core.ThreadRef? lastMarkThreadReadThread;
+
+  void emitPatch(core.ConversationStorePatch patch) {
+    _patches.add(patch);
+  }
+
+  @override
+  Stream<core.ConversationStorePatch> watchConversationPatches() {
+    return _patches.stream;
+  }
+
+  @override
+  Future<core.ConversationStorePatch> repairConversationStore() async {
+    return const core.ConversationStorePatch(
+      kind: core.ConversationStorePatchKind.repairRequired,
+      ownerIdentityId: 'alice-id',
+      ownerDid: 'did:alice',
+      version: 1,
+      unreadTotal: 0,
+      reason: 'test',
+    );
+  }
 
   @override
   Future<core.MarkThreadReadResult> markThreadRead(

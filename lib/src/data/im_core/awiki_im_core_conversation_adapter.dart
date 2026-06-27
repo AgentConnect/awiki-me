@@ -1,6 +1,7 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
 import '../../application/models/app_thread_ref.dart';
+import '../../application/models/conversation_patch.dart';
 import '../../application/ports/conversation_core_port.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
@@ -75,6 +76,34 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
   }
 
   @override
+  Stream<CoreConversationPatch> watchConversationPatches() async* {
+    final client = await _runtime.currentClient();
+    final ownerDid = (await client.identity.current()).did;
+    await for (final patch in client.messages.watchConversationPatches()) {
+      final mapped = _patchFromCore(patch, ownerDid: ownerDid);
+      if (mapped != null) {
+        yield mapped;
+      }
+    }
+  }
+
+  @override
+  Future<CoreConversationPatch> repairConversationStore() async {
+    return _runtime.withCurrentClient((client) async {
+      final ownerDid = (await client.identity.current()).did;
+      final patch = await client.messages.repairConversationStore();
+      return _patchFromCore(patch, ownerDid: ownerDid) ??
+          CoreConversationPatch(
+            kind: CoreConversationPatchKind.repairRequired,
+            ownerDid: ownerDid,
+            version: patch.version,
+            unreadTotal: patch.unreadTotal,
+            reason: 'owner_mismatch',
+          );
+    });
+  }
+
+  @override
   Future<List<ConversationSummary>> listConversations({
     int limit = 100,
     bool unreadOnly = false,
@@ -116,6 +145,80 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
       );
       return conversations;
     });
+  }
+
+  CoreConversationPatch? _patchFromCore(
+    core.ConversationStorePatch patch, {
+    required String ownerDid,
+  }) {
+    if (patch.ownerDid != ownerDid) {
+      return null;
+    }
+    switch (patch.kind) {
+      case core.ConversationStorePatchKind.reset:
+        return CoreConversationPatch(
+          kind: CoreConversationPatchKind.reset,
+          ownerDid: patch.ownerDid,
+          version: patch.version,
+          unreadTotal: patch.unreadTotal,
+          items: patch.items
+              .where(
+                (conversation) => !_hasControlSnapshotLastMessage(
+                  conversation,
+                ),
+              )
+              .map(
+                (conversation) => _mappers.conversationFromSnapshot(
+                  conversation,
+                  ownerDid: ownerDid,
+                ),
+              )
+              .toList(growable: false),
+        );
+      case core.ConversationStorePatchKind.upsert:
+        final item = patch.item;
+        if (item == null || _hasControlSnapshotLastMessage(item)) {
+          return CoreConversationPatch(
+            kind: CoreConversationPatchKind.remove,
+            ownerDid: patch.ownerDid,
+            version: patch.version,
+            unreadTotal: patch.unreadTotal,
+            threadId: item?.threadId ?? patch.threadId,
+          );
+        }
+        return CoreConversationPatch(
+          kind: CoreConversationPatchKind.upsert,
+          ownerDid: patch.ownerDid,
+          version: patch.version,
+          unreadTotal: patch.unreadTotal,
+          item: _mappers.conversationFromSnapshot(item, ownerDid: ownerDid),
+        );
+      case core.ConversationStorePatchKind.remove:
+        return CoreConversationPatch(
+          kind: CoreConversationPatchKind.remove,
+          ownerDid: patch.ownerDid,
+          version: patch.version,
+          unreadTotal: patch.unreadTotal,
+          threadId: patch.threadId,
+        );
+      case core.ConversationStorePatchKind.reorder:
+        return CoreConversationPatch(
+          kind: CoreConversationPatchKind.reorder,
+          ownerDid: patch.ownerDid,
+          version: patch.version,
+          unreadTotal: patch.unreadTotal,
+          threadId: patch.threadId,
+          index: patch.index,
+        );
+      case core.ConversationStorePatchKind.repairRequired:
+        return CoreConversationPatch(
+          kind: CoreConversationPatchKind.repairRequired,
+          ownerDid: patch.ownerDid,
+          version: patch.version,
+          unreadTotal: patch.unreadTotal,
+          reason: patch.reason,
+        );
+    }
   }
 
   @override

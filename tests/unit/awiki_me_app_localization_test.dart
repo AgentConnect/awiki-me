@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/ports/conversation_core_port.dart';
 import 'package:awiki_me/src/data/local/awiki_product_local_store.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
@@ -319,6 +322,21 @@ class _StaticConversationCore implements ConversationCorePort {
 
   @override
   Future<void> clearConversationSnapshot() async {}
+
+  @override
+  Stream<CoreConversationPatch> watchConversationPatches() {
+    return StreamController<CoreConversationPatch>().stream;
+  }
+
+  @override
+  Future<CoreConversationPatch> repairConversationStore() async {
+    return const CoreConversationPatch(
+      kind: CoreConversationPatchKind.reset,
+      ownerDid: 'did:me',
+      version: 1,
+      unreadTotal: 0,
+    );
+  }
 
   @override
   Future<List<ConversationSummary>> listConversations({

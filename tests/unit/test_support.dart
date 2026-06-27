@@ -8,6 +8,7 @@ import 'package:awiki_me/src/application/attachment_cache_service.dart';
 import 'package:awiki_me/src/application/attachment_picker_service.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/daemon_subkey_authorization_revoke_result.dart';
+import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/group_application_service.dart';
@@ -1402,6 +1403,27 @@ class FakeConversationService implements ConversationService {
     required String ownerDid,
   }) async {
     return gateway.conversations;
+  }
+
+  @override
+  Stream<ConversationListPatch> watchConversationPatches({
+    required String ownerDid,
+  }) {
+    return StreamController<ConversationListPatch>().stream;
+  }
+
+  @override
+  Future<ConversationStoreRepairResult> repairConversationStore({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) {
+    return gateway.listConversations().then(
+      (conversations) => ConversationStoreRepairResult(
+        conversations: conversations,
+        version: 1,
+      ),
+    );
   }
 
   @override

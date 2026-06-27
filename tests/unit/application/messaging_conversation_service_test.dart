@@ -4,6 +4,7 @@ import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/conversation_core_port.dart';
@@ -172,6 +173,88 @@ void main() {
       ]);
       expect(conversations.first.displayName, 'Pinned local');
       expect(pinnedRow.displayName, 'Pinned from snapshot');
+    });
+
+    test('watchConversationPatches normalizes upsert and repair patches', () async {
+      final core = _FakeConversations();
+      final store = InMemoryAwikiProductLocalStore();
+      await store.upsertConversationOverlay(
+        ProductConversationOverlay(
+          ownerDid: 'did:alice',
+          threadId: 'thread-patched',
+          customTitle: 'Patched local title',
+          updatedAt: DateTime.utc(2026, 5, 23, 9),
+        ),
+      );
+      final service = ImCoreConversationService(
+        conversations: core,
+        localStore: store,
+      );
+      final patchStream = service.watchConversationPatches(ownerDid: 'did:alice');
+      final firstPatch = patchStream.first;
+      await Future<void>.delayed(Duration.zero);
+
+      core.emitPatch(
+        CoreConversationPatch(
+          kind: CoreConversationPatchKind.upsert,
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 1,
+          item: _conversation(
+            'thread-patched',
+            minutesAgo: 1,
+            displayName: 'Patched core title',
+          ),
+        ),
+      );
+      final patch = await firstPatch.timeout(const Duration(seconds: 1));
+      expect(patch.kind, ConversationListPatchKind.upsert);
+      expect(patch.item?.displayName, 'Patched local title');
+
+      final repairPatchStream = service.watchConversationPatches(
+        ownerDid: 'did:alice',
+      );
+      final repairPatchFuture = repairPatchStream.first;
+      await Future<void>.delayed(Duration.zero);
+      core.emitPatch(
+        const CoreConversationPatch(
+          kind: CoreConversationPatchKind.repairRequired,
+          ownerDid: 'did:alice',
+          version: 2,
+          unreadTotal: 1,
+          reason: 'subscriber_lag',
+        ),
+      );
+      final repairPatch = await repairPatchFuture.timeout(
+        const Duration(seconds: 1),
+      );
+      expect(repairPatch.kind, ConversationListPatchKind.repairRequired);
+      expect(repairPatch.reason, 'subscriber_lag');
+
+      final reorderPatchStream = service.watchConversationPatches(
+        ownerDid: 'did:alice',
+      );
+      final reorderPatchFuture = reorderPatchStream.first;
+      await Future<void>.delayed(Duration.zero);
+      core.emitPatch(
+        const CoreConversationPatch(
+          kind: CoreConversationPatchKind.reorder,
+          ownerDid: 'did:alice',
+          version: 3,
+          unreadTotal: 1,
+          threadId: 'thread-patched',
+          index: 0,
+        ),
+      );
+      final reorderPatch = await reorderPatchFuture.timeout(
+        const Duration(seconds: 1),
+      );
+      expect(reorderPatch.kind, ConversationListPatchKind.reorder);
+      expect(reorderPatch.threadId, 'thread-patched');
+      expect(reorderPatch.index, 0);
+
+      await service.repairConversationStore(ownerDid: 'did:alice');
+      expect(core.repairCount, 1);
     });
 
     test(
@@ -983,9 +1066,16 @@ class _FakeConversations implements ConversationCorePort {
 
   final List<ConversationSummary> items;
   final List<ConversationSummary> snapshotItems;
+  final StreamController<CoreConversationPatch> _patches =
+      StreamController<CoreConversationPatch>.broadcast(sync: true);
   int listCount = 0;
   int snapshotCount = 0;
   int markReadCount = 0;
+  int repairCount = 0;
+
+  void emitPatch(CoreConversationPatch patch) {
+    _patches.add(patch);
+  }
 
   @override
   Future<List<ConversationSummary>> loadConversationSnapshot() async {
@@ -995,6 +1085,22 @@ class _FakeConversations implements ConversationCorePort {
 
   @override
   Future<void> clearConversationSnapshot() async {}
+
+  @override
+  Stream<CoreConversationPatch> watchConversationPatches() {
+    return _patches.stream;
+  }
+
+  @override
+  Future<CoreConversationPatch> repairConversationStore() async {
+    repairCount += 1;
+    return const CoreConversationPatch(
+      kind: CoreConversationPatchKind.reset,
+      ownerDid: 'did:alice',
+      version: 1,
+      unreadTotal: 0,
+    );
+  }
 
   @override
   Future<List<ConversationSummary>> listConversations({
