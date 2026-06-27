@@ -13,6 +13,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart'
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
+import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -188,40 +189,88 @@ void main() {
       },
     );
 
-    test('hides recents by stable direct peer key', () async {
-      final conversation = _conversation(
-        'dm:alice:old-did',
-        targetDid: 'did:old-bob',
-        targetPeer: 'bob.anpclaw.com',
-        minutesAgo: 1,
-      );
-      final core = _FakeConversations(
-        items: <ConversationSummary>[conversation],
-      );
-      final store = InMemoryAwikiProductLocalStore();
-      final service = ImCoreConversationService(
-        conversations: core,
-        localStore: store,
-      );
+    test(
+      'hides recents by stable direct DID and keeps handle as fallback',
+      () async {
+        final conversation = _conversation(
+          'dm:alice:old-did',
+          targetDid: 'did:old-bob',
+          targetPeer: 'bob.anpclaw.com',
+          minutesAgo: 1,
+        );
+        final core = _FakeConversations(
+          items: <ConversationSummary>[conversation],
+        );
+        final store = InMemoryAwikiProductLocalStore();
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: store,
+        );
 
-      await service.hideConversationFromRecents(
-        ownerDid: 'did:alice',
-        conversation: conversation,
-      );
-
-      final conversations = await service.listConversations(
-        ownerDid: 'did:alice',
-      );
-
-      expect(conversations, isEmpty);
-      expect(
-        (await store.loadConversationOverlay(
+        await service.hideConversationFromRecents(
           ownerDid: 'did:alice',
-          threadId: 'direct:bob.anpclaw.com',
-        ))?.hidden,
-        isTrue,
-      );
-    });
+          conversation: conversation,
+        );
+
+        final conversations = await service.listConversations(
+          ownerDid: 'did:alice',
+        );
+
+        expect(conversations, isEmpty);
+        expect(
+          (await store.loadConversationOverlay(
+            ownerDid: 'did:alice',
+            threadId: 'direct-did:did:old-bob',
+          ))?.hidden,
+          isTrue,
+        );
+        expect(
+          (await store.loadConversationOverlay(
+            ownerDid: 'did:alice',
+            threadId: 'direct-handle:bob.anpclaw.com',
+          ))?.hidden,
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'does not hide a newer message after local delete waterline',
+      () async {
+        final conversation = _conversation(
+          'dm:alice:old-did',
+          targetDid: 'did:old-bob',
+          targetPeer: 'bob.anpclaw.com',
+          minutesAgo: 1,
+        );
+        final newerConversation = _conversation(
+          'dm:alice:old-did',
+          targetDid: 'did:old-bob',
+          targetPeer: 'bob.anpclaw.com',
+          minutesAgo: 0,
+        );
+        final store = InMemoryAwikiProductLocalStore();
+        final service = ImCoreConversationService(
+          conversations: _FakeConversations(
+            items: <ConversationSummary>[newerConversation],
+          ),
+          localStore: store,
+        );
+
+        await service.hideConversationFromRecents(
+          ownerDid: 'did:alice',
+          conversation: conversation,
+          updatedAt: DateTime.utc(2026, 5, 23, 8, 59, 30),
+        );
+
+        final conversations = await service.listConversations(
+          ownerDid: 'did:alice',
+        );
+
+        expect(conversations, hasLength(1));
+        expect(conversations.single.threadId, 'dm:alice:old-did');
+      },
+    );
 
     test('restores hidden direct conversation when opened again', () async {
       final conversation = _conversation(
@@ -507,6 +556,129 @@ void main() {
         );
 
         expect(merged.single.visibilityKey, 'runtime:did:agent:runtime');
+        for (final key in <String>[
+          'runtime:did:agent:runtime',
+          'direct:did:agent:runtime',
+          'direct-handle:zhuocheng-test-hermes.anpclaw.com',
+          'direct-handle:zhuocheng-test-hermes',
+          'dm:peer-scope:v1:runtime',
+        ]) {
+          expect(
+            (await store.loadConversationOverlay(
+              ownerDid: 'did:human',
+              threadId: key,
+            ))?.hidden,
+            isTrue,
+            reason: key,
+          );
+        }
+        expect(conversations, isEmpty);
+      },
+    );
+
+    test(
+      'does not merge different DIDs that temporarily share one handle',
+      () async {
+        final core = _FakeConversations(
+          items: <ConversationSummary>[
+            _conversation(
+              'dm:alice:old-bob',
+              targetDid: 'did:old-bob',
+              targetPeer: 'bob.anpclaw.com',
+              minutesAgo: 2,
+            ),
+            _conversation(
+              'dm:alice:new-bob',
+              targetDid: 'did:new-bob',
+              targetPeer: 'bob.anpclaw.com',
+              minutesAgo: 1,
+            ),
+          ],
+        );
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: InMemoryAwikiProductLocalStore(),
+        );
+
+        final conversations = await service.listConversations(
+          ownerDid: 'did:alice',
+        );
+
+        expect(conversations, hasLength(2));
+        expect(
+          conversations.map((conversation) => conversation.conversationKey),
+          containsAll(<String>[
+            'direct-did:did:old-bob',
+            'direct-did:did:new-bob',
+          ]),
+        );
+      },
+    );
+
+    test(
+      'hidden DID conversation also suppresses an older handle-only projection',
+      () async {
+        final conversation = _conversation(
+          'dm:alice:old-bob',
+          targetDid: 'did:old-bob',
+          targetPeer: 'bob.anpclaw.com',
+          minutesAgo: 1,
+        );
+        final handleOnlyConversation = _conversation(
+          'dm:peer-scope:bob',
+          targetDid: '',
+          targetPeer: 'bob.anpclaw.com',
+          minutesAgo: 1,
+        );
+        final store = InMemoryAwikiProductLocalStore();
+        final service = ImCoreConversationService(
+          conversations: _FakeConversations(
+            items: <ConversationSummary>[handleOnlyConversation],
+          ),
+          localStore: store,
+        );
+
+        await service.hideConversationFromRecents(
+          ownerDid: 'did:alice',
+          conversation: conversation,
+        );
+
+        final conversations = await service.listConversations(
+          ownerDid: 'did:alice',
+        );
+
+        expect(conversations, isEmpty);
+      },
+    );
+
+    test(
+      'keeps runtime conversation hidden when agent projection is unavailable',
+      () async {
+        final didRow = _conversation(
+          'dm:did:human:did:agent:runtime',
+          targetDid: 'did:agent:runtime',
+          targetPeer: 'did:agent:runtime',
+          minutesAgo: 1,
+          displayName: 'zhuocheng-test-hermes',
+        );
+        final store = InMemoryAwikiProductLocalStore();
+        await store.setConversationHidden(
+          ownerDid: 'did:human',
+          conversationKey: 'runtime:did:agent:runtime',
+          hidden: true,
+          updatedAt: DateTime.utc(2026, 5, 23, 9),
+        );
+        final service = ImCoreConversationService(
+          conversations: _FakeConversations(
+            items: <ConversationSummary>[didRow],
+          ),
+          localStore: store,
+        );
+
+        final conversations = await service.listConversations(
+          ownerDid: 'did:human',
+        );
+
         expect(conversations, isEmpty);
       },
     );
@@ -711,6 +883,7 @@ class _FakeMessages implements MessageCorePort, LocalHistoryMessageCorePort {
     required AppThreadRef thread,
     required AttachmentDraft attachment,
     String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? idempotencyKey,
   }) async {
     return _message(caption ?? attachment.filename);

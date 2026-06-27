@@ -5,22 +5,58 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 
+enum AwikiPerformanceLogLevel { summary, verbose }
+
 class AwikiPerformanceLogger {
   const AwikiPerformanceLogger._();
 
-  static const bool enabled = bool.fromEnvironment('AWIKI_PERF_LOG');
+  static const bool _legacyEnabled = bool.fromEnvironment('AWIKI_PERF_LOG');
+  static const String configuredLevel = String.fromEnvironment(
+    'AWIKI_PERF_LOG_LEVEL',
+    defaultValue: 'off',
+  );
+  static const int maxLogsPerEvent = int.fromEnvironment(
+    'AWIKI_PERF_MAX_EVENT_LOGS',
+    defaultValue: 120,
+  );
   static const int slowFrameThresholdMs = int.fromEnvironment(
     'AWIKI_PERF_SLOW_FRAME_MS',
     defaultValue: 24,
   );
+
+  static final Map<String, int> _eventCounts = <String, int>{};
+  static final Set<String> _suppressedEvents = <String>{};
+
+  static bool get enabled {
+    if (_legacyEnabled) {
+      return true;
+    }
+    return switch (_normalizedConfiguredLevel) {
+      'summary' || 'verbose' => true,
+      _ => false,
+    };
+  }
+
+  static bool get verboseEnabled => _normalizedConfiguredLevel == 'verbose';
+
+  static String get effectiveLevel {
+    if (!enabled) {
+      return 'off';
+    }
+    return verboseEnabled ? 'verbose' : 'summary';
+  }
+
+  static String get _normalizedConfiguredLevel =>
+      configuredLevel.trim().toLowerCase();
 
   static T sync<T>(
     String event,
     T Function() action, {
     Map<String, Object?> fields = const <String, Object?>{},
     int minMs = 0,
+    AwikiPerformanceLogLevel level = AwikiPerformanceLogLevel.summary,
   }) {
-    if (!enabled) {
+    if (!_shouldMeasure(level)) {
       return action();
     }
     final watch = Stopwatch()..start();
@@ -28,7 +64,13 @@ class AwikiPerformanceLogger {
       return action();
     } finally {
       watch.stop();
-      log(event, elapsed: watch.elapsed, fields: fields, minMs: minMs);
+      log(
+        event,
+        elapsed: watch.elapsed,
+        fields: fields,
+        minMs: minMs,
+        level: level,
+      );
     }
   }
 
@@ -37,8 +79,9 @@ class AwikiPerformanceLogger {
     Future<T> Function() action, {
     Map<String, Object?> fields = const <String, Object?>{},
     int minMs = 0,
+    AwikiPerformanceLogLevel level = AwikiPerformanceLogLevel.summary,
   }) async {
-    if (!enabled) {
+    if (!_shouldMeasure(level)) {
       return action();
     }
     final watch = Stopwatch()..start();
@@ -46,7 +89,13 @@ class AwikiPerformanceLogger {
       return await action();
     } finally {
       watch.stop();
-      log(event, elapsed: watch.elapsed, fields: fields, minMs: minMs);
+      log(
+        event,
+        elapsed: watch.elapsed,
+        fields: fields,
+        minMs: minMs,
+        level: level,
+      );
     }
   }
 
@@ -55,15 +104,20 @@ class AwikiPerformanceLogger {
     Duration? elapsed,
     Map<String, Object?> fields = const <String, Object?>{},
     int minMs = 0,
+    AwikiPerformanceLogLevel level = AwikiPerformanceLogLevel.summary,
   }) {
-    if (!enabled) {
+    if (!_shouldMeasure(level)) {
       return;
     }
     final elapsedMs = elapsed?.inMilliseconds;
     if (elapsedMs != null && elapsedMs < minMs) {
       return;
     }
+    if (!_recordEventAndShouldPrint(event, level)) {
+      return;
+    }
     final details = <String>[
+      'level=${level.name}',
       if (elapsedMs != null) 'elapsed_ms=$elapsedMs',
       for (final entry in fields.entries)
         if (entry.value != null) '${entry.key}=${_formatValue(entry.value)}',
@@ -112,6 +166,36 @@ class AwikiPerformanceLogger {
 
   static Map<String, Object?> threadField(String threadId) {
     return <String, Object?>{'thread_hash': safeHash(threadId)};
+  }
+
+  static bool _shouldMeasure(AwikiPerformanceLogLevel level) {
+    if (!enabled) {
+      return false;
+    }
+    return switch (level) {
+      AwikiPerformanceLogLevel.summary => true,
+      AwikiPerformanceLogLevel.verbose => verboseEnabled,
+    };
+  }
+
+  static bool _recordEventAndShouldPrint(
+    String event,
+    AwikiPerformanceLogLevel level,
+  ) {
+    if (maxLogsPerEvent <= 0) {
+      return true;
+    }
+    final count = (_eventCounts[event] ?? 0) + 1;
+    _eventCounts[event] = count;
+    if (count <= maxLogsPerEvent) {
+      return true;
+    }
+    if (_suppressedEvents.add(event)) {
+      debugPrint(
+        '[awiki_me][perf] event=$event level=${level.name} suppressed_after=$maxLogsPerEvent',
+      );
+    }
+    return false;
   }
 
   static Object _formatValue(Object? value) {

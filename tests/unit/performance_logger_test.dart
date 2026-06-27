@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('performance logging is disabled by default', () {
     expect(AwikiPerformanceLogger.enabled, isFalse);
+    expect(AwikiPerformanceLogger.effectiveLevel, 'off');
+    expect(AwikiPerformanceLogger.maxLogsPerEvent, 120);
   });
 
   test('safeHash is stable and does not expose source text', () {

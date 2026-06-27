@@ -25,7 +25,8 @@ import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show SelectionArea;
+import 'package:flutter/material.dart'
+    show FontWeight, InlineSpan, RichText, SelectionArea, TextSpan;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -116,6 +117,14 @@ double _chatScrollPixels(WidgetTester tester) {
 
 double _chatScrollMax(WidgetTester tester) {
   return _chatScrollable(tester).position.maxScrollExtent;
+}
+
+double _messageContentBottomGap(WidgetTester tester, String localId) {
+  final listRect = tester.getRect(_chatMessagesListFinder());
+  final messageRect = tester.getRect(
+    find.byKey(Key('chat-message-content:$localId')),
+  );
+  return listRect.bottom - messageRect.bottom;
 }
 
 List<ChatMessage> _scrollMessages({
@@ -882,6 +891,62 @@ void main() {
     expect(gateway.lastSentThreadId, 'dm:did:test:peer');
     expect(gateway.lastSentContent, 'hello');
     expect(find.text('hello'), findsOneWidget);
+  });
+
+  testWidgets('进入长对话时最后一条消息贴到消息列表底部', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:scroll-bottom-gap',
+      displayName: 'Alice',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:alice',
+    );
+    final messages = _scrollMessages(
+      threadId: conversation.threadId,
+      peerDid: 'did:test:alice',
+      startedAt: DateTime(2026, 4, 5, 10),
+      count: 28,
+    );
+
+    await tester.binding.setSurfaceSize(const Size(390, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(
+            key: ValueKey('chat-view:${conversation.threadId}'),
+            conversation: conversation,
+            embedded: false,
+          ),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          chatThreadsProvider.overrideWith(
+            (ref) => _StaticChatThreadsController(
+              ref,
+              <String, List<ChatMessage>>{conversation.threadId: messages},
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_chatScrollPixels(tester), moreOrLessEquals(_chatScrollMax(tester)));
+    expect(
+      _messageContentBottomGap(tester, messages.last.localId),
+      moreOrLessEquals(0, epsilon: 1),
+    );
   });
 
   testWidgets('自己发送消息后即使原本离开底部也会滚到底部', (tester) async {
@@ -1848,8 +1913,15 @@ void main() {
     await tester.pumpAndSettle();
 
     final body = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
-    expect(body.data, text);
     expect(body.selectable, isFalse);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText &&
+            _textSpanHasStyledMention(widget.text, '@Alice'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('发送给 Runtime Agent 后在对应消息下显示处理中提示', (tester) async {
@@ -1996,10 +2068,10 @@ void main() {
             threadId: conversation.threadId,
             senderDid: 'did:wba:awiki.info:agent:runtime:hermes:e1_agent',
             groupId: conversation.groupId,
-            content: '@me 总结完成',
+            content: '@me **总结完成**',
             originalType: 'application/json',
             payloadJson:
-                '{"text":"@me 总结完成","mentions":[{"id":"reply_me","range":{"start":0,"end":3,"unit":"unicode_code_point"},"target":{"kind":"human","did":"did:test:me"},"mention_role":"addressee"}],"annotations":{"awiki_reply_to_message_id":"msg_group_agent_processing_1"}}',
+                '{"text":"@me **总结完成**","mentions":[{"id":"reply_me","range":{"start":0,"end":3,"unit":"unicode_code_point"},"target":{"kind":"human","did":"did:test:me"},"mention_role":"addressee"}],"annotations":{"awiki_reply_to_message_id":"msg_group_agent_processing_1"}}',
             createdAt: DateTime.now(),
             isMine: false,
             sendState: MessageSendState.sent,
@@ -2008,7 +2080,13 @@ void main() {
         );
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text('@me 总结完成'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText && _textSpanHasStyledMention(widget.text, '@me'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('@hermes 正在处理...'), findsNothing);
   });
 
@@ -2192,7 +2270,7 @@ void main() {
       tester.element(find.byType(ChatView)),
     );
     await container.read(conversationListProvider.notifier).refresh();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('你好。欢迎'), findsOneWidget);
     expect(gateway.fetchDmHistoryCalls, 1);
@@ -2260,7 +2338,7 @@ void main() {
       tester.element(find.byType(ChatView)),
     );
     await container.read(conversationListProvider.notifier).refresh();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('我在。'), findsOneWidget);
     expect(
@@ -2747,6 +2825,85 @@ void main() {
     expect(gateway.lastSentAttachment?.filename, 'brief.md');
     expect(gateway.lastSentAttachmentCaption, '请阅读附件');
     expect(find.text('智能体正在处理...'), findsOneWidget);
+  });
+
+  testWidgets('群聊暂存附件 caption 中 @智能体会发送结构化 mention 并显示处理中', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final picker = FakeAttachmentPickerService()
+      ..nextPick = AttachmentDraft(
+        filename: 'report.md',
+        mimeType: 'text/markdown',
+        bytes: Uint8List.fromList(<int>[35, 32, 82]),
+        sizeBytes: 3,
+      );
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'group:agent-attachment-compose',
+      displayName: '项目群',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:test:group:agent-attachment-compose',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          attachmentPickerServiceProvider.overrideWithValue(picker),
+        ],
+      ),
+    );
+    await tester.tap(find.byKey(const Key('chat-attachment-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(CupertinoTextField), '@codex 看看这个文件');
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    container
+        .read(chatComposerDraftsProvider.notifier)
+        .setDraft(
+          conversation,
+          const ChatComposerDraft(
+            text: '@codex 看看这个文件',
+            mentions: <ChatMentionDraft>[
+              ChatMentionDraft(
+                localId: 'men_codex',
+                surface: '@codex',
+                start: 0,
+                end: 6,
+                target: ChatMentionTargetDraft.member(
+                  kind: ChatMentionTargetKind.agent,
+                  did: 'did:agent:codex',
+                  handle: 'codex',
+                  displayName: 'CodeX',
+                ),
+              ),
+            ],
+          ),
+        );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('chat-send-button')));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(gateway.lastSentGroupId, conversation.groupId);
+    expect(gateway.lastSentAttachment?.filename, 'report.md');
+    expect(gateway.lastSentAttachmentCaption, '@codex 看看这个文件');
+    expect(find.text('@codex 看看这个文件'), findsOneWidget);
+    final thread = container.read(chatThreadProvider(conversation.threadId));
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(thread.agentPendingTurns.single.agentDid, 'did:agent:codex');
+    expect(find.text('@codex 正在处理...'), findsOneWidget);
   });
 
   testWidgets('输入框支持 Shift+Enter 换行，Enter 发送', (tester) async {
@@ -3550,4 +3707,21 @@ String _dateLabel(DateTime date) {
   final month = date.month.toString().padLeft(2, '0');
   final day = date.day.toString().padLeft(2, '0');
   return '$month-$day';
+}
+
+bool _textSpanHasStyledMention(InlineSpan span, String mentionText) {
+  if (span is! TextSpan) {
+    return false;
+  }
+  final style = span.style;
+  if (span.text == mentionText &&
+      style?.fontWeight == FontWeight.w700 &&
+      style?.color != null &&
+      style?.backgroundColor != null) {
+    return true;
+  }
+  return span.children?.any(
+        (child) => _textSpanHasStyledMention(child, mentionText),
+      ) ??
+      false;
 }

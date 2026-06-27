@@ -26,6 +26,7 @@ dependencies:
   flutter_secure_storage: ^9.2.4
   sqflite: ^2.4.1
   flutter_markdown: ^0.7.3+2
+  markdown: ^7.3.0
   flutter_svg: ^2.0.10+1
   flutter_local_notifications: ^19.4.0
   flutter_riverpod: ^2.6.1

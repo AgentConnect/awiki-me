@@ -12,10 +12,14 @@ Future<void> main() async {
   final startupWatch = Stopwatch()..start();
   WidgetsFlutterBinding.ensureInitialized();
   AwikiPerformanceLogger.registerFrameTimings();
-  AwikiPerformanceLogger.log('main.start');
+  AwikiPerformanceLogger.log(
+    'main.start',
+    level: AwikiPerformanceLogLevel.verbose,
+  );
   await AwikiPerformanceLogger.async(
     'main.system_ui',
     () => SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge),
+    level: AwikiPerformanceLogLevel.verbose,
   );
   AwikiPerformanceLogger.sync(
     'main.system_ui_overlay',
@@ -29,6 +33,7 @@ Future<void> main() async {
         systemNavigationBarDividerColor: AwikiMeColors.background,
       ),
     ),
+    level: AwikiPerformanceLogLevel.verbose,
   );
   final bootstrap = await AwikiPerformanceLogger.async(
     'main.bootstrap_create',
@@ -37,6 +42,7 @@ Future<void> main() async {
   final localeMode = await AwikiPerformanceLogger.async(
     'main.load_locale',
     bootstrap.localePreferenceService.loadMode,
+    level: AwikiPerformanceLogLevel.verbose,
   );
   runApp(
     AwikiMeApp(

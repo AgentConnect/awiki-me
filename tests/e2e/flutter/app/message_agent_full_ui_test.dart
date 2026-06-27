@@ -1748,6 +1748,7 @@ class _UiMessagingService implements MessagingService {
     required AppThreadRef thread,
     required AttachmentDraft attachment,
     String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? idempotencyKey,
   }) {
     throw UnimplementedError();

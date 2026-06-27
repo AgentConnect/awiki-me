@@ -4,10 +4,12 @@ import 'dart:typed_data';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
+import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
@@ -129,7 +131,7 @@ void main() {
     expect(thread.isLoading, isFalse);
   });
 
-  test('有稳定 DID 的 handle 会话打开历史时优先按 DID 拉取', () async {
+  test('有稳定 DID 的 handle 会话本地优先按 DID 读取，远端按 handle 也能解析到 DID 历史', () async {
     const agentDid = 'did:agent:runtime';
     const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
     final agentConversation = ConversationSummary(
@@ -161,6 +163,16 @@ void main() {
       agentDid: <ChatMessage>[outgoing],
       agentHandle: const <ChatMessage>[],
     };
+    gateway.publicProfilesByQuery[agentHandle] = const UserProfile(
+      did: agentDid,
+      displayName: 'Hermes',
+      bio: '',
+      tags: <String>[],
+      profileMarkdown: '',
+      handle: agentHandle,
+      fullHandle: agentHandle,
+      subjectType: 'agent',
+    );
 
     await container
         .read(chatThreadsProvider.notifier)
@@ -168,7 +180,7 @@ void main() {
     await pumpEventQueue();
 
     expect(gateway.lastFetchedLocalDmPeerDid, agentDid);
-    expect(gateway.lastFetchedDmPeerDid, agentDid);
+    expect(gateway.lastFetchedDmPeerDid, agentHandle);
     final thread = container.read(
       chatThreadProvider(agentConversation.threadId),
     );
@@ -1154,7 +1166,10 @@ void main() {
       chatThreadProvider(groupConversation.threadId),
     );
     expect(thread.messages, hasLength(1));
-    expect(thread.messages.single.attachment?.filename, 'report.pdf');
+    final sentAttachment = thread.messages.singleWhere(
+      (message) => message.attachment?.filename == 'report.pdf',
+    );
+    expect(sentAttachment.attachment?.filename, 'report.pdf');
   });
 
   test('发送私聊附件会生成 pending 并用服务端附件消息替换', () async {
@@ -1207,6 +1222,216 @@ void main() {
     expect(gateway.lastSentAttachment?.filename, 'report.pdf');
     expect(gateway.lastSentAttachmentCaption, '报告');
     expect(gateway.lastSentAttachmentIdempotencyKey, startsWith('pending-'));
+  });
+
+  test('发送给智能体的附件会按本地消息绑定处理中状态并在回复后清除', () async {
+    gateway.nextSentMessageId = 'sent-agent-attachment';
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendAttachment(
+          conversation: conversation,
+          attachment: AttachmentDraft(
+            filename: 'report.md',
+            mimeType: 'text/markdown',
+            bytes: Uint8List.fromList(<int>[35, 32, 65]),
+            sizeBytes: 3,
+          ),
+          caption: '看看附件',
+          expectedAgentReplyDid: 'did:peer',
+        );
+    await Future<void>.delayed(Duration.zero);
+
+    var thread = sendContainer.read(chatThreadProvider(conversation.threadId));
+    final sentAttachment = thread.messages.singleWhere(
+      (message) => message.attachment?.filename == 'report.md',
+    );
+    expect(sentAttachment.remoteId, 'sent-agent-attachment');
+    expect(sentAttachment.localId, 'sent-agent-attachment');
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(
+      thread.agentPendingTurns.single.localMessageId,
+      startsWith('pending-'),
+    );
+    expect(
+      thread.agentPendingTurns.single.remoteMessageId,
+      'sent-agent-attachment',
+    );
+    expect(thread.pendingAgentTurnForMessage(sentAttachment), isNotNull);
+
+    sendContainer
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(
+          ChatMessage(
+            localId: 'agent-attachment-reply',
+            remoteId: 'agent-attachment-reply',
+            threadId: conversation.threadId,
+            senderDid: 'did:peer',
+            receiverDid: 'did:me',
+            content: '附件里写的是 A。',
+            createdAt: DateTime.now(),
+            isMine: false,
+            sendState: MessageSendState.sent,
+          ),
+        );
+
+    thread = sendContainer.read(chatThreadProvider(conversation.threadId));
+    expect(thread.agentPendingTurns, isEmpty);
+  });
+
+  test('群聊附件 caption 中 @智能体会保留结构化 mention 并显示处理中', () async {
+    gateway.nextSentMessageId = 'sent-group-agent-attachment';
+    final groupConversation = ConversationSummary(
+      threadId: 'group:did:test:group',
+      displayName: 'Group',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 5, 8, 10),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:test:group',
+    );
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    const mention = ChatMentionDraft(
+      localId: 'men_agent',
+      surface: '@codex',
+      start: 0,
+      end: 6,
+      target: ChatMentionTargetDraft.member(
+        kind: ChatMentionTargetKind.agent,
+        did: 'did:agent:codex',
+        handle: 'codex',
+        displayName: 'CodeX',
+      ),
+    );
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendAttachment(
+          conversation: groupConversation,
+          attachment: AttachmentDraft(
+            filename: 'report.md',
+            mimeType: 'text/markdown',
+            bytes: Uint8List.fromList(<int>[35, 32, 65]),
+            sizeBytes: 3,
+          ),
+          caption: '@codex 看看这个文件',
+          mentions: const <ChatMentionDraft>[mention],
+        );
+    await Future<void>.delayed(Duration.zero);
+
+    final thread = sendContainer.read(
+      chatThreadProvider(groupConversation.threadId),
+    );
+    final sentAttachment = thread.messages.singleWhere(
+      (message) => message.attachment?.filename == 'report.md',
+    );
+    expect(sentAttachment.content, '@codex 看看这个文件');
+    expect(sentAttachment.mentions, hasLength(1));
+    expect(
+      sentAttachment.mentions.single.target.kind,
+      ChatMentionTargetKind.agent,
+    );
+    expect(sentAttachment.payloadJson, isNotNull);
+    expect(
+      ChatMentionPayload.tryParsePayloadJson(sentAttachment.payloadJson)?.text,
+      '@codex 看看这个文件',
+    );
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(thread.agentPendingTurns.single.agentDid, 'did:agent:codex');
+    expect(thread.agentPendingTurns.single.mentionId, 'men_agent');
+    expect(
+      thread.pendingAgentTurnForMessage(sentAttachment)?.agentHandle,
+      'codex',
+    );
+    expect(gateway.lastSentGroupId, 'did:test:group');
+    expect(gateway.lastSentAttachmentCaption, '@codex 看看这个文件');
+  });
+
+  test('普通用户附件不会误显示智能体处理中状态', () async {
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendAttachment(
+          conversation: conversation,
+          attachment: AttachmentDraft(
+            filename: 'report.pdf',
+            mimeType: 'application/pdf',
+            bytes: Uint8List.fromList(<int>[1, 2, 3]),
+            sizeBytes: 3,
+          ),
+          caption: '报告',
+        );
+    await Future<void>.delayed(Duration.zero);
+
+    final thread = sendContainer.read(
+      chatThreadProvider(conversation.threadId),
+    );
+    final sentAttachment = thread.messages.singleWhere(
+      (message) => message.attachment?.filename == 'report.pdf',
+    );
+    expect(sentAttachment.attachment?.filename, 'report.pdf');
+    expect(thread.agentPendingTurns, isEmpty);
+    expect(thread.isAgentProcessing, isFalse);
   });
 
   test('服务端附件消息不带本地路径时发送成功后仍保留本地缓存路径', () async {
@@ -1761,7 +1986,59 @@ void main() {
     expect(container.read(selectedConversationProvider), isNull);
     expect(notificationFacade.lastBadgeCount, 0);
     expect(gateway.deleteLocalThreadCalls, 1);
-    expect(gateway.lastDeletedLocalThreadId, 'direct:did:peer');
+    expect(gateway.lastDeletedLocalThreadId, 'direct-did:did:peer');
+  });
+
+  test('删除最近会话后旧实时不复活，新实时会重新显示', () async {
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:me',
+            credentialName: 'me.json',
+            displayName: 'Me',
+            handle: 'me',
+          ),
+        );
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(
+          conversation.copyWith(targetPeer: 'peer.anpclaw.com'),
+        );
+
+    await container
+        .read(conversationListProvider.notifier)
+        .deleteFromRecents(
+          conversation.copyWith(targetPeer: 'peer.anpclaw.com'),
+        );
+
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(
+          conversation.copyWith(
+            threadId: 'dm:peer-scope:peer',
+            targetDid: null,
+            targetPeer: 'peer.anpclaw.com',
+            lastMessagePreview: '旧消息',
+            lastMessageAt: conversation.lastMessageAt,
+          ),
+        );
+    expect(container.read(conversationListProvider).conversations, isEmpty);
+
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(
+          conversation.copyWith(
+            lastMessagePreview: '新消息',
+            lastMessageAt: DateTime.now().add(const Duration(seconds: 1)),
+          ),
+        );
+
+    final conversations = container
+        .read(conversationListProvider)
+        .conversations;
+    expect(conversations, hasLength(1));
+    expect(conversations.single.lastMessagePreview, '新消息');
   });
 
   test('本地 DID 会话和刷新的 full handle 会话会合并为同一个智能体会话', () async {

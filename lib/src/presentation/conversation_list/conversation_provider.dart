@@ -50,7 +50,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   Future<void>? _refreshOperation;
   bool _refreshOperationFastLocal = false;
   int _refreshGeneration = 0;
-  final Set<String> _locallyHiddenConversationKeys = <String>{};
+  final Map<String, DateTime> _locallyHiddenConversationKeys =
+      <String, DateTime>{};
 
   NotificationFacade get _notification => ref.read(notificationFacadeProvider);
 
@@ -71,6 +72,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         'reused': reused,
         'current': state.conversations.length,
       },
+      level: AwikiPerformanceLogLevel.verbose,
     );
     if (!state.isLoading) {
       state = state.copyWith(isLoading: true);
@@ -87,6 +89,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         'reused': reused,
         'current': state.conversations.length,
       },
+      level: AwikiPerformanceLogLevel.verbose,
     );
     if (!state.isLoading) {
       state = state.copyWith(isLoading: true);
@@ -167,6 +170,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         () => conversationService.listConversationSummariesFast(
           ownerDid: session.did,
         ),
+        level: AwikiPerformanceLogLevel.verbose,
       );
       if (generation != _refreshGeneration) {
         return;
@@ -215,6 +219,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         conversations: base,
       ),
       fields: <String, Object?>{'base': base.length},
+      level: AwikiPerformanceLogLevel.verbose,
     );
     if (generation != _refreshGeneration) {
       return;
@@ -353,7 +358,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     if (session == null) {
       throw StateError('No active awiki session. Please sign in first.');
     }
-    _addHiddenKeysFor(conversation);
+    final hiddenAt = DateTime.now().toUtc();
+    _addHiddenKeysFor(conversation, hiddenAt: hiddenAt);
     _removeConversationLocally(conversation);
     try {
       await ref
@@ -361,6 +367,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           .hideConversationFromRecents(
             ownerDid: session.did,
             conversation: conversation,
+            updatedAt: hiddenAt,
           );
     } catch (_) {
       _removeHiddenKeysFor(conversation);
@@ -464,20 +471,30 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         );
   }
 
-  void _addHiddenKeysFor(ConversationSummary conversation) {
-    _locallyHiddenConversationKeys.addAll(conversation.visibilityKeys);
+  void _addHiddenKeysFor(
+    ConversationSummary conversation, {
+    required DateTime hiddenAt,
+  }) {
+    for (final key in _visibilityKeysFor(
+      conversation,
+      includeHandleAliasesForStrongIdentity: true,
+    )) {
+      _locallyHiddenConversationKeys[key] = hiddenAt;
+    }
   }
 
   void _removeHiddenKeysFor(ConversationSummary conversation) {
-    for (final key in conversation.visibilityKeys) {
+    for (final key in _visibilityKeysFor(
+      conversation,
+      includeHandleAliasesForStrongIdentity: true,
+    )) {
       _locallyHiddenConversationKeys.remove(key);
     }
   }
 
   bool _isLocallyHidden(ConversationSummary conversation) {
-    return conversation.visibilityKeys.any(
-      _locallyHiddenConversationKeys.contains,
-    );
+    final hiddenAt = _latestLocalHiddenAt(conversation);
+    return hiddenAt != null && !conversation.lastMessageAt.isAfter(hiddenAt);
   }
 
   void _removeConversationLocally(ConversationSummary conversation) {
@@ -495,12 +512,22 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       return conversations;
     }
     return conversations
-        .where(
-          (conversation) => !conversation.visibilityKeys.any(
-            _locallyHiddenConversationKeys.contains,
-          ),
-        )
+        .where((conversation) => !_isLocallyHidden(conversation))
         .toList(growable: false);
+  }
+
+  DateTime? _latestLocalHiddenAt(ConversationSummary conversation) {
+    DateTime? latest;
+    for (final key in _visibilityKeysFor(conversation)) {
+      final hiddenAt = _locallyHiddenConversationKeys[key];
+      if (hiddenAt == null) {
+        continue;
+      }
+      if (latest == null || hiddenAt.isAfter(latest)) {
+        latest = hiddenAt;
+      }
+    }
+    return latest;
   }
 
   Future<void> _updateBadgeCountBestEffort(int count) async {
@@ -510,6 +537,17 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       // Badge updates are OS integration; they should not make list data fail.
     }
   }
+}
+
+List<String> _visibilityKeysFor(
+  ConversationSummary conversation, {
+  bool includeHandleAliasesForStrongIdentity = false,
+}) {
+  return conversationVisibilityIdentity(
+    conversation,
+    includeHandleAliasesForStrongIdentity:
+        includeHandleAliasesForStrongIdentity,
+  ).keys;
 }
 
 List<ConversationSummary> _mergeConversationRefresh({
@@ -667,13 +705,15 @@ ConversationSummary? _matchingConversationForUpsert(
       return item;
     }
   }
-  final incomingKeys = incoming.visibilityKeys
-      .map((key) => key.trim())
-      .where((key) => key.isNotEmpty)
-      .toSet();
+  final incomingKeys =
+      incoming.visibilityKeys
+          .map((key) => key.trim())
+          .where((key) => key.isNotEmpty)
+          .toSet()
+        ..addAll(_visibilityKeysFor(incoming));
   if (incomingKeys.isNotEmpty) {
     for (final item in conversations) {
-      if (item.visibilityKeys.any(incomingKeys.contains)) {
+      if (_visibilityKeysFor(item).any(incomingKeys.contains)) {
         return item;
       }
     }

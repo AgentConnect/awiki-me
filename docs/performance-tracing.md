@@ -9,12 +9,22 @@ cd awiki-me
 flutter run -d macos --dart-define=AWIKI_PERF_LOG=true
 ```
 
-可选：调整慢帧阈值，默认 24ms。
+默认只输出 `summary` 级别事件。`summary` 覆盖启动、会话列表、history、mark-read、慢帧等主链路结果；高频 UI build、merge 子步骤、重复请求类日志属于 `verbose`，默认不会输出，避免长时间运行时日志过大。
+
+需要完整细粒度日志时使用：
+
+```bash
+flutter run -d macos \
+  --dart-define=AWIKI_PERF_LOG_LEVEL=verbose
+```
+
+可选：调整慢帧阈值，默认 24ms；调整单个事件的日志上限，默认每个事件最多打印 120 条，超过后只打印一次 suppress 提示。
 
 ```bash
 flutter run -d macos \
   --dart-define=AWIKI_PERF_LOG=true \
-  --dart-define=AWIKI_PERF_SLOW_FRAME_MS=16
+  --dart-define=AWIKI_PERF_SLOW_FRAME_MS=16 \
+  --dart-define=AWIKI_PERF_MAX_EVENT_LOGS=200
 ```
 
 日志前缀统一为：
@@ -22,6 +32,16 @@ flutter run -d macos \
 ```text
 [awiki_me][perf]
 ```
+
+## 日志级别与容量控制
+
+| 级别 | 开启方式 | 内容 | 日志量风险 |
+|---|---|---|---|
+| `off` | 默认 | 不输出性能日志 | 无 |
+| `summary` | `AWIKI_PERF_LOG=true` 或 `AWIKI_PERF_LOG_LEVEL=summary` | 主链路汇总、慢帧、关键 native/SQLite/RPC 边界 | 低；适合日常联调 |
+| `verbose` | `AWIKI_PERF_LOG_LEVEL=verbose` | 包含 UI build、merge loop、重复请求、细粒度子步骤 | 中；只建议短时间复现问题时开启 |
+
+每个事件默认最多输出 120 条，由 `AWIKI_PERF_MAX_EVENT_LOGS` 控制。设置为 `0` 表示不限制，通常不建议在线上或长时间运行时使用。
 
 ## 重点事件
 

@@ -876,6 +876,7 @@ class _MessageBubble extends StatelessWidget {
         ? _MessageTextContent(
             text: message.content,
             mentions: message.mentions,
+            payloadJson: message.payloadJson,
             style: textStyle,
             renderMarkdown: !isMine,
           )
@@ -1071,6 +1072,7 @@ class _MessageBubble extends StatelessWidget {
                               ? _MessageTextContent(
                                   text: message.content,
                                   mentions: message.mentions,
+                                  payloadJson: message.payloadJson,
                                   style: textStyle,
                                   renderMarkdown: !isMine,
                                 )
@@ -1206,7 +1208,8 @@ class _AttachmentContent extends StatelessWidget {
           if (caption != null && caption.isNotEmpty) ...<Widget>[
             _MessageTextContent(
               text: caption,
-              mentions: const <ChatMessageMention>[],
+              mentions: message.mentions,
+              payloadJson: message.payloadJson,
               style: TextStyle(
                 color: macStyle ? const Color(0xFF17213A) : theme.title,
                 fontSize: macStyle
@@ -1312,27 +1315,42 @@ class _MessageTextContent extends StatelessWidget {
   const _MessageTextContent({
     required this.text,
     required this.mentions,
+    required this.payloadJson,
     required this.style,
     required this.renderMarkdown,
   });
 
   final String text;
   final List<ChatMessageMention> mentions;
+  final String? payloadJson;
   final TextStyle style;
   final bool renderMarkdown;
 
   @override
   Widget build(BuildContext context) {
-    final validMentions =
-        mentions.where((mention) => mention.rangeMatches(text)).toList()
-          ..sort((a, b) => a.start.compareTo(b.start));
+    final validMentions = _validMentionsForText(
+      text: text,
+      mentions: mentions,
+      payloadJson: payloadJson,
+    );
     if (renderMarkdown &&
         (validMentions.isEmpty || _messageTextContainsMarkdownSyntax(text))) {
+      final mentionBuilders = validMentions.isEmpty
+          ? null
+          : <String, MarkdownElementBuilder>{
+              _awikiMentionTag: _AwikiMarkdownMentionBuilder(),
+            };
       return MarkdownBody(
-        data: text,
+        data: validMentions.isEmpty
+            ? text
+            : _textWithMarkdownMentionMarkers(text, validMentions),
         selectable: false,
         shrinkWrap: true,
         styleSheet: _chatMarkdownStyleSheet(context, style),
+        inlineSyntaxes: validMentions.isEmpty
+            ? null
+            : <md.InlineSyntax>[_AwikiMarkdownMentionSyntax()],
+        builders: mentionBuilders ?? const <String, MarkdownElementBuilder>{},
       );
     }
     if (validMentions.isNotEmpty) {
@@ -1356,11 +1374,7 @@ class _MessageTextContent extends StatelessWidget {
     final theme = context.awikiTheme;
     final spans = <InlineSpan>[];
     var cursor = 0;
-    final mentionStyle = style.copyWith(
-      color: theme.primary,
-      fontWeight: FontWeight.w700,
-      backgroundColor: theme.primary.withValues(alpha: 0.10),
-    );
+    final mentionStyle = _mentionHighlightStyle(theme, style);
     for (final mention in validMentions) {
       if (mention.start < cursor || mention.end > text.length) {
         continue;
@@ -1380,6 +1394,123 @@ class _MessageTextContent extends StatelessWidget {
       spans.add(TextSpan(text: text.substring(cursor)));
     }
     return spans;
+  }
+}
+
+List<ChatMessageMention> _validMentionsForText({
+  required String text,
+  required List<ChatMessageMention> mentions,
+  required String? payloadJson,
+}) {
+  final result = <ChatMessageMention>[];
+  final seen = <String>{};
+
+  void addMention(ChatMessageMention mention) {
+    if (!mention.rangeMatches(text)) {
+      return;
+    }
+    final key =
+        '${mention.id}:${mention.start}:${mention.end}:${mention.surface}';
+    if (seen.add(key)) {
+      result.add(mention);
+    }
+  }
+
+  for (final mention in mentions) {
+    addMention(mention);
+  }
+
+  final payload = ChatMentionPayload.tryParsePayloadJson(payloadJson);
+  if (payload != null) {
+    for (final mention in payload.mentions) {
+      addMention(mention);
+    }
+  }
+
+  result.sort((a, b) => a.start.compareTo(b.start));
+  return result;
+}
+
+TextStyle _mentionHighlightStyle(
+  AwikiMeThemeTokens theme,
+  TextStyle baseStyle,
+) {
+  return baseStyle.copyWith(
+    color: theme.primary,
+    fontWeight: FontWeight.w700,
+    backgroundColor: theme.primary.withValues(alpha: 0.10),
+  );
+}
+
+const _awikiMentionTag = 'awikiMention';
+const _awikiMentionStartMarker = '\uE000';
+const _awikiMentionSeparatorMarker = '\uE001';
+const _awikiMentionEndMarker = '\uE002';
+const _awikiMentionStartMarkerCodeUnit = 0xE000;
+
+String _textWithMarkdownMentionMarkers(
+  String text,
+  List<ChatMessageMention> validMentions,
+) {
+  final buffer = StringBuffer();
+  var cursor = 0;
+  for (var index = 0; index < validMentions.length; index += 1) {
+    final mention = validMentions[index];
+    if (mention.start < cursor || mention.end > text.length) {
+      continue;
+    }
+    if (mention.start > cursor) {
+      buffer.write(text.substring(cursor, mention.start));
+    }
+    buffer
+      ..write(_awikiMentionStartMarker)
+      ..write(index.toRadixString(36))
+      ..write(_awikiMentionSeparatorMarker)
+      ..write(text.substring(mention.start, mention.end))
+      ..write(_awikiMentionEndMarker);
+    cursor = mention.end;
+  }
+  if (cursor < text.length) {
+    buffer.write(text.substring(cursor));
+  }
+  return buffer.toString();
+}
+
+class _AwikiMarkdownMentionSyntax extends md.InlineSyntax {
+  _AwikiMarkdownMentionSyntax()
+    : super(
+        '$_awikiMentionStartMarker([0-9a-z]+)'
+        '$_awikiMentionSeparatorMarker'
+        '([^$_awikiMentionEndMarker]+)'
+        '$_awikiMentionEndMarker',
+        startCharacter: _awikiMentionStartMarkerCodeUnit,
+      );
+
+  @override
+  bool onMatch(md.InlineParser parser, Match match) {
+    final surface = match.group(2) ?? '';
+    parser.addNode(md.Element.text(_awikiMentionTag, surface));
+    return true;
+  }
+}
+
+class _AwikiMarkdownMentionBuilder extends MarkdownElementBuilder {
+  @override
+  Widget visitElementAfterWithContext(
+    BuildContext context,
+    md.Element element,
+    TextStyle? preferredStyle,
+    TextStyle? parentStyle,
+  ) {
+    final theme = context.awikiTheme;
+    final baseStyle =
+        parentStyle ?? preferredStyle ?? DefaultTextStyle.of(context).style;
+    return Text.rich(
+      TextSpan(
+        text: element.textContent,
+        style: _mentionHighlightStyle(theme, baseStyle),
+      ),
+    );
   }
 }
 

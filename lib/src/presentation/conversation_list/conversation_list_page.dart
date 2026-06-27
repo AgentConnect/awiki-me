@@ -84,6 +84,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
         'mac_style': widget.macStyle && responsive.isMacDesktop,
       },
       minMs: 1,
+      level: AwikiPerformanceLogLevel.verbose,
     );
     Future<void> refreshConversations() async {
       try {
@@ -248,6 +249,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
         'query': hasQuery,
       },
       minMs: 1,
+      level: AwikiPerformanceLogLevel.verbose,
     );
     return DecoratedBox(
       decoration: const BoxDecoration(color: Color(0xFFF8FAFD)),

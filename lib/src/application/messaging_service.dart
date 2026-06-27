@@ -14,6 +14,7 @@ abstract interface class MessagingService {
     required AppThreadRef thread,
     required AttachmentDraft attachment,
     String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? idempotencyKey,
   });
 
@@ -77,12 +78,14 @@ class ImCoreMessagingService
     required AppThreadRef thread,
     required AttachmentDraft attachment,
     String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? idempotencyKey,
   }) {
     return _messages.sendAttachment(
       thread: thread,
       attachment: attachment,
       caption: caption,
+      mentions: mentions,
       idempotencyKey: idempotencyKey,
     );
   }

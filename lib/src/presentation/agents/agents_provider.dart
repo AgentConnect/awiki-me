@@ -455,7 +455,10 @@ class AgentsController extends StateNotifier<AgentsState> {
   Future<void> ensureLoaded() {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
-      AwikiPerformanceLogger.log('agents.ensure_loaded.no_session');
+      AwikiPerformanceLogger.log(
+        'agents.ensure_loaded.no_session',
+        level: AwikiPerformanceLogLevel.verbose,
+      );
       state = const AgentsState();
       _loadedCacheOwner = null;
       _stateEpoch += 1;
@@ -466,14 +469,23 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (activeLoad != null &&
         _loadOperationOwner == cacheOwner &&
         _loadOperationEpoch == _stateEpoch) {
-      AwikiPerformanceLogger.log('agents.ensure_loaded.reuse');
+      AwikiPerformanceLogger.log(
+        'agents.ensure_loaded.reuse',
+        level: AwikiPerformanceLogLevel.verbose,
+      );
       return activeLoad;
     }
     if (_loadedCacheOwner == cacheOwner) {
-      AwikiPerformanceLogger.log('agents.ensure_loaded.cached');
+      AwikiPerformanceLogger.log(
+        'agents.ensure_loaded.cached',
+        level: AwikiPerformanceLogLevel.verbose,
+      );
       return Future<void>.value();
     }
-    AwikiPerformanceLogger.log('agents.ensure_loaded.load');
+    AwikiPerformanceLogger.log(
+      'agents.ensure_loaded.load',
+      level: AwikiPerformanceLogLevel.verbose,
+    );
     return load();
   }
 
