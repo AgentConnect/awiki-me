@@ -7,6 +7,7 @@ import '../../app/app_services.dart';
 import '../../application/message_sync_service.dart';
 import '../../application/models/attachment_models.dart';
 import '../../application/models/app_thread_ref.dart';
+import '../../application/models/thread_message_patch.dart';
 import '../../application/messaging_service.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
@@ -392,6 +393,43 @@ class _HistoryLoadResult {
   bool get loadedAny => loadedCount > 0;
 }
 
+class _ThreadPatchSubscription {
+  const _ThreadPatchSubscription({
+    required this.token,
+    required this.ownerDid,
+    required this.threadRef,
+    required this.threadKind,
+    required this.threadId,
+    required this.subscription,
+    this.lastVersion = 0,
+  });
+
+  final int token;
+  final String ownerDid;
+  final AppThreadRef threadRef;
+  final String threadKind;
+  final String threadId;
+  final StreamSubscription<ThreadMessagePatch> subscription;
+  final int lastVersion;
+
+  String get threadRefKey => threadRef.stableId;
+
+  _ThreadPatchSubscription copyWith({
+    StreamSubscription<ThreadMessagePatch>? subscription,
+    int? lastVersion,
+  }) {
+    return _ThreadPatchSubscription(
+      token: token,
+      ownerDid: ownerDid,
+      threadRef: threadRef,
+      threadKind: threadKind,
+      threadId: threadId,
+      subscription: subscription ?? this.subscription,
+      lastVersion: lastVersion ?? this.lastVersion,
+    );
+  }
+}
+
 class ChatThreadsController
     extends StateNotifier<Map<String, ChatThreadState>> {
   ChatThreadsController(this.ref) : super(const <String, ChatThreadState>{});
@@ -417,6 +455,9 @@ class ChatThreadsController
       <String, Timer>{};
   final Map<String, ConversationSummary> _pendingConversationRefreshFallbacks =
       <String, ConversationSummary>{};
+  final Map<String, _ThreadPatchSubscription> _threadPatchSubscriptions =
+      <String, _ThreadPatchSubscription>{};
+  int _threadPatchToken = 0;
 
   static const Duration postSendReconcileDebounce = Duration(seconds: 1);
 
@@ -437,6 +478,10 @@ class ChatThreadsController
         'is_group': conversation.isGroup,
       },
       level: AwikiPerformanceLogLevel.verbose,
+    );
+    _ensureThreadPatchSubscription(
+      conversation,
+      displayThreadId: targetThreadId,
     );
     unawaited(
       _openConversationLocalFirst(
@@ -539,6 +584,180 @@ class ChatThreadsController
         'chat.thread_after.failed',
         fields: AwikiPerformanceLogger.threadField(displayThreadId),
       );
+    }
+  }
+
+  void _ensureThreadPatchSubscription(
+    ConversationSummary conversation, {
+    required String displayThreadId,
+  }) {
+    final messaging = ref.read(messagingServiceProvider);
+    if (messaging is! ThreadPatchMessagingService) {
+      return;
+    }
+    final threadPatchMessaging = messaging as ThreadPatchMessagingService;
+    final session = ref.read(sessionProvider).session;
+    final ownerDid = session?.did.trim();
+    if (ownerDid == null || ownerDid.isEmpty) {
+      return;
+    }
+    final threadRef = _localHistoryThreadRefFor(conversation);
+    final expectedPatchKey = _threadPatchKeyFor(threadRef);
+    final existing = _threadPatchSubscriptions[displayThreadId];
+    if (existing != null &&
+        existing.ownerDid == ownerDid &&
+        existing.threadRefKey == threadRef.stableId &&
+        existing.threadKind == expectedPatchKey.kind &&
+        existing.threadId == expectedPatchKey.id) {
+      return;
+    }
+    unawaited(existing?.subscription.cancel());
+    final token = ++_threadPatchToken;
+    late final StreamSubscription<ThreadMessagePatch> subscription;
+    subscription = threadPatchMessaging
+        .watchThreadPatches(threadRef)
+        .listen(
+          (patch) => _applyThreadPatch(
+            displayThreadId,
+            patch,
+            token: token,
+            ownerDid: ownerDid,
+            conversation: conversation,
+          ),
+          onError: (_) {
+            if (!mounted ||
+                _threadPatchSubscriptions[displayThreadId]?.token != token) {
+              return;
+            }
+            _threadPatchSubscriptions.remove(displayThreadId);
+          },
+        );
+    _threadPatchSubscriptions[displayThreadId] = _ThreadPatchSubscription(
+      token: token,
+      ownerDid: ownerDid,
+      threadRef: threadRef,
+      threadKind: expectedPatchKey.kind,
+      threadId: expectedPatchKey.id,
+      subscription: subscription,
+    );
+  }
+
+  Future<void> _applyThreadPatch(
+    String displayThreadId,
+    ThreadMessagePatch patch, {
+    required int token,
+    required String ownerDid,
+    required ConversationSummary conversation,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+    final currentSubscription = _threadPatchSubscriptions[displayThreadId];
+    if (currentSubscription == null ||
+        currentSubscription.token != token ||
+        currentSubscription.ownerDid != ownerDid) {
+      return;
+    }
+    if (patch.ownerDid.trim() != ownerDid) {
+      return;
+    }
+    if (!_threadPatchMatchesSubscription(patch, currentSubscription)) {
+      return;
+    }
+    if (patch.version <= currentSubscription.lastVersion) {
+      return;
+    }
+    if (patch.version > currentSubscription.lastVersion + 1 &&
+        currentSubscription.lastVersion != 0) {
+      await _repairThreadPatchSubscription(
+        displayThreadId,
+        conversation: conversation,
+        token: token,
+      );
+      return;
+    }
+    _threadPatchSubscriptions[displayThreadId] = currentSubscription.copyWith(
+      lastVersion: patch.version,
+    );
+    await _applyThreadPatchBody(displayThreadId, patch, conversation);
+  }
+
+  Future<void> _applyThreadPatchBody(
+    String displayThreadId,
+    ThreadMessagePatch patch,
+    ConversationSummary conversation,
+  ) async {
+    switch (patch.kind) {
+      case ThreadMessagePatchKind.reset:
+        _mergeMessages(
+          displayThreadId,
+          patch.messages
+              .map((message) => _withThreadId(message, displayThreadId))
+              .toList(),
+          isLoading: false,
+        );
+      case ThreadMessagePatchKind.upsert:
+        final message = patch.message;
+        if (message == null) {
+          return;
+        }
+        _mergeMessages(displayThreadId, <ChatMessage>[
+          _withThreadId(message, displayThreadId),
+        ], isLoading: false);
+      case ThreadMessagePatchKind.remove:
+        final messageId = patch.messageId?.trim();
+        if (messageId == null || messageId.isEmpty) {
+          return;
+        }
+        _removeMessageById(displayThreadId, messageId);
+      case ThreadMessagePatchKind.repairRequired:
+        final token = _threadPatchSubscriptions[displayThreadId]?.token;
+        if (token == null) {
+          return;
+        }
+        await _repairThreadPatchSubscription(
+          displayThreadId,
+          conversation: conversation,
+          token: token,
+        );
+    }
+  }
+
+  Future<void> _repairThreadPatchSubscription(
+    String displayThreadId, {
+    required ConversationSummary conversation,
+    required int token,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+    final messaging = ref.read(messagingServiceProvider);
+    final currentSubscription = _threadPatchSubscriptions[displayThreadId];
+    if (currentSubscription == null ||
+        currentSubscription.token != token ||
+        messaging is! ThreadPatchMessagingService) {
+      return;
+    }
+    final threadPatchMessaging = messaging as ThreadPatchMessagingService;
+    try {
+      final patch = await threadPatchMessaging.repairThreadStore(
+        currentSubscription.threadRef,
+      );
+      if (!mounted ||
+          _threadPatchSubscriptions[displayThreadId]?.token != token) {
+        return;
+      }
+      if (patch.ownerDid.trim() != currentSubscription.ownerDid ||
+          !_threadPatchMatchesSubscription(patch, currentSubscription)) {
+        await _loadLocalHistory(conversation, intoThreadId: displayThreadId);
+        return;
+      }
+      _threadPatchSubscriptions[displayThreadId] = currentSubscription.copyWith(
+        lastVersion: patch.version,
+      );
+      await _applyThreadPatchBody(displayThreadId, patch, conversation);
+    } catch (_) {
+      await _loadLocalHistory(conversation, intoThreadId: displayThreadId);
     }
   }
 
@@ -1215,6 +1434,7 @@ class ChatThreadsController
   void clear() {
     _cancelAgentProcessingTimers();
     _cancelConversationRefreshTimer();
+    _cancelThreadPatchSubscriptions();
     _pendingHistorySyncs.clear();
     _activeLocalHistoryLoads.clear();
     _activeRemoteHistorySyncs.clear();
@@ -1278,6 +1498,23 @@ class ChatThreadsController
     state = <String, ChatThreadState>{
       ...state,
       threadId: current.copyWith(messages: _sortMessages(messages)),
+    };
+  }
+
+  void _removeMessageById(String threadId, String messageId) {
+    final current = thread(threadId);
+    final nextMessages = current.messages
+        .where(
+          (message) =>
+              message.localId != messageId && message.remoteId != messageId,
+        )
+        .toList();
+    if (nextMessages.length == current.messages.length) {
+      return;
+    }
+    state = <String, ChatThreadState>{
+      ...state,
+      threadId: current.copyWith(messages: nextMessages),
     };
   }
 
@@ -2608,6 +2845,13 @@ class ChatThreadsController
     _pendingConversationRefreshFallbacks.clear();
   }
 
+  void _cancelThreadPatchSubscriptions() {
+    for (final session in _threadPatchSubscriptions.values) {
+      unawaited(session.subscription.cancel());
+    }
+    _threadPatchSubscriptions.clear();
+  }
+
   String _displayThreadIdFor(ConversationSummary conversation, String? value) {
     final displayThreadId = value?.trim();
     if (displayThreadId == null || displayThreadId.isEmpty) {
@@ -2620,6 +2864,7 @@ class ChatThreadsController
   void dispose() {
     _cancelAgentProcessingTimers();
     _cancelConversationRefreshTimer();
+    _cancelThreadPatchSubscriptions();
     super.dispose();
   }
 
@@ -2905,6 +3150,28 @@ AppThreadRef _localHistoryThreadRefFor(ConversationSummary conversation) {
     return AppThreadRef.direct(peer);
   }
   return AppThreadRef.thread(conversation.threadId);
+}
+
+({String kind, String id}) _threadPatchKeyFor(AppThreadRef thread) {
+  return switch (thread) {
+    AppDirectThreadRef(:final peerDidOrHandle) => (
+      kind: 'direct',
+      id: peerDidOrHandle.trim(),
+    ),
+    AppGroupThreadRef(:final groupDid) => (kind: 'group', id: groupDid.trim()),
+    AppMessageThreadRef(:final threadId) => (
+      kind: 'thread',
+      id: threadId.trim(),
+    ),
+  };
+}
+
+bool _threadPatchMatchesSubscription(
+  ThreadMessagePatch patch,
+  _ThreadPatchSubscription subscription,
+) {
+  return patch.threadKind.trim() == subscription.threadKind &&
+      patch.threadId.trim() == subscription.threadId;
 }
 
 AppThreadRef _readThreadRefFor(ConversationSummary conversation) {

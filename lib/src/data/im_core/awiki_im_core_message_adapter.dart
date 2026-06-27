@@ -5,6 +5,7 @@ import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
 import '../../application/models/attachment_models.dart';
 import '../../application/models/app_thread_ref.dart';
+import '../../application/models/thread_message_patch.dart';
 import '../../application/ports/message_core_port.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/chat_mention.dart';
@@ -13,7 +14,10 @@ import 'awiki_im_core_mappers.dart';
 import 'awiki_im_core_runtime.dart';
 
 class AwikiImCoreMessageAdapter
-    implements MessageCorePort, LocalHistoryMessageCorePort {
+    implements
+        MessageCorePort,
+        LocalHistoryMessageCorePort,
+        ThreadPatchMessageCorePort {
   AwikiImCoreMessageAdapter({
     required AwikiImCoreRuntime runtime,
     AwikiImCoreMappers mappers = const AwikiImCoreMappers(),
@@ -262,6 +266,33 @@ class AwikiImCoreMessageAdapter
   }
 
   @override
+  Stream<ThreadMessagePatch> watchThreadPatches(
+    AppThreadRef thread, {
+    int limit = 100,
+  }) async* {
+    final client = await _runtime.currentClient();
+    final ownerDid = (await client.identity.current()).did;
+    yield* client.messages
+        .watchThreadPatches(_mappers.threadRefToCore(thread), limit: limit)
+        .map((patch) => _threadPatchFromCore(patch, ownerDid: ownerDid));
+  }
+
+  @override
+  Future<ThreadMessagePatch> repairThreadStore(
+    AppThreadRef thread, {
+    int limit = 100,
+  }) async {
+    return _runtime.withCurrentClient((client) async {
+      final ownerDid = (await client.identity.current()).did;
+      final patch = await client.messages.repairThreadStore(
+        _mappers.threadRefToCore(thread),
+        limit: limit,
+      );
+      return _threadPatchFromCore(patch, ownerDid: ownerDid);
+    });
+  }
+
+  @override
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed) {
     final mentionPayload = ChatMentionPayload.tryParsePayloadJson(
       failed.payloadJson,
@@ -278,6 +309,42 @@ class AwikiImCoreMessageAdapter
     return sendText(
       thread: _threadFromFailedMessage(failed),
       content: failed.content,
+    );
+  }
+
+  ThreadMessagePatch _threadPatchFromCore(
+    core.ThreadMessageStorePatch patch, {
+    required String ownerDid,
+  }) {
+    final messages = patch.items
+        .map(
+          (message) =>
+              _mappers.chatMessageFromCore(message, ownerDid: ownerDid),
+        )
+        .where((message) => message.hasRenderableContent)
+        .toList();
+    final message = patch.message == null
+        ? null
+        : _mappers.chatMessageFromCore(patch.message!, ownerDid: ownerDid);
+    return ThreadMessagePatch(
+      kind: switch (patch.kind) {
+        core.ThreadMessageStorePatchKind.reset => ThreadMessagePatchKind.reset,
+        core.ThreadMessageStorePatchKind.upsert =>
+          ThreadMessagePatchKind.upsert,
+        core.ThreadMessageStorePatchKind.remove =>
+          ThreadMessagePatchKind.remove,
+        core.ThreadMessageStorePatchKind.repairRequired =>
+          ThreadMessagePatchKind.repairRequired,
+      },
+      ownerDid: patch.ownerDid,
+      version: patch.version,
+      threadKind: patch.threadKind,
+      threadId: patch.threadId,
+      messages: messages,
+      message: message == null || message.hasRenderableContent ? message : null,
+      index: patch.index,
+      messageId: patch.messageId,
+      reason: patch.reason,
     );
   }
 }

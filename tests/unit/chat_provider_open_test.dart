@@ -3,6 +3,9 @@ import 'dart:typed_data';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
+import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/thread_message_patch.dart';
+import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -175,6 +178,198 @@ void main() {
 
     final thread = container.read(chatThreadProvider(conversation.threadId));
     expect(thread.messages.single.content, 'hello');
+  });
+
+  test('thread patch upsert updates sent result without duplicating', () async {
+    final patchMessaging = _PatchMessagingService(
+      localHistory: <ChatMessage>[],
+    );
+    final patchContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        messagingServiceProvider.overrideWithValue(patchMessaging),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(patchContainer.dispose);
+
+    await patchContainer
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await pumpEventQueue();
+    await patchContainer
+        .read(chatThreadsProvider.notifier)
+        .sendMessage(conversation: conversation, content: 'hello patch');
+    await pumpEventQueue();
+
+    patchMessaging.emitPatch(
+      ThreadMessagePatch(
+        kind: ThreadMessagePatchKind.upsert,
+        ownerDid: 'did:me',
+        version: 2,
+        threadKind: 'direct',
+        threadId: 'did:peer',
+        message: ChatMessage(
+          localId: 'sent-patched',
+          remoteId: 'sent-patched',
+          threadId: conversation.threadId,
+          senderDid: 'did:me',
+          receiverDid: 'did:peer',
+          content: 'hello patch',
+          createdAt: DateTime.now(),
+          isMine: true,
+          sendState: MessageSendState.sent,
+          serverSequence: 2,
+        ),
+      ),
+    );
+    await pumpEventQueue();
+
+    final messages = patchContainer
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    expect(messages, hasLength(1));
+    expect(messages.single.remoteId, 'sent-patched');
+    expect(messages.single.sendState, MessageSendState.sent);
+    expect(messages.single.serverSequence, 2);
+  });
+
+  test('thread patch ignores mismatched thread', () async {
+    final patchMessaging = _PatchMessagingService(
+      localHistory: <ChatMessage>[message],
+    );
+    final patchContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        messagingServiceProvider.overrideWithValue(patchMessaging),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(patchContainer.dispose);
+
+    await patchContainer
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await pumpEventQueue();
+
+    patchMessaging.emitPatch(
+      ThreadMessagePatch(
+        kind: ThreadMessagePatchKind.upsert,
+        ownerDid: 'did:me',
+        version: 2,
+        threadKind: 'direct',
+        threadId: 'did:other',
+        message: ChatMessage(
+          localId: 'wrong-thread',
+          remoteId: 'wrong-thread',
+          threadId: 'dm:did:me:did:other',
+          senderDid: 'did:other',
+          receiverDid: 'did:me',
+          content: 'wrong thread',
+          createdAt: DateTime(2026, 5, 8, 10, 3),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+      ),
+    );
+    await pumpEventQueue();
+
+    final messages = patchContainer
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    expect(messages, hasLength(1));
+    expect(messages.single.content, 'hello');
+  });
+
+  test('thread patch version gap repairs from store snapshot', () async {
+    final repaired = ChatMessage(
+      localId: 'repaired-1',
+      remoteId: 'repaired-1',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'repaired',
+      createdAt: DateTime(2026, 5, 8, 10, 2),
+      isMine: false,
+      sendState: MessageSendState.sent,
+    );
+    final patchMessaging = _PatchMessagingService(
+      localHistory: <ChatMessage>[],
+      repairPatch: ThreadMessagePatch(
+        kind: ThreadMessagePatchKind.reset,
+        ownerDid: 'did:me',
+        version: 3,
+        threadKind: 'direct',
+        threadId: 'did:peer',
+        messages: <ChatMessage>[repaired],
+      ),
+    );
+    final patchContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        messagingServiceProvider.overrideWithValue(patchMessaging),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(patchContainer.dispose);
+
+    await patchContainer
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await pumpEventQueue();
+    patchMessaging.emitPatch(
+      ThreadMessagePatch(
+        kind: ThreadMessagePatchKind.upsert,
+        ownerDid: 'did:me',
+        version: 5,
+        threadKind: 'direct',
+        threadId: 'did:peer',
+        message: repaired,
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(patchMessaging.repairCalls, 1);
+    final messages = patchContainer
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    expect(messages.map((item) => item.content), contains('repaired'));
   });
 
   test('远端 reconcile 失败不会清空本地历史', () async {
@@ -2296,6 +2491,186 @@ class _ThrowingMarkReadGateway extends FakeAwikiGateway {
     markReadCalls += 1;
     throw UnsupportedError('IM Core markThreadRead is not available yet');
   }
+}
+
+class _PatchMessagingService
+    implements
+        MessagingService,
+        LocalHistoryMessagingService,
+        ThreadPatchMessagingService {
+  _PatchMessagingService({
+    required this.localHistory,
+    ThreadMessagePatch? repairPatch,
+  }) : repairPatch =
+           repairPatch ??
+           const ThreadMessagePatch(
+             kind: ThreadMessagePatchKind.reset,
+             ownerDid: 'did:me',
+             version: 1,
+             threadKind: 'direct',
+             threadId: 'did:peer',
+           );
+
+  final List<ChatMessage> localHistory;
+  final ThreadMessagePatch repairPatch;
+  final StreamController<ThreadMessagePatch> _patches =
+      StreamController<ThreadMessagePatch>.broadcast();
+  int repairCalls = 0;
+
+  void emitPatch(ThreadMessagePatch patch) {
+    _patches.add(patch);
+  }
+
+  @override
+  Stream<ThreadMessagePatch> watchThreadPatches(
+    AppThreadRef thread, {
+    int limit = 100,
+  }) {
+    return Stream<ThreadMessagePatch>.multi((controller) {
+      controller.add(
+        ThreadMessagePatch(
+          kind: ThreadMessagePatchKind.reset,
+          ownerDid: 'did:me',
+          version: 1,
+          threadKind: _patchThreadKind(thread),
+          threadId: _patchThreadId(thread),
+          messages: localHistory,
+        ),
+      );
+      final subscription = _patches.stream.listen(
+        controller.add,
+        onError: controller.addError,
+        onDone: controller.close,
+      );
+      controller.onCancel = subscription.cancel;
+    });
+  }
+
+  @override
+  Future<ThreadMessagePatch> repairThreadStore(
+    AppThreadRef thread, {
+    int limit = 100,
+  }) async {
+    repairCalls += 1;
+    return repairPatch;
+  }
+
+  @override
+  Future<AttachmentDownloadResult> downloadAttachment({
+    required AppThreadRef thread,
+    required String messageId,
+    String? attachmentId,
+    String? localPath,
+  }) async {
+    return AttachmentDownloadResult(attachmentId: attachmentId ?? 'a1');
+  }
+
+  @override
+  Future<List<ChatMessage>> loadHistory(
+    AppThreadRef thread, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  }) async {
+    return localHistory;
+  }
+
+  @override
+  Future<List<ChatMessage>> loadLocalHistory(
+    AppThreadRef thread, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  }) async {
+    return localHistory;
+  }
+
+  @override
+  Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed) async {
+    return failed.copyWith(sendState: MessageSendState.sent);
+  }
+
+  @override
+  Future<ChatMessage> sendAttachment({
+    required AppThreadRef thread,
+    required AttachmentDraft attachment,
+    String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
+    String? idempotencyKey,
+  }) async {
+    return _sentMessage(thread: thread, content: caption ?? '');
+  }
+
+  @override
+  Future<ChatMessage> sendMentionText({
+    required AppThreadRef thread,
+    required String text,
+    required List<ChatMentionDraft> mentions,
+    String? idempotencyKey,
+  }) async {
+    return _sentMessage(thread: thread, content: text);
+  }
+
+  @override
+  Future<ChatMessage> sendPayload({
+    required AppThreadRef thread,
+    required Map<String, Object?> payload,
+    bool secure = true,
+    String? idempotencyKey,
+  }) async {
+    return _sentMessage(
+      thread: thread,
+      content: payload['text']?.toString() ?? '',
+    );
+  }
+
+  @override
+  Future<ChatMessage> sendText({
+    required AppThreadRef thread,
+    required String content,
+  }) async {
+    return _sentMessage(thread: thread, content: content);
+  }
+}
+
+ChatMessage _sentMessage({
+  required AppThreadRef thread,
+  required String content,
+}) {
+  final groupDid = thread is AppGroupThreadRef ? thread.groupDid : null;
+  final receiverDid = thread is AppDirectThreadRef
+      ? thread.peerDidOrHandle
+      : null;
+  const messageId = 'sent-patched';
+  return ChatMessage(
+    localId: messageId,
+    remoteId: messageId,
+    threadId: thread.stableId,
+    senderDid: 'did:me',
+    receiverDid: receiverDid,
+    groupId: groupDid,
+    content: content,
+    originalType: 'text',
+    createdAt: DateTime.now(),
+    isMine: true,
+    sendState: MessageSendState.sent,
+  );
+}
+
+String _patchThreadKind(AppThreadRef thread) {
+  return switch (thread) {
+    AppDirectThreadRef() => 'direct',
+    AppGroupThreadRef() => 'group',
+    AppMessageThreadRef() => 'thread',
+  };
+}
+
+String _patchThreadId(AppThreadRef thread) {
+  return switch (thread) {
+    AppDirectThreadRef(:final peerDidOrHandle) => peerDidOrHandle,
+    AppGroupThreadRef(:final groupDid) => groupDid,
+    AppMessageThreadRef(:final threadId) => threadId,
+  };
 }
 
 Future<void> _pumpPostSendReconcile() async {

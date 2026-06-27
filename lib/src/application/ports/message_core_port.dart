@@ -2,6 +2,7 @@ import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/chat_mention.dart';
 import '../models/attachment_models.dart';
 import '../models/app_thread_ref.dart';
+import '../models/thread_message_patch.dart';
 
 abstract interface class MessageCorePort {
   Future<ChatMessage> sendText({
@@ -47,5 +48,17 @@ abstract interface class LocalHistoryMessageCorePort {
     int limit = 100,
     String? cursor,
     bool includeControlPayloads = false,
+  });
+}
+
+abstract interface class ThreadPatchMessageCorePort {
+  Stream<ThreadMessagePatch> watchThreadPatches(
+    AppThreadRef thread, {
+    int limit = 100,
+  });
+
+  Future<ThreadMessagePatch> repairThreadStore(
+    AppThreadRef thread, {
+    int limit = 100,
   });
 }

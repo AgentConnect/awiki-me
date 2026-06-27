@@ -2,6 +2,7 @@ import '../domain/entities/chat_message.dart';
 import '../domain/entities/chat_mention.dart';
 import 'models/attachment_models.dart';
 import 'models/app_thread_ref.dart';
+import 'models/thread_message_patch.dart';
 import 'ports/message_core_port.dart';
 
 abstract interface class MessagingService {
@@ -58,8 +59,23 @@ abstract interface class LocalHistoryMessagingService {
   });
 }
 
+abstract interface class ThreadPatchMessagingService {
+  Stream<ThreadMessagePatch> watchThreadPatches(
+    AppThreadRef thread, {
+    int limit = 100,
+  });
+
+  Future<ThreadMessagePatch> repairThreadStore(
+    AppThreadRef thread, {
+    int limit = 100,
+  });
+}
+
 class ImCoreMessagingService
-    implements MessagingService, LocalHistoryMessagingService {
+    implements
+        MessagingService,
+        LocalHistoryMessagingService,
+        ThreadPatchMessagingService {
   const ImCoreMessagingService({required MessageCorePort messages})
     : _messages = messages;
 
@@ -166,6 +182,36 @@ class ImCoreMessagingService
       limit: limit,
       cursor: cursor,
       includeControlPayloads: includeControlPayloads,
+    );
+  }
+
+  @override
+  Stream<ThreadMessagePatch> watchThreadPatches(
+    AppThreadRef thread, {
+    int limit = 100,
+  }) {
+    final messages = _messages;
+    if (messages is! ThreadPatchMessageCorePort) {
+      throw UnsupportedError('Message core does not expose thread patches.');
+    }
+    return (messages as ThreadPatchMessageCorePort).watchThreadPatches(
+      thread,
+      limit: limit,
+    );
+  }
+
+  @override
+  Future<ThreadMessagePatch> repairThreadStore(
+    AppThreadRef thread, {
+    int limit = 100,
+  }) {
+    final messages = _messages;
+    if (messages is! ThreadPatchMessageCorePort) {
+      throw UnsupportedError('Message core does not expose thread patches.');
+    }
+    return (messages as ThreadPatchMessageCorePort).repairThreadStore(
+      thread,
+      limit: limit,
     );
   }
 
