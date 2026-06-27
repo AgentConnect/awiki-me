@@ -2,6 +2,10 @@ import '../../domain/entities/conversation_summary.dart';
 import '../models/app_thread_ref.dart';
 
 abstract interface class ConversationCorePort {
+  Future<List<ConversationSummary>> loadConversationSnapshot();
+
+  Future<void> clearConversationSnapshot();
+
   Future<List<ConversationSummary>> listConversations({
     int limit = 100,
     bool unreadOnly = false,

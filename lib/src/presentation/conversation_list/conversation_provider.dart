@@ -49,6 +49,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   final Duration refreshTimeout;
   Future<void>? _refreshOperation;
   bool _refreshOperationFastLocal = false;
+  bool _snapshotBootstrapActive = false;
+  int? _snapshotBootstrapAllowedGeneration;
   int _refreshGeneration = 0;
   final Map<String, DateTime> _locallyHiddenConversationKeys =
       <String, DateTime>{};
@@ -83,6 +85,18 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   Future<void> refreshFastLocal() {
     final reused = _refreshOperation != null;
     final activeRefresh = _refreshOperation ?? _startRefresh(fastLocal: true);
+    if (!reused && state.conversations.isEmpty) {
+      final session = ref.read(sessionProvider).session;
+      if (session != null) {
+        _snapshotBootstrapAllowedGeneration = _refreshGeneration;
+        unawaited(
+          _bootstrapFromSnapshot(
+            generation: _refreshGeneration,
+            ownerDid: session.did,
+          ).catchError((_) {}),
+        );
+      }
+    }
     AwikiPerformanceLogger.log(
       'conversation_list.refresh_fast_local.request',
       fields: <String, Object?>{
@@ -153,6 +167,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           conversations,
           generation: generation,
           label: 'conversation_list.refresh',
+          keepLocalOnly: !_snapshotBootstrapActive,
         );
         totalWatch.stop();
         AwikiPerformanceLogger.log(
@@ -179,6 +194,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         conversations,
         generation: generation,
         label: 'conversation_list.refresh_fast_local',
+        keepLocalOnly: !_snapshotBootstrapActive,
       );
       totalWatch.stop();
       AwikiPerformanceLogger.log(
@@ -240,14 +256,69 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     );
   }
 
+  Future<void> _bootstrapFromSnapshot({
+    required int generation,
+    required String ownerDid,
+  }) async {
+    if (!_canApplySnapshotBootstrap(
+      generation: generation,
+      ownerDid: ownerDid,
+    )) {
+      return;
+    }
+    final conversations = await AwikiPerformanceLogger.async(
+      'conversation_list.snapshot.service',
+      () => ref
+          .read(conversationServiceProvider)
+          .loadConversationSnapshot(ownerDid: ownerDid),
+      level: AwikiPerformanceLogLevel.verbose,
+    );
+    if (!_canApplySnapshotBootstrap(
+          generation: generation,
+          ownerDid: ownerDid,
+        ) ||
+        conversations.isEmpty ||
+        state.conversations.isNotEmpty) {
+      return;
+    }
+    state = state.copyWith(
+      conversations: _filterLocallyHiddenConversations(conversations),
+      isLoading: true,
+    );
+    _snapshotBootstrapActive = true;
+    await _updateBadgeCountBestEffort(state.unreadCount);
+    AwikiPerformanceLogger.log(
+      'conversation_list.snapshot',
+      fields: <String, Object?>{
+        'items': state.conversations.length,
+        'unread': state.unreadCount,
+      },
+      level: AwikiPerformanceLogLevel.verbose,
+    );
+  }
+
+  bool _canApplySnapshotBootstrap({
+    required int generation,
+    required String ownerDid,
+  }) {
+    return generation == _refreshGeneration &&
+        _snapshotBootstrapAllowedGeneration == generation &&
+        _refreshOperation != null &&
+        _refreshOperationFastLocal &&
+        state.conversations.isEmpty &&
+        ref.read(sessionProvider).session?.did == ownerDid;
+  }
+
   Future<void> _applyConversationRefresh(
     List<ConversationSummary> refreshed, {
     required int generation,
     required String label,
+    bool keepLocalOnly = true,
   }) async {
     if (generation != _refreshGeneration) {
       return;
     }
+    _snapshotBootstrapAllowedGeneration = null;
     final currentConversations = state.conversations;
     final nextConversations = AwikiPerformanceLogger.sync(
       '$label.merge',
@@ -255,6 +326,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         _mergeConversationRefresh(
           refreshed: refreshed,
           local: currentConversations,
+          keepLocalOnly: keepLocalOnly,
         ),
       ),
       fields: <String, Object?>{
@@ -264,6 +336,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       },
     );
     state = state.copyWith(conversations: nextConversations, isLoading: false);
+    _snapshotBootstrapActive = false;
     await _updateBadgeCountBestEffort(state.unreadCount);
   }
 
@@ -451,6 +524,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     _refreshGeneration += 1;
     _refreshOperation = null;
     _refreshOperationFastLocal = false;
+    _snapshotBootstrapActive = false;
+    _snapshotBootstrapAllowedGeneration = null;
     _locallyHiddenConversationKeys.clear();
     state = const ConversationListState();
     await _updateBadgeCountBestEffort(0);
@@ -553,6 +628,7 @@ List<String> _visibilityKeysFor(
 List<ConversationSummary> _mergeConversationRefresh({
   required List<ConversationSummary> refreshed,
   required List<ConversationSummary> local,
+  bool keepLocalOnly = true,
 }) {
   final localIndex = _ConversationMergeIndex(local);
   final consumedLocalThreadIds = <String>{};
@@ -582,14 +658,16 @@ List<ConversationSummary> _mergeConversationRefresh({
   final refreshedThreadIds = <String>{
     for (final conversation in refreshed) conversation.threadId,
   };
-  final localOnly = local
-      .where(
-        (conversation) =>
-            !consumedLocalThreadIds.contains(conversation.threadId) &&
-            !refreshedThreadIds.contains(conversation.threadId) &&
-            conversation.lastMessagePreview.trim().isNotEmpty,
-      )
-      .toList();
+  final localOnly = keepLocalOnly
+      ? local
+            .where(
+              (conversation) =>
+                  !consumedLocalThreadIds.contains(conversation.threadId) &&
+                  !refreshedThreadIds.contains(conversation.threadId) &&
+                  conversation.lastMessagePreview.trim().isNotEmpty,
+            )
+            .toList()
+      : const <ConversationSummary>[];
   if (localOnly.isEmpty) {
     return mergedRefreshed;
   }

@@ -202,6 +202,68 @@ class AwikiImCoreMappers {
     );
   }
 
+  ConversationSummary conversationFromSnapshot(
+    core.ConversationSnapshotItem conversation, {
+    required String ownerDid,
+    ProductConversationOverlay? overlay,
+  }) {
+    final isGroup =
+        conversation.threadKind == 'group' ||
+        conversation.threadId.startsWith('group:');
+    final lastMessage = conversation.lastMessage;
+    final targetPeer = isGroup
+        ? null
+        : _directPeerTarget(
+            _directPeerHandleForSnapshotMessage(lastMessage) ??
+                _firstNonEmpty(
+                  conversation.participants.where(
+                    (participant) => participant.trim() != ownerDid.trim(),
+                  ),
+                ) ??
+                _directPeerFromSnapshotThread(ownerDid, conversation),
+          );
+    final targetDid = isGroup
+        ? null
+        : _directPeerDidForSnapshotMessage(ownerDid, lastMessage) ??
+              ((targetPeer?.startsWith('did:') ?? false) ? targetPeer : null);
+    final groupId = isGroup
+        ? lastMessage?.group ?? _stripPrefix(conversation.threadId, 'group:')
+        : null;
+    return ConversationSummary(
+      threadId: _conversationThreadId(
+        ownerDid: ownerDid,
+        isGroup: isGroup,
+        peerDid: targetDid,
+        groupId: groupId,
+        fallbackThreadId: conversation.threadId,
+      ),
+      displayName:
+          overlay?.customTitle ??
+          groupId ??
+          targetPeer ??
+          targetDid ??
+          conversation.threadId,
+      lastMessagePreview: lastMessage == null
+          ? ''
+          : _snapshotMessagePreview(lastMessage),
+      lastMessageAt: _parseDateTime(
+        conversation.lastMessageAt ??
+            lastMessage?.sentAt ??
+            lastMessage?.receivedAt,
+      ),
+      unreadCount: conversation.unreadCount,
+      unreadMentionCount: conversation.unreadMentionCount,
+      firstUnreadMentionMessageId: conversation.firstUnreadMentionMessageId,
+      isGroup: isGroup,
+      targetDid: targetDid,
+      targetPeer: targetPeer,
+      groupId: groupId,
+      avatarUri: null,
+      avatarSeed: overlay?.avatarSeed,
+      lastMessagePayloadJson: lastMessage?.body.payloadJson,
+    );
+  }
+
   GroupSummary groupFromCoreSummary(core.GroupSummary group) {
     return GroupSummary(
       groupId: group.did,
@@ -495,12 +557,52 @@ String? _directPeerDidForMessage(String ownerDid, core.Message? message) {
   return (peer?.startsWith('did:') ?? false) ? peer : null;
 }
 
+String? _directPeerDidForSnapshotMessage(
+  String ownerDid,
+  core.ConversationSnapshotMessage? message,
+) {
+  if (message == null) {
+    return null;
+  }
+  final currentDid =
+      _snapshotAttribute(message, 'peer_current_did') ??
+      _snapshotAttribute(message, 'resolved_target_did');
+  if (currentDid != null && currentDid.startsWith('did:')) {
+    return currentDid;
+  }
+  final owner = ownerDid.trim();
+  final sender = _nonEmpty(message.sender);
+  final receiver = _nonEmpty(message.receiver);
+  if (sender != null && sender.startsWith('did:') && sender != owner) {
+    return sender;
+  }
+  if (receiver != null && receiver.startsWith('did:') && receiver != owner) {
+    return receiver;
+  }
+  return null;
+}
+
 String? _directPeerHandleForMessage(core.Message? message) {
   if (message == null) {
     return null;
   }
   return _attribute(message.metadata, 'peer_full_handle') ??
       _attribute(message.metadata, 'target_handle') ??
+      ((message.threadKind == 'direct' &&
+              !message.threadId.startsWith('did:') &&
+              !_isInternalDirectThreadId(message.threadId))
+          ? _nonEmpty(message.threadId)
+          : null);
+}
+
+String? _directPeerHandleForSnapshotMessage(
+  core.ConversationSnapshotMessage? message,
+) {
+  if (message == null) {
+    return null;
+  }
+  return _snapshotAttribute(message, 'peer_full_handle') ??
+      _snapshotAttribute(message, 'target_handle') ??
       ((message.threadKind == 'direct' &&
               !message.threadId.startsWith('did:') &&
               !_isInternalDirectThreadId(message.threadId))
@@ -519,6 +621,19 @@ String? _directPeerTarget(String? value) {
 String? _directPeerFromConversationThread(
   String ownerDid,
   core.Conversation conversation,
+) {
+  if (conversation.threadKind != 'direct') {
+    return null;
+  }
+  return _directPeerFromThreadId(ownerDid, conversation.threadId) ??
+      (_isInternalDirectThreadId(conversation.threadId)
+          ? null
+          : _nonEmpty(conversation.threadId));
+}
+
+String? _directPeerFromSnapshotThread(
+  String ownerDid,
+  core.ConversationSnapshotItem conversation,
 ) {
   if (conversation.threadKind != 'direct') {
     return null;
@@ -629,6 +744,24 @@ String _messagePreview(core.Message message) {
       '';
 }
 
+String _snapshotMessagePreview(core.ConversationSnapshotMessage message) {
+  if (AgentControlPayloads.isControl(message.body.payloadJson)) {
+    return '';
+  }
+  final mentionPayload = ChatMentionPayload.tryParsePayloadJson(
+    message.body.payloadJson,
+  );
+  if (mentionPayload != null) {
+    return mentionPayload.text;
+  }
+  return message.body.text ??
+      message.body.payloadJson ??
+      message.body.unsupportedContentType ??
+      message.contentType ??
+      message.body.kind ??
+      '';
+}
+
 MessageSendState _sendStateFromCore(
   core.MessageMetadata metadata, {
   required bool isMine,
@@ -651,6 +784,18 @@ bool _isEncrypted(String? contentType) {
 
 String? _attribute(core.MessageMetadata metadata, String key) {
   for (final attribute in metadata.attributes) {
+    if (attribute.key == key && attribute.value.trim().isNotEmpty) {
+      return attribute.value;
+    }
+  }
+  return null;
+}
+
+String? _snapshotAttribute(
+  core.ConversationSnapshotMessage message,
+  String key,
+) {
+  for (final attribute in message.attributes) {
     if (attribute.key == key && attribute.value.trim().isNotEmpty) {
       return attribute.value;
     }

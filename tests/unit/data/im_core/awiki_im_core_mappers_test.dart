@@ -3,6 +3,7 @@ import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_mappers.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
+import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -304,6 +305,74 @@ void main() {
       expect(mapped.lastMessagePreview, 'hi');
       expect(mapped.avatarSeed, 'seed-1');
       expect(mapped.unreadCount, 2);
+    },
+  );
+
+  test(
+    'snapshot conversation maps core-only fields and app overlay stays local',
+    () {
+      const mentionPayload =
+          '{"text":"@bob 看这里","mentions":[{"id":"m1","range":{"start":0,"end":4,"unit":"unicode_code_point"},"target":{"kind":"human","did":"did:bob","display_name":"Bob"},"mention_role":"addressee"}]}';
+      const conversation = core.ConversationSnapshotItem(
+        threadKind: 'thread',
+        threadId: 'dm:peer-scope:v1:bob',
+        participants: <String>['bob.awiki.test'],
+        unreadCount: 3,
+        unreadMentionCount: 1,
+        firstUnreadMentionMessageId: 'msg-mention',
+        messageCount: 7,
+        lastMessageAt: '2026-05-23T09:01:00Z',
+        lastMessage: core.ConversationSnapshotMessage(
+          id: 'msg-mention',
+          threadKind: 'thread',
+          threadId: 'dm:peer-scope:v1:bob',
+          direction: 'incoming',
+          sender: 'did:bob:new',
+          receiver: 'did:alice',
+          body: core.ConversationSnapshotMessageBody(
+            payloadJson: mentionPayload,
+          ),
+          sentAt: '2026-05-23T09:00:00Z',
+          serverSequence: 42,
+          contentType: 'application/json',
+          attributes: <core.MessageMetadataAttribute>[
+            core.MessageMetadataAttribute(
+              key: 'peer_full_handle',
+              value: 'Bob.AWiki.Test',
+            ),
+            core.MessageMetadataAttribute(
+              key: 'peer_current_did',
+              value: 'did:bob:new',
+            ),
+          ],
+        ),
+      );
+
+      final mapped = mapper.conversationFromSnapshot(
+        conversation,
+        ownerDid: 'did:alice',
+        overlay: ProductConversationOverlay(
+          ownerDid: 'did:alice',
+          threadId: 'dm:peer-scope:v1:bob',
+          customTitle: 'Bob local',
+          avatarSeed: 'seed-local',
+          pinned: true,
+          hidden: true,
+          updatedAt: DateTime.utc(2026, 5, 23),
+        ),
+      );
+
+      expect(mapped.threadId, 'dm:peer-scope:v1:bob');
+      expect(mapped.displayName, 'Bob local');
+      expect(mapped.avatarSeed, 'seed-local');
+      expect(mapped.lastMessagePreview, '@bob 看这里');
+      expect(mapped.targetPeer, 'bob.awiki.test');
+      expect(mapped.targetDid, 'did:bob:new');
+      expect(mapped.unreadCount, 3);
+      expect(mapped.unreadMentionCount, 1);
+      expect(mapped.firstUnreadMentionMessageId, 'msg-mention');
+      expect(mapped.lastMessagePayloadJson, mentionPayload);
+      expect(mapped.peerLifecycleState, ConversationPeerLifecycleState.active);
     },
   );
 

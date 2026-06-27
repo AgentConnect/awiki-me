@@ -1398,6 +1398,13 @@ class FakeConversationService implements ConversationService {
   final FakeAwikiGateway gateway;
 
   @override
+  Future<List<ConversationSummary>> loadConversationSnapshot({
+    required String ownerDid,
+  }) async {
+    return gateway.conversations;
+  }
+
+  @override
   Future<List<ConversationSummary>> listConversationSummariesFast({
     required String ownerDid,
     int limit = 100,

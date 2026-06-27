@@ -122,6 +122,14 @@ class _FakeConversations implements ConversationCorePort {
   final List<ConversationSummary> items;
 
   @override
+  Future<List<ConversationSummary>> loadConversationSnapshot() async {
+    return const <ConversationSummary>[];
+  }
+
+  @override
+  Future<void> clearConversationSnapshot() async {}
+
+  @override
   Future<List<ConversationSummary>> listConversations({
     int limit = 100,
     bool unreadOnly = false,

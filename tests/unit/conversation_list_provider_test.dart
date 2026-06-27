@@ -165,6 +165,163 @@ void main() {
       expect(service.listCalls, 1);
     },
   );
+
+  test(
+    'refreshFastLocal shows snapshot before SQLite hydrate finishes',
+    () async {
+      final hydrateCompleter = Completer<List<ConversationSummary>>();
+      final service = _CompleterConversationService(
+        snapshot: <ConversationSummary>[
+          _conversation(
+            threadId: 'dm:alice:bob',
+            displayName: 'Bob snapshot',
+            unreadCount: 4,
+          ),
+        ],
+        hydrateCompleter: hydrateCompleter,
+      );
+      final notifications = FakeNotificationFacade();
+      final container = ProviderContainer(
+        overrides: <Override>[
+          conversationServiceProvider.overrideWithValue(service),
+          notificationFacadeProvider.overrideWithValue(notifications),
+          sessionProvider.overrideWith((ref) {
+            final controller = SessionController();
+            controller.setSession(
+              const SessionIdentity(
+                did: 'did:alice',
+                credentialName: 'alice',
+                displayName: 'Alice',
+              ),
+            );
+            return controller;
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final refresh = container
+          .read(conversationListProvider.notifier)
+          .refreshFastLocal();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(service.snapshotCalls, 1);
+      expect(
+        container
+            .read(conversationListProvider)
+            .conversations
+            .single
+            .displayName,
+        'Bob snapshot',
+      );
+      expect(container.read(conversationListProvider).isLoading, isTrue);
+      expect(notifications.lastBadgeCount, 4);
+
+      hydrateCompleter.complete(<ConversationSummary>[
+        _conversation(
+          threadId: 'dm:alice:bob',
+          displayName: 'Bob hydrate',
+          unreadCount: 1,
+        ),
+      ]);
+      await refresh;
+
+      expect(service.fastCalls, 1);
+      expect(
+        container
+            .read(conversationListProvider)
+            .conversations
+            .single
+            .displayName,
+        'Bob hydrate',
+      );
+      expect(container.read(conversationListProvider).unreadCount, 1);
+    },
+  );
+
+  test('fast hydrate removes stale snapshot-only conversations', () async {
+    final service = _StaticConversationService(
+      conversations: const <ConversationSummary>[],
+      snapshot: <ConversationSummary>[
+        _conversation(
+          threadId: 'dm:alice:stale',
+          displayName: 'Stale snapshot',
+          targetDid: 'did:stale',
+        ),
+      ],
+    );
+    final container = ProviderContainer(
+      overrides: <Override>[
+        conversationServiceProvider.overrideWithValue(service),
+        notificationFacadeProvider.overrideWithValue(FakeNotificationFacade()),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:alice',
+              credentialName: 'alice',
+              displayName: 'Alice',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(conversationListProvider.notifier).refreshFastLocal();
+
+    expect(service.snapshotCalls, 1);
+    expect(container.read(conversationListProvider).conversations, isEmpty);
+  });
+
+  test('snapshot bootstrap does not repopulate after clear', () async {
+    final snapshotCompleter = Completer<List<ConversationSummary>>();
+    final hydrateCompleter = Completer<List<ConversationSummary>>();
+    final service = _CompleterConversationService(
+      snapshot: const <ConversationSummary>[],
+      snapshotCompleter: snapshotCompleter,
+      hydrateCompleter: hydrateCompleter,
+    );
+    final notifications = FakeNotificationFacade();
+    final container = ProviderContainer(
+      overrides: <Override>[
+        conversationServiceProvider.overrideWithValue(service),
+        notificationFacadeProvider.overrideWithValue(notifications),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:alice',
+              credentialName: 'alice',
+              displayName: 'Alice',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final refresh = container.read(conversationListProvider.notifier);
+    final refreshFuture = refresh.refreshFastLocal();
+    await Future<void>.delayed(Duration.zero);
+
+    await refresh.clear();
+    snapshotCompleter.complete(<ConversationSummary>[
+      _conversation(
+        threadId: 'dm:alice:stale',
+        displayName: 'Stale snapshot',
+        unreadCount: 9,
+      ),
+    ]);
+    hydrateCompleter.complete(const <ConversationSummary>[]);
+    await refreshFuture;
+
+    expect(service.snapshotCalls, 1);
+    expect(container.read(conversationListProvider).conversations, isEmpty);
+    expect(notifications.lastBadgeCount, 0);
+  });
 }
 
 ConversationSummary _conversation({
@@ -193,12 +350,21 @@ class _SlowEnrichConversationService implements ConversationService {
   final List<ConversationSummary> enriched;
   final Completer<void> _enrichCompleter = Completer<void>();
   int fastCalls = 0;
+  int snapshotCalls = 0;
   int enrichCalls = 0;
 
   void completeEnrichment() {
     if (!_enrichCompleter.isCompleted) {
       _enrichCompleter.complete();
     }
+  }
+
+  @override
+  Future<List<ConversationSummary>> loadConversationSnapshot({
+    required String ownerDid,
+  }) async {
+    snapshotCalls += 1;
+    return const <ConversationSummary>[];
   }
 
   @override
@@ -265,10 +431,24 @@ class _SlowEnrichConversationService implements ConversationService {
 }
 
 class _StaticConversationService implements ConversationService {
-  _StaticConversationService({required this.conversations});
+  _StaticConversationService({
+    required this.conversations,
+    this.snapshot = const <ConversationSummary>[],
+  });
 
   final List<ConversationSummary> conversations;
+  final List<ConversationSummary> snapshot;
+  int fastCalls = 0;
   int listCalls = 0;
+  int snapshotCalls = 0;
+
+  @override
+  Future<List<ConversationSummary>> loadConversationSnapshot({
+    required String ownerDid,
+  }) async {
+    snapshotCalls += 1;
+    return snapshot;
+  }
 
   @override
   Future<List<ConversationSummary>> listConversations({
@@ -286,6 +466,7 @@ class _StaticConversationService implements ConversationService {
     int limit = 100,
     bool unreadOnly = false,
   }) async {
+    fastCalls += 1;
     return conversations;
   }
 
@@ -329,4 +510,37 @@ class _StaticConversationService implements ConversationService {
     required ConversationSummary conversation,
     DateTime? updatedAt,
   }) async {}
+}
+
+class _CompleterConversationService extends _StaticConversationService {
+  _CompleterConversationService({
+    required super.snapshot,
+    this.snapshotCompleter,
+    required this.hydrateCompleter,
+  }) : super(conversations: const <ConversationSummary>[]);
+
+  final Completer<List<ConversationSummary>>? snapshotCompleter;
+  final Completer<List<ConversationSummary>> hydrateCompleter;
+
+  @override
+  Future<List<ConversationSummary>> loadConversationSnapshot({
+    required String ownerDid,
+  }) async {
+    snapshotCalls += 1;
+    final completer = snapshotCompleter;
+    if (completer != null) {
+      return completer.future;
+    }
+    return snapshot;
+  }
+
+  @override
+  Future<List<ConversationSummary>> listConversationSummariesFast({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) async {
+    fastCalls += 1;
+    return hydrateCompleter.future;
+  }
 }

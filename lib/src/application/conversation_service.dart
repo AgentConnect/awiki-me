@@ -13,6 +13,10 @@ import 'ports/conversation_core_port.dart';
 import 'product_local_store.dart';
 
 abstract interface class ConversationService {
+  Future<List<ConversationSummary>> loadConversationSnapshot({
+    required String ownerDid,
+  });
+
   Future<List<ConversationSummary>> listConversationSummariesFast({
     required String ownerDid,
     int limit = 100,
@@ -80,6 +84,78 @@ class ImCoreConversationService implements ConversationService {
       agentInventory: inventory,
       agentProjectionTimeout: agentProjectionTimeout,
     );
+  }
+
+  @override
+  Future<List<ConversationSummary>> loadConversationSnapshot({
+    required String ownerDid,
+  }) async {
+    final items = await AwikiPerformanceLogger.async(
+      'conversation_service.snapshot.core_load',
+      _conversations.loadConversationSnapshot,
+      level: AwikiPerformanceLogLevel.verbose,
+    );
+    final projection =
+        _cachedAgentProjection ?? const _AgentConversationProjection();
+    final mergedItems = AwikiPerformanceLogger.sync(
+      'conversation_service.snapshot.merge_cached_agents',
+      () => _mergeAgentConversationDuplicates(items, projection),
+      fields: <String, Object?>{
+        'items': items.length,
+        'cache_hit': _cachedAgentProjection != null,
+        'agents': projection.agentCount,
+        'runtime_agents': projection.runtimeAgents.length,
+      },
+      level: AwikiPerformanceLogLevel.verbose,
+    );
+    final overlays = await _loadOverlaysForConversations(
+      ownerDid: ownerDid,
+      conversations: mergedItems,
+      projection: projection,
+      label: 'conversation_service.snapshot.overlays',
+    );
+    final visible = AwikiPerformanceLogger.sync(
+      'conversation_service.snapshot.filter_sort',
+      () {
+        final result = mergedItems
+            .where(
+              (item) => shouldShowConversationForChatList(
+                item,
+                daemonAgentDids: projection.daemonAgentDids,
+              ),
+            )
+            .where((item) => !_isConversationHidden(item, overlays, projection))
+            .map(
+              (item) => _applyOverlay(
+                _applyAgentLifecycleProjection(item, projection),
+                _preferredOverlayForConversation(item, overlays, projection),
+              ),
+            )
+            .toList();
+        _sortConversationsForDisplay(
+          result,
+          overlays: overlays,
+          projection: projection,
+        );
+        return result;
+      },
+      fields: <String, Object?>{
+        'items': items.length,
+        'merged': mergedItems.length,
+        'overlays': overlays.length,
+        'cache_hit': _cachedAgentProjection != null,
+      },
+      level: AwikiPerformanceLogLevel.verbose,
+    );
+    AwikiPerformanceLogger.log(
+      'conversation_service.snapshot',
+      fields: <String, Object?>{
+        'items': items.length,
+        'visible': visible.length,
+      },
+      level: AwikiPerformanceLogLevel.verbose,
+    );
+    return visible;
   }
 
   @override
@@ -171,13 +247,10 @@ class ImCoreConversationService implements ConversationService {
       agentProjection,
       includeHandleAliasesForStrongIdentity: true,
     ).toList(growable: false);
-    final overlays = await AwikiPerformanceLogger.async(
-      'conversation_service.overlays',
-      () => _localStore.loadConversationOverlays(
-        ownerDid: ownerDid,
-        threadIds: overlayKeys,
-      ),
-      fields: <String, Object?>{'keys': overlayKeys.length},
+    final overlays = await _loadOverlaysForKeys(
+      ownerDid: ownerDid,
+      keys: overlayKeys,
+      label: 'conversation_service.overlays',
     );
     final visible = AwikiPerformanceLogger.sync(
       'conversation_service.filter_sort',
@@ -203,26 +276,11 @@ class ImCoreConversationService implements ConversationService {
               ),
             )
             .toList();
-        result.sort((a, b) {
-          final aPinned =
-              _preferredOverlayForConversation(
-                a,
-                overlays,
-                agentProjection,
-              )?.pinned ==
-              true;
-          final bPinned =
-              _preferredOverlayForConversation(
-                b,
-                overlays,
-                agentProjection,
-              )?.pinned ==
-              true;
-          if (aPinned != bPinned) {
-            return aPinned ? -1 : 1;
-          }
-          return b.lastMessageAt.compareTo(a.lastMessageAt);
-        });
+        _sortConversationsForDisplay(
+          result,
+          overlays: overlays,
+          projection: agentProjection,
+        );
         return result;
       },
       fields: <String, Object?>{
@@ -291,13 +349,14 @@ class ImCoreConversationService implements ConversationService {
     )) {
       return null;
     }
-    final overlays = await _localStore.loadConversationOverlays(
+    final overlays = await _loadOverlaysForKeys(
       ownerDid: ownerDid,
-      threadIds: _conversationOverlayKeys(
+      keys: _conversationOverlayKeys(
         normalized,
         projection,
         includeHandleAliasesForStrongIdentity: true,
       ),
+      label: 'conversation_service.normalize.overlays',
     );
     if (_isConversationHidden(normalized, overlays, projection)) {
       return null;
@@ -407,6 +466,41 @@ class ImCoreConversationService implements ConversationService {
       ).primaryKey,
     );
   }
+
+  Future<Map<String, ProductConversationOverlay>>
+  _loadOverlaysForConversations({
+    required String ownerDid,
+    required Iterable<ConversationSummary> conversations,
+    required _AgentConversationProjection projection,
+    required String label,
+  }) {
+    return _loadOverlaysForKeys(
+      ownerDid: ownerDid,
+      keys: _overlayKeysForConversations(
+        conversations,
+        projection,
+        includeHandleAliasesForStrongIdentity: true,
+      ),
+      label: label,
+    );
+  }
+
+  Future<Map<String, ProductConversationOverlay>> _loadOverlaysForKeys({
+    required String ownerDid,
+    required Iterable<String> keys,
+    required String label,
+  }) {
+    final overlayKeys = keys.toList(growable: false);
+    return AwikiPerformanceLogger.async(
+      label,
+      () => _localStore.loadConversationOverlays(
+        ownerDid: ownerDid,
+        threadIds: overlayKeys,
+      ),
+      fields: <String, Object?>{'keys': overlayKeys.length},
+      level: AwikiPerformanceLogLevel.verbose,
+    );
+  }
 }
 
 Iterable<String> _overlayKeysForConversations(
@@ -474,6 +568,25 @@ ProductConversationOverlay? _latestOverlayForConversation(
     }
   }
   return latest;
+}
+
+void _sortConversationsForDisplay(
+  List<ConversationSummary> conversations, {
+  required Map<String, ProductConversationOverlay> overlays,
+  required _AgentConversationProjection projection,
+}) {
+  conversations.sort((a, b) {
+    final aPinned =
+        _preferredOverlayForConversation(a, overlays, projection)?.pinned ==
+        true;
+    final bPinned =
+        _preferredOverlayForConversation(b, overlays, projection)?.pinned ==
+        true;
+    if (aPinned != bPinned) {
+      return aPinned ? -1 : 1;
+    }
+    return b.lastMessageAt.compareTo(a.lastMessageAt);
+  });
 }
 
 List<String> _conversationOverlayKeys(

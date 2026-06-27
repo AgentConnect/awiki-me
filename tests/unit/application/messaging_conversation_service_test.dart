@@ -79,6 +79,168 @@ void main() {
     });
 
     test(
+      'snapshot load applies app overlays without caching them in core',
+      () async {
+        final snapshotRow = _conversation(
+          'dm:did:alice:did:bob',
+          targetDid: 'did:bob',
+          minutesAgo: 1,
+          displayName: 'Bob from snapshot',
+        );
+        final hiddenSnapshotRow = _conversation(
+          'dm:did:alice:did:stale',
+          targetDid: 'did:stale',
+          minutesAgo: 2,
+          displayName: 'Stale from snapshot',
+        );
+        final core = _FakeConversations(
+          snapshotItems: <ConversationSummary>[snapshotRow, hiddenSnapshotRow],
+        );
+        final store = InMemoryAwikiProductLocalStore();
+        await store.upsertConversationOverlay(
+          ProductConversationOverlay(
+            ownerDid: 'did:alice',
+            threadId: 'dm:did:alice:did:bob',
+            customTitle: 'Bob local title',
+            avatarSeed: 'local-seed',
+            updatedAt: DateTime.utc(2026, 5, 23, 9),
+          ),
+        );
+        await store.upsertConversationOverlay(
+          ProductConversationOverlay(
+            ownerDid: 'did:alice',
+            threadId: 'dm:did:alice:did:stale',
+            hidden: true,
+            updatedAt: DateTime.utc(2026, 5, 23, 9),
+          ),
+        );
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: store,
+        );
+
+        final conversations = await service.loadConversationSnapshot(
+          ownerDid: 'did:alice',
+        );
+
+        expect(core.snapshotCount, 1);
+        expect(core.listCount, 0);
+        expect(conversations, hasLength(1));
+        expect(conversations.single.displayName, 'Bob local title');
+        expect(conversations.single.avatarSeed, 'local-seed');
+        expect(snapshotRow.displayName, 'Bob from snapshot');
+        expect(snapshotRow.avatarSeed, isNull);
+      },
+    );
+
+    test('snapshot load applies pinned sort using app overlays', () async {
+      final recentRow = _conversation(
+        'thread-recent',
+        minutesAgo: 1,
+        displayName: 'Recent',
+      );
+      final pinnedRow = _conversation(
+        'thread-pinned',
+        minutesAgo: 20,
+        displayName: 'Pinned from snapshot',
+      );
+      final core = _FakeConversations(
+        snapshotItems: <ConversationSummary>[recentRow, pinnedRow],
+      );
+      final store = InMemoryAwikiProductLocalStore();
+      await store.upsertConversationOverlay(
+        ProductConversationOverlay(
+          ownerDid: 'did:alice',
+          threadId: 'thread-pinned',
+          pinned: true,
+          customTitle: 'Pinned local',
+          updatedAt: DateTime.utc(2026, 5, 23, 9),
+        ),
+      );
+      final service = ImCoreConversationService(
+        conversations: core,
+        localStore: store,
+      );
+
+      final conversations = await service.loadConversationSnapshot(
+        ownerDid: 'did:alice',
+      );
+
+      expect(conversations.map((item) => item.threadId), [
+        'thread-pinned',
+        'thread-recent',
+      ]);
+      expect(conversations.first.displayName, 'Pinned local');
+      expect(pinnedRow.displayName, 'Pinned from snapshot');
+    });
+
+    test(
+      'snapshot load merges cached runtime DID and handle agent rows',
+      () async {
+        final core = _FakeConversations(
+          items: <ConversationSummary>[
+            _conversation(
+              'dm:did:human:did:agent:runtime',
+              targetDid: 'did:agent:runtime',
+              targetPeer: 'did:agent:runtime',
+              minutesAgo: 2,
+              displayName: 'zhuocheng-test-hermes',
+            ),
+          ],
+          snapshotItems: <ConversationSummary>[
+            _conversation(
+              'dm:did:human:did:agent:runtime',
+              targetDid: 'did:agent:runtime',
+              targetPeer: 'did:agent:runtime',
+              minutesAgo: 2,
+              displayName: 'zhuocheng-test-hermes',
+            ),
+            _conversation(
+              'dm:peer-scope:v1:runtime',
+              targetDid: 'did:agent:runtime',
+              targetPeer: 'zhuocheng-test-hermes.anpclaw.com',
+              minutesAgo: 1,
+              displayName: 'zhuocheng-test-hermes.anpclaw.com',
+            ),
+          ],
+        );
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: InMemoryAwikiProductLocalStore(),
+          agentInventory: const _FakeAgentInventory(
+            agents: <AgentSummary>[
+              AgentSummary(
+                agentDid: 'did:agent:runtime',
+                kind: AgentKind.runtime,
+                daemonAgentDid: 'did:agent:daemon',
+                runtime: 'hermes',
+                handle: 'zhuocheng-test-hermes',
+                displayName: '改名后的智能体',
+                activeState: 'active',
+                latest: AgentLatestStatus(status: 'ready'),
+              ),
+            ],
+          ),
+        );
+
+        await service.listConversations(ownerDid: 'did:human');
+        final conversations = await service.loadConversationSnapshot(
+          ownerDid: 'did:human',
+        );
+
+        expect(core.snapshotCount, 1);
+        expect(conversations, hasLength(1));
+        expect(conversations.single.threadId, 'dm:peer-scope:v1:runtime');
+        expect(conversations.single.targetDid, 'did:agent:runtime');
+        expect(
+          conversations.single.targetPeer,
+          'zhuocheng-test-hermes.anpclaw.com',
+        );
+        expect(conversations.single.displayName, '改名后的智能体');
+      },
+    );
+
+    test(
       'fast local summaries do not wait for agent inventory projection',
       () async {
         final inventory = _BlockingAgentInventory(
@@ -814,11 +976,25 @@ ChatMessage _message(String id) {
 }
 
 class _FakeConversations implements ConversationCorePort {
-  _FakeConversations({this.items = const <ConversationSummary>[]});
+  _FakeConversations({
+    this.items = const <ConversationSummary>[],
+    this.snapshotItems = const <ConversationSummary>[],
+  });
 
   final List<ConversationSummary> items;
+  final List<ConversationSummary> snapshotItems;
   int listCount = 0;
+  int snapshotCount = 0;
   int markReadCount = 0;
+
+  @override
+  Future<List<ConversationSummary>> loadConversationSnapshot() async {
+    snapshotCount += 1;
+    return snapshotItems;
+  }
+
+  @override
+  Future<void> clearConversationSnapshot() async {}
 
   @override
   Future<List<ConversationSummary>> listConversations({

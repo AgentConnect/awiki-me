@@ -19,6 +19,62 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
   final AwikiImCoreMappers _mappers;
 
   @override
+  Future<List<ConversationSummary>> loadConversationSnapshot() async {
+    return _runtime.withCurrentClient((client) async {
+      final totalWatch = Stopwatch()..start();
+      final snapshot = await AwikiPerformanceLogger.async(
+        'im_core_conversations.snapshot.native_load',
+        client.messages.loadConversationSnapshot,
+        level: AwikiPerformanceLogLevel.verbose,
+      );
+      if (snapshot == null || snapshot.items.isEmpty) {
+        totalWatch.stop();
+        AwikiPerformanceLogger.log(
+          'im_core_conversations.snapshot',
+          elapsed: totalWatch.elapsed,
+          fields: const <String, Object?>{'items': 0},
+          level: AwikiPerformanceLogLevel.verbose,
+        );
+        return const <ConversationSummary>[];
+      }
+      final conversations = AwikiPerformanceLogger.sync(
+        'im_core_conversations.snapshot.map',
+        () => snapshot.items
+            .where(
+              (conversation) => !_hasControlSnapshotLastMessage(conversation),
+            )
+            .map(
+              (conversation) => _mappers.conversationFromSnapshot(
+                conversation,
+                ownerDid: snapshot.ownerDid,
+              ),
+            )
+            .toList(),
+        fields: <String, Object?>{'items': snapshot.items.length},
+        level: AwikiPerformanceLogLevel.verbose,
+      );
+      totalWatch.stop();
+      AwikiPerformanceLogger.log(
+        'im_core_conversations.snapshot',
+        elapsed: totalWatch.elapsed,
+        fields: <String, Object?>{
+          'items': snapshot.items.length,
+          'mapped': conversations.length,
+        },
+        level: AwikiPerformanceLogLevel.verbose,
+      );
+      return conversations;
+    });
+  }
+
+  @override
+  Future<void> clearConversationSnapshot() async {
+    await _runtime.withCurrentClient((client) {
+      return client.messages.clearConversationSnapshot();
+    });
+  }
+
+  @override
   Future<List<ConversationSummary>> listConversations({
     int limit = 100,
     bool unreadOnly = false,
@@ -93,6 +149,14 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
 }
 
 bool _hasControlLastMessage(core.Conversation conversation) {
+  return AgentControlPayloads.isControl(
+    conversation.lastMessage?.body.payloadJson,
+  );
+}
+
+bool _hasControlSnapshotLastMessage(
+  core.ConversationSnapshotItem conversation,
+) {
   return AgentControlPayloads.isControl(
     conversation.lastMessage?.body.payloadJson,
   );

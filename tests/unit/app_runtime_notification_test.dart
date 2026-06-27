@@ -743,6 +743,13 @@ class _RecordingConversationService implements ConversationService {
   int listCalls = 0;
 
   @override
+  Future<List<ConversationSummary>> loadConversationSnapshot({
+    required String ownerDid,
+  }) async {
+    return const <ConversationSummary>[];
+  }
+
+  @override
   Future<List<ConversationSummary>> listConversationSummariesFast({
     required String ownerDid,
     int limit = 100,
