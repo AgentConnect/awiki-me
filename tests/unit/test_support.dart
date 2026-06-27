@@ -12,6 +12,7 @@ import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/group_application_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
+import 'package:awiki_me/src/application/message_sync_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
@@ -19,6 +20,7 @@ import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/application/peer_identity_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
+import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
 import 'package:awiki_me/src/application/product_local_store.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
@@ -55,6 +57,7 @@ import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/domain/services/update_service.dart';
 import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:awiki_me/src/app/app_services.dart';
@@ -241,9 +244,11 @@ Widget buildLocalizedTestApp({
 List<Override> fakeApplicationServiceOverrides(
   FakeAwikiGateway gateway, {
   FakeRealtimeGateway? realtimeGateway,
+  FakeMessageSyncService? messageSyncService,
   AttachmentCacheService? attachmentCacheService,
 }) {
   final resolvedRealtime = realtimeGateway ?? FakeRealtimeGateway();
+  final resolvedMessageSync = messageSyncService ?? FakeMessageSyncService();
   return <Override>[
     appSessionServiceProvider.overrideWithValue(FakeAppSessionService(gateway)),
     identityCorePortProvider.overrideWithValue(FakeIdentityCorePort()),
@@ -255,6 +260,14 @@ List<Override> fakeApplicationServiceOverrides(
       FakeConversationService(gateway),
     ),
     messagingServiceProvider.overrideWithValue(FakeMessagingService(gateway)),
+    messageSyncServiceProvider.overrideWithValue(resolvedMessageSync),
+    messageSyncCoordinatorProvider.overrideWith(
+      (ref) => MessageSyncCoordinator(
+        ref,
+        minInterval: Duration.zero,
+        failureBackoff: Duration.zero,
+      ),
+    ),
     attachmentCacheServiceProvider.overrideWithValue(
       attachmentCacheService ?? FakeAttachmentCacheService(),
     ),
@@ -2646,6 +2659,79 @@ class FakeLocalePreferenceService extends LocalePreferenceService {
     saveCalls += 1;
     _storedMode = mode;
   }
+}
+
+class FakeMessageSyncService implements MessageSyncService {
+  FakeMessageSyncService({
+    this.deltaResult = const MessageSyncDeltaResult(
+      eventsApplied: 0,
+      pagesFetched: 0,
+      hasMore: false,
+      snapshotRequired: false,
+    ),
+  });
+
+  MessageSyncDeltaResult deltaResult;
+  Object? nextDeltaError;
+  Object? nextThreadAfterError;
+  final List<String> syncReasons = <String>[];
+  final List<FakeThreadAfterRequest> threadAfterRequests =
+      <FakeThreadAfterRequest>[];
+  final Map<String, List<ChatMessage>> threadAfterMessagesByStableId =
+      <String, List<ChatMessage>>{};
+
+  @override
+  Future<MessageSyncDeltaResult> syncNow({
+    required String reason,
+    int limit = 100,
+  }) async {
+    syncReasons.add(reason);
+    final error = nextDeltaError;
+    if (error != null) {
+      nextDeltaError = null;
+      throw error;
+    }
+    return deltaResult;
+  }
+
+  @override
+  Future<MessageSyncThreadAfterResult> syncThreadAfter({
+    required AppThreadRef thread,
+    String? afterServerSeq,
+    int limit = 100,
+  }) async {
+    threadAfterRequests.add(
+      FakeThreadAfterRequest(
+        thread: thread,
+        afterServerSeq: afterServerSeq,
+        limit: limit,
+      ),
+    );
+    final error = nextThreadAfterError;
+    if (error != null) {
+      nextThreadAfterError = null;
+      throw error;
+    }
+    final messages =
+        threadAfterMessagesByStableId[thread.stableId] ?? const <ChatMessage>[];
+    return MessageSyncThreadAfterResult(
+      messages: messages,
+      nextAfterServerSeq: maxServerSequenceForMessages(messages),
+      hasMore: false,
+    );
+  }
+}
+
+class FakeThreadAfterRequest {
+  const FakeThreadAfterRequest({
+    required this.thread,
+    required this.afterServerSeq,
+    required this.limit,
+  });
+
+  final AppThreadRef thread;
+  final String? afterServerSeq;
+  final int limit;
 }
 
 class FakeRealtimeGateway implements RealtimeGateway {

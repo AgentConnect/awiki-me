@@ -33,12 +33,14 @@ void main() {
     late FakeAwikiGateway gateway;
     late FakeRealtimeGateway realtimeGateway;
     late FakeNotificationFacade notificationFacade;
+    late FakeMessageSyncService messageSyncService;
     late ProviderContainer container;
 
     setUp(() {
       gateway = FakeAwikiGateway();
       realtimeGateway = FakeRealtimeGateway();
       notificationFacade = FakeNotificationFacade();
+      messageSyncService = FakeMessageSyncService();
       gateway.myProfile = const UserProfile(
         did: 'did:test:me',
         nickName: 'Me',
@@ -55,6 +57,7 @@ void main() {
           ...fakeApplicationServiceOverrides(
             gateway,
             realtimeGateway: realtimeGateway,
+            messageSyncService: messageSyncService,
           ),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
@@ -162,6 +165,51 @@ void main() {
       expect(notificationFacade.lastSystemTitle, isNull);
     });
 
+    test('激活身份后后台调度 startup 可靠同步', () async {
+      await activate();
+      await pumpEventQueue();
+
+      expect(messageSyncService.syncReasons, contains('startup'));
+      expect(container.read(appRuntimeProvider).isBusy, isFalse);
+    });
+
+    test('恢复前台时调度 app_resumed 可靠同步', () async {
+      await activate();
+      messageSyncService.syncReasons.clear();
+
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await pumpEventQueue();
+
+      expect(messageSyncService.syncReasons, contains('app_resumed'));
+    });
+
+    test('realtime gap hint 只调度 delta 不改变低延迟投影', () async {
+      await activate();
+      messageSyncService.syncReasons.clear();
+      gateway.nextRealtimeUpdate = RealtimeUpdate(
+        message: buildUpdate().message,
+        conversation: buildUpdate().conversation,
+        syncDirty: true,
+        gapDetected: true,
+        syncEventSeq: '42',
+        syncEventType: 'message.created',
+      );
+
+      await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+      await pumpEventQueue();
+
+      expect(messageSyncService.syncReasons, contains('realtime_gap'));
+      expect(
+        container.read(chatThreadProvider('dm:1')).messages.single.content,
+        'hello',
+      );
+    });
+
     test('后台收到消息时触发系统通知', () async {
       gateway.nextRealtimeUpdate = buildUpdate();
       container
@@ -253,6 +301,7 @@ void main() {
 
     test('恢复和重连短时间重复触发时复用同一次后台刷新', () async {
       final slowProfile = Completer<void>();
+      final sync = FakeMessageSyncService();
       gateway.myProfile = null;
       final conversations = _RecordingConversationService(<ConversationSummary>[
         buildUpdate().conversation!,
@@ -265,6 +314,7 @@ void main() {
           ...fakeApplicationServiceOverrides(
             gateway,
             realtimeGateway: realtimeGateway,
+            messageSyncService: sync,
           ),
           conversationServiceProvider.overrideWithValue(conversations),
           profileApplicationServiceProvider.overrideWithValue(
@@ -287,7 +337,10 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
 
-      expect(conversations.fastCalls, 1);
+      expect(sync.syncReasons, contains('startup'));
+      expect(sync.syncReasons, contains('app_resumed'));
+      expect(conversations.fastCalls, 2);
+      expect(conversations.enrichCalls, 2);
       slowProfile.complete();
       await Future<void>.delayed(Duration.zero);
     });

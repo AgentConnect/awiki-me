@@ -68,6 +68,10 @@ class AwikiMeApp extends StatelessWidget {
           messagingServiceProvider.overrideWithValue(
             bootstrap.messagingService!,
           ),
+        if (bootstrap.messageSyncService != null)
+          messageSyncServiceProvider.overrideWithValue(
+            bootstrap.messageSyncService!,
+          ),
         if (bootstrap.agentInventoryPort != null)
           agentInventoryPortProvider.overrideWith((ref) {
             final inventory = bootstrap.agentInventoryPort!;

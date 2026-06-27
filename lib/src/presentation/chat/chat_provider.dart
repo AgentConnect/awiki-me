@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
+import '../../application/message_sync_service.dart';
 import '../../application/models/attachment_models.dart';
 import '../../application/models/app_thread_ref.dart';
 import '../../application/messaging_service.dart';
@@ -479,6 +480,9 @@ class ChatThreadsController
     if (!mounted) {
       return;
     }
+    unawaited(
+      _syncThreadAfterLocalMax(conversation, displayThreadId: displayThreadId),
+    );
     final shouldReconcileRemote =
         currentBeforeLocal.messages.isEmpty ||
         localResult.failed ||
@@ -502,6 +506,40 @@ class ChatThreadsController
         showLoading: !localResult.loadedAny && !hadLocalMessagesBefore,
       ),
     );
+  }
+
+  Future<void> _syncThreadAfterLocalMax(
+    ConversationSummary conversation, {
+    required String displayThreadId,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+    final afterServerSeq = maxServerSequenceForMessages(
+      thread(displayThreadId).messages,
+    );
+    try {
+      final result = await ref
+          .read(messageSyncServiceProvider)
+          .syncThreadAfter(
+            thread: _localHistoryThreadRefFor(conversation),
+            afterServerSeq: afterServerSeq,
+          );
+      final messages = result.messages
+          .map((message) => _withThreadId(message, displayThreadId))
+          .where((message) => message.hasRenderableContent)
+          .toList();
+      if (!mounted || messages.isEmpty) {
+        return;
+      }
+      _mergeMessages(displayThreadId, messages, isLoading: false);
+      await ref.read(conversationListProvider.notifier).refreshFastLocal();
+    } catch (_) {
+      AwikiPerformanceLogger.log(
+        'chat.thread_after.failed',
+        fields: AwikiPerformanceLogger.threadField(displayThreadId),
+      );
+    }
   }
 
   void _markConversationReadBestEffort(ConversationSummary conversation) {

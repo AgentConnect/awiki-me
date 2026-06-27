@@ -23,6 +23,7 @@ import '../../group/group_provider.dart';
 import '../../profile/profile_provider.dart';
 import '../../shared/formatters/display_formatters.dart';
 import 'app_lifecycle_provider.dart';
+import 'message_sync_coordinator_provider.dart';
 import 'selected_conversation_provider.dart';
 import 'session_provider.dart';
 
@@ -111,6 +112,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       );
       state = state.copyWith(isBusy: false, isInitialized: true);
       unawaited(_refreshAuthenticatedDataInBackground(debounce: false));
+      _scheduleReliableSync('startup', immediate: true);
       _ensureRealtimeConnected();
     } finally {
       state = state.copyWith(isBusy: false, isInitialized: true);
@@ -321,6 +323,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       return;
     }
     _ensureRealtimeConnected();
+    _scheduleReliableSync('app_resumed');
     unawaited(_refreshAuthenticatedDataInBackground());
   }
 
@@ -352,6 +355,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (ref.read(sessionProvider).session == null) {
       return;
     }
+    _scheduleReliableSync('realtime_reconnected');
     unawaited(_refreshAuthenticatedDataInBackground());
   }
 
@@ -409,6 +413,11 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   void _applyRealtimeUpdate(RealtimeUpdate update) {
+    if (update.needsReliableSync) {
+      _scheduleReliableSync(
+        update.gapDetected ? 'realtime_gap' : 'realtime_dirty',
+      );
+    }
     final controlPayload = update.agentControlPayload;
     if (controlPayload != null) {
       ref.read(agentsProvider.notifier).applyControlPayload(controlPayload);
@@ -460,6 +469,20 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
             .showSystemNotification(title: title, body: body);
       }
     }
+  }
+
+  void _scheduleReliableSync(String reason, {bool immediate = false}) {
+    if (!mounted ||
+        _isLoggingOut ||
+        ref.read(sessionProvider).session == null) {
+      return;
+    }
+    unawaited(
+      ref
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync(reason, immediate: immediate)
+          .catchError((_) {}),
+    );
   }
 
   bool _shouldShowRealtimeConversation(ConversationSummary conversation) {

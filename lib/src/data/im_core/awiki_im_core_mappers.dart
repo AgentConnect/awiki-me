@@ -338,6 +338,10 @@ class AwikiImCoreMappers {
         agentControlPayload:
             AgentControlPayloads.decode(chatMessage.payloadJson) ??
             const <String, Object?>{},
+        syncDirty: event.sync?.syncDirty ?? false,
+        gapDetected: event.sync?.gapDetected ?? false,
+        syncEventSeq: event.sync?.eventSeq,
+        syncEventType: event.sync?.eventType,
       );
     }
     final isGroup =
@@ -378,6 +382,10 @@ class AwikiImCoreMappers {
               lastMessageAt: chatMessage.createdAt,
               membershipStatus: null,
             ),
+      syncDirty: event.sync?.syncDirty ?? false,
+      gapDetected: event.sync?.gapDetected ?? false,
+      syncEventSeq: event.sync?.eventSeq,
+      syncEventType: event.sync?.eventType,
     );
   }
 

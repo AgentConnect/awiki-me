@@ -23,6 +23,7 @@ import 'test_support.dart';
 void main() {
   late FakeAwikiGateway gateway;
   late FakeNotificationFacade notificationFacade;
+  late FakeMessageSyncService messageSyncService;
   late ProviderContainer container;
 
   final conversation = ConversationSummary(
@@ -52,11 +53,15 @@ void main() {
         'did:peer': <ChatMessage>[message],
       };
     notificationFacade = FakeNotificationFacade();
+    messageSyncService = FakeMessageSyncService();
     container = ProviderContainer(
       overrides: <Override>[
         awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(notificationFacade),
-        ...fakeApplicationServiceOverrides(gateway),
+        ...fakeApplicationServiceOverrides(
+          gateway,
+          messageSyncService: messageSyncService,
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -109,6 +114,67 @@ void main() {
     final thread = container.read(chatThreadProvider(conversation.threadId));
     expect(thread.messages.map((item) => item.content), contains('hello'));
     expect(thread.isLoading, isFalse);
+  });
+
+  test('打开会话后按本地最大 serverSequence 调用 thread-after 补新', () async {
+    final local = ChatMessage(
+      localId: 'local-1',
+      remoteId: 'local-1',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'old',
+      createdAt: DateTime(2026, 5, 8, 9, 59),
+      isMine: false,
+      serverSequence: 10,
+      sendState: MessageSendState.sent,
+    );
+    final newer = ChatMessage(
+      localId: 'remote-11',
+      remoteId: 'remote-11',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'new',
+      createdAt: DateTime(2026, 5, 8, 10, 1),
+      isMine: false,
+      serverSequence: 11,
+      sendState: MessageSendState.sent,
+    );
+    gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:peer': <ChatMessage>[local],
+    };
+    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:peer': <ChatMessage>[local],
+    };
+    messageSyncService.threadAfterMessagesByStableId['dm:did:peer'] =
+        <ChatMessage>[newer];
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await pumpEventQueue();
+
+    expect(messageSyncService.threadAfterRequests.single.afterServerSeq, '10');
+    final messages = container
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    expect(messages.map((item) => item.content), ['old', 'new']);
+  });
+
+  test('thread-after 失败不会清空本地历史', () async {
+    gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:peer': <ChatMessage>[message],
+    };
+    messageSyncService.nextThreadAfterError = StateError('thread-after failed');
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await pumpEventQueue();
+
+    final thread = container.read(chatThreadProvider(conversation.threadId));
+    expect(thread.messages.single.content, 'hello');
   });
 
   test('远端 reconcile 失败不会清空本地历史', () async {

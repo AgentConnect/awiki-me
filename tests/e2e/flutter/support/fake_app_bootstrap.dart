@@ -57,6 +57,7 @@ FakeAwikiMeAppHarness createFakeAwikiMeAppHarness({
     onboardingService: FakeOnboardingService(gateway),
     onboardingSupportService: FakeOnboardingSupportService(gateway),
     messagingService: FakeMessagingService(gateway),
+    messageSyncService: FakeMessageSyncService(),
     conversationService: FakeConversationService(gateway),
     agentInventoryPort: FakeAgentInventoryPort(),
     agentControlService: FakeAgentControlService(),

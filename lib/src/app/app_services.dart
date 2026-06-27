@@ -11,6 +11,7 @@ import '../application/conversation_service.dart';
 import '../application/directory_application_service.dart';
 import '../application/group_application_service.dart';
 import '../application/messaging_service.dart';
+import '../application/message_sync_service.dart';
 import '../application/onboarding_service.dart';
 import '../application/onboarding_support_service.dart';
 import '../application/peer_identity_service.dart';
@@ -84,6 +85,11 @@ final onboardingSupportServiceProvider = Provider<OnboardingSupportService>(
 final messagingServiceProvider = Provider<MessagingService>(
   (ref) =>
       throw UnimplementedError('messagingServiceProvider must be overridden'),
+);
+
+final messageSyncServiceProvider = Provider<MessageSyncService>(
+  (ref) =>
+      throw UnimplementedError('messageSyncServiceProvider must be overridden'),
 );
 
 final conversationServiceProvider = Provider<ConversationService>(
