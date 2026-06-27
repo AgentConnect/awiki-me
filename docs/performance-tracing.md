@@ -58,10 +58,40 @@ flutter run -d macos \
 | `chat.local_history.*` / `im_core_messages.local_history*` | 进入会话时本地 projection 历史读取、Dart 映射、merge/sort | 判断本地已有消息是否能先于远端 history 快速渲染 |
 | `chat.remote_history.*` / `im_core_messages.remote_history*` | 后台远端 history reconcile、Dart 映射、merge/sort | 判断远端补齐、E2EE projection 和 native persist/merge 是否仍拖慢进入会话 |
 | `chat.history.*` / `im_core_messages.history*` | 兼容旧日志名的消息历史边界 | 新链路优先看 `local_history` / `remote_history`；旧名只用于兼容对比 |
+| `message_sync.coordinator.request` | App 侧可靠同步调度请求 | 判断 startup、resume、reconnect、realtime dirty/gap 是否合并为一次 SDK `syncDelta`；该事件是 verbose 级别 |
+| `message_sync.delta` | App 调用 SDK 全局 reliable sync 入口 | 判断 Rust `im-core` 是否完成账号级 delta apply；App 只提供 `reason`/`limit`，不读写 checkpoint |
+| `message_sync.thread_after` | 打开会话后的 thread-local 补新 | 判断本地 history 首屏后，是否按当前 thread 的最大 `server_seq` 补齐新消息；不推进全局 checkpoint |
 | `chat.messages.merge_loop` / `chat.messages.merge` | 消息列表 merge、pending 匹配和排序前准备 | `indexed=true` 表示当前 merge 已用 remoteId/localId/pending 索引，避免每条 incoming 反复 `indexWhere` 扫描 current |
 | `chat.mark_read*` | 打开未读会话后的本地清未读与已读同步 | 判断本地清 unread 和 SDK thread mark-read ack 是否慢 |
 | `chat_page.build.*` / `conversation_list_page.*build.*` | Flutter build 准备阶段 | 判断是否是 UI 构建/重算慢 |
 | `frame.slow` | Flutter 慢帧 build/raster 时间 | 判断是否出现明显 UI jank |
+
+## 可靠同步边界
+
+可靠消息同步的 SDK / Rust 契约以
+[awiki-cli-rs2/docs/flutter-sdk/awiki-im-core-flutter-sdk.md](../../awiki-cli-rs2/docs/flutter-sdk/awiki-im-core-flutter-sdk.md)
+和
+[awiki-cli-rs2/docs/api/im-core-interface/04-message-interface.md](../../awiki-cli-rs2/docs/api/im-core-interface/04-message-interface.md)
+为准。AWiki Me 只负责根据 App 生命周期和 realtime 提示调度同步；全局 reliable
+checkpoint 属于 Rust `im-core` / SQLite local state。
+
+App 侧允许做的事情：
+
+- 在启动、恢复前台、realtime 重连、realtime dirty / gap hint 后请求 `syncDelta`。
+- 传入诊断用 `reason`，例如 `startup`、`app_resumed`、`realtime_reconnected`、
+  `realtime_dirty`、`realtime_gap`。
+- 在打开会话后，用当前 thread 本地消息里的最大 `server_seq` 调用 `syncThreadAfter`，
+  做 thread-local 补新。
+- 在 SDK sync 成功后刷新本地 projection，例如重新读取 fast local conversation list。
+
+App 侧禁止做的事情：
+
+- 不读取、保存或修改全局 reliable checkpoint。
+- 不传入 `since_event_seq`，不手动推进 `next_event_seq`。
+- 不手写 `/im/rpc` 的 `sync.*` payload，不绕过 SDK 拼 wire 请求。
+- 不把 realtime `sync` hint 或 realtime projection 成功视为 checkpoint commit。
+- 不在 `snapshotRequired` / `snapshot_required` 时清空本地 projection；该状态应按
+  SDK 契约 fail-closed，并等待后续 repair / snapshot 方案。
 
 ## 如何解读
 
@@ -71,11 +101,19 @@ flutter run -d macos \
 4. 如果 `conversation_service.fast_local` 很快但 `conversation_service.enrich`、`conversation_service.agent_projection` 或 `agents.load.*` 很慢，说明首屏已经脱离远端 Agent inventory，慢点在后台补齐链路。
 5. 如果 `product_store.legacy_migration` 或 `product_store.open_database` 很慢，优先看首次 DB open、旧库迁移和 WAL/SHM 拷贝；这些应通过 `app_refresh.product_store_warm_up` 后台预热，不能阻塞 `conversation_fast_local`。
 6. 如果 `conversation_service.filter_sort`、`conversation_list.refresh_fast_local.merge`、`conversation_list.refresh_enrich.merge` 或 `chat.messages.sort` 很慢，优先看 Dart 侧列表规模、索引命中和排序。`conversation_list.*.merge` 与 `chat.messages.merge_loop` 应带 `indexed=true`，否则说明回归到线性扫描路径。
-7. 如果 `chat.mark_read` 很慢，优先看 `im_core_conversations.mark_read.native` 的
+7. 如果 `message_sync.delta` 很慢，优先判断是 SDK delta apply、SQLite projection 写入、
+   message-service sync 响应，还是随后 `conversation_list.refresh_fast_local` 读取本地
+   projection 变慢。`message_sync.delta` 的返回诊断可用于判断 `eventsApplied`、
+   `pagesFetched`、`hasMore`、`snapshotRequired` 和 `warnings`，但不能把
+   `lastAppliedEventSeq` 当作 App 可写 checkpoint。
+8. 如果 `message_sync.thread_after` 很慢，优先看该 thread 的远端补新、E2EE projection
+   persist 和消息 merge。它只按 `afterServerSeq` 做 thread-local freshness，不代表全局
+   reliable sync 落后。
+9. 如果 `chat.mark_read` 很慢，优先看 `im_core_conversations.mark_read.native` 的
    `local_candidates`、`remote_ack`、`partial` 和 `warnings`；旧的
    `im_core_conversations.mark_read.history_page` 不应再出现，出现则说明回归到了
    history 分页找 unread ids。
-8. 如果 `frame.slow` 很多而数据层日志不慢，说明主要是 Flutter build/raster 或大量 widget 重建。
+10. 如果 `frame.slow` 很多而数据层日志不慢，说明主要是 Flutter build/raster 或大量 widget 重建。
 
 ## 当前性能门禁
 
@@ -83,6 +121,8 @@ flutter run -d macos \
 - `conversation_service.fast_local` 不应等待 `conversation_service.agent_projection.list_agents`；如果二者耗时同步增长，说明会话首屏又被 Agent RPC 绑定。
 - `product_store.open_database` / `product_store.legacy_migration` 可在后台 warm-up 中出现，但不应成为 `conversation_list.refresh_fast_local` 的直接子链路。
 - 进入已有本地 projection 的会话时，应先看到 `chat.local_history.load`，消息立即出现；`chat.remote_history.load` 只作为后台 reconcile，失败不应清空已显示的本地消息。
+- 启动、恢复前台、realtime 重连、realtime dirty / gap 后，App 侧应只调度 SDK `message_sync.delta`；不能出现 App 自己读写 checkpoint、传 `since_event_seq` 或手写 `sync.*` wire payload 的代码路径。
+- 打开已有本地 projection 的会话时，`chat.local_history.load` 应先完成；如需要补新，可随后看到 `message_sync.thread_after`，该链路不得推进账号级 reliable checkpoint。
 - 打开未读会话时只允许看到一次远端 `chat.remote_history.*` reconcile；`chat.mark_read*` 不应再触发 history 分页。
 - 发送/重试/附件成功后允许本地立刻 upsert 会话 row；全量 `conversation_list.refresh` 和强制 remote history reconcile 必须经过 debounce 合并，连续发送不应逐条触发全量刷新。
 
