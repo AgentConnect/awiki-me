@@ -237,13 +237,13 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
         'im_core_conversations.mark_read',
         elapsed: totalWatch.elapsed,
         fields: <String, Object?>{
-          'message_ids': result.messageIds.length,
           'updated': result.updatedCount,
-          'local_candidates': result.localCandidateCount,
-          'local_updated': result.localUpdatedCount,
-          'remote_updated': result.remoteUpdatedCount,
+          'legacy_message_ids': result.legacyMessageIds.length,
           'remote_ack': result.remoteAcknowledged,
           'partial': result.partial,
+          'fallback_used': result.fallbackUsed,
+          'pending_remote_ack': result.pendingRemoteAck,
+          'watermark_seq': result.effectiveWatermark?.lastReadThreadSeq,
           'warnings': result.warnings.length,
         },
       );

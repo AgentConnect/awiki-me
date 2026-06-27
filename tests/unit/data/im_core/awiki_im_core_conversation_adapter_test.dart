@@ -245,18 +245,19 @@ class _FakeMessageApi implements core.MessageApi {
   @override
   Future<core.MarkThreadReadResult> markThreadRead(
     core.ThreadRef thread, {
-    int? maxMessageIds,
+    core.ReadWatermark? watermark,
+    int? fallbackMaxMessageIds,
   }) async {
     markThreadReadCalls += 1;
     lastMarkThreadReadThread = thread;
     return const core.MarkThreadReadResult(
       updatedCount: 1,
-      messageIds: <String>['msg-1'],
-      localCandidateCount: 1,
-      localUpdatedCount: 1,
-      remoteUpdatedCount: 1,
       remoteAcknowledged: true,
       partial: false,
+      fallbackUsed: false,
+      pendingRemoteAck: false,
+      effectiveWatermark: core.ReadWatermark(lastReadThreadSeq: '42'),
+      legacyMessageIds: <String>['msg-1'],
     );
   }
 
