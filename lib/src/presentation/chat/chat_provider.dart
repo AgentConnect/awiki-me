@@ -451,15 +451,9 @@ class ChatThreadsController
       <String, _PendingHistorySync>{};
   final Set<String> _activeLocalHistoryLoads = <String>{};
   final Set<String> _activeRemoteHistorySyncs = <String>{};
-  final Map<String, Timer> _conversationRefreshDebounceTimers =
-      <String, Timer>{};
-  final Map<String, ConversationSummary> _pendingConversationRefreshFallbacks =
-      <String, ConversationSummary>{};
   final Map<String, _ThreadPatchSubscription> _threadPatchSubscriptions =
       <String, _ThreadPatchSubscription>{};
   int _threadPatchToken = 0;
-
-  static const Duration postSendReconcileDebounce = Duration(seconds: 1);
 
   ChatThreadState thread(String threadId) {
     return state[threadId] ?? ChatThreadState(threadId: threadId);
@@ -1001,7 +995,6 @@ class ChatThreadsController
     ref
         .read(conversationListProvider.notifier)
         .upsertConversation(pendingConversation);
-    var latestConversation = pendingConversation;
     try {
       final messaging = ref.read(messagingServiceProvider);
       final sent = validMentionDrafts.isEmpty
@@ -1029,22 +1022,21 @@ class ChatThreadsController
         submittedLocalMessageId: pending.localId,
         deliveredMessage: sentInThread,
       );
-      latestConversation = _withConversationPreview(conversation, sentInThread);
+      final sentConversation = _withConversationPreview(
+        conversation,
+        sentInThread,
+      );
       ref
           .read(conversationListProvider.notifier)
-          .upsertConversation(latestConversation);
+          .upsertConversation(sentConversation);
     } catch (_) {
       final failed = pending.copyWith(sendState: MessageSendState.failed);
       _replaceMessage(targetThreadId, pending.localId, failed);
-      latestConversation = _withConversationPreview(conversation, failed);
+      final failedConversation = _withConversationPreview(conversation, failed);
       ref
           .read(conversationListProvider.notifier)
-          .upsertConversation(latestConversation);
+          .upsertConversation(failedConversation);
     }
-    _scheduleConversationRefreshBestEffort(
-      latestConversation,
-      displayThreadId: targetThreadId,
-    );
   }
 
   Future<void> sendAttachment({
@@ -1116,7 +1108,6 @@ class ChatThreadsController
     ref
         .read(conversationListProvider.notifier)
         .upsertConversation(pendingConversation);
-    var latestConversation = pendingConversation;
     try {
       final sent = await ref
           .read(messagingServiceProvider)
@@ -1141,22 +1132,21 @@ class ChatThreadsController
         submittedLocalMessageId: pending.localId,
         deliveredMessage: sentInThread,
       );
-      latestConversation = _withConversationPreview(conversation, sentInThread);
+      final sentConversation = _withConversationPreview(
+        conversation,
+        sentInThread,
+      );
       ref
           .read(conversationListProvider.notifier)
-          .upsertConversation(latestConversation);
+          .upsertConversation(sentConversation);
     } catch (_) {
       final failed = pending.copyWith(sendState: MessageSendState.failed);
       _replaceMessage(targetThreadId, pending.localId, failed);
-      latestConversation = _withConversationPreview(conversation, failed);
+      final failedConversation = _withConversationPreview(conversation, failed);
       ref
           .read(conversationListProvider.notifier)
-          .upsertConversation(latestConversation);
+          .upsertConversation(failedConversation);
     }
-    _scheduleConversationRefreshBestEffort(
-      latestConversation,
-      displayThreadId: targetThreadId,
-    );
   }
 
   Future<AttachmentDownloadResult> downloadAttachment({
@@ -1219,10 +1209,6 @@ class ChatThreadsController
       final failed = retrying.copyWith(sendState: MessageSendState.failed);
       _replaceMessage(targetThreadId, message.localId, failed);
     }
-    _scheduleConversationRefreshBestEffort(
-      conversation,
-      displayThreadId: targetThreadId,
-    );
   }
 
   Future<void> retryAttachment({
@@ -1284,10 +1270,6 @@ class ChatThreadsController
       final failed = retrying.copyWith(sendState: MessageSendState.failed);
       _replaceMessage(targetThreadId, message.localId, failed);
     }
-    _scheduleConversationRefreshBestEffort(
-      conversation,
-      displayThreadId: targetThreadId,
-    );
   }
 
   Future<void> deleteThread(String threadId) async {
@@ -1365,75 +1347,8 @@ class ChatThreadsController
     );
   }
 
-  void _scheduleConversationRefreshBestEffort(
-    ConversationSummary fallback, {
-    required String displayThreadId,
-  }) {
-    final pendingFallback =
-        _pendingConversationRefreshFallbacks[displayThreadId];
-    _pendingConversationRefreshFallbacks[displayThreadId] =
-        pendingFallback == null
-        ? fallback
-        : _newerConversation(pendingFallback, fallback);
-    _conversationRefreshDebounceTimers[displayThreadId]?.cancel();
-    _conversationRefreshDebounceTimers[displayThreadId] = Timer(
-      postSendReconcileDebounce,
-      () {
-        if (!mounted) {
-          return;
-        }
-        _conversationRefreshDebounceTimers.remove(displayThreadId);
-        final reconcileFallback =
-            _pendingConversationRefreshFallbacks.remove(displayThreadId) ??
-            fallback;
-        unawaited(
-          _refreshConversationsBestEffort(
-            reconcileFallback,
-            displayThreadId: displayThreadId,
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _refreshConversationsBestEffort(
-    ConversationSummary fallback, {
-    required String displayThreadId,
-  }) async {
-    if (!mounted) {
-      return;
-    }
-    try {
-      await ref.read(conversationListProvider.notifier).refresh();
-      if (!mounted) {
-        return;
-      }
-      final remoteConversation = _refreshedConversationFor(fallback);
-      final refreshedConversation = _newerConversation(
-        remoteConversation,
-        fallback,
-      );
-      ref
-          .read(conversationListProvider.notifier)
-          .upsertConversation(refreshedConversation);
-      unawaited(
-        syncHistoryForConversation(
-          remoteConversation,
-          displayThreadId: displayThreadId,
-          force: true,
-          showLoading: false,
-        ),
-      );
-    } catch (_) {
-      // The local thread has already been updated with the send result. A
-      // follow-up conversation-list refresh should not turn a completed send
-      // into a visible low-level SDK error.
-    }
-  }
-
   void clear() {
     _cancelAgentProcessingTimers();
-    _cancelConversationRefreshTimer();
     _cancelThreadPatchSubscriptions();
     _pendingHistorySyncs.clear();
     _activeLocalHistoryLoads.clear();
@@ -2837,14 +2752,6 @@ class ChatThreadsController
     _agentProcessingTimers.clear();
   }
 
-  void _cancelConversationRefreshTimer() {
-    for (final timer in _conversationRefreshDebounceTimers.values) {
-      timer.cancel();
-    }
-    _conversationRefreshDebounceTimers.clear();
-    _pendingConversationRefreshFallbacks.clear();
-  }
-
   void _cancelThreadPatchSubscriptions() {
     for (final session in _threadPatchSubscriptions.values) {
       unawaited(session.subscription.cancel());
@@ -2863,7 +2770,6 @@ class ChatThreadsController
   @override
   void dispose() {
     _cancelAgentProcessingTimers();
-    _cancelConversationRefreshTimer();
     _cancelThreadPatchSubscriptions();
     super.dispose();
   }

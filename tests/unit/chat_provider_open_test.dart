@@ -533,7 +533,7 @@ void main() {
     expect(throwingGateway.markReadCalls, 1);
   });
 
-  test('发送后会同步历史以展示服务端快速返回的对方消息', () async {
+  test('发送后不触发 full refresh 或 force history 补拉', () async {
     final reply = ChatMessage(
       localId: 'reply-1',
       remoteId: 'reply-1',
@@ -584,20 +584,18 @@ void main() {
     await sendContainer
         .read(chatThreadsProvider.notifier)
         .sendMessage(conversation: conversation, content: '你好');
-    await _pumpPostSendReconcile();
     await Future<void>.delayed(Duration.zero);
 
     final messages = sendContainer
         .read(chatThreadProvider(conversation.threadId))
         .messages;
-    expect(
-      messages.map((item) => item.content),
-      containsAll(<String>['你好', '你好。欢迎']),
-    );
-    expect(gateway.fetchDmHistoryCalls, 1);
+    expect(messages.map((item) => item.content), contains('你好'));
+    expect(messages.map((item) => item.content), isNot(contains('你好。欢迎')));
+    expect(gateway.listConversationsCalls, 0);
+    expect(gateway.fetchDmHistoryCalls, 0);
   });
 
-  test('发送后刷新未返回当前会话时仍保留最近会话', () async {
+  test('发送后不依赖刷新也会保留最近会话', () async {
     gateway.conversations = const <ConversationSummary>[];
     final sendContainer = ProviderContainer(
       overrides: <Override>[
@@ -626,7 +624,6 @@ void main() {
     await sendContainer
         .read(chatThreadsProvider.notifier)
         .sendMessage(conversation: conversation, content: '你好');
-    await _pumpPostSendReconcile();
     await Future<void>.delayed(Duration.zero);
 
     final conversations = sendContainer
@@ -636,7 +633,8 @@ void main() {
     expect(conversations.single.threadId, conversation.threadId);
     expect(conversations.single.lastMessagePreview, '你好');
     expect(conversations.single.targetDid, conversation.targetDid);
-    expect(gateway.listConversationsCalls, lessThanOrEqualTo(1));
+    expect(gateway.listConversationsCalls, 0);
+    expect(gateway.fetchDmHistoryCalls, 0);
   });
 
   test('发送时刷新后的线程标识不会分裂当前打开会话的消息列表', () async {
@@ -716,7 +714,7 @@ void main() {
     );
   });
 
-  test('发送后刷新返回旧概览时不会覆盖本地最新预览', () async {
+  test('发送后不会让旧远端概览覆盖本地最新预览', () async {
     final staleConversation = ConversationSummary(
       threadId: conversation.threadId,
       displayName: conversation.displayName,
@@ -758,7 +756,7 @@ void main() {
           content: '正在处理的问题',
           expectedAgentReplyDid: 'did:peer',
         );
-    await _pumpPostSendReconcile();
+    await Future<void>.delayed(Duration.zero);
 
     final latest = sendContainer
         .read(conversationListProvider)
@@ -766,7 +764,8 @@ void main() {
         .single;
     expect(latest.lastMessagePreview, '正在处理的问题');
     expect(latest.lastMessageAt.isAfter(staleConversation.lastMessageAt), true);
-    expect(gateway.listConversationsCalls, lessThanOrEqualTo(1));
+    expect(gateway.listConversationsCalls, 0);
+    expect(gateway.fetchDmHistoryCalls, 0);
   });
 
   test('普通私聊发送成功后不会显示智能体处理中状态', () async {
@@ -1467,7 +1466,6 @@ void main() {
           ),
           caption: '报告',
         );
-    await _pumpPostSendReconcile();
     await Future<void>.delayed(Duration.zero);
 
     final messages = sendContainer
@@ -1483,6 +1481,8 @@ void main() {
     expect(gateway.lastSentAttachment?.filename, 'report.pdf');
     expect(gateway.lastSentAttachmentCaption, '报告');
     expect(gateway.lastSentAttachmentIdempotencyKey, startsWith('pending-'));
+    expect(gateway.listConversationsCalls, 0);
+    expect(gateway.fetchDmHistoryCalls, 0);
   });
 
   test('发送给智能体的附件会按本地消息绑定处理中状态并在回复后清除', () async {
@@ -1751,7 +1751,7 @@ void main() {
     expect(cache.lastSourcePath, '/tmp/original-report.pdf');
   });
 
-  test('附件发送成功后会话刷新失败不会覆盖发送结果', () async {
+  test('附件发送成功后不触发 full refresh', () async {
     final flakyGateway = FakeAwikiGateway()
       ..loginResult = const SessionIdentity(
         did: 'did:me',
@@ -1801,7 +1801,8 @@ void main() {
     expect(messages, hasLength(1));
     expect(messages.single.attachment?.filename, 'report.md');
     expect(messages.single.sendState, MessageSendState.sent);
-    expect(flakyGateway.listConversationsCalls, lessThanOrEqualTo(1));
+    expect(flakyGateway.listConversationsCalls, 0);
+    expect(flakyGateway.fetchDmHistoryCalls, 0);
   });
 
   test('发送群聊附件使用群目标并更新会话预览', () async {
@@ -1886,6 +1887,109 @@ void main() {
         .read(chatThreadProvider(conversation.threadId))
         .messages;
     expect(messages.single.sendState, MessageSendState.failed);
+  });
+
+  test('文本重试成功后不触发 full refresh 或 force history 补拉', () async {
+    final failedMessage = ChatMessage(
+      localId: 'failed-text',
+      threadId: conversation.threadId,
+      senderDid: 'did:me',
+      receiverDid: conversation.targetDid,
+      content: '重试文本',
+      originalType: 'text',
+      createdAt: DateTime(2026, 5, 8, 10, 3),
+      isMine: true,
+      sendState: MessageSendState.failed,
+    );
+    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:peer': <ChatMessage>[
+        ChatMessage(
+          localId: 'remote-retry-reply',
+          remoteId: 'remote-retry-reply',
+          threadId: conversation.threadId,
+          senderDid: 'did:peer',
+          receiverDid: 'did:me',
+          content: '远端补拉消息',
+          originalType: 'text',
+          createdAt: DateTime(2026, 5, 8, 10, 4),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+      ],
+    };
+    container
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(failedMessage);
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .retryMessage(conversation: conversation, message: failedMessage);
+    await Future<void>.delayed(Duration.zero);
+
+    final messages = container
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    expect(messages.map((item) => item.content), contains('重试文本'));
+    expect(messages.map((item) => item.content), isNot(contains('远端补拉消息')));
+    expect(gateway.listConversationsCalls, 0);
+    expect(gateway.fetchDmHistoryCalls, 0);
+  });
+
+  test('附件重试成功后不触发 full refresh 或 force history 补拉', () async {
+    final failedAttachment = ChatMessage(
+      localId: 'failed-attachment-retry',
+      threadId: conversation.threadId,
+      senderDid: 'did:me',
+      receiverDid: conversation.targetDid,
+      content: '附件说明',
+      originalType: 'application/anp-attachment-manifest+json',
+      createdAt: DateTime(2026, 5, 8, 10, 4),
+      isMine: true,
+      sendState: MessageSendState.failed,
+      attachment: const ChatAttachment(
+        attachmentId: 'pending-attachment-retry',
+        filename: 'retry.pdf',
+        mimeType: 'application/pdf',
+        localPath: '/tmp/retry.pdf',
+        caption: '附件说明',
+      ),
+    );
+    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:peer': <ChatMessage>[
+        ChatMessage(
+          localId: 'remote-attachment-retry-reply',
+          remoteId: 'remote-attachment-retry-reply',
+          threadId: conversation.threadId,
+          senderDid: 'did:peer',
+          receiverDid: 'did:me',
+          content: '附件远端补拉消息',
+          originalType: 'text',
+          createdAt: DateTime(2026, 5, 8, 10, 5),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+      ],
+    };
+    container
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(failedAttachment);
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .retryMessage(conversation: conversation, message: failedAttachment);
+    await Future<void>.delayed(Duration.zero);
+
+    final messages = container
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    final sentAttachment = messages.singleWhere(
+      (message) => message.attachment?.filename == 'retry.pdf',
+    );
+    expect(sentAttachment.sendState, MessageSendState.sent);
+    expect(gateway.lastSentAttachment?.filename, 'retry.pdf');
+    expect(messages.map((item) => item.content), isNot(contains('附件远端补拉消息')));
+    expect(gateway.listConversationsCalls, 0);
+    expect(gateway.fetchDmHistoryCalls, 0);
   });
 
   test('历史刷新后仍未回补的过期 pending 会转为失败', () async {
@@ -2415,7 +2519,7 @@ void main() {
     expect(refreshed.unreadCount, 0);
   });
 
-  test('连续发送只合并一次会话刷新和远端历史 reconcile', () async {
+  test('连续发送不会触发会话刷新或远端历史 reconcile', () async {
     final reply = ChatMessage(
       localId: 'reply-batched',
       remoteId: 'reply-batched',
@@ -2472,16 +2576,16 @@ void main() {
 
     expect(gateway.listConversationsCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);
-
-    await _pumpPostSendReconcile();
     await Future<void>.delayed(Duration.zero);
 
-    expect(gateway.listConversationsCalls, 1);
-    expect(gateway.fetchDmHistoryCalls, 1);
     final messages = sendContainer
         .read(chatThreadProvider(conversation.threadId))
         .messages;
-    expect(messages.map((item) => item.content), contains('批量回复'));
+    expect(gateway.listConversationsCalls, 0);
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(messages.map((item) => item.content), contains('第一条'));
+    expect(messages.map((item) => item.content), contains('第二条'));
+    expect(messages.map((item) => item.content), isNot(contains('批量回复')));
   });
 }
 
@@ -2671,12 +2775,4 @@ String _patchThreadId(AppThreadRef thread) {
     AppGroupThreadRef(:final groupDid) => groupDid,
     AppMessageThreadRef(:final threadId) => threadId,
   };
-}
-
-Future<void> _pumpPostSendReconcile() async {
-  await Future<void>.delayed(
-    ChatThreadsController.postSendReconcileDebounce +
-        const Duration(milliseconds: 100),
-  );
-  await Future<void>.delayed(Duration.zero);
 }
