@@ -75,6 +75,19 @@ AWIKI_ANP_SERVICE_DID
 AWIKI_DAEMON_DOWNLOAD_BASE_URL
 ```
 
+## Message Sync
+
+AWiki Me keeps message views local-first and delegates reliable recovery to the
+Flutter SDK / Rust `im-core` boundary. `MessageSyncCoordinator` schedules
+`syncDelta` on startup, foreground resume, reconnect, and realtime dirty/gap
+signals, then refreshes local projections after a successful SDK sync. Chat
+opening can call SDK `syncThreadAfter` with a thread-local `afterServerSeq`.
+
+The App must not read or write the global reliable checkpoint, pass
+`since_event_seq`, manually advance `next_event_seq`, build raw `/im/rpc`
+`sync.*` payloads, or treat realtime `sync` hints as checkpoint commits. Those
+remain `im-core` Rust/SQLite responsibilities.
+
 ## Building on macOS with Xcode
 
 Before opening the project in Xcode, generate the CocoaPods support files:
