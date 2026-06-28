@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)  
 Step index：05  
-状态：draft
+状态：in_progress
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
+| Status | in_progress |
 | Branch | `awiki-me: feature/perf/message-sync-opt-0627`; `awiki-system-test: release/0526` 如需测试文档；`awiki-cli-rs2: feature/perf/message-sync-opt-0627` 如需 docs 收口 |
-| Started | 待填 |
+| Started | 2026-06-28 21:57:54 CST |
 | Completed | 待填 |
 | Commit | 待填 |
 | Review evidence | 待填 |
 | Verification evidence | 待填 |
-| Next action | 串联 P0-P3，补 E2E 指标和最终文档 / 验证证据。 |
+| Next action | 阅读 E2E runner/performance flow/docs，补新消息点击首屏指标和验证证据。 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 

@@ -4,7 +4,7 @@
 DOC：`awiki-me/docs/plan/20260628-chat-open-realtime-tail/`  
 Harness：`awiki-harness/`  
 创建时间：2026-06-28  
-恢复指针：Step 04 已完成；恢复时从执行台账里第一个状态不是 `done` 的步骤继续，当前应从 Step 05 开始。
+恢复指针：Step 05 正在执行；恢复时从执行台账里第一个状态不是 `done` 的步骤继续，当前应继续 Step 05。
 
 ## 1. 目标
 
@@ -122,7 +122,7 @@ Harness：`awiki-harness/`
 | 02 | Flutter realtime thread-tail alias 预热 | Step 01 行为可独立测试；代码上可在 Step 01 后做 | AWiki Me 收到 realtime 后把消息预热到所有等价 ChatThreadState key。 | [steps/02-flutter-thread-tail-prewarm.md](steps/02-flutter-thread-tail-prewarm.md) | 必须 | done |
 | 03 | 点击路径 local-first，网络补同步后台化 | Step 02 | 打开会话首屏使用 memory/local tail，`syncThreadAfter` 和 remote history 不阻塞。 | [steps/03-local-first-open-path.md](steps/03-local-first-open-path.md) | 必须 | done |
 | 04 | 降低 Flutter → Rust → SQLite 首屏开销 | Step 03 | 首屏 `localHistory` limit 降低，owner DID 缓存；保留 snapshot API 决策 gate。 | [steps/04-local-history-tail-cost.md](steps/04-local-history-tail-cost.md) | 必须 | done |
-| 05 | 集成验证、性能门禁和文档收口 | Step 01-04 | E2E 指标覆盖新消息点击首屏，系统测试 / App E2E / 文档证据完整。 | [steps/05-integration-e2e-docs.md](steps/05-integration-e2e-docs.md) | 若修改文件则必须 | pending |
+| 05 | 集成验证、性能门禁和文档收口 | Step 01-04 | E2E 指标覆盖新消息点击首屏，系统测试 / App E2E / 文档证据完整。 | [steps/05-integration-e2e-docs.md](steps/05-integration-e2e-docs.md) | 若修改文件则必须 | in_progress |
 
 ## 7. 执行台账
 
@@ -134,7 +134,7 @@ Harness：`awiki-harness/`
 | 02 | done | `awiki-me: feature/perf/message-sync-opt-0627` | 2026-06-28 21:03:43 CST | 2026-06-28 21:22:50 CST | `awiki-me@e34f996` | Review 确认 `ChatThreadsController.applyRealtimeUpdate` 改为有序去重 alias fan-out；覆盖已有 opened state key、`conversation.threadId`、`message.threadId`、`visibilityKeys`、direct DID/handle/direct-did/direct aliases、handle 打开路径 `dm:pending:*`、group raw id 与 `group:` canonical key；每个 alias 仍走 `_mergeMessages` 去重；未新增持久缓存、checkpoint 或 raw sync payload。Review 中发现 handle alias 不应生成当前打开路径不会使用的 `dm:<owner>:<handle>`，并补齐 `dm:pending:<handle>`。 | `dart format lib/src/presentation/chat/chat_provider.dart tests/unit/app_runtime_notification_test.dart tests/unit/chat_provider_open_test.dart` 通过；`git diff --check` 通过；`flutter test tests/unit/app_runtime_notification_test.dart` 通过 19 个测试；`flutter test tests/unit/chat_provider_open_test.dart` 通过 50 个测试；`dart run tests/unit/runner.dart` 通过，最终 `+678: All tests passed!`；`dart analyze` 仅失败于既有无关 warning：`tests/e2e/flutter/desktop_cli_peer/support/cli_peer_process.dart:192:5 unused_element _groupCountFromCliOutput`。 | 开始 Step 03：点击路径 local-first，网络补同步后台化。 |
 | 03 | done | `awiki-me: feature/perf/message-sync-opt-0627` | 2026-06-28 21:26:45 CST | 2026-06-28 21:35:18 CST | `awiki-me@b6d8c1f` | Review 确认 `openConversation` 仍不 await 后台工作；memory tail 命中直接记录 `chat.open.first_paint` 并只后台 `syncThreadAfter`；空内存才读 local history；local history 命中后不再因 unreadCount 或 lastMessageAt 触发 remote history；local 空或失败时 remote fallback 保留且 `force=true`；未新增 checkpoint、raw sync payload 或持久缓存。Review 中将旧 pending 回补测试从 remote history 改为 thread-after，保持新语义一致。 | `dart format lib/src/presentation/chat/chat_provider.dart tests/unit/chat_provider_open_test.dart` 通过；`git diff --check` 通过；`flutter test tests/unit/chat_provider_open_test.dart` 通过 50 个测试；`flutter test tests/unit/app_runtime_notification_test.dart` 通过 19 个测试；`dart run tests/unit/runner.dart` 通过，最终 `+678: All tests passed!`；`dart analyze` 仅失败于既有无关 warning：`tests/e2e/flutter/desktop_cli_peer/support/cli_peer_process.dart:192:5 unused_element _groupCountFromCliOutput`。 | 开始 Step 04：降低 Flutter → Rust → SQLite 首屏开销。 |
 | 04 | done | `awiki-me: feature/perf/message-sync-opt-0627` | 2026-06-28 21:37:41 CST | 2026-06-28 21:55:36 CST | `awiki-me@e350970` | Review 确认首屏 `_openConversationLocalFirst` 显式传 `limit=50`，`_loadLocalHistory` 默认仍为 100，thread patch repair fallback 未被缩小；`AwikiImCoreMessageAdapter` owner DID cache 绑定当前 `AwikiImClient` 对象，client switch 时重新读取；owner DID 仍来自 SDK `identity.current()`，未新增 public DTO/API、checkpoint/raw sync 或 `loadThreadTailSnapshot`；性能日志只新增非敏感 `limit` 字段。 | `dart format lib/src/presentation/chat/chat_provider.dart lib/src/data/im_core/awiki_im_core_message_adapter.dart tests/unit/test_support.dart tests/unit/chat_provider_open_test.dart tests/unit/data/im_core/awiki_im_core_message_adapter_test.dart` 通过；`git diff --check` 通过；`flutter test tests/unit/data/im_core/awiki_im_core_message_adapter_test.dart` 通过 7 个测试；`flutter test tests/unit/chat_provider_open_test.dart` 串行重跑通过 50 个测试（并行首次尝试因 Flutter native assets 初始化缺 `build/native_assets/linux/native_assets.json` 未进入测试）；`dart run tests/unit/runner.dart` 通过，最终 `+680: All tests passed!`；`dart analyze` 仅失败于既有无关 warning：`tests/e2e/flutter/desktop_cli_peer/support/cli_peer_process.dart:192:5 unused_element _groupCountFromCliOutput`。 | 开始 Step 05：集成验证、性能门禁和文档收口。 |
-| 05 | pending | `awiki-me: feature/perf/message-sync-opt-0627`; `awiki-system-test: release/0526` 如需测试文档 | 待填 | 待填 | 待填 | 待填 | 待填 | 按 Step 05 补 E2E performance gate、文档和整体验证。 |
+| 05 | in_progress | `awiki-me: feature/perf/message-sync-opt-0627`; `awiki-system-test: release/0526` 如需测试文档 | 2026-06-28 21:57:54 CST | 待填 | 待填 | 待填 | 待填 | 阅读 E2E runner/performance flow/docs，补新消息点击首屏指标和验证证据。 |
 | Final | pending | 全部受影响仓库 | 待填 | 待填 | 若有最终收口修改则填 | 待填 | 待填 | 所有步骤 done 后执行全局 Review |
 
 ## 8. Codex Goal 执行协议
