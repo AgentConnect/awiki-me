@@ -431,11 +431,93 @@ class _ThreadPatchSubscription {
   }
 }
 
+class ThreadMemoryCachePolicy {
+  const ThreadMemoryCachePolicy({
+    this.hotThreadMessageLimit = 120,
+    this.warmThreadMessageLimit = 60,
+    this.coldThreadMessageLimit = 20,
+    this.maxTotalCachedMessages = 1200,
+    this.maxCachedCanonicalThreads = 100,
+    this.maxMessageRouteEntries = 4000,
+    this.messageRouteTtl = const Duration(hours: 24),
+  });
+
+  final int hotThreadMessageLimit;
+  final int warmThreadMessageLimit;
+  final int coldThreadMessageLimit;
+  final int maxTotalCachedMessages;
+  final int maxCachedCanonicalThreads;
+  final int maxMessageRouteEntries;
+  final Duration messageRouteTtl;
+}
+
+class ChatThreadCacheStats {
+  const ChatThreadCacheStats({
+    required this.rawThreadStateCount,
+    required this.canonicalThreadCount,
+    required this.totalRetainedMessages,
+    required this.activePatchSubscriptionCount,
+    required this.messageRouteEntryCount,
+    required this.trimmedMessageCount,
+    required this.evictedThreadCount,
+    required this.protectedOverflowCount,
+  });
+
+  final int rawThreadStateCount;
+  final int canonicalThreadCount;
+  final int totalRetainedMessages;
+  final int activePatchSubscriptionCount;
+  final int messageRouteEntryCount;
+  final int trimmedMessageCount;
+  final int evictedThreadCount;
+  final int protectedOverflowCount;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'cache.raw_thread_state_count': rawThreadStateCount,
+      'cache.canonical_thread_count': canonicalThreadCount,
+      'cache.total_retained_messages': totalRetainedMessages,
+      'cache.active_patch_subscription_count': activePatchSubscriptionCount,
+      'cache.message_route_entry_count': messageRouteEntryCount,
+      'cache.trimmed_message_count': trimmedMessageCount,
+      'cache.evicted_thread_count': evictedThreadCount,
+      'cache.protected_overflow_count': protectedOverflowCount,
+    };
+  }
+}
+
+class _ThreadCacheMetadata {
+  const _ThreadCacheMetadata({
+    required this.canonicalKey,
+    required this.lastTouchedAt,
+  });
+
+  final String canonicalKey;
+  final DateTime lastTouchedAt;
+}
+
+class _MessageThreadRoute {
+  const _MessageThreadRoute({
+    required this.threadId,
+    required this.canonicalKey,
+    required this.lastTouchedAt,
+  });
+
+  final String threadId;
+  final String canonicalKey;
+  final DateTime lastTouchedAt;
+}
+
 class ChatThreadsController
     extends StateNotifier<Map<String, ChatThreadState>> {
-  ChatThreadsController(this.ref) : super(const <String, ChatThreadState>{});
+  ChatThreadsController(
+    this.ref, {
+    ThreadMemoryCachePolicy cachePolicy = const ThreadMemoryCachePolicy(),
+  }) : _cachePolicy = cachePolicy,
+       super(const <String, ChatThreadState>{});
 
   final Ref ref;
+  final ThreadMemoryCachePolicy _cachePolicy;
   static const Duration _pendingMatchWindow = Duration(minutes: 2);
   static const Duration _staleSendingAge = Duration(seconds: 30);
   static const Duration _sendTimeout = Duration(seconds: 20);
@@ -455,6 +537,16 @@ class ChatThreadsController
   final Set<String> _activeRemoteHistorySyncs = <String>{};
   final Map<String, _ThreadPatchSubscription> _threadPatchSubscriptions =
       <String, _ThreadPatchSubscription>{};
+  final Map<String, _ThreadCacheMetadata> _cacheMetadataByThreadId =
+      <String, _ThreadCacheMetadata>{};
+  final Map<String, Set<String>> _cacheAliasesByThreadId =
+      <String, Set<String>>{};
+  final Map<String, Set<String>> _canonicalAliases = <String, Set<String>>{};
+  final Map<String, _MessageThreadRoute> _messageThreadRoutes =
+      <String, _MessageThreadRoute>{};
+  int _trimmedMessageCount = 0;
+  int _evictedThreadCount = 0;
+  int _protectedOverflowCount = 0;
   int _threadPatchToken = 0;
 
   ChatThreadState thread(String threadId) {
@@ -466,6 +558,7 @@ class ChatThreadsController
     String? displayThreadId,
   }) async {
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
+    _touchConversationCache(conversation, targetThreadId);
     AwikiPerformanceLogger.log(
       'chat.open_conversation',
       fields: <String, Object?>{
@@ -1324,6 +1417,7 @@ class ChatThreadsController
           hidden: true,
         );
     final next = Map<String, ChatThreadState>.from(state)..remove(threadId);
+    _removeThreadCacheMetadata(threadId);
     state = next;
     await ref.read(conversationListProvider.notifier).refresh();
   }
@@ -1394,7 +1488,252 @@ class ChatThreadsController
     _pendingHistorySyncs.clear();
     _activeLocalHistoryLoads.clear();
     _activeRemoteHistorySyncs.clear();
+    _clearMemoryCacheMetadata();
     state = const <String, ChatThreadState>{};
+  }
+
+  ChatThreadCacheStats debugCacheStats() => _cacheStats();
+
+  String? debugThreadIdForSourceMessage(String? messageId) {
+    return _threadIdForSourceMessage(messageId);
+  }
+
+  void debugDropMessagesForTesting(String threadId) {
+    final current = state[threadId];
+    if (current == null) {
+      return;
+    }
+    _touchThreadCache(threadId, current.messages);
+    state = <String, ChatThreadState>{
+      ...state,
+      threadId: current.copyWith(messages: const <ChatMessage>[]),
+    };
+  }
+
+  ChatThreadCacheStats _cacheStats() {
+    final canonicalKeys = <String>{
+      for (final entry in _canonicalAliases.entries)
+        if (entry.value.isNotEmpty) entry.key,
+      for (final metadata in _cacheMetadataByThreadId.values)
+        metadata.canonicalKey,
+    };
+    return ChatThreadCacheStats(
+      rawThreadStateCount: state.length,
+      canonicalThreadCount: canonicalKeys.length,
+      totalRetainedMessages: state.values.fold<int>(
+        0,
+        (total, thread) => total + thread.messages.length,
+      ),
+      activePatchSubscriptionCount: _threadPatchSubscriptions.length,
+      messageRouteEntryCount: _messageThreadRoutes.length,
+      trimmedMessageCount: _trimmedMessageCount,
+      evictedThreadCount: _evictedThreadCount,
+      protectedOverflowCount: _protectedOverflowCount,
+    );
+  }
+
+  void _touchConversationCache(
+    ConversationSummary conversation,
+    String threadId,
+  ) {
+    final aliases = <String>{
+      threadId,
+      conversation.threadId,
+      for (final key in conversation.visibilityKeys) key,
+      for (final key in conversationVisibilityIdentity(
+        conversation,
+        includeHandleAliasesForStrongIdentity: true,
+      ).keys)
+        key,
+    };
+    _touchThreadCache(
+      threadId,
+      const <ChatMessage>[],
+      canonicalKey: _canonicalKeyForConversation(conversation),
+      aliases: aliases,
+    );
+  }
+
+  void _touchThreadCache(
+    String threadId,
+    List<ChatMessage> messages, {
+    String? canonicalKey,
+    Iterable<String> aliases = const <String>[],
+  }) {
+    final now = DateTime.now();
+    final canonical =
+        _normalizedCacheKey(canonicalKey) ??
+        _canonicalKeyForMessages(threadId, messages) ??
+        _cacheMetadataByThreadId[threadId]?.canonicalKey ??
+        threadId;
+    final previous = _cacheMetadataByThreadId[threadId]?.canonicalKey;
+    if (previous != null && previous != canonical) {
+      final previousAliases = _canonicalAliases[previous];
+      for (final alias
+          in _cacheAliasesByThreadId[threadId] ?? <String>{threadId}) {
+        previousAliases?.remove(alias);
+      }
+      if (previousAliases != null && previousAliases.isEmpty) {
+        _canonicalAliases.remove(previous);
+      }
+    }
+    final threadAliases = <String>{threadId};
+    if (previous == canonical) {
+      threadAliases.addAll(
+        _cacheAliasesByThreadId[threadId] ?? const <String>{},
+      );
+    }
+    for (final alias in aliases) {
+      final key = alias.trim();
+      if (key.isNotEmpty) {
+        threadAliases.add(key);
+      }
+    }
+    _cacheAliasesByThreadId[threadId] = threadAliases;
+    _cacheMetadataByThreadId[threadId] = _ThreadCacheMetadata(
+      canonicalKey: canonical,
+      lastTouchedAt: now,
+    );
+    final aliasSet = _canonicalAliases.putIfAbsent(canonical, () => <String>{});
+    aliasSet.addAll(threadAliases);
+  }
+
+  String? _canonicalKeyForConversation(ConversationSummary conversation) {
+    if (conversation.isGroup) {
+      final group = conversation.groupId?.trim();
+      if (group != null && group.isNotEmpty) {
+        return canonicalGroupThreadId(group);
+      }
+    } else {
+      final peerDid = conversation.targetDid?.trim();
+      if (peerDid != null && peerDid.isNotEmpty) {
+        return canonicalDirectThreadId(_ownerDidForCache(), peerDid);
+      }
+      final peer = normalizedDirectPeer(conversation.targetPeer);
+      if (peer != null && peer.startsWith('did:')) {
+        return canonicalDirectThreadId(_ownerDidForCache(), peer);
+      }
+    }
+    return conversationVisibilityIdentity(
+      conversation,
+      includeHandleAliasesForStrongIdentity: true,
+    ).primaryKey;
+  }
+
+  String? _canonicalKeyForMessages(
+    String threadId,
+    List<ChatMessage> messages,
+  ) {
+    for (final message in messages.reversed) {
+      final group = message.groupId?.trim();
+      if (group != null && group.isNotEmpty) {
+        return canonicalGroupThreadId(group);
+      }
+    }
+    final peerDid = directPeerDidFromMessages(messages)?.trim();
+    if (peerDid != null && peerDid.isNotEmpty) {
+      return canonicalDirectThreadId(_ownerDidForCache(), peerDid);
+    }
+    final normalizedThread = threadId.trim();
+    return normalizedThread.isEmpty ? null : normalizedThread;
+  }
+
+  String _ownerDidForCache() {
+    return ref.read(sessionProvider).session?.did.trim() ?? '';
+  }
+
+  String? _normalizedCacheKey(String? value) {
+    final key = value?.trim();
+    return key == null || key.isEmpty ? null : key;
+  }
+
+  void _recordMessageRoutes(String threadId, List<ChatMessage> messages) {
+    if (messages.isEmpty) {
+      return;
+    }
+    final now = DateTime.now();
+    final canonicalKey =
+        _cacheMetadataByThreadId[threadId]?.canonicalKey ??
+        _canonicalKeyForMessages(threadId, messages) ??
+        threadId;
+    for (final message in messages) {
+      for (final id in <String>[message.localId, ?message.remoteId]) {
+        final key = id.trim();
+        if (key.isEmpty) {
+          continue;
+        }
+        final existing = _messageThreadRoutes[key];
+        if (existing != null && state.containsKey(existing.threadId)) {
+          _messageThreadRoutes[key] = _MessageThreadRoute(
+            threadId: existing.threadId,
+            canonicalKey: existing.canonicalKey,
+            lastTouchedAt: now,
+          );
+          continue;
+        }
+        _messageThreadRoutes[key] = _MessageThreadRoute(
+          threadId: threadId,
+          canonicalKey: canonicalKey,
+          lastTouchedAt: now,
+        );
+      }
+    }
+  }
+
+  void _cleanupMessageRoutes() {
+    final maxEntries = _cachePolicy.maxMessageRouteEntries;
+    if (maxEntries <= 0) {
+      _messageThreadRoutes.clear();
+      return;
+    }
+    final now = DateTime.now();
+    final ttl = _cachePolicy.messageRouteTtl;
+    _messageThreadRoutes.removeWhere((_, route) {
+      return ttl > Duration.zero && now.difference(route.lastTouchedAt) > ttl;
+    });
+    if (_messageThreadRoutes.length <= maxEntries) {
+      return;
+    }
+    final entries = _messageThreadRoutes.entries.toList()
+      ..sort((a, b) => a.value.lastTouchedAt.compareTo(b.value.lastTouchedAt));
+    final removeCount = _messageThreadRoutes.length - maxEntries;
+    for (final entry in entries.take(removeCount)) {
+      _messageThreadRoutes.remove(entry.key);
+    }
+  }
+
+  void _removeMessageRoutesForIds(Set<String> messageIds) {
+    if (messageIds.isEmpty) {
+      return;
+    }
+    _messageThreadRoutes.removeWhere((id, _) => messageIds.contains(id));
+  }
+
+  void _removeThreadCacheMetadata(String threadId) {
+    final metadata = _cacheMetadataByThreadId.remove(threadId);
+    final threadAliases =
+        _cacheAliasesByThreadId.remove(threadId) ?? <String>{threadId};
+    final canonicalKey = metadata?.canonicalKey;
+    if (canonicalKey != null) {
+      final aliases = _canonicalAliases[canonicalKey];
+      for (final alias in threadAliases) {
+        aliases?.remove(alias);
+      }
+      if (aliases != null && aliases.isEmpty) {
+        _canonicalAliases.remove(canonicalKey);
+      }
+    }
+    _messageThreadRoutes.removeWhere((_, route) => route.threadId == threadId);
+  }
+
+  void _clearMemoryCacheMetadata() {
+    _cacheMetadataByThreadId.clear();
+    _cacheAliasesByThreadId.clear();
+    _canonicalAliases.clear();
+    _messageThreadRoutes.clear();
+    _trimmedMessageCount = 0;
+    _evictedThreadCount = 0;
+    _protectedOverflowCount = 0;
   }
 
   void _queuePendingHistorySync(
@@ -1451,6 +1790,9 @@ class ChatThreadsController
 
   void _setMessages(String threadId, List<ChatMessage> messages) {
     final current = thread(threadId);
+    _touchThreadCache(threadId, messages);
+    _recordMessageRoutes(threadId, messages);
+    _cleanupMessageRoutes();
     state = <String, ChatThreadState>{
       ...state,
       threadId: current.copyWith(messages: _sortMessages(messages)),
@@ -1459,6 +1801,16 @@ class ChatThreadsController
 
   void _removeMessageById(String threadId, String messageId) {
     final current = thread(threadId);
+    final removedRouteIds = <String>{};
+    for (final message in current.messages) {
+      if (message.localId == messageId || message.remoteId == messageId) {
+        removedRouteIds.add(message.localId);
+        final remoteId = message.remoteId?.trim();
+        if (remoteId != null && remoteId.isNotEmpty) {
+          removedRouteIds.add(remoteId);
+        }
+      }
+    }
     final nextMessages = current.messages
         .where(
           (message) =>
@@ -1468,6 +1820,8 @@ class ChatThreadsController
     if (nextMessages.length == current.messages.length) {
       return;
     }
+    _removeMessageRoutesForIds(removedRouteIds);
+    _touchThreadCache(threadId, nextMessages);
     state = <String, ChatThreadState>{
       ...state,
       threadId: current.copyWith(messages: nextMessages),
@@ -1511,6 +1865,7 @@ class ChatThreadsController
               ),
       );
     }
+    _recordMessageRoutes(threadId, <ChatMessage>[replacement]);
     _setMessages(threadId, current);
   }
 
@@ -1525,6 +1880,8 @@ class ChatThreadsController
     final current = List<ChatMessage>.from(thread(threadId).messages);
     final indexes = _MessageMergeIndexes(current);
     final newlyMergedMessages = <ChatMessage>[];
+    _touchThreadCache(threadId, incoming);
+    _recordMessageRoutes(threadId, incoming);
     AwikiPerformanceLogger.sync(
       'chat.messages.merge_loop',
       () {
@@ -2344,6 +2701,20 @@ class ChatThreadsController
     if (normalized == null || normalized.isEmpty) {
       return null;
     }
+    final route = _messageThreadRoutes[normalized];
+    if (route != null) {
+      if (state.containsKey(route.threadId)) {
+        return route.threadId;
+      }
+      final aliases = _canonicalAliases[route.canonicalKey];
+      if (aliases != null) {
+        for (final alias in aliases) {
+          if (state.containsKey(alias)) {
+            return alias;
+          }
+        }
+      }
+    }
     for (final entry in state.entries) {
       if (entry.value.messages.any(
         (message) =>
@@ -2812,6 +3183,7 @@ class ChatThreadsController
   void dispose() {
     _cancelAgentProcessingTimers();
     _cancelThreadPatchSubscriptions();
+    _clearMemoryCacheMetadata();
     super.dispose();
   }
 

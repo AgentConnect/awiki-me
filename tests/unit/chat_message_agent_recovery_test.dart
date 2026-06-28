@@ -4,7 +4,9 @@ import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -83,6 +85,17 @@ void main() {
             conversation,
           ]),
         ),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:human:alice',
+              credentialName: 'alice.json',
+              displayName: 'Alice',
+            ),
+          );
+          return controller;
+        }),
         agentsProvider.overrideWith(
           (ref) => _StaticAgentsController(ref, const <AgentSummary>[
             daemon,
@@ -177,6 +190,20 @@ void main() {
     'runtime final with peer-scope route attaches to loaded source message thread',
     () async {
       container.read(chatThreadsProvider.notifier).applyRealtimeUpdate(message);
+      container
+          .read(chatThreadsProvider.notifier)
+          .debugDropMessagesForTesting(conversation.threadId);
+
+      expect(
+        container.read(chatThreadProvider(conversation.threadId)).messages,
+        isEmpty,
+      );
+      expect(
+        container
+            .read(chatThreadsProvider.notifier)
+            .debugThreadIdForSourceMessage('msg_1'),
+        conversation.threadId,
+      );
 
       container
           .read(chatThreadsProvider.notifier)
@@ -197,7 +224,7 @@ void main() {
       final sourceThread = container.read(
         chatThreadProvider(conversation.threadId),
       );
-      expect(sourceThread.messages.single.remoteId, 'msg_1');
+      expect(sourceThread.messages, isEmpty);
       expect(sourceThread.messageAgentSyncs.single.type, 'runtime_final');
       expect(
         sourceThread.messageAgentSyncs.single.conversationId,
@@ -211,6 +238,60 @@ void main() {
       );
     },
   );
+
+  test('cache stats count canonical conversations and route entries', () {
+    final controller = container.read(chatThreadsProvider.notifier);
+    controller.applyRealtimeUpdate(message);
+    controller.applyRealtimeUpdate(
+      ChatMessage(
+        localId: 'local_msg_2',
+        remoteId: 'msg_2',
+        threadId: 'dm:peer-scope:v1:bob',
+        senderDid: 'did:human:bob',
+        receiverDid: 'did:human:alice',
+        content: 'hello again',
+        createdAt: DateTime(2026, 6, 19, 10, 1),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      ),
+      conversation: conversation.copyWith(threadId: 'dm:peer-scope:v1:bob'),
+    );
+
+    final stats = controller.debugCacheStats();
+    expect(stats.rawThreadStateCount, greaterThanOrEqualTo(2));
+    expect(stats.canonicalThreadCount, 1);
+    expect(stats.messageRouteEntryCount, greaterThanOrEqualTo(4));
+    expect(stats.totalRetainedMessages, greaterThanOrEqualTo(2));
+    expect(
+      stats.toJson()['cache.message_route_entry_count'],
+      stats.messageRouteEntryCount,
+    );
+  });
+
+  test('delete and clear remove cache metadata and routes', () async {
+    final controller = container.read(chatThreadsProvider.notifier);
+    container.read(chatThreadsProvider.notifier).applyRealtimeUpdate(message);
+
+    expect(controller.debugCacheStats().messageRouteEntryCount, 2);
+    expect(
+      controller.debugThreadIdForSourceMessage('msg_1'),
+      conversation.threadId,
+    );
+
+    await controller.deleteThread(conversation.threadId);
+
+    expect(controller.debugCacheStats().rawThreadStateCount, 0);
+    expect(controller.debugCacheStats().canonicalThreadCount, 0);
+    expect(controller.debugCacheStats().messageRouteEntryCount, 0);
+    expect(controller.debugThreadIdForSourceMessage('msg_1'), isNull);
+
+    controller.applyRealtimeUpdate(message);
+    expect(controller.debugCacheStats().messageRouteEntryCount, 2);
+    controller.clear();
+    expect(controller.debugCacheStats().rawThreadStateCount, 0);
+    expect(controller.debugCacheStats().canonicalThreadCount, 0);
+    expect(controller.debugCacheStats().messageRouteEntryCount, 0);
+  });
 
   test(
     'confirm create draft writes composer and sends result to daemon',
