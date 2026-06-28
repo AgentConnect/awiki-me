@@ -994,11 +994,13 @@ void main() {
       openedThread.messages.map((message) => message.content),
       contains('我在。'),
     );
+    final canonicalThread = sendContainer.read(
+      chatThreadProvider(realtimeConversation.threadId),
+    );
+    expect(canonicalThread.messages.map((message) => message.content), ['我在。']);
     expect(
-      sendContainer
-          .read(chatThreadProvider(realtimeConversation.threadId))
-          .messages,
-      isEmpty,
+      canonicalThread.messages.single.threadId,
+      realtimeConversation.threadId,
     );
   });
 

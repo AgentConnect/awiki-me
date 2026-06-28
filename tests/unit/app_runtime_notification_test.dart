@@ -451,6 +451,124 @@ void main() {
       expect(directThread.messages.single.content, 'hello');
     });
 
+    test('实时 direct 消息会预热 DID、handle、message thread aliases', () async {
+      await activate();
+      final conversation = ConversationSummary(
+        threadId: 'direct-handle:alice.awiki.info',
+        displayName: 'Alice',
+        lastMessagePreview: 'hello alias',
+        lastMessageAt: DateTime(2026, 4, 5, 12, 10),
+        unreadCount: 1,
+        isGroup: false,
+        targetDid: 'did:test:alice',
+        targetPeer: 'alice.awiki.info',
+      );
+      gateway.nextRealtimeUpdate = RealtimeUpdate(
+        message: ChatMessage(
+          localId: 'alias-direct-1',
+          remoteId: 'alias-direct-1',
+          threadId: 'dm:peer-scope:v1:alice',
+          senderDid: 'did:test:alice',
+          senderName: 'Alice',
+          receiverDid: 'did:test:me',
+          content: 'hello alias',
+          createdAt: DateTime(2026, 4, 5, 12, 10),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+        conversation: conversation,
+      );
+
+      await realtimeGateway.emit(const <String, Object?>{'type': 'direct'});
+
+      for (final key in <String>[
+        'direct-handle:alice.awiki.info',
+        'dm:peer-scope:v1:alice',
+        'did:test:alice',
+        'direct:did:test:alice',
+        'direct-did:did:test:alice',
+        'direct:alice.awiki.info',
+        'direct-handle:alice',
+        'dm:pending:alice.awiki.info',
+        'dm:did:test:alice:did:test:me',
+      ]) {
+        final thread = container.read(chatThreadProvider(key));
+        expect(
+          thread.messages.map((message) => message.content),
+          contains('hello alias'),
+          reason: 'missing realtime prewarm for $key',
+        );
+        expect(thread.messages.single.threadId, key);
+      }
+
+      gateway.nextRealtimeUpdate = RealtimeUpdate(
+        message: ChatMessage(
+          localId: 'alias-direct-1',
+          remoteId: 'alias-direct-1',
+          threadId: 'dm:peer-scope:v1:alice',
+          senderDid: 'did:test:alice',
+          senderName: 'Alice',
+          receiverDid: 'did:test:me',
+          content: 'hello alias',
+          createdAt: DateTime(2026, 4, 5, 12, 10),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+        conversation: conversation,
+      );
+      await realtimeGateway.emit(const <String, Object?>{'type': 'direct'});
+
+      expect(
+        container
+            .read(chatThreadProvider('direct-handle:alice.awiki.info'))
+            .messages,
+        hasLength(1),
+      );
+    });
+
+    test('实时 group 消息会预热 raw group id 和 canonical group key', () async {
+      await activate();
+      gateway.nextRealtimeUpdate = RealtimeUpdate(
+        message: ChatMessage(
+          localId: 'alias-group-1',
+          remoteId: 'alias-group-1',
+          threadId: 'sdk-group-thread-alpha',
+          senderDid: 'did:test:alice',
+          senderName: 'Alice',
+          groupId: 'did:test:group:alpha',
+          content: 'hello group alias',
+          createdAt: DateTime(2026, 4, 5, 12, 15),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+        conversation: ConversationSummary(
+          threadId: 'group:did:test:group:alpha',
+          displayName: 'Alpha',
+          lastMessagePreview: 'hello group alias',
+          lastMessageAt: DateTime(2026, 4, 5, 12, 15),
+          unreadCount: 1,
+          isGroup: true,
+          groupId: 'did:test:group:alpha',
+        ),
+      );
+
+      await realtimeGateway.emit(const <String, Object?>{'type': 'group'});
+
+      for (final key in <String>[
+        'group:did:test:group:alpha',
+        'sdk-group-thread-alpha',
+        'did:test:group:alpha',
+      ]) {
+        final thread = container.read(chatThreadProvider(key));
+        expect(
+          thread.messages.map((message) => message.content),
+          contains('hello group alias'),
+          reason: 'missing realtime prewarm for $key',
+        );
+        expect(thread.messages.single.threadId, key);
+      }
+    });
+
     test('Daemon Agent 普通实时消息不进入聊天、未读或通知', () async {
       container.read(agentsProvider.notifier).applyControlPayload(
         const <String, Object?>{

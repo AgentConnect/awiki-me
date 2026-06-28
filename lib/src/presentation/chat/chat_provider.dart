@@ -9,6 +9,7 @@ import '../../application/models/attachment_models.dart';
 import '../../application/models/app_thread_ref.dart';
 import '../../application/models/thread_message_patch.dart';
 import '../../application/messaging_service.dart';
+import '../../application/thread_id_utils.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../../domain/entities/agent/agent_status.dart';
@@ -1293,12 +1294,14 @@ class ChatThreadsController
     ChatMessage message, {
     ConversationSummary? conversation,
   }) {
-    final targetThreadId = conversation == null
-        ? message.threadId
-        : _threadIdForRealtimeMessage(message, conversation);
-    _mergeMessages(targetThreadId, <ChatMessage>[
-      _withThreadId(message, targetThreadId),
-    ], trustIncomingAgentReply: true);
+    for (final targetThreadId in _threadIdsForRealtimeMessage(
+      message,
+      conversation,
+    )) {
+      _mergeMessages(targetThreadId, <ChatMessage>[
+        _withThreadId(message, targetThreadId),
+      ], trustIncomingAgentReply: true);
+    }
   }
 
   Future<void> refreshConversation(
@@ -2834,21 +2837,147 @@ class ChatThreadsController
     return refreshed.isEmpty ? fallback : refreshed.first;
   }
 
-  String _threadIdForRealtimeMessage(
+  List<String> _threadIdsForRealtimeMessage(
     ChatMessage message,
-    ConversationSummary conversation,
+    ConversationSummary? conversation,
   ) {
+    final aliases = <String>[];
+    void add(String? value) {
+      final key = value?.trim();
+      if (key != null && key.isNotEmpty && !aliases.contains(key)) {
+        aliases.add(key);
+      }
+    }
+
+    if (conversation == null) {
+      add(message.threadId);
+      return aliases;
+    }
+
     for (final entry in state.entries) {
       if (sameConversationTarget(
         _conversationIdentityForThread(entry.key, entry.value),
         conversation,
       )) {
-        return entry.key;
+        add(entry.key);
       }
     }
-    return conversation.threadId.trim().isEmpty
-        ? message.threadId
-        : conversation.threadId;
+    add(conversation.threadId);
+    add(message.threadId);
+    for (final key in conversation.visibilityKeys) {
+      add(key);
+    }
+    for (final key in conversationVisibilityIdentity(
+      conversation,
+      includeHandleAliasesForStrongIdentity: true,
+    ).keys) {
+      add(key);
+    }
+
+    final ownerDid = ref.read(sessionProvider).session?.did.trim() ?? '';
+    if (conversation.isGroup) {
+      _addRealtimeGroupAliases(
+        add,
+        conversation.groupId,
+        message.groupId,
+        conversation.threadId,
+        message.threadId,
+      );
+    } else {
+      _addRealtimeDirectAliases(add, conversation, message, ownerDid);
+    }
+    if (aliases.isEmpty) {
+      add(message.threadId);
+    }
+    return aliases;
+  }
+
+  void _addRealtimeGroupAliases(
+    void Function(String? value) add,
+    String? conversationGroupId,
+    String? messageGroupId,
+    String conversationThreadId,
+    String messageThreadId,
+  ) {
+    for (final value in <String?>[
+      conversationGroupId,
+      messageGroupId,
+      conversationThreadId,
+      messageThreadId,
+    ]) {
+      final group = value?.trim();
+      if (group == null || group.isEmpty) {
+        continue;
+      }
+      add(group);
+      add(canonicalGroupThreadId(group));
+    }
+  }
+
+  void _addRealtimeDirectAliases(
+    void Function(String? value) add,
+    ConversationSummary conversation,
+    ChatMessage message,
+    String ownerDid,
+  ) {
+    final peerDid = _directPeerDidForRealtimeMessage(message, ownerDid);
+    final targetDid = conversation.targetDid?.trim();
+    final normalizedTargetPeer = normalizedDirectPeer(conversation.targetPeer);
+    final peerDids = <String?>[
+      targetDid,
+      normalizedTargetPeer != null && normalizedTargetPeer.startsWith('did:')
+          ? normalizedTargetPeer
+          : null,
+      peerDid,
+    ];
+    for (final did in peerDids) {
+      final peer = did?.trim();
+      if (peer == null || peer.isEmpty) {
+        continue;
+      }
+      add(peer);
+      add('direct:$peer');
+      add('direct-did:$peer');
+      if (ownerDid.isNotEmpty) {
+        add(canonicalDirectThreadId(ownerDid, peer));
+      }
+    }
+
+    if (normalizedTargetPeer == null ||
+        normalizedTargetPeer.startsWith('did:')) {
+      return;
+    }
+    add(normalizedTargetPeer);
+    add('direct:$normalizedTargetPeer');
+    add('direct-handle:$normalizedTargetPeer');
+    add('dm:pending:$normalizedTargetPeer');
+    final localPart = _handleLocalPart(normalizedTargetPeer);
+    add('direct:$localPart');
+    add('direct-handle:$localPart');
+  }
+
+  String? _directPeerDidForRealtimeMessage(
+    ChatMessage message,
+    String ownerDid,
+  ) {
+    final owner = ownerDid.trim();
+    final sender = message.senderDid.trim();
+    final receiver = message.receiverDid?.trim();
+    if (owner.isNotEmpty) {
+      if (sender == owner && receiver != null && receiver.isNotEmpty) {
+        return receiver;
+      }
+      if (receiver == owner && sender.isNotEmpty) {
+        return sender;
+      }
+    }
+    if (!message.isMine && sender.isNotEmpty) {
+      return sender;
+    }
+    if (receiver != null && receiver.isNotEmpty) {
+      return receiver;
+    }
+    return sender.isEmpty ? null : sender;
   }
 
   ConversationSummary _conversationIdentityForThread(
