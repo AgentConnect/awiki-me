@@ -279,6 +279,71 @@ void main() {
     expect(service.watchCalls, 1);
   });
 
+  test('conversation patch upsert respects local hidden waterline', () async {
+    final seed = _conversation(
+      threadId: 'dm:alice:bob',
+      displayName: 'Bob',
+      unreadCount: 1,
+      lastMessageAt: DateTime.utc(2026, 6, 27, 2),
+    );
+    final service = _PatchConversationService(
+      conversations: <ConversationSummary>[seed],
+    );
+    final notifications = FakeNotificationFacade();
+    final container = _conversationContainer(
+      service: service,
+      notifications: notifications,
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(conversationListProvider.notifier);
+    await notifier.refreshFastLocal();
+    await notifier.deleteFromRecents(seed);
+
+    expect(container.read(conversationListProvider).conversations, isEmpty);
+    expect(notifications.lastBadgeCount, 0);
+
+    service.emitPatch(
+      ConversationListPatch(
+        kind: ConversationListPatchKind.upsert,
+        ownerDid: 'did:alice',
+        version: 1,
+        unreadTotal: 1,
+        item: seed.copyWith(lastMessagePreview: 'stale hidden row'),
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(container.read(conversationListProvider).conversations, isEmpty);
+
+    final newerMessageAt = DateTime.now().toUtc().add(
+      const Duration(minutes: 1),
+    );
+    service.emitPatch(
+      ConversationListPatch(
+        kind: ConversationListPatchKind.upsert,
+        ownerDid: 'did:alice',
+        version: 2,
+        unreadTotal: 2,
+        item: seed.copyWith(
+          lastMessagePreview: 'new message after hide',
+          lastMessageAt: newerMessageAt,
+          unreadCount: 2,
+        ),
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    final conversations = container
+        .read(conversationListProvider)
+        .conversations;
+    expect(conversations, hasLength(1));
+    expect(conversations.single.lastMessagePreview, 'new message after hide');
+    expect(conversations.single.unreadCount, 2);
+    expect(notifications.lastBadgeCount, 2);
+  });
+
   test('conversation patch reorder moves existing row without repair', () async {
     final service = _PatchConversationService(
       conversations: const <ConversationSummary>[],
@@ -561,12 +626,13 @@ ConversationSummary _conversation({
   int unreadCount = 0,
   String targetDid = 'did:bob',
   String? targetPeer,
+  DateTime? lastMessageAt,
 }) {
   return ConversationSummary(
     threadId: threadId,
     displayName: displayName,
     lastMessagePreview: 'hello',
-    lastMessageAt: DateTime.utc(2026, 6, 27, 2),
+    lastMessageAt: lastMessageAt ?? DateTime.utc(2026, 6, 27, 2),
     unreadCount: unreadCount,
     isGroup: false,
     targetDid: targetDid,
