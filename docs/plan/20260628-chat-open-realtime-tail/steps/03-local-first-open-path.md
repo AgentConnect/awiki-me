@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)  
 Step index：03  
-状态：draft
+状态：done
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
+| Status | done |
 | Branch | `awiki-me: feature/perf/message-sync-opt-0627` |
-| Started | 待填 |
-| Completed | 待填 |
-| Commit | 待填 |
-| Review evidence | 待填 |
-| Verification evidence | 待填 |
-| Next action | 调整 Chat open path，使首屏不等待网络同步或 remote history。 |
+| Started | 2026-06-28 21:26:45 CST |
+| Completed | 2026-06-28 21:35:18 CST |
+| Commit | `awiki-me@b6d8c1f` |
+| Review evidence | Review 确认 `openConversation` 仍只调度 `_openConversationLocalFirst`，不会 await 首屏后台 work；memory tail 命中时记录 `chat.open.first_paint` 并后台 `syncThreadAfter`；空内存才读 local history；local history 命中后不再因 unreadCount 或 lastMessageAt 调用 remote history；本地空或本地失败时 remote fallback 保留，且允许 loading / failure；`syncThreadAfter` 仍走 `messageSyncServiceProvider`，未推进 global checkpoint。 |
+| Verification evidence | `dart format lib/src/presentation/chat/chat_provider.dart tests/unit/chat_provider_open_test.dart` 通过；`git diff --check` 通过；`flutter test tests/unit/chat_provider_open_test.dart` 通过 50 个测试；`flutter test tests/unit/app_runtime_notification_test.dart` 通过 19 个测试；`dart run tests/unit/runner.dart` 通过，最终 `+678: All tests passed!`；`dart analyze` 仅失败于既有无关 warning：`tests/e2e/flutter/desktop_cli_peer/support/cli_peer_process.dart:192:5 unused_element _groupCountFromCliOutput`。 |
+| Next action | 返回主 Plan，开始 Step 04。 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -95,14 +95,14 @@ Step index：03
 
 ## 7. 验收标准
 
-- [ ] memory tail 命中时首屏不等待 local history / remote history。
-- [ ] local history 命中时首屏不等待 remote history。
-- [ ] unreadCount 不再单独导致 remote history 阻塞。
-- [ ] `syncThreadAfter` 只后台补新，不影响 first paint。
-- [ ] 本地空 / 本地失败时 remote history fallback 保留。
-- [ ] fake service tests 覆盖 remote call / syncThreadAfter call 的期望。
-- [ ] Review 发现已经修复或明确记录。
-- [ ] 本步骤在进入下一步之前已经创建聚焦 commit。
+- [x] memory tail 命中时首屏不等待 local history / remote history。
+- [x] local history 命中时首屏不等待 remote history。
+- [x] unreadCount 不再单独导致 remote history 阻塞。
+- [x] `syncThreadAfter` 只后台补新，不影响 first paint。
+- [x] 本地空 / 本地失败时 remote history fallback 保留。
+- [x] fake service tests 覆盖 remote call / syncThreadAfter call 的期望。
+- [x] Review 发现已经修复或明确记录。
+- [x] 本步骤在进入下一步之前已经创建聚焦 commit。
 
 ## 8. 验证方式
 
@@ -130,20 +130,20 @@ Step index：03
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待填 | 待填 |
-| 已修复问题 | 待填 | 待填 |
-| 剩余风险 | 待填 | 待填 |
-| 新增或缺失测试 | 待填 | 待填 |
-| 已更新或缺失文档 | 待填 | 待填 |
+| 发现问题 | 发现 1 个测试语义冲突 | 旧 pending 回补测试依赖 open path 触发 remote history；Step 03 后 open path 本地有消息时应只后台 thread-after。 |
+| 已修复问题 | 已修复 | 将 pending 回补测试改为 `thread-after` 回补服务端已发送消息，同时断言 remote history 不被调用。 |
+| 剩余风险 | 可接受 | memory/local 命中后 remote history 不再立即兜底；freshness 依赖 thread-after 和 patch stream。已有 local 空、local 失败、manual refresh 测试覆盖兜底路径。 |
+| 新增或缺失测试 | 已更新 | `tests/unit/chat_provider_open_test.dart` 覆盖 local history 命中不 remote、local 空 remote fallback、memory tail 命中走 thread-after 不 remote、pending 回补由 thread-after 完成、已加载再次打开不重读本地。 |
+| 已更新或缺失文档 | 本步骤无需业务文档 | 新增 perf event `chat.open.first_paint`，按计划在 Step 05 更新 `docs/performance-tracing.md`。 |
 
 ## 10. Commit 要求
 
 - Commit 时机：本步骤实现、验证、Review 都完成后。
 - Commit 范围：只包含 AWiki Me P2 click local-first 代码、测试和必要文档。
-- Commit 前状态：记录 `cd awiki-me && git status --short --branch`。
-- 纳入文件：记录本步骤 commit 包含的文件。
-- Commit 后证据：记录 commit hash 和 commit 后 `git status`。
-- 遗留未提交变更：必须记录原因以及为什么安全。
+- Commit 前状态：`awiki-me` 位于 `feature/perf/message-sync-opt-0627`，领先远端 3 个提交；未提交文件包括 `android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java`、主 Plan、本 Step 文档、`lib/src/presentation/chat/chat_provider.dart`、`tests/unit/chat_provider_open_test.dart`。
+- 纳入文件：`lib/src/presentation/chat/chat_provider.dart`、`tests/unit/chat_provider_open_test.dart`。
+- Commit 后证据：实现提交 `awiki-me@b6d8c1f fix(app): keep chat open first paint local-first`；提交后仍有 `android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java` 和 Plan 文档未提交，Android 生成文件不是本步骤范围，计划文档作为单独台账提交。
+- 遗留未提交变更：`android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java` 为执行前已有/工具生成 Android registrant 差异，非本步骤范围，未纳入实现提交。
 - 建议消息：`fix(app): keep chat open first paint local-first`
 
 ## 11. Blocked 处理
