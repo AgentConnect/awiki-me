@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)  
 Step index：04  
-状态：draft
+状态：done
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
+| Status | done |
 | Branch | `awiki-me: feature/perf/message-sync-opt-0627` |
-| Started | 待填 |
-| Completed | 待填 |
-| Commit | 待填 |
-| Review evidence | 待填 |
-| Verification evidence | 待填 |
-| Next action | 降低 localHistory 首屏 limit，并缓存 owner DID。 |
+| Started | 2026-06-28 21:37:41 CST |
+| Completed | 2026-06-28 21:55:36 CST |
+| Commit | `awiki-me@e350970` |
+| Review evidence | Review 确认首屏 local history 只在 chat open first paint 路径传 `limit=50`，repair fallback 保持默认 100；owner DID cache 绑定 `AwikiImClient` object，client switch 重新读取；未新增 public DTO/API、checkpoint/raw sync、`loadThreadTailSnapshot` 或敏感日志。 |
+| Verification evidence | `dart format ...` 通过；`git diff --check` 通过；`flutter test tests/unit/data/im_core/awiki_im_core_message_adapter_test.dart` 通过 7 个测试；`flutter test tests/unit/chat_provider_open_test.dart` 串行通过 50 个测试；`dart run tests/unit/runner.dart` 通过，最终 `+680: All tests passed!`；`dart analyze` 仅失败于既有无关 warning：`tests/e2e/flutter/desktop_cli_peer/support/cli_peer_process.dart:192:5 unused_element _groupCountFromCliOutput`。 |
+| Next action | 开始 Step 05：集成验证、性能门禁和文档收口。 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -99,14 +99,14 @@ Step index：04
 
 ## 7. 验收标准
 
-- [ ] chat open 首屏 `loadLocalHistory` 显式 limit 为 50 或 Review 认可的 30。
-- [ ] adapter owner DID cache 减少重复 `identity.current()`。
-- [ ] client / session switch 不复用旧 owner DID。
-- [ ] 不改变 public SDK DTO 或 checkpoint 语义。
-- [ ] unit tests 覆盖 limit、cache、失效。
-- [ ] 如未实现 `loadThreadTailSnapshot`，Plan / Review 明确记录“为何当前 P3 已通过低风险优化满足，何时升级”。
-- [ ] Review 发现已经修复或明确记录。
-- [ ] 本步骤在进入下一步之前已经创建聚焦 commit。
+- [x] chat open 首屏 `loadLocalHistory` 显式 limit 为 50 或 Review 认可的 30。
+- [x] adapter owner DID cache 减少重复 `identity.current()`。
+- [x] client / session switch 不复用旧 owner DID。
+- [x] 不改变 public SDK DTO 或 checkpoint 语义。
+- [x] unit tests 覆盖 limit、cache、失效。
+- [x] 如未实现 `loadThreadTailSnapshot`，Plan / Review 明确记录“为何当前 P3 已通过低风险优化满足，何时升级”。
+- [x] Review 发现已经修复或明确记录。
+- [x] 本步骤在进入下一步之前已经创建聚焦 commit。
 
 ## 8. 验证方式
 
@@ -133,20 +133,22 @@ Step index：04
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待填 | 待填 |
-| 已修复问题 | 待填 | 待填 |
-| 剩余风险 | 待填 | 待填 |
-| 新增或缺失测试 | 待填 | 待填 |
-| 已更新或缺失文档 | 待填 | 待填 |
+| 发现问题 | 初始实现会让 `_loadLocalHistory` 的 repair fallback 也使用 50，和本步骤“repair 保持 100”的设计不一致。 | 已在提交前修正为 `_loadLocalHistory(..., int limit = 100)`，仅 `_openConversationLocalFirst` 显式传 `_initialLocalHistoryLimit=50`。 |
+| 已修复问题 | 补充 `chat.local_history.service` 日志 `limit` 字段；补充 provider 测试断言首屏 50、repair 100；补充 adapter 测试断言同一 client 只调用一次 `identity.current()`、client 切换重新读取。 | `tests/unit/chat_provider_open_test.dart`、`tests/unit/data/im_core/awiki_im_core_message_adapter_test.dart` 覆盖。 |
+| 剩余风险 | 未引入 `loadThreadTailSnapshot`；当前 P3 以低风险 limit + owner DID cache 满足，是否需要 snapshot API 交由 Step 05 的真实性能 gate 决定。 | 如 Step 05 指标仍不达标，必须先更新主 Plan 变更记录并拆新增 API Step。 |
+| 新增或缺失测试 | 已新增 / 更新 limit、cache、client-switch 失效和 repair limit 测试；无本步骤缺失单测。 | E2E 性能验证按计划留到 Step 05。 |
+| 已更新或缺失文档 | 本 Step 文档和主 Plan 台账已更新；`awiki-me/docs/performance-tracing.md` 按主 Plan 留给 Step 05 集成文档收口。 | 本步骤未改 public API，子仓库 API 文档不需要同步。 |
+
+Review 结论：本步骤实现符合 P3 低风险方案。`loadThreadTailSnapshot` 未实现是有意保留的决策 gate，不属于 Step 04 缺口；只有 Step 05 真实 E2E 性能指标仍不达标时才通过 Plan 变更升级。
 
 ## 10. Commit 要求
 
 - Commit 时机：本步骤实现、验证、Review 都完成后。
 - Commit 范围：只包含 AWiki Me P3 localHistory 成本优化代码、测试和必要文档。
-- Commit 前状态：记录 `cd awiki-me && git status --short --branch`。
-- 纳入文件：记录本步骤 commit 包含的文件。
-- Commit 后证据：记录 commit hash 和 commit 后 `git status`。
-- 遗留未提交变更：必须记录原因以及为什么安全。
+- Commit 前状态：`awiki-me` 分支 `feature/perf/message-sync-opt-0627` ahead 5；暂存仅包含 `lib/src/presentation/chat/chat_provider.dart`、`lib/src/data/im_core/awiki_im_core_message_adapter.dart`、`tests/unit/test_support.dart`、`tests/unit/chat_provider_open_test.dart`、`tests/unit/data/im_core/awiki_im_core_message_adapter_test.dart`。
+- 纳入文件：上述 5 个 Step 04 代码 / 测试文件。
+- Commit 后证据：`awiki-me@e350970 perf(app): reduce local history first-paint overhead`。
+- 遗留未提交变更：`android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java` 为执行前已有无关平台 generated 改动，未纳入；Plan 文档更新独立提交。
 - 建议消息：`perf(app): reduce local history first-paint overhead`
 
 ## 11. Blocked 处理
