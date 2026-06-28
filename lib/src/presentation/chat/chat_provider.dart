@@ -440,6 +440,7 @@ class ChatThreadsController
   static const Duration _staleSendingAge = Duration(seconds: 30);
   static const Duration _sendTimeout = Duration(seconds: 20);
   static const Duration _attachmentSendTimeout = Duration(minutes: 3);
+  static const int _initialLocalHistoryLimit = 50;
   static const Duration _attachmentStaleSendingAge = Duration(
     minutes: 3,
     seconds: 30,
@@ -528,6 +529,7 @@ class ChatThreadsController
     final localResult = await _loadLocalHistory(
       conversation,
       intoThreadId: displayThreadId,
+      limit: _initialLocalHistoryLimit,
     );
     if (!mounted) {
       return;
@@ -812,6 +814,7 @@ class ChatThreadsController
   Future<_HistoryLoadResult> _loadLocalHistory(
     ConversationSummary conversation, {
     String? intoThreadId,
+    int limit = 100,
   }) async {
     if (!mounted) {
       return const _HistoryLoadResult(loadedCount: 0, failed: false);
@@ -840,8 +843,12 @@ class ChatThreadsController
         'chat.local_history.service',
         () => localMessaging.loadLocalHistory(
           _localHistoryThreadRefFor(conversation),
+          limit: limit,
         ),
-        fields: AwikiPerformanceLogger.threadField(targetThreadId),
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'limit': limit,
+        },
         level: AwikiPerformanceLogLevel.verbose,
       );
       final history = AwikiPerformanceLogger.sync(

@@ -1532,9 +1532,10 @@ class FakeConversationService implements ConversationService {
 
 class FakeMessagingService
     implements MessagingService, LocalHistoryMessagingService {
-  const FakeMessagingService(this.gateway);
+  FakeMessagingService(this.gateway);
 
   final FakeAwikiGateway gateway;
+  int? lastLocalHistoryLimit;
 
   @override
   Future<AttachmentDownloadResult> downloadAttachment({
@@ -1582,6 +1583,7 @@ class FakeMessagingService
     String? cursor,
     bool includeControlPayloads = false,
   }) {
+    lastLocalHistoryLimit = limit;
     final history = switch (thread) {
       AppDirectThreadRef(:final peerDidOrHandle) => gateway.fetchLocalDmHistory(
         peerDidOrHandle,

@@ -84,6 +84,9 @@ void main() {
     expect(gateway.fetchLocalDmHistoryCalls, 1);
     expect(gateway.fetchDmHistoryCalls, 0);
     expect(gateway.listConversationsCalls, 0);
+    final messaging = container.read(messagingServiceProvider);
+    expect(messaging, isA<FakeMessagingService>());
+    expect((messaging as FakeMessagingService).lastLocalHistoryLimit, 50);
     expect(messageSyncService.threadAfterRequests, hasLength(1));
     expect(
       messageSyncService.threadAfterRequests.single.afterServerSeq,
@@ -358,6 +361,7 @@ void main() {
     await pumpEventQueue();
 
     expect(patchMessaging.repairCalls, 1);
+    expect(patchMessaging.lastRepairLimit, 100);
     final messages = patchContainer
         .read(chatThreadProvider(conversation.threadId))
         .messages;
@@ -2623,6 +2627,7 @@ class _PatchMessagingService
   final StreamController<ThreadMessagePatch> _patches =
       StreamController<ThreadMessagePatch>.broadcast();
   int repairCalls = 0;
+  int? lastRepairLimit;
 
   void emitPatch(ThreadMessagePatch patch) {
     _patches.add(patch);
@@ -2659,6 +2664,7 @@ class _PatchMessagingService
     int limit = 100,
   }) async {
     repairCalls += 1;
+    lastRepairLimit = limit;
     return repairPatch;
   }
 

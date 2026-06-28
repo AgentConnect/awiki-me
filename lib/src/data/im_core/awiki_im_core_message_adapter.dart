@@ -26,6 +26,8 @@ class AwikiImCoreMessageAdapter
 
   final AwikiImCoreRuntime _runtime;
   final AwikiImCoreMappers _mappers;
+  core.AwikiImClient? _ownerDidClient;
+  String? _ownerDid;
 
   @override
   Future<ChatMessage> sendText({
@@ -33,7 +35,7 @@ class AwikiImCoreMessageAdapter
     required String content,
   }) async {
     return _runtime.withCurrentClient((client) async {
-      final ownerDid = (await client.identity.current()).did;
+      final ownerDid = await _currentOwnerDid(client);
       final result = await client.messages.sendText(
         core.SendTextRequest(
           target: _mappers.messageTargetToCore(thread),
@@ -53,7 +55,7 @@ class AwikiImCoreMessageAdapter
     String? idempotencyKey,
   }) async {
     return _runtime.withCurrentClient((client) async {
-      final ownerDid = (await client.identity.current()).did;
+      final ownerDid = await _currentOwnerDid(client);
       final mentionPayloadJson = mentions.isEmpty || caption == null
           ? null
           : jsonEncode(
@@ -88,7 +90,7 @@ class AwikiImCoreMessageAdapter
     String? idempotencyKey,
   }) async {
     return _runtime.withCurrentClient((client) async {
-      final ownerDid = (await client.identity.current()).did;
+      final ownerDid = await _currentOwnerDid(client);
       final result = await client.messages.sendPayload(
         core.SendPayloadRequest(
           target: _mappers.messageTargetToCore(thread),
@@ -151,10 +153,7 @@ class AwikiImCoreMessageAdapter
   }) async {
     return _runtime.withCurrentClient((client) async {
       final totalWatch = Stopwatch()..start();
-      final ownerDid = (await AwikiPerformanceLogger.async(
-        'im_core_messages.identity_current',
-        client.identity.current,
-      )).did;
+      final ownerDid = await _currentOwnerDid(client);
       final coreThread = _mappers.threadRefToCore(thread);
       final page = await AwikiPerformanceLogger.async(
         'im_core_messages.remote_history_native',
@@ -215,10 +214,7 @@ class AwikiImCoreMessageAdapter
   }) async {
     return _runtime.withCurrentClient((client) async {
       final totalWatch = Stopwatch()..start();
-      final ownerDid = (await AwikiPerformanceLogger.async(
-        'im_core_messages.identity_current',
-        client.identity.current,
-      )).did;
+      final ownerDid = await _currentOwnerDid(client);
       final coreThread = _mappers.threadRefToCore(thread);
       final page = await AwikiPerformanceLogger.async(
         'im_core_messages.local_history_native',
@@ -271,7 +267,7 @@ class AwikiImCoreMessageAdapter
     int limit = 100,
   }) async* {
     final client = await _runtime.currentClient();
-    final ownerDid = (await client.identity.current()).did;
+    final ownerDid = await _currentOwnerDid(client);
     yield* client.messages
         .watchThreadPatches(_mappers.threadRefToCore(thread), limit: limit)
         .map((patch) => _threadPatchFromCore(patch, ownerDid: ownerDid));
@@ -283,7 +279,7 @@ class AwikiImCoreMessageAdapter
     int limit = 100,
   }) async {
     return _runtime.withCurrentClient((client) async {
-      final ownerDid = (await client.identity.current()).did;
+      final ownerDid = await _currentOwnerDid(client);
       final patch = await client.messages.repairThreadStore(
         _mappers.threadRefToCore(thread),
         limit: limit,
@@ -310,6 +306,23 @@ class AwikiImCoreMessageAdapter
       thread: _threadFromFailedMessage(failed),
       content: failed.content,
     );
+  }
+
+  Future<String> _currentOwnerDid(core.AwikiImClient client) async {
+    final cachedOwnerDid = _ownerDid;
+    if (identical(_ownerDidClient, client) &&
+        cachedOwnerDid != null &&
+        cachedOwnerDid.isNotEmpty) {
+      return cachedOwnerDid;
+    }
+    final identity = await AwikiPerformanceLogger.async(
+      'im_core_messages.identity_current',
+      client.identity.current,
+    );
+    final ownerDid = identity.did;
+    _ownerDidClient = client;
+    _ownerDid = ownerDid;
+    return ownerDid;
   }
 
   ThreadMessagePatch _threadPatchFromCore(
