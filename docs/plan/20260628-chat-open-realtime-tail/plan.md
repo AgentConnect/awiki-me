@@ -1,10 +1,10 @@
 # Plan：AWiki Me 新消息点开首屏秒开优化
 
-状态：in_progress
+状态：done
 DOC：`awiki-me/docs/plan/20260628-chat-open-realtime-tail/`  
 Harness：`awiki-harness/`  
 创建时间：2026-06-28  
-恢复指针：Step 01-05 已完成；恢复时应执行第 17 节最终全局 Review 与整体验证。
+恢复指针：全部步骤与最终全局 Review 已完成；如恢复仅需检查是否需要推送本地领先提交。
 
 ## 1. 目标
 
@@ -135,7 +135,7 @@ Harness：`awiki-harness/`
 | 03 | done | `awiki-me: feature/perf/message-sync-opt-0627` | 2026-06-28 21:26:45 CST | 2026-06-28 21:35:18 CST | `awiki-me@b6d8c1f` | Review 确认 `openConversation` 仍不 await 后台工作；memory tail 命中直接记录 `chat.open.first_paint` 并只后台 `syncThreadAfter`；空内存才读 local history；local history 命中后不再因 unreadCount 或 lastMessageAt 触发 remote history；local 空或失败时 remote fallback 保留且 `force=true`；未新增 checkpoint、raw sync payload 或持久缓存。Review 中将旧 pending 回补测试从 remote history 改为 thread-after，保持新语义一致。 | `dart format lib/src/presentation/chat/chat_provider.dart tests/unit/chat_provider_open_test.dart` 通过；`git diff --check` 通过；`flutter test tests/unit/chat_provider_open_test.dart` 通过 50 个测试；`flutter test tests/unit/app_runtime_notification_test.dart` 通过 19 个测试；`dart run tests/unit/runner.dart` 通过，最终 `+678: All tests passed!`；`dart analyze` 仅失败于既有无关 warning：`tests/e2e/flutter/desktop_cli_peer/support/cli_peer_process.dart:192:5 unused_element _groupCountFromCliOutput`。 | 开始 Step 04：降低 Flutter → Rust → SQLite 首屏开销。 |
 | 04 | done | `awiki-me: feature/perf/message-sync-opt-0627` | 2026-06-28 21:37:41 CST | 2026-06-28 21:55:36 CST | `awiki-me@e350970` | Review 确认首屏 `_openConversationLocalFirst` 显式传 `limit=50`，`_loadLocalHistory` 默认仍为 100，thread patch repair fallback 未被缩小；`AwikiImCoreMessageAdapter` owner DID cache 绑定当前 `AwikiImClient` 对象，client switch 时重新读取；owner DID 仍来自 SDK `identity.current()`，未新增 public DTO/API、checkpoint/raw sync 或 `loadThreadTailSnapshot`；性能日志只新增非敏感 `limit` 字段。 | `dart format lib/src/presentation/chat/chat_provider.dart lib/src/data/im_core/awiki_im_core_message_adapter.dart tests/unit/test_support.dart tests/unit/chat_provider_open_test.dart tests/unit/data/im_core/awiki_im_core_message_adapter_test.dart` 通过；`git diff --check` 通过；`flutter test tests/unit/data/im_core/awiki_im_core_message_adapter_test.dart` 通过 7 个测试；`flutter test tests/unit/chat_provider_open_test.dart` 串行重跑通过 50 个测试（并行首次尝试因 Flutter native assets 初始化缺 `build/native_assets/linux/native_assets.json` 未进入测试）；`dart run tests/unit/runner.dart` 通过，最终 `+680: All tests passed!`；`dart analyze` 仅失败于既有无关 warning：`tests/e2e/flutter/desktop_cli_peer/support/cli_peer_process.dart:192:5 unused_element _groupCountFromCliOutput`。 | 开始 Step 05：集成验证、性能门禁和文档收口。 |
 | 05 | done | `awiki-me: feature/perf/message-sync-opt-0627`; `awiki-system-test: release/0526`; `awiki-cli-rs2: feature/perf/message-sync-opt-0627` | 2026-06-28 21:57:54 CST | 2026-06-28 22:37:02 CST | `awiki-me@ba04e0a` | Review 确认 E2E first-paint gate 在显式 `syncThreadAfter` 前等待 fast local conversation preview，并通过 `ChatThreadsController.openConversation` + `selectedConversationProvider` 走 App provider open path；required metrics / hard / soft budgets 已进入默认配置，local YAML 会与默认 budgets 合并；报告脱敏边界未扩大；文档 schema 修正为顶层 `metrics` map；删除 E2E harness unused helper 后全局 analyzer gate 恢复通过。 | `uname -s` 为 Linux；首次 `dart run tests/e2e/runner.dart --case performance` 因缺 `awiki-cli-rs2/target/release/awiki-cli` 停在 tooling check，随后 `CARGO_BUILD_JOBS=1 cargo build --release -p awiki-cli --locked` 成功；重跑 `dart run tests/e2e/runner.dart --case performance` 通过，报告 `awiki-me/.e2e/desktop-cli-peer/20260628142733-hjwd9412nn/reports/timings.json`，`message.cli_send_to_app_open_first_paint_ms=450`、`thread.realtime_open_first_paint_ms=348`、`message.cli_send_app_thread_after_ms=135`、`message.cli_send_to_app_history_visible_ms=724`、`message.cli_send_to_conversation_preview_visible_ms=101`、`conversation.full_refresh_during_send_receive_count=0`、`conversation.patch_apply_count=10`、`conversation.patch_repair_count=0`，hard/soft failures 均为空；`flutter test tests/unit/e2e_harness/desktop_e2e_runner_test.dart` 通过 45 个测试；`dart run tests/unit/runner.dart` 通过 `+682: All tests passed!`；`dart analyze` 通过；`git diff --check` 通过；`CARGO_BUILD_JOBS=1 cargo test -p im-core --locked realtime` 通过；`CARGO_BUILD_JOBS=1 cargo test -p im-core --locked` 通过；`awiki-system-test` remote focused suite 15 passed；docs path scan 无本机绝对路径或 workspace 目录名前缀。 | 进入第 17 节最终全局 Review 与整体验证。 |
-| Final | pending | 全部受影响仓库 | 待填 | 待填 | 若有最终收口修改则填 | 待填 | 待填 | 执行全局 Review，核对跨 repo 一致性、最终验证证据和工作区状态。 |
+| Final | done | `awiki-me: feature/perf/message-sync-opt-0627`; `awiki-cli-rs2: feature/perf/message-sync-opt-0627`; `awiki-system-test: release/0526`; `awiki-harness: main` | 2026-06-28 22:37:02 CST | 2026-06-28 22:40:50 CST | 本最终文档收口 commit | Review 确认 Step 01-05 台账齐全；`awiki-cli-rs2` 文档已说明 realtime incoming 只有在 SQLite local projection commit 后才产生 conversation/thread patch；`awiki-me` 扫描未发现 App 代码读写 checkpoint、传 `since_event_seq`、推进 `next_event_seq` 或拼 raw `/im/rpc` sync payload；`openConversation` 仍 memory/local-first，`syncThreadAfter` 后台化，remote history 只在本地空/失败时兜底；performance gate 在显式 thread-after 前测 App provider open first-paint；Harness `features/message-sync-reliability.md`、client architecture node、message-flow node、repo profiles 已覆盖本次边界，无需改动。 | 沿用 Step 05 最终验证证据：`dart analyze` 通过；`dart run tests/unit/runner.dart` 通过 `+682`；`dart run tests/e2e/runner.dart --case performance` 通过，报告 `awiki-me/.e2e/desktop-cli-peer/20260628142733-hjwd9412nn/reports/timings.json`，open first-paint 450ms、thread open first-paint 348ms、full refresh counter 0；`CARGO_BUILD_JOBS=1 cargo test -p im-core --locked realtime` 通过；`CARGO_BUILD_JOBS=1 cargo test -p im-core --locked` 通过；`awiki-system-test` remote focused suite 15 passed；docs/path/security scans 未发现新增本机路径或敏感账号/secret。 | 完成；仅剩各仓库本地领先提交需要按用户要求推送，`awiki-me` 仍有无关 Android generated 本地改动未提交。 |
 
 ## 8. Codex Goal 执行协议
 
@@ -310,9 +310,25 @@ Harness：`awiki-harness/`
   - 性能门禁是否覆盖“收到远端新消息后点开”的路径，而不只是手动调用 `syncThreadAfter`。
   - Mac 平台是否使用 Mac config。
 - 整体验证命令 / 检查：按第 11 节执行，并记录通过 / 失败 / 跳过数量、报告路径、失败原因和最终工作区状态。
-- Review 发现：待执行时填写。
-- 已修复问题：待执行时填写。
-- 剩余风险：待执行时填写。
-- 最终证据：待执行时填写。
-- 最终 `git status`：待执行时填写。
-- 如果本阶段修改文件：记录 Review、验证和最终集成 commit。
+- Review 发现：
+  - 未发现跨 repo 契约偏差。Rust realtime patch 发射点和 docs 都保持“SQLite local projection commit 成功后才 emit”；App/Dart 只通过 SDK 高层 API 使用 sync/localHistory/patch，不读写 reliable checkpoint、`since_event_seq`、`next_event_seq` 或 raw `/im/rpc` sync payload。
+  - 未发现 Step 05 performance gate 绕过首屏路径。真实 E2E 在显式 `syncThreadAfter` 前等待 fast local conversation preview，并通过 `ChatThreadsController.openConversation`、`selectedConversationProvider`、`chatThreadProvider` 验证新消息首屏。
+  - Harness `features/message-sync-reliability.md`、`context/nodes/client-architecture.node.md`、`context/nodes/message-flow.node.md`、`context/repo-profiles/awiki-me.md`、`context/repo-profiles/awiki-cli-rs2.md` 已覆盖本次边界，无需再改 Harness。
+- 已修复问题：
+  - Step 05 中已修正 performance tracing 文档对 `timings.json` 指标位置的描述，改为顶层 `metrics` map。
+  - Step 05 中删除 E2E harness 未使用 helper，使 `dart analyze` 从既有 warning 恢复为无问题。
+- 剩余风险：
+  - 当前真实 performance E2E 使用本地 Linux config，小数据集 `conversationCount=10`、`longThreadMessageCount=2`；500/1000 大数据集分页 gate 属于前序 conversation pagination 工作和后续 release gate，可单独重跑。
+  - `awiki-me/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java` 是执行前已有的无关本地改动，按约定未提交。
+  - `awiki-cli-rs2`、`awiki-me`、`awiki-system-test` 均有本地领先远端提交，后续需要按用户要求推送。
+- 最终证据：
+  - `awiki-me`: `dart analyze` 通过；`flutter test tests/unit/e2e_harness/desktop_e2e_runner_test.dart` 通过 45 个测试；`dart run tests/unit/runner.dart` 通过 `+682: All tests passed!`；`dart run tests/e2e/runner.dart --case performance` 通过，报告 `awiki-me/.e2e/desktop-cli-peer/20260628142733-hjwd9412nn/reports/timings.json`，`message.cli_send_to_app_open_first_paint_ms=450`、`thread.realtime_open_first_paint_ms=348`、`message.cli_send_app_thread_after_ms=135`、`message.cli_send_to_app_history_visible_ms=724`、`message.cli_send_to_conversation_preview_visible_ms=101`、`conversation.full_refresh_during_send_receive_count=0`、`conversation.patch_apply_count=10`、`conversation.patch_repair_count=0`，hard/soft failures 均为空。
+  - `awiki-cli-rs2`: `CARGO_BUILD_JOBS=1 cargo build --release -p awiki-cli --locked` 成功；`CARGO_BUILD_JOBS=1 cargo test -p im-core --locked realtime` 通过；`CARGO_BUILD_JOBS=1 cargo test -p im-core --locked` 通过。
+  - `awiki-system-test`: `AWIKI_SYSTEM_TEST_MODE=remote ... uv run --no-sync pytest tests_v2/message_service/test_sync_delta_local.py tests_v2/message_service/test_sync_thread_after_local.py tests_v2/message_service/test_ws_notifications.py tests_v2/message_service/test_read_watermark_local.py -q -rs` 通过，15 passed。
+  - docs/security/path scan：计划文档、`awiki-me` performance docs、E2E README/example config 没有新增本机绝对路径、workspace 目录名前缀、测试 OTP 或完整测试手机号；E2E report scan仅出现公开 `did:wba:awiki.info` service DID。
+- 最终 `git status`：
+  - `awiki-me`: `feature/perf/message-sync-opt-0627...origin/feature/perf/message-sync-opt-0627 [ahead 11]`，仅剩未提交无关 `android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java`。
+  - `awiki-cli-rs2`: `feature/perf/message-sync-opt-0627...origin/feature/perf/message-sync-opt-0627 [ahead 1]`，工作区干净。
+  - `awiki-system-test`: `release/0526...origin/release/0526 [ahead 2]`，工作区干净。
+  - `awiki-harness`: `main...origin/main`，工作区干净。
+- 如果本阶段修改文件：仅更新本主 Plan 的最终 Review 记录，并创建本最终文档收口 commit。
