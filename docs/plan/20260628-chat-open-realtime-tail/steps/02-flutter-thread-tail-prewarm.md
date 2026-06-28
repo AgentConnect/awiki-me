@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)  
 Step index：02  
-状态：draft
+状态：done
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
+| Status | done |
 | Branch | `awiki-me: feature/perf/message-sync-opt-0627` |
-| Started | 待填 |
-| Completed | 待填 |
-| Commit | 待填 |
-| Review evidence | 待填 |
-| Verification evidence | 待填 |
-| Next action | 为 realtime update 计算所有 thread aliases 并预热 ChatThreadState。 |
+| Started | 2026-06-28 21:03:43 CST |
+| Completed | 2026-06-28 21:22:50 CST |
+| Commit | `awiki-me@e34f996` |
+| Review evidence | Review 确认 realtime update 只做内存 tail 预热，不新增持久缓存、checkpoint 或 raw sync；alias fan-out 有序去重，覆盖 opened state key、conversation/message thread id、conversation visibility keys、direct DID/handle/direct-did/direct aliases、handle 打开路径 `dm:pending:*`、group raw id 与 `group:` canonical key；每个 alias 仍通过 `_mergeMessages` 去重。Review 发现并修复 handle alias 不应生成当前打开路径不会使用的 `dm:<owner>:<handle>`，应补齐 `dm:pending:<handle>`。 |
+| Verification evidence | `dart format lib/src/presentation/chat/chat_provider.dart tests/unit/app_runtime_notification_test.dart tests/unit/chat_provider_open_test.dart` 通过；`git diff --check` 通过；`flutter test tests/unit/app_runtime_notification_test.dart` 通过 19 个测试；`flutter test tests/unit/chat_provider_open_test.dart` 通过 50 个测试；`dart run tests/unit/runner.dart` 通过，最终 `+678: All tests passed!`；`dart analyze` 仅失败于既有无关 warning：`tests/e2e/flutter/desktop_cli_peer/support/cli_peer_process.dart:192:5 unused_element _groupCountFromCliOutput`。 |
+| Next action | 返回主 Plan，开始 Step 03。 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -92,14 +92,14 @@ Step index：02
 
 ## 7. 验收标准
 
-- [ ] realtime message 被合并到 `conversation.threadId` key。
-- [ ] realtime message 被合并到 `message.threadId` key。
-- [ ] direct peer DID / handle 相关 canonical key 被预热。
-- [ ] group id / group DID / `group:` canonical key 被预热。
-- [ ] 同一 key 内没有重复消息。
-- [ ] `AppRuntimeProvider._applyRealtimeUpdate` 的现有通知、group upsert、conversation upsert 行为不回归。
-- [ ] Review 发现已经修复或明确记录。
-- [ ] 本步骤在进入下一步之前已经创建聚焦 commit。
+- [x] realtime message 被合并到 `conversation.threadId` key。
+- [x] realtime message 被合并到 `message.threadId` key。
+- [x] direct peer DID / handle 相关 canonical key 被预热。
+- [x] group id / group DID / `group:` canonical key 被预热。
+- [x] 同一 key 内没有重复消息。
+- [x] `AppRuntimeProvider._applyRealtimeUpdate` 的现有通知、group upsert、conversation upsert 行为不回归。
+- [x] Review 发现已经修复或明确记录。
+- [x] 本步骤在进入下一步之前已经创建聚焦 commit。
 
 ## 8. 验证方式
 
@@ -127,20 +127,20 @@ Step index：02
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待填 | 待填 |
-| 已修复问题 | 待填 | 待填 |
-| 剩余风险 | 待填 | 待填 |
-| 新增或缺失测试 | 待填 | 待填 |
-| 已更新或缺失文档 | 待填 | 待填 |
+| 发现问题 | 发现 1 个边界问题 | direct handle alias 初版会生成 `dm:<owner>:<handle>`，该 key 不是当前 `openDirectConversationForDid` 的 handle 打开路径；同时缺少 `dm:pending:<handle>`。 |
+| 已修复问题 | 已修复 | 去掉 handle 生成的 `dm:<owner>:<handle>`，补齐 `dm:pending:<handle>`，并在 realtime direct alias 单测中断言该 key 被预热。 |
+| 剩余风险 | 可接受 | fan-out 会增加少量内存 state，但仅写非空去重 key，且单 key 内仍用 `_mergeMessages` 通过 remoteId/localId/pending 匹配去重。 |
+| 新增或缺失测试 | 已新增 | `tests/unit/app_runtime_notification_test.dart` 新增 direct DID/handle/message thread/`dm:pending:*` alias、重复消息去重、group raw/canonical alias 覆盖；`tests/unit/chat_provider_open_test.dart` 更新 canonical realtime thread 预热断言。 |
+| 已更新或缺失文档 | 本步骤无需业务文档 | 主 Plan 和本 Step 文档已回填执行证据；面向性能 tracing 的说明按计划留到 Step 05 统一更新。 |
 
 ## 10. Commit 要求
 
 - Commit 时机：本步骤实现、验证、Review 都完成后。
 - Commit 范围：只包含 AWiki Me P1 alias prewarm 代码、测试和必要文档。
-- Commit 前状态：记录 `cd awiki-me && git status --short --branch`。
-- 纳入文件：记录本步骤 commit 包含的文件。
-- Commit 后证据：记录 commit hash 和 commit 后 `git status`。
-- 遗留未提交变更：例如执行前已有 `awiki-me/codex.md`，必须记录原因以及为什么安全。
+- Commit 前状态：`awiki-me` 位于 `feature/perf/message-sync-opt-0627`，领先远端 1 个提交；未提交文件包括 `android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java`、主 Plan、本 Step 文档、`lib/src/presentation/chat/chat_provider.dart`、`tests/unit/app_runtime_notification_test.dart`、`tests/unit/chat_provider_open_test.dart`。
+- 纳入文件：`lib/src/presentation/chat/chat_provider.dart`、`tests/unit/app_runtime_notification_test.dart`、`tests/unit/chat_provider_open_test.dart`。
+- Commit 后证据：实现提交 `awiki-me@e34f996 fix(app): prewarm realtime thread aliases`；提交后仍有 `android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java` 和 Plan 文档未提交，Android 生成文件不是本步骤范围，计划文档作为单独台账提交。
+- 遗留未提交变更：`android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java` 为执行前已有/工具生成的 Android registrant 差异，非本步骤范围，未纳入实现提交。
 - 建议消息：`fix(app): prewarm realtime thread aliases`
 
 ## 11. Blocked 处理
