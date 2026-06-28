@@ -58,6 +58,25 @@ void main() {
       expect(contacts.e2eCase, DesktopE2eCase.contacts);
     });
 
+    test('parses performance case aliases', () {
+      final performance = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'performance',
+        '--dry-run',
+      ]);
+      final perf = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'perf',
+        '--dry-run',
+      ]);
+
+      expect(performance.e2eCase, DesktopE2eCase.performance);
+      expect(perf.e2eCase, DesktopE2eCase.performance);
+      expect(performance.e2eCase.caseName, 'performance');
+      expect(performance.e2eCase.scenario, 'desktop-app-cli-peer-performance');
+      expect(performance.e2eCase.runConfigPath, contains('desktop-cli-peer'));
+    });
+
     test('parses message-agent case aliases', () {
       final hyphen = DesktopE2eOptions.parse(const <String>[
         '--case',
@@ -123,7 +142,7 @@ void main() {
             (error) => error.message,
             'message',
             'Unsupported E2E case "unknown". '
-                'Use smoke, full, direct, group, attachment, contacts, '
+                'Use smoke, full, performance, direct, group, attachment, contacts, '
                 'message-agent, codex-agent, or claude-code-agent.',
           ),
         ),
@@ -654,7 +673,7 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_smoke_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_smoke_test.dart -d linux',
         ),
       );
       expect(log, contains('would write Flutter E2E run config: <redacted>'));
@@ -708,26 +727,26 @@ cliPeer:
         expect(
           log,
           contains(
-            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/app_smoke_test.dart -d linux',
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/app_smoke_test.dart -d linux',
           ),
         );
         expect(
           log,
           contains(
-            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/im_core_open_smoke_test.dart -d linux',
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/im_core_open_smoke_test.dart -d linux',
           ),
         );
       } else {
         expect(
           log,
           contains(
-            r'$ flutter test --dart-define=AWIKI_E2E=true integration_test/app_smoke_test.dart -d macos',
+            r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/app_smoke_test.dart -d macos',
           ),
         );
         expect(
           log,
           contains(
-            r'$ flutter test --dart-define=AWIKI_E2E=true integration_test/im_core_open_smoke_test.dart -d macos',
+            r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/im_core_open_smoke_test.dart -d macos',
           ),
         );
       }
@@ -804,7 +823,7 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_smoke_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_smoke_test.dart -d linux',
         ),
       );
       expect(log, contains('would write Flutter E2E run config: <redacted>'));
@@ -976,7 +995,7 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_group_test.dart -d macos',
+          r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_group_test.dart -d macos',
         ),
       );
       final timings = File(
@@ -1032,7 +1051,7 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_direct_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_direct_test.dart -d linux',
         ),
       );
       final timings = File(
@@ -1048,6 +1067,131 @@ cliPeer:
         'MSG-REG-001',
       ]);
     });
+
+    test(
+      'generates performance Flutter command, budgets, and report schema',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'awiki_desktop_cli_peer_runner_performance_test_',
+        );
+        addTearDown(() async {
+          if (await root.exists()) {
+            await root.delete(recursive: true);
+          }
+        });
+        _writeLocalConfig(
+          root,
+          platform: 'linux',
+          performanceBlock: '''
+performance:
+  dataset:
+    conversationCount: 12
+    longThreadMessageCount: 8
+  budgets:
+    maxFullRefreshDuringSendReceive: 0
+    hardBudgetMs:
+      app.launch_to_shell_visible_ms: 30000
+    softBudgetMs:
+      conversation_list.first_non_empty_visible_ms: 3000
+    requiredMetrics:
+      - app.launch_to_shell_visible_ms
+      - conversation_list.first_non_empty_visible_ms
+''',
+        );
+        final lines = <String>[];
+        final runner = DesktopE2eRunner(
+          root: root,
+          options: DesktopE2eOptions.parse(const <String>[
+            '--dry-run',
+            '--case',
+            'performance',
+            '--run-id',
+            'run-performance',
+          ]),
+          commands: DesktopCommandRunner(
+            root: root,
+            dryRun: true,
+            redactor: DesktopSecretRedactor(const <String>[
+              'test-phone-secret',
+              'test-otp-secret',
+            ]),
+            logLine: lines.add,
+          ),
+        );
+
+        await runner.run();
+
+        final log = lines.join('\n');
+        expect(
+          log,
+          contains(
+            r'$ /tmp/fake-awiki-cli --format json id recover --handle e2e-app --phone <redacted> --otp <redacted>',
+          ),
+        );
+        expect(log, isNot(contains('Preparing performance dataset')));
+        expect(
+          log,
+          contains(
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_performance_test.dart -d linux',
+          ),
+        );
+        final runConfig = File(
+          '${root.path}/.e2e/desktop-cli-peer/current/run_config.json',
+        );
+        final runConfigJson =
+            jsonDecode(await runConfig.readAsString()) as Map<String, dynamic>;
+        expect(runConfigJson['case'], 'performance');
+        final performance =
+            runConfigJson['performance'] as Map<String, dynamic>;
+        expect(performance['enabled'], isTrue);
+        expect(performance['datasetConversationCount'], 12);
+        expect(performance['longThreadMessageCount'], 8);
+        expect(
+          performance['productTimingsPath'],
+          contains('product_timings.json'),
+        );
+        final app = runConfigJson['app'] as Map<String, dynamic>;
+        expect(
+          app['stateRoot'],
+          endsWith('/.e2e/desktop-cli-peer/run-performance/app'),
+        );
+
+        final timings = File(
+          '${root.path}/.e2e/desktop-cli-peer/run-performance/reports/timings.json',
+        );
+        final decoded =
+            jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
+        expect(decoded['scenario'], 'desktop-app-cli-peer-performance');
+        expect(decoded['case'], 'performance');
+        expect(decoded['caseIds'], <dynamic>[
+          'PERF-E2E-001',
+          'PERF-E2E-002',
+          'PERF-E2E-003',
+          'PERF-E2E-004',
+          'PERF-E2E-005',
+          'PERF-E2E-006',
+          'PERF-E2E-007',
+          'PERF-E2E-008',
+          'PERF-E2E-009',
+          'PERF-E2E-010',
+          'PERF-E2E-011',
+          'PERF-E2E-012',
+        ]);
+        expect(decoded['dataset'], isA<Map<String, dynamic>>());
+        expect(decoded['budgets'], isA<Map<String, dynamic>>());
+        expect(decoded['hardFailures'], isEmpty);
+        expect(decoded['softWarnings'], isEmpty);
+        expect(decoded['toolingTimings'], isA<List<dynamic>>());
+        final steps = decoded['steps'] as List<dynamic>;
+        expect(
+          steps.map((step) => (step as Map<String, dynamic>)['name']),
+          containsAll(<String>[
+            'Preparing performance App identity',
+            'Flutter App + CLI peer flow',
+          ]),
+        );
+      },
+    );
 
     test('generates attachment-only Flutter command and report case IDs', () async {
       final root = await Directory.systemTemp.createTemp(
@@ -1086,7 +1230,7 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_attachment_test.dart -d macos',
+          r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_attachment_test.dart -d macos',
         ),
       );
       final timings = File(
@@ -1140,7 +1284,7 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_contacts_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_contacts_test.dart -d linux',
         ),
       );
       final timings = File(
@@ -1210,7 +1354,7 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/message_agent_full_ui_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/message_agent_full_ui_test.dart -d linux',
         ),
       );
       expect(log, isNot(contains('test-phone-secret')));
@@ -1391,7 +1535,7 @@ cliPeer:
         expect(
           log,
           contains(
-            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/codex_agent_full_ui_test.dart -d linux',
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/codex_agent_full_ui_test.dart -d linux',
           ),
         );
 
@@ -1497,7 +1641,7 @@ cliPeer:
         expect(
           log,
           contains(
-            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true integration_test/claude_code_agent_full_ui_test.dart -d linux',
+            r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/claude_code_agent_full_ui_test.dart -d linux',
           ),
         );
 
@@ -1591,7 +1735,7 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_smoke_test.dart -d macos',
+          r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_smoke_test.dart -d macos',
         ),
       );
       expect(log, isNot(contains(r'$ xvfb-run')));
@@ -1637,6 +1781,210 @@ cliPeer:
       expect(log, isNot(contains('desktop_cli_peer_smoke_test.dart')));
     });
   });
+
+  group('DesktopPerformanceBudgetResult', () {
+    test('fails when required metrics or dataset coverage are missing', () {
+      final config = DesktopPerformanceConfig(
+        datasetConversationCount: 10,
+        longThreadMessageCount: 5,
+        requiredMetrics: const <String>{
+          'conversation_list.first_non_empty_visible_ms',
+        },
+        hardBudgetMs: const <String, int>{},
+        softBudgetMs: const <String, int>{},
+        maxFullRefreshDuringSendReceive: 0,
+      );
+      final result = DesktopPerformanceBudgetResult.evaluate(
+        config: config,
+        report: DesktopProductTimingReport.fromJson(<String, Object?>{
+          'dataset': <String, Object?>{
+            'conversationCountTarget': 10,
+            'conversationCountObserved': 2,
+            'warmupConversationCountObserved': 2,
+            'visibleConversationCountObserved': 2,
+            'longThreadMessageCountTarget': 5,
+            'longThreadMessageCountObserved': 1,
+          },
+          'metrics': <String, Object?>{},
+          'counters': _completePerformanceCounters(),
+          'appProductTimings': <Object?>[],
+        }),
+      );
+
+      expect(
+        result.hardFailures,
+        contains(
+          'missing required metric conversation_list.first_non_empty_visible_ms',
+        ),
+      );
+      expect(
+        result.hardFailures,
+        contains('dataset conversation count 2 is below target 10'),
+      );
+      expect(
+        result.hardFailures,
+        contains('long thread message count 1 is below target 5'),
+      );
+    });
+
+    test('uses visible conversation coverage instead of warmup coverage', () {
+      final config = DesktopPerformanceConfig(
+        datasetConversationCount: 10,
+        longThreadMessageCount: 1,
+        requiredMetrics: const <String>{},
+        hardBudgetMs: const <String, int>{},
+        softBudgetMs: const <String, int>{},
+        maxFullRefreshDuringSendReceive: 0,
+      );
+      final result = DesktopPerformanceBudgetResult.evaluate(
+        config: config,
+        report: DesktopProductTimingReport.fromJson(<String, Object?>{
+          'dataset': <String, Object?>{
+            'conversationCountTarget': 10,
+            'conversationCountObserved': 10,
+            'warmupConversationCountObserved': 10,
+            'visibleConversationCountObserved': 0,
+            'longThreadMessageCountTarget': 1,
+            'longThreadMessageCountObserved': 1,
+          },
+          'metrics': <String, Object?>{},
+          'counters': _completePerformanceCounters(),
+          'appProductTimings': <Object?>[],
+        }),
+      );
+
+      expect(
+        result.hardFailures,
+        contains('dataset conversation count 0 is below target 10'),
+      );
+    });
+
+    test('separates hard budget failures from soft warnings', () {
+      final config = DesktopPerformanceConfig(
+        datasetConversationCount: 1,
+        longThreadMessageCount: 1,
+        requiredMetrics: const <String>{'metric.a', 'metric.b'},
+        hardBudgetMs: const <String, int>{'metric.a': 100},
+        softBudgetMs: const <String, int>{'metric.b': 50},
+        maxFullRefreshDuringSendReceive: 0,
+      );
+      final result = DesktopPerformanceBudgetResult.evaluate(
+        config: config,
+        report: _completePerformanceReport(
+          dataset: const <String, Object?>{
+            'conversationCountTarget': 1,
+            'conversationCountObserved': 1,
+            'warmupConversationCountObserved': 1,
+            'visibleConversationCountObserved': 1,
+            'longThreadMessageCountTarget': 1,
+            'longThreadMessageCountObserved': 1,
+          },
+          metrics: const <String, Object?>{'metric.a': 101, 'metric.b': 60},
+          counters: const <String, Object?>{
+            'conversation.full_refresh_during_send_receive_count': 1,
+          },
+        ),
+      );
+
+      expect(
+        result.hardFailures,
+        contains('metric.a 101ms exceeds hard budget 100ms'),
+      );
+      expect(
+        result.hardFailures,
+        contains(
+          'conversation full refresh during send/receive count 1 exceeds 0',
+        ),
+      );
+      expect(
+        result.softWarnings,
+        contains('metric.b 60ms exceeds soft budget 50ms'),
+      );
+    });
+
+    test('fails when required dataset fields or counters are missing', () {
+      final config = DesktopPerformanceConfig(
+        datasetConversationCount: 1,
+        longThreadMessageCount: 1,
+        requiredMetrics: const <String>{},
+        hardBudgetMs: const <String, int>{},
+        softBudgetMs: const <String, int>{},
+        maxFullRefreshDuringSendReceive: 0,
+      );
+      final result = DesktopPerformanceBudgetResult.evaluate(
+        config: config,
+        report: DesktopProductTimingReport.fromJson(<String, Object?>{
+          'dataset': <String, Object?>{
+            'conversationCountObserved': 1,
+            'longThreadMessageCountObserved': 1,
+          },
+          'metrics': <String, Object?>{},
+          'counters': <String, Object?>{},
+          'appProductTimings': <Object?>[],
+        }),
+      );
+
+      expect(
+        result.hardFailures,
+        contains(
+          'missing required dataset field visibleConversationCountObserved',
+        ),
+      );
+      expect(
+        result.hardFailures,
+        contains(
+          'missing required counter '
+          'conversation.full_refresh_during_send_receive_count',
+        ),
+      );
+      expect(
+        result.hardFailures,
+        contains('dataset conversation count 0 is below target 1'),
+      );
+    });
+  });
+}
+
+DesktopProductTimingReport _completePerformanceReport({
+  Map<String, Object?> dataset = const <String, Object?>{},
+  Map<String, Object?> metrics = const <String, Object?>{},
+  Map<String, Object?> counters = const <String, Object?>{},
+}) {
+  return DesktopProductTimingReport.fromJson(<String, Object?>{
+    'dataset': <String, Object?>{
+      'conversationCountTarget': 1,
+      'conversationCountObserved': 1,
+      'warmupConversationCountObserved': 1,
+      'visibleConversationCountObserved': 1,
+      'longThreadMessageCountTarget': 1,
+      'longThreadMessageCountObserved': 1,
+      ...dataset,
+    },
+    'metrics': <String, Object?>{...metrics},
+    'counters': <String, Object?>{
+      ..._completePerformanceCounters(),
+      ...counters,
+    },
+    'appProductTimings': <Object?>[],
+  });
+}
+
+Map<String, Object?> _completePerformanceCounters() {
+  return <String, Object?>{
+    'performance_dataset.existing_count': 0,
+    'performance_dataset.created_count': 1,
+    'performance_dataset.long_thread_initial_count': 0,
+    'performance_dataset.long_thread_created_count': 1,
+    'performance_dataset.long_thread_observed_count': 1,
+    'message_sync.warmup_events_applied': 1,
+    'message_sync.warmup_pages_fetched': 1,
+    'message_sync.warmup_snapshot_required_count': 0,
+    'message_sync.warmup_has_more_count': 0,
+    'conversation.full_refresh_during_send_receive_count': 0,
+    'conversation.list_conversations_calls_total': 0,
+    'conversation.patch_apply_count': 1,
+    'conversation.patch_repair_count': 0,
+  };
 }
 
 void _writeLocalConfig(
@@ -1667,6 +2015,7 @@ void _writeLocalConfig(
   String? claudeCodeAgentPrompt,
   String? claudeCodeAgentExpectedReply,
   bool includeClaudeCodeAgent = true,
+  String performanceBlock = '',
 }) {
   final messageService = messageServiceUrl == null
       ? ''
@@ -1733,7 +2082,7 @@ service:
   didDomain: example.test
 $messageService
 $messageServiceWs
-$daemon$messageAgent$codexAgent$claudeCodeAgent
+$daemon$messageAgent$codexAgent$claudeCodeAgent$performanceBlock
 otp:
   phone: test-phone-secret
   code: test-otp-secret

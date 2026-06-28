@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
+import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/group_application_service.dart';
@@ -13,22 +14,26 @@ import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
 import 'package:awiki_me/src/application/relationship_application_service.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
+import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
 
 part 'flows/attachment_flow.dart';
 part 'flows/contact_flow.dart';
 part 'flows/direct_message_flow.dart';
 part 'flows/group_message_flow.dart';
+part 'flows/performance_flow.dart';
 part 'support/cli_peer_process.dart';
 part 'support/config.dart';
 part 'support/polling.dart';
@@ -41,7 +46,8 @@ enum DesktopCliPeerIntegrationCase {
   direct,
   group,
   attachment,
-  contacts;
+  contacts,
+  performance;
 
   static DesktopCliPeerIntegrationCase parse(String value) {
     return switch (value.trim().toLowerCase()) {
@@ -64,9 +70,15 @@ enum DesktopCliPeerIntegrationCase {
       'people' ||
       'follow' ||
       'contact-only' => DesktopCliPeerIntegrationCase.contacts,
+      'performance' ||
+      'perf' ||
+      'startup-performance' ||
+      'startup_performance' ||
+      'conversation-performance' ||
+      'conversation_performance' => DesktopCliPeerIntegrationCase.performance,
       _ => throw StateError(
         'Unsupported Desktop CLI peer E2E case "$value". '
-        'Use full, direct, group, attachment, or contacts.',
+        'Use full, performance, direct, group, attachment, or contacts.',
       ),
     };
   }
@@ -86,6 +98,8 @@ enum DesktopCliPeerIntegrationCase {
   bool get runsContacts =>
       this == DesktopCliPeerIntegrationCase.full ||
       this == DesktopCliPeerIntegrationCase.contacts;
+
+  bool get runsPerformance => this == DesktopCliPeerIntegrationCase.performance;
 }
 
 DesktopCliPeerIntegrationCase desktopCliPeerCaseFromRunConfig() =>
@@ -103,22 +117,45 @@ void runDesktopCliPeerE2e({
     description,
     (tester) async {
       final config = _DesktopCliPeerSmokeConfig.load();
+      final performanceWarmup = config.e2eCase.runsPerformance
+          ? await _warmPerformanceLocalConversationState(config)
+          : null;
+      final appCreateWatch = Stopwatch()..start();
       final bootstrap = await AppBootstrap.create(
         environment: config.environment,
         appStateRoot: config.appStateRoot,
       );
+      appCreateWatch.stop();
+      final countingConversations = config.e2eCase.runsPerformance
+          ? _CountingConversationService(bootstrap.conversationService!)
+          : null;
       addTearDown(() async {
         await bootstrap.appSessionService?.logout();
       });
 
-      await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
+      final shellWatch = Stopwatch()..start();
+      await tester.pumpWidget(
+        AwikiMeApp(
+          bootstrap: bootstrap,
+          providerOverrides: <Override>[
+            if (countingConversations != null)
+              conversationServiceProvider.overrideWithValue(
+                countingConversations,
+              ),
+          ],
+        ),
+      );
       await tester.pumpAndSettle();
+      shellWatch.stop();
       expect(find.byType(AppShell), findsOneWidget);
 
-      final session = await _prepareAppIdentity(
-        bootstrap.onboardingService!,
-        config,
-      );
+      final session = selectedCase.runsPerformance
+          ? await _preparePerformanceAppIdentity(
+              bootstrap: bootstrap,
+              config: config,
+              warmup: performanceWarmup!,
+            )
+          : await _prepareAppIdentity(bootstrap.onboardingService!, config);
       expect(session.authenticated, isTrue);
 
       await tester.pumpAndSettle();
@@ -126,6 +163,22 @@ void runDesktopCliPeerE2e({
       final messaging = bootstrap.messagingService!;
       final messageNonce = _messageNonce();
       final directThread = AppThreadRef.direct(config.cliHandle);
+
+      if (selectedCase.runsPerformance) {
+        await _verifyPerformanceRegression(
+          tester: tester,
+          bootstrapCreateElapsed: appCreateWatch.elapsed,
+          shellVisibleElapsed: shellWatch.elapsed,
+          warmup: performanceWarmup!,
+          messaging: messaging,
+          conversations: countingConversations!,
+          thread: directThread,
+          ownerDid: session.did,
+          config: config,
+          nonce: messageNonce,
+        );
+        return;
+      }
 
       if (selectedCase.runsDirectText) {
         final conversations = bootstrap.conversationService!;
@@ -207,6 +260,250 @@ Future<AppSession> _prepareAppIdentity(
     'App register failed: '
     '${_sanitizeDiagnostic(register.errorText, secrets: config.secrets)}',
   );
+}
+
+Future<AppSession> _preparePerformanceAppIdentity({
+  required AppBootstrap bootstrap,
+  required _DesktopCliPeerSmokeConfig config,
+  required _PerformanceWarmupResult warmup,
+}) async {
+  final restored = await bootstrap.appSessionService!.restoreSession();
+  if (restored != null && restored.did == warmup.ownerDid) {
+    return restored;
+  }
+  final identities = await bootstrap.appSessionService!.listLocalIdentities();
+  for (final identity in identities) {
+    if (identity.did == warmup.ownerDid) {
+      return bootstrap.appSessionService!.activateIdentity(identity);
+    }
+  }
+  fail(
+    'Performance warmup identity ${warmup.ownerDid} was not available during '
+    'the measured App launch.',
+  );
+}
+
+Future<_PerformanceWarmupResult> _warmPerformanceLocalConversationState(
+  _DesktopCliPeerSmokeConfig config,
+) async {
+  final bootstrap = await AppBootstrap.create(
+    environment: config.environment,
+    appStateRoot: config.appStateRoot,
+  );
+  try {
+    final session = await _prepareAppIdentity(
+      bootstrap.onboardingService!,
+      config,
+    );
+    final datasetWatch = Stopwatch()..start();
+    final dataset = await _preparePerformanceDatasetForAppSession(
+      config: config,
+      appDid: session.did,
+    );
+    final longThreadWatch = Stopwatch()..start();
+    final longThread = await _ensureLongThreadDataset(
+      messaging: bootstrap.messagingService!,
+      thread: AppThreadRef.direct(config.cliHandle),
+      config: config,
+      nonce: config.runId,
+    );
+    longThreadWatch.stop();
+    datasetWatch.stop();
+    final syncWatch = Stopwatch()..start();
+    final syncResult = await bootstrap.messageSyncService!.syncNow(
+      reason: 'performance-warmup',
+      limit: config.performance.datasetConversationCount
+          .clamp(100, 1000)
+          .toInt(),
+    );
+    syncWatch.stop();
+    final summaryWatch = Stopwatch()..start();
+    final summaries = await bootstrap.conversationService!
+        .listConversationSummariesFast(
+          ownerDid: session.did,
+          limit: config.performance.datasetConversationCount,
+        );
+    summaryWatch.stop();
+    return _PerformanceWarmupResult(
+      ownerDid: session.did,
+      datasetElapsed: datasetWatch.elapsed,
+      datasetExistingCount: dataset.existingCount,
+      datasetCreatedCount: dataset.createdCount,
+      longThreadElapsed: longThreadWatch.elapsed,
+      longThreadInitialCount: longThread.initialCount,
+      longThreadCreatedCount: longThread.createdCount,
+      longThreadObservedCount: longThread.observedCount,
+      syncElapsed: syncWatch.elapsed,
+      summaryElapsed: summaryWatch.elapsed,
+      eventsApplied: syncResult.eventsApplied,
+      pagesFetched: syncResult.pagesFetched,
+      snapshotRequired: syncResult.snapshotRequired,
+      hasMore: syncResult.hasMore,
+      localConversationCount: summaries.length,
+      warnings: syncResult.warnings,
+    );
+  } finally {
+    await bootstrap.appSessionService?.logout();
+  }
+}
+
+class _PerformanceWarmupResult {
+  const _PerformanceWarmupResult({
+    required this.ownerDid,
+    required this.datasetElapsed,
+    required this.datasetExistingCount,
+    required this.datasetCreatedCount,
+    required this.longThreadElapsed,
+    required this.longThreadInitialCount,
+    required this.longThreadCreatedCount,
+    required this.longThreadObservedCount,
+    required this.syncElapsed,
+    required this.summaryElapsed,
+    required this.eventsApplied,
+    required this.pagesFetched,
+    required this.snapshotRequired,
+    required this.hasMore,
+    required this.localConversationCount,
+    required this.warnings,
+  });
+
+  final String ownerDid;
+  final Duration datasetElapsed;
+  final int datasetExistingCount;
+  final int datasetCreatedCount;
+  final Duration longThreadElapsed;
+  final int longThreadInitialCount;
+  final int longThreadCreatedCount;
+  final int longThreadObservedCount;
+  final Duration syncElapsed;
+  final Duration summaryElapsed;
+  final int eventsApplied;
+  final int pagesFetched;
+  final bool snapshotRequired;
+  final bool hasMore;
+  final int localConversationCount;
+  final List<String> warnings;
+}
+
+Future<_PerformanceDatasetPrepareResult>
+_preparePerformanceDatasetForAppSession({
+  required _DesktopCliPeerSmokeConfig config,
+  required String appDid,
+}) async {
+  final target = config.performance.datasetConversationCount;
+  if (target <= 1) {
+    return const _PerformanceDatasetPrepareResult(
+      existingCount: 0,
+      createdCount: 0,
+    );
+  }
+  final existing = await _runCli(config, <String>[
+    '--format',
+    'json',
+    'group',
+    'list',
+    '--limit',
+    target.toString(),
+  ]);
+  if (existing.exitCode != 0) {
+    fail(
+      'Performance dataset group list failed: '
+      '${_summarizeCliResult(existing)}',
+    );
+  }
+  final existingGroups = _performanceDatasetGroupsFromCliOutput(
+    existing.stdout,
+    runId: config.runId,
+  );
+  final existingCount = existingGroups.length;
+  final missing = target - existingCount;
+  if (missing <= 0) {
+    return _PerformanceDatasetPrepareResult(
+      existingCount: existingCount,
+      createdCount: 0,
+    );
+  }
+  for (var index = 0; index < missing; index += 1) {
+    final groupNumber = existingCount + index + 1;
+    final groupName = 'AWiki Perf ${config.runId} $groupNumber';
+    final create = await _runCli(config, <String>[
+      '--format',
+      'json',
+      'group',
+      'create',
+      '--name',
+      groupName,
+      '--description',
+      'AWiki performance E2E dataset conversation '
+          '${config.runId} $groupNumber',
+      '--discoverability',
+      'private',
+    ]);
+    if (create.exitCode != 0) {
+      fail(
+        'Performance dataset group create failed: '
+        '${_summarizeCliResult(create)}',
+      );
+    }
+    final groupDid = _firstNonEmptyCliStringAtAnyPath(create.stdout, const [
+      <Object>['data', 'group', 'group_did'],
+      <Object>['data', 'group', 'group_id'],
+      <Object>['data', 'group_did'],
+      <Object>['data', 'group_id'],
+    ]);
+    if (groupDid == null) {
+      fail(
+        'Performance dataset group create did not return group id: '
+        '${_summarizeCliResult(create)}',
+      );
+    }
+    final addMember = await _runCli(config, <String>[
+      '--format',
+      'json',
+      'group',
+      'add',
+      '--group',
+      groupDid,
+      '--member',
+      appDid,
+    ]);
+    if (addMember.exitCode != 0) {
+      fail(
+        'Performance dataset group add failed: '
+        '${_summarizeCliResult(addMember)}',
+      );
+    }
+    final send = await _runCli(config, <String>[
+      '--format',
+      'json',
+      'msg',
+      'send',
+      '--group',
+      groupDid,
+      '--text',
+      'perf dataset ${config.runId} $groupNumber',
+    ]);
+    if (send.exitCode != 0) {
+      fail(
+        'Performance dataset group send failed: '
+        '${_summarizeCliResult(send)}',
+      );
+    }
+  }
+  return _PerformanceDatasetPrepareResult(
+    existingCount: existingCount,
+    createdCount: missing,
+  );
+}
+
+class _PerformanceDatasetPrepareResult {
+  const _PerformanceDatasetPrepareResult({
+    required this.existingCount,
+    required this.createdCount,
+  });
+
+  final int existingCount;
+  final int createdCount;
 }
 
 Future<_AppIdentityAttempt> _tryAppIdentityAction(

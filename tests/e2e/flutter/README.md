@@ -20,10 +20,25 @@ Run E2E through the repository-level runner:
 ```bash
 dart run tests/e2e/runner.dart --case smoke
 dart run tests/e2e/runner.dart --case full
+dart run tests/e2e/runner.dart --case performance
 dart run tests/e2e/runner.dart --case message-agent
 dart run tests/e2e/runner.dart --case codex-agent
 dart run tests/e2e/runner.dart --case claude-code-agent
 ```
+
+`--case performance` is the startup/conversation performance acceptance gate for
+the real desktop App + CLI peer + backend flow. It writes product-level metrics
+to `.e2e/desktop-cli-peer/<run-id>/reports/timings.json`, including the
+separate `toolingTimings`, `appProductTimings`, `dataset`, `budgets`,
+`metrics`, `counters`, `hardFailures`, and `softWarnings` sections. The gate is
+intended to prove the message-sync performance work with product timings such as
+shell visible, first non-empty conversation list, snapshot load, fast local
+hydrate, full hydrate, App-to-CLI visible latency, CLI-to-App visible latency,
+and thread initial load. It fails on missing required metrics, insufficient
+configured dataset coverage, missing required dataset/counter evidence, hard
+budget overrun, or any full conversation refresh counted during the App
+send/receive window. Soft budget overruns remain warnings so local real-backend
+variance can be tracked before thresholds are tightened.
 
 `--case message-agent` is the durable acceptance entry for Message Agent
 product behavior. It must exercise the App UI path for selecting a daemon,

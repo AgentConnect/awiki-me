@@ -173,6 +173,71 @@ String? _jsonStringAt(String output, List<Object> path) {
   return null;
 }
 
+String? _firstNonEmptyCliStringAtAnyPath(
+  String output,
+  List<List<Object>> paths,
+) {
+  for (final path in paths) {
+    final value = _jsonValueAt(output, path);
+    if (value is String && value.trim().isNotEmpty) {
+      return value.trim();
+    }
+    if (value is num) {
+      return value.toString();
+    }
+  }
+  return null;
+}
+
+int _groupCountFromCliOutput(String output) {
+  Object? decoded;
+  try {
+    decoded = jsonDecode(output);
+  } on Object {
+    return 0;
+  }
+  final groups = _jsonValueAtDecoded(decoded, const <Object>['data', 'groups']);
+  if (groups is List) {
+    return groups.length;
+  }
+  final total = _jsonValueAtDecoded(decoded, const <Object>['data', 'total']);
+  if (total is int) {
+    return total;
+  }
+  if (total is num) {
+    return total.round();
+  }
+  return 0;
+}
+
+List<Map<String, Object?>> _performanceDatasetGroupsFromCliOutput(
+  String output, {
+  required String runId,
+}) {
+  Object? decoded;
+  try {
+    decoded = jsonDecode(output);
+  } on Object {
+    return const <Map<String, Object?>>[];
+  }
+  final groups = _jsonValueAtDecoded(decoded, const <Object>['data', 'groups']);
+  if (groups is! List) {
+    return const <Map<String, Object?>>[];
+  }
+  final expectedPrefix = 'AWiki Perf $runId ';
+  return groups
+      .whereType<Map>()
+      .map((group) => _cliStringKeyMap(group))
+      .where((group) {
+        final name =
+            _nonEmptyCliString(group['name']) ??
+            _nonEmptyCliString(group['display_name']) ??
+            _nonEmptyCliString(group['group_name']);
+        return name != null && name.startsWith(expectedPrefix);
+      })
+      .toList(growable: false);
+}
+
 Object? _jsonValueAt(String output, List<Object> path) {
   Object? value;
   try {
@@ -180,6 +245,10 @@ Object? _jsonValueAt(String output, List<Object> path) {
   } on Object {
     return null;
   }
+  return _jsonValueAtDecoded(value, path);
+}
+
+Object? _jsonValueAtDecoded(Object? value, List<Object> path) {
   for (final segment in path) {
     if (value is Map) {
       value = value[segment];

@@ -14,6 +14,7 @@ class _DesktopCliPeerSmokeConfig {
     required this.cliWorkspace,
     required this.cliHome,
     required this.appStateRoot,
+    required this.performance,
   });
 
   factory _DesktopCliPeerSmokeConfig.load() {
@@ -47,6 +48,7 @@ class _DesktopCliPeerSmokeConfig {
     final cliPeerAccount = _mapAt(accounts, 'cliPeer');
     final cliPeer = _mapAt(map, 'cliPeer');
     final app = _mapAt(map, 'app');
+    final performance = _mapAt(map, 'performance', optional: true);
     final baseUrl = _requiredConfig(service, 'baseUrl', 'service.baseUrl');
     final didDomain = _requiredConfig(
       service,
@@ -84,6 +86,7 @@ class _DesktopCliPeerSmokeConfig {
       cliWorkspace: _requiredConfig(cliPeer, 'workspace', 'cliPeer.workspace'),
       cliHome: _requiredConfig(cliPeer, 'home', 'cliPeer.home'),
       appStateRoot: _requiredConfig(app, 'stateRoot', 'app.stateRoot'),
+      performance: _DesktopPerformanceRunConfig.fromJson(performance),
     );
   }
 
@@ -99,6 +102,7 @@ class _DesktopCliPeerSmokeConfig {
   final String cliWorkspace;
   final String cliHome;
   final String appStateRoot;
+  final _DesktopPerformanceRunConfig performance;
 
   List<String> get secrets => <String>[
     otpPhone,
@@ -107,6 +111,44 @@ class _DesktopCliPeerSmokeConfig {
     cliHome,
     appStateRoot,
   ].where((value) => value.trim().isNotEmpty).toList(growable: false);
+}
+
+class _DesktopPerformanceRunConfig {
+  const _DesktopPerformanceRunConfig({
+    required this.enabled,
+    required this.productTimingsPath,
+    required this.datasetConversationCount,
+    required this.longThreadMessageCount,
+    required this.requiredMetrics,
+    required this.hardBudgetMs,
+    required this.softBudgetMs,
+    required this.maxFullRefreshDuringSendReceive,
+  });
+
+  factory _DesktopPerformanceRunConfig.fromJson(Map<String, Object?> map) {
+    return _DesktopPerformanceRunConfig(
+      enabled: _optionalBool(map, 'enabled') ?? false,
+      productTimingsPath: _optionalConfig(map, 'productTimingsPath'),
+      datasetConversationCount:
+          _optionalInt(map, 'datasetConversationCount') ?? 100,
+      longThreadMessageCount:
+          _optionalInt(map, 'longThreadMessageCount') ?? 100,
+      requiredMetrics: _optionalStringList(map, 'requiredMetrics'),
+      hardBudgetMs: _optionalIntMap(map, 'hardBudgetMs'),
+      softBudgetMs: _optionalIntMap(map, 'softBudgetMs'),
+      maxFullRefreshDuringSendReceive:
+          _optionalInt(map, 'maxFullRefreshDuringSendReceive') ?? 0,
+    );
+  }
+
+  final bool enabled;
+  final String? productTimingsPath;
+  final int datasetConversationCount;
+  final int longThreadMessageCount;
+  final List<String> requiredMetrics;
+  final Map<String, int> hardBudgetMs;
+  final Map<String, int> softBudgetMs;
+  final int maxFullRefreshDuringSendReceive;
 }
 
 class _AppIdentityAttempt {
@@ -133,8 +175,15 @@ Map<String, Object?> _stringKeyMap(Object? value, {required String path}) {
   };
 }
 
-Map<String, Object?> _mapAt(Map<String, Object?> map, String key) {
+Map<String, Object?> _mapAt(
+  Map<String, Object?> map,
+  String key, {
+  bool optional = false,
+}) {
   final value = map[key];
+  if (value == null && optional) {
+    return const <String, Object?>{};
+  }
   if (value is Map) {
     return _stringKeyMap(value, path: key);
   }
@@ -153,6 +202,59 @@ String? _optionalConfig(Map<String, Object?> map, String key) {
   final raw = map[key];
   final value = raw?.toString().trim();
   return value == null || value.isEmpty ? null : value;
+}
+
+bool? _optionalBool(Map<String, Object?> map, String key) {
+  final raw = map[key];
+  if (raw == null) {
+    return null;
+  }
+  if (raw is bool) {
+    return raw;
+  }
+  return switch (raw.toString().trim().toLowerCase()) {
+    'true' || '1' || 'yes' || 'on' => true,
+    'false' || '0' || 'no' || 'off' => false,
+    _ => null,
+  };
+}
+
+int? _optionalInt(Map<String, Object?> map, String key) {
+  final raw = map[key];
+  if (raw == null) {
+    return null;
+  }
+  if (raw is int) {
+    return raw;
+  }
+  if (raw is num) {
+    return raw.round();
+  }
+  return int.tryParse(raw.toString().trim());
+}
+
+List<String> _optionalStringList(Map<String, Object?> map, String key) {
+  final raw = map[key];
+  if (raw is! List) {
+    return const <String>[];
+  }
+  return raw
+      .map((item) => item.toString().trim())
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
+}
+
+Map<String, int> _optionalIntMap(Map<String, Object?> map, String key) {
+  final raw = map[key];
+  if (raw is! Map) {
+    return const <String, int>{};
+  }
+  return <String, int>{
+    for (final entry in raw.entries)
+      entry.key.toString(): entry.value is num
+          ? (entry.value as num).round()
+          : int.tryParse(entry.value.toString().trim()) ?? 0,
+  };
 }
 
 String _messageNonce() {

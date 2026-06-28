@@ -7,6 +7,7 @@ import 'package:yaml/yaml.dart';
 const String _defaultDesktopE2eConfigPath = 'tests/e2e/configs/e2e.local.yaml';
 const String _desktopCliPeerRunConfigPath =
     '.e2e/desktop-cli-peer/current/run_config.json';
+const String _desktopCliPeerProductTimingsFileName = 'product_timings.json';
 const String _messageAgentRunConfigPath =
     '.e2e/message-agent/current/run_config.json';
 const String _codexAgentRunConfigPath =
@@ -14,6 +15,8 @@ const String _codexAgentRunConfigPath =
 const String _claudeCodeAgentRunConfigPath =
     '.e2e/claude-code-agent/current/run_config.json';
 const String _desktopCliPeerScenario = 'desktop-app-cli-peer';
+const String _desktopCliPeerPerformanceScenario =
+    'desktop-app-cli-peer-performance';
 const String _messageAgentScenario = 'message-agent-full-ui';
 const String _codexAgentScenario = 'codex-agent-full-ui';
 const String _claudeCodeAgentScenario = 'claude-code-agent-full-ui';
@@ -64,6 +67,67 @@ const List<String> _desktopCliPeerContactsCaseIds = <String>[
   'CONTACT-E2E-002',
   'CONTACT-REG-001',
 ];
+const List<String> _desktopCliPeerPerformanceCaseIds = <String>[
+  'PERF-E2E-001', // real backend App + CLI peer performance gate.
+  'PERF-E2E-002', // multi-conversation dataset coverage.
+  'PERF-E2E-003', // cold App shell and conversation-list visible timings.
+  'PERF-E2E-004', // snapshot, fast local hydrate, and full hydrate timings.
+  'PERF-E2E-005', // App -> CLI send-to-visible latency.
+  'PERF-E2E-006', // CLI -> App send-to-visible latency.
+  'PERF-E2E-007', // no full conversation refresh during send/receive gate.
+  'PERF-E2E-008', // long-thread open/load timing.
+  'PERF-E2E-009', // product timing report schema.
+  'PERF-E2E-010', // hard budget failure semantics.
+  'PERF-E2E-011', // soft budget warning semantics.
+  'PERF-E2E-012', // retained failure diagnostics.
+];
+const Set<String> _desktopCliPeerPerformanceRequiredMetrics = <String>{
+  'app.bootstrap_create_ms',
+  'app.launch_to_shell_visible_ms',
+  'performance_dataset.prepare_ms',
+  'conversation_list.remote_sync_warmup_ms',
+  'conversation_list.warmup_fast_local_ms',
+  'conversation_list.warmup_item_count',
+  'conversation_list.snapshot_load_ms',
+  'conversation_list.snapshot_item_count',
+  'conversation_list.fast_local_hydrate_ms',
+  'conversation_list.fast_local_item_count',
+  'conversation_list.full_hydrate_ms',
+  'conversation_list.full_hydrate_item_count',
+  'conversation_list.first_non_empty_visible_ms',
+  'performance_dataset.long_thread_prepare_ms',
+  'message.app_send_to_local_visible_ms',
+  'message.app_send_to_cli_inbox_visible_ms',
+  'message.app_send_to_cli_history_visible_ms',
+  'message.cli_send_to_app_history_visible_ms',
+  'message.cli_send_to_conversation_preview_visible_ms',
+  'thread.history_initial_load_ms',
+  'thread.open_to_first_message_visible_ms',
+  'thread.initial_item_count',
+};
+const Set<String> _desktopCliPeerPerformanceRequiredDatasetFields = <String>{
+  'conversationCountTarget',
+  'conversationCountObserved',
+  'warmupConversationCountObserved',
+  'visibleConversationCountObserved',
+  'longThreadMessageCountTarget',
+  'longThreadMessageCountObserved',
+};
+const Set<String> _desktopCliPeerPerformanceRequiredCounters = <String>{
+  'performance_dataset.existing_count',
+  'performance_dataset.created_count',
+  'performance_dataset.long_thread_initial_count',
+  'performance_dataset.long_thread_created_count',
+  'performance_dataset.long_thread_observed_count',
+  'message_sync.warmup_events_applied',
+  'message_sync.warmup_pages_fetched',
+  'message_sync.warmup_snapshot_required_count',
+  'message_sync.warmup_has_more_count',
+  'conversation.full_refresh_during_send_receive_count',
+  'conversation.list_conversations_calls_total',
+  'conversation.patch_apply_count',
+  'conversation.patch_repair_count',
+};
 const List<String> _messageAgentCaseIds = <String>[
   'MSGAGENT-E2E-001', // App UI selects daemon and enables Message Agent.
   'MSGAGENT-E2E-002', // CLI peer message is recovered into App UI.
@@ -124,9 +188,14 @@ class DesktopE2eRunner {
   late final Directory reportDir;
   late final Directory cliWorkspaceDir;
   late final Directory cliHomeDir;
+  late final Directory appIdentityWorkspaceDir;
+  late final Directory appIdentityHomeDir;
   late final Directory appStateRootDir;
   late final File runConfigFile;
+  late final File productTimingsFile;
   final List<DesktopTimingEntry> _timings = <DesktopTimingEntry>[];
+  DesktopProductTimingReport? _productTimingReport;
+  DesktopPerformanceBudgetResult? _performanceBudgetResult;
 
   Future<void> run() async {
     fileConfig = DesktopE2eFileConfig.load(
@@ -143,16 +212,30 @@ class DesktopE2eRunner {
       ..createSync(recursive: true);
     cliWorkspaceDir = Directory('${root.path}/.e2e/$runScope/$runId/cli-peer');
     cliHomeDir = Directory('${root.path}/.e2e/$runScope/$runId/cli-home');
+    appIdentityWorkspaceDir = Directory(
+      '${root.path}/.e2e/$runScope/$runId/app-identity-cli',
+    );
+    appIdentityHomeDir = Directory(
+      '${root.path}/.e2e/$runScope/$runId/app-identity-home',
+    );
     appStateRootDir = Directory('${root.path}/.e2e/$runScope/$runId/app');
     runConfigFile = File('${root.path}/${options.e2eCase.runConfigPath}');
+    productTimingsFile = File(
+      '${reportDir.path}/$_desktopCliPeerProductTimingsFileName',
+    );
     _addRuntimeSecret(reportDir.path);
     _addRuntimeSecret(cliWorkspaceDir.path);
     _addRuntimeSecret(cliHomeDir.path);
+    _addRuntimeSecret(appIdentityWorkspaceDir.path);
+    _addRuntimeSecret(appIdentityHomeDir.path);
     _addRuntimeSecret(appStateRootDir.path);
     _addRuntimeSecret(runConfigFile.path);
+    _addRuntimeSecret(productTimingsFile.path);
     if (!options.dryRun && options.e2eCase.requiresCliPeer) {
       cliWorkspaceDir.createSync(recursive: true);
       cliHomeDir.createSync(recursive: true);
+      appIdentityWorkspaceDir.createSync(recursive: true);
+      appIdentityHomeDir.createSync(recursive: true);
       appStateRootDir.createSync(recursive: true);
     }
 
@@ -232,6 +315,12 @@ class DesktopE2eRunner {
     await _timed('Preparing CLI workspace', _prepareCliWorkspace);
     await _timed('Preparing CLI identity', _prepareCliIdentity);
     await _timed('Checking CLI ready state', _checkCliReady);
+    if (peerConfig.e2eCase == DesktopE2eCase.performance) {
+      await _timed(
+        'Preparing performance App identity',
+        _preparePerformanceAppIdentity,
+      );
+    }
 
     if (options.prepareOnly) {
       _section('Prepare-only completed');
@@ -240,6 +329,24 @@ class DesktopE2eRunner {
     }
     await _writeFlutterRunConfig(peerConfig);
     await _timed('Flutter App + CLI peer flow', _planFlutterDesktopSmoke);
+    if (!options.dryRun && peerConfig.e2eCase == DesktopE2eCase.performance) {
+      _productTimingReport = _readProductTimingReport();
+      _performanceBudgetResult = DesktopPerformanceBudgetResult.evaluate(
+        config: peerConfig.performance,
+        report: _productTimingReport,
+      );
+      final failures = _performanceBudgetResult!.hardFailures;
+      if (failures.isNotEmpty) {
+        throw E2eFailure(
+          'Performance E2E budget failed: ${failures.join('; ')}',
+        );
+      }
+    } else if (peerConfig.e2eCase == DesktopE2eCase.performance) {
+      _performanceBudgetResult = DesktopPerformanceBudgetResult(
+        hardFailures: const <String>[],
+        softWarnings: const <String>[],
+      );
+    }
   }
 
   Future<T> _timed<T>(String name, Future<T> Function() action) async {
@@ -272,13 +379,13 @@ class DesktopE2eRunner {
 
   Future<void> _prepareCliWorkspace() async {
     await _cli(const <String>['--format', 'json', 'init']);
-    await _writeCliConfig();
+    await _writeCliConfig(cliWorkspaceDir);
     await _cli(const <String>['--format', 'json', 'config', 'show']);
   }
 
-  Future<void> _writeCliConfig() async {
+  Future<void> _writeCliConfig(Directory workspaceDir) async {
     final peerConfig = _requireConfig();
-    final file = File('${cliWorkspaceDir.path}/config.yaml');
+    final file = File('${workspaceDir.path}/config.yaml');
     final configMap = file.existsSync()
         ? _toStringKeyMap(loadYaml(file.readAsStringSync()), path: 'config')
         : <String, Object?>{};
@@ -311,7 +418,7 @@ class DesktopE2eRunner {
       );
       return;
     }
-    cliWorkspaceDir.createSync(recursive: true);
+    workspaceDir.createSync(recursive: true);
     file.writeAsStringSync(_renderYamlMap(configMap));
   }
 
@@ -370,11 +477,76 @@ class DesktopE2eRunner {
     ]);
   }
 
+  Future<void> _preparePerformanceAppIdentity() async {
+    final peerConfig = _requireConfig();
+    await _cliForWorkspace(
+      workspaceDir: appIdentityWorkspaceDir,
+      homeDir: appIdentityHomeDir,
+      args: const <String>['--format', 'json', 'init'],
+    );
+    await _writeCliConfig(appIdentityWorkspaceDir);
+    await _cliForWorkspace(
+      workspaceDir: appIdentityWorkspaceDir,
+      homeDir: appIdentityHomeDir,
+      args: const <String>['--format', 'json', 'config', 'show'],
+    );
+    final recover = await _cliForWorkspace(
+      workspaceDir: appIdentityWorkspaceDir,
+      homeDir: appIdentityHomeDir,
+      args: <String>[
+        '--format',
+        'json',
+        'id',
+        'recover',
+        '--handle',
+        peerConfig.appHandle,
+        '--phone',
+        peerConfig.otpPhone,
+        '--otp',
+        peerConfig.otpCode,
+      ],
+      allowFailure: true,
+    );
+    if (recover.exitCode == 0 || options.dryRun) {
+      return;
+    }
+    if (!_looksRecoverableForRegister(recover.output)) {
+      throw E2eFailure(
+        'Performance App identity recover failed and did not look like a '
+        'missing-handle error: ${redactor.redact(recover.output)}',
+      );
+    }
+    final register = await _cliForWorkspace(
+      workspaceDir: appIdentityWorkspaceDir,
+      homeDir: appIdentityHomeDir,
+      args: <String>[
+        '--format',
+        'json',
+        'id',
+        'register',
+        '--handle',
+        peerConfig.appHandle,
+        '--phone',
+        peerConfig.otpPhone,
+        '--otp',
+        peerConfig.otpCode,
+      ],
+      allowFailure: true,
+    );
+    if (register.exitCode != 0) {
+      throw E2eFailure(
+        'Performance App identity register failed: '
+        '${redactor.redact(register.output)}',
+      );
+    }
+  }
+
   Future<void> _planFlutterDesktopSmoke() async {
     final peerConfig = _requireConfig();
     final flutterArgs = <String>[
       'test',
       '--dart-define=AWIKI_E2E=true',
+      '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
       peerConfig.e2eCase.testFile,
       '-d',
       peerConfig.platform.name,
@@ -416,6 +588,18 @@ class DesktopE2eRunner {
         'home': cliHomeDir.path,
       },
       'app': <String, Object?>{'stateRoot': appStateRootDir.path},
+      'performance': <String, Object?>{
+        'enabled': peerConfig.e2eCase == DesktopE2eCase.performance,
+        'productTimingsPath': productTimingsFile.path,
+        'datasetConversationCount':
+            peerConfig.performance.datasetConversationCount,
+        'longThreadMessageCount': peerConfig.performance.longThreadMessageCount,
+        'requiredMetrics': peerConfig.performance.requiredMetrics.toList(),
+        'hardBudgetMs': peerConfig.performance.hardBudgetMs,
+        'softBudgetMs': peerConfig.performance.softBudgetMs,
+        'maxFullRefreshDuringSendReceive':
+            peerConfig.performance.maxFullRefreshDuringSendReceive,
+      },
       'daemon': <String, Object?>{
         'rustRepo': peerConfig.daemonRustRepo,
         'binary': peerConfig.daemonBinary,
@@ -460,13 +644,18 @@ class DesktopE2eRunner {
   }
 
   Future<void> _runFlutterTest(String testFile) {
-    return _runFlutterArgs(<String>[
-      'test',
-      '--dart-define=AWIKI_E2E=true',
-      testFile,
-      '-d',
-      platform.name,
-    ], platform: platform, timeout: options.e2eCase.flutterTimeout);
+    return _runFlutterArgs(
+      <String>[
+        'test',
+        '--dart-define=AWIKI_E2E=true',
+        '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
+        testFile,
+        '-d',
+        platform.name,
+      ],
+      platform: platform,
+      timeout: options.e2eCase.flutterTimeout,
+    );
   }
 
   Future<void> _runFlutterArgs(
@@ -475,11 +664,11 @@ class DesktopE2eRunner {
     Duration timeout = const Duration(minutes: 5),
   }) async {
     if (platform == DesktopE2ePlatform.linux) {
-      await commands.run(
-        'xvfb-run',
-        <String>['-a', 'flutter', ...flutterArgs],
-        timeout: timeout,
-      );
+      await commands.run('xvfb-run', <String>[
+        '-a',
+        'flutter',
+        ...flutterArgs,
+      ], timeout: timeout);
       return;
     }
     await commands.run('flutter', flutterArgs, timeout: timeout);
@@ -489,9 +678,23 @@ class DesktopE2eRunner {
     List<String> args, {
     bool allowFailure = false,
   }) {
+    return _cliForWorkspace(
+      workspaceDir: cliWorkspaceDir,
+      homeDir: cliHomeDir,
+      args: args,
+      allowFailure: allowFailure,
+    );
+  }
+
+  Future<DesktopCommandResult> _cliForWorkspace({
+    required Directory workspaceDir,
+    required Directory homeDir,
+    required List<String> args,
+    bool allowFailure = false,
+  }) {
     final environment = <String, String>{
-      'HOME': cliHomeDir.path,
-      'AWIKI_CLI_WORKSPACE_HOME_DIR': cliWorkspaceDir.path,
+      'HOME': homeDir.path,
+      'AWIKI_CLI_WORKSPACE_HOME_DIR': workspaceDir.path,
     };
     for (final name in const <String>[
       'PATH',
@@ -525,10 +728,37 @@ class DesktopE2eRunner {
 
   String get _timingsPath => '${reportDir.path}/timings.json';
 
+  DesktopProductTimingReport _readProductTimingReport() {
+    if (!productTimingsFile.existsSync()) {
+      throw E2eFailure(
+        'Performance product timing report was not written: '
+        '${productTimingsFile.path}',
+      );
+    }
+    Object? decoded;
+    try {
+      decoded = jsonDecode(productTimingsFile.readAsStringSync());
+    } on Object catch (error) {
+      throw E2eFailure(
+        'Performance product timing report is not valid JSON: $error',
+      );
+    }
+    if (decoded is! Map) {
+      throw E2eFailure(
+        'Performance product timing report must be a JSON object.',
+      );
+    }
+    return DesktopProductTimingReport.fromJson(<String, Object?>{
+      for (final entry in decoded.entries) entry.key.toString(): entry.value,
+    });
+  }
+
   void _writeTimingReport({
     required bool succeeded,
     required Duration totalElapsed,
   }) {
+    final productTimingReport = _productTimingReport;
+    final performanceBudgetResult = _performanceBudgetResult;
     const encoder = JsonEncoder.withIndent('  ');
     final file = File(_timingsPath);
     if (!options.dryRun) {
@@ -595,6 +825,30 @@ class DesktopE2eRunner {
         'cliHome': '<redacted-home>',
         'appStateRoot': '<redacted-app-state>',
         'totalMs': totalElapsed.inMilliseconds,
+        if (config?.e2eCase == DesktopE2eCase.performance)
+          'dataset':
+              productTimingReport?.dataset ??
+              config?.performance.dataset.toJson(),
+        if (config?.e2eCase == DesktopE2eCase.performance)
+          'budgets': config!.performance.budgetsJson(),
+        if (productTimingReport != null) 'metrics': productTimingReport.metrics,
+        if (productTimingReport != null)
+          'counters': productTimingReport.counters,
+        if (productTimingReport != null)
+          'appProductTimings': productTimingReport.appProductTimings,
+        if (config?.e2eCase == DesktopE2eCase.performance)
+          'toolingTimings': [
+            for (final entry in _timings)
+              <String, Object?>{
+                'name': entry.name,
+                'status': entry.succeeded ? 'success' : 'failed',
+                'elapsedMs': entry.elapsed.inMilliseconds,
+              },
+          ],
+        if (performanceBudgetResult != null)
+          'hardFailures': performanceBudgetResult.hardFailures,
+        if (performanceBudgetResult != null)
+          'softWarnings': performanceBudgetResult.softWarnings,
         'steps': [
           for (final entry in _timings)
             <String, Object?>{
@@ -815,6 +1069,7 @@ Run the AWiki Me Desktop App + CLI peer E2E smoke.
 Usage:
   dart run tests/e2e/runner.dart --case smoke
   dart run tests/e2e/runner.dart --case full
+  dart run tests/e2e/runner.dart --case performance
   dart run tests/e2e/runner.dart --case message-agent
   dart run tests/e2e/runner.dart --case codex-agent
   dart run tests/e2e/runner.dart --case claude-code-agent
@@ -822,9 +1077,12 @@ Usage:
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|full|direct|group|attachment|contacts|message-agent|codex-agent|claude-code-agent
+  --case smoke|full|performance|direct|group|attachment|contacts|message-agent|codex-agent|claude-code-agent
                                smoke runs local App/native checks. The other
                                cases run real App+CLI peer flows. The
+                               performance case records product-level startup,
+                               conversation, and send-to-visible timings and
+                               applies the configured performance budgets. The
                                message-agent case is the full UI acceptance
                                gate for Message Agent; codex-agent and
                                claude-code-agent are user-visible runtime
@@ -847,6 +1105,7 @@ class DesktopCliPeerConfig {
     required this.cliHandle,
     required this.cliBin,
     required this.e2eCase,
+    required this.performance,
     this.userServiceUrl,
     this.messageServiceUrl,
     this.messageServiceWsUrl,
@@ -883,6 +1142,7 @@ class DesktopCliPeerConfig {
   final String cliHandle;
   final String cliBin;
   final DesktopE2eCase e2eCase;
+  final DesktopPerformanceConfig performance;
   final String? userServiceUrl;
   final String? messageServiceUrl;
   final String? messageServiceWsUrl;
@@ -962,6 +1222,7 @@ class DesktopCliPeerConfig {
       cliHandle: cliHandle,
       cliBin: cliBin,
       e2eCase: options.e2eCase,
+      performance: fileConfig.performance ?? DesktopPerformanceConfig.defaults,
       userServiceUrl: fileConfig.userServiceUrl,
       messageServiceUrl: fileConfig.messageServiceUrl,
       messageServiceWsUrl: fileConfig.messageServiceWsUrl,
@@ -1144,6 +1405,7 @@ class DesktopE2eFileConfig {
     this.appHandle,
     this.cliHandle,
     this.cliBin,
+    this.performance,
   });
 
   const DesktopE2eFileConfig.empty()
@@ -1180,7 +1442,8 @@ class DesktopE2eFileConfig {
       otpCode = null,
       appHandle = null,
       cliHandle = null,
-      cliBin = null;
+      cliBin = null,
+      performance = null;
 
   final String? path;
   final DesktopE2ePlatform? platform;
@@ -1216,6 +1479,7 @@ class DesktopE2eFileConfig {
   final String? appHandle;
   final String? cliHandle;
   final String? cliBin;
+  final DesktopPerformanceConfig? performance;
 
   static DesktopE2eFileConfig load({
     required Directory root,
@@ -1235,6 +1499,7 @@ class DesktopE2eFileConfig {
     final messageAgent = _mapAt(raw, 'messageAgent', optional: true);
     final codexAgent = _mapAt(raw, 'codexAgent', optional: true);
     final claudeCodeAgent = _mapAt(raw, 'claudeCodeAgent', optional: true);
+    final performance = _mapAt(raw, 'performance', optional: true);
     final otp = _mapAt(raw, 'otp', optional: true);
 
     final baseUrl = _stringAt(service, 'baseUrl');
@@ -1292,6 +1557,250 @@ class DesktopE2eFileConfig {
       appHandle: appHandle,
       cliHandle: cliHandle,
       cliBin: cliBin == null ? null : _resolvePath(root, cliBin),
+      performance: DesktopPerformanceConfig.fromYaml(performance),
+    );
+  }
+}
+
+class DesktopPerformanceDataset {
+  const DesktopPerformanceDataset({
+    required this.conversationCountTarget,
+    required this.longThreadMessageCountTarget,
+  });
+
+  final int conversationCountTarget;
+  final int longThreadMessageCountTarget;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'conversationCountTarget': conversationCountTarget,
+      'longThreadMessageCountTarget': longThreadMessageCountTarget,
+    };
+  }
+}
+
+class DesktopPerformanceConfig {
+  DesktopPerformanceConfig({
+    required this.datasetConversationCount,
+    required this.longThreadMessageCount,
+    required this.requiredMetrics,
+    required this.hardBudgetMs,
+    required this.softBudgetMs,
+    required this.maxFullRefreshDuringSendReceive,
+  });
+
+  static final DesktopPerformanceConfig defaults = DesktopPerformanceConfig(
+    datasetConversationCount: 100,
+    longThreadMessageCount: 100,
+    requiredMetrics: _desktopCliPeerPerformanceRequiredMetrics,
+    hardBudgetMs: const <String, int>{
+      'app.launch_to_shell_visible_ms': 30000,
+      'conversation_list.first_non_empty_visible_ms': 10000,
+      'conversation_list.snapshot_load_ms': 5000,
+      'conversation_list.fast_local_hydrate_ms': 5000,
+      'conversation_list.full_hydrate_ms': 15000,
+      'message.app_send_to_cli_inbox_visible_ms': 90000,
+      'message.app_send_to_cli_history_visible_ms': 90000,
+      'message.cli_send_to_app_history_visible_ms': 90000,
+      'message.cli_send_to_conversation_preview_visible_ms': 90000,
+      'thread.open_to_first_message_visible_ms': 8000,
+      'thread.history_initial_load_ms': 8000,
+    },
+    softBudgetMs: const <String, int>{
+      'app.launch_to_shell_visible_ms': 15000,
+      'conversation_list.first_non_empty_visible_ms': 3000,
+      'conversation_list.snapshot_load_ms': 1000,
+      'conversation_list.fast_local_hydrate_ms': 1500,
+      'conversation_list.full_hydrate_ms': 5000,
+      'message.app_send_to_cli_inbox_visible_ms': 20000,
+      'message.app_send_to_cli_history_visible_ms': 20000,
+      'message.cli_send_to_app_history_visible_ms': 20000,
+      'message.cli_send_to_conversation_preview_visible_ms': 20000,
+      'thread.open_to_first_message_visible_ms': 3000,
+      'thread.history_initial_load_ms': 3000,
+    },
+    maxFullRefreshDuringSendReceive: 0,
+  );
+
+  final int datasetConversationCount;
+  final int longThreadMessageCount;
+  final Set<String> requiredMetrics;
+  final Map<String, int> hardBudgetMs;
+  final Map<String, int> softBudgetMs;
+  final int maxFullRefreshDuringSendReceive;
+
+  DesktopPerformanceDataset get dataset => DesktopPerformanceDataset(
+    conversationCountTarget: datasetConversationCount,
+    longThreadMessageCountTarget: longThreadMessageCount,
+  );
+
+  Map<String, Object?> budgetsJson() {
+    return <String, Object?>{
+      'requiredMetrics': requiredMetrics.toList()..sort(),
+      'hardBudgetMs': hardBudgetMs,
+      'softBudgetMs': softBudgetMs,
+      'maxFullRefreshDuringSendReceive': maxFullRefreshDuringSendReceive,
+    };
+  }
+
+  static DesktopPerformanceConfig fromYaml(Map<String, Object?> map) {
+    final defaults = DesktopPerformanceConfig.defaults;
+    final dataset = _mapAt(map, 'dataset', optional: true);
+    final budgets = _mapAt(map, 'budgets', optional: true);
+    return DesktopPerformanceConfig(
+      datasetConversationCount:
+          _intAt(dataset, 'conversationCount') ??
+          defaults.datasetConversationCount,
+      longThreadMessageCount:
+          _intAt(dataset, 'longThreadMessageCount') ??
+          defaults.longThreadMessageCount,
+      requiredMetrics:
+          _stringSetAt(budgets, 'requiredMetrics') ?? defaults.requiredMetrics,
+      hardBudgetMs: _intMapAt(budgets, 'hardBudgetMs') ?? defaults.hardBudgetMs,
+      softBudgetMs: _intMapAt(budgets, 'softBudgetMs') ?? defaults.softBudgetMs,
+      maxFullRefreshDuringSendReceive:
+          _intAt(budgets, 'maxFullRefreshDuringSendReceive') ??
+          defaults.maxFullRefreshDuringSendReceive,
+    );
+  }
+}
+
+class DesktopProductTimingReport {
+  DesktopProductTimingReport({
+    required this.dataset,
+    required this.metrics,
+    required this.counters,
+    required this.appProductTimings,
+  });
+
+  final Map<String, Object?> dataset;
+  final Map<String, num> metrics;
+  final Map<String, int> counters;
+  final List<Map<String, Object?>> appProductTimings;
+
+  static DesktopProductTimingReport fromJson(Map<String, Object?> json) {
+    final dataset = _jsonMapAt(json, 'dataset');
+    final metrics = <String, num>{};
+    for (final entry in _jsonMapAt(json, 'metrics').entries) {
+      final value = entry.value;
+      if (value is num) {
+        metrics[entry.key] = value;
+      }
+    }
+    final counters = <String, int>{};
+    for (final entry in _jsonMapAt(json, 'counters').entries) {
+      final value = entry.value;
+      if (value is int) {
+        counters[entry.key] = value;
+      } else if (value is num) {
+        counters[entry.key] = value.round();
+      }
+    }
+    final productTimings = <Map<String, Object?>>[];
+    final rawTimings = json['appProductTimings'];
+    if (rawTimings is List) {
+      for (final value in rawTimings) {
+        if (value is Map) {
+          productTimings.add(<String, Object?>{
+            for (final entry in value.entries)
+              entry.key.toString(): entry.value,
+          });
+        }
+      }
+    }
+    return DesktopProductTimingReport(
+      dataset: dataset,
+      metrics: metrics,
+      counters: counters,
+      appProductTimings: productTimings,
+    );
+  }
+}
+
+class DesktopPerformanceBudgetResult {
+  DesktopPerformanceBudgetResult({
+    required this.hardFailures,
+    required this.softWarnings,
+  });
+
+  final List<String> hardFailures;
+  final List<String> softWarnings;
+
+  static DesktopPerformanceBudgetResult evaluate({
+    required DesktopPerformanceConfig config,
+    required DesktopProductTimingReport? report,
+  }) {
+    final hardFailures = <String>[];
+    final softWarnings = <String>[];
+    if (report == null) {
+      hardFailures.add('missing product timing report');
+      return DesktopPerformanceBudgetResult(
+        hardFailures: hardFailures,
+        softWarnings: softWarnings,
+      );
+    }
+    for (final metric in config.requiredMetrics) {
+      if (!report.metrics.containsKey(metric)) {
+        hardFailures.add('missing required metric $metric');
+      }
+    }
+    for (final field in _desktopCliPeerPerformanceRequiredDatasetFields) {
+      if (!report.dataset.containsKey(field)) {
+        hardFailures.add('missing required dataset field $field');
+      }
+    }
+    for (final counter in _desktopCliPeerPerformanceRequiredCounters) {
+      if (!report.counters.containsKey(counter)) {
+        hardFailures.add('missing required counter $counter');
+      }
+    }
+    final observedConversations =
+        _numFromJson(report.dataset['visibleConversationCountObserved']) ?? 0;
+    if (observedConversations < config.datasetConversationCount) {
+      hardFailures.add(
+        'dataset conversation count $observedConversations is below target '
+        '${config.datasetConversationCount}',
+      );
+    }
+    final observedLongThread =
+        _numFromJson(report.dataset['longThreadMessageCountObserved']) ?? 0;
+    if (observedLongThread < config.longThreadMessageCount) {
+      hardFailures.add(
+        'long thread message count $observedLongThread is below target '
+        '${config.longThreadMessageCount}',
+      );
+    }
+    final fullRefreshCount =
+        report
+            .counters['conversation.full_refresh_during_send_receive_count'] ??
+        0;
+    if (fullRefreshCount > config.maxFullRefreshDuringSendReceive) {
+      hardFailures.add(
+        'conversation full refresh during send/receive count $fullRefreshCount '
+        'exceeds ${config.maxFullRefreshDuringSendReceive}',
+      );
+    }
+    for (final entry in config.hardBudgetMs.entries) {
+      final actual = report.metrics[entry.key];
+      if (actual != null && actual > entry.value) {
+        hardFailures.add(
+          '${entry.key} ${actual.round()}ms exceeds hard budget '
+          '${entry.value}ms',
+        );
+      }
+    }
+    for (final entry in config.softBudgetMs.entries) {
+      final actual = report.metrics[entry.key];
+      if (actual != null && actual > entry.value) {
+        softWarnings.add(
+          '${entry.key} ${actual.round()}ms exceeds soft budget '
+          '${entry.value}ms',
+        );
+      }
+    }
+    return DesktopPerformanceBudgetResult(
+      hardFailures: hardFailures,
+      softWarnings: softWarnings,
     );
   }
 }
@@ -1299,6 +1808,7 @@ class DesktopE2eFileConfig {
 enum DesktopE2eCase {
   smoke(_desktopSmokeCaseIds),
   full(_desktopCliPeerCaseIds),
+  performance(_desktopCliPeerPerformanceCaseIds),
   direct(_desktopCliPeerDirectCaseIds),
   group(_desktopCliPeerGroupCaseIds),
   attachment(_desktopCliPeerAttachmentCaseIds),
@@ -1316,6 +1826,8 @@ enum DesktopE2eCase {
       DesktopE2eCase.smoke => 'integration_test/app_smoke_test.dart',
       DesktopE2eCase.full =>
         'integration_test/desktop_cli_peer_smoke_test.dart',
+      DesktopE2eCase.performance =>
+        'integration_test/desktop_cli_peer_performance_test.dart',
       DesktopE2eCase.direct =>
         'integration_test/desktop_cli_peer_direct_test.dart',
       DesktopE2eCase.group =>
@@ -1359,6 +1871,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.claudeCodeAgent => const Duration(minutes: 15),
       DesktopE2eCase.codexAgent => const Duration(minutes: 8),
       DesktopE2eCase.messageAgent => const Duration(minutes: 10),
+      DesktopE2eCase.performance => const Duration(minutes: 12),
       _ => const Duration(minutes: 5),
     };
   }
@@ -1368,6 +1881,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.messageAgent => _messageAgentScenario,
       DesktopE2eCase.codexAgent => _codexAgentScenario,
       DesktopE2eCase.claudeCodeAgent => _claudeCodeAgentScenario,
+      DesktopE2eCase.performance => _desktopCliPeerPerformanceScenario,
       _ => _desktopCliPeerScenario,
     };
   }
@@ -1385,6 +1899,12 @@ enum DesktopE2eCase {
     return switch (value.trim().toLowerCase()) {
       '' || 'smoke' || 'app' || 'local' => DesktopE2eCase.smoke,
       'full' => DesktopE2eCase.full,
+      'performance' ||
+      'perf' ||
+      'startup-performance' ||
+      'startup_performance' ||
+      'conversation-performance' ||
+      'conversation_performance' => DesktopE2eCase.performance,
       'direct' ||
       'dm' ||
       'message' ||
@@ -1420,8 +1940,8 @@ enum DesktopE2eCase {
       'claude_agent' => DesktopE2eCase.claudeCodeAgent,
       _ => throw E2eFailure(
         'Unsupported E2E case "$value". '
-        'Use smoke, full, direct, group, attachment, contacts, message-agent, '
-        'codex-agent, or claude-code-agent.',
+        'Use smoke, full, performance, direct, group, attachment, contacts, '
+        'message-agent, codex-agent, or claude-code-agent.',
       ),
     };
   }
@@ -1548,6 +2068,68 @@ bool? _boolAt(Map<String, Object?> map, String key) {
     '0' || 'false' || 'no' || 'off' => false,
     _ => throw E2eFailure('$key must be a boolean value.'),
   };
+}
+
+int? _intAt(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value == null) {
+    return null;
+  }
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.round();
+  }
+  final parsed = int.tryParse(value.toString().trim());
+  if (parsed == null) {
+    throw E2eFailure('$key must be an integer value.');
+  }
+  return parsed;
+}
+
+Set<String>? _stringSetAt(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value == null) {
+    return null;
+  }
+  if (value is! List) {
+    throw E2eFailure('$key must be a list of strings.');
+  }
+  return value
+      .map((item) => item.toString().trim())
+      .where((item) => item.isNotEmpty)
+      .toSet();
+}
+
+Map<String, int>? _intMapAt(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value == null) {
+    return null;
+  }
+  if (value is! Map<String, Object?>) {
+    throw E2eFailure('$key must be configured as a map.');
+  }
+  return <String, int>{
+    for (final entry in value.entries) entry.key: _intAt(value, entry.key) ?? 0,
+  };
+}
+
+Map<String, Object?> _jsonMapAt(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value is Map) {
+    return <String, Object?>{
+      for (final entry in value.entries) entry.key.toString(): entry.value,
+    };
+  }
+  return <String, Object?>{};
+}
+
+num? _numFromJson(Object? value) {
+  if (value is num) {
+    return value;
+  }
+  return num.tryParse(value?.toString() ?? '');
 }
 
 String _requiredConfig(String? value, String key, String sourcePath) {
