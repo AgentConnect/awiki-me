@@ -451,6 +451,18 @@ class ThreadMemoryCachePolicy {
   final Duration messageRouteTtl;
 }
 
+class _ThreadCacheEnforcementResult {
+  const _ThreadCacheEnforcementResult({
+    required this.messages,
+    required this.trimmedCount,
+    required this.protectedOverflow,
+  });
+
+  final List<ChatMessage> messages;
+  final int trimmedCount;
+  final int protectedOverflow;
+}
+
 class ChatThreadCacheStats {
   const ChatThreadCacheStats({
     required this.rawThreadStateCount,
@@ -1512,10 +1524,7 @@ class ChatThreadsController
 
   ChatThreadCacheStats _cacheStats() {
     final canonicalKeys = <String>{
-      for (final entry in _canonicalAliases.entries)
-        if (entry.value.isNotEmpty) entry.key,
-      for (final metadata in _cacheMetadataByThreadId.values)
-        metadata.canonicalKey,
+      for (final threadId in state.keys) _canonicalKeyForThreadId(threadId),
     };
     return ChatThreadCacheStats(
       rawThreadStateCount: state.length,
@@ -1736,6 +1745,334 @@ class ChatThreadsController
     _protectedOverflowCount = 0;
   }
 
+  _ThreadCacheEnforcementResult _enforceThreadMessageCache(
+    String threadId,
+    ChatThreadState thread,
+    List<ChatMessage> sortedMessages, {
+    int? overrideLimit,
+  }) {
+    final limit = overrideLimit ?? _messageLimitForThread(threadId);
+    if (limit <= 0 || sortedMessages.length <= limit) {
+      return _ThreadCacheEnforcementResult(
+        messages: sortedMessages,
+        trimmedCount: 0,
+        protectedOverflow: 0,
+      );
+    }
+    final protectedIds = _protectedMessageIds(threadId, thread, sortedMessages);
+    final retained = <ChatMessage>[];
+    final retainedIds = <String>{};
+    for (final message in sortedMessages.reversed) {
+      if (retained.length >= limit) {
+        break;
+      }
+      retained.add(message);
+      retainedIds.add(_stableMessageId(message));
+    }
+    for (final message in sortedMessages) {
+      final stableId = _stableMessageId(message);
+      if (!protectedIds.contains(stableId) || retainedIds.contains(stableId)) {
+        continue;
+      }
+      retained.add(message);
+      retainedIds.add(stableId);
+    }
+    final trimmedCount = sortedMessages.length - retained.length;
+    final protectedOverflow = retained.length > limit
+        ? retained.length - limit
+        : 0;
+    if (trimmedCount <= 0 && protectedOverflow <= 0) {
+      return _ThreadCacheEnforcementResult(
+        messages: sortedMessages,
+        trimmedCount: 0,
+        protectedOverflow: protectedOverflow,
+      );
+    }
+    _trimmedMessageCount += trimmedCount > 0 ? trimmedCount : 0;
+    _protectedOverflowCount += protectedOverflow;
+    final sortedRetained = _sortMessages(retained);
+    AwikiPerformanceLogger.log(
+      protectedOverflow > 0
+          ? 'chat.cache.protected_overflow'
+          : 'chat.cache.trim_thread',
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(threadId),
+        'before': sortedMessages.length,
+        'after': sortedRetained.length,
+        'limit': limit,
+        'trimmed': trimmedCount,
+        'protected_overflow': protectedOverflow,
+      },
+      minMs: 1,
+    );
+    return _ThreadCacheEnforcementResult(
+      messages: sortedRetained,
+      trimmedCount: trimmedCount > 0 ? trimmedCount : 0,
+      protectedOverflow: protectedOverflow,
+    );
+  }
+
+  Map<String, ChatThreadState> _enforceGlobalCachePolicy(
+    Map<String, ChatThreadState> candidate,
+  ) {
+    if (candidate.isEmpty) {
+      return candidate;
+    }
+    final maxTotal = _cachePolicy.maxTotalCachedMessages;
+    final maxCanonical = _cachePolicy.maxCachedCanonicalThreads;
+    if (maxTotal <= 0 && maxCanonical <= 0) {
+      return candidate;
+    }
+    var changed = false;
+    var nextState = Map<String, ChatThreadState>.from(candidate);
+    final canonicalKeys = <String>{
+      for (final threadId in nextState.keys) _canonicalKeyForThreadId(threadId),
+    };
+    if (maxCanonical > 0 && canonicalKeys.length > maxCanonical) {
+      final coldThreadIds = nextState.keys.toList()
+        ..sort((a, b) => _lastTouchedAt(a).compareTo(_lastTouchedAt(b)));
+      final retainedCanonical = <String>{
+        for (final entry in coldThreadIds.reversed.take(maxCanonical))
+          _canonicalKeyForThreadId(entry),
+      };
+      for (final threadId in coldThreadIds) {
+        if (retainedCanonical.contains(_canonicalKeyForThreadId(threadId))) {
+          continue;
+        }
+        final thread = nextState[threadId];
+        if (thread == null) {
+          continue;
+        }
+        if (_threadHasHardProtectedMessages(thread, thread.messages)) {
+          final enforced = _enforceThreadMessageCache(
+            threadId,
+            thread,
+            thread.messages,
+            overrideLimit: _cachePolicy.coldThreadMessageLimit,
+          );
+          if (enforced.messages.length != thread.messages.length) {
+            changed = true;
+            nextState[threadId] = thread.copyWith(messages: enforced.messages);
+          }
+          continue;
+        }
+        _evictThreadFromCacheCandidate(nextState, threadId, thread);
+        changed = true;
+      }
+      final canonicalAfterEvict = <String>{
+        for (final threadId in nextState.keys)
+          _canonicalKeyForThreadId(threadId),
+      };
+      if (canonicalAfterEvict.length > maxCanonical) {
+        _protectedOverflowCount += canonicalAfterEvict.length - maxCanonical;
+      }
+    }
+    var total = _totalRetainedMessages(nextState);
+    if (maxTotal > 0 && total > maxTotal) {
+      var madeProgress = true;
+      while (total > maxTotal && madeProgress) {
+        madeProgress = false;
+        final threadIds = nextState.keys.toList()
+          ..sort((a, b) => _lastTouchedAt(a).compareTo(_lastTouchedAt(b)));
+        for (final threadId in threadIds) {
+          if (total <= maxTotal) {
+            break;
+          }
+          final thread = nextState[threadId];
+          if (thread == null || thread.messages.length <= 1) {
+            continue;
+          }
+          final targetLimit = _globalQuotaTargetLimit(thread.messages.length);
+          final enforced = _enforceThreadMessageCache(
+            threadId,
+            thread,
+            thread.messages,
+            overrideLimit: targetLimit,
+          );
+          if (enforced.messages.length == thread.messages.length) {
+            continue;
+          }
+          changed = true;
+          madeProgress = true;
+          nextState[threadId] = thread.copyWith(messages: enforced.messages);
+          total = _totalRetainedMessages(nextState);
+        }
+        if (!madeProgress) {
+          final evicted = _evictOldestUnprotectedThread(nextState);
+          if (evicted) {
+            changed = true;
+            madeProgress = true;
+            total = _totalRetainedMessages(nextState);
+            continue;
+          }
+          _protectedOverflowCount += total - maxTotal;
+          break;
+        }
+      }
+    }
+    if (changed) {
+      AwikiPerformanceLogger.log(
+        'chat.cache.enforce',
+        fields: <String, Object?>{
+          'raw_threads': nextState.length,
+          'canonical_threads': <String>{
+            for (final threadId in nextState.keys)
+              _canonicalKeyForThreadId(threadId),
+          }.length,
+          'total_retained_messages': _totalRetainedMessages(nextState),
+          'trimmed_total': _trimmedMessageCount,
+          'protected_overflow_total': _protectedOverflowCount,
+        },
+        minMs: 1,
+      );
+    }
+    return nextState;
+  }
+
+  int _globalQuotaTargetLimit(int currentLength) {
+    final coldLimit = _cachePolicy.coldThreadMessageLimit;
+    if (coldLimit > 0 && currentLength > coldLimit + 1) {
+      return coldLimit;
+    }
+    return currentLength - 1;
+  }
+
+  int _totalRetainedMessages(Map<String, ChatThreadState> threads) {
+    return threads.values.fold<int>(
+      0,
+      (total, thread) => total + thread.messages.length,
+    );
+  }
+
+  int _messageLimitForThread(String threadId) {
+    final touchedAt = _lastTouchedAt(threadId);
+    final age = DateTime.now().difference(touchedAt);
+    if (age <= const Duration(minutes: 5)) {
+      return _cachePolicy.hotThreadMessageLimit;
+    }
+    if (age <= const Duration(minutes: 30)) {
+      return _cachePolicy.warmThreadMessageLimit;
+    }
+    return _cachePolicy.coldThreadMessageLimit;
+  }
+
+  DateTime _lastTouchedAt(String threadId) {
+    return _cacheMetadataByThreadId[threadId]?.lastTouchedAt ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  String _canonicalKeyForThreadId(String threadId) {
+    return _cacheMetadataByThreadId[threadId]?.canonicalKey ?? threadId;
+  }
+
+  bool _evictOldestUnprotectedThread(Map<String, ChatThreadState> nextState) {
+    final candidates =
+        nextState.entries
+            .where(
+              (entry) => !_threadHasHardProtectedMessages(
+                entry.value,
+                entry.value.messages,
+              ),
+            )
+            .toList()
+          ..sort(
+            (a, b) => _lastTouchedAt(a.key).compareTo(_lastTouchedAt(b.key)),
+          );
+    if (candidates.isEmpty) {
+      return false;
+    }
+    final entry = candidates.first;
+    _evictThreadFromCacheCandidate(nextState, entry.key, entry.value);
+    return true;
+  }
+
+  void _evictThreadFromCacheCandidate(
+    Map<String, ChatThreadState> nextState,
+    String threadId,
+    ChatThreadState thread,
+  ) {
+    nextState.remove(threadId);
+    _evictedThreadCount += 1;
+    _removeThreadCacheMetadata(threadId);
+    AwikiPerformanceLogger.log(
+      'chat.cache.evict_thread',
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(threadId),
+        'messages': thread.messages.length,
+      },
+      minMs: 1,
+    );
+  }
+
+  Set<String> _protectedMessageIds(
+    String threadId,
+    ChatThreadState thread,
+    List<ChatMessage> messages,
+  ) {
+    final ids = _hardProtectedMessageIds(thread, messages);
+    if (messages.isNotEmpty) {
+      ids.add(_stableMessageId(messages.last));
+    }
+    final routedIds = <String>{
+      for (final id in ids)
+        if (_messageThreadRoutes[id]?.threadId == threadId) id,
+    };
+    ids.addAll(routedIds);
+    return ids;
+  }
+
+  bool _threadHasHardProtectedMessages(
+    ChatThreadState thread,
+    List<ChatMessage> messages,
+  ) {
+    return _hardProtectedMessageIds(thread, messages).isNotEmpty;
+  }
+
+  Set<String> _hardProtectedMessageIds(
+    ChatThreadState thread,
+    List<ChatMessage> messages,
+  ) {
+    final ids = <String>{};
+    void add(String? value) {
+      final key = value?.trim();
+      if (key != null && key.isNotEmpty) {
+        ids.add(key);
+      }
+    }
+
+    for (final message in messages) {
+      if (message.sendState == MessageSendState.sending ||
+          message.sendState == MessageSendState.failed) {
+        add(_stableMessageId(message));
+      }
+      for (final turn in thread.agentPendingTurns) {
+        if (turn.isActive && turn.matchesMessage(message)) {
+          add(_stableMessageId(message));
+        }
+      }
+    }
+    for (final turn in thread.agentPendingTurns) {
+      if (!turn.isActive) {
+        continue;
+      }
+      add(turn.localMessageId);
+      add(turn.remoteMessageId);
+    }
+    for (final record in thread.messageAgentSyncs) {
+      if (record.isTerminal) {
+        continue;
+      }
+      add(record.messageId);
+    }
+    for (final record in thread.appActionRecords.values) {
+      if (record.isTerminal) {
+        continue;
+      }
+      add(record.request?.sourceMessageId);
+    }
+    return ids;
+  }
+
   void _queuePendingHistorySync(
     String threadId,
     ConversationSummary conversation, {
@@ -1793,10 +2130,17 @@ class ChatThreadsController
     _touchThreadCache(threadId, messages);
     _recordMessageRoutes(threadId, messages);
     _cleanupMessageRoutes();
-    state = <String, ChatThreadState>{
+    final sortedMessages = _sortMessages(messages);
+    final enforcedMessages = _enforceThreadMessageCache(
+      threadId,
+      current.copyWith(messages: sortedMessages),
+      sortedMessages,
+    ).messages;
+    final nextState = <String, ChatThreadState>{
       ...state,
-      threadId: current.copyWith(messages: _sortMessages(messages)),
+      threadId: current.copyWith(messages: enforcedMessages),
     };
+    state = _enforceGlobalCachePolicy(nextState);
   }
 
   void _removeMessageById(String threadId, String messageId) {
@@ -1822,10 +2166,16 @@ class ChatThreadsController
     }
     _removeMessageRoutesForIds(removedRouteIds);
     _touchThreadCache(threadId, nextMessages);
-    state = <String, ChatThreadState>{
+    final enforcedMessages = _enforceThreadMessageCache(
+      threadId,
+      current.copyWith(messages: nextMessages),
+      nextMessages,
+    ).messages;
+    final nextState = <String, ChatThreadState>{
       ...state,
-      threadId: current.copyWith(messages: nextMessages),
+      threadId: current.copyWith(messages: enforcedMessages),
     };
+    state = _enforceGlobalCachePolicy(nextState);
   }
 
   void _replaceMessage(
@@ -1951,17 +2301,26 @@ class ChatThreadsController
       minMs: 1,
       level: AwikiPerformanceLogLevel.verbose,
     );
-    state = <String, ChatThreadState>{
+    final enforced = _enforceThreadMessageCache(
+      threadId,
+      previous.copyWith(
+        messages: sortedMessages,
+        agentPendingTurns: nextAgentPendingTurns,
+      ),
+      sortedMessages,
+    );
+    final nextState = <String, ChatThreadState>{
       ...state,
       threadId: ChatThreadState(
         threadId: threadId,
-        messages: sortedMessages,
+        messages: enforced.messages,
         isLoading: isLoading ?? previous.isLoading,
         agentPendingTurns: nextAgentPendingTurns,
         messageAgentSyncs: previous.messageAgentSyncs,
         appActionRecords: previous.appActionRecords,
       ),
     };
+    state = _enforceGlobalCachePolicy(nextState);
     totalWatch.stop();
     AwikiPerformanceLogger.log(
       'chat.messages.merge',
@@ -1970,7 +2329,8 @@ class ChatThreadsController
         ...AwikiPerformanceLogger.threadField(threadId),
         'incoming': incoming.length,
         'new': newlyMergedMessages.length,
-        'total': sortedMessages.length,
+        'total': enforced.messages.length,
+        'trimmed': enforced.trimmedCount,
       },
       minMs: 1,
     );
