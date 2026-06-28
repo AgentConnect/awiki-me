@@ -37,9 +37,12 @@ performance:
       conversation_list.first_non_empty_visible_ms: 10000
       conversation_list.snapshot_load_ms: 5000
       conversation_list.fast_local_hydrate_ms: 5000
+      conversation_list.fast_local_page_scan_ms: 30000
       conversation_list.full_hydrate_ms: 15000
+      conversation_list.full_page_scan_ms: 60000
       message.app_send_to_cli_inbox_visible_ms: 90000
       message.app_send_to_cli_history_visible_ms: 90000
+      message.cli_send_app_thread_after_ms: 90000
       message.cli_send_to_app_history_visible_ms: 90000
       message.cli_send_to_conversation_preview_visible_ms: 90000
       thread.open_to_first_message_visible_ms: 8000
@@ -50,9 +53,12 @@ performance:
       conversation_list.first_non_empty_visible_ms: 3000
       conversation_list.snapshot_load_ms: 1000
       conversation_list.fast_local_hydrate_ms: 1500
+      conversation_list.fast_local_page_scan_ms: 15000
       conversation_list.full_hydrate_ms: 5000
+      conversation_list.full_page_scan_ms: 30000
       message.app_send_to_cli_inbox_visible_ms: 20000
       message.app_send_to_cli_history_visible_ms: 20000
+      message.cli_send_app_thread_after_ms: 20000
       message.cli_send_to_app_history_visible_ms: 20000
       message.cli_send_to_conversation_preview_visible_ms: 20000
       thread.open_to_first_message_visible_ms: 3000

@@ -1436,6 +1436,23 @@ class FakeConversationService implements ConversationService {
   }
 
   @override
+  Future<ConversationPage> listConversationSummariesFastPage({
+    required String ownerDid,
+    int limit = 100,
+    String? cursor,
+    bool unreadOnly = false,
+  }) async {
+    return ConversationPage(
+      items: await listConversationSummariesFast(
+        ownerDid: ownerDid,
+        limit: limit,
+        unreadOnly: unreadOnly,
+      ),
+      hasMore: false,
+    );
+  }
+
+  @override
   Future<List<ConversationSummary>> enrichConversationSummaries({
     required String ownerDid,
     required List<ConversationSummary> conversations,
@@ -1450,6 +1467,23 @@ class FakeConversationService implements ConversationService {
     bool unreadOnly = false,
   }) {
     return gateway.listConversations();
+  }
+
+  @override
+  Future<ConversationPage> listConversationsPage({
+    required String ownerDid,
+    int limit = 100,
+    String? cursor,
+    bool unreadOnly = false,
+  }) async {
+    return ConversationPage(
+      items: await listConversations(
+        ownerDid: ownerDid,
+        limit: limit,
+        unreadOnly: unreadOnly,
+      ),
+      hasMore: false,
+    );
   }
 
   @override

@@ -80,6 +80,40 @@ void main() {
     });
 
     test(
+      'conversation page forwards cursor and preserves page metadata',
+      () async {
+        final core = _FakeConversations(
+          items: <ConversationSummary>[
+            _conversation('thread-2', minutesAgo: 2),
+            _conversation('thread-3', minutesAgo: 3),
+          ],
+          nextCursor: 'cursor-3',
+          hasMore: true,
+        );
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: InMemoryAwikiProductLocalStore(),
+        );
+
+        final page = await service.listConversationsPage(
+          ownerDid: 'did:alice',
+          limit: 2,
+          cursor: 'cursor-1',
+        );
+
+        expect(core.listCount, 1);
+        expect(core.lastLimit, 2);
+        expect(core.lastCursor, 'cursor-1');
+        expect(page.items.map((item) => item.threadId), [
+          'thread-2',
+          'thread-3',
+        ]);
+        expect(page.nextCursor, 'cursor-3');
+        expect(page.hasMore, isTrue);
+      },
+    );
+
+    test(
       'snapshot load applies app overlays without caching them in core',
       () async {
         final snapshotRow = _conversation(
@@ -175,87 +209,92 @@ void main() {
       expect(pinnedRow.displayName, 'Pinned from snapshot');
     });
 
-    test('watchConversationPatches normalizes upsert and repair patches', () async {
-      final core = _FakeConversations();
-      final store = InMemoryAwikiProductLocalStore();
-      await store.upsertConversationOverlay(
-        ProductConversationOverlay(
-          ownerDid: 'did:alice',
-          threadId: 'thread-patched',
-          customTitle: 'Patched local title',
-          updatedAt: DateTime.utc(2026, 5, 23, 9),
-        ),
-      );
-      final service = ImCoreConversationService(
-        conversations: core,
-        localStore: store,
-      );
-      final patchStream = service.watchConversationPatches(ownerDid: 'did:alice');
-      final firstPatch = patchStream.first;
-      await Future<void>.delayed(Duration.zero);
-
-      core.emitPatch(
-        CoreConversationPatch(
-          kind: CoreConversationPatchKind.upsert,
-          ownerDid: 'did:alice',
-          version: 1,
-          unreadTotal: 1,
-          item: _conversation(
-            'thread-patched',
-            minutesAgo: 1,
-            displayName: 'Patched core title',
+    test(
+      'watchConversationPatches normalizes upsert and repair patches',
+      () async {
+        final core = _FakeConversations();
+        final store = InMemoryAwikiProductLocalStore();
+        await store.upsertConversationOverlay(
+          ProductConversationOverlay(
+            ownerDid: 'did:alice',
+            threadId: 'thread-patched',
+            customTitle: 'Patched local title',
+            updatedAt: DateTime.utc(2026, 5, 23, 9),
           ),
-        ),
-      );
-      final patch = await firstPatch.timeout(const Duration(seconds: 1));
-      expect(patch.kind, ConversationListPatchKind.upsert);
-      expect(patch.item?.displayName, 'Patched local title');
-
-      final repairPatchStream = service.watchConversationPatches(
-        ownerDid: 'did:alice',
-      );
-      final repairPatchFuture = repairPatchStream.first;
-      await Future<void>.delayed(Duration.zero);
-      core.emitPatch(
-        const CoreConversationPatch(
-          kind: CoreConversationPatchKind.repairRequired,
+        );
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: store,
+        );
+        final patchStream = service.watchConversationPatches(
           ownerDid: 'did:alice',
-          version: 2,
-          unreadTotal: 1,
-          reason: 'subscriber_lag',
-        ),
-      );
-      final repairPatch = await repairPatchFuture.timeout(
-        const Duration(seconds: 1),
-      );
-      expect(repairPatch.kind, ConversationListPatchKind.repairRequired);
-      expect(repairPatch.reason, 'subscriber_lag');
+        );
+        final firstPatch = patchStream.first;
+        await Future<void>.delayed(Duration.zero);
 
-      final reorderPatchStream = service.watchConversationPatches(
-        ownerDid: 'did:alice',
-      );
-      final reorderPatchFuture = reorderPatchStream.first;
-      await Future<void>.delayed(Duration.zero);
-      core.emitPatch(
-        const CoreConversationPatch(
-          kind: CoreConversationPatchKind.reorder,
+        core.emitPatch(
+          CoreConversationPatch(
+            kind: CoreConversationPatchKind.upsert,
+            ownerDid: 'did:alice',
+            version: 1,
+            unreadTotal: 1,
+            item: _conversation(
+              'thread-patched',
+              minutesAgo: 1,
+              displayName: 'Patched core title',
+            ),
+          ),
+        );
+        final patch = await firstPatch.timeout(const Duration(seconds: 1));
+        expect(patch.kind, ConversationListPatchKind.upsert);
+        expect(patch.item?.displayName, 'Patched local title');
+
+        final repairPatchStream = service.watchConversationPatches(
           ownerDid: 'did:alice',
-          version: 3,
-          unreadTotal: 1,
-          threadId: 'thread-patched',
-          index: 0,
-        ),
-      );
-      final reorderPatch = await reorderPatchFuture.timeout(
-        const Duration(seconds: 1),
-      );
-      expect(reorderPatch.kind, ConversationListPatchKind.reorder);
-      expect(reorderPatch.threadId, 'thread-patched');
-      expect(reorderPatch.index, 0);
+        );
+        final repairPatchFuture = repairPatchStream.first;
+        await Future<void>.delayed(Duration.zero);
+        core.emitPatch(
+          const CoreConversationPatch(
+            kind: CoreConversationPatchKind.repairRequired,
+            ownerDid: 'did:alice',
+            version: 2,
+            unreadTotal: 1,
+            reason: 'subscriber_lag',
+          ),
+        );
+        final repairPatch = await repairPatchFuture.timeout(
+          const Duration(seconds: 1),
+        );
+        expect(repairPatch.kind, ConversationListPatchKind.repairRequired);
+        expect(repairPatch.reason, 'subscriber_lag');
 
-      await service.repairConversationStore(ownerDid: 'did:alice');
-      expect(core.repairCount, 1);
-    });
+        final reorderPatchStream = service.watchConversationPatches(
+          ownerDid: 'did:alice',
+        );
+        final reorderPatchFuture = reorderPatchStream.first;
+        await Future<void>.delayed(Duration.zero);
+        core.emitPatch(
+          const CoreConversationPatch(
+            kind: CoreConversationPatchKind.reorder,
+            ownerDid: 'did:alice',
+            version: 3,
+            unreadTotal: 1,
+            threadId: 'thread-patched',
+            index: 0,
+          ),
+        );
+        final reorderPatch = await reorderPatchFuture.timeout(
+          const Duration(seconds: 1),
+        );
+        expect(reorderPatch.kind, ConversationListPatchKind.reorder);
+        expect(reorderPatch.threadId, 'thread-patched');
+        expect(reorderPatch.index, 0);
+
+        await service.repairConversationStore(ownerDid: 'did:alice');
+        expect(core.repairCount, 1);
+      },
+    );
 
     test(
       'snapshot load merges cached runtime DID and handle agent rows',
@@ -1062,16 +1101,22 @@ class _FakeConversations implements ConversationCorePort {
   _FakeConversations({
     this.items = const <ConversationSummary>[],
     this.snapshotItems = const <ConversationSummary>[],
+    this.nextCursor,
+    this.hasMore = false,
   });
 
   final List<ConversationSummary> items;
   final List<ConversationSummary> snapshotItems;
+  final String? nextCursor;
+  final bool hasMore;
   final StreamController<CoreConversationPatch> _patches =
       StreamController<CoreConversationPatch>.broadcast(sync: true);
   int listCount = 0;
   int snapshotCount = 0;
   int markReadCount = 0;
   int repairCount = 0;
+  int? lastLimit;
+  String? lastCursor;
 
   void emitPatch(CoreConversationPatch patch) {
     _patches.add(patch);
@@ -1107,8 +1152,26 @@ class _FakeConversations implements ConversationCorePort {
     int limit = 100,
     bool unreadOnly = false,
   }) async {
+    return (await listConversationPage(
+      limit: limit,
+      unreadOnly: unreadOnly,
+    )).items;
+  }
+
+  @override
+  Future<CoreConversationPage> listConversationPage({
+    int limit = 100,
+    String? cursor,
+    bool unreadOnly = false,
+  }) async {
     listCount += 1;
-    return items.take(limit).toList();
+    lastLimit = limit;
+    lastCursor = cursor;
+    return CoreConversationPage(
+      items: items.take(limit).toList(),
+      nextCursor: nextCursor,
+      hasMore: hasMore,
+    );
   }
 
   @override

@@ -1,6 +1,12 @@
 import '../../domain/entities/conversation_summary.dart';
 
-enum ConversationListPatchKind { reset, upsert, remove, reorder, repairRequired }
+enum ConversationListPatchKind {
+  reset,
+  upsert,
+  remove,
+  reorder,
+  repairRequired,
+}
 
 class ConversationListPatch {
   const ConversationListPatch({
@@ -38,7 +44,37 @@ class ConversationStoreRepairResult {
   final int version;
 }
 
-enum CoreConversationPatchKind { reset, upsert, remove, reorder, repairRequired }
+class ConversationPage {
+  const ConversationPage({
+    required this.items,
+    this.nextCursor,
+    required this.hasMore,
+  });
+
+  final List<ConversationSummary> items;
+  final String? nextCursor;
+  final bool hasMore;
+}
+
+enum CoreConversationPatchKind {
+  reset,
+  upsert,
+  remove,
+  reorder,
+  repairRequired,
+}
+
+class CoreConversationPage {
+  const CoreConversationPage({
+    required this.items,
+    this.nextCursor,
+    required this.hasMore,
+  });
+
+  final List<ConversationSummary> items;
+  final String? nextCursor;
+  final bool hasMore;
+}
 
 class CoreConversationPatch {
   const CoreConversationPatch({

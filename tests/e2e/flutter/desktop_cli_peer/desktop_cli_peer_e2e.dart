@@ -10,6 +10,7 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/group_application_service.dart';
+import 'package:awiki_me/src/application/message_sync_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
@@ -171,6 +172,7 @@ void runDesktopCliPeerE2e({
           shellVisibleElapsed: shellWatch.elapsed,
           warmup: performanceWarmup!,
           messaging: messaging,
+          messageSync: bootstrap.messageSyncService!,
           conversations: countingConversations!,
           thread: directThread,
           ownerDid: session.did,
@@ -312,9 +314,9 @@ Future<_PerformanceWarmupResult> _warmPerformanceLocalConversationState(
     final syncWatch = Stopwatch()..start();
     final syncResult = await bootstrap.messageSyncService!.syncNow(
       reason: 'performance-warmup',
-      limit: config.performance.datasetConversationCount
-          .clamp(100, 1000)
-          .toInt(),
+      limit: _performanceWarmupSyncLimit(
+        config.performance.datasetConversationCount,
+      ),
     );
     syncWatch.stop();
     final summaryWatch = Stopwatch()..start();
@@ -345,6 +347,10 @@ Future<_PerformanceWarmupResult> _warmPerformanceLocalConversationState(
   } finally {
     await bootstrap.appSessionService?.logout();
   }
+}
+
+int _performanceWarmupSyncLimit(int datasetConversationCount) {
+  return datasetConversationCount.clamp(100, 500).toInt();
 }
 
 class _PerformanceWarmupResult {

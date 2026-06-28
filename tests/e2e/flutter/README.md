@@ -33,8 +33,10 @@ separate `toolingTimings`, `appProductTimings`, `dataset`, `budgets`,
 `metrics`, `counters`, `hardFailures`, and `softWarnings` sections. The gate is
 intended to prove the message-sync performance work with product timings such as
 shell visible, first non-empty conversation list, snapshot load, fast local
-hydrate, full hydrate, App-to-CLI visible latency, CLI-to-App visible latency,
-and thread initial load. It fails on missing required metrics, insufficient
+hydrate, full hydrate, full conversation page scan, App-to-CLI visible latency,
+CLI-to-App visible latency, and thread initial load. For large datasets the
+gate must page the conversation list through `nextCursor`; 500/1000 conversation
+targets are not satisfied by the first 100-row page. It fails on missing required metrics, insufficient
 configured dataset coverage, missing required dataset/counter evidence, hard
 budget overrun, or any full conversation refresh counted during the App
 send/receive window. Soft budget overruns remain warnings so local real-backend

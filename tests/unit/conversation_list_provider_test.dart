@@ -344,105 +344,115 @@ void main() {
     expect(notifications.lastBadgeCount, 2);
   });
 
-  test('conversation patch reorder moves existing row without repair', () async {
-    final service = _PatchConversationService(
-      conversations: const <ConversationSummary>[],
-    );
-    final container = _conversationContainer(
-      service: service,
-      notifications: FakeNotificationFacade(),
-      ownerDid: 'did:alice',
-    );
-    addTearDown(container.dispose);
+  test(
+    'conversation patch reorder moves existing row without repair',
+    () async {
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
 
-    await container.read(conversationListProvider.notifier).refreshFastLocal();
-    for (final patch in <ConversationListPatch>[
-      ConversationListPatch(
-        kind: ConversationListPatchKind.upsert,
-        ownerDid: 'did:alice',
-        version: 1,
-        unreadTotal: 0,
-        item: _conversation(
-          threadId: 'thread-a',
-          displayName: 'A',
-          targetDid: 'did:a',
+      await container
+          .read(conversationListProvider.notifier)
+          .refreshFastLocal();
+      for (final patch in <ConversationListPatch>[
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+          item: _conversation(
+            threadId: 'thread-a',
+            displayName: 'A',
+            targetDid: 'did:a',
+          ),
         ),
-      ),
-      ConversationListPatch(
-        kind: ConversationListPatchKind.upsert,
-        ownerDid: 'did:alice',
-        version: 2,
-        unreadTotal: 0,
-        item: _conversation(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerDid: 'did:alice',
+          version: 2,
+          unreadTotal: 0,
+          item: _conversation(
+            threadId: 'thread-b',
+            displayName: 'B',
+            targetDid: 'did:b',
+          ),
+        ),
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.reorder,
+          ownerDid: 'did:alice',
+          version: 3,
+          unreadTotal: 0,
           threadId: 'thread-b',
-          displayName: 'B',
-          targetDid: 'did:b',
+          index: 0,
         ),
-      ),
-      const ConversationListPatch(
-        kind: ConversationListPatchKind.reorder,
-        ownerDid: 'did:alice',
-        version: 3,
-        unreadTotal: 0,
-        threadId: 'thread-b',
-        index: 0,
-      ),
-    ]) {
-      service.emitPatch(patch);
-      await Future<void>.delayed(Duration.zero);
-    }
+      ]) {
+        service.emitPatch(patch);
+        await Future<void>.delayed(Duration.zero);
+      }
 
-    expect(
-      container
+      expect(
+        container
+            .read(conversationListProvider)
+            .conversations
+            .map((item) => item.threadId),
+        <String>['thread-b', 'thread-a'],
+      );
+      expect(service.repairCalls, 0);
+    },
+  );
+
+  test(
+    'conversation patch repairRequired falls back to repaired list',
+    () async {
+      final repaired = <ConversationSummary>[
+        _conversation(
+          threadId: 'dm:alice:carol',
+          displayName: 'Carol repaired',
+          unreadCount: 2,
+        ),
+      ];
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+        repaired: repaired,
+      );
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: service,
+        notifications: notifications,
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(conversationListProvider.notifier)
+          .refreshFastLocal();
+
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.repairRequired,
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 2,
+          reason: 'subscriber_lag',
+        ),
+      );
+      await pumpEventQueue();
+
+      final conversations = container
           .read(conversationListProvider)
-          .conversations
-          .map((item) => item.threadId),
-      <String>['thread-b', 'thread-a'],
-    );
-    expect(service.repairCalls, 0);
-  });
-
-  test('conversation patch repairRequired falls back to repaired list', () async {
-    final repaired = <ConversationSummary>[
-      _conversation(
-        threadId: 'dm:alice:carol',
-        displayName: 'Carol repaired',
-        unreadCount: 2,
-      ),
-    ];
-    final service = _PatchConversationService(
-      conversations: const <ConversationSummary>[],
-      repaired: repaired,
-    );
-    final notifications = FakeNotificationFacade();
-    final container = _conversationContainer(
-      service: service,
-      notifications: notifications,
-      ownerDid: 'did:alice',
-    );
-    addTearDown(container.dispose);
-
-    await container.read(conversationListProvider.notifier).refreshFastLocal();
-
-    service.emitPatch(
-      const ConversationListPatch(
-        kind: ConversationListPatchKind.repairRequired,
-        ownerDid: 'did:alice',
-        version: 1,
-        unreadTotal: 2,
-        reason: 'subscriber_lag',
-      ),
-    );
-    await pumpEventQueue();
-
-    final conversations = container
-        .read(conversationListProvider)
-        .conversations;
-    expect(service.repairCalls, 1);
-    expect(conversations, hasLength(1));
-    expect(conversations.single.displayName, 'Carol repaired');
-    expect(notifications.lastBadgeCount, 2);
-  });
+          .conversations;
+      expect(service.repairCalls, 1);
+      expect(conversations, hasLength(1));
+      expect(conversations.single.displayName, 'Carol repaired');
+      expect(notifications.lastBadgeCount, 2);
+    },
+  );
 
   test('conversation patch repair resumes from repaired version', () async {
     final service = _PatchConversationService(
@@ -715,6 +725,23 @@ class _SlowEnrichConversationService implements ConversationService {
   }
 
   @override
+  Future<ConversationPage> listConversationSummariesFastPage({
+    required String ownerDid,
+    int limit = 100,
+    String? cursor,
+    bool unreadOnly = false,
+  }) async {
+    return ConversationPage(
+      items: await listConversationSummariesFast(
+        ownerDid: ownerDid,
+        limit: limit,
+        unreadOnly: unreadOnly,
+      ),
+      hasMore: false,
+    );
+  }
+
+  @override
   Future<List<ConversationSummary>> enrichConversationSummaries({
     required String ownerDid,
     required List<ConversationSummary> conversations,
@@ -731,6 +758,23 @@ class _SlowEnrichConversationService implements ConversationService {
     bool unreadOnly = false,
   }) async {
     return base;
+  }
+
+  @override
+  Future<ConversationPage> listConversationsPage({
+    required String ownerDid,
+    int limit = 100,
+    String? cursor,
+    bool unreadOnly = false,
+  }) async {
+    return ConversationPage(
+      items: await listConversations(
+        ownerDid: ownerDid,
+        limit: limit,
+        unreadOnly: unreadOnly,
+      ),
+      hasMore: false,
+    );
   }
 
   @override
@@ -817,6 +861,23 @@ class _StaticConversationService implements ConversationService {
   }
 
   @override
+  Future<ConversationPage> listConversationsPage({
+    required String ownerDid,
+    int limit = 100,
+    String? cursor,
+    bool unreadOnly = false,
+  }) async {
+    return ConversationPage(
+      items: await listConversations(
+        ownerDid: ownerDid,
+        limit: limit,
+        unreadOnly: unreadOnly,
+      ),
+      hasMore: false,
+    );
+  }
+
+  @override
   Future<List<ConversationSummary>> listConversationSummariesFast({
     required String ownerDid,
     int limit = 100,
@@ -824,6 +885,23 @@ class _StaticConversationService implements ConversationService {
   }) async {
     fastCalls += 1;
     return conversations;
+  }
+
+  @override
+  Future<ConversationPage> listConversationSummariesFastPage({
+    required String ownerDid,
+    int limit = 100,
+    String? cursor,
+    bool unreadOnly = false,
+  }) async {
+    return ConversationPage(
+      items: await listConversationSummariesFast(
+        ownerDid: ownerDid,
+        limit: limit,
+        unreadOnly: unreadOnly,
+      ),
+      hasMore: false,
+    );
   }
 
   @override

@@ -92,13 +92,18 @@ const Set<String> _desktopCliPeerPerformanceRequiredMetrics = <String>{
   'conversation_list.snapshot_item_count',
   'conversation_list.fast_local_hydrate_ms',
   'conversation_list.fast_local_item_count',
+  'conversation_list.fast_local_page_scan_ms',
+  'conversation_list.fast_local_paged_item_count',
   'conversation_list.full_hydrate_ms',
   'conversation_list.full_hydrate_item_count',
+  'conversation_list.full_page_scan_ms',
+  'conversation_list.full_paged_item_count',
   'conversation_list.first_non_empty_visible_ms',
   'performance_dataset.long_thread_prepare_ms',
   'message.app_send_to_local_visible_ms',
   'message.app_send_to_cli_inbox_visible_ms',
   'message.app_send_to_cli_history_visible_ms',
+  'message.cli_send_app_thread_after_ms',
   'message.cli_send_to_app_history_visible_ms',
   'message.cli_send_to_conversation_preview_visible_ms',
   'thread.history_initial_load_ms',
@@ -123,6 +128,8 @@ const Set<String> _desktopCliPeerPerformanceRequiredCounters = <String>{
   'message_sync.warmup_pages_fetched',
   'message_sync.warmup_snapshot_required_count',
   'message_sync.warmup_has_more_count',
+  'conversation_list.fast_local_pages_fetched',
+  'conversation_list.full_pages_fetched',
   'conversation.full_refresh_during_send_receive_count',
   'conversation.list_conversations_calls_total',
   'conversation.patch_apply_count',
@@ -554,7 +561,7 @@ class DesktopE2eRunner {
     await _runFlutterArgs(
       flutterArgs,
       platform: peerConfig.platform,
-      timeout: peerConfig.e2eCase.flutterTimeout,
+      timeout: peerConfig.flutterTimeout,
     );
   }
 
@@ -1169,6 +1176,13 @@ class DesktopCliPeerConfig {
   final String? claudeCodeAgentPrompt;
   final String? claudeCodeAgentExpectedReply;
 
+  Duration get flutterTimeout {
+    if (e2eCase == DesktopE2eCase.performance) {
+      return performance.flutterTimeout;
+    }
+    return e2eCase.flutterTimeout;
+  }
+
   static DesktopCliPeerConfig from(
     DesktopE2eOptions options,
     DesktopE2eFileConfig fileConfig,
@@ -1598,9 +1612,12 @@ class DesktopPerformanceConfig {
       'conversation_list.first_non_empty_visible_ms': 10000,
       'conversation_list.snapshot_load_ms': 5000,
       'conversation_list.fast_local_hydrate_ms': 5000,
+      'conversation_list.fast_local_page_scan_ms': 30000,
       'conversation_list.full_hydrate_ms': 15000,
+      'conversation_list.full_page_scan_ms': 60000,
       'message.app_send_to_cli_inbox_visible_ms': 90000,
       'message.app_send_to_cli_history_visible_ms': 90000,
+      'message.cli_send_app_thread_after_ms': 90000,
       'message.cli_send_to_app_history_visible_ms': 90000,
       'message.cli_send_to_conversation_preview_visible_ms': 90000,
       'thread.open_to_first_message_visible_ms': 8000,
@@ -1611,9 +1628,12 @@ class DesktopPerformanceConfig {
       'conversation_list.first_non_empty_visible_ms': 3000,
       'conversation_list.snapshot_load_ms': 1000,
       'conversation_list.fast_local_hydrate_ms': 1500,
+      'conversation_list.fast_local_page_scan_ms': 15000,
       'conversation_list.full_hydrate_ms': 5000,
+      'conversation_list.full_page_scan_ms': 30000,
       'message.app_send_to_cli_inbox_visible_ms': 20000,
       'message.app_send_to_cli_history_visible_ms': 20000,
+      'message.cli_send_app_thread_after_ms': 20000,
       'message.cli_send_to_app_history_visible_ms': 20000,
       'message.cli_send_to_conversation_preview_visible_ms': 20000,
       'thread.open_to_first_message_visible_ms': 3000,
@@ -1628,6 +1648,16 @@ class DesktopPerformanceConfig {
   final Map<String, int> hardBudgetMs;
   final Map<String, int> softBudgetMs;
   final int maxFullRefreshDuringSendReceive;
+
+  Duration get flutterTimeout {
+    const baseMinutes = 12;
+    final extraConversations = datasetConversationCount - 500;
+    if (extraConversations <= 0) {
+      return const Duration(minutes: baseMinutes);
+    }
+    final extraBlocks = (extraConversations + 249) ~/ 250;
+    return Duration(minutes: baseMinutes + extraBlocks * 6);
+  }
 
   DesktopPerformanceDataset get dataset => DesktopPerformanceDataset(
     conversationCountTarget: datasetConversationCount,

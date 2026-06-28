@@ -1783,6 +1783,21 @@ performance:
   });
 
   group('DesktopPerformanceBudgetResult', () {
+    test('scales Flutter command timeout for large performance datasets', () {
+      final fiveHundred = DesktopPerformanceConfig.defaults;
+      final oneThousand = DesktopPerformanceConfig(
+        datasetConversationCount: 1000,
+        longThreadMessageCount: 100,
+        requiredMetrics: const <String>{},
+        hardBudgetMs: const <String, int>{},
+        softBudgetMs: const <String, int>{},
+        maxFullRefreshDuringSendReceive: 0,
+      );
+
+      expect(fiveHundred.flutterTimeout, const Duration(minutes: 12));
+      expect(oneThousand.flutterTimeout, const Duration(minutes: 24));
+    });
+
     test('fails when required metrics or dataset coverage are missing', () {
       final config = DesktopPerformanceConfig(
         datasetConversationCount: 10,
@@ -1980,6 +1995,8 @@ Map<String, Object?> _completePerformanceCounters() {
     'message_sync.warmup_pages_fetched': 1,
     'message_sync.warmup_snapshot_required_count': 0,
     'message_sync.warmup_has_more_count': 0,
+    'conversation_list.fast_local_pages_fetched': 1,
+    'conversation_list.full_pages_fetched': 1,
     'conversation.full_refresh_during_send_receive_count': 0,
     'conversation.list_conversations_calls_total': 0,
     'conversation.patch_apply_count': 1,

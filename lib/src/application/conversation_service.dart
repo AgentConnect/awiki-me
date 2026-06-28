@@ -34,6 +34,13 @@ abstract interface class ConversationService {
     bool unreadOnly = false,
   });
 
+  Future<ConversationPage> listConversationSummariesFastPage({
+    required String ownerDid,
+    int limit = 100,
+    String? cursor,
+    bool unreadOnly = false,
+  });
+
   Future<List<ConversationSummary>> enrichConversationSummaries({
     required String ownerDid,
     required List<ConversationSummary> conversations,
@@ -42,6 +49,13 @@ abstract interface class ConversationService {
   Future<List<ConversationSummary>> listConversations({
     required String ownerDid,
     int limit = 100,
+    bool unreadOnly = false,
+  });
+
+  Future<ConversationPage> listConversationsPage({
+    required String ownerDid,
+    int limit = 100,
+    String? cursor,
     bool unreadOnly = false,
   });
 
@@ -302,15 +316,35 @@ class ImCoreConversationService implements ConversationService {
     int limit = 100,
     bool unreadOnly = false,
   }) async {
-    final items = await AwikiPerformanceLogger.async(
+    return (await listConversationSummariesFastPage(
+      ownerDid: ownerDid,
+      limit: limit,
+      unreadOnly: unreadOnly,
+    )).items;
+  }
+
+  @override
+  Future<ConversationPage> listConversationSummariesFastPage({
+    required String ownerDid,
+    int limit = 100,
+    String? cursor,
+    bool unreadOnly = false,
+  }) async {
+    final page = await AwikiPerformanceLogger.async(
       'conversation_service.fast_local.core_list',
-      () => _conversations.listConversations(
+      () => _conversations.listConversationPage(
         limit: limit,
+        cursor: cursor,
         unreadOnly: unreadOnly,
       ),
-      fields: <String, Object?>{'limit': limit, 'unread_only': unreadOnly},
+      fields: <String, Object?>{
+        'limit': limit,
+        'cursor': cursor != null,
+        'unread_only': unreadOnly,
+      },
       level: AwikiPerformanceLogLevel.verbose,
     );
+    final items = page.items;
     final projection =
         _cachedAgentProjection ?? const _AgentConversationProjection();
     final mergedItems = AwikiPerformanceLogger.sync(
@@ -350,10 +384,15 @@ class ImCoreConversationService implements ConversationService {
       fields: <String, Object?>{
         'items': items.length,
         'visible': visible.length,
+        'has_more': page.hasMore,
         'agent_projection_cache_hit': _cachedAgentProjection != null,
       },
     );
-    return visible;
+    return ConversationPage(
+      items: visible,
+      nextCursor: page.nextCursor,
+      hasMore: page.hasMore,
+    );
   }
 
   @override
@@ -446,26 +485,46 @@ class ImCoreConversationService implements ConversationService {
     int limit = 100,
     bool unreadOnly = false,
   }) async {
-    final totalWatch = Stopwatch()..start();
-    final base = await listConversationSummariesFast(
+    return (await listConversationsPage(
       ownerDid: ownerDid,
       limit: limit,
+      unreadOnly: unreadOnly,
+    )).items;
+  }
+
+  @override
+  Future<ConversationPage> listConversationsPage({
+    required String ownerDid,
+    int limit = 100,
+    String? cursor,
+    bool unreadOnly = false,
+  }) async {
+    final totalWatch = Stopwatch()..start();
+    final base = await listConversationSummariesFastPage(
+      ownerDid: ownerDid,
+      limit: limit,
+      cursor: cursor,
       unreadOnly: unreadOnly,
     );
     final visible = await enrichConversationSummaries(
       ownerDid: ownerDid,
-      conversations: base,
+      conversations: base.items,
     );
     totalWatch.stop();
     AwikiPerformanceLogger.log(
       'conversation_service.list',
       elapsed: totalWatch.elapsed,
       fields: <String, Object?>{
-        'items': base.length,
+        'items': base.items.length,
         'visible': visible.length,
+        'has_more': base.hasMore,
       },
     );
-    return visible;
+    return ConversationPage(
+      items: visible,
+      nextCursor: base.nextCursor,
+      hasMore: base.hasMore,
+    );
   }
 
   @override

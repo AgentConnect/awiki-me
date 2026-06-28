@@ -777,6 +777,23 @@ class _RecordingConversationService implements ConversationService {
   }
 
   @override
+  Future<ConversationPage> listConversationSummariesFastPage({
+    required String ownerDid,
+    int limit = 100,
+    String? cursor,
+    bool unreadOnly = false,
+  }) async {
+    return ConversationPage(
+      items: await listConversationSummariesFast(
+        ownerDid: ownerDid,
+        limit: limit,
+        unreadOnly: unreadOnly,
+      ),
+      hasMore: false,
+    );
+  }
+
+  @override
   Future<List<ConversationSummary>> enrichConversationSummaries({
     required String ownerDid,
     required List<ConversationSummary> conversations,
@@ -793,6 +810,23 @@ class _RecordingConversationService implements ConversationService {
   }) async {
     listCalls += 1;
     return items;
+  }
+
+  @override
+  Future<ConversationPage> listConversationsPage({
+    required String ownerDid,
+    int limit = 100,
+    String? cursor,
+    bool unreadOnly = false,
+  }) async {
+    return ConversationPage(
+      items: await listConversations(
+        ownerDid: ownerDid,
+        limit: limit,
+        unreadOnly: unreadOnly,
+      ),
+      hasMore: false,
+    );
   }
 
   @override

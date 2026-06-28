@@ -343,7 +343,22 @@ class _StaticConversationCore implements ConversationCorePort {
     int limit = 100,
     bool unreadOnly = false,
   }) async {
-    return items.take(limit).toList();
+    return (await listConversationPage(
+      limit: limit,
+      unreadOnly: unreadOnly,
+    )).items;
+  }
+
+  @override
+  Future<CoreConversationPage> listConversationPage({
+    int limit = 100,
+    String? cursor,
+    bool unreadOnly = false,
+  }) async {
+    return CoreConversationPage(
+      items: items.take(limit).toList(),
+      hasMore: false,
+    );
   }
 
   @override

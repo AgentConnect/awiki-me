@@ -6,6 +6,7 @@ Future<void> _verifyPerformanceRegression({
   required Duration shellVisibleElapsed,
   required _PerformanceWarmupResult warmup,
   required MessagingService messaging,
+  required MessageSyncService messageSync,
   required _CountingConversationService conversations,
   required AppThreadRef thread,
   required String ownerDid,
@@ -83,7 +84,7 @@ Future<void> _verifyPerformanceRegression({
     'conversation_list.fast_local_hydrate_ms',
     () => conversations.listConversationSummariesFast(
       ownerDid: ownerDid,
-      limit: config.performance.datasetConversationCount,
+      limit: _conversationPageSize(config.performance.datasetConversationCount),
     ),
     source: 'app',
   );
@@ -91,9 +92,39 @@ Future<void> _verifyPerformanceRegression({
     'conversation_list.full_hydrate_ms',
     () => conversations.listConversations(
       ownerDid: ownerDid,
-      limit: config.performance.datasetConversationCount,
+      limit: _conversationPageSize(config.performance.datasetConversationCount),
     ),
     source: 'app',
+  );
+  final fastLocalPageScan = await _measureConversationPageScan(
+    recorder: recorder,
+    metricName: 'conversation_list.fast_local_page_scan_ms',
+    pageCounterName: 'conversation_list.fast_local_pages_fetched',
+    itemMetricName: 'conversation_list.fast_local_paged_item_count',
+    target: config.performance.datasetConversationCount,
+    source: 'app',
+    fetchPage: ({required int limit, required String? cursor}) {
+      return conversations.listConversationSummariesFastPage(
+        ownerDid: ownerDid,
+        limit: limit,
+        cursor: cursor,
+      );
+    },
+  );
+  final hydratedPageScan = await _measureConversationPageScan(
+    recorder: recorder,
+    metricName: 'conversation_list.full_page_scan_ms',
+    pageCounterName: 'conversation_list.full_pages_fetched',
+    itemMetricName: 'conversation_list.full_paged_item_count',
+    target: config.performance.datasetConversationCount,
+    source: 'app',
+    fetchPage: ({required int limit, required String? cursor}) {
+      return conversations.listConversationsPage(
+        ownerDid: ownerDid,
+        limit: limit,
+        cursor: cursor,
+      );
+    },
   );
   recorder.metric(
     'conversation_list.snapshot_item_count',
@@ -202,6 +233,22 @@ Future<void> _verifyPerformanceRegression({
     'id',
   ]);
   expect(cliSentMessageId, isNotNull);
+  final threadAfterWatch = Stopwatch()..start();
+  final threadAfter = await messageSync.syncThreadAfter(
+    thread: thread,
+    limit: 20,
+  );
+  threadAfterWatch.stop();
+  recorder.record(
+    'message.cli_send_app_thread_after_ms',
+    threadAfterWatch.elapsed,
+    source: 'app',
+    fields: <String, Object?>{
+      'items': threadAfter.messages.length,
+      'hasMore': threadAfter.hasMore,
+      'warnings': threadAfter.warnings,
+    },
+  );
   await _waitForAppHistory(
     messaging: messaging,
     thread: thread,
@@ -271,10 +318,90 @@ Future<void> _verifyPerformanceRegression({
       initialConversations.length,
       fastLocalConversations.length,
       hydratedConversations.length,
+      fastLocalPageScan.items.length,
+      hydratedPageScan.items.length,
     ].reduce((value, element) => value > element ? value : element),
     longThreadMessageCountObserved: longThreadMessages.length,
   );
   await recorder.write();
+}
+
+Future<_ConversationPageScanResult> _measureConversationPageScan({
+  required _E2ePerformanceRecorder recorder,
+  required String metricName,
+  required String pageCounterName,
+  required String itemMetricName,
+  required int target,
+  required String source,
+  required Future<ConversationPage> Function({
+    required int limit,
+    required String? cursor,
+  })
+  fetchPage,
+}) async {
+  final watch = Stopwatch()..start();
+  final byKey = <String, ConversationSummary>{};
+  String? cursor;
+  final seenCursors = <String>{};
+  var pagesFetched = 0;
+  var hasMore = true;
+  while (hasMore && byKey.length < target) {
+    final currentCursor = cursor?.trim();
+    if (currentCursor != null &&
+        currentCursor.isNotEmpty &&
+        !seenCursors.add(currentCursor)) {
+      fail('$metricName returned repeated cursor after $pagesFetched pages.');
+    }
+    final page = await fetchPage(
+      limit: _conversationPageSize(target),
+      cursor: cursor,
+    );
+    pagesFetched += 1;
+    for (final conversation in page.items) {
+      byKey[_conversationStableKey(conversation)] = conversation;
+    }
+    cursor = page.nextCursor;
+    hasMore = page.hasMore && cursor != null && cursor.trim().isNotEmpty;
+    if (page.items.isEmpty && !hasMore) {
+      break;
+    }
+  }
+  watch.stop();
+  recorder.record(
+    metricName,
+    watch.elapsed,
+    source: source,
+    fields: <String, Object?>{
+      'items': byKey.length,
+      'pages': pagesFetched,
+      'target': target,
+      'hasMore': hasMore,
+    },
+  );
+  recorder.metric(itemMetricName, byKey.length);
+  recorder.counter(pageCounterName, pagesFetched);
+  return _ConversationPageScanResult(byKey.values.toList(growable: false));
+}
+
+int _conversationPageSize(int remaining) {
+  if (remaining <= 0) {
+    return 1;
+  }
+  return remaining > 100 ? 100 : remaining;
+}
+
+String _conversationStableKey(ConversationSummary conversation) {
+  final key = conversation.conversationKey?.trim();
+  if (key != null && key.isNotEmpty) {
+    return key;
+  }
+  return conversation.threadId;
+}
+
+class _ConversationPageScanResult {
+  const _ConversationPageScanResult(this.items);
+
+  final List<ConversationSummary> items;
 }
 
 Future<_LongThreadDatasetResult> _ensureLongThreadDataset({
@@ -473,6 +600,21 @@ class _CountingConversationService implements ConversationService {
   }
 
   @override
+  Future<ConversationPage> listConversationSummariesFastPage({
+    required String ownerDid,
+    int limit = 100,
+    String? cursor,
+    bool unreadOnly = false,
+  }) {
+    return delegate.listConversationSummariesFastPage(
+      ownerDid: ownerDid,
+      limit: limit,
+      cursor: cursor,
+      unreadOnly: unreadOnly,
+    );
+  }
+
+  @override
   Future<List<ConversationSummary>> enrichConversationSummaries({
     required String ownerDid,
     required List<ConversationSummary> conversations,
@@ -496,6 +638,25 @@ class _CountingConversationService implements ConversationService {
     return delegate.listConversations(
       ownerDid: ownerDid,
       limit: limit,
+      unreadOnly: unreadOnly,
+    );
+  }
+
+  @override
+  Future<ConversationPage> listConversationsPage({
+    required String ownerDid,
+    int limit = 100,
+    String? cursor,
+    bool unreadOnly = false,
+  }) {
+    listConversationsCalls += 1;
+    if (_countSendReceiveRefreshes) {
+      fullRefreshDuringSendReceiveCount += 1;
+    }
+    return delegate.listConversationsPage(
+      ownerDid: ownerDid,
+      limit: limit,
+      cursor: cursor,
       unreadOnly: unreadOnly,
     );
   }

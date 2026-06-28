@@ -16,6 +16,12 @@ abstract interface class ConversationCorePort {
     bool unreadOnly = false,
   });
 
+  Future<CoreConversationPage> listConversationPage({
+    int limit = 100,
+    String? cursor,
+    bool unreadOnly = false,
+  });
+
   /// Marks known unread messages in a thread as read through IM Core.
   Future<void> markThreadRead(AppThreadRef thread);
 }

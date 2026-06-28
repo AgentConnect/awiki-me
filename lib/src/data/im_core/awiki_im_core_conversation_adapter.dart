@@ -108,6 +108,18 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
     int limit = 100,
     bool unreadOnly = false,
   }) async {
+    return (await listConversationPage(
+      limit: limit,
+      unreadOnly: unreadOnly,
+    )).items;
+  }
+
+  @override
+  Future<CoreConversationPage> listConversationPage({
+    int limit = 100,
+    String? cursor,
+    bool unreadOnly = false,
+  }) async {
     return _runtime.withCurrentClient((client) async {
       final totalWatch = Stopwatch()..start();
       final ownerDid = (await AwikiPerformanceLogger.async(
@@ -116,9 +128,16 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
       )).did;
       final page = await AwikiPerformanceLogger.async(
         'im_core_conversations.native_list',
-        () =>
-            client.messages.conversations(limit: limit, unreadOnly: unreadOnly),
-        fields: <String, Object?>{'limit': limit, 'unread_only': unreadOnly},
+        () => client.messages.conversations(
+          limit: limit,
+          cursor: cursor,
+          unreadOnly: unreadOnly,
+        ),
+        fields: <String, Object?>{
+          'limit': limit,
+          'cursor': cursor != null,
+          'unread_only': unreadOnly,
+        },
       );
       final conversations = AwikiPerformanceLogger.sync(
         'im_core_conversations.map',
@@ -143,7 +162,11 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
           'has_more': page.hasMore,
         },
       );
-      return conversations;
+      return CoreConversationPage(
+        items: conversations,
+        nextCursor: page.nextCursor,
+        hasMore: page.hasMore,
+      );
     });
   }
 
@@ -163,9 +186,7 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
           unreadTotal: patch.unreadTotal,
           items: patch.items
               .where(
-                (conversation) => !_hasControlSnapshotLastMessage(
-                  conversation,
-                ),
+                (conversation) => !_hasControlSnapshotLastMessage(conversation),
               )
               .map(
                 (conversation) => _mappers.conversationFromSnapshot(
