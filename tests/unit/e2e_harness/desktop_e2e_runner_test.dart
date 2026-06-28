@@ -1797,6 +1797,14 @@ performance:
           contains('thread.realtime_open_first_paint_ms'),
         );
         expect(
+          config.requiredMetrics,
+          contains('cache.total_retained_messages'),
+        );
+        expect(
+          config.requiredMetrics,
+          contains('cache.active_patch_subscription_count'),
+        );
+        expect(
           config.hardBudgetMs['message.cli_send_to_app_open_first_paint_ms'],
           90000,
         );
@@ -1833,6 +1841,7 @@ performance:
         config.requiredMetrics,
         contains('message.cli_send_to_app_open_first_paint_ms'),
       );
+      expect(config.requiredMetrics, contains('cache.total_retained_messages'));
       expect(config.hardBudgetMs['app.launch_to_shell_visible_ms'], 45000);
       expect(config.hardBudgetMs['thread.realtime_open_first_paint_ms'], 5000);
       expect(
@@ -1979,6 +1988,69 @@ performance:
       );
     });
 
+    test('fails when cache counters exceed bounded memory budgets', () {
+      final config = DesktopPerformanceConfig(
+        datasetConversationCount: 1,
+        longThreadMessageCount: 1,
+        requiredMetrics: const <String>{},
+        hardBudgetMs: const <String, int>{},
+        softBudgetMs: const <String, int>{},
+        maxFullRefreshDuringSendReceive: 0,
+      );
+      final result = DesktopPerformanceBudgetResult.evaluate(
+        config: config,
+        report: _completePerformanceReport(
+          metrics: const <String, Object?>{
+            'cache.total_retained_messages': 1202,
+            'cache.canonical_thread_count': 101,
+            'cache.active_patch_subscription_count': 101,
+          },
+        ),
+      );
+
+      expect(
+        result.hardFailures,
+        contains('cache total retained messages 1202 exceeds 1200'),
+      );
+      expect(
+        result.hardFailures,
+        contains('cache canonical thread count 101 exceeds 100'),
+      );
+      expect(
+        result.hardFailures,
+        contains('cache active patch subscription count 101 exceeds 100'),
+      );
+    });
+
+    test('allows cache protected overflow when reported by counters', () {
+      final config = DesktopPerformanceConfig(
+        datasetConversationCount: 1,
+        longThreadMessageCount: 1,
+        requiredMetrics: const <String>{},
+        hardBudgetMs: const <String, int>{},
+        softBudgetMs: const <String, int>{},
+        maxFullRefreshDuringSendReceive: 0,
+      );
+      final result = DesktopPerformanceBudgetResult.evaluate(
+        config: config,
+        report: _completePerformanceReport(
+          metrics: const <String, Object?>{
+            'cache.total_retained_messages': 1202,
+            'cache.canonical_thread_count': 102,
+            'cache.active_patch_subscription_count': 100,
+          },
+          counters: const <String, Object?>{
+            'cache.protected_overflow_count': 2,
+          },
+        ),
+      );
+
+      expect(
+        result.hardFailures.where((failure) => failure.startsWith('cache ')),
+        isEmpty,
+      );
+    });
+
     test('fails when required dataset fields or counters are missing', () {
       final config = DesktopPerformanceConfig(
         datasetConversationCount: 1,
@@ -2013,6 +2085,10 @@ performance:
           'missing required counter '
           'conversation.full_refresh_during_send_receive_count',
         ),
+      );
+      expect(
+        result.hardFailures,
+        contains('missing required counter cache.trimmed_message_count'),
       );
       expect(
         result.hardFailures,
@@ -2063,6 +2139,9 @@ Map<String, Object?> _completePerformanceCounters() {
     'conversation.list_conversations_calls_total': 0,
     'conversation.patch_apply_count': 1,
     'conversation.patch_repair_count': 0,
+    'cache.trimmed_message_count': 0,
+    'cache.evicted_thread_count': 0,
+    'cache.protected_overflow_count': 0,
   };
 }
 

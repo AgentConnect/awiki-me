@@ -71,7 +71,11 @@ flutter run -d macos \
 `dart run tests/e2e/runner.dart --case performance` 会在真实桌面 App +
 `awiki-cli-rs2` peer + 后端链路上生成
 `.e2e/desktop-cli-peer/<run-id>/reports/timings.json`，其中
-顶层 `metrics` map（由 `appProductTimings` 明细汇总）必须包含以下和消息首屏相关的指标：
+顶层 `metrics` map（由 `appProductTimings` 明细汇总）必须包含消息首屏指标和
+消息内存缓存有界化指标；顶层 `counters` map 必须包含缓存累计计数，用作
+performance gate 的 hard evidence。
+
+消息首屏相关指标：
 
 | 指标 | 含义 | 通过要求 |
 |---|---|---|
@@ -84,6 +88,40 @@ flutter run -d macos \
 `ChatThreadsController.openConversation` / `selectedConversationProvider` 这条 App
 打开路径，再轮询 `chatThreadProvider`。它不能只通过 `loadHistory` 或手动
 `syncThreadAfter` 来证明“可见”。
+
+消息内存缓存指标写入顶层 `metrics`：
+
+| 指标 | 含义 | 通过要求 |
+|---|---|---|
+| `cache.raw_thread_state_count` | 当前 provider 保留的 raw thread state 数。 | required metric；用于发现 alias state 或 thread state 无界增长。 |
+| `cache.canonical_thread_count` | 当前按 canonical conversation 聚合后的 thread 数。 | required metric；应受 cache policy 约束。 |
+| `cache.total_retained_messages` | 当前内存中保留的消息总数。 | required metric；应受全局 retained messages 上限和 protected overflow 规则约束。 |
+| `cache.active_patch_subscription_count` | 当前活跃的 thread patch subscription 数。 | required metric；不应随打开/关闭会话次数无界增长。 |
+| `cache.message_route_entry_count` | 当前消息路由索引条目数。 | required metric；用于证明被 trim 的消息仍可通过轻量索引完成 source-message 路由。 |
+| `cache.trimmed_message_count` | 本次 performance flow 观察到的累计 trim 消息数。 | required metric；同时写入 `counters`。 |
+| `cache.evicted_thread_count` | 本次 performance flow 观察到的累计 evict thread 数。 | required metric；同时写入 `counters`。 |
+| `cache.protected_overflow_count` | 因 protected message 不能被普通 trim 删除而产生的累计 overflow 数。 | required metric；同时写入 `counters`。 |
+
+缓存累计计数同时写入顶层 `counters`：
+
+| Counter | 含义 |
+|---|---|
+| `cache.trimmed_message_count` | 累计被 cache policy trim 的消息数量。 |
+| `cache.evicted_thread_count` | 累计被 cache policy 回收的 thread 数量。 |
+| `cache.protected_overflow_count` | 累计 protected overflow 次数。 |
+
+这些 cache 指标和 counters 只记录数量，不包含消息正文、payload、thread id、
+token、本地路径、附件路径或完整 DID。它们用于判断 UI 层消息内存缓存是否有界，
+不代表 Rust `im-core` 的 reliable checkpoint 或 SQLite projection 状态。
+
+`--case performance` 与 `--case full` 目的不同：performance gate 专门验证启动、
+会话打开、App/CLI 互发可见延迟和 cache counters/budgets；full E2E 验证真实
+backend App + CLI peer 的完整产品互发链路。运行命令分别是：
+
+```bash
+dart run tests/e2e/runner.dart --case performance
+dart run tests/e2e/runner.dart --case full
+```
 
 ## 可靠同步边界
 
@@ -144,6 +182,9 @@ App 侧禁止做的事情：
   `message.cli_send_to_app_open_first_paint_ms` 和
   `thread.realtime_open_first_paint_ms`；这两项证明点击路径本身 memory/local-first，
   不能被 `message.cli_send_app_thread_after_ms` 或 history 查询替代。
+- Performance E2E 必须在 `timings.json` 顶层 `metrics` / `counters` 写入
+  `cache.*` 数量指标，并把缓存上限类指标作为 gate；这些字段只记录数量，不记录正文、
+  payload、thread id、token 或本地路径。
 - 启动、恢复前台、realtime 重连、realtime dirty / gap 后，App 侧应只调度 SDK `message_sync.delta`；不能出现 App 自己读写 checkpoint、传 `since_event_seq` 或手写 `sync.*` wire payload 的代码路径。
 - 打开已有本地 projection 的会话时，`chat.local_history.load` 应先完成；如需要补新，可随后看到 `message_sync.thread_after`，该链路不得推进账号级 reliable checkpoint。
 - 打开未读会话时只允许看到一次远端 `chat.remote_history.*` reconcile；`chat.mark_read*` 不应再触发 history 分页。

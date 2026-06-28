@@ -35,7 +35,33 @@ intended to prove the message-sync performance work with product timings such as
 shell visible, first non-empty conversation list, snapshot load, fast local
 hydrate, full hydrate, full conversation page scan, App-to-CLI visible latency,
 CLI-to-App visible latency, realtime click-open first-paint latency, and thread
-initial load. The realtime click-open gate records
+initial load. It also gates the AWiki Me message memory cache by writing cache
+stats into top-level `metrics` and cumulative cache counters into top-level
+`counters`.
+
+The required cache metrics are:
+
+- `cache.raw_thread_state_count`
+- `cache.canonical_thread_count`
+- `cache.total_retained_messages`
+- `cache.active_patch_subscription_count`
+- `cache.message_route_entry_count`
+- `cache.trimmed_message_count`
+- `cache.evicted_thread_count`
+- `cache.protected_overflow_count`
+
+The required cache counters are:
+
+- `cache.trimmed_message_count`
+- `cache.evicted_thread_count`
+- `cache.protected_overflow_count`
+
+These cache fields are count-only evidence. They must not include message body
+text, payloads, raw thread ids, tokens, local paths, attachment paths, or full
+DIDs. They are used to prove the UI message cache remains bounded; they do not
+represent the Rust `im-core` reliable checkpoint or SQLite projection state.
+
+The realtime click-open gate records
 `message.cli_send_to_app_open_first_paint_ms` from CLI send to App provider open
 first paint, and `thread.realtime_open_first_paint_ms` for the open path itself;
 the flow must not satisfy this gate only by calling history or explicit
@@ -46,6 +72,15 @@ configured dataset coverage, missing required dataset/counter evidence, hard
 budget overrun, or any full conversation refresh counted during the App
 send/receive window. Soft budget overruns remain warnings so local real-backend
 variance can be tracked before thresholds are tightened.
+
+`--case full` is still the AWiki Me full E2E entry for the real backend App +
+CLI peer message exchange. Use `--case performance` for the performance/cache
+gate and `--case full` for the broader product E2E flow:
+
+```bash
+dart run tests/e2e/runner.dart --case performance
+dart run tests/e2e/runner.dart --case full
+```
 
 `--case message-agent` is the durable acceptance entry for Message Agent
 product behavior. It must exercise the App UI path for selecting a daemon,

@@ -111,6 +111,14 @@ const Set<String> _desktopCliPeerPerformanceRequiredMetrics = <String>{
   'thread.history_initial_load_ms',
   'thread.open_to_first_message_visible_ms',
   'thread.initial_item_count',
+  'cache.raw_thread_state_count',
+  'cache.canonical_thread_count',
+  'cache.total_retained_messages',
+  'cache.active_patch_subscription_count',
+  'cache.message_route_entry_count',
+  'cache.trimmed_message_count',
+  'cache.evicted_thread_count',
+  'cache.protected_overflow_count',
 };
 const Set<String> _desktopCliPeerPerformanceRequiredDatasetFields = <String>{
   'conversationCountTarget',
@@ -136,7 +144,13 @@ const Set<String> _desktopCliPeerPerformanceRequiredCounters = <String>{
   'conversation.list_conversations_calls_total',
   'conversation.patch_apply_count',
   'conversation.patch_repair_count',
+  'cache.trimmed_message_count',
+  'cache.evicted_thread_count',
+  'cache.protected_overflow_count',
 };
+const int _desktopCliPeerPerformanceMaxCachedMessages = 1200;
+const int _desktopCliPeerPerformanceMaxCachedCanonicalThreads = 100;
+const int _desktopCliPeerPerformanceMaxActivePatchSubscriptions = 100;
 const List<String> _messageAgentCaseIds = <String>[
   'MSGAGENT-E2E-001', // App UI selects daemon and enables Message Agent.
   'MSGAGENT-E2E-002', // CLI peer message is recovered into App UI.
@@ -1822,6 +1836,40 @@ class DesktopPerformanceBudgetResult {
       hardFailures.add(
         'conversation full refresh during send/receive count $fullRefreshCount '
         'exceeds ${config.maxFullRefreshDuringSendReceive}',
+      );
+    }
+    final totalRetainedMessages =
+        _numFromJson(report.metrics['cache.total_retained_messages']) ?? 0;
+    final protectedOverflowCount =
+        report.counters['cache.protected_overflow_count'] ?? 0;
+    final maxRetainedMessages =
+        _desktopCliPeerPerformanceMaxCachedMessages + protectedOverflowCount;
+    if (totalRetainedMessages > maxRetainedMessages) {
+      hardFailures.add(
+        'cache total retained messages ${totalRetainedMessages.round()} '
+        'exceeds $maxRetainedMessages',
+      );
+    }
+    final canonicalThreadCount =
+        _numFromJson(report.metrics['cache.canonical_thread_count']) ?? 0;
+    final maxCanonicalThreads =
+        _desktopCliPeerPerformanceMaxCachedCanonicalThreads +
+        protectedOverflowCount;
+    if (canonicalThreadCount > maxCanonicalThreads) {
+      hardFailures.add(
+        'cache canonical thread count ${canonicalThreadCount.round()} '
+        'exceeds $maxCanonicalThreads',
+      );
+    }
+    final activePatchSubscriptions =
+        _numFromJson(report.metrics['cache.active_patch_subscription_count']) ??
+        0;
+    if (activePatchSubscriptions >
+        _desktopCliPeerPerformanceMaxActivePatchSubscriptions) {
+      hardFailures.add(
+        'cache active patch subscription count '
+        '${activePatchSubscriptions.round()} exceeds '
+        '$_desktopCliPeerPerformanceMaxActivePatchSubscriptions',
       );
     }
     for (final entry in config.hardBudgetMs.entries) {

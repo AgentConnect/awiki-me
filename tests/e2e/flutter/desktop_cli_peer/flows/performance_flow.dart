@@ -332,6 +332,12 @@ Future<void> _verifyPerformanceRegression({
     'conversation.patch_repair_count',
     conversations.patchRepairCount,
   );
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(AppShell)),
+  );
+  recorder.cacheStats(
+    container.read(chatThreadsProvider.notifier).debugCacheStats(),
+  );
 
   recorder.dataset(
     warmupConversationCountObserved: warmup.localConversationCount,
@@ -830,6 +836,22 @@ class _E2ePerformanceRecorder {
 
   void counter(String name, int value) {
     _counters[name] = value;
+  }
+
+  void cacheStats(ChatThreadCacheStats stats) {
+    final values = stats.toJson();
+    for (final entry in values.entries) {
+      final value = entry.value;
+      if (value is! num) {
+        continue;
+      }
+      metric(entry.key, value);
+      if (entry.key == 'cache.trimmed_message_count' ||
+          entry.key == 'cache.evicted_thread_count' ||
+          entry.key == 'cache.protected_overflow_count') {
+        counter(entry.key, value.round());
+      }
+    }
   }
 
   void dataset({
