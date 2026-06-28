@@ -34,9 +34,14 @@ separate `toolingTimings`, `appProductTimings`, `dataset`, `budgets`,
 intended to prove the message-sync performance work with product timings such as
 shell visible, first non-empty conversation list, snapshot load, fast local
 hydrate, full hydrate, full conversation page scan, App-to-CLI visible latency,
-CLI-to-App visible latency, and thread initial load. For large datasets the
-gate must page the conversation list through `nextCursor`; 500/1000 conversation
-targets are not satisfied by the first 100-row page. It fails on missing required metrics, insufficient
+CLI-to-App visible latency, realtime click-open first-paint latency, and thread
+initial load. The realtime click-open gate records
+`message.cli_send_to_app_open_first_paint_ms` from CLI send to App provider open
+first paint, and `thread.realtime_open_first_paint_ms` for the open path itself;
+the flow must not satisfy this gate only by calling history or explicit
+`syncThreadAfter`. For large datasets the gate must page the conversation list
+through `nextCursor`; 500/1000 conversation targets are not satisfied by the
+first 100-row page. It fails on missing required metrics, insufficient
 configured dataset coverage, missing required dataset/counter evidence, hard
 budget overrun, or any full conversation refresh counted during the App
 send/receive window. Soft budget overruns remain warnings so local real-backend

@@ -81,7 +81,11 @@ AWiki Me keeps message views local-first and delegates reliable recovery to the
 Flutter SDK / Rust `im-core` boundary. `MessageSyncCoordinator` schedules
 `syncDelta` on startup, foreground resume, reconnect, and realtime dirty/gap
 signals, then refreshes local projections after a successful SDK sync. Chat
-opening can call SDK `syncThreadAfter` with a thread-local `afterServerSeq`.
+opening is memory/local-first: it renders the in-memory tail or recent local
+projection before backgrounding `syncThreadAfter` with a thread-local
+`afterServerSeq`. The performance E2E gate records both CLI-to-App open
+first-paint latency and the later thread-after/history reconcile timings so the
+click path cannot be proven only by a remote history query.
 
 The App must not read or write the global reliable checkpoint, pass
 `since_event_seq`, manually advance `next_event_seq`, build raw `/im/rpc`

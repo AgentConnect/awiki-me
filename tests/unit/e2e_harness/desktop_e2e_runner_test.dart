@@ -1783,6 +1783,68 @@ performance:
   });
 
   group('DesktopPerformanceBudgetResult', () {
+    test(
+      'default performance gate requires realtime chat open first-paint metrics',
+      () {
+        final config = DesktopPerformanceConfig.defaults;
+
+        expect(
+          config.requiredMetrics,
+          contains('message.cli_send_to_app_open_first_paint_ms'),
+        );
+        expect(
+          config.requiredMetrics,
+          contains('thread.realtime_open_first_paint_ms'),
+        );
+        expect(
+          config.hardBudgetMs['message.cli_send_to_app_open_first_paint_ms'],
+          90000,
+        );
+        expect(
+          config.hardBudgetMs['thread.realtime_open_first_paint_ms'],
+          5000,
+        );
+        expect(
+          config.softBudgetMs['message.cli_send_to_app_open_first_paint_ms'],
+          5000,
+        );
+        expect(
+          config.softBudgetMs['thread.realtime_open_first_paint_ms'],
+          1500,
+        );
+      },
+    );
+
+    test('performance YAML budget overrides keep default required metrics', () {
+      final config = DesktopPerformanceConfig.fromYaml(const <String, Object?>{
+        'budgets': <String, Object?>{
+          'requiredMetrics': <Object?>['custom.metric'],
+          'hardBudgetMs': <String, Object?>{
+            'app.launch_to_shell_visible_ms': 45000,
+          },
+          'softBudgetMs': <String, Object?>{
+            'conversation_list.first_non_empty_visible_ms': 6000,
+          },
+        },
+      });
+
+      expect(config.requiredMetrics, contains('custom.metric'));
+      expect(
+        config.requiredMetrics,
+        contains('message.cli_send_to_app_open_first_paint_ms'),
+      );
+      expect(config.hardBudgetMs['app.launch_to_shell_visible_ms'], 45000);
+      expect(config.hardBudgetMs['thread.realtime_open_first_paint_ms'], 5000);
+      expect(
+        config.softBudgetMs['conversation_list.first_non_empty_visible_ms'],
+        6000,
+      );
+      expect(
+        config.softBudgetMs['message.cli_send_to_app_open_first_paint_ms'],
+        5000,
+      );
+    });
+
     test('scales Flutter command timeout for large performance datasets', () {
       final fiveHundred = DesktopPerformanceConfig.defaults;
       final oneThousand = DesktopPerformanceConfig(

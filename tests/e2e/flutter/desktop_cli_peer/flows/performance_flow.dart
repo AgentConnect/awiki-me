@@ -233,6 +233,36 @@ Future<void> _verifyPerformanceRegression({
     'id',
   ]);
   expect(cliSentMessageId, isNotNull);
+  final conversationForCliMessage = await _waitForAppConversationPreviewFast(
+    conversations: conversations,
+    ownerDid: ownerDid,
+    expectedText: cliToAppText,
+  );
+  recorder.metric(
+    'message.cli_send_to_conversation_preview_visible_ms',
+    cliSendWatch.elapsedMilliseconds,
+  );
+  final realtimeOpenWatch = Stopwatch()..start();
+  await _openConversationAndWaitForFirstPaint(
+    tester: tester,
+    conversation: conversationForCliMessage,
+    expectedText: cliToAppText,
+    expectedMessageId: cliSentMessageId,
+  );
+  realtimeOpenWatch.stop();
+  recorder.record(
+    'thread.realtime_open_first_paint_ms',
+    realtimeOpenWatch.elapsed,
+    source: 'ui',
+    fields: <String, Object?>{
+      'threadKind': conversationForCliMessage.isGroup ? 'group' : 'direct',
+      'unread': conversationForCliMessage.unreadCount,
+    },
+  );
+  recorder.metric(
+    'message.cli_send_to_app_open_first_paint_ms',
+    cliSendWatch.elapsedMilliseconds,
+  );
   final threadAfterWatch = Stopwatch()..start();
   final threadAfter = await messageSync.syncThreadAfter(
     thread: thread,
@@ -259,16 +289,7 @@ Future<void> _verifyPerformanceRegression({
     'message.cli_send_to_app_history_visible_ms',
     cliSendWatch.elapsedMilliseconds,
   );
-  await _waitForAppConversationPreviewFast(
-    conversations: conversations,
-    ownerDid: ownerDid,
-    expectedText: cliToAppText,
-  );
   cliSendWatch.stop();
-  recorder.metric(
-    'message.cli_send_to_conversation_preview_visible_ms',
-    cliSendWatch.elapsedMilliseconds,
-  );
   conversations.endSendReceiveWindow();
 
   await _expectAppHistoryContainsExactlyOnce(
@@ -464,36 +485,77 @@ class _LongThreadDatasetResult {
   final int observedCount;
 }
 
-Future<void> _waitForAppConversationPreviewFast({
+Future<ConversationSummary> _waitForAppConversationPreviewFast({
   required ConversationService conversations,
   required String ownerDid,
   required String expectedText,
 }) async {
+  ConversationSummary? matched;
   await _poll(
     description: 'App fast conversation summary contains "$expectedText"',
     action: () async {
       final snapshot = await conversations.loadConversationSnapshot(
         ownerDid: ownerDid,
       );
-      if (_conversationPreviewContains(snapshot, expectedText)) {
+      matched = _findConversationByPreview(snapshot, expectedText);
+      if (matched != null) {
         return true;
       }
       final items = await conversations.listConversationSummariesFast(
         ownerDid: ownerDid,
         limit: 20,
       );
-      return _conversationPreviewContains(items, expectedText);
+      matched = _findConversationByPreview(items, expectedText);
+      return matched != null;
     },
     interval: const Duration(seconds: 1),
   );
+  return matched!;
 }
 
-bool _conversationPreviewContains(
+ConversationSummary? _findConversationByPreview(
   List<ConversationSummary> conversations,
   String expectedText,
 ) {
-  return conversations.any(
-    (conversation) => conversation.lastMessagePreview.contains(expectedText),
+  for (final conversation in conversations) {
+    if (conversation.lastMessagePreview.contains(expectedText)) {
+      return conversation;
+    }
+  }
+  return null;
+}
+
+Future<void> _openConversationAndWaitForFirstPaint({
+  required WidgetTester tester,
+  required ConversationSummary conversation,
+  required String expectedText,
+  String? expectedMessageId,
+}) async {
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(AppShell)),
+  );
+  final targetThreadId = conversation.threadId;
+  await container
+      .read(chatThreadsProvider.notifier)
+      .openConversation(conversation);
+  container
+      .read(selectedConversationProvider.notifier)
+      .selectConversation(conversation);
+  await tester.pump();
+  await _poll(
+    description: 'App open first paint contains exact "$expectedText"',
+    action: () async {
+      await tester.pump(const Duration(milliseconds: 50));
+      final thread = container.read(chatThreadProvider(targetThreadId));
+      return thread.messages.any(
+        (message) => message._matchesText(
+          expectedText,
+          expectedMessageId: expectedMessageId,
+        ),
+      );
+    },
+    interval: const Duration(milliseconds: 100),
+    timeout: const Duration(seconds: 30),
   );
 }
 

@@ -189,27 +189,6 @@ String? _firstNonEmptyCliStringAtAnyPath(
   return null;
 }
 
-int _groupCountFromCliOutput(String output) {
-  Object? decoded;
-  try {
-    decoded = jsonDecode(output);
-  } on Object {
-    return 0;
-  }
-  final groups = _jsonValueAtDecoded(decoded, const <Object>['data', 'groups']);
-  if (groups is List) {
-    return groups.length;
-  }
-  final total = _jsonValueAtDecoded(decoded, const <Object>['data', 'total']);
-  if (total is int) {
-    return total;
-  }
-  if (total is num) {
-    return total.round();
-  }
-  return 0;
-}
-
 List<Map<String, Object?>> _performanceDatasetGroupsFromCliOutput(
   String output, {
   required String runId,

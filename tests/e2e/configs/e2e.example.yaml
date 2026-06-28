@@ -43,8 +43,10 @@ performance:
       message.app_send_to_cli_inbox_visible_ms: 90000
       message.app_send_to_cli_history_visible_ms: 90000
       message.cli_send_app_thread_after_ms: 90000
+      message.cli_send_to_app_open_first_paint_ms: 90000
       message.cli_send_to_app_history_visible_ms: 90000
       message.cli_send_to_conversation_preview_visible_ms: 90000
+      thread.realtime_open_first_paint_ms: 5000
       thread.open_to_first_message_visible_ms: 8000
       thread.history_initial_load_ms: 8000
     # Soft budgets are reported as warnings in timings.json.
@@ -59,8 +61,10 @@ performance:
       message.app_send_to_cli_inbox_visible_ms: 20000
       message.app_send_to_cli_history_visible_ms: 20000
       message.cli_send_app_thread_after_ms: 20000
+      message.cli_send_to_app_open_first_paint_ms: 5000
       message.cli_send_to_app_history_visible_ms: 20000
       message.cli_send_to_conversation_preview_visible_ms: 20000
+      thread.realtime_open_first_paint_ms: 1500
       thread.open_to_first_message_visible_ms: 3000
       thread.history_initial_load_ms: 3000
 

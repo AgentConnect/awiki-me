@@ -66,6 +66,25 @@ flutter run -d macos \
 | `chat_page.build.*` / `conversation_list_page.*build.*` | Flutter build 准备阶段 | 判断是否是 UI 构建/重算慢 |
 | `frame.slow` | Flutter 慢帧 build/raster 时间 | 判断是否出现明显 UI jank |
 
+## E2E 性能指标
+
+`dart run tests/e2e/runner.dart --case performance` 会在真实桌面 App +
+`awiki-cli-rs2` peer + 后端链路上生成
+`.e2e/desktop-cli-peer/<run-id>/reports/timings.json`，其中
+顶层 `metrics` map（由 `appProductTimings` 明细汇总）必须包含以下和消息首屏相关的指标：
+
+| 指标 | 含义 | 通过要求 |
+|---|---|---|
+| `message.cli_send_to_app_open_first_paint_ms` | 从 CLI 向 App 发送消息开始，到 App 通过当前 provider open path 打开会话并在首屏 state 中看到该消息。 | required metric；默认 hard budget 90000ms，soft budget 5000ms。 |
+| `thread.realtime_open_first_paint_ms` | conversation preview 已到达后，调用 App 打开会话路径到 `chatThreadProvider` 首屏出现该消息的耗时。 | required metric；默认 hard budget 5000ms，soft budget 1500ms。 |
+| `message.cli_send_app_thread_after_ms` | 打开首屏之后显式 `syncThreadAfter` 的后台补新耗时。 | 只能作为后台补同步证据，不能替代 first-paint 指标。 |
+| `message.cli_send_to_app_history_visible_ms` | App history 查询最终可见该消息的耗时。 | 用于确认本地 projection/history 最终一致，不能替代 first-paint 指标。 |
+
+新增的 first-paint gate 必须先等待 fast local conversation preview，然后走
+`ChatThreadsController.openConversation` / `selectedConversationProvider` 这条 App
+打开路径，再轮询 `chatThreadProvider`。它不能只通过 `loadHistory` 或手动
+`syncThreadAfter` 来证明“可见”。
+
 ## 可靠同步边界
 
 可靠消息同步的 SDK / Rust 契约以
@@ -121,6 +140,10 @@ App 侧禁止做的事情：
 - `conversation_service.fast_local` 不应等待 `conversation_service.agent_projection.list_agents`；如果二者耗时同步增长，说明会话首屏又被 Agent RPC 绑定。
 - `product_store.open_database` / `product_store.legacy_migration` 可在后台 warm-up 中出现，但不应成为 `conversation_list.refresh_fast_local` 的直接子链路。
 - 进入已有本地 projection 的会话时，应先看到 `chat.local_history.load`，消息立即出现；`chat.remote_history.load` 只作为后台 reconcile，失败不应清空已显示的本地消息。
+- 收到 CLI 远端新消息后，performance E2E 必须记录
+  `message.cli_send_to_app_open_first_paint_ms` 和
+  `thread.realtime_open_first_paint_ms`；这两项证明点击路径本身 memory/local-first，
+  不能被 `message.cli_send_app_thread_after_ms` 或 history 查询替代。
 - 启动、恢复前台、realtime 重连、realtime dirty / gap 后，App 侧应只调度 SDK `message_sync.delta`；不能出现 App 自己读写 checkpoint、传 `since_event_seq` 或手写 `sync.*` wire payload 的代码路径。
 - 打开已有本地 projection 的会话时，`chat.local_history.load` 应先完成；如需要补新，可随后看到 `message_sync.thread_after`，该链路不得推进账号级 reliable checkpoint。
 - 打开未读会话时只允许看到一次远端 `chat.remote_history.*` reconcile；`chat.mark_read*` 不应再触发 history 分页。

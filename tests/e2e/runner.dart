@@ -104,8 +104,10 @@ const Set<String> _desktopCliPeerPerformanceRequiredMetrics = <String>{
   'message.app_send_to_cli_inbox_visible_ms',
   'message.app_send_to_cli_history_visible_ms',
   'message.cli_send_app_thread_after_ms',
+  'message.cli_send_to_app_open_first_paint_ms',
   'message.cli_send_to_app_history_visible_ms',
   'message.cli_send_to_conversation_preview_visible_ms',
+  'thread.realtime_open_first_paint_ms',
   'thread.history_initial_load_ms',
   'thread.open_to_first_message_visible_ms',
   'thread.initial_item_count',
@@ -1618,8 +1620,10 @@ class DesktopPerformanceConfig {
       'message.app_send_to_cli_inbox_visible_ms': 90000,
       'message.app_send_to_cli_history_visible_ms': 90000,
       'message.cli_send_app_thread_after_ms': 90000,
+      'message.cli_send_to_app_open_first_paint_ms': 90000,
       'message.cli_send_to_app_history_visible_ms': 90000,
       'message.cli_send_to_conversation_preview_visible_ms': 90000,
+      'thread.realtime_open_first_paint_ms': 5000,
       'thread.open_to_first_message_visible_ms': 8000,
       'thread.history_initial_load_ms': 8000,
     },
@@ -1634,8 +1638,10 @@ class DesktopPerformanceConfig {
       'message.app_send_to_cli_inbox_visible_ms': 20000,
       'message.app_send_to_cli_history_visible_ms': 20000,
       'message.cli_send_app_thread_after_ms': 20000,
+      'message.cli_send_to_app_open_first_paint_ms': 5000,
       'message.cli_send_to_app_history_visible_ms': 20000,
       'message.cli_send_to_conversation_preview_visible_ms': 20000,
+      'thread.realtime_open_first_paint_ms': 1500,
       'thread.open_to_first_message_visible_ms': 3000,
       'thread.history_initial_load_ms': 3000,
     },
@@ -1684,10 +1690,18 @@ class DesktopPerformanceConfig {
       longThreadMessageCount:
           _intAt(dataset, 'longThreadMessageCount') ??
           defaults.longThreadMessageCount,
-      requiredMetrics:
-          _stringSetAt(budgets, 'requiredMetrics') ?? defaults.requiredMetrics,
-      hardBudgetMs: _intMapAt(budgets, 'hardBudgetMs') ?? defaults.hardBudgetMs,
-      softBudgetMs: _intMapAt(budgets, 'softBudgetMs') ?? defaults.softBudgetMs,
+      requiredMetrics: <String>{
+        ...defaults.requiredMetrics,
+        ...?_stringSetAt(budgets, 'requiredMetrics'),
+      },
+      hardBudgetMs: <String, int>{
+        ...defaults.hardBudgetMs,
+        ...?_intMapAt(budgets, 'hardBudgetMs'),
+      },
+      softBudgetMs: <String, int>{
+        ...defaults.softBudgetMs,
+        ...?_intMapAt(budgets, 'softBudgetMs'),
+      },
       maxFullRefreshDuringSendReceive:
           _intAt(budgets, 'maxFullRefreshDuringSendReceive') ??
           defaults.maxFullRefreshDuringSendReceive,
@@ -2263,9 +2277,7 @@ Map<String, Object?> _mapAt(
 }) {
   final value = map[key];
   if (value == null && optional) {
-    final nested = <String, Object?>{};
-    map[key] = nested;
-    return nested;
+    return <String, Object?>{};
   }
   if (value is Map<String, Object?>) {
     return value;
