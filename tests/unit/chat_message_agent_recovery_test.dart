@@ -315,6 +315,7 @@ void main() {
     );
     addTearDown(trimContainer.dispose);
     final controller = trimContainer.read(chatThreadsProvider.notifier);
+    controller.markConversationVisible(conversation);
     for (var i = 0; i < 6; i += 1) {
       controller.applyRealtimeUpdate(
         _chatMessage(
