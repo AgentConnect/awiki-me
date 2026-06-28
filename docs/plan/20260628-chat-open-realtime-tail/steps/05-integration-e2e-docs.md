@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)  
 Step index：05  
-状态：in_progress
+状态：done
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | in_progress |
+| Status | done |
 | Branch | `awiki-me: feature/perf/message-sync-opt-0627`; `awiki-system-test: release/0526` 如需测试文档；`awiki-cli-rs2: feature/perf/message-sync-opt-0627` 如需 docs 收口 |
 | Started | 2026-06-28 21:57:54 CST |
-| Completed | 待填 |
-| Commit | 待填 |
-| Review evidence | 待填 |
-| Verification evidence | 待填 |
-| Next action | 阅读 E2E runner/performance flow/docs，补新消息点击首屏指标和验证证据。 |
+| Completed | 2026-06-28 22:37:02 CST |
+| Commit | `awiki-me@ba04e0a` |
+| Review evidence | Review 确认 performance flow 在显式 `syncThreadAfter` 前先等待 fast local conversation preview，再通过 `ChatThreadsController.openConversation` + `selectedConversationProvider` 走 App provider open path，并轮询 `chatThreadProvider` 精确匹配 CLI message id；required metrics / hard / soft budgets 已加入默认配置，local YAML 会与默认 budgets 合并；报告只记录耗时、计数、thread kind 和 unread 数，不写 token、私钥、JWT、完整 DID 或消息正文；文档中修正 `timings.json` schema 为顶层 `metrics` map；删除 E2E harness 中未使用 helper 以恢复全局 analyzer gate。 |
+| Verification evidence | `uname -s` 为 Linux，使用 Linux 本地 E2E config，未触发 Darwin/macOS config 约束；首次 `dart run tests/e2e/runner.dart --case performance` 因 `awiki-cli-rs2/target/release/awiki-cli` 缺失停在 tooling check，随后 `CARGO_BUILD_JOBS=1 cargo build --release -p awiki-cli --locked` 成功；重跑 `dart run tests/e2e/runner.dart --case performance` 通过，报告 `awiki-me/.e2e/desktop-cli-peer/20260628142733-hjwd9412nn/reports/timings.json`，`message.cli_send_to_app_open_first_paint_ms=450`、`thread.realtime_open_first_paint_ms=348`、`message.cli_send_app_thread_after_ms=135`、`message.cli_send_to_app_history_visible_ms=724`、`message.cli_send_to_conversation_preview_visible_ms=101`、`conversation.full_refresh_during_send_receive_count=0`、`conversation.patch_apply_count=10`、`conversation.patch_repair_count=0`，hard/soft failures 均为空；`flutter test tests/unit/e2e_harness/desktop_e2e_runner_test.dart` 通过 45 个测试；`dart run tests/unit/runner.dart` 通过 `+682: All tests passed!`；`dart analyze` 通过；`git diff --check` 通过；`CARGO_BUILD_JOBS=1 cargo test -p im-core --locked realtime` 通过；`CARGO_BUILD_JOBS=1 cargo test -p im-core --locked` 通过；`awiki-system-test` remote focused suite 15 passed；docs path scan 无本机绝对路径或 workspace 目录名前缀。 |
+| Next action | Step 05 已完成；进入主 Plan 最终全局 Review 与整体验证。 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -102,15 +102,15 @@ Step index：05
 
 ## 7. 验收标准
 
-- [ ] performance E2E 报告包含新消息点击首屏指标。
-- [ ] required metrics / budgets 覆盖该指标。
-- [ ] Darwin 主机使用 macOS config，未使用 Linux config。
-- [ ] `awiki-me` unit/analyze 通过或失败原因已处理。
-- [ ] `awiki-cli-rs2` focused tests 通过或失败原因已处理。
-- [ ] `awiki-system-test` remote focused suite 运行并记录通过/失败/跳过数量；失败不通过放宽 contract 解决。
-- [ ] 文档与实现一致。
-- [ ] Review 发现已经修复或明确记录。
-- [ ] 若本步骤修改文件，在进入最终全局 Review 前已经创建聚焦 commit。
+- [x] performance E2E 报告包含新消息点击首屏指标。
+- [x] required metrics / budgets 覆盖该指标。
+- [x] 宿主为 Linux，使用 Linux E2E config；Darwin/macOS config 约束不适用且未误用 Linux config 到 Mac。
+- [x] `awiki-me` unit/analyze 通过。
+- [x] `awiki-cli-rs2` focused tests 通过。
+- [x] `awiki-system-test` remote focused suite 运行并记录通过数量：15 passed。
+- [x] 文档与实现一致。
+- [x] Review 发现已经修复或明确记录。
+- [x] 本步骤修改文件已创建聚焦 commit：`awiki-me@ba04e0a`。
 
 ## 8. 验证方式
 
@@ -141,11 +141,11 @@ Step index：05
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待填 | 待填 |
-| 已修复问题 | 待填 | 待填 |
-| 剩余风险 | 待填 | 待填 |
-| 新增或缺失测试 | 待填 | 待填 |
-| 已更新或缺失文档 | 待填 | 待填 |
+| 发现问题 | 2 项 | `timings.json` 文档最初把汇总指标写成 `appProductTimings.metrics`，实际为顶层 `metrics` map；全局 analyzer 原有 `_groupCountFromCliOutput` unused warning 会削弱 Step 05 gate 证据。 |
+| 已修复问题 | 已修复 | 文档改为顶层 `metrics` map（由 `appProductTimings` 明细汇总）；删除未使用 helper，`dart analyze` 恢复无 warning。 |
+| 剩余风险 | 可接受 | 本次真实 performance E2E 使用本地 Linux config 的小数据集 `conversationCount=10`、`longThreadMessageCount=2`；500/1000 大数据集分页 gate 已由前序 conversation pagination 工作支持，但本 Step 05 未重跑大数据集 gate。 |
+| 新增或缺失测试 | 已新增 | 新增 E2E required metrics / budgets 覆盖；新增 unit 覆盖默认 required metrics 和 local YAML 与默认 budgets 合并；真实 performance E2E 覆盖 App + CLI peer + 后端链路。 |
+| 已更新或缺失文档 | 已更新 | 更新 `awiki-me/README.md`、`awiki-me/docs/performance-tracing.md`、`awiki-me/tests/e2e/flutter/README.md`、`awiki-me/tests/e2e/configs/e2e.example.yaml`；Step 01 已完成 `awiki-cli-rs2` 相关 SDK docs，本步骤未再改 Harness docs。 |
 
 ## 10. Commit 要求
 
