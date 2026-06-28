@@ -1,10 +1,10 @@
 # Plan：AWiki Me 新消息点开首屏秒开优化
 
-状态：draft  
+状态：in_progress
 DOC：`awiki-me/docs/plan/20260628-chat-open-realtime-tail/`  
 Harness：`awiki-harness/`  
 创建时间：2026-06-28  
-恢复指针：执行开始前从 Step 01 开始；恢复时从执行台账里第一个状态不是 `done` 的步骤继续。
+恢复指针：Step 01 已完成；恢复时从执行台账里第一个状态不是 `done` 的步骤继续，当前应从 Step 02 开始。
 
 ## 1. 目标
 
@@ -68,7 +68,7 @@ Harness：`awiki-harness/`
 
 ### 当前工作区观察
 
-- `awiki-cli-rs2`：`feature/perf/message-sync-opt-0627`，最新已观察提交 `39b2e433 feat(im-core): add conversation cursor pagination`。
+- `awiki-cli-rs2`：`feature/perf/message-sync-opt-0627`，Step 01 已提交 `94285c8 fix(im-core): emit patches for realtime incoming projection`。
 - `awiki-me`：`feature/perf/message-sync-opt-0627`，最新已观察提交 `0a0d10b feat(app): gate conversation pagination performance`；执行前必须重新检查 `git status`，当前可能有 `codex.md` 本地修改，不能覆盖或误合并非本步骤变更。
 - `awiki-system-test`：`release/0526`，最新已观察提交 `01bb3ed fix: skip local db cleanup in remote system tests`。
 
@@ -118,7 +118,7 @@ Harness：`awiki-harness/`
 
 | Step | 标题 | 依赖 | 产出 | 小 Plan 文档 | Commit gate | 状态 |
 |---|---|---|---|---|---|---|
-| 01 | Rust realtime projection 写库后发 patch | 无 | `im-core` realtime incoming 触发 conversation/thread patch，含 Rust 测试和 SDK docs。 | [steps/01-rust-realtime-projection-patches.md](steps/01-rust-realtime-projection-patches.md) | 必须 | pending |
+| 01 | Rust realtime projection 写库后发 patch | 无 | `im-core` realtime incoming 触发 conversation/thread patch，含 Rust 测试和 SDK docs。 | [steps/01-rust-realtime-projection-patches.md](steps/01-rust-realtime-projection-patches.md) | 必须 | done |
 | 02 | Flutter realtime thread-tail alias 预热 | Step 01 行为可独立测试；代码上可在 Step 01 后做 | AWiki Me 收到 realtime 后把消息预热到所有等价 ChatThreadState key。 | [steps/02-flutter-thread-tail-prewarm.md](steps/02-flutter-thread-tail-prewarm.md) | 必须 | pending |
 | 03 | 点击路径 local-first，网络补同步后台化 | Step 02 | 打开会话首屏使用 memory/local tail，`syncThreadAfter` 和 remote history 不阻塞。 | [steps/03-local-first-open-path.md](steps/03-local-first-open-path.md) | 必须 | pending |
 | 04 | 降低 Flutter → Rust → SQLite 首屏开销 | Step 03 | 首屏 `localHistory` limit 降低，owner DID 缓存；保留 snapshot API 决策 gate。 | [steps/04-local-history-tail-cost.md](steps/04-local-history-tail-cost.md) | 必须 | pending |
@@ -130,8 +130,8 @@ Harness：`awiki-harness/`
 
 | Step | 状态 | 分支 | 开始时间 | 完成时间 | Commit | Review 证据 | 验证证据 | 下一步 |
 |---|---|---|---|---|---|---|---|---|
-| 01 | pending | `awiki-cli-rs2: feature/perf/message-sync-opt-0627` | 待填 | 待填 | 待填 | 待填 | 待填 | 启动 Step 01 |
-| 02 | pending | `awiki-me: feature/perf/message-sync-opt-0627` | 待填 | 待填 | 待填 | 待填 | 待填 | 等 Step 01 done |
+| 01 | done | `awiki-cli-rs2: feature/perf/message-sync-opt-0627` | 2026-06-28 20:28:56 CST | 2026-06-28 21:00:05 CST | `awiki-cli-rs2@94285c8` | Review 确认 emit 只在 `messages` 写入和 group/contact upsert 全部成功后执行；未新增 checkpoint 写入；patch DTO/API shape 未改变；新增 subscriber 测试不扩大 public API。 | `cargo fmt -p im-core`; `CARGO_BUILD_JOBS=1 cargo test -p im-core --locked realtime -- --nocapture` 通过 24 个 lib realtime 测试并通过 realtime integration tests；`CARGO_BUILD_JOBS=1 cargo test -p im-core --locked patch -- --nocapture` 通过 patch 过滤测试；`CARGO_BUILD_JOBS=1 cargo test -p im-core --locked` 通过；`--features blocking` focused patch 测试通过；docs grep 已确认。 | 开始 Step 02：Flutter realtime thread-tail alias 预热。 |
+| 02 | pending | `awiki-me: feature/perf/message-sync-opt-0627` | 待填 | 待填 | 待填 | 待填 | 待填 | 开始 Step 02 |
 | 03 | pending | `awiki-me: feature/perf/message-sync-opt-0627` | 待填 | 待填 | 待填 | 待填 | 待填 | 等 Step 02 done |
 | 04 | pending | `awiki-me: feature/perf/message-sync-opt-0627` | 待填 | 待填 | 待填 | 待填 | 待填 | 等 Step 03 done |
 | 05 | pending | `awiki-me: feature/perf/message-sync-opt-0627`; `awiki-system-test: release/0526` 如需测试文档 | 待填 | 待填 | 待填 | 待填 | 待填 | 等 Step 01-04 done |

@@ -2,20 +2,20 @@
 
 主 Plan：[../plan.md](../plan.md)  
 Step index：01  
-状态：draft
+状态：done
 
 ## 1. 执行状态
 
 | 字段 | 值 |
 |---|---|
-| Status | pending |
+| Status | done |
 | Branch | `awiki-cli-rs2: feature/perf/message-sync-opt-0627` |
-| Started | 待填 |
-| Completed | 待填 |
-| Commit | 待填 |
-| Review evidence | 待填 |
-| Verification evidence | 待填 |
-| Next action | 修改 realtime local projection 后的 patch emit，并补测试。 |
+| Started | 2026-06-28 20:28:56 CST |
+| Completed | 2026-06-28 21:00:05 CST |
+| Commit | `awiki-cli-rs2@94285c8 fix(im-core): emit patches for realtime incoming projection` |
+| Review evidence | 提交前 Review 确认 blocking / async emit 都位于 SQLite message projection、group upsert、contact upsert 成功之后；无新增 checkpoint 写入；patch DTO/API shape 未变化；测试直接订阅 `watch_conversation_patches` / `watch_thread_patches`，未扩大 public API。 |
+| Verification evidence | `cargo fmt -p im-core`; `CARGO_BUILD_JOBS=1 cargo test -p im-core --locked realtime -- --nocapture`; `CARGO_BUILD_JOBS=1 cargo test -p im-core --locked patch -- --nocapture`; `CARGO_BUILD_JOBS=1 cargo test -p im-core --locked`; `CARGO_BUILD_JOBS=1 cargo test -p im-core --locked --features blocking realtime_blocking_local_state_projector_emits_committed_message_patches -- --nocapture`; docs grep 均通过。 |
+| Next action | 回到主 Plan，从 Step 02：Flutter realtime thread-tail alias 预热继续。 |
 
 状态取值：`pending`、`in_progress`、`review`、`blocked`、`committed`、`done`。
 
@@ -99,14 +99,14 @@ Step index：01
 
 ## 7. 验收标准
 
-- [ ] realtime incoming async 写库成功后触发 conversation patch。
-- [ ] realtime incoming async 写库成功后触发 thread message patch。
-- [ ] blocking realtime projection 行为不落后 async 路径。
-- [ ] projection 失败或无 projection 时不发 authoritative patch。
-- [ ] 新增 / 更新 Rust 测试覆盖 patch subscriber。
-- [ ] SDK / architecture docs 与行为一致。
-- [ ] Review 发现已经修复或明确记录。
-- [ ] 本步骤在进入下一步之前已经创建聚焦 commit。
+- [x] realtime incoming async 写库成功后触发 conversation patch。
+- [x] realtime incoming async 写库成功后触发 thread message patch。
+- [x] blocking realtime projection 行为不落后 async 路径。
+- [x] projection 失败或无 projection 时不发 authoritative patch。
+- [x] 新增 / 更新 Rust 测试覆盖 patch subscriber。
+- [x] SDK / architecture docs 与行为一致。
+- [x] Review 发现已经修复或明确记录。
+- [x] 本步骤在进入下一步之前已经创建聚焦 commit。
 
 ## 8. 验证方式
 
@@ -133,11 +133,11 @@ Step index：01
 
 | Review 项 | 结果 | 备注 |
 |---|---|---|
-| 发现问题 | 待填 | 待填 |
-| 已修复问题 | 待填 | 待填 |
-| 剩余风险 | 待填 | 待填 |
-| 新增或缺失测试 | 待填 | 待填 |
-| 已更新或缺失文档 | 待填 | 待填 |
+| 发现问题 | 无阻塞问题 | Review 检查 `runner.rs` 中两个 emit 均在 `?` 写入链之后，失败会提前返回，不发 authoritative patch。 |
+| 已修复问题 | 已补缺失的 realtime committed patch emit | `project_realtime_message_received` 和 `project_realtime_message_received_async` 都调用 `emit_committed_local_message_projection("realtime_incoming")`。 |
+| 剩余风险 | 低 | 本步骤未覆盖真实远端 WebSocket E2E；按主 Plan 留到 Step 05 串联 App/CLI/backend 验证。 |
+| 新增或缺失测试 | 已新增 Rust subscriber 测试 | 新增 async 成功、async no-projection 不发 patch、blocking 成功三类测试；既有 checkpoint 测试继续覆盖 realtime hint 不推进 checkpoint。 |
+| 已更新或缺失文档 | 已更新 SDK / architecture docs | 更新 `awiki-cli-rs2/docs/architecture/im-core-sdk-architecture.md`、`awiki-cli-rs2/docs/api/im-core-interface/04-message-interface.md`、`awiki-cli-rs2/docs/flutter-sdk/awiki-im-core-flutter-sdk.md`。 |
 
 ## 10. Commit 要求
 
@@ -148,6 +148,13 @@ Step index：01
 - Commit 后证据：记录 commit hash 和 commit 后 `git status`。
 - 遗留未提交变更：必须记录原因以及为什么安全。
 - 建议消息：`fix(im-core): emit patches for realtime incoming projection`
+
+执行记录：
+
+- Commit 前状态：`awiki-cli-rs2` 在 `feature/perf/message-sync-opt-0627`，仅修改 `crates/im-core/src/realtime/runner.rs`、`crates/im-core/src/realtime/runner/tests.rs`、`docs/api/im-core-interface/04-message-interface.md`、`docs/architecture/im-core-sdk-architecture.md`、`docs/flutter-sdk/awiki-im-core-flutter-sdk.md`。
+- Commit：`94285c8 fix(im-core): emit patches for realtime incoming projection`。
+- Commit 后状态：`awiki-cli-rs2` 工作区干净，分支 ahead origin 1。
+- 遗留未提交变更：`awiki-me` 中仅剩本 Plan / Step 台账回填，作为独立文档 commit 处理；不包含 `codex.md`。
 
 ## 11. Blocked 处理
 
