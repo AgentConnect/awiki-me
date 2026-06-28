@@ -440,6 +440,7 @@ class ThreadMemoryCachePolicy {
     this.maxCachedCanonicalThreads = 100,
     this.maxMessageRouteEntries = 4000,
     this.messageRouteTtl = const Duration(hours: 24),
+    this.warmSubscriptionTtl = const Duration(minutes: 5),
   });
 
   final int hotThreadMessageLimit;
@@ -449,6 +450,7 @@ class ThreadMemoryCachePolicy {
   final int maxCachedCanonicalThreads;
   final int maxMessageRouteEntries;
   final Duration messageRouteTtl;
+  final Duration warmSubscriptionTtl;
 }
 
 class _ThreadCacheEnforcementResult {
@@ -502,11 +504,33 @@ class _ThreadCacheMetadata {
   const _ThreadCacheMetadata({
     required this.canonicalKey,
     required this.lastTouchedAt,
+    this.isVisible = false,
+    this.hiddenAt,
   });
 
   final String canonicalKey;
   final DateTime lastTouchedAt;
+  final bool isVisible;
+  final DateTime? hiddenAt;
+
+  _ThreadCacheMetadata copyWith({
+    String? canonicalKey,
+    DateTime? lastTouchedAt,
+    bool? isVisible,
+    Object? hiddenAt = _threadCacheMetadataUnset,
+  }) {
+    return _ThreadCacheMetadata(
+      canonicalKey: canonicalKey ?? this.canonicalKey,
+      lastTouchedAt: lastTouchedAt ?? this.lastTouchedAt,
+      isVisible: isVisible ?? this.isVisible,
+      hiddenAt: identical(hiddenAt, _threadCacheMetadataUnset)
+          ? this.hiddenAt
+          : hiddenAt as DateTime?,
+    );
+  }
 }
+
+const Object _threadCacheMetadataUnset = Object();
 
 class _MessageThreadRoute {
   const _MessageThreadRoute({
@@ -556,6 +580,8 @@ class ChatThreadsController
   final Map<String, Set<String>> _canonicalAliases = <String, Set<String>>{};
   final Map<String, _MessageThreadRoute> _messageThreadRoutes =
       <String, _MessageThreadRoute>{};
+  final Map<String, Timer> _threadPatchSubscriptionTtlTimers =
+      <String, Timer>{};
   int _trimmedMessageCount = 0;
   int _evictedThreadCount = 0;
   int _protectedOverflowCount = 0;
@@ -724,6 +750,7 @@ class ChatThreadsController
     ConversationSummary conversation, {
     required String displayThreadId,
   }) {
+    _cancelThreadPatchSubscriptionTtl(displayThreadId);
     final messaging = ref.read(messagingServiceProvider);
     if (messaging is! ThreadPatchMessagingService) {
       return;
@@ -1429,6 +1456,7 @@ class ChatThreadsController
           hidden: true,
         );
     final next = Map<String, ChatThreadState>.from(state)..remove(threadId);
+    _cancelThreadPatchSubscriptionTtl(threadId);
     _removeThreadCacheMetadata(threadId);
     state = next;
     await ref.read(conversationListProvider.notifier).refresh();
@@ -1497,11 +1525,51 @@ class ChatThreadsController
   void clear() {
     _cancelAgentProcessingTimers();
     _cancelThreadPatchSubscriptions();
+    _cancelThreadPatchSubscriptionTtls();
     _pendingHistorySyncs.clear();
     _activeLocalHistoryLoads.clear();
     _activeRemoteHistorySyncs.clear();
     _clearMemoryCacheMetadata();
     state = const <String, ChatThreadState>{};
+  }
+
+  void markConversationVisible(
+    ConversationSummary conversation, {
+    String? displayThreadId,
+  }) {
+    final threadId = _displayThreadIdFor(conversation, displayThreadId);
+    _touchConversationCache(conversation, threadId, visible: true);
+    _cancelThreadPatchSubscriptionTtl(threadId);
+    _ensureThreadPatchSubscription(conversation, displayThreadId: threadId);
+  }
+
+  void markConversationHidden(
+    ConversationSummary conversation, {
+    String? displayThreadId,
+  }) {
+    final threadId = _displayThreadIdFor(conversation, displayThreadId);
+    final metadata = _cacheMetadataByThreadId[threadId];
+    if (metadata != null) {
+      _cacheMetadataByThreadId[threadId] = metadata.copyWith(
+        isVisible: false,
+        hiddenAt: DateTime.now(),
+      );
+    } else {
+      _touchConversationCache(conversation, threadId, visible: false);
+    }
+    _scheduleThreadPatchSubscriptionTtl(threadId);
+    _enforceThreadCacheForExistingState(threadId);
+  }
+
+  void trimForAppBackground() {
+    _trimInactiveThreads(
+      hiddenLimit: _cachePolicy.coldThreadMessageLimit,
+      evictUnprotectedHidden: false,
+    );
+  }
+
+  void trimForMemoryPressure() {
+    _trimInactiveThreads(hiddenLimit: 1, evictUnprotectedHidden: true);
   }
 
   ChatThreadCacheStats debugCacheStats() => _cacheStats();
@@ -1543,8 +1611,9 @@ class ChatThreadsController
 
   void _touchConversationCache(
     ConversationSummary conversation,
-    String threadId,
-  ) {
+    String threadId, {
+    bool? visible,
+  }) {
     final aliases = <String>{
       threadId,
       conversation.threadId,
@@ -1560,6 +1629,7 @@ class ChatThreadsController
       const <ChatMessage>[],
       canonicalKey: _canonicalKeyForConversation(conversation),
       aliases: aliases,
+      visible: visible,
     );
   }
 
@@ -1568,14 +1638,16 @@ class ChatThreadsController
     List<ChatMessage> messages, {
     String? canonicalKey,
     Iterable<String> aliases = const <String>[],
+    bool? visible,
   }) {
     final now = DateTime.now();
+    final existingMetadata = _cacheMetadataByThreadId[threadId];
     final canonical =
         _normalizedCacheKey(canonicalKey) ??
         _canonicalKeyForMessages(threadId, messages) ??
-        _cacheMetadataByThreadId[threadId]?.canonicalKey ??
+        existingMetadata?.canonicalKey ??
         threadId;
-    final previous = _cacheMetadataByThreadId[threadId]?.canonicalKey;
+    final previous = existingMetadata?.canonicalKey;
     if (previous != null && previous != canonical) {
       final previousAliases = _canonicalAliases[previous];
       for (final alias
@@ -1599,9 +1671,12 @@ class ChatThreadsController
       }
     }
     _cacheAliasesByThreadId[threadId] = threadAliases;
+    final isVisible = visible ?? existingMetadata?.isVisible ?? false;
     _cacheMetadataByThreadId[threadId] = _ThreadCacheMetadata(
       canonicalKey: canonical,
       lastTouchedAt: now,
+      isVisible: isVisible,
+      hiddenAt: isVisible ? null : existingMetadata?.hiddenAt,
     );
     final aliasSet = _canonicalAliases.putIfAbsent(canonical, () => <String>{});
     aliasSet.addAll(threadAliases);
@@ -1945,15 +2020,83 @@ class ChatThreadsController
   }
 
   int _messageLimitForThread(String threadId) {
-    final touchedAt = _lastTouchedAt(threadId);
-    final age = DateTime.now().difference(touchedAt);
-    if (age <= const Duration(minutes: 5)) {
+    final metadata = _cacheMetadataByThreadId[threadId];
+    if (metadata?.isVisible == true) {
       return _cachePolicy.hotThreadMessageLimit;
     }
+    final hiddenAt = metadata?.hiddenAt;
+    if (hiddenAt != null &&
+        DateTime.now().difference(hiddenAt) > const Duration(minutes: 30)) {
+      return _cachePolicy.coldThreadMessageLimit;
+    }
+    final touchedAt = _lastTouchedAt(threadId);
+    final age = DateTime.now().difference(touchedAt);
     if (age <= const Duration(minutes: 30)) {
       return _cachePolicy.warmThreadMessageLimit;
     }
     return _cachePolicy.coldThreadMessageLimit;
+  }
+
+  void _trimInactiveThreads({
+    required int hiddenLimit,
+    required bool evictUnprotectedHidden,
+  }) {
+    if (state.isEmpty) {
+      return;
+    }
+    var nextState = Map<String, ChatThreadState>.from(state);
+    var changed = false;
+    for (final entry in state.entries) {
+      final metadata = _cacheMetadataByThreadId[entry.key];
+      if (metadata?.isVisible == true) {
+        continue;
+      }
+      if (evictUnprotectedHidden &&
+          !_threadHasHardProtectedMessages(entry.value, entry.value.messages)) {
+        _evictThreadFromCacheCandidate(nextState, entry.key, entry.value);
+        changed = true;
+        continue;
+      }
+      final enforced = _enforceThreadMessageCache(
+        entry.key,
+        entry.value,
+        entry.value.messages,
+        overrideLimit: hiddenLimit,
+      );
+      if (enforced.messages.length != entry.value.messages.length) {
+        changed = true;
+        nextState[entry.key] = entry.value.copyWith(
+          messages: enforced.messages,
+        );
+      }
+      _scheduleThreadPatchSubscriptionTtl(
+        entry.key,
+        immediate: evictUnprotectedHidden,
+      );
+    }
+    nextState = _enforceGlobalCachePolicy(nextState);
+    if (changed || !identical(nextState, state)) {
+      state = nextState;
+    }
+  }
+
+  void _enforceThreadCacheForExistingState(String threadId) {
+    final current = state[threadId];
+    if (current == null) {
+      return;
+    }
+    final enforced = _enforceThreadMessageCache(
+      threadId,
+      current,
+      current.messages,
+    );
+    if (enforced.messages.length == current.messages.length) {
+      return;
+    }
+    state = <String, ChatThreadState>{
+      ...state,
+      threadId: current.copyWith(messages: enforced.messages),
+    };
   }
 
   DateTime _lastTouchedAt(String threadId) {
@@ -3531,6 +3674,51 @@ class ChatThreadsController
     _threadPatchSubscriptions.clear();
   }
 
+  void _scheduleThreadPatchSubscriptionTtl(
+    String threadId, {
+    bool immediate = false,
+  }) {
+    final subscription = _threadPatchSubscriptions[threadId];
+    if (subscription == null) {
+      return;
+    }
+    if (_cacheMetadataByThreadId[threadId]?.isVisible == true) {
+      _cancelThreadPatchSubscriptionTtl(threadId);
+      return;
+    }
+    final ttl = immediate ? Duration.zero : _cachePolicy.warmSubscriptionTtl;
+    _cancelThreadPatchSubscriptionTtl(threadId);
+    if (ttl <= Duration.zero) {
+      _cancelThreadPatchSubscription(threadId);
+      return;
+    }
+    _threadPatchSubscriptionTtlTimers[threadId] = Timer(ttl, () {
+      if (!mounted || _cacheMetadataByThreadId[threadId]?.isVisible == true) {
+        return;
+      }
+      _cancelThreadPatchSubscription(threadId);
+    });
+  }
+
+  void _cancelThreadPatchSubscription(String threadId) {
+    _cancelThreadPatchSubscriptionTtl(threadId);
+    final subscription = _threadPatchSubscriptions.remove(threadId);
+    if (subscription != null) {
+      unawaited(subscription.subscription.cancel());
+    }
+  }
+
+  void _cancelThreadPatchSubscriptionTtl(String threadId) {
+    _threadPatchSubscriptionTtlTimers.remove(threadId)?.cancel();
+  }
+
+  void _cancelThreadPatchSubscriptionTtls() {
+    for (final timer in _threadPatchSubscriptionTtlTimers.values) {
+      timer.cancel();
+    }
+    _threadPatchSubscriptionTtlTimers.clear();
+  }
+
   String _displayThreadIdFor(ConversationSummary conversation, String? value) {
     final displayThreadId = value?.trim();
     if (displayThreadId == null || displayThreadId.isEmpty) {
@@ -3543,6 +3731,7 @@ class ChatThreadsController
   void dispose() {
     _cancelAgentProcessingTimers();
     _cancelThreadPatchSubscriptions();
+    _cancelThreadPatchSubscriptionTtls();
     _clearMemoryCacheMetadata();
     super.dispose();
   }

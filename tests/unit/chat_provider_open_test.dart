@@ -368,6 +368,63 @@ void main() {
     expect(messages.map((item) => item.content), contains('repaired'));
   });
 
+  test(
+    'hidden conversation cancels patch subscription after TTL and reopen restores',
+    () async {
+      final patchMessaging = _PatchMessagingService(
+        localHistory: <ChatMessage>[message],
+      );
+      final patchContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          ...fakeApplicationServiceOverrides(gateway),
+          messagingServiceProvider.overrideWithValue(patchMessaging),
+          chatThreadsProvider.overrideWith(
+            (ref) => ChatThreadsController(
+              ref,
+              cachePolicy: const ThreadMemoryCachePolicy(
+                warmSubscriptionTtl: Duration(milliseconds: 20),
+              ),
+            ),
+          ),
+          sessionProvider.overrideWith((ref) {
+            final controller = SessionController();
+            controller.setSession(
+              const SessionIdentity(
+                did: 'did:me',
+                credentialName: 'me.json',
+                displayName: 'Me',
+              ),
+            );
+            return controller;
+          }),
+        ],
+      );
+      addTearDown(patchContainer.dispose);
+
+      final controller = patchContainer.read(chatThreadsProvider.notifier);
+      controller.markConversationVisible(conversation);
+      await pumpEventQueue();
+      expect(patchMessaging.watchCalls, 1);
+
+      controller.markConversationHidden(conversation);
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      expect(patchMessaging.cancelledWatches, 1);
+
+      controller.markConversationVisible(conversation);
+      await pumpEventQueue();
+      expect(patchMessaging.watchCalls, 2);
+      expect(
+        patchContainer
+            .read(chatThreadProvider(conversation.threadId))
+            .messages
+            .map((item) => item.content),
+        contains('hello'),
+      );
+    },
+  );
+
   test('本地历史命中时失败的远端 history 不会被触发', () async {
     gateway
       ..failNextFetchDmHistory = true
@@ -2628,6 +2685,8 @@ class _PatchMessagingService
       StreamController<ThreadMessagePatch>.broadcast();
   int repairCalls = 0;
   int? lastRepairLimit;
+  int watchCalls = 0;
+  int cancelledWatches = 0;
 
   void emitPatch(ThreadMessagePatch patch) {
     _patches.add(patch);
@@ -2638,6 +2697,7 @@ class _PatchMessagingService
     AppThreadRef thread, {
     int limit = 100,
   }) {
+    watchCalls += 1;
     return Stream<ThreadMessagePatch>.multi((controller) {
       controller.add(
         ThreadMessagePatch(
@@ -2654,7 +2714,10 @@ class _PatchMessagingService
         onError: controller.addError,
         onDone: controller.close,
       );
-      controller.onCancel = subscription.cancel;
+      controller.onCancel = () {
+        cancelledWatches += 1;
+        return subscription.cancel();
+      };
     });
   }
 

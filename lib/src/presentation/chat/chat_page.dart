@@ -169,6 +169,7 @@ class _BottomInitialScrollPosition extends ScrollPositionWithSingleContext {
 class _ChatViewState extends ConsumerState<ChatView> {
   final textController = TextEditingController();
   late final _BottomInitialScrollController scrollController;
+  late final ChatThreadsController _chatThreadsController;
   AttachmentDraft? _pendingAttachment;
   bool _isApplyingComposerDraft = false;
   bool _isRefreshingCurrentConversation = false;
@@ -183,6 +184,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
   void initState() {
     super.initState();
     scrollController = _BottomInitialScrollController();
+    _chatThreadsController = ref.read(chatThreadsProvider.notifier);
+    _markConversationVisible(widget.conversation);
     _restoreComposerDraft(widget.conversation);
     textController.addListener(_persistComposerText);
     scrollController.addListener(_handleScrollPositionChanged);
@@ -190,6 +193,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   @override
   void dispose() {
+    _markConversationHidden(widget.conversation);
     textController.removeListener(_persistComposerText);
     scrollController.removeListener(_handleScrollPositionChanged);
     textController.dispose();
@@ -201,11 +205,33 @@ class _ChatViewState extends ConsumerState<ChatView> {
   void didUpdateWidget(covariant ChatView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!sameConversationTarget(oldWidget.conversation, widget.conversation)) {
+      _markConversationHidden(oldWidget.conversation);
+      _markConversationVisible(widget.conversation);
       _restoreComposerDraft(widget.conversation, updateState: true);
       _hasDeferredBottomNotice = false;
       _userAwayFromBottom = false;
       scrollController.prepareForInitialBottomPosition();
     }
+  }
+
+  void _markConversationVisible(
+    ConversationSummary conversation, {
+    String? displayThreadId,
+  }) {
+    _chatThreadsController.markConversationVisible(
+      conversation,
+      displayThreadId: displayThreadId ?? conversation.threadId,
+    );
+  }
+
+  void _markConversationHidden(
+    ConversationSummary conversation, {
+    String? displayThreadId,
+  }) {
+    _chatThreadsController.markConversationHidden(
+      conversation,
+      displayThreadId: displayThreadId ?? conversation.threadId,
+    );
   }
 
   void _persistComposerText() {

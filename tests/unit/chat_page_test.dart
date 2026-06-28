@@ -91,6 +91,33 @@ class _StaticChatThreadsController extends ChatThreadsController {
         entry.key: ChatThreadState(threadId: entry.key, messages: entry.value),
     };
   }
+
+  final List<String> visibleThreadIds = <String>[];
+  final List<String> hiddenThreadIds = <String>[];
+
+  @override
+  void markConversationVisible(
+    ConversationSummary conversation, {
+    String? displayThreadId,
+  }) {
+    visibleThreadIds.add(displayThreadId ?? conversation.threadId);
+    super.markConversationVisible(
+      conversation,
+      displayThreadId: displayThreadId,
+    );
+  }
+
+  @override
+  void markConversationHidden(
+    ConversationSummary conversation, {
+    String? displayThreadId,
+  }) {
+    hiddenThreadIds.add(displayThreadId ?? conversation.threadId);
+    super.markConversationHidden(
+      conversation,
+      displayThreadId: displayThreadId,
+    );
+  }
 }
 
 Finder _chatMessagesListFinder() {
@@ -1007,6 +1034,88 @@ void main() {
 
     expect(gateway.lastSentContent, 'my new message');
     expect(_chatScrollPixels(tester), moreOrLessEquals(_chatScrollMax(tester)));
+  });
+
+  testWidgets('ChatView 挂载切换和卸载会更新会话可见性', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversationA = ConversationSummary(
+      threadId: 'dm:visible-a',
+      displayName: 'Alice',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:alice',
+    );
+    final conversationB = ConversationSummary(
+      threadId: 'dm:visible-b',
+      displayName: 'Bob',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:bob',
+    );
+    late _StaticChatThreadsController controller;
+    late StateSetter setHostState;
+    var currentConversation = conversationA;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            setHostState = setState;
+            return CupertinoPageScaffold(
+              child: ChatView(
+                key: const ValueKey<String>('chat-view-visibility-lifecycle'),
+                conversation: currentConversation,
+                embedded: false,
+              ),
+            );
+          },
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          chatThreadsProvider.overrideWith((ref) {
+            controller = _StaticChatThreadsController(
+              ref,
+              const <String, List<ChatMessage>>{},
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(controller.visibleThreadIds, <String>[conversationA.threadId]);
+    expect(controller.hiddenThreadIds, isEmpty);
+
+    setHostState(() {
+      currentConversation = conversationB;
+    });
+    await tester.pumpAndSettle();
+
+    expect(controller.visibleThreadIds, <String>[
+      conversationA.threadId,
+      conversationB.threadId,
+    ]);
+    expect(controller.hiddenThreadIds, <String>[conversationA.threadId]);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+
+    expect(controller.hiddenThreadIds, <String>[
+      conversationA.threadId,
+      conversationB.threadId,
+    ]);
   });
 
   testWidgets('切换会话后保留各自输入草稿并在发送后清空', (tester) async {

@@ -16,6 +16,7 @@ import '../presentation/app_shell/app_shell.dart';
 import '../presentation/app_shell/providers/app_lifecycle_provider.dart';
 import '../presentation/app_shell/providers/session_provider.dart';
 import '../presentation/agents/agents_provider.dart';
+import '../presentation/chat/chat_provider.dart';
 import '../presentation/shared/awiki_me_design.dart';
 import '../presentation/shared/display_scale.dart';
 import 'app_orientation.dart';
@@ -213,6 +214,11 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     ref.read(appLifecycleProvider.notifier).setLifecycle(state);
+  }
+
+  @override
+  void didHaveMemoryPressure() {
+    ref.read(chatThreadsProvider.notifier).trimForMemoryPressure();
   }
 
   @override

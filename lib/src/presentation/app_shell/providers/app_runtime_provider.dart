@@ -315,7 +315,16 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     AppLifecycleState? previous,
     AppLifecycleState next,
   ) {
-    if (previous == next || next != AppLifecycleState.resumed) {
+    if (previous == next) {
+      return;
+    }
+    if (next == AppLifecycleState.paused ||
+        next == AppLifecycleState.inactive ||
+        next == AppLifecycleState.hidden) {
+      ref.read(chatThreadsProvider.notifier).trimForAppBackground();
+      return;
+    }
+    if (next != AppLifecycleState.resumed) {
       return;
     }
     final session = ref.read(sessionProvider).session;

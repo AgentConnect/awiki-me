@@ -189,6 +189,158 @@ void main() {
       expect(messageSyncService.syncReasons, contains('app_resumed'));
     });
 
+    test('进入后台时裁剪隐藏会话缓存但保留可见会话', () async {
+      final visibleConversation = ConversationSummary(
+        threadId: 'dm:visible',
+        displayName: 'Visible',
+        lastMessagePreview: '',
+        lastMessageAt: DateTime(2026, 6, 29, 10),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:test:visible',
+      );
+      final hiddenConversation = ConversationSummary(
+        threadId: 'dm:hidden',
+        displayName: 'Hidden',
+        lastMessagePreview: '',
+        lastMessageAt: DateTime(2026, 6, 29, 10),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:test:hidden',
+      );
+      final cacheContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+            messageSyncService: messageSyncService,
+          ),
+          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+          chatThreadsProvider.overrideWith(
+            (ref) => ChatThreadsController(
+              ref,
+              cachePolicy: const ThreadMemoryCachePolicy(
+                hotThreadMessageLimit: 10,
+                warmThreadMessageLimit: 4,
+                coldThreadMessageLimit: 1,
+                maxTotalCachedMessages: 20,
+                maxCachedCanonicalThreads: 20,
+              ),
+            ),
+          ),
+        ],
+      );
+      addTearDown(cacheContainer.dispose);
+      final controller = cacheContainer.read(chatThreadsProvider.notifier);
+      controller.markConversationVisible(visibleConversation);
+      for (var i = 0; i < 4; i += 1) {
+        controller.applyRealtimeUpdate(
+          _runtimeTestMessage(visibleConversation, i),
+        );
+        controller.applyRealtimeUpdate(
+          _runtimeTestMessage(hiddenConversation, i),
+        );
+      }
+
+      cacheContainer.read(appRuntimeProvider);
+      cacheContainer
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+
+      expect(
+        cacheContainer
+            .read(chatThreadProvider(visibleConversation.threadId))
+            .messages,
+        hasLength(4),
+      );
+      expect(
+        cacheContainer
+            .read(chatThreadProvider(hiddenConversation.threadId))
+            .messages,
+        hasLength(1),
+      );
+    });
+
+    test('内存压力会回收隐藏会话缓存但保留可见会话', () {
+      final visibleConversation = ConversationSummary(
+        threadId: 'dm:memory-visible',
+        displayName: 'Visible',
+        lastMessagePreview: '',
+        lastMessageAt: DateTime(2026, 6, 29, 10),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:test:memory-visible',
+      );
+      final hiddenConversation = ConversationSummary(
+        threadId: 'dm:memory-hidden',
+        displayName: 'Hidden',
+        lastMessagePreview: '',
+        lastMessageAt: DateTime(2026, 6, 29, 10),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:test:memory-hidden',
+      );
+      final cacheContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+            messageSyncService: messageSyncService,
+          ),
+          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+          chatThreadsProvider.overrideWith(
+            (ref) => ChatThreadsController(
+              ref,
+              cachePolicy: const ThreadMemoryCachePolicy(
+                hotThreadMessageLimit: 10,
+                warmThreadMessageLimit: 4,
+                coldThreadMessageLimit: 1,
+                maxTotalCachedMessages: 20,
+                maxCachedCanonicalThreads: 20,
+              ),
+            ),
+          ),
+        ],
+      );
+      addTearDown(cacheContainer.dispose);
+      final controller = cacheContainer.read(chatThreadsProvider.notifier);
+      controller.markConversationVisible(visibleConversation);
+      for (var i = 0; i < 4; i += 1) {
+        controller.applyRealtimeUpdate(
+          _runtimeTestMessage(visibleConversation, i),
+        );
+        controller.applyRealtimeUpdate(
+          _runtimeTestMessage(hiddenConversation, i),
+        );
+      }
+
+      controller.trimForMemoryPressure();
+
+      expect(
+        cacheContainer
+            .read(chatThreadProvider(visibleConversation.threadId))
+            .messages,
+        hasLength(4),
+      );
+      expect(
+        cacheContainer
+            .read(chatThreadProvider(hiddenConversation.threadId))
+            .messages,
+        isEmpty,
+      );
+      expect(controller.debugCacheStats().evictedThreadCount, 1);
+    });
+
     test('realtime gap hint 只调度 delta 不改变低延迟投影', () async {
       await activate();
       messageSyncService.syncReasons.clear();
@@ -1008,4 +1160,18 @@ class _BlockingProfileService implements ProfileApplicationService {
   Future<UserProfile> updateProfile(ProfilePatch patch) {
     throw UnimplementedError();
   }
+}
+
+ChatMessage _runtimeTestMessage(ConversationSummary conversation, int index) {
+  return ChatMessage(
+    localId: '${conversation.threadId}:local:$index',
+    remoteId: '${conversation.threadId}:remote:$index',
+    threadId: conversation.threadId,
+    senderDid: conversation.targetDid ?? 'did:test:peer',
+    receiverDid: 'did:test:me',
+    content: 'message $index',
+    createdAt: DateTime(2026, 6, 29, 10, index),
+    isMine: false,
+    sendState: MessageSendState.sent,
+  );
 }
