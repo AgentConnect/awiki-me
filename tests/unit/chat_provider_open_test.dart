@@ -70,13 +70,10 @@ void main() {
     addTearDown(container.dispose);
   });
 
-  test('首次打开空线程时先显示本地历史，再后台远端 reconcile', () async {
-    final remoteCompleter = Completer<void>();
-    gateway
-      ..fetchDmHistoryCompleter = remoteCompleter
-      ..localDmHistoryByPeerDid = <String, List<ChatMessage>>{
-        'did:peer': <ChatMessage>[message],
-      };
+  test('首次打开空线程时本地历史命中不触发远端 history', () async {
+    gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:peer': <ChatMessage>[message],
+    };
 
     await container
         .read(chatThreadsProvider.notifier)
@@ -85,23 +82,18 @@ void main() {
     await pumpEventQueue();
 
     expect(gateway.fetchLocalDmHistoryCalls, 1);
-    expect(gateway.fetchDmHistoryCalls, 1);
+    expect(gateway.fetchDmHistoryCalls, 0);
     expect(gateway.listConversationsCalls, 0);
+    expect(messageSyncService.threadAfterRequests, hasLength(1));
+    expect(
+      messageSyncService.threadAfterRequests.single.afterServerSeq,
+      isNull,
+    );
 
     final thread = container.read(chatThreadProvider(conversation.threadId));
     expect(thread.messages, hasLength(1));
     expect(thread.messages.single.content, 'hello');
     expect(thread.isLoading, isFalse);
-
-    remoteCompleter.complete();
-    await pumpEventQueue();
-
-    final reconciled = container.read(
-      chatThreadProvider(conversation.threadId),
-    );
-    expect(reconciled.messages, hasLength(1));
-    expect(reconciled.messages.single.remoteId, 'msg-1');
-    expect(reconciled.isLoading, isFalse);
   });
 
   test('本地历史为空时仍回退远端 history', () async {
@@ -372,7 +364,7 @@ void main() {
     expect(messages.map((item) => item.content), contains('repaired'));
   });
 
-  test('远端 reconcile 失败不会清空本地历史', () async {
+  test('本地历史命中时失败的远端 history 不会被触发', () async {
     gateway
       ..failNextFetchDmHistory = true
       ..localDmHistoryByPeerDid = <String, List<ChatMessage>>{
@@ -385,14 +377,14 @@ void main() {
     await pumpEventQueue();
 
     expect(gateway.fetchLocalDmHistoryCalls, 1);
-    expect(gateway.fetchDmHistoryCalls, 1);
+    expect(gateway.fetchDmHistoryCalls, 0);
     final thread = container.read(chatThreadProvider(conversation.threadId));
     expect(thread.messages, hasLength(1));
     expect(thread.messages.single.content, 'hello');
     expect(thread.isLoading, isFalse);
   });
 
-  test('有稳定 DID 的 handle 会话本地优先按 DID 读取，远端按 handle 也能解析到 DID 历史', () async {
+  test('有稳定 DID 的 handle 会话本地优先按 DID 读取且不触发远端 history', () async {
     const agentDid = 'did:agent:runtime';
     const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
     final agentConversation = ConversationSummary(
@@ -441,7 +433,8 @@ void main() {
     await pumpEventQueue();
 
     expect(gateway.lastFetchedLocalDmPeerDid, agentDid);
-    expect(gateway.lastFetchedDmPeerDid, agentHandle);
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(gateway.lastFetchedDmPeerDid, isNull);
     final thread = container.read(
       chatThreadProvider(agentConversation.threadId),
     );
@@ -460,6 +453,7 @@ void main() {
 
     expect(gateway.fetchLocalDmHistoryCalls, 1);
     expect(gateway.fetchDmHistoryCalls, 1);
+    expect(messageSyncService.threadAfterRequests, hasLength(2));
     expect(gateway.listConversationsCalls, 0);
   });
 
@@ -1226,7 +1220,7 @@ void main() {
     );
   });
 
-  test('历史回补会用服务端已发送消息替换同内容 pending', () async {
+  test('thread-after 回补会用服务端已发送消息替换同内容 pending', () async {
     final pending = ChatMessage(
       localId: 'pending-1',
       threadId: conversation.threadId,
@@ -1249,9 +1243,8 @@ void main() {
       sendState: MessageSendState.sent,
       serverSequence: 5,
     );
-    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
-      'did:peer': <ChatMessage>[serverMessage],
-    };
+    messageSyncService.threadAfterMessagesByStableId['dm:did:peer'] =
+        <ChatMessage>[serverMessage];
     container.read(chatThreadsProvider.notifier).applyRealtimeUpdate(pending);
 
     await container
@@ -1267,7 +1260,7 @@ void main() {
             targetDid: conversation.targetDid,
           ),
         );
-    await Future<void>.delayed(Duration.zero);
+    await pumpEventQueue();
 
     final messages = container
         .read(chatThreadProvider(conversation.threadId))
@@ -1275,6 +1268,7 @@ void main() {
     expect(messages.where((item) => item.content == '5'), hasLength(1));
     expect(messages.single.remoteId, 'remote-5');
     expect(messages.single.sendState, MessageSendState.sent);
+    expect(gateway.fetchDmHistoryCalls, 0);
   });
 
   test('历史回补不会把同一条已发送消息重复展示', () async {
@@ -2055,7 +2049,7 @@ void main() {
     expect(messages.single.sendState, MessageSendState.sending);
   });
 
-  test('会话列表已有新预览时再次打开会补拉历史', () async {
+  test('会话列表已有新预览时再次打开走 thread-after 不走远端 history', () async {
     final localOnly = ChatMessage(
       localId: 'sent-local',
       remoteId: 'sent-local',
@@ -2065,6 +2059,7 @@ void main() {
       content: '你好',
       createdAt: DateTime(2026, 5, 8, 10, 0),
       isMine: true,
+      serverSequence: 5,
       sendState: MessageSendState.sent,
     );
     final reply = ChatMessage(
@@ -2077,11 +2072,14 @@ void main() {
       content: '你好。欢迎',
       createdAt: DateTime(2026, 5, 8, 10, 2),
       isMine: false,
+      serverSequence: 6,
       sendState: MessageSendState.sent,
     );
     gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
       'did:peer': <ChatMessage>[localOnly, reply],
     };
+    messageSyncService.threadAfterMessagesByStableId['dm:did:peer'] =
+        <ChatMessage>[reply];
     container.read(chatThreadsProvider.notifier).applyRealtimeUpdate(localOnly);
 
     await container
@@ -2103,7 +2101,10 @@ void main() {
         .read(chatThreadProvider(conversation.threadId))
         .messages;
     expect(messages.map((item) => item.content), contains('你好。欢迎'));
-    expect(gateway.fetchDmHistoryCalls, 1);
+    expect(gateway.fetchLocalDmHistoryCalls, 0);
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(messageSyncService.threadAfterRequests, hasLength(1));
+    expect(messageSyncService.threadAfterRequests.single.afterServerSeq, '5');
   });
 
   test('历史加载中收到新的会话概览时会排队再补拉一次', () async {

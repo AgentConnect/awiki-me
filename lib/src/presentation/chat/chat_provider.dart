@@ -510,9 +510,21 @@ class ChatThreadsController
         _activeRemoteHistorySyncs.contains(displayThreadId)) {
       return;
     }
-    if (!_shouldLoadHistory(currentBeforeLocal, conversation)) {
+    if (_hasRenderableMessages(currentBeforeLocal)) {
+      _logOpenFirstPaintSource(
+        displayThreadId,
+        source: 'memory_tail',
+        items: currentBeforeLocal.messages.length,
+      );
+      unawaited(
+        _syncThreadAfterLocalMax(
+          conversation,
+          displayThreadId: displayThreadId,
+        ),
+      );
       return;
     }
+
     final localResult = await _loadLocalHistory(
       conversation,
       intoThreadId: displayThreadId,
@@ -523,28 +535,47 @@ class ChatThreadsController
     unawaited(
       _syncThreadAfterLocalMax(conversation, displayThreadId: displayThreadId),
     );
-    final shouldReconcileRemote =
-        currentBeforeLocal.messages.isEmpty ||
-        localResult.failed ||
-        _shouldLoadHistory(thread(displayThreadId), conversation);
-    if (!shouldReconcileRemote) {
+    final currentAfterLocal = thread(displayThreadId);
+    if (_hasRenderableMessages(currentAfterLocal)) {
+      _logOpenFirstPaintSource(
+        displayThreadId,
+        source: localResult.loadedAny ? 'local_history' : 'memory_tail',
+        items: currentAfterLocal.messages.length,
+      );
       return;
     }
     if (_activeRemoteHistorySyncs.contains(displayThreadId)) {
       return;
     }
-    final hadLocalMessagesBefore = currentBeforeLocal.messages.isNotEmpty;
     final shouldShowRemoteFailure =
-        localResult.failed ||
-        (!localResult.loadedAny && !hadLocalMessagesBefore);
+        localResult.failed || !localResult.loadedAny;
     unawaited(
       syncHistoryForConversation(
         conversation,
         displayThreadId: displayThreadId,
-        force: currentBeforeLocal.messages.isEmpty || localResult.failed,
+        force: true,
         reportFailure: shouldShowRemoteFailure,
-        showLoading: !localResult.loadedAny && !hadLocalMessagesBefore,
+        showLoading: true,
       ),
+    );
+  }
+
+  bool _hasRenderableMessages(ChatThreadState current) {
+    return current.messages.any((message) => message.hasRenderableContent);
+  }
+
+  void _logOpenFirstPaintSource(
+    String threadId, {
+    required String source,
+    required int items,
+  }) {
+    AwikiPerformanceLogger.log(
+      'chat.open.first_paint',
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(threadId),
+        'source': source,
+        'items': items,
+      },
     );
   }
 
