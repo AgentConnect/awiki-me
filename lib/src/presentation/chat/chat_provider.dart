@@ -24,6 +24,9 @@ import '../agents/agents_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../conversation_list/conversation_provider.dart';
 
+const String _attachmentManifestContentType =
+    'application/anp-attachment-manifest+json';
+
 class ChatThreadState {
   const ChatThreadState({
     required this.threadId,
@@ -1444,26 +1447,37 @@ class ChatThreadsController
                 )
                 .timeout(_sendTimeout);
       final sentInThread = _withThreadId(sent, targetThreadId);
-      _replaceMessage(targetThreadId, pending.localId, sentInThread);
+      final deliveredMessage = _replaceMessage(
+        targetThreadId,
+        pending.localId,
+        sentInThread,
+      );
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
         displayThreadId: targetThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
         mentions: validMentionDrafts,
         submittedLocalMessageId: pending.localId,
-        deliveredMessage: sentInThread,
+        deliveredMessage: deliveredMessage,
       );
       final sentConversation = _withConversationPreview(
         conversation,
-        sentInThread,
+        deliveredMessage,
       );
       ref
           .read(conversationListProvider.notifier)
           .upsertConversation(sentConversation);
     } catch (_) {
       final failed = pending.copyWith(sendState: MessageSendState.failed);
-      _replaceMessage(targetThreadId, pending.localId, failed);
-      final failedConversation = _withConversationPreview(conversation, failed);
+      final failedInThread = _replaceMessage(
+        targetThreadId,
+        pending.localId,
+        failed,
+      );
+      final failedConversation = _withConversationPreview(
+        conversation,
+        failedInThread,
+      );
       ref
           .read(conversationListProvider.notifier)
           .upsertConversation(failedConversation);
@@ -1554,26 +1568,37 @@ class ChatThreadsController
         sent: _withThreadId(sent, targetThreadId),
         originalAttachment: attachment,
       );
-      _replaceMessage(targetThreadId, pending.localId, sentInThread);
+      final deliveredMessage = _replaceMessage(
+        targetThreadId,
+        pending.localId,
+        sentInThread,
+      );
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
         displayThreadId: targetThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
         mentions: validMentionDrafts,
         submittedLocalMessageId: pending.localId,
-        deliveredMessage: sentInThread,
+        deliveredMessage: deliveredMessage,
       );
       final sentConversation = _withConversationPreview(
         conversation,
-        sentInThread,
+        deliveredMessage,
       );
       ref
           .read(conversationListProvider.notifier)
           .upsertConversation(sentConversation);
     } catch (_) {
       final failed = pending.copyWith(sendState: MessageSendState.failed);
-      _replaceMessage(targetThreadId, pending.localId, failed);
-      final failedConversation = _withConversationPreview(conversation, failed);
+      final failedInThread = _replaceMessage(
+        targetThreadId,
+        pending.localId,
+        failed,
+      );
+      final failedConversation = _withConversationPreview(
+        conversation,
+        failedInThread,
+      );
       ref
           .read(conversationListProvider.notifier)
           .upsertConversation(failedConversation);
@@ -2602,7 +2627,7 @@ class ChatThreadsController
     state = _enforceGlobalCachePolicy(nextState);
   }
 
-  void _replaceMessage(
+  ChatMessage _replaceMessage(
     String threadId,
     String localId,
     ChatMessage replacement,
@@ -2613,34 +2638,84 @@ class ChatThreadsController
     if (index >= 0) {
       existing = current.removeAt(index);
     } else if (replacement.sendState != MessageSendState.sent) {
-      return;
+      return replacement;
     }
+    late final ChatMessage resolved;
     final replacementIndex = _matchingMessageIndex(current, replacement);
     if (replacementIndex >= 0) {
-      final merged = _withPreservedAttachmentState(
+      final merged = _mergeMessageSemantics(
         replacement,
         current[replacementIndex],
       );
-      current[replacementIndex] = existing == null
+      resolved = existing == null
           ? merged
-          : _withPreservedAttachmentState(
-              merged,
+          : _mergeMessageSemantics(merged, existing, trustMessageMatch: true);
+      current[replacementIndex] = resolved;
+    } else {
+      resolved = existing == null
+          ? replacement
+          : _mergeMessageSemantics(
+              replacement,
               existing,
               trustMessageMatch: true,
             );
-    } else {
-      current.add(
-        existing == null
-            ? replacement
-            : _withPreservedAttachmentState(
-                replacement,
-                existing,
-                trustMessageMatch: true,
-              ),
+      current.add(resolved);
+    }
+    _recordMessageRoutes(threadId, <ChatMessage>[
+      replacement,
+      if (!identical(replacement, resolved)) resolved,
+    ]);
+    _setMessages(threadId, current);
+    return resolved;
+  }
+
+  ChatMessage _mergeMessageSemantics(
+    ChatMessage incoming,
+    ChatMessage existing, {
+    bool trustMessageMatch = false,
+  }) {
+    final incomingAttachment = incoming.attachment;
+    final existingAttachment = existing.attachment;
+    final sameStableMessage = _sameStableMessage(incoming, existing);
+    final canPreserveExistingSemantics = trustMessageMatch || sameStableMessage;
+    if (existingAttachment == null) {
+      return _withPreservedMentionState(incoming, existing);
+    }
+    if (incomingAttachment == null) {
+      if (!canPreserveExistingSemantics) {
+        return _withPreservedMentionState(incoming, existing);
+      }
+      return _withPreservedMentionState(
+        incoming.copyWith(
+          content: _mergedAttachmentContent(incoming, existing),
+          originalType: _attachmentManifestContentType,
+          attachment: existingAttachment,
+          payloadJson: _mergedPayloadJson(incoming, existing),
+        ),
+        existing,
       );
     }
-    _recordMessageRoutes(threadId, <ChatMessage>[replacement]);
-    _setMessages(threadId, current);
+    if (!canPreserveExistingSemantics &&
+        !_isSameAttachment(incoming, existing)) {
+      return _withPreservedMentionState(incoming, existing);
+    }
+    final mergedAttachment = _mergeAttachment(
+      incomingAttachment,
+      existingAttachment,
+      preferExistingCaption: _shouldPreserveExistingAttachmentCaption(
+        incoming,
+        existing,
+      ),
+    );
+    return _withPreservedMentionState(
+      incoming.copyWith(
+        content: _mergedAttachmentContent(incoming, existing),
+        originalType: _attachmentManifestContentType,
+        attachment: mergedAttachment,
+        payloadJson: _mergedPayloadJson(incoming, existing),
+      ),
+      existing,
+    );
   }
 
   void _mergeMessages(
@@ -2669,7 +2744,11 @@ class ChatThreadsController
           );
           if (index >= 0) {
             final previous = current[index];
-            current[index] = _withPreservedAttachmentState(message, previous);
+            current[index] = _mergeMessageSemantics(
+              message,
+              previous,
+              trustMessageMatch: true,
+            );
             indexes.replace(index, current[index]);
           } else {
             current.add(message);
@@ -2819,35 +2898,97 @@ class ChatThreadsController
     );
   }
 
-  ChatMessage _withPreservedAttachmentState(
+  ChatMessage _withPreservedMentionState(
     ChatMessage incoming,
-    ChatMessage existing, {
-    bool trustMessageMatch = false,
-  }) {
-    final incomingAttachment = incoming.attachment;
-    final existingAttachment = existing.attachment;
-    if (incomingAttachment == null || existingAttachment == null) {
+    ChatMessage existing,
+  ) {
+    if (incoming.mentions.isNotEmpty || existing.mentions.isEmpty) {
       return incoming;
     }
-    if (!trustMessageMatch && !_isSameAttachment(incoming, existing)) {
-      return incoming;
-    }
-    final existingPath = existingAttachment.localPath?.trim();
-    if (existingPath == null || existingPath.isEmpty) {
-      return incoming;
-    }
-    final incomingPath = incomingAttachment.localPath?.trim();
-    if (incomingPath != null && incomingPath.isNotEmpty) {
+    if (!_sameMessageTextForMentions(incoming, existing)) {
       return incoming;
     }
     return incoming.copyWith(
-      attachment: incomingAttachment.copyWith(
-        localPath: existingPath,
-        hasLocalSource:
-            incomingAttachment.hasLocalSource ||
-            existingAttachment.hasLocalSource,
-      ),
+      payloadJson: _mergedPayloadJson(incoming, existing),
+      mentions: existing.mentions,
     );
+  }
+
+  ChatAttachment _mergeAttachment(
+    ChatAttachment incoming,
+    ChatAttachment existing, {
+    required bool preferExistingCaption,
+  }) {
+    return incoming.copyWith(
+      caption: preferExistingCaption
+          ? _firstNonEmptyText(existing.caption, incoming.caption)
+          : _firstNonEmptyText(incoming.caption, existing.caption),
+      objectUri: _firstNonEmptyText(incoming.objectUri, existing.objectUri),
+      localPath: _firstNonEmptyText(incoming.localPath, existing.localPath),
+      hasLocalSource: incoming.hasLocalSource || existing.hasLocalSource,
+    );
+  }
+
+  String _mergedAttachmentContent(ChatMessage incoming, ChatMessage existing) {
+    final incomingContent = incoming.content.trim();
+    if (incomingContent.isNotEmpty) {
+      return incoming.content;
+    }
+    final existingContent = existing.content.trim();
+    if (existingContent.isNotEmpty) {
+      return existing.content;
+    }
+    return existing.attachment?.caption ?? incoming.content;
+  }
+
+  bool _shouldPreserveExistingAttachmentCaption(
+    ChatMessage incoming,
+    ChatMessage existing,
+  ) {
+    if (existing.mentions.isEmpty) {
+      return false;
+    }
+    return incoming.mentions.isEmpty &&
+        _sameMessageTextForMentions(incoming, existing);
+  }
+
+  String? _mergedPayloadJson(ChatMessage incoming, ChatMessage existing) {
+    return _firstNonEmptyText(incoming.payloadJson, existing.payloadJson);
+  }
+
+  bool _sameMessageTextForMentions(ChatMessage incoming, ChatMessage existing) {
+    final incomingText = incoming.content.trim();
+    final existingText = existing.content.trim();
+    if (incomingText.isNotEmpty && existingText.isNotEmpty) {
+      return incoming.content == existing.content;
+    }
+    final incomingCaption = incoming.attachment?.caption?.trim();
+    final existingCaption = existing.attachment?.caption?.trim();
+    if (incomingCaption != null &&
+        incomingCaption.isNotEmpty &&
+        existingCaption != null &&
+        existingCaption.isNotEmpty) {
+      return incoming.attachment?.caption == existing.attachment?.caption;
+    }
+    return incoming.previewText == existing.previewText;
+  }
+
+  bool _sameStableMessage(ChatMessage first, ChatMessage second) {
+    final firstId = _stableMessageId(first);
+    final secondId = _stableMessageId(second);
+    return firstId.isNotEmpty && firstId == secondId;
+  }
+
+  String? _firstNonEmptyText(String? first, String? second) {
+    final firstValue = first?.trim();
+    if (firstValue != null && firstValue.isNotEmpty) {
+      return first;
+    }
+    final secondValue = second?.trim();
+    if (secondValue != null && secondValue.isNotEmpty) {
+      return second;
+    }
+    return first ?? second;
   }
 
   bool _isSameAttachment(ChatMessage first, ChatMessage second) {

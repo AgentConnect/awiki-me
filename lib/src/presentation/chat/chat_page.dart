@@ -55,6 +55,8 @@ const _macChatHeaderActionActiveBackground = Color(0xFFE4ECF7);
 const _macChatHeaderActionIconSize = 16.0;
 const _macChatHeaderActionFontWeight = FontWeight.w400;
 const _macChatHeaderActionActiveFontWeight = FontWeight.w600;
+const _chatMessageListBottomInset = 12.0;
+const _macChatMessageListBottomInset = 10.0;
 
 class ChatPage extends StatelessWidget {
   const ChatPage({super.key, required this.conversation});
@@ -166,6 +168,8 @@ class _BottomInitialScrollPosition extends ScrollPositionWithSingleContext {
   }
 }
 
+enum _ChatScrollAnchorPhase { opening, active }
+
 class _ChatViewState extends ConsumerState<ChatView> {
   final textController = TextEditingController();
   late final _BottomInitialScrollController scrollController;
@@ -182,6 +186,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
   int _visibleReadAckToken = 0;
   bool _pendingScrollAnimated = false;
   int _pendingScrollSettleFrames = 1;
+  _ChatScrollAnchorPhase _scrollAnchorPhase = _ChatScrollAnchorPhase.opening;
+  bool _openingAnchorObservedContent = false;
+  int _openingAnchorToken = 0;
   final Set<String> _downloadingAttachmentMessageIds = <String>{};
   static const double _nearBottomExtent = 96;
 
@@ -191,6 +198,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     _displayThreadId = widget.conversation.threadId;
     scrollController = _BottomInitialScrollController();
     _chatThreadsController = ref.read(chatThreadsProvider.notifier);
+    _beginOpeningBottomAnchor();
     _markConversationVisible(
       widget.conversation,
       displayThreadId: _displayThreadId,
@@ -233,7 +241,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       _hasDeferredBottomNotice = false;
       _userAwayFromBottom = false;
       _cancelPendingScrollRequests();
-      scrollController.prepareForInitialBottomPosition();
+      _beginOpeningBottomAnchor();
     }
   }
 
@@ -342,6 +350,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final buildWatch = Stopwatch()..start();
     final responsive = context.awikiResponsive;
     final macStyle = widget.macStyle && responsive.isMacDesktop;
+    final messageListBottomInset = macStyle
+        ? responsive.displayScaled(_macChatMessageListBottomInset)
+        : responsive.spacing(_chatMessageListBottomInset);
     final displayThreadId = _displayThreadId;
     final thread = ref.watch(chatThreadProvider(displayThreadId));
     final currentConversation = _currentConversationForTitle();
@@ -390,6 +401,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       }
     });
     final messages = thread.messages;
+    _settleOpeningBottomAnchorForCurrentThread(thread);
     final activePendingTurns = thread.agentPendingTurns
         .where((turn) => turn.isActive)
         .toList(growable: false);
@@ -467,7 +479,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                             : (widget.embedded
                                   ? responsive.spacing(32)
                                   : responsive.tabContentHorizontalPadding),
-                        0,
+                        messageListBottomInset,
                       ),
                       itemCount: messageListItemCount,
                       itemBuilder: (_, index) {
@@ -886,11 +898,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
                   message: message,
                 ),
           );
-      await _launchNativeAttachment(previewPath);
-    } catch (error) {
+      await ref.read(attachmentOpenServiceProvider).open(previewPath);
+    } catch (error, stackTrace) {
       ref
           .read(uiFeedbackProvider.notifier)
-          .showError(_attachmentOpenErrorMessage(error));
+          .showError(
+            _attachmentOpenErrorMessage(error),
+            detail: _attachmentOpenErrorDetail(error, stackTrace),
+          );
     } finally {
       if (mounted) {
         setState(() {
@@ -909,24 +924,18 @@ class _ChatViewState extends ConsumerState<ChatView> {
         raw.contains('message not found')) {
       return AppMessage.attachmentUnavailable();
     }
-    return AppMessage.fromError(error);
+    return AppMessage.attachmentOpenFailed();
   }
 
-  Future<void> _launchNativeAttachment(String pathOrUri) async {
-    final uri = _attachmentUri(pathOrUri);
-    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!launched) {
-      throw StateError('无法使用本机应用打开附件：$pathOrUri');
+  String _attachmentOpenErrorDetail(Object error, StackTrace stackTrace) {
+    final buffer = StringBuffer()..writeln(error);
+    final stack = stackTrace.toString().trim();
+    if (stack.isNotEmpty) {
+      buffer
+        ..writeln()
+        ..write(stack);
     }
-  }
-
-  Uri _attachmentUri(String pathOrUri) {
-    final value = pathOrUri.trim();
-    final parsed = Uri.tryParse(value);
-    if (parsed != null && parsed.hasScheme) {
-      return parsed;
-    }
-    return Uri.file(value);
+    return buffer.toString().trim();
   }
 
   void _requestAgentsIfNeeded(ConversationSummary conversation) {
@@ -947,6 +956,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   bool _handleScrollNotification(ScrollNotification notification) {
     if (notification is UserScrollNotification) {
+      _endOpeningBottomAnchor();
       _updateUserAwayFromBottom();
       return false;
     }
@@ -985,6 +995,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
     ChatThreadState next,
     ConversationSummary conversation,
   ) {
+    if (_shouldUseOpeningBottomAnchor(previous, next)) {
+      _scheduleOpeningBottomAnchorSettle(settleFrames: 3);
+      return;
+    }
     if (previous == null) {
       if (next.messages.isNotEmpty) {
         _scheduleScrollToBottom(settleFrames: 2);
@@ -1036,8 +1050,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
     });
   }
 
-  void _scheduleScrollToBottom({bool animated = false, int settleFrames = 1}) {
-    _pendingScrollAnimated = _pendingScrollAnimated || animated;
+  void _scheduleScrollToBottom({
+    bool animated = false,
+    int settleFrames = 1,
+    bool forceJump = false,
+  }) {
+    _pendingScrollAnimated = forceJump
+        ? false
+        : _pendingScrollAnimated || animated;
     _pendingScrollSettleFrames = _pendingScrollSettleFrames > settleFrames
         ? _pendingScrollSettleFrames
         : settleFrames;
@@ -1076,6 +1096,85 @@ class _ChatViewState extends ConsumerState<ChatView> {
     _pendingScrollAnimated = false;
     _pendingScrollSettleFrames = 1;
     _isProgrammaticScroll = false;
+  }
+
+  void _beginOpeningBottomAnchor() {
+    _scrollAnchorPhase = _ChatScrollAnchorPhase.opening;
+    _openingAnchorObservedContent = false;
+    _openingAnchorToken += 1;
+    scrollController.prepareForInitialBottomPosition();
+  }
+
+  void _endOpeningBottomAnchor() {
+    if (_scrollAnchorPhase == _ChatScrollAnchorPhase.active) {
+      return;
+    }
+    _scrollAnchorPhase = _ChatScrollAnchorPhase.active;
+    _openingAnchorToken += 1;
+  }
+
+  bool _shouldUseOpeningBottomAnchor(
+    ChatThreadState? previous,
+    ChatThreadState next,
+  ) {
+    if (_scrollAnchorPhase != _ChatScrollAnchorPhase.opening ||
+        _userAwayFromBottom ||
+        !_threadHasBottomAnchorContent(next)) {
+      return false;
+    }
+    if (previous == null) {
+      return true;
+    }
+    return next.messages.length != previous.messages.length ||
+        _activePendingTurnCount(next) != _activePendingTurnCount(previous) ||
+        next.messageAgentTimelineCount != previous.messageAgentTimelineCount;
+  }
+
+  void _settleOpeningBottomAnchorForCurrentThread(ChatThreadState thread) {
+    if (_scrollAnchorPhase != _ChatScrollAnchorPhase.opening ||
+        _openingAnchorObservedContent ||
+        _userAwayFromBottom) {
+      return;
+    }
+    if (_threadHasBottomAnchorContent(thread)) {
+      _scheduleOpeningBottomAnchorSettle(settleFrames: 3);
+    }
+  }
+
+  bool _threadHasBottomAnchorContent(ChatThreadState thread) {
+    return thread.messages.isNotEmpty ||
+        _activePendingTurnCount(thread) > 0 ||
+        thread.messageAgentTimelineCount > 0;
+  }
+
+  void _scheduleOpeningBottomAnchorSettle({required int settleFrames}) {
+    if (_scrollAnchorPhase != _ChatScrollAnchorPhase.opening) {
+      return;
+    }
+    _openingAnchorObservedContent = true;
+    scrollController.prepareForInitialBottomPosition();
+    _scheduleScrollToBottom(settleFrames: settleFrames, forceJump: true);
+    _scheduleOpeningBottomAnchorEnd(afterFrames: settleFrames + 1);
+  }
+
+  void _scheduleOpeningBottomAnchorEnd({required int afterFrames}) {
+    final token = ++_openingAnchorToken;
+    void schedule(int remainingFrames) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            token != _openingAnchorToken ||
+            _scrollAnchorPhase != _ChatScrollAnchorPhase.opening) {
+          return;
+        }
+        if (remainingFrames <= 0) {
+          _scrollAnchorPhase = _ChatScrollAnchorPhase.active;
+          return;
+        }
+        schedule(remainingFrames - 1);
+      });
+    }
+
+    schedule(afterFrames);
   }
 
   void _scrollToBottom({bool animated = false, required int token}) {

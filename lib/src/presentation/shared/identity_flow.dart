@@ -1,10 +1,12 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../../app/e2e_semantics.dart';
 import '../../app/app_router.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
+import '../../application/ports/directory_core_port.dart';
 import '../../application/thread_id_utils.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/relationship_summary.dart';
@@ -32,12 +34,128 @@ class IdentityFlowResult {
   final UserProfile profile;
 }
 
+typedef IdentityConfirmAction = Future<void> Function(UserProfile profile);
+
+class IdentityLookupDialogConfig {
+  const IdentityLookupDialogConfig({
+    required this.title,
+    required this.subtitle,
+    required this.actionLabel,
+    required this.actionButtonKey,
+    required this.actionSemanticsIdentifier,
+    required this.previewNoticeText,
+    this.searchButtonKey = const Key('identity-lookup-search-button'),
+    this.inputKey = const Key('identity-lookup-input'),
+    this.inputSemanticsIdentifier = 'e2e-identity-lookup-input',
+    this.inputSemanticsLabel = '输入 handle 或 DID',
+    this.inputPlaceholder = '输入 @handle / DID / Agent 地址',
+    this.searchLabel = '匹配身份',
+    this.resolvingLabel = '匹配中...',
+    this.submittingLabel = '处理中...',
+    this.loadRelationship = false,
+    this.showRelationship = true,
+  });
+
+  final String title;
+  final String subtitle;
+  final String actionLabel;
+  final Key actionButtonKey;
+  final String actionSemanticsIdentifier;
+  final String previewNoticeText;
+  final Key searchButtonKey;
+  final Key inputKey;
+  final String inputSemanticsIdentifier;
+  final String inputSemanticsLabel;
+  final String inputPlaceholder;
+  final String searchLabel;
+  final String resolvingLabel;
+  final String submittingLabel;
+  final bool loadRelationship;
+  final bool showRelationship;
+
+  factory IdentityLookupDialogConfig.forMode(
+    IdentityFlowMode mode,
+    AppLocalizations l10n,
+  ) {
+    switch (mode) {
+      case IdentityFlowMode.startConversation:
+        return IdentityLookupDialogConfig(
+          title: l10n.quickActionStartConversation,
+          subtitle: l10n.identityStartConversationSubtitle,
+          actionLabel: l10n.identityStartConversationAction,
+          actionButtonKey: const Key('identity-start-chat-button'),
+          actionSemanticsIdentifier: 'e2e-identity-start-chat-button',
+          previewNoticeText: l10n.identityStartConversationNotice,
+        );
+      case IdentityFlowMode.followContact:
+        return IdentityLookupDialogConfig(
+          title: l10n.identityFollowContactTitle,
+          subtitle: l10n.identityFollowContactSubtitle,
+          actionLabel: l10n.identityFollowContactAction,
+          actionButtonKey: const Key('identity-add-contact-button'),
+          actionSemanticsIdentifier: 'e2e-identity-add-contact-button',
+          previewNoticeText: l10n.identityFollowContactNotice,
+          loadRelationship: true,
+        );
+    }
+  }
+
+  static const IdentityLookupDialogConfig addGroupMember =
+      IdentityLookupDialogConfig(
+        title: '添加群成员',
+        subtitle: '输入普通用户或 Agent 的 handle / DID，确认身份后加入群聊。',
+        actionLabel: '确认添加',
+        actionButtonKey: Key('identity-add-group-member-button'),
+        actionSemanticsIdentifier: 'e2e-identity-add-group-member-button',
+        previewNoticeText: '请确认这是要加入群聊的身份。',
+        showRelationship: false,
+      );
+}
+
 String normalizeDidOrHandleInput(String rawValue) {
   var value = rawValue.trim();
   while (value.startsWith('@')) {
     value = value.substring(1).trimLeft();
   }
   return value;
+}
+
+Future<UserProfile> resolveIdentityProfile(
+  WidgetRef ref,
+  String rawQuery,
+) async {
+  final query = normalizeDidOrHandleInput(rawQuery);
+  if (query.isEmpty) {
+    throw ArgumentError('请输入 handle 或 DID。');
+  }
+  try {
+    final resolution = await ref
+        .read(directoryApplicationServiceProvider)
+        .resolvePeer(query);
+    return resolution.profile ?? identityProfileFromResolution(resolution);
+  } catch (_) {
+    return ref.read(profileApplicationServiceProvider).loadPublicProfile(query);
+  }
+}
+
+UserProfile identityProfileFromResolution(DirectoryPeerResolution resolution) {
+  final did = resolution.did.trim();
+  if (did.isEmpty) {
+    throw StateError('身份解析结果缺少 DID。');
+  }
+  final handle = resolution.handle?.trim();
+  final displayName = handle == null || handle.isEmpty
+      ? DidDisplayFormatter.compactDid(did)
+      : handle;
+  return UserProfile(
+    did: did,
+    displayName: displayName,
+    bio: '',
+    tags: const <String>[],
+    profileMarkdown: '',
+    handle: handle,
+    fullHandle: handle,
+  );
 }
 
 String dmThreadIdForDids(String myDid, String peerDid) {
@@ -227,9 +345,16 @@ Future<void> showFollowIdentityDialog(
 }
 
 class IdentityLookupDialog extends ConsumerStatefulWidget {
-  const IdentityLookupDialog({super.key, required this.mode});
+  const IdentityLookupDialog({
+    super.key,
+    this.mode,
+    this.config,
+    this.onConfirm,
+  }) : assert(mode != null || config != null);
 
-  final IdentityFlowMode mode;
+  final IdentityFlowMode? mode;
+  final IdentityLookupDialogConfig? config;
+  final IdentityConfirmAction? onConfirm;
 
   @override
   ConsumerState<IdentityLookupDialog> createState() =>
@@ -239,11 +364,14 @@ class IdentityLookupDialog extends ConsumerStatefulWidget {
 class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
   final _queryController = TextEditingController();
   bool _isResolving = false;
+  bool _isSubmitting = false;
   UserProfile? _profile;
   RelationshipSummary? _relationship;
   String? _errorText;
 
-  bool get _isFollowContact => widget.mode == IdentityFlowMode.followContact;
+  IdentityLookupDialogConfig get _config =>
+      widget.config ??
+      IdentityLookupDialogConfig.forMode(widget.mode!, context.l10n);
 
   @override
   void dispose() {
@@ -264,11 +392,10 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
       _relationship = null;
     });
     try {
-      final profile = await ref
-          .read(profileApplicationServiceProvider)
-          .loadPublicProfile(query);
+      final resolved = await _resolveIdentity(query);
+      final profile = resolved.profile;
       RelationshipSummary? relationship;
-      if (_isFollowContact) {
+      if (_config.loadRelationship) {
         try {
           relationship = await ref
               .read(relationshipApplicationServiceProvider)
@@ -296,12 +423,17 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
     }
   }
 
-  void _submit() {
+  Future<_ResolvedIdentity> _resolveIdentity(String query) async {
+    final profile = await resolveIdentityProfile(ref, query);
+    return _ResolvedIdentity(profile: profile);
+  }
+
+  Future<void> _submit() async {
     final profile = _profile;
-    if (profile == null) {
+    if (profile == null || _isSubmitting || _isResolving) {
       return;
     }
-    if (_isFollowContact) {
+    if (_config.loadRelationship) {
       final relationship = _relationship?.relationship.trim() ?? 'none';
       if (relationship.isNotEmpty && relationship != 'none') {
         ref
@@ -311,16 +443,35 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
         return;
       }
     }
-    Navigator.of(context).pop(IdentityFlowResult(profile: profile));
+    final confirm = widget.onConfirm;
+    if (confirm == null) {
+      Navigator.of(context).pop(IdentityFlowResult(profile: profile));
+      return;
+    }
+    setState(() {
+      _isSubmitting = true;
+      _errorText = null;
+    });
+    try {
+      await confirm(profile);
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(IdentityFlowResult(profile: profile));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isSubmitting = false;
+        _errorText = AppMessage.fromError(error).resolve(context.l10n);
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final title = _isFollowContact ? '关注联系人 / Agent' : '发起新消息';
-    final subtitle = _isFollowContact
-        ? '输入 handle 或 DID，确认身份后关注该身份。'
-        : '输入 handle、DID 或 Agent 地址，确认身份后开始可信会话。';
-    final actionLabel = _isFollowContact ? '关注' : '开始聊天';
+    final config = _config;
     final responsive = context.awikiResponsive;
     final maxWidth = responsive.isPhone ? double.infinity : 560.0;
     return CupertinoPopupSurface(
@@ -357,7 +508,7 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
                               Text(
-                                title,
+                                config.title,
                                 style: const TextStyle(
                                   color: Color(0xFF101B32),
                                   fontSize: 20,
@@ -366,7 +517,7 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                subtitle,
+                                config.subtitle,
                                 style: const TextStyle(
                                   color: Color(0xFF66728A),
                                   fontSize: 13,
@@ -377,7 +528,9 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                           ),
                         ),
                         TopBarActionButton(
-                          onTap: () => Navigator.of(context).pop(),
+                          onTap: _isSubmitting
+                              ? null
+                              : () => Navigator.of(context).pop(),
                           semanticsLabel: '关闭',
                           tooltip: '关闭',
                           child: const Padding(
@@ -394,18 +547,26 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                     const SizedBox(height: 22),
                     _IdentitySearchInput(
                       controller: _queryController,
-                      isResolving: _isResolving,
+                      enabled: !_isResolving && !_isSubmitting,
+                      keyValue: config.inputKey,
+                      semanticsIdentifier: config.inputSemanticsIdentifier,
+                      semanticsLabel: config.inputSemanticsLabel,
+                      placeholder: config.inputPlaceholder,
                       onSubmitted: _resolve,
                     ),
                     const SizedBox(height: 14),
                     SizedBox(
                       width: double.infinity,
                       child: AppPrimaryButton(
-                        key: const Key('identity-lookup-search-button'),
-                        label: _isResolving ? '匹配中...' : '匹配身份',
+                        key: config.searchButtonKey,
+                        label: _isResolving
+                            ? config.resolvingLabel
+                            : config.searchLabel,
                         semanticsIdentifier:
                             'e2e-identity-lookup-search-button',
-                        onPressed: _isResolving ? null : _resolve,
+                        onPressed: _isResolving || _isSubmitting
+                            ? null
+                            : _resolve,
                       ),
                     ),
                     if (_errorText != null) ...<Widget>[
@@ -417,11 +578,10 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                       _IdentityPreviewCard(
                         profile: _profile!,
                         relationship: _relationship,
+                        showRelationship: config.showRelationship,
                       ),
                       const SizedBox(height: 12),
-                      const _InlineNotice(
-                        text: '消息将通过已验证 DID 连接发送；首次联系外部身份请谨慎确认。',
-                      ),
+                      _InlineNotice(text: config.previewNoticeText),
                     ],
                     const SizedBox(height: 22),
                     Row(
@@ -429,22 +589,26 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                         Expanded(
                           child: AppSecondaryButton(
                             label: context.l10n.commonCancel,
-                            onPressed: () => Navigator.of(context).pop(),
+                            onPressed: _isSubmitting
+                                ? null
+                                : () => Navigator.of(context).pop(),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: AppPrimaryButton(
-                            key: Key(
-                              _isFollowContact
-                                  ? 'identity-add-contact-button'
-                                  : 'identity-start-chat-button',
-                            ),
-                            label: actionLabel,
-                            semanticsIdentifier: _isFollowContact
-                                ? 'e2e-identity-add-contact-button'
-                                : 'e2e-identity-start-chat-button',
-                            onPressed: _profile == null ? null : _submit,
+                            key: config.actionButtonKey,
+                            label: _isSubmitting
+                                ? config.submittingLabel
+                                : config.actionLabel,
+                            semanticsIdentifier:
+                                config.actionSemanticsIdentifier,
+                            onPressed:
+                                _profile == null ||
+                                    _isResolving ||
+                                    _isSubmitting
+                                ? null
+                                : _submit,
                           ),
                         ),
                       ],
@@ -460,15 +624,29 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
   }
 }
 
+class _ResolvedIdentity {
+  const _ResolvedIdentity({required this.profile});
+
+  final UserProfile profile;
+}
+
 class _IdentitySearchInput extends StatelessWidget {
   const _IdentitySearchInput({
     required this.controller,
-    required this.isResolving,
+    required this.enabled,
+    required this.keyValue,
+    required this.semanticsIdentifier,
+    required this.semanticsLabel,
+    required this.placeholder,
     required this.onSubmitted,
   });
 
   final TextEditingController controller;
-  final bool isResolving;
+  final bool enabled;
+  final Key keyValue;
+  final String semanticsIdentifier;
+  final String semanticsLabel;
+  final String placeholder;
   final Future<void> Function() onSubmitted;
 
   @override
@@ -487,16 +665,20 @@ class _IdentitySearchInput extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: e2eSemantics(
-              identifier: 'e2e-identity-lookup-input',
-              label: '输入 handle 或 DID',
+              identifier: semanticsIdentifier,
+              label: semanticsLabel,
               textField: true,
               child: CupertinoTextField(
-                key: const Key('identity-lookup-input'),
+                key: keyValue,
                 controller: controller,
-                enabled: !isResolving,
-                placeholder: '输入 @handle / DID / Agent 地址',
+                enabled: enabled,
+                placeholder: placeholder,
                 textInputAction: TextInputAction.search,
-                onSubmitted: (_) async => onSubmitted(),
+                onSubmitted: (_) async {
+                  if (enabled) {
+                    await onSubmitted();
+                  }
+                },
                 decoration: null,
                 padding: EdgeInsets.zero,
                 style: const TextStyle(color: Color(0xFF17213A), fontSize: 14),
@@ -514,10 +696,15 @@ class _IdentitySearchInput extends StatelessWidget {
 }
 
 class _IdentityPreviewCard extends StatelessWidget {
-  const _IdentityPreviewCard({required this.profile, this.relationship});
+  const _IdentityPreviewCard({
+    required this.profile,
+    this.relationship,
+    this.showRelationship = true,
+  });
 
   final UserProfile profile;
   final RelationshipSummary? relationship;
+  final bool showRelationship;
 
   @override
   Widget build(BuildContext context) {
@@ -578,12 +765,13 @@ class _IdentityPreviewCard extends StatelessWidget {
           const SizedBox(height: 14),
           _IdentityMetaLine(label: 'DID', value: profile.did),
           _IdentityMetaLine(label: '类型', value: _inferIdentityType(profile)),
-          _IdentityMetaLine(
-            label: '关系',
-            value: relationshipLabel == null || relationshipLabel.isEmpty
-                ? 'none'
-                : relationshipLabel,
-          ),
+          if (showRelationship)
+            _IdentityMetaLine(
+              label: '关系',
+              value: relationshipLabel == null || relationshipLabel.isEmpty
+                  ? 'none'
+                  : relationshipLabel,
+            ),
           if (profile.bio.trim().isNotEmpty)
             _IdentityMetaLine(label: '简介', value: profile.bio.trim()),
           if (profile.tags.isNotEmpty) ...<Widget>[

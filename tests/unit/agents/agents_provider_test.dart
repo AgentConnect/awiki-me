@@ -22,7 +22,7 @@ import '../test_support.dart';
 
 void main() {
   test(
-    'load restores UserService inventory and selects daemon first',
+    'load restores UserService inventory without explicit selection',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -61,7 +61,7 @@ void main() {
         'did:agent:daemon',
         'did:agent:runtime',
       ]);
-      expect(state.selectedAgentDid, 'did:agent:daemon');
+      expect(state.selectedAgentDid, isNull);
     },
   );
 
@@ -332,7 +332,7 @@ void main() {
       final state = container.read(agentsProvider);
 
       expect(state.agents.map((agent) => agent.agentDid), ['did:agent:daemon']);
-      expect(state.selectedAgentDid, 'did:agent:daemon');
+      expect(state.selectedAgentDid, isNull);
       expect(state.error, isNull);
       expect(control.lastRefreshedDaemonDid, 'did:agent:daemon');
     },

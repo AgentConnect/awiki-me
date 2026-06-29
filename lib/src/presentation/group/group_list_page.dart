@@ -16,8 +16,9 @@ import '../shared/formatters/display_formatters.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../app_shell/providers/session_provider.dart';
-import 'create_group_page.dart';
+import 'create_group_dialog.dart';
 import 'group_chat_navigation.dart';
+import 'group_member_invite_dialog.dart';
 import 'group_provider.dart';
 
 class GroupListPage extends ConsumerWidget {
@@ -74,9 +75,13 @@ class GroupListPage extends ConsumerWidget {
                   ),
                   const SizedBox(width: 12),
                   TopBarActionButton(
-                    onTap: () => AppNavigator.push(
+                    key: const Key('group-list-create-button'),
+                    semanticsLabel: context.l10n.quickActionCreateGroup,
+                    onTap: () => showCreateGroupDialog(
                       context,
-                      (_) => const CreateGroupPage(),
+                      ref,
+                      closeCurrentRouteOnDesktop: !embedded,
+                      replaceCurrentRouteOnPhone: !embedded,
                     ),
                     child: Icon(
                       CupertinoIcons.person_3_fill,
@@ -353,7 +358,7 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                             semanticLabel: '添加成员',
                             icon: CupertinoIcons.person_add,
                             onTap: canManageMembers
-                                ? _showAddMemberDialog
+                                ? () => _showAddMemberDialog(members)
                                 : null,
                           ),
                           const SizedBox(width: 8),
@@ -479,11 +484,12 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
     }
   }
 
-  void _showAddMemberDialog() {
+  void _showAddMemberDialog(List<GroupMemberSummary> members) {
     AppNavigator.showDialog<void>(
       context,
       (ctx) => AddGroupMemberDialog(
         groupId: _group.groupId,
+        existingMembers: members,
         onGroupUpdated: (updated) {
           if (!mounted) {
             return;
@@ -510,106 +516,26 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
   }
 }
 
-class AddGroupMemberDialog extends ConsumerStatefulWidget {
+class AddGroupMemberDialog extends StatelessWidget {
   const AddGroupMemberDialog({
     super.key,
     required this.groupId,
+    required this.existingMembers,
     required this.onGroupUpdated,
   });
 
   final String groupId;
+  final List<GroupMemberSummary> existingMembers;
   final ValueChanged<GroupSummary> onGroupUpdated;
 
   @override
-  ConsumerState<AddGroupMemberDialog> createState() =>
-      _AddGroupMemberDialogState();
-}
-
-class _AddGroupMemberDialogState extends ConsumerState<AddGroupMemberDialog> {
-  final TextEditingController _memberController = TextEditingController();
-  bool _isSubmitting = false;
-
-  @override
-  void dispose() {
-    _memberController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return CupertinoAlertDialog(
-      title: const Text('添加成员'),
-      content: Column(
-        children: <Widget>[
-          const SizedBox(height: 10),
-          Text(
-            '支持普通用户和智能体，输入 handle 或 DID 后会直接加入群聊。',
-            style: AwikiMeTextStyles.cardSubtitle,
-          ),
-          const SizedBox(height: 12),
-          AppTextField(
-            controller: _memberController,
-            label: '成员 handle 或 DID',
-            placeholder: '输入 handle / DID',
-            keyboardType: TextInputType.text,
-            enabled: !_isSubmitting,
-          ),
-        ],
-      ),
-      actions: <Widget>[
-        CupertinoDialogAction(
-          onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(),
-          child: Text(context.l10n.commonCancel),
-        ),
-        CupertinoDialogAction(
-          isDefaultAction: !_isSubmitting,
-          onPressed: _isSubmitting ? null : _addMember,
-          child: _isSubmitting
-              ? const CupertinoActivityIndicator()
-              : const Text('添加'),
-        ),
-      ],
+    return GroupMemberInviteDialog(
+      groupId: groupId,
+      existingMembers: existingMembers,
+      onGroupUpdated: onGroupUpdated,
     );
   }
-
-  Future<void> _addMember() async {
-    final memberRef = _normalizeMemberRef(_memberController.text);
-    if (memberRef.isEmpty) {
-      return;
-    }
-    final groupNotifier = ref.read(groupProvider.notifier);
-    final feedback = ref.read(uiFeedbackProvider.notifier);
-    setState(() {
-      _isSubmitting = true;
-    });
-    try {
-      final updated = await groupNotifier.addGroupMember(
-        groupId: widget.groupId,
-        memberRef: memberRef,
-      );
-      widget.onGroupUpdated(updated);
-      if (!mounted) {
-        return;
-      }
-      Navigator.of(context).pop();
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isSubmitting = false;
-      });
-      feedback.showError(AppMessage.fromError(error));
-    }
-  }
-}
-
-String _normalizeMemberRef(String raw) {
-  final trimmed = raw.trim();
-  if (trimmed.startsWith('@')) {
-    return trimmed.substring(1).trim();
-  }
-  return trimmed;
 }
 
 class _GroupDetailIconButton extends StatelessWidget {

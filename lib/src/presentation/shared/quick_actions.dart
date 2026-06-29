@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
 import '../../l10n/l10n.dart';
-import '../group/create_group_page.dart';
+import '../group/create_group_dialog.dart';
 import '../group/group_list_page.dart';
 import 'identity_flow.dart';
 import 'widgets/app_widgets.dart';
@@ -21,7 +21,7 @@ Future<void> showCommonQuickActionsMenu(
       title: l10n.quickActionsTitle.toUpperCase(),
       items: <AppDropMenuItem>[
         AppDropMenuItem(
-          label: '发起新消息',
+          label: l10n.quickActionStartConversation,
           icon: CupertinoIcons.square_pencil,
           semanticsIdentifier: 'e2e-start-conversation-menu-item',
           onTap: () {
@@ -32,7 +32,7 @@ Future<void> showCommonQuickActionsMenu(
           label: l10n.quickActionCreateGroup,
           icon: CupertinoIcons.person_3_fill,
           onTap: () {
-            AppNavigator.push(rootContext, (_) => const CreateGroupPage());
+            showCreateGroupDialog(rootContext, ref);
           },
         ),
         AppDropMenuItem(

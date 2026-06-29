@@ -7,11 +7,13 @@ class UiFeedbackEvent {
     required this.id,
     required this.message,
     required this.danger,
+    this.detail,
   });
 
   final int id;
   final AppMessage message;
   final bool danger;
+  final String? detail;
 }
 
 class UiFeedbackController extends StateNotifier<UiFeedbackEvent?> {
@@ -19,12 +21,22 @@ class UiFeedbackController extends StateNotifier<UiFeedbackEvent?> {
 
   int _seed = 0;
 
-  void showInfo(AppMessage message) {
-    state = UiFeedbackEvent(id: ++_seed, message: message, danger: false);
+  void showInfo(AppMessage message, {String? detail}) {
+    state = UiFeedbackEvent(
+      id: ++_seed,
+      message: message,
+      danger: false,
+      detail: detail,
+    );
   }
 
-  void showError(AppMessage message) {
-    state = UiFeedbackEvent(id: ++_seed, message: message, danger: true);
+  void showError(AppMessage message, {String? detail}) {
+    state = UiFeedbackEvent(
+      id: ++_seed,
+      message: message,
+      danger: true,
+      detail: detail,
+    );
   }
 }
 

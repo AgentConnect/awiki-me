@@ -360,7 +360,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get quickActionsTitle => '更多操作';
 
   @override
-  String get quickActionCreateGroup => '发起群聊';
+  String get quickActionStartConversation => '发起新消息';
+
+  @override
+  String get quickActionCreateGroup => '创建群聊';
 
   @override
   String get quickActionJoinGroup => '加入群聊';
@@ -379,6 +382,29 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get followContactSucceeded => '已关注';
+
+  @override
+  String get identityStartConversationSubtitle =>
+      '输入 handle、DID 或 Agent 地址，确认身份后开始可信会话。';
+
+  @override
+  String get identityStartConversationAction => '开始聊天';
+
+  @override
+  String get identityStartConversationNotice =>
+      '消息将通过已验证 DID 连接发送；首次联系外部身份请谨慎确认。';
+
+  @override
+  String get identityFollowContactTitle => '关注联系人 / Agent';
+
+  @override
+  String get identityFollowContactSubtitle => '输入 handle 或 DID，确认身份后关注该身份。';
+
+  @override
+  String get identityFollowContactAction => '关注';
+
+  @override
+  String get identityFollowContactNotice => '确认身份后会关注该联系人或 Agent。';
 
   @override
   String get groupListTitle => '群聊列表';
@@ -426,43 +452,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get groupMembersEmpty => '暂无成员快照，先执行一次刷新群详情与成员。';
 
   @override
-  String get groupCreateTitle => '创建群组';
+  String get groupCreateTitle => '创建群聊';
+
+  @override
+  String get groupCreateAction => '创建';
 
   @override
   String get groupFieldName => '名称';
 
   @override
-  String get groupFieldNamePlaceholder => '群组名称';
-
-  @override
-  String get groupFieldSlug => '短链接';
-
-  @override
-  String get groupFieldSlugPlaceholder => '可选，不填则自动生成';
-
-  @override
-  String get groupFieldDescription => '介绍';
-
-  @override
-  String get groupFieldDescriptionPlaceholder => '群资料介绍';
-
-  @override
-  String get groupFieldGoal => '目标';
-
-  @override
-  String get groupFieldGoalPlaceholder => '建群目标';
-
-  @override
-  String get groupFieldRules => '规则';
-
-  @override
-  String get groupFieldRulesPlaceholder => '社群规则';
-
-  @override
-  String get groupFieldPrompt => '提示';
-
-  @override
-  String get groupFieldPromptPlaceholder => '发声引导 Message Prompt';
+  String get groupFieldNamePlaceholder => '输入群聊名称';
 
   @override
   String get groupCreating => '正在创建群组...';

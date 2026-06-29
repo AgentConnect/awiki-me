@@ -1302,19 +1302,38 @@ void main() {
     expect(find.text('did:test:member'), findsNothing);
     expect(find.byType(GroupDetailPage), findsNothing);
 
-    const memberRef = 'did:wba:awiki.ai:user:bob:e1_member';
+    const memberHandle = 'bob.awiki.ai';
+    const memberDid = 'did:wba:awiki.ai:user:bob:e1_member';
+    gateway.publicProfilesByQuery = const <String, UserProfile>{
+      memberHandle: UserProfile(
+        did: memberDid,
+        nickName: 'Bob',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+        handle: memberHandle,
+        fullHandle: memberHandle,
+      ),
+    };
     await tester.tap(find.byKey(const Key('mac-group-info-add-member-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('成员 handle 或 DID'), findsOneWidget);
-    await tester.enterText(find.byType(CupertinoTextField).last, memberRef);
-    await tester.tap(find.text('添加'));
+    expect(find.text('添加群成员'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('identity-lookup-input')),
+      memberHandle,
+    );
+    await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bob'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('identity-add-group-member-button')));
     await tester.pumpAndSettle();
 
     expect(gateway.lastAddedGroupId, group.groupId);
-    expect(gateway.lastAddedMemberRef, memberRef);
-    expect(find.text('bob'), findsOneWidget);
-    expect(find.text(memberRef), findsNothing);
+    expect(gateway.lastAddedMemberRef, memberDid);
+    expect(find.text(memberHandle), findsOneWidget);
+    expect(find.text(memberDid), findsNothing);
     expect(find.text('3 人'), findsOneWidget);
 
     await tester.tap(find.bySemanticsLabel('移除成员').last);
@@ -1323,8 +1342,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gateway.lastRemovedGroupId, group.groupId);
-    expect(gateway.lastRemovedMemberRef, memberRef);
-    expect(find.text('bob'), findsNothing);
+    expect(gateway.lastRemovedMemberRef, memberDid);
+    expect(find.text(memberHandle), findsNothing);
     expect(find.text('2 人'), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = null;
@@ -2356,6 +2375,68 @@ void main() {
 
     expect(find.byType(ChatPage), findsOneWidget);
     expect(find.byType(ChatView), findsOneWidget);
+  });
+
+  testWidgets('手机宽度下最近会话搜索支持标题和最近消息预览', (tester) async {
+    final conversations = <ConversationSummary>[
+      conversation,
+      ConversationSummary(
+        threadId: 'group:funding',
+        displayName: '融资协作群',
+        lastMessagePreview: '明早同步 deck',
+        lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+        unreadCount: 0,
+        isGroup: true,
+        groupId: 'did:test:group:funding',
+      ),
+      ConversationSummary(
+        threadId: 'dm:did:me:did:ops',
+        displayName: 'Ops Bot',
+        lastMessagePreview: 'server alert recovered',
+        lastMessageAt: DateTime(2026, 3, 28, 10, 26),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:ops',
+      ),
+    ];
+    final gateway = FakeAwikiGateway()..conversations = conversations;
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) => _StaticConversationListController(ref, conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('conversation-search-field')), findsOneWidget);
+    expect(find.text('Marcus Chen'), findsOneWidget);
+    expect(find.text('融资协作群'), findsOneWidget);
+    expect(find.text('Ops Bot'), findsOneWidget);
+
+    await tester.enterText(find.byType(CupertinoSearchTextField), '融资');
+    await tester.pumpAndSettle();
+    expect(find.text('Marcus Chen'), findsNothing);
+    expect(find.text('融资协作群'), findsOneWidget);
+    expect(find.text('Ops Bot'), findsNothing);
+
+    await tester.enterText(find.byType(CupertinoSearchTextField), 'recovered');
+    await tester.pumpAndSettle();
+    expect(find.text('Marcus Chen'), findsNothing);
+    expect(find.text('融资协作群'), findsNothing);
+    expect(find.text('Ops Bot'), findsOneWidget);
+
+    await tester.enterText(find.byType(CupertinoSearchTextField), 'not-found');
+    await tester.pumpAndSettle();
+    expect(find.text('没有找到相关会话'), findsOneWidget);
+    expect(find.text('换个关键词试试'), findsOneWidget);
   });
 
   testWidgets('手机主导航显示文字标签并保持切换功能', (tester) async {

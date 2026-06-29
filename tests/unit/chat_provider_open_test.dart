@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:awiki_me/src/app/app_services.dart';
@@ -264,6 +265,126 @@ void main() {
     expect(messages.single.sendState, MessageSendState.sent);
     expect(messages.single.serverSequence, 2);
   });
+
+  test(
+    'thread patch low fidelity upsert does not downgrade existing attachment semantics',
+    () async {
+      const mention = ChatMessageMention(
+        id: 'men_patch_agent',
+        surface: '@codex',
+        start: 0,
+        end: 6,
+        target: ChatMentionTargetDraft.member(
+          kind: ChatMentionTargetKind.agent,
+          did: 'did:agent:codex',
+          handle: 'codex',
+          displayName: 'CodeX',
+        ),
+      );
+      final mentionPayload = ChatMentionPayload.toP9Json(
+        text: '@codex 看看这个文件',
+        draftMentions: const <ChatMentionDraft>[
+          ChatMentionDraft(
+            localId: 'men_patch_agent',
+            surface: '@codex',
+            start: 0,
+            end: 6,
+            target: ChatMentionTargetDraft.member(
+              kind: ChatMentionTargetKind.agent,
+              did: 'did:agent:codex',
+              handle: 'codex',
+              displayName: 'CodeX',
+            ),
+          ),
+        ],
+      );
+      final existingAttachment = ChatMessage(
+        localId: 'sent-patched-attachment',
+        remoteId: 'sent-patched-attachment',
+        threadId: conversation.threadId,
+        senderDid: 'did:me',
+        receiverDid: 'did:peer',
+        content: '@codex 看看这个文件',
+        originalType: 'application/anp-attachment-manifest+json',
+        createdAt: DateTime(2026, 5, 8, 10),
+        isMine: true,
+        sendState: MessageSendState.sent,
+        attachment: const ChatAttachment(
+          attachmentId: 'att-patch',
+          filename: 'patch-report.md',
+          mimeType: 'text/markdown',
+          caption: '@codex 看看这个文件',
+          localPath: '/tmp/patch-report.md',
+          hasLocalSource: true,
+        ),
+        payloadJson: jsonEncode(mentionPayload),
+        mentions: const <ChatMessageMention>[mention],
+      );
+      final patchMessaging = _PatchMessagingService(
+        localHistory: <ChatMessage>[existingAttachment],
+      );
+      final patchContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          ...fakeApplicationServiceOverrides(gateway),
+          messagingServiceProvider.overrideWithValue(patchMessaging),
+          sessionProvider.overrideWith((ref) {
+            final controller = SessionController();
+            controller.setSession(
+              const SessionIdentity(
+                did: 'did:me',
+                credentialName: 'me.json',
+                displayName: 'Me',
+              ),
+            );
+            return controller;
+          }),
+        ],
+      );
+      addTearDown(patchContainer.dispose);
+
+      await patchContainer
+          .read(chatThreadsProvider.notifier)
+          .openConversation(conversation);
+      await pumpEventQueue();
+
+      patchMessaging.emitPatch(
+        ThreadMessagePatch(
+          kind: ThreadMessagePatchKind.upsert,
+          ownerDid: 'did:me',
+          version: 2,
+          threadKind: 'direct',
+          threadId: 'did:peer',
+          message: ChatMessage(
+            localId: 'sent-patched-attachment',
+            remoteId: 'sent-patched-attachment',
+            threadId: conversation.threadId,
+            senderDid: 'did:me',
+            receiverDid: 'did:peer',
+            content: '@codex 看看这个文件',
+            createdAt: DateTime(2026, 5, 8, 10, 0, 1),
+            isMine: true,
+            sendState: MessageSendState.sent,
+            serverSequence: 3,
+          ),
+        ),
+      );
+      await pumpEventQueue();
+
+      final messages = patchContainer
+          .read(chatThreadProvider(conversation.threadId))
+          .messages;
+      expect(messages, hasLength(1));
+      final message = messages.single;
+      expect(message.serverSequence, 3);
+      expect(message.originalType, 'application/anp-attachment-manifest+json');
+      expect(message.attachment?.filename, 'patch-report.md');
+      expect(message.attachment?.localPath, '/tmp/patch-report.md');
+      expect(message.mentions, hasLength(1));
+      expect(message.payloadJson, isNotNull);
+    },
+  );
 
   test('thread patch ignores mismatched thread', () async {
     final patchMessaging = _PatchMessagingService(
@@ -1832,6 +1953,122 @@ void main() {
     expect(thread.agentPendingTurns, isEmpty);
   });
 
+  test('私聊人类附件发送结果为低保真文本时仍保留附件消息', () async {
+    final lowFidelityMessaging = _PatchMessagingService(
+      localHistory: <ChatMessage>[],
+    );
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        messagingServiceProvider.overrideWithValue(lowFidelityMessaging),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendAttachment(
+          conversation: conversation,
+          attachment: AttachmentDraft(
+            filename: 'human-report.pdf',
+            mimeType: 'application/pdf',
+            bytes: Uint8List.fromList(<int>[1, 2, 3]),
+            sizeBytes: 3,
+          ),
+          caption: '给你报告',
+        );
+    await pumpEventQueue();
+
+    final thread = sendContainer.read(
+      chatThreadProvider(conversation.threadId),
+    );
+    expect(thread.messages, hasLength(1));
+    final sentAttachment = thread.messages.single;
+    expect(sentAttachment.localId, 'sent-patched');
+    expect(sentAttachment.remoteId, 'sent-patched');
+    expect(
+      sentAttachment.originalType,
+      'application/anp-attachment-manifest+json',
+    );
+    expect(sentAttachment.attachment?.filename, 'human-report.pdf');
+    expect(sentAttachment.attachment?.caption, '给你报告');
+    expect(sentAttachment.content, '给你报告');
+    expect(sentAttachment.mentions, isEmpty);
+    expect(thread.agentPendingTurns, isEmpty);
+  });
+
+  test('私聊智能体附件发送结果为低保真文本时仍保留附件和处理中状态', () async {
+    final lowFidelityMessaging = _PatchMessagingService(
+      localHistory: <ChatMessage>[],
+    );
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        messagingServiceProvider.overrideWithValue(lowFidelityMessaging),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendAttachment(
+          conversation: conversation,
+          attachment: AttachmentDraft(
+            filename: 'agent-report.md',
+            mimeType: 'text/markdown',
+            bytes: Uint8List.fromList(<int>[35, 32, 65]),
+            sizeBytes: 3,
+          ),
+          caption: '看看附件',
+          expectedAgentReplyDid: 'did:peer',
+        );
+    await pumpEventQueue();
+
+    final thread = sendContainer.read(
+      chatThreadProvider(conversation.threadId),
+    );
+    final sentAttachment = thread.messages.single;
+    expect(sentAttachment.localId, 'sent-patched');
+    expect(sentAttachment.remoteId, 'sent-patched');
+    expect(
+      sentAttachment.originalType,
+      'application/anp-attachment-manifest+json',
+    );
+    expect(sentAttachment.attachment?.filename, 'agent-report.md');
+    expect(sentAttachment.attachment?.caption, '看看附件');
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(thread.pendingAgentTurnForMessage(sentAttachment), isNotNull);
+    expect(thread.agentPendingTurns.single.remoteMessageId, 'sent-patched');
+  });
+
   test('群聊附件 caption 中 @智能体会保留结构化 mention 并显示处理中', () async {
     gateway.nextSentMessageId = 'sent-group-agent-attachment';
     final groupConversation = ConversationSummary(
@@ -1918,6 +2155,177 @@ void main() {
     );
     expect(gateway.lastSentGroupId, 'did:test:group');
     expect(gateway.lastSentAttachmentCaption, '@codex 看看这个文件');
+  });
+
+  test('群聊附件 @普通用户低保真发送结果保留附件和 mention 且不触发智能体处理中', () async {
+    final lowFidelityMessaging = _PatchMessagingService(
+      localHistory: <ChatMessage>[],
+    );
+    final groupConversation = ConversationSummary(
+      threadId: 'group:did:test:group-human',
+      displayName: 'Group',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 5, 8, 10),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:test:group-human',
+    );
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        messagingServiceProvider.overrideWithValue(lowFidelityMessaging),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    const mention = ChatMentionDraft(
+      localId: 'men_human',
+      surface: '@alice',
+      start: 0,
+      end: 6,
+      target: ChatMentionTargetDraft.member(
+        kind: ChatMentionTargetKind.human,
+        did: 'did:human:alice',
+        handle: 'alice',
+        displayName: 'Alice',
+      ),
+    );
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendAttachment(
+          conversation: groupConversation,
+          attachment: AttachmentDraft(
+            filename: 'human-mention.pdf',
+            mimeType: 'application/pdf',
+            bytes: Uint8List.fromList(<int>[1, 2, 3]),
+            sizeBytes: 3,
+          ),
+          caption: '@alice 看看这个文件',
+          mentions: const <ChatMentionDraft>[mention],
+        );
+    await pumpEventQueue();
+
+    final thread = sendContainer.read(
+      chatThreadProvider(groupConversation.threadId),
+    );
+    final sentAttachment = thread.messages.single;
+    expect(
+      sentAttachment.originalType,
+      'application/anp-attachment-manifest+json',
+    );
+    expect(sentAttachment.attachment?.filename, 'human-mention.pdf');
+    expect(sentAttachment.attachment?.caption, '@alice 看看这个文件');
+    expect(sentAttachment.content, '@alice 看看这个文件');
+    expect(sentAttachment.mentions, hasLength(1));
+    expect(
+      sentAttachment.mentions.single.target.kind,
+      ChatMentionTargetKind.human,
+    );
+    expect(
+      ChatMentionPayload.tryParsePayloadJson(sentAttachment.payloadJson)?.text,
+      '@alice 看看这个文件',
+    );
+    expect(thread.agentPendingTurns, isEmpty);
+    expect(thread.isAgentProcessing, isFalse);
+  });
+
+  test('群聊附件 @智能体低保真发送结果保留附件和 mention 且显示处理中', () async {
+    final lowFidelityMessaging = _PatchMessagingService(
+      localHistory: <ChatMessage>[],
+    );
+    final groupConversation = ConversationSummary(
+      threadId: 'group:did:test:group-agent-low',
+      displayName: 'Group',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 5, 8, 10),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:test:group-agent-low',
+    );
+    final sendContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        messagingServiceProvider.overrideWithValue(lowFidelityMessaging),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              handle: 'me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(sendContainer.dispose);
+
+    const mention = ChatMentionDraft(
+      localId: 'men_agent_low',
+      surface: '@codex',
+      start: 0,
+      end: 6,
+      target: ChatMentionTargetDraft.member(
+        kind: ChatMentionTargetKind.agent,
+        did: 'did:agent:codex',
+        handle: 'codex',
+        displayName: 'CodeX',
+      ),
+    );
+
+    await sendContainer
+        .read(chatThreadsProvider.notifier)
+        .sendAttachment(
+          conversation: groupConversation,
+          attachment: AttachmentDraft(
+            filename: 'agent-mention.md',
+            mimeType: 'text/markdown',
+            bytes: Uint8List.fromList(<int>[35, 32, 65]),
+            sizeBytes: 3,
+          ),
+          caption: '@codex 看看这个文件',
+          mentions: const <ChatMentionDraft>[mention],
+        );
+    await pumpEventQueue();
+
+    final thread = sendContainer.read(
+      chatThreadProvider(groupConversation.threadId),
+    );
+    final sentAttachment = thread.messages.single;
+    expect(
+      sentAttachment.originalType,
+      'application/anp-attachment-manifest+json',
+    );
+    expect(sentAttachment.attachment?.filename, 'agent-mention.md');
+    expect(sentAttachment.attachment?.caption, '@codex 看看这个文件');
+    expect(sentAttachment.content, '@codex 看看这个文件');
+    expect(sentAttachment.mentions, hasLength(1));
+    expect(
+      sentAttachment.mentions.single.target.kind,
+      ChatMentionTargetKind.agent,
+    );
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(thread.pendingAgentTurnForMessage(sentAttachment), isNotNull);
+    expect(thread.agentPendingTurns.single.mentionId, 'men_agent_low');
   });
 
   test('普通用户附件不会误显示智能体处理中状态', () async {

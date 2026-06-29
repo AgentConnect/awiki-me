@@ -379,7 +379,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quickActionsTitle => 'More actions';
 
   @override
-  String get quickActionCreateGroup => 'Start group chat';
+  String get quickActionStartConversation => 'New message';
+
+  @override
+  String get quickActionCreateGroup => 'Create group chat';
 
   @override
   String get quickActionJoinGroup => 'Join group chat';
@@ -398,6 +401,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get followContactSucceeded => 'Followed';
+
+  @override
+  String get identityStartConversationSubtitle =>
+      'Enter a handle, DID, or Agent address, then confirm the identity to start a trusted conversation.';
+
+  @override
+  String get identityStartConversationAction => 'Start chat';
+
+  @override
+  String get identityStartConversationNotice =>
+      'Messages will be sent through a verified DID connection. Confirm external identities carefully before first contact.';
+
+  @override
+  String get identityFollowContactTitle => 'Follow contact / Agent';
+
+  @override
+  String get identityFollowContactSubtitle =>
+      'Enter a handle or DID, then confirm the identity to follow it.';
+
+  @override
+  String get identityFollowContactAction => 'Follow';
+
+  @override
+  String get identityFollowContactNotice =>
+      'Confirm the identity to follow this contact or Agent.';
 
   @override
   String get groupListTitle => 'Group chats';
@@ -447,43 +475,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'No member snapshot yet. Refresh group details and members first.';
 
   @override
-  String get groupCreateTitle => 'Create group';
+  String get groupCreateTitle => 'Create group chat';
+
+  @override
+  String get groupCreateAction => 'Create';
 
   @override
   String get groupFieldName => 'Name';
 
   @override
-  String get groupFieldNamePlaceholder => 'Group name';
-
-  @override
-  String get groupFieldSlug => 'Slug';
-
-  @override
-  String get groupFieldSlugPlaceholder => 'Optional, auto-generated if empty';
-
-  @override
-  String get groupFieldDescription => 'Description';
-
-  @override
-  String get groupFieldDescriptionPlaceholder => 'Group description';
-
-  @override
-  String get groupFieldGoal => 'Goal';
-
-  @override
-  String get groupFieldGoalPlaceholder => 'Group goal';
-
-  @override
-  String get groupFieldRules => 'Rules';
-
-  @override
-  String get groupFieldRulesPlaceholder => 'Community rules';
-
-  @override
-  String get groupFieldPrompt => 'Prompt';
-
-  @override
-  String get groupFieldPromptPlaceholder => 'Message prompt for participation';
+  String get groupFieldNamePlaceholder => 'Enter group chat name';
 
   @override
   String get groupCreating => 'Creating group...';

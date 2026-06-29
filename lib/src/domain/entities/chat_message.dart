@@ -87,6 +87,7 @@ class ChatMessage {
   ChatMessage copyWith({
     String? remoteId,
     String? content,
+    String? originalType,
     DateTime? createdAt,
     int? serverSequence,
     MessageSendState? sendState,
@@ -109,7 +110,7 @@ class ChatMessage {
       sendState: sendState ?? this.sendState,
       serverSequence: serverSequence ?? this.serverSequence,
       isEncrypted: isEncrypted,
-      originalType: originalType,
+      originalType: originalType ?? this.originalType,
       attachment: attachment ?? this.attachment,
       payloadJson: payloadJson ?? this.payloadJson,
       mentions: mentions ?? this.mentions,

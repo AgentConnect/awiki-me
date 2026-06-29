@@ -2,6 +2,7 @@ import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_mappers.dart';
+import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
@@ -246,6 +247,75 @@ void main() {
     expect(mapped.attachment?.objectUri, 'https://objects.example/att-1');
     expect(mapped.previewText, '季度报告');
   });
+
+  test('attachment manifest mention payload maps into structured mentions', () {
+    const manifest =
+        '{"attachments":[{"attachment_id":"att-1","filename":"report.md","mime_type":"text/markdown","size":"1024"}],"primary_attachment_id":"att-1","caption":"@codex 看看这个文件","mention_payload":{"text":"@codex 看看这个文件","mentions":[{"id":"men_codex","range":{"start":0,"end":6,"unit":"unicode_code_point"},"target":{"kind":"agent","did":"did:agent:codex"},"mention_role":"addressee"}]}}';
+    const message = core.Message(
+      id: 'msg-attachment-mention',
+      threadKind: 'group',
+      threadId: 'group:did:test:group',
+      direction: core.MessageDirection.outgoing,
+      sender: 'did:alice',
+      group: 'did:test:group',
+      body: core.MessageBodyView(
+        payloadJson: manifest,
+        unsupportedContentType: 'application/anp-attachment-manifest+json',
+      ),
+      sentAt: '2026-05-23T09:00:00Z',
+      metadata: core.MessageMetadata(
+        contentType: 'application/anp-attachment-manifest+json',
+      ),
+    );
+
+    final mapped = mapper.chatMessageFromCore(message, ownerDid: 'did:alice');
+
+    expect(mapped.hasRenderableContent, isTrue);
+    expect(mapped.originalType, 'application/anp-attachment-manifest+json');
+    expect(mapped.attachment?.filename, 'report.md');
+    expect(mapped.attachment?.caption, '@codex 看看这个文件');
+    expect(mapped.content, '@codex 看看这个文件');
+    expect(mapped.payloadJson, isNot(manifest));
+    expect(
+      ChatMentionPayload.tryParsePayloadJson(mapped.payloadJson)?.text,
+      '@codex 看看这个文件',
+    );
+    expect(mapped.mentions, hasLength(1));
+    expect(mapped.mentions.single.surface, '@codex');
+    expect(mapped.mentions.single.target.kind, ChatMentionTargetKind.agent);
+    expect(mapped.mentions.single.target.did, 'did:agent:codex');
+  });
+
+  test(
+    'local history attachment manifest payload maps into attachment chat message',
+    () {
+      const manifest =
+          '{"attachments":[{"attachment_id":"att-local","filename":"local.md","mime_type":"text/markdown","size":"24","access_info":{"object_uri":"https://objects.example/att-local"}}],"caption":"本地历史附件","primary_attachment_id":"att-local"}';
+      const message = core.Message(
+        id: 'msg-local-attachment',
+        threadKind: 'group',
+        threadId: 'group:did:test:group',
+        direction: core.MessageDirection.incoming,
+        sender: 'did:bob',
+        group: 'did:test:group',
+        body: core.MessageBodyView(payloadJson: manifest, kind: 'payload'),
+        sentAt: '2026-05-23T09:00:00Z',
+        metadata: core.MessageMetadata(
+          contentType: 'application/anp-attachment-manifest+json',
+        ),
+      );
+
+      final mapped = mapper.chatMessageFromCore(message, ownerDid: 'did:alice');
+
+      expect(mapped.hasRenderableContent, isTrue);
+      expect(mapped.originalType, 'application/anp-attachment-manifest+json');
+      expect(mapped.content, '本地历史附件');
+      expect(mapped.attachment?.attachmentId, 'att-local');
+      expect(mapped.attachment?.filename, 'local.md');
+      expect(mapped.attachment?.mimeType, 'text/markdown');
+      expect(mapped.attachment?.objectUri, 'https://objects.example/att-local');
+    },
+  );
 
   test('message timestamps from SDK are normalized to local time', () {
     const message = core.Message(

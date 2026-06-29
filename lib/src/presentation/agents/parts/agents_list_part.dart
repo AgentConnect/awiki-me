@@ -5,6 +5,7 @@ class _AgentListPane extends StatelessWidget {
     required this.state,
     required this.footer,
     required this.pendingAgentDids,
+    required this.selectedAgentDid,
     required this.onCreateDaemon,
     required this.onRefreshDaemon,
     required this.onSelect,
@@ -14,6 +15,7 @@ class _AgentListPane extends StatelessWidget {
   final AgentsState state;
   final Widget? footer;
   final Set<String> pendingAgentDids;
+  final String? selectedAgentDid;
   final VoidCallback onCreateDaemon;
   final ValueChanged<AgentSummary> onRefreshDaemon;
   final ValueChanged<String> onSelect;
@@ -86,6 +88,7 @@ class _AgentListPane extends StatelessWidget {
                 _AgentHierarchyList(
                   state: state,
                   pendingAgentDids: pendingAgentDids,
+                  selectedAgentDid: selectedAgentDid,
                   onSelect: onSelect,
                   onRefreshDaemon: onRefreshDaemon,
                 ),
@@ -103,18 +106,19 @@ class _AgentHierarchyList extends StatelessWidget {
   const _AgentHierarchyList({
     required this.state,
     required this.pendingAgentDids,
+    required this.selectedAgentDid,
     required this.onSelect,
     required this.onRefreshDaemon,
   });
 
   final AgentsState state;
   final Set<String> pendingAgentDids;
+  final String? selectedAgentDid;
   final ValueChanged<String> onSelect;
   final ValueChanged<AgentSummary> onRefreshDaemon;
 
   @override
   Widget build(BuildContext context) {
-    final selectedDid = state.selectedAgent?.agentDid;
     final groups = _AgentTreeGroup.fromState(state);
     return Column(
       children: <Widget>[
@@ -123,7 +127,7 @@ class _AgentHierarchyList extends StatelessWidget {
             group: group,
             state: state,
             pendingAgentDids: pendingAgentDids,
-            selectedAgentDid: selectedDid,
+            selectedAgentDid: selectedAgentDid,
             onSelect: onSelect,
             onRefreshDaemon: onRefreshDaemon,
           ),

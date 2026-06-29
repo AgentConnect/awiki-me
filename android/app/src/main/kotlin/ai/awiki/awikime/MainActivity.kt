@@ -18,6 +18,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val DOCUMENT_CHANNEL = "ai.awiki.awikime/document_picker"
         private const val ATTACHMENT_CHANNEL = "ai.awiki.awikime/attachment_picker"
+        private const val ATTACHMENT_VIEWER_CHANNEL = "ai.awiki.awikime/attachment_viewer"
         private const val UPDATE_CHANNEL = "ai.awiki.awikime/app_update"
         private const val REQUEST_SAVE_ZIP = 2001
         private const val REQUEST_PICK_ZIP = 2002
@@ -57,6 +58,14 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "pickAttachment" -> launchPickAttachment(result)
                     "saveAttachment" -> handleSaveAttachment(call = call, result = result)
+                    else -> result.notImplemented()
+                }
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ATTACHMENT_VIEWER_CHANNEL)
+            .setMethodCallHandler { call: MethodCall, result: MethodChannel.Result ->
+                when (call.method) {
+                    "openAttachment" -> handleOpenAttachment(call = call, result = result)
                     else -> result.notImplemented()
                 }
             }
@@ -138,6 +147,19 @@ class MainActivity : FlutterActivity() {
             result.success(null)
         } catch (e: Exception) {
             result.error("apk_install_failed", formatExceptionMessage(e), null)
+        }
+    }
+
+    private fun handleOpenAttachment(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            val args = call.arguments as? Map<*, *> ?: emptyMap<Any?, Any?>()
+            val path = (args["path"] as? String)
+                ?.takeIf { it.isNotBlank() }
+                ?: throw IllegalArgumentException("path is required")
+            openAttachment(path)
+            result.success(null)
+        } catch (e: Exception) {
+            result.error("attachment_open_failed", formatExceptionMessage(e), null)
         }
     }
 
@@ -356,6 +378,59 @@ class MainActivity : FlutterActivity() {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         startActivity(intent)
+    }
+
+    private fun openAttachment(pathOrUri: String) {
+        val parsed = Uri.parse(pathOrUri)
+        val hasScheme = parsed.scheme?.isNotBlank() == true
+        val sourceUri = if (hasScheme && parsed.scheme != "file") {
+            parsed
+        } else {
+            val file = if (hasScheme && parsed.scheme == "file") {
+                File(parsed.path ?: "")
+            } else {
+                File(pathOrUri)
+            }
+            if (!file.exists()) {
+                throw IllegalArgumentException("Attachment file not found: ${file.absolutePath}")
+            }
+            FileProvider.getUriForFile(
+                this,
+                "$packageName.fileprovider",
+                file,
+            )
+        }
+        val mimeType = contentResolver.getType(sourceUri) ?: guessMimeType(pathOrUri)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(sourceUri, mimeType)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val chooser = Intent.createChooser(intent, "打开附件").apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            startActivity(chooser)
+        } catch (e: Exception) {
+            throw IllegalStateException("没有可用于打开此附件的应用。", e)
+        }
+    }
+
+    private fun guessMimeType(pathOrUri: String): String {
+        val extensionFromUrl = android.webkit.MimeTypeMap
+            .getFileExtensionFromUrl(pathOrUri)
+            ?.takeIf { it.isNotBlank() }
+        val extensionFromPath = pathOrUri
+            .substringBefore('?')
+            .substringBefore('#')
+            .substringAfterLast('/', "")
+            .substringAfterLast('.', "")
+            .takeIf { it.isNotBlank() && it != pathOrUri }
+        val extension = (extensionFromUrl ?: extensionFromPath)?.lowercase()
+        return extension
+            ?.let { android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(it) }
+            ?: "application/octet-stream"
     }
 
     private fun formatExceptionMessage(error: Throwable): String {

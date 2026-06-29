@@ -161,6 +161,9 @@ class AppMessage {
   factory AppMessage.attachmentUnavailable() =>
       const AppMessage._('attachmentUnavailable');
 
+  factory AppMessage.attachmentOpenFailed() =>
+      const AppMessage._('attachmentOpenFailed');
+
   factory AppMessage.fromError(Object error) {
     final raw = normalizeAppError(error);
     if (raw.isEmpty) {
@@ -371,6 +374,8 @@ class AppMessage {
         return '已从最近会话移除';
       case 'attachmentUnavailable':
         return '附件文件已过期或本机缓存不存在，请让对方重新发送。';
+      case 'attachmentOpenFailed':
+        return '附件无法打开，请稍后重试或保存后再打开。';
       case 'raw':
         return detail ?? l10n.operationFailedRetry;
       default:
@@ -404,6 +409,8 @@ class AppMessage {
         return 'Conversation removed from recents.';
       case 'attachmentUnavailable':
         return 'The attachment has expired or is not cached on this device. Ask the sender to send it again.';
+      case 'attachmentOpenFailed':
+        return 'The attachment cannot be opened. Try again later or save it before opening.';
       case 'raw':
         return detail ?? 'The operation failed. Please try again later.';
       default:

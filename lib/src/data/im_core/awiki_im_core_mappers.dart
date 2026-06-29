@@ -92,10 +92,18 @@ class AwikiImCoreMappers {
     core.Message message, {
     required String ownerDid,
   }) {
-    final attachment = _attachmentFromCoreMessage(message);
-    final mentionPayload = ChatMentionPayload.tryParsePayloadJson(
+    final manifest = _attachmentManifestJson(message);
+    final attachment = _attachmentFromCoreMessage(message, manifest: manifest);
+    final bodyMentionPayload = ChatMentionPayload.tryParsePayloadJson(
       message.body.payloadJson,
     );
+    final manifestMentionPayloadJson = _mentionPayloadJson(manifest);
+    final mentionPayload =
+        bodyMentionPayload ??
+        ChatMentionPayload.tryParsePayloadJson(manifestMentionPayloadJson);
+    final payloadJson = bodyMentionPayload == null
+        ? manifestMentionPayloadJson ?? message.body.payloadJson
+        : message.body.payloadJson;
     final bodyText = message.body.text ?? '';
     final isMine =
         message.direction == core.MessageDirection.outgoing ||
@@ -125,7 +133,9 @@ class AwikiImCoreMappers {
       receiverDid: _nonEmpty(message.receiver),
       groupId: groupId,
       content: attachment?.caption ?? mentionPayload?.text ?? bodyText,
-      originalType: mentionPayload == null
+      originalType: attachment != null
+          ? _attachmentManifestContentType
+          : mentionPayload == null
           ? message.body.kind ?? message.metadata.contentType ?? 'text'
           : 'application/json',
       createdAt: _parseDateTime(message.sentAt ?? message.receivedAt),
@@ -134,7 +144,7 @@ class AwikiImCoreMappers {
       serverSequence: message.metadata.serverSequence,
       isEncrypted: _isEncrypted(message.metadata.contentType),
       attachment: attachment,
-      payloadJson: message.body.payloadJson,
+      payloadJson: payloadJson,
       mentions: mentionPayload?.mentions ?? const <ChatMessageMention>[],
     );
   }
@@ -753,7 +763,8 @@ String _messagePreview(core.Message message) {
   if (AgentControlPayloads.isControl(message.body.payloadJson)) {
     return _controlMessagePreview(message.body.text);
   }
-  final attachment = _attachmentFromCoreMessage(message);
+  final manifest = _attachmentManifestJson(message);
+  final attachment = _attachmentFromCoreMessage(message, manifest: manifest);
   if (attachment != null) {
     final caption = attachment.caption?.trim();
     if (caption != null && caption.isNotEmpty) {
@@ -778,9 +789,18 @@ String _snapshotMessagePreview(core.ConversationSnapshotMessage message) {
   if (AgentControlPayloads.isControl(message.body.payloadJson)) {
     return _controlMessagePreview(message.body.text);
   }
-  final mentionPayload = ChatMentionPayload.tryParsePayloadJson(
-    message.body.payloadJson,
-  );
+  final manifest = _snapshotAttachmentManifestJson(message);
+  final attachment = _attachmentFromManifest(manifest);
+  if (attachment != null) {
+    final caption = attachment.caption?.trim();
+    if (caption != null && caption.isNotEmpty) {
+      return caption;
+    }
+    return '[附件] ${attachment.displayName}';
+  }
+  final mentionPayload =
+      ChatMentionPayload.tryParsePayloadJson(message.body.payloadJson) ??
+      _mentionPayloadFromAttachmentManifest(manifest);
   if (mentionPayload != null) {
     return mentionPayload.text;
   }
@@ -848,11 +868,13 @@ String? _snapshotAttribute(
 const String _attachmentManifestContentType =
     'application/anp-attachment-manifest+json';
 
-ChatAttachment? _attachmentFromCoreMessage(core.Message message) {
+ChatAttachment? _attachmentFromCoreMessage(
+  core.Message message, {
+  Map<String, Object?>? manifest,
+}) {
   if (!_isAttachmentManifestMessage(message)) {
     return null;
   }
-  final manifest = _attachmentManifestJson(message);
   final fromManifest = _attachmentFromManifest(manifest);
   if (fromManifest != null) {
     return fromManifest;
@@ -905,6 +927,7 @@ Map<String, Object?>? _attachmentManifestJson(core.Message message) {
   final candidates = <String?>[
     _attribute(message.metadata, 'attachment_manifest'),
     _attribute(message.metadata, 'raw_content'),
+    message.body.payloadJson,
     message.body.text,
   ];
   for (final candidate in candidates) {
@@ -912,6 +935,61 @@ Map<String, Object?>? _attachmentManifestJson(core.Message message) {
     if (parsed != null) {
       return parsed;
     }
+  }
+  return null;
+}
+
+Map<String, Object?>? _snapshotAttachmentManifestJson(
+  core.ConversationSnapshotMessage message,
+) {
+  if (!_isSnapshotAttachmentManifestMessage(message)) {
+    return null;
+  }
+  final candidates = <String?>[
+    _snapshotAttribute(message, 'attachment_manifest'),
+    _snapshotAttribute(message, 'raw_content'),
+    message.body.payloadJson,
+    message.body.text,
+  ];
+  for (final candidate in candidates) {
+    final parsed = _tryDecodeObject(candidate);
+    if (parsed != null) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+bool _isSnapshotAttachmentManifestMessage(
+  core.ConversationSnapshotMessage message,
+) {
+  final values = <String?>[
+    message.contentType,
+    message.body.unsupportedContentType,
+    message.body.kind,
+  ];
+  return values.any(
+    (value) => value?.trim().toLowerCase() == _attachmentManifestContentType,
+  );
+}
+
+ChatMentionPayload? _mentionPayloadFromAttachmentManifest(
+  Map<String, Object?>? manifest,
+) {
+  final payloadJson = _mentionPayloadJson(manifest);
+  return ChatMentionPayload.tryParsePayloadJson(payloadJson);
+}
+
+String? _mentionPayloadJson(Map<String, Object?>? manifest) {
+  final raw = manifest?['mention_payload'];
+  if (raw == null) {
+    return null;
+  }
+  if (raw is String) {
+    return _nonEmpty(raw);
+  }
+  if (raw is Map) {
+    return jsonEncode(raw);
   }
   return null;
 }

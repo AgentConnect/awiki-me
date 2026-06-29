@@ -425,7 +425,9 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
                   key: const Key('mac-group-info-add-member-button'),
                   semanticLabel: '添加成员',
                   icon: CupertinoIcons.person_add,
-                  onTap: canManageMembers ? _openAddMemberDialog : null,
+                  onTap: canManageMembers
+                      ? () => _openAddMemberDialog(members)
+                      : null,
                 ),
                 const SizedBox(width: 8),
                 _MacPanelIconButton(
@@ -563,11 +565,12 @@ class _MacGroupInfoPanelState extends ConsumerState<_MacGroupInfoPanel> {
     }
   }
 
-  void _openAddMemberDialog() {
+  void _openAddMemberDialog(List<GroupMemberSummary> members) {
     AppNavigator.showDialog<void>(
       context,
       (dialogContext) => AddGroupMemberDialog(
         groupId: _group.groupId,
+        existingMembers: members,
         onGroupUpdated: (updated) {
           if (!mounted) {
             return;
