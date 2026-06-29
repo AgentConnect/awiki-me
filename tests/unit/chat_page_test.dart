@@ -325,12 +325,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final refreshIcon = tester.widget<Icon>(
-      find.descendant(
-        of: find.byKey(const Key('chat-refresh-button')),
-        matching: find.byIcon(CupertinoIcons.refresh),
-      ),
-    );
+    expect(find.byKey(const Key('chat-refresh-button')), findsNothing);
     final identityIcon = tester.widget<Icon>(
       find.descendant(
         of: find.byKey(const Key('chat-identity-card-button')),
@@ -345,13 +340,10 @@ void main() {
     );
     final identityLabel = tester.widget<Text>(find.text('身份卡'));
 
-    expect(infoIcon.color, refreshIcon.color);
-    expect(identityIcon.size, refreshIcon.size);
-    expect(infoIcon.size, refreshIcon.size);
-    expect(infoIcon.weight, refreshIcon.weight);
-    expect(refreshIcon.weight, 500);
-    expect(identityIcon.color, refreshIcon.color);
-    expect(identityIcon.weight, refreshIcon.weight);
+    expect(identityIcon.size, infoIcon.size);
+    expect(identityIcon.color, infoIcon.color);
+    expect(identityIcon.weight, infoIcon.weight);
+    expect(infoIcon.weight, 500);
     expect(identityLabel.style?.fontWeight, FontWeight.w400);
 
     debugDefaultTargetPlatformOverride = null;
@@ -676,73 +668,6 @@ void main() {
     await tester.pump();
 
     expect(gateway.lastUnfollowedDidOrHandle, 'did:test:peer');
-  });
-
-  testWidgets('macOS 聊天头部刷新按钮会同步当前会话消息', (tester) async {
-    final gateway = FakeAwikiGateway();
-    const session = SessionIdentity(
-      did: 'did:test:me',
-      handle: 'me',
-      displayName: 'Me',
-      credentialName: 'default',
-    );
-    final conversation = ConversationSummary(
-      threadId: 'dm:refresh-button',
-      displayName: 'Mac Agent',
-      lastMessagePreview: '',
-      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
-      unreadCount: 0,
-      isGroup: false,
-      targetDid: 'did:test:peer',
-    );
-    final message = ChatMessage(
-      localId: 'remote-refresh',
-      remoteId: 'remote-refresh',
-      threadId: conversation.threadId,
-      senderDid: 'did:test:peer',
-      content: 'synced message',
-      createdAt: DateTime(2026, 4, 5, 12, 1),
-      isMine: false,
-      sendState: MessageSendState.sent,
-    );
-    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
-      'did:test:peer': <ChatMessage>[message],
-    };
-    addTearDown(() {
-      debugDefaultTargetPlatformOverride = null;
-      tester.binding.setSurfaceSize(null);
-    });
-    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    await tester.binding.setSurfaceSize(const Size(1100, 760));
-
-    await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: CupertinoPageScaffold(
-          child: ChatView(
-            conversation: conversation,
-            embedded: true,
-            macStyle: true,
-          ),
-        ),
-        gateway: gateway,
-        session: session,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const Key('chat-refresh-button')));
-    await tester.pump();
-
-    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
-
-    await tester.pumpAndSettle();
-
-    expect(gateway.listConversationsCalls, 1);
-    expect(gateway.fetchDmHistoryCalls, 1);
-    expect(find.text('synced message'), findsOneWidget);
-
-    debugDefaultTargetPlatformOverride = null;
-    await tester.binding.setSurfaceSize(null);
   });
 
   testWidgets('群聊标题优先显示已知群名称', (tester) async {

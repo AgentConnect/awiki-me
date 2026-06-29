@@ -49,6 +49,11 @@ part 'parts/chat_peer_info_part.dart';
 part 'parts/chat_message_part.dart';
 part 'parts/chat_composer_part.dart';
 
+const bool _chatTraceEnabled = bool.fromEnvironment(
+  'AWIKI_CHAT_TRACE',
+  defaultValue: true,
+);
+
 const _macChatHeaderActionColor = Color(0xFF44506A);
 const _macChatHeaderActionActiveColor = Color(0xFF101B32);
 const _macChatHeaderActionActiveBackground = Color(0xFFE4ECF7);
@@ -173,7 +178,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
   late String _displayThreadId;
   AttachmentDraft? _pendingAttachment;
   bool _isApplyingComposerDraft = false;
-  bool _isRefreshingCurrentConversation = false;
   bool _didRequestAgents = false;
   bool _hasDeferredBottomNotice = false;
   bool _userAwayFromBottom = false;
@@ -389,6 +393,19 @@ class _ChatViewState extends ConsumerState<ChatView> {
           reason: 'visible_summary_update',
         );
       }
+      final currentThread = ref.read(chatThreadProvider(displayThreadId));
+      _chatTrace(
+        'conversation_list_listener.sync_request',
+        fields: <String, Object?>{
+          'thread_hash': _chatSafeHash(displayThreadId),
+          'updated_thread_hash': _chatSafeHash(updated.threadId),
+          'unread': updated.unreadCount,
+          'messages': currentThread.messages.length,
+          'thread_loading': currentThread.isLoading,
+          'last_at': updated.lastMessageAt,
+          'preview_hash': _chatSafeHash(updated.lastMessagePreview),
+        },
+      );
       unawaited(
         ref
             .read(chatThreadsProvider.notifier)
@@ -439,7 +456,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
             conversation: currentConversation,
             embedded: widget.embedded,
             macStyle: macStyle,
-            isRefreshing: _isRefreshingCurrentConversation || thread.isLoading,
             classification: peerClassification,
             isDeletedAgentConversation: isDeletedAgentConversation,
             onBack: widget.onBack,
@@ -449,7 +465,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
             onMacConversationInfoTap: widget.onMacConversationInfoTap,
             macConversationInfoPanelActive:
                 widget.macConversationInfoPanelActive,
-            onRefresh: () => _refreshCurrentConversation(currentConversation),
           ),
           Expanded(
             child: Listener(
@@ -938,40 +953,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return parsed;
     }
     return Uri.file(value);
-  }
-
-  Future<void> _refreshCurrentConversation(
-    ConversationSummary conversation,
-  ) async {
-    if (_isRefreshingCurrentConversation) {
-      return;
-    }
-    setState(() {
-      _isRefreshingCurrentConversation = true;
-    });
-    final startedAt = DateTime.now();
-    try {
-      await ref
-          .read(chatThreadsProvider.notifier)
-          .refreshConversation(conversation, displayThreadId: _displayThreadId);
-      final elapsed = DateTime.now().difference(startedAt);
-      const minimumVisibleTime = Duration(milliseconds: 350);
-      if (elapsed < minimumVisibleTime) {
-        await Future<void>.delayed(minimumVisibleTime - elapsed);
-      }
-    } catch (error) {
-      if (mounted) {
-        ref
-            .read(uiFeedbackProvider.notifier)
-            .showError(AppMessage.fromError(error));
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isRefreshingCurrentConversation = false;
-        });
-      }
-    }
   }
 
   void _requestAgentsIfNeeded(ConversationSummary conversation) {
@@ -1469,4 +1450,55 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
     return '${handles.length} 个智能体';
   }
+}
+
+void _chatTrace(String event, {Map<String, Object?> fields = const {}}) {
+  if (!_chatTraceEnabled) {
+    return;
+  }
+  final details = <String>[];
+  for (final entry in fields.entries) {
+    final value = entry.value;
+    if (value != null) {
+      details.add('${entry.key}=${_chatFormat(value)}');
+    }
+  }
+  debugPrint(
+    details.isEmpty
+        ? '[awiki_me][chat_trace] event=$event'
+        : '[awiki_me][chat_trace] event=$event ${details.join(' ')}',
+  );
+}
+
+String? _chatSafeHash(String? value) {
+  final normalized = value?.trim();
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+  return AwikiPerformanceLogger.safeHash(normalized);
+}
+
+String _chatFormat(Object value) {
+  if (value is DateTime) {
+    return value.toUtc().toIso8601String();
+  }
+  return _chatCollapseWhitespace(value.toString());
+}
+
+String _chatCollapseWhitespace(String value) {
+  final buffer = StringBuffer();
+  var lastWasWhitespace = false;
+  for (final rune in value.runes) {
+    final char = String.fromCharCode(rune);
+    if (char.trim().isEmpty) {
+      if (!lastWasWhitespace) {
+        buffer.write('_');
+      }
+      lastWasWhitespace = true;
+      continue;
+    }
+    buffer.write(char);
+    lastWasWhitespace = false;
+  }
+  return buffer.toString();
 }

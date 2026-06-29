@@ -5,12 +5,10 @@ class _ChatHeader extends StatelessWidget {
     required this.conversation,
     required this.embedded,
     required this.macStyle,
-    required this.isRefreshing,
     required this.classification,
     required this.isDeletedAgentConversation,
     required this.onDetails,
     required this.onPeerInfoTap,
-    required this.onRefresh,
     this.onMacIdentityPanelTap,
     this.onMacConversationInfoTap,
     this.macConversationInfoPanelActive = false,
@@ -21,7 +19,6 @@ class _ChatHeader extends StatelessWidget {
   final bool embedded;
   final VoidCallback? onBack;
   final bool macStyle;
-  final bool isRefreshing;
   final ConversationPeerClassification classification;
   final bool isDeletedAgentConversation;
   final VoidCallback onDetails;
@@ -29,7 +26,6 @@ class _ChatHeader extends StatelessWidget {
   final VoidCallback? onMacIdentityPanelTap;
   final VoidCallback? onMacConversationInfoTap;
   final bool macConversationInfoPanelActive;
-  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -118,14 +114,6 @@ class _ChatHeader extends StatelessWidget {
                   ),
                 ),
                 SizedBox(width: actionGap),
-                _MacChatHeaderButton(
-                  key: const Key('chat-refresh-button'),
-                  semanticLabel: '刷新当前会话',
-                  icon: CupertinoIcons.refresh,
-                  isLoading: isRefreshing,
-                  onTap: onRefresh,
-                ),
-                SizedBox(width: responsive.displayScaled(8)),
                 _MacChatIdentityButton(
                   key: const Key('chat-identity-card-button'),
                   label: conversation.isGroup ? '群聊信息' : '身份卡',
