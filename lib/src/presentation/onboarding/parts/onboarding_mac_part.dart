@@ -523,27 +523,27 @@ class _MacAuthCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(maxWidth: 490),
+      constraints: const BoxConstraints(maxWidth: 500),
       decoration: BoxDecoration(
         color: CupertinoColors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFDDE5F0)),
         boxShadow: const <BoxShadow>[
           BoxShadow(
             color: Color(0x120B1F3A),
-            blurRadius: 32,
-            offset: Offset(0, 16),
+            blurRadius: 36,
+            offset: Offset(0, 18),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(24),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Padding(
-                padding: const EdgeInsets.fromLTRB(38, 32, 38, 34),
+                padding: const EdgeInsets.fromLTRB(38, 32, 38, 36),
                 child: Column(
                   children: <Widget>[
                     _MacAuthTabs(
@@ -599,11 +599,11 @@ class _MacAuthTabs extends StatelessWidget {
     return Center(
       child: Container(
         key: const Key('onboarding-mac-entry-tabs'),
-        constraints: const BoxConstraints(maxWidth: 306),
+        constraints: const BoxConstraints(maxWidth: 310),
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: const Color(0xFFF0F5FE),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color(0xFFDDE7F7)),
         ),
         child: Row(
@@ -649,14 +649,14 @@ class _MacAuthTab extends StatelessWidget {
       selected: selected,
       scaleOnPress: true,
       pressedScale: 0.98,
-      borderRadius: BorderRadius.circular(9),
+      borderRadius: BorderRadius.circular(11),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        height: 42,
+        height: 40,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: selected ? CupertinoColors.white : CupertinoColors.transparent,
-          borderRadius: BorderRadius.circular(9),
+          borderRadius: BorderRadius.circular(11),
           boxShadow: selected
               ? const <BoxShadow>[
                   BoxShadow(
@@ -1031,7 +1031,7 @@ class _MacAuthModeRow extends StatelessWidget {
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: const Color(0xFFF4F7FC),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color(0xFFDDE5F0)),
         ),
         child: Row(
@@ -1081,14 +1081,14 @@ class _MacAuthModeButton extends StatelessWidget {
       selected: selected,
       scaleOnPress: true,
       pressedScale: 0.98,
-      borderRadius: BorderRadius.circular(9),
+      borderRadius: BorderRadius.circular(11),
       child: Container(
-        height: 36,
-        constraints: const BoxConstraints(minWidth: 86),
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        height: 38,
+        constraints: const BoxConstraints(minWidth: 92),
+        padding: const EdgeInsets.symmetric(horizontal: 13),
         decoration: BoxDecoration(
           color: selected ? CupertinoColors.white : CupertinoColors.transparent,
-          borderRadius: BorderRadius.circular(9),
+          borderRadius: BorderRadius.circular(11),
           border: Border.all(
             color: selected
                 ? const Color(0xFFC9DAFF)
@@ -1099,14 +1099,14 @@ class _MacAuthModeButton extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            Icon(
+            _MacCenteredIcon(
               icon,
-              size: 18,
+              size: 17,
               color: selected
                   ? const Color(0xFF0B65F8)
                   : const Color(0xFF66728A),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 7),
             FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
@@ -1116,6 +1116,7 @@ class _MacAuthModeButton extends StatelessWidget {
                   color: selected
                       ? const Color(0xFF0B65F8)
                       : const Color(0xFF66728A),
+                  fontSize: 14,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                   height: 1,
                 ),
@@ -1172,13 +1173,13 @@ class _MacOutlinedField extends StatelessWidget {
         _MacFieldLabel(label),
         const SizedBox(height: 10),
         Container(
-          height: 50,
+          height: 52,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: _macFieldDecoration(),
           child: Row(
             children: <Widget>[
-              Icon(icon, size: 18, color: const Color(0xFF66728A)),
-              const SizedBox(width: 12),
+              _MacCenteredIcon(icon, size: 18, color: const Color(0xFF66728A)),
+              const SizedBox(width: 11),
               Expanded(
                 child: CupertinoTextField(
                   controller: controller,
@@ -1186,13 +1187,16 @@ class _MacOutlinedField extends StatelessWidget {
                   placeholder: placeholder,
                   decoration: null,
                   padding: EdgeInsets.zero,
+                  textAlignVertical: TextAlignVertical.center,
                   style: const TextStyle(
                     color: Color(0xFF17213A),
                     fontSize: 14,
+                    height: 1.2,
                   ),
                   placeholderStyle: const TextStyle(
                     color: Color(0xFFB3BDCD),
                     fontSize: 14,
+                    height: 1.2,
                   ),
                 ),
               ),
@@ -1241,7 +1245,7 @@ class _MacInlineAction extends StatelessWidget {
       enabled: onPressed != null,
       scaleOnPress: true,
       pressedScale: 0.98,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(10),
       builder: (context, state, child) {
         final opacity = !state.enabled
             ? 0.55
@@ -1261,11 +1265,11 @@ class _MacInlineAction extends StatelessWidget {
         opacity: 1,
         child: Container(
           height: 34,
-          constraints: const BoxConstraints(minWidth: 88, maxWidth: 132),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          constraints: const BoxConstraints(minWidth: 104, maxWidth: 124),
+          padding: const EdgeInsets.symmetric(horizontal: 13),
           decoration: BoxDecoration(
             color: const Color(0xFFEAF2FF),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(color: const Color(0xFFC9DAFF)),
           ),
           alignment: Alignment.center,
@@ -1309,7 +1313,7 @@ class _MacPrimaryAction extends StatelessWidget {
       enabled: onPressed != null,
       scaleOnPress: true,
       pressedScale: 0.985,
-      borderRadius: BorderRadius.circular(9),
+      borderRadius: BorderRadius.circular(11),
       builder: (context, state, child) {
         final opacity = !state.enabled
             ? 0.55
@@ -1333,12 +1337,12 @@ class _MacPrimaryAction extends StatelessWidget {
             gradient: const LinearGradient(
               colors: <Color>[Color(0xFF0B65F8), Color(0xFF0752F0)],
             ),
-            borderRadius: BorderRadius.circular(9),
+            borderRadius: BorderRadius.circular(11),
             boxShadow: const <BoxShadow>[
               BoxShadow(
-                color: Color(0x240B65F8),
-                blurRadius: 20,
-                offset: Offset(0, 8),
+                color: Color(0x220B65F8),
+                blurRadius: 18,
+                offset: Offset(0, 7),
               ),
             ],
           ),
@@ -1349,12 +1353,19 @@ class _MacPrimaryAction extends StatelessWidget {
                 Icon(icon, color: CupertinoColors.white, size: 18),
                 const SizedBox(width: 8),
               ],
-              Text(
-                label,
-                style: const TextStyle(
-                  color: CupertinoColors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: const TextStyle(
+                      color: CupertinoColors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      height: 1,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -1381,7 +1392,7 @@ class _MacSecondaryAction extends StatelessWidget {
       enabled: onPressed != null,
       scaleOnPress: true,
       pressedScale: 0.985,
-      borderRadius: BorderRadius.circular(9),
+      borderRadius: BorderRadius.circular(11),
       builder: (context, state, child) {
         final opacity = !state.enabled
             ? 0.55
@@ -1403,7 +1414,7 @@ class _MacSecondaryAction extends StatelessWidget {
           height: 52,
           decoration: BoxDecoration(
             color: CupertinoColors.white,
-            borderRadius: BorderRadius.circular(9),
+            borderRadius: BorderRadius.circular(11),
             border: Border.all(color: const Color(0xFFDDE5F0)),
           ),
           child: Row(
@@ -1413,12 +1424,19 @@ class _MacSecondaryAction extends StatelessWidget {
                 Icon(icon, color: const Color(0xFF17213A), size: 18),
                 const SizedBox(width: 8),
               ],
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Color(0xFF17213A),
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: const TextStyle(
+                      color: Color(0xFF17213A),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      height: 1,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -1432,7 +1450,25 @@ class _MacSecondaryAction extends StatelessWidget {
 BoxDecoration _macFieldDecoration() {
   return BoxDecoration(
     color: CupertinoColors.white,
-    borderRadius: BorderRadius.circular(9),
+    borderRadius: BorderRadius.circular(12),
     border: Border.all(color: const Color(0xFFDDE5F0)),
   );
+}
+
+class _MacCenteredIcon extends StatelessWidget {
+  const _MacCenteredIcon(this.icon, {required this.size, required this.color});
+
+  final IconData icon;
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: 22,
+      child: Center(
+        child: Icon(icon, size: size, color: color),
+      ),
+    );
+  }
 }
