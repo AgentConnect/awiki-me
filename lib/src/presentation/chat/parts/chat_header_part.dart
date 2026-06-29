@@ -7,11 +7,7 @@ class _ChatHeader extends StatelessWidget {
     required this.macStyle,
     required this.classification,
     required this.isDeletedAgentConversation,
-    required this.onDetails,
     required this.onPeerInfoTap,
-    this.onMacIdentityPanelTap,
-    this.onMacConversationInfoTap,
-    this.macConversationInfoPanelActive = false,
     this.onBack,
   });
 
@@ -21,11 +17,7 @@ class _ChatHeader extends StatelessWidget {
   final bool macStyle;
   final ConversationPeerClassification classification;
   final bool isDeletedAgentConversation;
-  final VoidCallback onDetails;
   final VoidCallback onPeerInfoTap;
-  final VoidCallback? onMacIdentityPanelTap;
-  final VoidCallback? onMacConversationInfoTap;
-  final bool macConversationInfoPanelActive;
 
   @override
   Widget build(BuildContext context) {
@@ -55,17 +47,17 @@ class _ChatHeader extends StatelessWidget {
           builder: (context, constraints) {
             final width = constraints.maxWidth;
             final showSecurityPill = width >= 620;
-            final showIdentityLabel = width >= 470;
             final avatarSize = responsive.displayScaled(
               width >= 360 ? 40.0 : 36.0,
             );
-            final actionGap = responsive.displayScaled(width >= 520 ? 12 : 8);
 
             return Row(
               children: <Widget>[
                 AppPressable(
+                  key: const Key('chat-peer-info-avatar-button'),
                   onTap: onPeerInfoTap,
                   semanticLabel: '打开${classification.detailTypeLabel}信息',
+                  semanticsIdentifier: 'chat-peer-info-avatar-button',
                   tooltip: '打开${classification.detailTypeLabel}信息',
                   borderRadius: BorderRadius.circular(avatarSize / 2),
                   child: AvatarBadge(
@@ -113,28 +105,6 @@ class _ChatHeader extends StatelessWidget {
                     ],
                   ),
                 ),
-                SizedBox(width: actionGap),
-                _MacChatIdentityButton(
-                  key: const Key('chat-identity-card-button'),
-                  label: conversation.isGroup ? '群聊信息' : '身份卡',
-                  showLabel: showIdentityLabel,
-                  isActive: false,
-                  onTap: conversation.isGroup
-                      ? (onMacIdentityPanelTap ?? onDetails)
-                      : onDetails,
-                ),
-                if (onMacConversationInfoTap != null) ...<Widget>[
-                  SizedBox(width: responsive.displayScaled(8)),
-                  _MacChatHeaderButton(
-                    key: const Key('chat-conversation-info-button'),
-                    semanticLabel: '打开或关闭会话信息',
-                    icon: CupertinoIcons.sidebar_right,
-                    isActive: macConversationInfoPanelActive,
-                    onTap: () async {
-                      onMacConversationInfoTap!();
-                    },
-                  ),
-                ],
               ],
             );
           },
@@ -172,8 +142,10 @@ class _ChatHeader extends StatelessWidget {
           ),
           SizedBox(width: responsive.spacing(4)),
           AppPressable(
+            key: const Key('chat-peer-info-avatar-button'),
             onTap: onPeerInfoTap,
             semanticLabel: '打开${classification.detailTypeLabel}信息',
+            semanticsIdentifier: 'chat-peer-info-avatar-button',
             tooltip: '打开${classification.detailTypeLabel}信息',
             borderRadius: BorderRadius.circular(responsive.avatarSizeMd / 2),
             child: AvatarBadge(
@@ -234,18 +206,6 @@ class _ChatHeader extends StatelessWidget {
                   ],
                 ),
               ],
-            ),
-          ),
-          TopBarActionButton(
-            onTap: onDetails,
-            semanticsLabel: '打开${classification.detailTypeLabel}信息',
-            child: Padding(
-              padding: EdgeInsets.all(responsive.spacing(8)),
-              child: AwikiAssetIcon(
-                assetName: 'assets/icons/dot_vertical.svg',
-                color: theme.title,
-                size: responsive.iconMd,
-              ),
             ),
           ),
         ],

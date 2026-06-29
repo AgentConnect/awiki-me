@@ -160,61 +160,65 @@ class GroupListPage extends ConsumerWidget {
     );
   }
 
-  void _showJoinDialog(BuildContext context, WidgetRef ref) {
+  Future<void> _showJoinDialog(BuildContext context, WidgetRef ref) async {
     final textController = TextEditingController();
-    AppNavigator.showDialog<void>(
-      context,
-      (ctx) => CupertinoAlertDialog(
-        title: Text(context.l10n.groupJoinDialogTitle),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 12),
-          child: AppTextField(
-            controller: textController,
-            label: context.l10n.groupJoinDialogTitle,
-            placeholder: context.l10n.groupJoinDialogPlaceholder,
-            keyboardType: TextInputType.text,
+    try {
+      await AppNavigator.showDialog<void>(
+        context,
+        (ctx) => CupertinoAlertDialog(
+          title: Text(context.l10n.groupJoinDialogTitle),
+          content: Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: AppTextField(
+              controller: textController,
+              label: context.l10n.groupJoinDialogTitle,
+              placeholder: context.l10n.groupJoinDialogPlaceholder,
+              keyboardType: TextInputType.text,
+            ),
           ),
-        ),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(context.l10n.commonCancel),
-          ),
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () async {
-              final groupDid = textController.text.trim();
-              if (groupDid.isEmpty) {
-                return;
-              }
-              Navigator.of(ctx).pop();
-              try {
-                final group = await ref
-                    .read(groupProvider.notifier)
-                    .joinGroup(groupDid);
-                await ref
-                    .read(groupProvider.notifier)
-                    .loadGroupMembers(group.groupId);
-                if (!context.mounted) {
+          actions: <Widget>[
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(context.l10n.commonCancel),
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () async {
+                final groupDid = textController.text.trim();
+                if (groupDid.isEmpty) {
                   return;
                 }
-                await openGroupChat(
-                  context,
-                  ref,
-                  group,
-                  closeCurrentRouteOnDesktop: true,
-                );
-              } catch (error) {
-                ref
-                    .read(uiFeedbackProvider.notifier)
-                    .showError(AppMessage.fromError(error));
-              }
-            },
-            child: Text(context.l10n.commonJoin),
-          ),
-        ],
-      ),
-    );
+                Navigator.of(ctx).pop();
+                try {
+                  final group = await ref
+                      .read(groupProvider.notifier)
+                      .joinGroup(groupDid);
+                  await ref
+                      .read(groupProvider.notifier)
+                      .loadGroupMembers(group.groupId);
+                  if (!context.mounted) {
+                    return;
+                  }
+                  await openGroupChat(
+                    context,
+                    ref,
+                    group,
+                    closeCurrentRouteOnDesktop: true,
+                  );
+                } catch (error) {
+                  ref
+                      .read(uiFeedbackProvider.notifier)
+                      .showError(AppMessage.fromError(error));
+                }
+              },
+              child: Text(context.l10n.commonJoin),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      textController.dispose();
+    }
   }
 }
 
