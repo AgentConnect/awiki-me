@@ -64,6 +64,42 @@ void main() {
     },
   );
 
+  test(
+    'visible realtime control payload can update recents without chat content',
+    () {
+      const event = core.RealtimeEvent(
+        kind: 'message_received',
+        message: core.Message(
+          id: 'msg-control-visible-realtime',
+          threadKind: 'direct',
+          threadId: 'did:agent:runtime',
+          direction: core.MessageDirection.incoming,
+          sender: 'did:agent:runtime',
+          receiver: 'did:human:me',
+          body: core.MessageBodyView(
+            text: 'Agent 已准备好。',
+            payloadJson:
+                '{"schema":"awiki.agent.status.v1","status_scope":"runtime"}',
+            kind: 'payload',
+          ),
+          sentAt: '2026-06-04T09:00:00Z',
+          metadata: core.MessageMetadata(),
+        ),
+      );
+
+      final update = mapper.realtimeUpdateFromCore(
+        event,
+        ownerDid: 'did:human:me',
+      );
+
+      expect(update, isNotNull);
+      expect(update!.message, isNull);
+      expect(update.agentControlPayload?['schema'], 'awiki.agent.status.v1');
+      expect(update.conversation?.targetDid, 'did:agent:runtime');
+      expect(update.conversation?.lastMessagePreview, 'Agent 已准备好。');
+    },
+  );
+
   test('runtime agent normal text remains renderable and updates recents', () {
     const event = core.RealtimeEvent(
       kind: 'message_received',

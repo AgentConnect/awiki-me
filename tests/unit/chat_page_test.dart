@@ -210,7 +210,12 @@ void main() {
       ),
     );
 
-    expect(find.text('身份卡'), findsOneWidget);
+    expect(find.byKey(const Key('chat-identity-card-button')), findsNothing);
+    expect(
+      find.byKey(const Key('chat-conversation-info-button')),
+      findsNothing,
+    );
+    expect(find.text('身份卡'), findsNothing);
 
     await tester.enterText(find.byType(CupertinoTextField), 'hello mac');
     await tester.testTextInput.receiveAction(TextInputAction.send);
@@ -223,7 +228,7 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('macOS 窄聊天头部保留身份卡入口且不溢出', (tester) async {
+  testWidgets('macOS 窄聊天头部不显示信息入口且不溢出', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -262,14 +267,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byIcon(CupertinoIcons.person_crop_square), findsOneWidget);
+    expect(find.byKey(const Key('chat-identity-card-button')), findsNothing);
+    expect(
+      find.byKey(const Key('chat-conversation-info-button')),
+      findsNothing,
+    );
+    expect(find.byIcon(CupertinoIcons.person_crop_square), findsNothing);
     expect(tester.takeException(), isNull);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('macOS 聊天头部操作按钮使用一致的轻量样式', (tester) async {
+  testWidgets('macOS 聊天头部不显示信息入口按钮', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -300,7 +310,6 @@ void main() {
             conversation: conversation,
             embedded: true,
             macStyle: true,
-            onMacConversationInfoTap: () {},
           ),
         ),
         gateway: gateway,
@@ -309,34 +318,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final refreshIcon = tester.widget<Icon>(
-      find.descendant(
-        of: find.byKey(const Key('chat-refresh-button')),
-        matching: find.byIcon(CupertinoIcons.refresh),
-      ),
+    expect(find.byKey(const Key('chat-refresh-button')), findsNothing);
+    expect(find.byKey(const Key('chat-identity-card-button')), findsNothing);
+    expect(
+      find.byKey(const Key('chat-conversation-info-button')),
+      findsNothing,
     );
-    final identityIcon = tester.widget<Icon>(
-      find.descendant(
-        of: find.byKey(const Key('chat-identity-card-button')),
-        matching: find.byIcon(CupertinoIcons.person_crop_square),
-      ),
-    );
-    final infoIcon = tester.widget<Icon>(
-      find.descendant(
-        of: find.byKey(const Key('chat-conversation-info-button')),
-        matching: find.byIcon(CupertinoIcons.sidebar_right),
-      ),
-    );
-    final identityLabel = tester.widget<Text>(find.text('身份卡'));
-
-    expect(infoIcon.color, refreshIcon.color);
-    expect(identityIcon.size, refreshIcon.size);
-    expect(infoIcon.size, refreshIcon.size);
-    expect(infoIcon.weight, refreshIcon.weight);
-    expect(refreshIcon.weight, 500);
-    expect(identityIcon.color, refreshIcon.color);
-    expect(identityIcon.weight, refreshIcon.weight);
-    expect(identityLabel.style?.fontWeight, FontWeight.w400);
+    expect(find.text('身份卡'), findsNothing);
+    expect(find.text('会话信息'), findsNothing);
+    expect(find.text('群聊信息'), findsNothing);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -384,8 +374,13 @@ void main() {
     expect(find.text('融资协作群'), findsOneWidget);
     expect(find.text('我的智能体'), findsNothing);
     expect(find.text('安全协作中'), findsOneWidget);
-    expect(find.text('群聊信息'), findsOneWidget);
+    expect(find.text('群聊信息'), findsNothing);
     expect(find.text('身份卡'), findsNothing);
+    expect(find.byKey(const Key('chat-identity-card-button')), findsNothing);
+    expect(
+      find.byKey(const Key('chat-conversation-info-button')),
+      findsNothing,
+    );
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -529,7 +524,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.bySemanticsLabel('打开用户信息').last);
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('关注'));
     await tester.pumpAndSettle();
@@ -575,7 +570,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.bySemanticsLabel('打开用户信息').last);
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('关注'));
     await tester.pumpAndSettle();
@@ -648,7 +643,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.bySemanticsLabel('打开用户信息').last);
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('已关注'));
     await tester.pump();
@@ -660,73 +655,6 @@ void main() {
     await tester.pump();
 
     expect(gateway.lastUnfollowedDidOrHandle, 'did:test:peer');
-  });
-
-  testWidgets('macOS 聊天头部刷新按钮会同步当前会话消息', (tester) async {
-    final gateway = FakeAwikiGateway();
-    const session = SessionIdentity(
-      did: 'did:test:me',
-      handle: 'me',
-      displayName: 'Me',
-      credentialName: 'default',
-    );
-    final conversation = ConversationSummary(
-      threadId: 'dm:refresh-button',
-      displayName: 'Mac Agent',
-      lastMessagePreview: '',
-      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
-      unreadCount: 0,
-      isGroup: false,
-      targetDid: 'did:test:peer',
-    );
-    final message = ChatMessage(
-      localId: 'remote-refresh',
-      remoteId: 'remote-refresh',
-      threadId: conversation.threadId,
-      senderDid: 'did:test:peer',
-      content: 'synced message',
-      createdAt: DateTime(2026, 4, 5, 12, 1),
-      isMine: false,
-      sendState: MessageSendState.sent,
-    );
-    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
-      'did:test:peer': <ChatMessage>[message],
-    };
-    addTearDown(() {
-      debugDefaultTargetPlatformOverride = null;
-      tester.binding.setSurfaceSize(null);
-    });
-    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    await tester.binding.setSurfaceSize(const Size(1100, 760));
-
-    await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: CupertinoPageScaffold(
-          child: ChatView(
-            conversation: conversation,
-            embedded: true,
-            macStyle: true,
-          ),
-        ),
-        gateway: gateway,
-        session: session,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const Key('chat-refresh-button')));
-    await tester.pump();
-
-    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
-
-    await tester.pumpAndSettle();
-
-    expect(gateway.listConversationsCalls, 1);
-    expect(gateway.fetchDmHistoryCalls, 1);
-    expect(find.text('synced message'), findsOneWidget);
-
-    debugDefaultTargetPlatformOverride = null;
-    await tester.binding.setSurfaceSize(null);
   });
 
   testWidgets('群聊标题优先显示已知群名称', (tester) async {
@@ -2535,7 +2463,7 @@ void main() {
     expect(find.text('智能体正在处理...'), findsNothing);
   });
 
-  testWidgets('聊天窗口在会话列表刷新到新消息时补拉历史', (tester) async {
+  testWidgets('聊天窗口在会话列表刷新到新消息时只清未读不补拉历史', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -2596,11 +2524,16 @@ void main() {
     await container.read(conversationListProvider.notifier).refresh();
     await tester.pumpAndSettle();
 
-    expect(find.text('你好。欢迎'), findsOneWidget);
-    expect(gateway.fetchDmHistoryCalls, 1);
+    expect(find.text('你好。欢迎'), findsNothing);
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(gateway.markReadCalls, 1);
+    expect(
+      container.read(conversationListProvider).conversations.single.unreadCount,
+      0,
+    );
   });
 
-  testWidgets('聊天窗口在会话列表切换为 canonical thread 后仍补拉到当前窗口', (tester) async {
+  testWidgets('聊天窗口在会话列表切换为 canonical thread 后不反向补拉历史', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -2664,13 +2597,11 @@ void main() {
     await container.read(conversationListProvider.notifier).refresh();
     await tester.pumpAndSettle();
 
-    expect(find.text('我在。'), findsOneWidget);
+    expect(find.text('我在。'), findsNothing);
+    expect(gateway.fetchDmHistoryCalls, 0);
     expect(
-      container
-          .read(chatThreadProvider(openedConversation.threadId))
-          .messages
-          .map((message) => message.content),
-      contains('我在。'),
+      container.read(chatThreadProvider(openedConversation.threadId)).messages,
+      isEmpty,
     );
     expect(
       container
@@ -2740,7 +2671,9 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ChatView)),
     );
-    await container.read(conversationListProvider.notifier).refresh();
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
     await tester.pumpAndSettle();
 
     final expectedTime =

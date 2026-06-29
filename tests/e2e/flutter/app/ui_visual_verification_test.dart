@@ -85,12 +85,14 @@ void main() {
       expect(find.text('product-brief.pdf'), findsOneWidget);
       await _captureScreenshot(tester, '02-chat-default-info-closed');
 
-      await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
-      await tester.pumpAndSettle();
-      expect(find.text('会话信息'), findsOneWidget);
-      await _captureScreenshot(tester, '03-chat-info-side-panel');
+      expect(
+        find.byKey(const Key('chat-conversation-info-button')),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('chat-identity-card-button')), findsNothing);
+      expect(find.text('身份卡'), findsNothing);
 
-      await tester.tap(find.text('身份卡').first);
+      await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
       await tester.pumpAndSettle();
       expect(find.text('智能体信息'), findsOneWidget);
       expect(find.text('Runtime Agent'), findsOneWidget);
@@ -98,7 +100,7 @@ void main() {
         find.byKey(const Key('peer-info-dialog-did-value')),
         findsOneWidget,
       );
-      await _captureScreenshot(tester, '04-agent-info-popup');
+      await _captureScreenshot(tester, '03-agent-info-popup');
 
       await tester.tap(find.text('Agent 收件箱').last);
       await tester.pump();
@@ -111,7 +113,7 @@ void main() {
       expect(find.textContaining('最新：'), findsWidgets);
       await tester.ensureVisible(find.text('bob.anpclaw.com').first);
       await tester.pumpAndSettle();
-      await _captureScreenshot(tester, '05-agent-inbox-list');
+      await _captureScreenshot(tester, '04-agent-inbox-list');
 
       await tester.tap(find.text('bob.anpclaw.com').first);
       await tester.pump();
@@ -122,7 +124,7 @@ void main() {
       expect(find.text('加载更早消息'), findsOneWidget);
       await tester.ensureVisible(find.text('加载更早消息'));
       await tester.pumpAndSettle();
-      await _captureScreenshot(tester, '06-agent-inbox-thread');
+      await _captureScreenshot(tester, '05-agent-inbox-thread');
 
       final agentsHarness = _createVisualHarness();
       await _resetApp(tester);
@@ -143,7 +145,7 @@ void main() {
       expect(find.text('工作目录策略'), findsNothing);
       expect(find.text('宿主机全权限'), findsNothing);
       expect(find.text('按会话目录'), findsNothing);
-      await _captureScreenshot(tester, '07-agent-create-agent-type');
+      await _captureScreenshot(tester, '06-agent-create-agent-type');
     } finally {
       debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);

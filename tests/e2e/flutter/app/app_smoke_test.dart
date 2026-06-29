@@ -443,16 +443,15 @@ void main() {
         expect(find.text('会话信息'), findsNothing);
         expect(
           find.byKey(const Key('chat-conversation-info-button')),
-          findsOneWidget,
+          findsNothing,
         );
-
-        await tester.tap(
-          find.byKey(const Key('chat-conversation-info-button')),
+        expect(
+          find.byKey(const Key('chat-identity-card-button')),
+          findsNothing,
         );
-        await tester.pump();
-        expect(find.text('会话信息'), findsOneWidget);
+        expect(find.text('身份卡'), findsNothing);
 
-        await tester.tap(find.text('身份卡').first);
+        await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
         await tester.pumpAndSettle();
 
         expect(find.text('智能体信息'), findsOneWidget);

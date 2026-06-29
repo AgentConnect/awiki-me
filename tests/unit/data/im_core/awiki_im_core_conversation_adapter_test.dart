@@ -81,7 +81,56 @@ void main() {
     },
   );
 
-  test('watchConversationPatches maps SDK upsert patch to app core patch', () async {
+  test(
+    'watchConversationPatches maps SDK upsert patch to app core patch',
+    () async {
+      final client = _FakeClient();
+      final adapter = AwikiImCoreConversationAdapter(
+        runtime: _FakeRuntime(client),
+      );
+      final patchFuture = adapter.watchConversationPatches().first;
+      await Future<void>.delayed(Duration.zero);
+
+      client.messages.emitPatch(
+        const core.ConversationStorePatch(
+          kind: core.ConversationStorePatchKind.upsert,
+          ownerIdentityId: 'alice-id',
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 2,
+          item: core.ConversationSnapshotItem(
+            threadKind: 'direct',
+            threadId: 'did:bob',
+            participants: <String>['did:bob'],
+            unreadCount: 2,
+            messageCount: 1,
+            lastMessageAt: '2026-06-27T00:00:00Z',
+            lastMessage: core.ConversationSnapshotMessage(
+              id: 'msg-1',
+              threadKind: 'direct',
+              threadId: 'did:bob',
+              direction: 'incoming',
+              sender: 'did:bob',
+              body: core.ConversationSnapshotMessageBody(
+                text: 'hello',
+                kind: 'text',
+              ),
+              sentAt: '2026-06-27T00:00:00Z',
+            ),
+          ),
+        ),
+      );
+
+      final patch = await patchFuture.timeout(const Duration(seconds: 1));
+      expect(patch.kind.name, 'upsert');
+      expect(patch.ownerDid, 'did:alice');
+      expect(patch.item?.threadId, 'dm:did:alice:did:bob');
+      expect(patch.item?.lastMessagePreview, 'hello');
+      expect(patch.item?.unreadCount, 2);
+    },
+  );
+
+  test('visible control patch updates recents preview', () async {
     final client = _FakeClient();
     final adapter = AwikiImCoreConversationAdapter(
       runtime: _FakeRuntime(client),
@@ -94,24 +143,25 @@ void main() {
         kind: core.ConversationStorePatchKind.upsert,
         ownerIdentityId: 'alice-id',
         ownerDid: 'did:alice',
-        version: 1,
-        unreadTotal: 2,
+        version: 3,
+        unreadTotal: 1,
         item: core.ConversationSnapshotItem(
           threadKind: 'direct',
-          threadId: 'did:bob',
-          participants: <String>['did:bob'],
-          unreadCount: 2,
+          threadId: 'did:agent:runtime',
+          participants: <String>['did:agent:runtime'],
+          unreadCount: 1,
           messageCount: 1,
           lastMessageAt: '2026-06-27T00:00:00Z',
           lastMessage: core.ConversationSnapshotMessage(
-            id: 'msg-1',
+            id: 'msg-control-visible',
             threadKind: 'direct',
-            threadId: 'did:bob',
+            threadId: 'did:agent:runtime',
             direction: 'incoming',
-            sender: 'did:bob',
+            sender: 'did:agent:runtime',
             body: core.ConversationSnapshotMessageBody(
-              text: 'hello',
-              kind: 'text',
+              text: 'Agent 已准备好。',
+              payloadJson:
+                  '{"schema":"awiki.agent.status.v1","status_scope":"runtime"}',
             ),
             sentAt: '2026-06-27T00:00:00Z',
           ),
@@ -120,14 +170,12 @@ void main() {
     );
 
     final patch = await patchFuture.timeout(const Duration(seconds: 1));
-    expect(patch.kind.name, 'upsert');
-    expect(patch.ownerDid, 'did:alice');
-    expect(patch.item?.threadId, 'dm:did:alice:did:bob');
-    expect(patch.item?.lastMessagePreview, 'hello');
-    expect(patch.item?.unreadCount, 2);
+    expect(patch.kind, CoreConversationPatchKind.upsert);
+    expect(patch.item?.lastMessagePreview, 'Agent 已准备好。');
+    expect(patch.item?.lastMessagePayloadJson, contains('awiki.agent.status'));
   });
 
-  test('watchConversationPatches maps SDK reorder patch without removing row', () async {
+  test('payload-only control patch removes hidden row', () async {
     final client = _FakeClient();
     final adapter = AwikiImCoreConversationAdapter(
       runtime: _FakeRuntime(client),
@@ -137,22 +185,68 @@ void main() {
 
     client.messages.emitPatch(
       const core.ConversationStorePatch(
-        kind: core.ConversationStorePatchKind.reorder,
+        kind: core.ConversationStorePatchKind.upsert,
         ownerIdentityId: 'alice-id',
         ownerDid: 'did:alice',
-        version: 2,
+        version: 4,
         unreadTotal: 0,
-        threadKind: 'direct',
-        threadId: 'did:bob',
-        index: 0,
+        item: core.ConversationSnapshotItem(
+          threadKind: 'direct',
+          threadId: 'did:agent:daemon',
+          participants: <String>['did:agent:daemon'],
+          unreadCount: 0,
+          messageCount: 1,
+          lastMessageAt: '2026-06-27T00:00:00Z',
+          lastMessage: core.ConversationSnapshotMessage(
+            id: 'msg-control-hidden',
+            threadKind: 'direct',
+            threadId: 'did:agent:daemon',
+            direction: 'incoming',
+            sender: 'did:agent:daemon',
+            body: core.ConversationSnapshotMessageBody(
+              payloadJson:
+                  '{"schema":"awiki.agent.status.v1","status_scope":"daemon"}',
+            ),
+            sentAt: '2026-06-27T00:00:00Z',
+          ),
+        ),
       ),
     );
 
     final patch = await patchFuture.timeout(const Duration(seconds: 1));
-    expect(patch.kind, CoreConversationPatchKind.reorder);
-    expect(patch.threadId, 'did:bob');
-    expect(patch.index, 0);
+    expect(patch.kind, CoreConversationPatchKind.remove);
+    expect(patch.threadId, 'did:agent:daemon');
   });
+
+  test(
+    'watchConversationPatches maps SDK reorder patch without removing row',
+    () async {
+      final client = _FakeClient();
+      final adapter = AwikiImCoreConversationAdapter(
+        runtime: _FakeRuntime(client),
+      );
+      final patchFuture = adapter.watchConversationPatches().first;
+      await Future<void>.delayed(Duration.zero);
+
+      client.messages.emitPatch(
+        const core.ConversationStorePatch(
+          kind: core.ConversationStorePatchKind.reorder,
+          ownerIdentityId: 'alice-id',
+          ownerDid: 'did:alice',
+          version: 2,
+          unreadTotal: 0,
+          threadKind: 'direct',
+          threadId: 'did:bob',
+          index: 0,
+        ),
+      );
+
+      final patch = await patchFuture.timeout(const Duration(seconds: 1));
+      expect(patch.kind, CoreConversationPatchKind.reorder);
+      expect(patch.threadId, 'did:bob');
+      expect(patch.index, 0);
+    },
+  );
 }
 
 class _FakeRuntime extends AwikiImCoreRuntime {

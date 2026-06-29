@@ -2,8 +2,8 @@
 
 import 'dart:async';
 
-import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
@@ -34,7 +34,6 @@ import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
@@ -129,7 +128,7 @@ void main() {
     expect(find.text('@我'), findsOneWidget);
   });
 
-  testWidgets('macOS 宽度下消息工作区默认关闭会话信息', (tester) async {
+  testWidgets('macOS 宽度下聊天头部不显示身份卡或会话信息入口', (tester) async {
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[conversation]
       ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
@@ -161,23 +160,20 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ChatView), findsOneWidget);
-    expect(find.text('会话信息'), findsNothing);
-    expect(find.text('did:peer'), findsNothing);
     expect(find.text('安全协作中'), findsOneWidget);
+    expect(find.text('会话信息'), findsNothing);
+    expect(find.text('身份卡'), findsNothing);
+    expect(find.text('群聊信息'), findsNothing);
+    expect(find.byKey(const Key('chat-identity-card-button')), findsNothing);
     expect(
       find.byKey(const Key('chat-conversation-info-button')),
-      findsOneWidget,
+      findsNothing,
     );
-    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
-    await tester.pump();
-
-    expect(find.text('会话信息'), findsOneWidget);
-    expect(find.text('did:peer'), findsOneWidget);
+    expect(find.byKey(const Key('mac-side-panel')), findsNothing);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });
-
   testWidgets('macOS 最近会话点击不等待恢复最近列表完成', (tester) async {
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[conversation]
@@ -299,7 +295,7 @@ void main() {
     await tester.pump();
 
     expect(find.bySemanticsLabel('Agent 收件箱'), findsNothing);
-    await tester.tap(find.bySemanticsLabel('打开智能体信息'));
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
     await tester.pumpAndSettle();
 
     expect(find.text('智能体信息'), findsOneWidget);
@@ -316,139 +312,7 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('macOS 会话信息完整显示 DID 并支持一键复制', (tester) async {
-    const longDid =
-        'did:awiki:user:marcus-chen-lab:e1_abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789';
-    final longDidConversation = ConversationSummary(
-      threadId: 'dm:did:me:$longDid',
-      displayName: 'Marcus Chen',
-      lastMessagePreview: '',
-      lastMessageAt: DateTime(2026, 3, 28, 10, 24),
-      unreadCount: 0,
-      isGroup: false,
-      targetDid: longDid,
-    );
-    final gateway = FakeAwikiGateway()
-      ..conversations = <ConversationSummary>[longDidConversation]
-      ..dmHistoryByPeerDid = const <String, List<ChatMessage>>{longDid: []};
-    addTearDown(() {
-      debugDefaultTargetPlatformOverride = null;
-      tester.binding.setSurfaceSize(null);
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(SystemChannels.platform, null);
-    });
-    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    await tester.binding.setSurfaceSize(const Size(1600, 960));
-
-    String? clipboardText;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(SystemChannels.platform, (
-          MethodCall methodCall,
-        ) async {
-          if (methodCall.method == 'Clipboard.setData') {
-            final data = methodCall.arguments as Map<Object?, Object?>;
-            clipboardText = data['text'] as String?;
-          }
-          return null;
-        });
-
-    await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const ConversationWorkspacePage(),
-        gateway: gateway,
-        providerOverrides: <Override>[
-          conversationListProvider.overrideWith(
-            (ref) =>
-                _StaticConversationListController(ref, gateway.conversations),
-          ),
-        ],
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Marcus Chen'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
-    await tester.pump();
-
-    final didFinder = find.byKey(const Key('mac-conversation-did-value'));
-    expect(didFinder, findsOneWidget);
-    final didText = tester.widget<Text>(didFinder);
-    expect(didText.data, longDid);
-    expect(didText.maxLines, isNull);
-    expect(
-      find.byKey(const Key('mac-conversation-copy-did-button')),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.byKey(const Key('mac-conversation-copy-did-button')));
-    await tester.pump();
-
-    expect(clipboardText, longDid);
-    expect(find.text('DID 已复制'), findsOneWidget);
-    await tester.pump(const Duration(seconds: 2));
-    await tester.pump();
-
-    debugDefaultTargetPlatformOverride = null;
-    await tester.binding.setSurfaceSize(null);
-  });
-
-  testWidgets('macOS 会话状态最近预览多行时圆点对齐首行', (tester) async {
-    final previewConversation = ConversationSummary(
-      threadId: 'dm:did:me:did:peer',
-      displayName: 'Marcus Chen',
-      lastMessagePreview: '这是一段比较长的最近消息预览，用来触发右侧会话状态区域里的两行文本布局',
-      lastMessageAt: DateTime(2026, 3, 28, 10, 24),
-      unreadCount: 0,
-      isGroup: false,
-      targetDid: 'did:peer',
-    );
-    final gateway = FakeAwikiGateway()
-      ..conversations = <ConversationSummary>[previewConversation]
-      ..dmHistoryByPeerDid = const <String, List<ChatMessage>>{
-        'did:peer': <ChatMessage>[],
-      };
-    addTearDown(() {
-      debugDefaultTargetPlatformOverride = null;
-      tester.binding.setSurfaceSize(null);
-    });
-    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    await tester.binding.setSurfaceSize(const Size(1600, 960));
-
-    await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const ConversationWorkspacePage(),
-        gateway: gateway,
-        providerOverrides: <Override>[
-          conversationListProvider.overrideWith(
-            (ref) =>
-                _StaticConversationListController(ref, gateway.conversations),
-          ),
-        ],
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Marcus Chen'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
-    await tester.pump();
-
-    final dotRect = tester.getRect(
-      find.byKey(const Key('mac-conversation-preview-status-dot')),
-    );
-    final valueRect = tester.getRect(
-      find.byKey(const Key('mac-conversation-preview-status-value')),
-    );
-
-    expect(valueRect.height, greaterThan(20));
-    expect((dotRect.center.dy - (valueRect.top + 8.1)).abs(), lessThan(1.0));
-
-    debugDefaultTargetPlatformOverride = null;
-    await tester.binding.setSurfaceSize(null);
-  });
-
-  testWidgets('macOS 最近会话和信息面板只给真实智能体显示 AI 标记', (tester) async {
+  testWidgets('macOS 最近会话只给真实智能体显示 AI 标记且无会话信息入口', (tester) async {
     final humanConversation = ConversationSummary(
       threadId: 'dm:human',
       displayName: '普通用户',
@@ -510,24 +374,23 @@ void main() {
 
     await tester.tap(find.text('普通用户'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
-    await tester.pump();
-
-    expect(find.text('类型:'), findsOneWidget);
-    expect(find.text('用户'), findsOneWidget);
-    expect(find.text('Personal Agent'), findsNothing);
+    expect(find.text('用户'), findsNothing);
+    expect(
+      find.byKey(const Key('chat-conversation-info-button')),
+      findsNothing,
+    );
 
     await tester.tap(find.text('远端智能体'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
-    await tester.pump();
-
     expect(find.text('智能体'), findsWidgets);
+    expect(
+      find.byKey(const Key('chat-conversation-info-button')),
+      findsNothing,
+    );
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });
-
   testWidgets('macOS 最近会话为正在处理的本地智能体显示状态圆点', (tester) async {
     const session = SessionIdentity(
       did: 'did:human:me',
@@ -1153,7 +1016,7 @@ void main() {
     expect(find.text('智能体已删除，无法继续发送消息'), findsOneWidget);
   });
 
-  testWidgets('macOS 点击身份卡入口打开用户信息弹窗', (tester) async {
+  testWidgets('macOS 聊天头部移除身份卡按钮但头像仍可打开用户信息弹窗', (tester) async {
     const peerProfile = UserProfile(
       did: 'did:peer',
       nickName: 'Marcus Chen',
@@ -1192,12 +1055,17 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('mac-side-panel')), findsNothing);
     expect(find.text('会话信息'), findsNothing);
+    expect(find.text('身份卡'), findsNothing);
+    expect(find.byKey(const Key('chat-identity-card-button')), findsNothing);
+    expect(
+      find.byKey(const Key('chat-conversation-info-button')),
+      findsNothing,
+    );
 
     await tester.tap(find.text('Marcus Chen').last);
     await tester.pumpAndSettle();
 
     expect(find.text('用户信息'), findsOneWidget);
-    expect(find.text('身份卡'), findsWidgets);
     expect(find.text('负责融资协作。'), findsOneWidget);
     expect(find.text('@marcus'), findsOneWidget);
     expect(find.byKey(const Key('peer-info-dialog-did-value')), findsOneWidget);
@@ -1207,29 +1075,19 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('用户信息'), findsNothing);
 
-    await tester.tap(find.text('身份卡'));
-    await tester.pumpAndSettle();
-    expect(find.text('用户信息'), findsOneWidget);
-
-    await tester.tap(find.bySemanticsLabel('关闭信息弹窗'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
-    await tester.pump();
-    expect(find.text('会话信息'), findsOneWidget);
-
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });
-
-  testWidgets('macOS 群聊信息按钮打开统一信息弹窗而不是全屏跳转', (tester) async {
+  testWidgets('macOS 群聊头像打开统一信息弹窗且头部不显示入口', (tester) async {
+    const groupId = 'did:test:group:funding';
     final group = GroupSummary(
-      groupId: 'did:test:group:funding',
+      groupId: groupId,
       name: '融资协作群',
       description: '同步融资材料和里程碑',
       memberCount: 2,
       lastMessageAt: DateTime(2026, 3, 28, 10, 25),
       myRole: 'owner',
+      membershipStatus: 'active',
     );
     final groupConversation = ConversationSummary(
       threadId: 'group:funding',
@@ -1238,13 +1096,13 @@ void main() {
       lastMessageAt: DateTime(2026, 3, 28, 10, 25),
       unreadCount: 0,
       isGroup: true,
-      groupId: 'did:test:group:funding',
+      groupId: groupId,
     );
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[groupConversation]
       ..groups = <GroupSummary>[group]
       ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
-        group.groupId: const <GroupMemberSummary>[
+        groupId: const <GroupMemberSummary>[
           GroupMemberSummary(
             userId: 'did:test:owner',
             did: 'did:test:owner',
@@ -1283,8 +1141,15 @@ void main() {
     await tester.tap(find.text('融资协作群').first);
     await tester.pumpAndSettle();
     expect(find.text('会话信息'), findsNothing);
-    expect(find.text('群聊信息'), findsOneWidget);
+    expect(find.text('群聊信息'), findsNothing);
     expect(find.text('身份卡'), findsNothing);
+    expect(find.byKey(const Key('chat-identity-card-button')), findsNothing);
+    expect(
+      find.byKey(const Key('chat-conversation-info-button')),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('mac-side-panel')), findsNothing);
+    expect(find.byType(GroupDetailPage), findsNothing);
 
     await tester.tap(find.text('融资协作群').last);
     await tester.pumpAndSettle();
@@ -1315,7 +1180,7 @@ void main() {
     await tester.tap(find.bySemanticsLabel('关闭信息弹窗'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('群聊信息'));
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
     await tester.pumpAndSettle();
     expect(find.text('同步融资材料和里程碑'), findsOneWidget);
 
@@ -1431,7 +1296,7 @@ void main() {
 
     await tester.tap(find.text('融资协作群').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('群聊信息'));
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
     await tester.pumpAndSettle();
 
     expect(
@@ -1472,19 +1337,10 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('macOS 右侧栏空间不足时在聊天区打开会话信息和身份卡', (tester) async {
-    const peerProfile = UserProfile(
-      did: 'did:peer',
-      nickName: 'Marcus Chen',
-      bio: '融资协作 Agent',
-      tags: <String>['Agent'],
-      profileMarkdown: '# Marcus\n\n负责融资协作。',
-      handle: 'marcus',
-    );
+  testWidgets('macOS 右侧栏空间不足时聊天头部仍不显示信息入口', (tester) async {
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[conversation]
-      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history}
-      ..publicProfilesByQuery = <String, UserProfile>{'did:peer': peerProfile};
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
       tester.binding.setSurfaceSize(null);
@@ -1499,7 +1355,6 @@ void main() {
           child: ConversationWorkspacePage(),
         ),
         gateway: gateway,
-        homepageMarkdownLoader: (_) async => null,
         providerOverrides: <Override>[
           conversationListProvider.overrideWith(
             (ref) =>
@@ -1515,50 +1370,29 @@ void main() {
 
     expect(find.byType(ChatView), findsOneWidget);
     expect(find.byKey(const Key('mac-side-panel')), findsNothing);
-    expect(find.text('会话信息'), findsNothing);
-
-    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(ChatView), findsNothing);
-    expect(find.byKey(const Key('mac-inline-side-panel')), findsOneWidget);
-    expect(find.byKey(const Key('mac-side-panel')), findsNothing);
-    expect(find.text('会话信息'), findsOneWidget);
-    expect(find.text('did:peer'), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('mac-compact-panel-back-button')));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(ChatView), findsOneWidget);
-    expect(find.text('会话信息'), findsNothing);
-
-    await tester.tap(find.text('身份卡'));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(ChatView), findsOneWidget);
-    expect(find.text('用户信息'), findsOneWidget);
-    expect(find.byKey(const Key('mac-side-panel')), findsNothing);
     expect(find.byKey(const Key('mac-inline-side-panel')), findsNothing);
-    expect(find.text('负责融资协作。'), findsOneWidget);
-
-    await tester.tap(find.bySemanticsLabel('关闭信息弹窗'));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(ChatView), findsOneWidget);
-    expect(find.text('用户信息'), findsNothing);
+    expect(find.text('会话信息'), findsNothing);
+    expect(find.text('身份卡'), findsNothing);
+    expect(find.byKey(const Key('chat-identity-card-button')), findsNothing);
+    expect(
+      find.byKey(const Key('chat-conversation-info-button')),
+      findsNothing,
+    );
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('macOS 右侧栏空间不足时也用弹窗打开群聊信息', (tester) async {
+  testWidgets('macOS 右侧栏空间不足时群聊头像打开统一信息弹窗', (tester) async {
+    const groupId = 'did:test:group:funding';
     final group = GroupSummary(
-      groupId: 'did:test:group:funding',
+      groupId: groupId,
       name: '融资协作群',
       description: '同步融资材料和里程碑',
       memberCount: 2,
       lastMessageAt: DateTime(2026, 3, 28, 10, 25),
       myRole: 'owner',
+      membershipStatus: 'active',
     );
     final groupConversation = ConversationSummary(
       threadId: 'group:funding',
@@ -1567,13 +1401,13 @@ void main() {
       lastMessageAt: DateTime(2026, 3, 28, 10, 25),
       unreadCount: 0,
       isGroup: true,
-      groupId: 'did:test:group:funding',
+      groupId: groupId,
     );
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[groupConversation]
       ..groups = <GroupSummary>[group]
       ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
-        group.groupId: const <GroupMemberSummary>[
+        groupId: const <GroupMemberSummary>[
           GroupMemberSummary(
             userId: 'did:test:owner',
             did: 'did:test:owner',
@@ -1611,9 +1445,15 @@ void main() {
 
     expect(find.byType(ChatView), findsOneWidget);
     expect(find.byKey(const Key('mac-side-panel')), findsNothing);
-    expect(find.text('群聊信息'), findsOneWidget);
+    expect(find.byKey(const Key('mac-inline-side-panel')), findsNothing);
+    expect(find.text('群聊信息'), findsNothing);
+    expect(find.byKey(const Key('chat-identity-card-button')), findsNothing);
+    expect(
+      find.byKey(const Key('chat-conversation-info-button')),
+      findsNothing,
+    );
 
-    await tester.tap(find.text('群聊信息'));
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
     await tester.pumpAndSettle();
 
     expect(find.byType(ChatView), findsOneWidget);
@@ -1687,7 +1527,7 @@ void main() {
 
     await tester.tap(find.text('融资协作群').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('群聊信息'));
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
     await tester.pumpAndSettle();
 
     expect(find.text('暂无成员快照，先执行一次刷新群详情与成员。'), findsOneWidget);
@@ -1776,7 +1616,7 @@ void main() {
 
     await tester.tap(find.text('融资协作群').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('群聊信息'));
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
     await tester.pumpAndSettle();
 
     gateway.listGroupMembersCompleter = memberRefresh;
@@ -1808,7 +1648,7 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('macOS 会话信息按钮支持折叠和重新打开右侧栏', (tester) async {
+  testWidgets('macOS 会话信息头部按钮已移除', (tester) async {
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[conversation]
       ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
@@ -1836,19 +1676,15 @@ void main() {
     await tester.tap(find.text('Marcus Chen'));
     await tester.pumpAndSettle();
     expect(find.text('会话信息'), findsNothing);
-
-    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
-    await tester.pumpAndSettle();
-    expect(find.text('会话信息'), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
-    await tester.pumpAndSettle();
-    expect(find.text('会话信息'), findsNothing);
+    expect(
+      find.byKey(const Key('chat-conversation-info-button')),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('mac-side-panel')), findsNothing);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });
-
   testWidgets('macOS 主导航点击会切换模块并保持图标可点', (tester) async {
     const session = SessionIdentity(
       did: 'did:test:me',

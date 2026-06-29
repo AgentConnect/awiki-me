@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
@@ -14,6 +15,11 @@ import '../../domain/entities/group_summary.dart';
 import '../../domain/services/notification_facade.dart';
 import '../app_shell/providers/selected_conversation_provider.dart';
 import '../app_shell/providers/session_provider.dart';
+
+const bool _conversationTraceEnabled = bool.fromEnvironment(
+  'AWIKI_CONVERSATION_TRACE',
+  defaultValue: false,
+);
 
 class ConversationListState {
   const ConversationListState({
@@ -160,7 +166,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           conversations: const <ConversationSummary>[],
           isLoading: false,
         );
-        await _updateBadgeCountBestEffort(0);
+        await _updateBadgeCountBestEffort(0, source: 'refresh.no_session');
         return;
       }
       _ensurePatchSubscription(ownerDid: session.did, generation: generation);
@@ -178,6 +184,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           generation: generation,
           label: 'conversation_list.refresh',
           keepLocalOnly: !_snapshotBootstrapActive,
+          badgeSource: 'refresh',
         );
         totalWatch.stop();
         AwikiPerformanceLogger.log(
@@ -205,6 +212,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         generation: generation,
         label: 'conversation_list.refresh_fast_local',
         keepLocalOnly: !_snapshotBootstrapActive,
+        badgeSource: 'refresh_fast_local',
       );
       totalWatch.stop();
       AwikiPerformanceLogger.log(
@@ -254,6 +262,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       enriched,
       generation: generation,
       label: 'conversation_list.refresh_enrich',
+      badgeSource: 'refresh_enrich',
     );
     totalWatch.stop();
     AwikiPerformanceLogger.log(
@@ -296,7 +305,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       isLoading: true,
     );
     _snapshotBootstrapActive = true;
-    await _updateBadgeCountBestEffort(state.unreadCount);
+    await _updateBadgeCountBestEffort(state.unreadCount, source: 'snapshot');
     AwikiPerformanceLogger.log(
       'conversation_list.snapshot',
       fields: <String, Object?>{
@@ -334,11 +343,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         .read(conversationServiceProvider)
         .watchConversationPatches(ownerDid: ownerDid)
         .listen(
-          (patch) => _handleConversationPatch(
-            patch,
-            ownerDid: ownerDid,
-            token: token,
-          ),
+          (patch) =>
+              _handleConversationPatch(patch, ownerDid: ownerDid, token: token),
           onError: (_) => _schedulePatchRepair(
             ownerDid: ownerDid,
             generation: generation,
@@ -368,17 +374,49 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     required String ownerDid,
     required int token,
   }) {
-    if (!_canApplyPatch(
-      patch,
-      ownerDid: ownerDid,
-      token: token,
-    )) {
+    _trace(
+      'patch.received',
+      fields: <String, Object?>{
+        'kind': patch.kind.name,
+        'version': patch.version,
+        'last_version': _lastPatchVersion,
+        'unread_total': patch.unreadTotal,
+        'thread_hash': _safeHash(patch.threadId),
+        'reason': patch.reason,
+      },
+    );
+    if (!_canApplyPatch(patch, ownerDid: ownerDid, token: token)) {
+      _trace(
+        'patch.ignored',
+        fields: <String, Object?>{
+          'reason': 'stale_or_owner_mismatch',
+          'kind': patch.kind.name,
+          'version': patch.version,
+        },
+      );
       return;
     }
     if (patch.version <= _lastPatchVersion) {
+      _trace(
+        'patch.ignored',
+        fields: <String, Object?>{
+          'reason': 'duplicate_or_old',
+          'kind': patch.kind.name,
+          'version': patch.version,
+          'last_version': _lastPatchVersion,
+        },
+      );
       return;
     }
     if (_lastPatchVersion != 0 && patch.version != _lastPatchVersion + 1) {
+      _trace(
+        'patch.repair_scheduled',
+        fields: <String, Object?>{
+          'reason': 'version_gap',
+          'version': patch.version,
+          'last_version': _lastPatchVersion,
+        },
+      );
       _schedulePatchRepair(
         ownerDid: ownerDid,
         generation: _refreshGeneration,
@@ -437,18 +475,45 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   }
 
   void _applyPatchReset(ConversationListPatch patch) {
-    state = state.copyWith(
-      conversations: _filterLocallyHiddenConversations(
-        _mergeConversationRefresh(
-          refreshed: patch.items,
-          local: state.conversations,
-          keepLocalOnly: false,
-        ),
+    final currentConversations = state.conversations;
+    final nextConversations = _filterLocallyHiddenConversations(
+      _mergeConversationRefresh(
+        refreshed: patch.items,
+        local: currentConversations,
+        keepLocalOnly: false,
       ),
-      isLoading: false,
     );
+    final beforeUnread = state.unreadCount;
+    final beforeItems = state.conversations.length;
+    final beforeLoading = state.isLoading;
+    if (!beforeLoading &&
+        _sameConversationSummaryList(currentConversations, nextConversations)) {
+      _snapshotBootstrapActive = false;
+      _trace(
+        'state.patch_reset.noop',
+        fields: <String, Object?>{
+          'items': beforeItems,
+          'unread': beforeUnread,
+          'version': patch.version,
+        },
+      );
+      return;
+    }
+    state = state.copyWith(conversations: nextConversations, isLoading: false);
     _snapshotBootstrapActive = false;
-    unawaited(_updateBadgeCountBestEffort(state.unreadCount));
+    _trace(
+      'state.patch_reset',
+      fields: <String, Object?>{
+        'before_items': beforeItems,
+        'after_items': state.conversations.length,
+        'before_unread': beforeUnread,
+        'after_unread': state.unreadCount,
+        'version': patch.version,
+      },
+    );
+    unawaited(
+      _updateBadgeCountBestEffort(state.unreadCount, source: 'patch_reset'),
+    );
   }
 
   void _applyPatchUpsert(ConversationSummary conversation) {
@@ -456,29 +521,45 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       return;
     }
     _snapshotBootstrapActive = false;
-    _upsertConversation(conversation);
+    _upsertConversation(conversation, source: 'patch_upsert');
   }
 
   void _applyPatchRemove(ConversationListPatch patch) {
     final threadId = patch.threadId?.trim();
     final conversationKey = patch.conversationKey?.trim();
-    final next = state.conversations.where((item) {
-      if (threadId != null && threadId.isNotEmpty && item.threadId == threadId) {
-        return false;
-      }
-      if (conversationKey != null &&
-          conversationKey.isNotEmpty &&
-          item.visibilityKeys.contains(conversationKey)) {
-        return false;
-      }
-      return true;
-    }).toList(growable: false);
+    final next = state.conversations
+        .where((item) {
+          if (threadId != null &&
+              threadId.isNotEmpty &&
+              item.threadId == threadId) {
+            return false;
+          }
+          if (conversationKey != null &&
+              conversationKey.isNotEmpty &&
+              item.visibilityKeys.contains(conversationKey)) {
+            return false;
+          }
+          return true;
+        })
+        .toList(growable: false);
     if (next.length == state.conversations.length) {
       return;
     }
+    final beforeUnread = state.unreadCount;
     state = state.copyWith(conversations: next);
     _snapshotBootstrapActive = false;
-    unawaited(_updateBadgeCountBestEffort(state.unreadCount));
+    _trace(
+      'state.patch_remove',
+      fields: <String, Object?>{
+        'before_unread': beforeUnread,
+        'after_unread': state.unreadCount,
+        'thread_hash': _safeHash(threadId),
+        'conversation_key_hash': _safeHash(conversationKey),
+      },
+    );
+    unawaited(
+      _updateBadgeCountBestEffort(state.unreadCount, source: 'patch_remove'),
+    );
   }
 
   bool _applyPatchReorder(ConversationListPatch patch) {
@@ -487,7 +568,9 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       return false;
     }
     final current = state.conversations.toList(growable: true);
-    final currentIndex = current.indexWhere((item) => item.threadId == threadId);
+    final currentIndex = current.indexWhere(
+      (item) => item.threadId == threadId,
+    );
     if (currentIndex < 0) {
       return false;
     }
@@ -496,7 +579,18 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     current.insert(targetIndex, item);
     state = state.copyWith(conversations: current);
     _snapshotBootstrapActive = false;
-    unawaited(_updateBadgeCountBestEffort(state.unreadCount));
+    _trace(
+      'state.patch_reorder',
+      fields: <String, Object?>{
+        'unread': state.unreadCount,
+        'thread_hash': _safeHash(threadId),
+        'from': currentIndex,
+        'to': targetIndex,
+      },
+    );
+    unawaited(
+      _updateBadgeCountBestEffort(state.unreadCount, source: 'patch_reorder'),
+    );
     return true;
   }
 
@@ -509,14 +603,15 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     if (_patchRepairOperation != null) {
       return;
     }
-    _patchRepairOperation = _repairFromPatchStream(
-      ownerDid: ownerDid,
-      generation: generation,
-      token: token,
-      reason: reason,
-    ).whenComplete(() {
-      _patchRepairOperation = null;
-    });
+    _patchRepairOperation =
+        _repairFromPatchStream(
+          ownerDid: ownerDid,
+          generation: generation,
+          token: token,
+          reason: reason,
+        ).whenComplete(() {
+          _patchRepairOperation = null;
+        });
   }
 
   Future<void> _repairFromPatchStream({
@@ -525,9 +620,24 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     required int token,
     required String reason,
   }) async {
+    _trace(
+      'patch_repair.start',
+      fields: <String, Object?>{
+        'reason': reason,
+        'generation': generation,
+        'current_generation': _refreshGeneration,
+      },
+    );
     if (token != _patchSubscriptionToken ||
         generation != _refreshGeneration ||
         ref.read(sessionProvider).session?.did != ownerDid) {
+      _trace(
+        'patch_repair.skip',
+        fields: <String, Object?>{
+          'reason': 'stale_or_owner_mismatch',
+          'requested_reason': reason,
+        },
+      );
       return;
     }
     final repair = await AwikiPerformanceLogger.async(
@@ -541,6 +651,13 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     if (token != _patchSubscriptionToken ||
         generation != _refreshGeneration ||
         ref.read(sessionProvider).session?.did != ownerDid) {
+      _trace(
+        'patch_repair.skip',
+        fields: <String, Object?>{
+          'reason': 'stale_after_service',
+          'requested_reason': reason,
+        },
+      );
       return;
     }
     if (repair.version > _lastPatchVersion) {
@@ -551,6 +668,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       generation: generation,
       label: 'conversation_list.patch_repair',
       keepLocalOnly: false,
+      badgeSource: 'patch_repair',
     );
   }
 
@@ -571,6 +689,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     required int generation,
     required String label,
     bool keepLocalOnly = true,
+    String? badgeSource,
   }) async {
     if (generation != _refreshGeneration) {
       return;
@@ -592,16 +711,51 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         'indexed': true,
       },
     );
+    final beforeUnread = state.unreadCount;
+    final beforeItems = state.conversations.length;
+    final beforeLoading = state.isLoading;
+    if (!beforeLoading &&
+        _sameConversationSummaryList(currentConversations, nextConversations)) {
+      _snapshotBootstrapActive = false;
+      _trace(
+        'state.refresh_noop',
+        fields: <String, Object?>{
+          'label': label,
+          'items': beforeItems,
+          'unread': beforeUnread,
+          'generation': generation,
+        },
+      );
+      return;
+    }
     state = state.copyWith(conversations: nextConversations, isLoading: false);
     _snapshotBootstrapActive = false;
-    await _updateBadgeCountBestEffort(state.unreadCount);
+    _trace(
+      'state.refresh_apply',
+      fields: <String, Object?>{
+        'label': label,
+        'before_items': beforeItems,
+        'after_items': state.conversations.length,
+        'before_unread': beforeUnread,
+        'after_unread': state.unreadCount,
+        'generation': generation,
+      },
+    );
+    await _updateBadgeCountBestEffort(
+      state.unreadCount,
+      source: badgeSource ?? label,
+    );
   }
 
   void upsertConversation(ConversationSummary conversation) {
     if (_isLocallyHidden(conversation)) {
       return;
     }
-    _upsertConversation(conversation, preferLocalTitle: true);
+    _upsertConversation(
+      conversation,
+      preferLocalTitle: true,
+      source: 'upsert_public',
+    );
     unawaited(_normalizeAndUpsertConversation(conversation).catchError((_) {}));
   }
 
@@ -616,7 +770,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     if (_isLocallyHidden(normalized)) {
       return;
     }
-    _upsertConversation(normalized);
+    _upsertConversation(normalized, source: 'upsert_normalized');
   }
 
   void upsertConversationBestEffort(ConversationSummary conversation) {
@@ -630,6 +784,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   void _upsertConversation(
     ConversationSummary conversation, {
     bool preferLocalTitle = false,
+    String source = 'upsert',
   }) {
     if (_isLocallyHidden(conversation)) {
       return;
@@ -660,8 +815,43 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     byThread[mergedConversation.threadId] = mergedConversation;
     final merged = byThread.values.toList()
       ..sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
+    final beforeUnread = state.unreadCount;
+    final beforeItems = state.conversations.length;
+    if (_sameConversationSummaryList(state.conversations, merged)) {
+      _trace(
+        'state.upsert_noop',
+        fields: <String, Object?>{
+          'source': source,
+          'matched': existing != null,
+          'items': beforeItems,
+          'unread': beforeUnread,
+          'incoming_unread': conversation.unreadCount,
+          'merged_unread': mergedConversation.unreadCount,
+          'thread_hash': _safeHash(mergedConversation.threadId),
+          'preview_hash': _safeHash(mergedConversation.lastMessagePreview),
+          'last_at': mergedConversation.lastMessageAt,
+        },
+      );
+      return;
+    }
     state = state.copyWith(conversations: merged);
-    unawaited(_updateBadgeCountBestEffort(state.unreadCount));
+    _trace(
+      'state.upsert',
+      fields: <String, Object?>{
+        'source': source,
+        'matched': existing != null,
+        'before_items': beforeItems,
+        'after_items': state.conversations.length,
+        'before_unread': beforeUnread,
+        'after_unread': state.unreadCount,
+        'incoming_unread': conversation.unreadCount,
+        'merged_unread': mergedConversation.unreadCount,
+        'thread_hash': _safeHash(mergedConversation.threadId),
+        'preview_hash': _safeHash(mergedConversation.lastMessagePreview),
+        'last_at': mergedConversation.lastMessageAt,
+      },
+    );
+    unawaited(_updateBadgeCountBestEffort(state.unreadCount, source: source));
   }
 
   Future<void> restoreConversation(ConversationSummary conversation) async {
@@ -701,14 +891,21 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           );
     } catch (_) {
       _removeHiddenKeysFor(conversation);
-      _upsertConversation(conversation, preferLocalTitle: true);
+      _upsertConversation(
+        conversation,
+        preferLocalTitle: true,
+        source: 'delete_rollback',
+      );
       rethrow;
     }
     final selected = ref.read(selectedConversationProvider);
     if (selected != null && sameConversationTarget(selected, conversation)) {
       ref.read(selectedConversationProvider.notifier).clearSelection();
     }
-    await _updateBadgeCountBestEffort(state.unreadCount);
+    await _updateBadgeCountBestEffort(
+      state.unreadCount,
+      source: 'delete_from_recents',
+    );
   }
 
   void applyGroupNames(List<GroupSummary> groups) {
@@ -746,7 +943,9 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   }
 
   void markThreadReadLocal(String threadId) {
-    final next = state.conversations.map((item) {
+    final currentConversations = state.conversations;
+    final beforeUnread = state.unreadCount;
+    final next = currentConversations.map((item) {
       if (item.threadId != threadId ||
           (item.unreadCount == 0 && item.unreadMentionCount == 0)) {
         return item;
@@ -757,12 +956,37 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         firstUnreadMentionMessageId: null,
       );
     }).toList();
+    if (_sameConversationSummaryList(currentConversations, next)) {
+      _trace(
+        'state.mark_thread_read.noop',
+        fields: <String, Object?>{
+          'unread': beforeUnread,
+          'thread_hash': _safeHash(threadId),
+        },
+      );
+      return;
+    }
     state = state.copyWith(conversations: next);
-    unawaited(_updateBadgeCountBestEffort(state.unreadCount));
+    _trace(
+      'state.mark_thread_read',
+      fields: <String, Object?>{
+        'before_unread': beforeUnread,
+        'after_unread': state.unreadCount,
+        'thread_hash': _safeHash(threadId),
+      },
+    );
+    unawaited(
+      _updateBadgeCountBestEffort(
+        state.unreadCount,
+        source: 'mark_thread_read_local',
+      ),
+    );
   }
 
   void markConversationReadLocal(ConversationSummary conversation) {
-    final next = state.conversations.map((item) {
+    final currentConversations = state.conversations;
+    final beforeUnread = state.unreadCount;
+    final next = currentConversations.map((item) {
       if ((item.unreadCount == 0 && item.unreadMentionCount == 0) ||
           !_sameConversationForList(item, conversation)) {
         return item;
@@ -773,8 +997,31 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         firstUnreadMentionMessageId: null,
       );
     }).toList();
+    if (_sameConversationSummaryList(currentConversations, next)) {
+      _trace(
+        'state.mark_conversation_read.noop',
+        fields: <String, Object?>{
+          'unread': beforeUnread,
+          'thread_hash': _safeHash(conversation.threadId),
+        },
+      );
+      return;
+    }
     state = state.copyWith(conversations: next);
-    unawaited(_updateBadgeCountBestEffort(state.unreadCount));
+    _trace(
+      'state.mark_conversation_read',
+      fields: <String, Object?>{
+        'before_unread': beforeUnread,
+        'after_unread': state.unreadCount,
+        'thread_hash': _safeHash(conversation.threadId),
+      },
+    );
+    unawaited(
+      _updateBadgeCountBestEffort(
+        state.unreadCount,
+        source: 'mark_conversation_read_local',
+      ),
+    );
   }
 
   Future<void> clear() async {
@@ -786,7 +1033,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     await _cancelPatchSubscription();
     _locallyHiddenConversationKeys.clear();
     state = const ConversationListState();
-    await _updateBadgeCountBestEffort(0);
+    await _updateBadgeCountBestEffort(0, source: 'clear');
   }
 
   @override
@@ -840,8 +1087,19 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final next = state.conversations
         .where((item) => !_sameConversationForList(item, conversation))
         .toList(growable: false);
+    final beforeUnread = state.unreadCount;
     state = state.copyWith(conversations: next);
-    unawaited(_updateBadgeCountBestEffort(state.unreadCount));
+    _trace(
+      'state.remove_local',
+      fields: <String, Object?>{
+        'before_unread': beforeUnread,
+        'after_unread': state.unreadCount,
+        'thread_hash': _safeHash(conversation.threadId),
+      },
+    );
+    unawaited(
+      _updateBadgeCountBestEffort(state.unreadCount, source: 'remove_local'),
+    );
   }
 
   List<ConversationSummary> _filterLocallyHiddenConversations(
@@ -869,13 +1127,117 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     return latest;
   }
 
-  Future<void> _updateBadgeCountBestEffort(int count) async {
+  Future<void> _updateBadgeCountBestEffort(
+    int count, {
+    required String source,
+  }) async {
+    _trace(
+      'badge.request',
+      fields: <String, Object?>{
+        'source': source,
+        'unread': count,
+        'items': state.conversations.length,
+        'loading': state.isLoading,
+        'generation': _refreshGeneration,
+      },
+    );
     try {
       await _notification.updateBadgeCount(count);
     } catch (_) {
       // Badge updates are OS integration; they should not make list data fail.
     }
   }
+}
+
+void _trace(String event, {Map<String, Object?> fields = const {}}) {
+  if (!_conversationTraceEnabled) {
+    return;
+  }
+  final details = <String>[];
+  for (final entry in fields.entries) {
+    final value = entry.value;
+    if (value != null) {
+      details.add('${entry.key}=${_formatTraceValue(value)}');
+    }
+  }
+  debugPrint(
+    details.isEmpty
+        ? '[awiki_me][conversation_trace] event=$event'
+        : '[awiki_me][conversation_trace] event=$event ${details.join(' ')}',
+  );
+}
+
+String? _safeHash(String? value) {
+  final normalized = value?.trim();
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+  return AwikiPerformanceLogger.safeHash(normalized);
+}
+
+String _formatTraceValue(Object value) {
+  if (value is DateTime) {
+    return value.toUtc().toIso8601String();
+  }
+  return _collapseTraceWhitespace(value.toString());
+}
+
+String _collapseTraceWhitespace(String value) {
+  final buffer = StringBuffer();
+  var lastWasWhitespace = false;
+  for (final rune in value.runes) {
+    final char = String.fromCharCode(rune);
+    if (char.trim().isEmpty) {
+      if (!lastWasWhitespace) {
+        buffer.write('_');
+      }
+      lastWasWhitespace = true;
+      continue;
+    }
+    buffer.write(char);
+    lastWasWhitespace = false;
+  }
+  return buffer.toString();
+}
+
+bool _sameConversationSummaryList(
+  List<ConversationSummary> first,
+  List<ConversationSummary> second,
+) {
+  if (identical(first, second)) {
+    return true;
+  }
+  if (first.length != second.length) {
+    return false;
+  }
+  for (var i = 0; i < first.length; i += 1) {
+    if (!_sameConversationSummaryValue(first[i], second[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool _sameConversationSummaryValue(
+  ConversationSummary first,
+  ConversationSummary second,
+) {
+  return first.threadId == second.threadId &&
+      first.displayName == second.displayName &&
+      first.lastMessagePreview == second.lastMessagePreview &&
+      first.lastMessageAt.isAtSameMomentAs(second.lastMessageAt) &&
+      first.unreadCount == second.unreadCount &&
+      first.unreadMentionCount == second.unreadMentionCount &&
+      first.firstUnreadMentionMessageId == second.firstUnreadMentionMessageId &&
+      first.isGroup == second.isGroup &&
+      first.targetDid == second.targetDid &&
+      first.targetPeer == second.targetPeer &&
+      first.groupId == second.groupId &&
+      first.avatarUri == second.avatarUri &&
+      first.avatarSeed == second.avatarSeed &&
+      first.lastMessagePayloadJson == second.lastMessagePayloadJson &&
+      first.conversationKey == second.conversationKey &&
+      first.peerLifecycleState == second.peerLifecycleState;
 }
 
 List<String> _visibilityKeysFor(
@@ -1148,6 +1510,10 @@ ConversationSummary _mergeConversationLastMessage({
   required ConversationSummary? local,
 }) {
   if (local == null || !local.lastMessageAt.isAfter(refreshed.lastMessageAt)) {
+    return refreshed;
+  }
+  if (local.lastMessagePreview.trim().isEmpty &&
+      refreshed.lastMessagePreview.trim().isNotEmpty) {
     return refreshed;
   }
   return refreshed.copyWith(

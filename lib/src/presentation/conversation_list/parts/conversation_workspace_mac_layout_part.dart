@@ -132,10 +132,6 @@ class _MacConversationDetailAreaState
         if (!canShowSidePanel && _isInlineSidePanelOpen) {
           return _buildSidePanel(selectedConversation, inline: true);
         }
-        final visiblePanelIsOpen = canShowSidePanel
-            ? _isSidePanelOpen
-            : _isInlineSidePanelOpen;
-
         return Row(
           children: <Widget>[
             Expanded(
@@ -145,10 +141,6 @@ class _MacConversationDetailAreaState
                 embedded: true,
                 macStyle: true,
                 onBack: widget.onClearSelection,
-                onMacConversationInfoTap: () {
-                  _toggleConversationInfo(canShowSidePanel: canShowSidePanel);
-                },
-                macConversationInfoPanelActive: visiblePanelIsOpen,
               ),
             ),
             if (canShowSidePanel && _isSidePanelOpen) ...<Widget>[
@@ -236,18 +228,6 @@ class _MacConversationDetailAreaState
         onBack: inline ? _closeInlineSidePanel : null,
       ),
     );
-  }
-
-  void _toggleConversationInfo({required bool canShowSidePanel}) {
-    setState(() {
-      if (!canShowSidePanel) {
-        _isSidePanelOpen = true;
-        _isInlineSidePanelOpen = true;
-        return;
-      }
-      _isSidePanelOpen = !_isSidePanelOpen;
-      _isInlineSidePanelOpen = false;
-    });
   }
 
   void _closeInlineSidePanel() {

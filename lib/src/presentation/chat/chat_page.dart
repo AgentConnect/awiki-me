@@ -52,12 +52,6 @@ part 'parts/chat_peer_info_part.dart';
 part 'parts/chat_message_part.dart';
 part 'parts/chat_composer_part.dart';
 
-const _macChatHeaderActionColor = Color(0xFF44506A);
-const _macChatHeaderActionActiveColor = Color(0xFF101B32);
-const _macChatHeaderActionActiveBackground = Color(0xFFE4ECF7);
-const _macChatHeaderActionIconSize = 16.0;
-const _macChatHeaderActionFontWeight = FontWeight.w400;
-const _macChatHeaderActionActiveFontWeight = FontWeight.w600;
 const _chatMessageListBottomInset = 12.0;
 const _macChatMessageListBottomInset = 10.0;
 
@@ -87,18 +81,12 @@ class ChatView extends ConsumerStatefulWidget {
     required this.conversation,
     required this.embedded,
     this.onBack,
-    this.onMacIdentityPanelTap,
-    this.onMacConversationInfoTap,
-    this.macConversationInfoPanelActive = false,
     this.macStyle = false,
   });
 
   final ConversationSummary conversation;
   final bool embedded;
   final VoidCallback? onBack;
-  final VoidCallback? onMacIdentityPanelTap;
-  final VoidCallback? onMacConversationInfoTap;
-  final bool macConversationInfoPanelActive;
   final bool macStyle;
 
   @override
@@ -180,7 +168,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
   late String _displayThreadId;
   AttachmentDraft? _pendingAttachment;
   bool _isApplyingComposerDraft = false;
-  bool _isRefreshingCurrentConversation = false;
   bool _didRequestAgents = false;
   bool _hasDeferredBottomNotice = false;
   bool _userAwayFromBottom = false;
@@ -403,14 +390,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
           reason: 'visible_summary_update',
         );
       }
-      unawaited(
-        ref
-            .read(chatThreadsProvider.notifier)
-            .syncVisibleConversationAfterSummaryUpdate(
-              updated,
-              displayThreadId: displayThreadId,
-            ),
-      );
     });
     final messages = thread.messages;
     _settleOpeningBottomAnchorForCurrentThread(thread);
@@ -454,17 +433,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
             conversation: currentConversation,
             embedded: widget.embedded,
             macStyle: macStyle,
-            isRefreshing: _isRefreshingCurrentConversation || thread.isLoading,
             classification: peerClassification,
             isDeletedAgentConversation: isDeletedAgentConversation,
             onBack: widget.onBack,
-            onDetails: _openDetails,
             onPeerInfoTap: _openDetails,
-            onMacIdentityPanelTap: widget.onMacIdentityPanelTap,
-            onMacConversationInfoTap: widget.onMacConversationInfoTap,
-            macConversationInfoPanelActive:
-                widget.macConversationInfoPanelActive,
-            onRefresh: () => _refreshCurrentConversation(currentConversation),
           ),
           Expanded(
             child: Listener(
@@ -958,40 +930,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
         ..write(stack);
     }
     return buffer.toString().trim();
-  }
-
-  Future<void> _refreshCurrentConversation(
-    ConversationSummary conversation,
-  ) async {
-    if (_isRefreshingCurrentConversation) {
-      return;
-    }
-    setState(() {
-      _isRefreshingCurrentConversation = true;
-    });
-    final startedAt = DateTime.now();
-    try {
-      await ref
-          .read(chatThreadsProvider.notifier)
-          .refreshConversation(conversation, displayThreadId: _displayThreadId);
-      final elapsed = DateTime.now().difference(startedAt);
-      const minimumVisibleTime = Duration(milliseconds: 350);
-      if (elapsed < minimumVisibleTime) {
-        await Future<void>.delayed(minimumVisibleTime - elapsed);
-      }
-    } catch (error) {
-      if (mounted) {
-        ref
-            .read(uiFeedbackProvider.notifier)
-            .showError(AppMessage.fromError(error));
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isRefreshingCurrentConversation = false;
-        });
-      }
-    }
   }
 
   void _requestAgentsIfNeeded(ConversationSummary conversation) {

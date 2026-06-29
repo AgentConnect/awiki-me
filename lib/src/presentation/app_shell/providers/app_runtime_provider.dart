@@ -27,6 +27,11 @@ import 'message_sync_coordinator_provider.dart';
 import 'selected_conversation_provider.dart';
 import 'session_provider.dart';
 
+const bool _runtimeTraceEnabled = bool.fromEnvironment(
+  'AWIKI_RUNTIME_TRACE',
+  defaultValue: true,
+);
+
 class AppRuntimeState {
   const AppRuntimeState({this.isInitialized = false, this.isBusy = false});
 
@@ -422,7 +427,35 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   void _applyRealtimeUpdate(RealtimeUpdate update) {
+    final traceConversation = update.conversation ?? update.conversationHint;
+    _runtimeTrace(
+      'realtime.update',
+      fields: <String, Object?>{
+        'control': update.agentControlPayload != null,
+        'message': update.message != null,
+        'conversation': traceConversation != null,
+        'conversation_hint': update.conversationHint != null,
+        'sync_dirty': update.syncDirty,
+        'gap': update.gapDetected,
+        'event_seq': update.syncEventSeq,
+        'event_type': update.syncEventType,
+        'thread_hash': _runtimeSafeHash(
+          traceConversation?.threadId ?? update.message?.threadId,
+        ),
+        'preview_hash': _runtimeSafeHash(
+          traceConversation?.lastMessagePreview ?? update.message?.previewText,
+        ),
+        'unread': traceConversation?.unreadCount,
+      },
+    );
     if (update.needsReliableSync) {
+      _runtimeTrace(
+        'reliable_sync.schedule',
+        fields: <String, Object?>{
+          'reason': update.gapDetected ? 'realtime_gap' : 'realtime_dirty',
+          'event_seq': update.syncEventSeq,
+        },
+      );
       _scheduleReliableSync(
         update.gapDetected ? 'realtime_gap' : 'realtime_dirty',
       );
@@ -437,6 +470,25 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       ref
           .read(chatThreadsProvider.notifier)
           .applyMessageAgentControlPayload(controlPayload);
+      final conversation = update.conversation;
+      if (conversation != null &&
+          _shouldAcceptRealtimeConversationHint(conversation)) {
+        ref
+            .read(conversationListProvider.notifier)
+            .upsertConversationBestEffort(conversation);
+        if (update.group != null) {
+          ref.read(groupProvider.notifier).upsertGroup(update.group!);
+        }
+      }
+      _runtimeTrace(
+        'realtime.control_applied',
+        fields: <String, Object?>{
+          'conversation': conversation != null,
+          'thread_hash': _runtimeSafeHash(conversation?.threadId),
+          'preview_hash': _runtimeSafeHash(conversation?.lastMessagePreview),
+          'unread': conversation?.unreadCount,
+        },
+      );
       return;
     }
     final message = update.message;
@@ -446,8 +498,25 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     final shouldShow = _shouldAcceptRealtimeConversationHint(conversationHint);
     if (!shouldShow) {
+      _runtimeTrace(
+        'realtime.message.hidden',
+        fields: <String, Object?>{
+          'thread_hash': _runtimeSafeHash(conversationHint.threadId),
+          'sender_hash': _runtimeSafeHash(message.senderDid),
+        },
+      );
       return;
     }
+    _runtimeTrace(
+      'conversation.upsert_from_realtime_message',
+      fields: <String, Object?>{
+        'thread_hash': _runtimeSafeHash(conversationHint.threadId),
+        'message_hash': _runtimeSafeHash(message.remoteId ?? message.localId),
+        'is_mine': message.isMine,
+        'unread': conversationHint.unreadCount,
+        'preview_hash': _runtimeSafeHash(conversationHint.lastMessagePreview),
+      },
+    );
     ref
         .read(chatThreadsProvider.notifier)
         .applyRealtimeUpdate(message, conversation: conversationHint);
@@ -540,6 +609,57 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     _realtimeUpdateSubscription.cancel();
     super.dispose();
   }
+}
+
+void _runtimeTrace(String event, {Map<String, Object?> fields = const {}}) {
+  if (!_runtimeTraceEnabled) {
+    return;
+  }
+  final details = <String>[];
+  for (final entry in fields.entries) {
+    final value = entry.value;
+    if (value != null) {
+      details.add('${entry.key}=${_runtimeFormat(value)}');
+    }
+  }
+  debugPrint(
+    details.isEmpty
+        ? '[awiki_me][runtime_trace] event=$event'
+        : '[awiki_me][runtime_trace] event=$event ${details.join(' ')}',
+  );
+}
+
+String? _runtimeSafeHash(String? value) {
+  final normalized = value?.trim();
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+  return AwikiPerformanceLogger.safeHash(normalized);
+}
+
+String _runtimeFormat(Object value) {
+  if (value is DateTime) {
+    return value.toUtc().toIso8601String();
+  }
+  return _runtimeCollapseWhitespace(value.toString());
+}
+
+String _runtimeCollapseWhitespace(String value) {
+  final buffer = StringBuffer();
+  var lastWasWhitespace = false;
+  for (final rune in value.runes) {
+    final char = String.fromCharCode(rune);
+    if (char.trim().isEmpty) {
+      if (!lastWasWhitespace) {
+        buffer.write('_');
+      }
+      lastWasWhitespace = true;
+      continue;
+    }
+    buffer.write(char);
+    lastWasWhitespace = false;
+  }
+  return buffer.toString();
 }
 
 Future<List<SessionIdentity>> _localCredentialsFor(Ref ref) async {

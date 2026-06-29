@@ -1011,6 +1011,48 @@ void main() {
       expect(notificationFacade.lastSystemTitle, isNull);
     });
 
+    test('实时可见控制状态更新会话预览但不进入消息或通知', () async {
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await activate();
+      await Future<void>.delayed(Duration.zero);
+
+      gateway.nextRealtimeUpdate = RealtimeUpdate(
+        agentControlPayload: const <String, Object?>{
+          'schema': 'awiki.agent.status.v1',
+          'status_scope': 'runtime',
+          'runtime_agent_did': 'did:agent:runtime',
+          'runtime': <String, Object?>{
+            'agent_did': 'did:agent:runtime',
+            'status': 'ready',
+          },
+        },
+        conversation: ConversationSummary(
+          threadId: 'dm:runtime',
+          displayName: 'Hermes',
+          lastMessagePreview: 'Agent 已准备好。',
+          lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+          unreadCount: 1,
+          isGroup: false,
+          targetDid: 'did:agent:runtime',
+        ),
+      );
+      await realtimeGateway.emit(const <String, Object?>{'type': 'status'});
+
+      final conversations = container
+          .read(conversationListProvider)
+          .conversations;
+      expect(conversations, hasLength(1));
+      expect(conversations.single.lastMessagePreview, 'Agent 已准备好。');
+      expect(
+        container.read(chatThreadProvider('dm:runtime')).messages,
+        isEmpty,
+      );
+      expect(notificationFacade.lastInAppTitle, isNull);
+      expect(notificationFacade.lastSystemTitle, isNull);
+    });
+
     test('实时 Message Agent 控制 payload 回收到 chat provider', () async {
       final conversation = ConversationSummary(
         threadId: 'direct:did:human:bob',

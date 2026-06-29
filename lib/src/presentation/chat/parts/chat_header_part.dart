@@ -5,15 +5,9 @@ class _ChatHeader extends StatelessWidget {
     required this.conversation,
     required this.embedded,
     required this.macStyle,
-    required this.isRefreshing,
     required this.classification,
     required this.isDeletedAgentConversation,
-    required this.onDetails,
     required this.onPeerInfoTap,
-    required this.onRefresh,
-    this.onMacIdentityPanelTap,
-    this.onMacConversationInfoTap,
-    this.macConversationInfoPanelActive = false,
     this.onBack,
   });
 
@@ -21,15 +15,9 @@ class _ChatHeader extends StatelessWidget {
   final bool embedded;
   final VoidCallback? onBack;
   final bool macStyle;
-  final bool isRefreshing;
   final ConversationPeerClassification classification;
   final bool isDeletedAgentConversation;
-  final VoidCallback onDetails;
   final VoidCallback onPeerInfoTap;
-  final VoidCallback? onMacIdentityPanelTap;
-  final VoidCallback? onMacConversationInfoTap;
-  final bool macConversationInfoPanelActive;
-  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -59,16 +47,16 @@ class _ChatHeader extends StatelessWidget {
           builder: (context, constraints) {
             final width = constraints.maxWidth;
             final showSecurityPill = width >= 620;
-            final showIdentityLabel = width >= 470;
             final avatarSize = responsive.displayScaled(
               width >= 360 ? 40.0 : 36.0,
             );
-            final actionGap = responsive.displayScaled(width >= 520 ? 12 : 8);
 
             return Row(
               children: <Widget>[
                 _ChatHeaderIdentityTapTarget(
+                  key: const Key('chat-peer-info-avatar-button'),
                   semanticLabel: '打开${classification.detailTypeLabel}信息',
+                  semanticsIdentifier: 'chat-peer-info-avatar-button',
                   onTap: onPeerInfoTap,
                   child: AvatarBadge(
                     seed: compactName,
@@ -88,36 +76,6 @@ class _ChatHeader extends StatelessWidget {
                     onNameTap: onPeerInfoTap,
                   ),
                 ),
-                SizedBox(width: actionGap),
-                _MacChatHeaderButton(
-                  key: const Key('chat-refresh-button'),
-                  semanticLabel: '刷新当前会话',
-                  icon: CupertinoIcons.refresh,
-                  isLoading: isRefreshing,
-                  onTap: onRefresh,
-                ),
-                SizedBox(width: responsive.displayScaled(8)),
-                _MacChatIdentityButton(
-                  key: const Key('chat-identity-card-button'),
-                  label: conversation.isGroup ? '群聊信息' : '身份卡',
-                  showLabel: showIdentityLabel,
-                  isActive: false,
-                  onTap: conversation.isGroup
-                      ? (onMacIdentityPanelTap ?? onDetails)
-                      : onDetails,
-                ),
-                if (onMacConversationInfoTap != null) ...<Widget>[
-                  SizedBox(width: responsive.displayScaled(8)),
-                  _MacChatHeaderButton(
-                    key: const Key('chat-conversation-info-button'),
-                    semanticLabel: '打开或关闭会话信息',
-                    icon: CupertinoIcons.sidebar_right,
-                    isActive: macConversationInfoPanelActive,
-                    onTap: () async {
-                      onMacConversationInfoTap!();
-                    },
-                  ),
-                ],
               ],
             );
           },
@@ -155,7 +113,9 @@ class _ChatHeader extends StatelessWidget {
           ),
           SizedBox(width: responsive.spacing(4)),
           _ChatHeaderIdentityTapTarget(
+            key: const Key('chat-peer-info-avatar-button'),
             semanticLabel: '打开${classification.detailTypeLabel}信息',
+            semanticsIdentifier: 'chat-peer-info-avatar-button',
             onTap: onPeerInfoTap,
             child: AvatarBadge(
               seed: compactName,
@@ -221,18 +181,6 @@ class _ChatHeader extends StatelessWidget {
               ],
             ),
           ),
-          TopBarActionButton(
-            onTap: onDetails,
-            semanticsLabel: '打开${classification.detailTypeLabel}信息',
-            child: Padding(
-              padding: EdgeInsets.all(responsive.spacing(8)),
-              child: AwikiAssetIcon(
-                assetName: 'assets/icons/dot_vertical.svg',
-                color: theme.title,
-                size: responsive.iconMd,
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -241,20 +189,24 @@ class _ChatHeader extends StatelessWidget {
 
 class _ChatHeaderIdentityTapTarget extends StatelessWidget {
   const _ChatHeaderIdentityTapTarget({
+    super.key,
     required this.child,
     required this.onTap,
     required this.semanticLabel,
+    this.semanticsIdentifier,
   });
 
   final Widget child;
   final VoidCallback onTap;
   final String semanticLabel;
+  final String? semanticsIdentifier;
 
   @override
   Widget build(BuildContext context) {
     return AppPressable(
       onTap: onTap,
       semanticLabel: semanticLabel,
+      semanticsIdentifier: semanticsIdentifier,
       tooltip: semanticLabel,
       builder: (_, __, child) => child,
       child: child,

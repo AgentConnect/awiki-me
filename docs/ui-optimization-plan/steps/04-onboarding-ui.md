@@ -102,3 +102,10 @@ Step index：04
 - 风险：设计稿若变更，当前 spacing 需再调。
 - 回滚 / 回退：恢复旧 onboarding 布局。
 - 后续文档：无。
+
+## 14. 2026-06-29 macOS 登录卡片微调
+
+- 背景：截图反馈 macOS 登录 / 注册卡片中图标垂直对齐、分段按钮圆角和内联按钮尺寸不协调。
+- 调整范围：仅修改 `lib/src/presentation/onboarding/parts/onboarding_mac_part.dart`，不改变登录、注册、验证码或身份切换逻辑。
+- 具体内容：统一 macOS 卡片圆角和阴影；收敛入口 tab 高度；扩大认证方式 tab 的点击区并使用固定图标盒居中；输入框图标使用统一 22px 对齐盒；输入文本设置垂直居中；收敛验证码内联按钮宽度和圆角；主 / 次按钮文字增加自适应缩放，避免不同语言溢出。
+- 验证证据：`dart analyze lib/src/presentation/onboarding/onboarding_page.dart lib/src/presentation/onboarding/parts/onboarding_mac_part.dart` 通过；`flutter test tests/unit/onboarding_page_test.dart` 因当前 shell 找不到 `flutter` 未运行（`zsh:1: command not found: flutter`）。

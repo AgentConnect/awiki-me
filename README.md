@@ -87,6 +87,15 @@ projection before backgrounding `syncThreadAfter` with a thread-local
 first-paint latency and the later thread-after/history reconcile timings so the
 click path cannot be proven only by a remote history query.
 
+Chat presentation is intentionally one-way. `ConversationListProvider` owns the
+recent-conversation list and badge state; `ChatThreadsProvider` owns message
+threads. `ChatPage` renders the selected thread and may acknowledge a visible
+conversation as read, but it must not treat conversation-list summary changes as
+a signal to pull thread history. Necessary thread reconciliation is limited to
+opening a conversation, thread patch version-gap repair, and thread patch stream
+repair/re-subscription. The macOS chat header no longer exposes a manual
+conversation refresh button.
+
 The App must not read or write the global reliable checkpoint, pass
 `since_event_seq`, manually advance `next_event_seq`, build raw `/im/rpc`
 `sync.*` payloads, or treat realtime `sync` hints as checkpoint commits. Those

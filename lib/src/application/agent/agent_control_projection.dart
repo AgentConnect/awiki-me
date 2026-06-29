@@ -9,7 +9,9 @@ bool shouldShowConversationForChatList(
   Iterable<String> daemonAgentDids = const [],
 }) {
   if (AgentControlPayloads.isControl(conversation.lastMessagePayloadJson)) {
-    return false;
+    if (conversation.lastMessagePreview.trim().isEmpty) {
+      return false;
+    }
   }
   final targetDid = conversation.targetDid?.trim();
   if (targetDid == null || targetDid.isEmpty) {

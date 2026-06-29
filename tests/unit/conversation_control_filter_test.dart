@@ -86,6 +86,7 @@ void main() {
             targetDid: 'did:agent:unknown-daemon',
             lastMessagePayloadJson:
                 '{"schema":"awiki.agent.status.v1","status_scope":"daemon"}',
+            lastMessagePreview: '',
           ),
           _conversation('dm:human:runtime', targetDid: 'did:agent:runtime'),
         ],
@@ -100,17 +101,42 @@ void main() {
 
     expect(conversations.map((item) => item.targetDid), ['did:agent:runtime']);
   });
+
+  test('visible control payload preview remains in recent messages', () async {
+    final service = ImCoreConversationService(
+      conversations: _FakeConversations(
+        items: <ConversationSummary>[
+          _conversation(
+            'dm:human:runtime-control',
+            targetDid: 'did:agent:runtime',
+            lastMessagePayloadJson:
+                '{"schema":"awiki.agent.status.v1","status_scope":"runtime"}',
+            lastMessagePreview: 'Agent 已准备好。',
+          ),
+        ],
+      ),
+      localStore: InMemoryAwikiProductLocalStore(),
+      agentInventory: const _ThrowingAgentInventory(),
+    );
+
+    final conversations = await service.listConversations(
+      ownerDid: 'did:human:me',
+    );
+
+    expect(conversations.single.lastMessagePreview, 'Agent 已准备好。');
+  });
 }
 
 ConversationSummary _conversation(
   String threadId, {
   required String targetDid,
   String? lastMessagePayloadJson,
+  String lastMessagePreview = 'preview',
 }) {
   return ConversationSummary(
     threadId: threadId,
     displayName: threadId,
-    lastMessagePreview: 'preview',
+    lastMessagePreview: lastMessagePreview,
     lastMessageAt: DateTime.utc(2026, 6, 4),
     unreadCount: 0,
     isGroup: false,
