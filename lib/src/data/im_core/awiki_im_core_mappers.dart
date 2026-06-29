@@ -202,6 +202,17 @@ class AwikiImCoreMappers {
     );
   }
 
+  bool shouldIncludeConversation(core.Conversation conversation) {
+    final lastMessage = conversation.lastMessage;
+    if (lastMessage == null) {
+      return true;
+    }
+    return _shouldIncludeConversationLastMessage(
+      payloadJson: lastMessage.body.payloadJson,
+      preview: _messagePreview(lastMessage),
+    );
+  }
+
   ConversationSummary conversationFromSnapshot(
     core.ConversationSnapshotItem conversation, {
     required String ownerDid,
@@ -261,6 +272,19 @@ class AwikiImCoreMappers {
       avatarUri: null,
       avatarSeed: overlay?.avatarSeed,
       lastMessagePayloadJson: lastMessage?.body.payloadJson,
+    );
+  }
+
+  bool shouldIncludeSnapshotConversation(
+    core.ConversationSnapshotItem conversation,
+  ) {
+    final lastMessage = conversation.lastMessage;
+    if (lastMessage == null) {
+      return true;
+    }
+    return _shouldIncludeConversationLastMessage(
+      payloadJson: lastMessage.body.payloadJson,
+      preview: _snapshotMessagePreview(lastMessage),
     );
   }
 
@@ -395,17 +419,6 @@ class AwikiImCoreMappers {
       return null;
     }
     final chatMessage = chatMessageFromCore(message, ownerDid: ownerDid);
-    if (chatMessage.isAgentControlPayload) {
-      return RealtimeUpdate(
-        agentControlPayload:
-            AgentControlPayloads.decode(chatMessage.payloadJson) ??
-            const <String, Object?>{},
-        syncDirty: event.sync?.syncDirty ?? false,
-        gapDetected: event.sync?.gapDetected ?? false,
-        syncEventSeq: event.sync?.eventSeq,
-        syncEventType: event.sync?.eventType,
-      );
-    }
     final isGroup =
         chatMessage.groupId != null || message.threadKind == 'group';
     final targetPeer = isGroup
@@ -431,19 +444,36 @@ class AwikiImCoreMappers {
       avatarUri: null,
       lastMessagePayloadJson: message.body.payloadJson,
     );
+    final group = chatMessage.groupId == null
+        ? null
+        : GroupSummary(
+            groupId: chatMessage.groupId!,
+            displayName: chatMessage.groupId!,
+            description: '',
+            memberCount: 0,
+            lastMessageAt: chatMessage.createdAt,
+            membershipStatus: null,
+          );
+    if (chatMessage.isAgentControlPayload) {
+      final visibleConversation = conversation.lastMessagePreview.trim().isEmpty
+          ? null
+          : conversation;
+      return RealtimeUpdate(
+        conversation: visibleConversation,
+        group: visibleConversation == null ? null : group,
+        agentControlPayload:
+            AgentControlPayloads.decode(chatMessage.payloadJson) ??
+            const <String, Object?>{},
+        syncDirty: event.sync?.syncDirty ?? false,
+        gapDetected: event.sync?.gapDetected ?? false,
+        syncEventSeq: event.sync?.eventSeq,
+        syncEventType: event.sync?.eventType,
+      );
+    }
     return RealtimeUpdate(
       message: chatMessage,
       conversationHint: conversation,
-      group: chatMessage.groupId == null
-          ? null
-          : GroupSummary(
-              groupId: chatMessage.groupId!,
-              displayName: chatMessage.groupId!,
-              description: '',
-              memberCount: 0,
-              lastMessageAt: chatMessage.createdAt,
-              membershipStatus: null,
-            ),
+      group: group,
       syncDirty: event.sync?.syncDirty ?? false,
       gapDetected: event.sync?.gapDetected ?? false,
       syncEventSeq: event.sync?.eventSeq,
@@ -721,7 +751,7 @@ String? _subjectTypeFromDid(String did) {
 
 String _messagePreview(core.Message message) {
   if (AgentControlPayloads.isControl(message.body.payloadJson)) {
-    return '';
+    return _controlMessagePreview(message.body.text);
   }
   final attachment = _attachmentFromCoreMessage(message);
   if (attachment != null) {
@@ -746,7 +776,7 @@ String _messagePreview(core.Message message) {
 
 String _snapshotMessagePreview(core.ConversationSnapshotMessage message) {
   if (AgentControlPayloads.isControl(message.body.payloadJson)) {
-    return '';
+    return _controlMessagePreview(message.body.text);
   }
   final mentionPayload = ChatMentionPayload.tryParsePayloadJson(
     message.body.payloadJson,
@@ -760,6 +790,18 @@ String _snapshotMessagePreview(core.ConversationSnapshotMessage message) {
       message.contentType ??
       message.body.kind ??
       '';
+}
+
+String _controlMessagePreview(String? text) => _nonEmpty(text) ?? '';
+
+bool _shouldIncludeConversationLastMessage({
+  required String? payloadJson,
+  required String preview,
+}) {
+  if (!AgentControlPayloads.isControl(payloadJson)) {
+    return true;
+  }
+  return preview.trim().isNotEmpty;
 }
 
 MessageSendState _sendStateFromCore(

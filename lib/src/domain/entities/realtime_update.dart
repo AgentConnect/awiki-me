@@ -6,6 +6,7 @@ class RealtimeUpdate {
   const RealtimeUpdate({
     this.message,
     this.conversationHint,
+    this.conversation,
     this.group,
     this.agentControlPayload,
     this.syncDirty = false,
@@ -16,6 +17,7 @@ class RealtimeUpdate {
 
   final ChatMessage? message;
   final ConversationSummary? conversationHint;
+  final ConversationSummary? conversation;
   final GroupSummary? group;
   final Map<String, Object?>? agentControlPayload;
   final bool syncDirty;

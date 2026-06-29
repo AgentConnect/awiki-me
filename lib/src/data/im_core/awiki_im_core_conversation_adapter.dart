@@ -4,7 +4,6 @@ import '../../application/models/app_thread_ref.dart';
 import '../../application/models/conversation_patch.dart';
 import '../../application/ports/conversation_core_port.dart';
 import '../../core/performance_logger.dart';
-import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../../domain/entities/conversation_summary.dart';
 import 'awiki_im_core_mappers.dart';
 import 'awiki_im_core_runtime.dart';
@@ -41,9 +40,7 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
       final conversations = AwikiPerformanceLogger.sync(
         'im_core_conversations.snapshot.map',
         () => snapshot.items
-            .where(
-              (conversation) => !_hasControlSnapshotLastMessage(conversation),
-            )
+            .where(_mappers.shouldIncludeSnapshotConversation)
             .map(
               (conversation) => _mappers.conversationFromSnapshot(
                 conversation,
@@ -142,7 +139,7 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
       final conversations = AwikiPerformanceLogger.sync(
         'im_core_conversations.map',
         () => page.items
-            .where((conversation) => !_hasControlLastMessage(conversation))
+            .where(_mappers.shouldIncludeConversation)
             .map(
               (conversation) => _mappers.conversationFromCore(
                 conversation,
@@ -185,9 +182,7 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
           version: patch.version,
           unreadTotal: patch.unreadTotal,
           items: patch.items
-              .where(
-                (conversation) => !_hasControlSnapshotLastMessage(conversation),
-              )
+              .where(_mappers.shouldIncludeSnapshotConversation)
               .map(
                 (conversation) => _mappers.conversationFromSnapshot(
                   conversation,
@@ -198,7 +193,7 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
         );
       case core.ConversationStorePatchKind.upsert:
         final item = patch.item;
-        if (item == null || _hasControlSnapshotLastMessage(item)) {
+        if (item == null || !_mappers.shouldIncludeSnapshotConversation(item)) {
           return CoreConversationPatch(
             kind: CoreConversationPatchKind.remove,
             ownerDid: patch.ownerDid,
@@ -270,20 +265,6 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
       );
     });
   }
-}
-
-bool _hasControlLastMessage(core.Conversation conversation) {
-  return AgentControlPayloads.isControl(
-    conversation.lastMessage?.body.payloadJson,
-  );
-}
-
-bool _hasControlSnapshotLastMessage(
-  core.ConversationSnapshotItem conversation,
-) {
-  return AgentControlPayloads.isControl(
-    conversation.lastMessage?.body.payloadJson,
-  );
 }
 
 core.ThreadRef coreThreadRefForMarkRead(AppThreadRef thread, String ownerDid) {
