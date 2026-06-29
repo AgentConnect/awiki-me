@@ -140,13 +140,6 @@ class _MacConversationDetailAreaState
         if (!canShowSidePanel && _isInlineSidePanelOpen) {
           return _buildSidePanel(selectedConversation, inline: true);
         }
-        final visiblePanelIsOpen = canShowSidePanel
-            ? _isSidePanelOpen
-            : _isInlineSidePanelOpen;
-        final conversationInfoPanelActive =
-            _sidePanel == _MacDetailSidePanel.conversationInfo &&
-            visiblePanelIsOpen;
-
         return Row(
           children: <Widget>[
             Expanded(
@@ -156,15 +149,6 @@ class _MacConversationDetailAreaState
                 embedded: true,
                 macStyle: true,
                 onBack: widget.onClearSelection,
-                onMacIdentityPanelTap: selectedConversation.isGroup
-                    ? () {
-                        _openIdentityPanel(canShowSidePanel: canShowSidePanel);
-                      }
-                    : null,
-                onMacConversationInfoTap: () {
-                  _toggleConversationInfo(canShowSidePanel: canShowSidePanel);
-                },
-                macConversationInfoPanelActive: conversationInfoPanelActive,
               ),
             ),
             if (canShowSidePanel && _isSidePanelOpen) ...<Widget>[
@@ -281,21 +265,6 @@ class _MacConversationDetailAreaState
     }
   }
 
-  void _openIdentityPanel({required bool canShowSidePanel}) {
-    setState(() {
-      if (canShowSidePanel &&
-          _sidePanel == _MacDetailSidePanel.identityCard &&
-          _isSidePanelOpen) {
-        _isSidePanelOpen = false;
-        _isInlineSidePanelOpen = false;
-        return;
-      }
-      _sidePanel = _MacDetailSidePanel.identityCard;
-      _isSidePanelOpen = true;
-      _isInlineSidePanelOpen = !canShowSidePanel;
-    });
-  }
-
   Widget _buildSidePanel(
     ConversationSummary selectedConversation, {
     required bool inline,
@@ -338,24 +307,6 @@ class _MacConversationDetailAreaState
         ),
       },
     );
-  }
-
-  void _toggleConversationInfo({required bool canShowSidePanel}) {
-    setState(() {
-      if (!canShowSidePanel) {
-        _sidePanel = _MacDetailSidePanel.conversationInfo;
-        _isSidePanelOpen = true;
-        _isInlineSidePanelOpen = true;
-        return;
-      }
-      if (_sidePanel == _MacDetailSidePanel.conversationInfo) {
-        _isSidePanelOpen = !_isSidePanelOpen;
-      } else {
-        _sidePanel = _MacDetailSidePanel.conversationInfo;
-        _isSidePanelOpen = true;
-      }
-      _isInlineSidePanelOpen = false;
-    });
   }
 
   void _closeInlineSidePanel() {

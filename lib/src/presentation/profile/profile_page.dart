@@ -223,58 +223,64 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final bioController = TextEditingController(text: profile.bio);
     final tagsController = TextEditingController(text: profile.tags.join(', '));
 
-    await AppNavigator.showDialog<void>(
-      context,
-      (dialogContext) => CupertinoAlertDialog(
-        title: Text(context.l10n.profileEditTitle),
-        content: Column(
-          children: <Widget>[
-            const SizedBox(height: 12),
-            AppTextField(
-              controller: nickController,
-              label: context.l10n.onboardingNickname,
-              placeholder: context.l10n.onboardingNicknamePlaceholder,
+    try {
+      await AppNavigator.showDialog<void>(
+        context,
+        (dialogContext) => CupertinoAlertDialog(
+          title: Text(context.l10n.profileEditTitle),
+          content: Column(
+            children: <Widget>[
+              const SizedBox(height: 12),
+              AppTextField(
+                controller: nickController,
+                label: context.l10n.onboardingNickname,
+                placeholder: context.l10n.onboardingNicknamePlaceholder,
+              ),
+              const SizedBox(height: 8),
+              AppTextField(
+                controller: bioController,
+                label: context.l10n.profileEditTitle,
+                placeholder: context.l10n.profileBioPlaceholder,
+                multiline: true,
+              ),
+              const SizedBox(height: 8),
+              AppTextField(
+                controller: tagsController,
+                label: context.l10n.profileTagsPlaceholder,
+                placeholder: context.l10n.profileTagsPlaceholder,
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(context.l10n.commonCancel),
             ),
-            const SizedBox(height: 8),
-            AppTextField(
-              controller: bioController,
-              label: context.l10n.profileEditTitle,
-              placeholder: context.l10n.profileBioPlaceholder,
-              multiline: true,
-            ),
-            const SizedBox(height: 8),
-            AppTextField(
-              controller: tagsController,
-              label: context.l10n.profileTagsPlaceholder,
-              placeholder: context.l10n.profileTagsPlaceholder,
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () async {
+                final patch = ProfilePatch(
+                  displayName: nickController.text.trim(),
+                  bio: bioController.text.trim(),
+                  tags: tagsController.text
+                      .split(',')
+                      .map((item) => item.trim())
+                      .where((item) => item.isNotEmpty)
+                      .toList(),
+                );
+                Navigator.of(dialogContext).pop();
+                await ref.read(profileProvider.notifier).updateProfile(patch);
+              },
+              child: Text(context.l10n.commonSave),
             ),
           ],
         ),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(context.l10n.commonCancel),
-          ),
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () async {
-              final patch = ProfilePatch(
-                displayName: nickController.text.trim(),
-                bio: bioController.text.trim(),
-                tags: tagsController.text
-                    .split(',')
-                    .map((item) => item.trim())
-                    .where((item) => item.isNotEmpty)
-                    .toList(),
-              );
-              Navigator.of(dialogContext).pop();
-              await ref.read(profileProvider.notifier).updateProfile(patch);
-            },
-            child: Text(context.l10n.commonSave),
-          ),
-        ],
-      ),
-    );
+      );
+    } finally {
+      nickController.dispose();
+      bioController.dispose();
+      tagsController.dispose();
+    }
   }
 }
 

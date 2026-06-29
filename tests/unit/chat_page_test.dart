@@ -226,7 +226,12 @@ void main() {
       ),
     );
 
-    expect(find.text('身份卡'), findsOneWidget);
+    expect(find.byKey(const Key('chat-identity-card-button')), findsNothing);
+    expect(
+      find.byKey(const Key('chat-conversation-info-button')),
+      findsNothing,
+    );
+    expect(find.text('身份卡'), findsNothing);
 
     await tester.enterText(find.byType(CupertinoTextField), 'hello mac');
     await tester.testTextInput.receiveAction(TextInputAction.send);
@@ -239,7 +244,7 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('macOS 窄聊天头部保留身份卡入口且不溢出', (tester) async {
+  testWidgets('macOS 窄聊天头部不显示信息入口且不溢出', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -278,14 +283,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byIcon(CupertinoIcons.person_crop_square), findsOneWidget);
+    expect(find.byKey(const Key('chat-identity-card-button')), findsNothing);
+    expect(
+      find.byKey(const Key('chat-conversation-info-button')),
+      findsNothing,
+    );
+    expect(find.byIcon(CupertinoIcons.person_crop_square), findsNothing);
     expect(tester.takeException(), isNull);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('macOS 聊天头部操作按钮使用一致的轻量样式', (tester) async {
+  testWidgets('macOS 聊天头部不显示信息入口按钮', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -316,7 +326,6 @@ void main() {
             conversation: conversation,
             embedded: true,
             macStyle: true,
-            onMacConversationInfoTap: () {},
           ),
         ),
         gateway: gateway,
@@ -326,25 +335,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('chat-refresh-button')), findsNothing);
-    final identityIcon = tester.widget<Icon>(
-      find.descendant(
-        of: find.byKey(const Key('chat-identity-card-button')),
-        matching: find.byIcon(CupertinoIcons.person_crop_square),
-      ),
+    expect(find.byKey(const Key('chat-identity-card-button')), findsNothing);
+    expect(
+      find.byKey(const Key('chat-conversation-info-button')),
+      findsNothing,
     );
-    final infoIcon = tester.widget<Icon>(
-      find.descendant(
-        of: find.byKey(const Key('chat-conversation-info-button')),
-        matching: find.byIcon(CupertinoIcons.sidebar_right),
-      ),
-    );
-    final identityLabel = tester.widget<Text>(find.text('身份卡'));
-
-    expect(identityIcon.size, infoIcon.size);
-    expect(identityIcon.color, infoIcon.color);
-    expect(identityIcon.weight, infoIcon.weight);
-    expect(infoIcon.weight, 500);
-    expect(identityLabel.style?.fontWeight, FontWeight.w400);
+    expect(find.text('身份卡'), findsNothing);
+    expect(find.text('会话信息'), findsNothing);
+    expect(find.text('群聊信息'), findsNothing);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -392,8 +390,13 @@ void main() {
     expect(find.text('融资协作群'), findsOneWidget);
     expect(find.text('我的智能体'), findsNothing);
     expect(find.text('安全协作中'), findsOneWidget);
-    expect(find.text('群聊信息'), findsOneWidget);
+    expect(find.text('群聊信息'), findsNothing);
     expect(find.text('身份卡'), findsNothing);
+    expect(find.byKey(const Key('chat-identity-card-button')), findsNothing);
+    expect(
+      find.byKey(const Key('chat-conversation-info-button')),
+      findsNothing,
+    );
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -537,7 +540,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.bySemanticsLabel('打开用户信息').last);
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('关注'));
     await tester.pumpAndSettle();
@@ -583,7 +586,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.bySemanticsLabel('打开用户信息').last);
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('关注'));
     await tester.pumpAndSettle();
@@ -656,7 +659,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.bySemanticsLabel('打开用户信息').last);
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('已关注'));
     await tester.pump();

@@ -154,6 +154,34 @@ For UI / visual verification, the screenshot smoke writes PNG evidence under
 `docs/ui-optimization-plan/screenshots/`. If the screenshots are not the intended
 change, restore them before committing.
 
+## Memory Leak Checks
+
+代码侧内存泄漏检查优先覆盖三类资源：
+
+- StatefulWidget 持有的 `TextEditingController`、`ScrollController`、`FocusNode`
+  必须在 `dispose()` 释放；临时 dialog controller 也要在 dialog 关闭后释放。
+- provider / controller 持有的 `Timer`、`Timer.periodic`、`StreamSubscription`
+  必须在 `dispose()`、`clear()` 或对应 cancel 路径释放。
+
+建议验证流程：
+
+```bash
+dart analyze
+flutter test tests/unit/chat_page_test.dart tests/unit/conversation_workspace_test.dart
+flutter test tests/unit/agents/agents_page_layout_test.dart tests/unit/group_flow_test.dart tests/unit/profile_page_test.dart
+```
+
+若要做运行时 retained-object 验证，使用 Flutter DevTools Memory：
+
+```bash
+flutter run -d macos --profile
+```
+
+打开 DevTools Memory 后，对“消息页 ⇄ 个人资料 / 群弹窗”等常用路径循环 20-50
+次，分别在循环前后采集 heap snapshot。重点确认 `ChatView`、
+`TextEditingController`、`ScrollController`、`Timer` 和 `StreamSubscription`
+没有随循环次数持续增长。
+
 ## Local Gate
 
 Recommended deterministic local gate:

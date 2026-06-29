@@ -54,13 +54,6 @@ const bool _chatTraceEnabled = bool.fromEnvironment(
   defaultValue: true,
 );
 
-const _macChatHeaderActionColor = Color(0xFF44506A);
-const _macChatHeaderActionActiveColor = Color(0xFF101B32);
-const _macChatHeaderActionActiveBackground = Color(0xFFE4ECF7);
-const _macChatHeaderActionIconSize = 16.0;
-const _macChatHeaderActionFontWeight = FontWeight.w400;
-const _macChatHeaderActionActiveFontWeight = FontWeight.w600;
-
 class ChatPage extends StatelessWidget {
   const ChatPage({super.key, required this.conversation});
 
@@ -87,18 +80,12 @@ class ChatView extends ConsumerStatefulWidget {
     required this.conversation,
     required this.embedded,
     this.onBack,
-    this.onMacIdentityPanelTap,
-    this.onMacConversationInfoTap,
-    this.macConversationInfoPanelActive = false,
     this.macStyle = false,
   });
 
   final ConversationSummary conversation;
   final bool embedded;
   final VoidCallback? onBack;
-  final VoidCallback? onMacIdentityPanelTap;
-  final VoidCallback? onMacConversationInfoTap;
-  final bool macConversationInfoPanelActive;
   final bool macStyle;
 
   @override
@@ -459,12 +446,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
             classification: peerClassification,
             isDeletedAgentConversation: isDeletedAgentConversation,
             onBack: widget.onBack,
-            onDetails: _openDetails,
             onPeerInfoTap: _openDetails,
-            onMacIdentityPanelTap: widget.onMacIdentityPanelTap,
-            onMacConversationInfoTap: widget.onMacConversationInfoTap,
-            macConversationInfoPanelActive:
-                widget.macConversationInfoPanelActive,
           ),
           Expanded(
             child: Listener(
