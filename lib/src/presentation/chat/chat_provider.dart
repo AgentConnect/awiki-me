@@ -582,6 +582,7 @@ class ChatThreadsController
       <String, _MessageThreadRoute>{};
   final Map<String, Timer> _threadPatchSubscriptionTtlTimers =
       <String, Timer>{};
+  final Map<String, Timer> _hiddenThreadCacheTrimTimers = <String, Timer>{};
   int _trimmedMessageCount = 0;
   int _evictedThreadCount = 0;
   int _protectedOverflowCount = 0;
@@ -1526,6 +1527,7 @@ class ChatThreadsController
     _cancelAgentProcessingTimers();
     _cancelThreadPatchSubscriptions();
     _cancelThreadPatchSubscriptionTtls();
+    _cancelHiddenThreadCacheTrimTimers();
     _pendingHistorySyncs.clear();
     _activeLocalHistoryLoads.clear();
     _activeRemoteHistorySyncs.clear();
@@ -1538,6 +1540,7 @@ class ChatThreadsController
     String? displayThreadId,
   }) {
     final threadId = _displayThreadIdFor(conversation, displayThreadId);
+    _cancelHiddenThreadCacheTrim(threadId);
     _touchConversationCache(conversation, threadId, visible: true);
     _cancelThreadPatchSubscriptionTtl(threadId);
     _ensureThreadPatchSubscription(conversation, displayThreadId: threadId);
@@ -1558,7 +1561,7 @@ class ChatThreadsController
       _touchConversationCache(conversation, threadId, visible: false);
     }
     _scheduleThreadPatchSubscriptionTtl(threadId);
-    _enforceThreadCacheForExistingState(threadId);
+    _scheduleHiddenThreadCacheTrim(threadId);
   }
 
   void trimForAppBackground() {
@@ -1794,6 +1797,8 @@ class ChatThreadsController
   }
 
   void _removeThreadCacheMetadata(String threadId) {
+    _cancelHiddenThreadCacheTrim(threadId);
+    _cancelThreadPatchSubscriptionTtl(threadId);
     final metadata = _cacheMetadataByThreadId.remove(threadId);
     final threadAliases =
         _cacheAliasesByThreadId.remove(threadId) ?? <String>{threadId};
@@ -1811,6 +1816,7 @@ class ChatThreadsController
   }
 
   void _clearMemoryCacheMetadata() {
+    _cancelHiddenThreadCacheTrimTimers();
     _cacheMetadataByThreadId.clear();
     _cacheAliasesByThreadId.clear();
     _canonicalAliases.clear();
@@ -3719,6 +3725,28 @@ class ChatThreadsController
     _threadPatchSubscriptionTtlTimers.clear();
   }
 
+  void _scheduleHiddenThreadCacheTrim(String threadId) {
+    _cancelHiddenThreadCacheTrim(threadId);
+    _hiddenThreadCacheTrimTimers[threadId] = Timer(Duration.zero, () {
+      _hiddenThreadCacheTrimTimers.remove(threadId);
+      if (!mounted || _cacheMetadataByThreadId[threadId]?.isVisible == true) {
+        return;
+      }
+      _enforceThreadCacheForExistingState(threadId);
+    });
+  }
+
+  void _cancelHiddenThreadCacheTrim(String threadId) {
+    _hiddenThreadCacheTrimTimers.remove(threadId)?.cancel();
+  }
+
+  void _cancelHiddenThreadCacheTrimTimers() {
+    for (final timer in _hiddenThreadCacheTrimTimers.values) {
+      timer.cancel();
+    }
+    _hiddenThreadCacheTrimTimers.clear();
+  }
+
   String _displayThreadIdFor(ConversationSummary conversation, String? value) {
     final displayThreadId = value?.trim();
     if (displayThreadId == null || displayThreadId.isEmpty) {
@@ -3732,6 +3760,7 @@ class ChatThreadsController
     _cancelAgentProcessingTimers();
     _cancelThreadPatchSubscriptions();
     _cancelThreadPatchSubscriptionTtls();
+    _cancelHiddenThreadCacheTrimTimers();
     _clearMemoryCacheMetadata();
     super.dispose();
   }

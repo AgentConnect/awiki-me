@@ -3066,6 +3066,87 @@ void main() {
     expect(find.text('第一行\n第二行'), findsOneWidget);
   });
 
+  testWidgets('离开长会话时延迟裁剪缓存且不重建已销毁页面', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:cache-dispose',
+      displayName: 'Cache Tester',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    final messages = _scrollMessages(
+      threadId: conversation.threadId,
+      peerDid: 'did:test:peer',
+      startedAt: DateTime(2026, 4, 5, 12, 0),
+      count: 8,
+    );
+    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:test:peer': messages,
+    };
+    late ChatThreadsController controller;
+    final showChat = ValueNotifier<bool>(true);
+    addTearDown(showChat.dispose);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: ValueListenableBuilder<bool>(
+          valueListenable: showChat,
+          builder: (context, visible, _) {
+            return CupertinoPageScaffold(
+              child: visible
+                  ? ChatView(conversation: conversation, embedded: false)
+                  : const SizedBox.shrink(),
+            );
+          },
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          chatThreadsProvider.overrideWith((ref) {
+            controller = ChatThreadsController(
+              ref,
+              cachePolicy: const ThreadMemoryCachePolicy(
+                hotThreadMessageLimit: 8,
+                warmThreadMessageLimit: 2,
+                coldThreadMessageLimit: 1,
+                maxTotalCachedMessages: 50,
+                maxCachedCanonicalThreads: 50,
+              ),
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+    await controller.openConversation(conversation);
+    await tester.pumpAndSettle();
+
+    expect(
+      controller.thread(conversation.threadId).messages.length,
+      greaterThanOrEqualTo(8),
+    );
+
+    showChat.value = false;
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1));
+
+    expect(tester.takeException(), isNull);
+    expect(
+      controller.thread(conversation.threadId).messages.length,
+      lessThanOrEqualTo(2),
+    );
+    expect(controller.debugCacheStats().trimmedMessageCount, greaterThan(0));
+  });
+
   testWidgets('输入法组合输入时 Enter 不触发发送', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
