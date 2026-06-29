@@ -11,6 +11,7 @@ import 'package:awiki_me/src/application/models/daemon_subkey_authorization_revo
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
+import 'package:awiki_me/src/application/directory_application_service.dart';
 import 'package:awiki_me/src/application/group_application_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/message_sync_service.dart';
@@ -20,6 +21,7 @@ import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/application/peer_identity_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
+import 'package:awiki_me/src/application/ports/directory_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
@@ -255,6 +257,9 @@ List<Override> fakeApplicationServiceOverrides(
     identityCorePortProvider.overrideWithValue(FakeIdentityCorePort()),
     profileApplicationServiceProvider.overrideWithValue(
       FakeProfileApplicationService(gateway),
+    ),
+    directoryApplicationServiceProvider.overrideWithValue(
+      FakeDirectoryApplicationService(gateway),
     ),
     peerIdentityServiceProvider.overrideWithValue(FakePeerIdentityService()),
     conversationServiceProvider.overrideWithValue(
@@ -848,11 +853,12 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       ...(groupMembersByGroupId[groupId] ?? const <GroupMemberSummary>[]),
     ];
     if (!members.any((item) => item.did == memberRef)) {
+      final profile = _profileForDid(memberRef);
       members.add(
         GroupMemberSummary(
           userId: memberRef,
           did: memberRef,
-          handle: memberRef,
+          handle: profile?.fullHandle ?? profile?.handle ?? memberRef,
           role: role,
           profileUrl: null,
         ),
@@ -874,6 +880,18 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       updated,
     ];
     return updated;
+  }
+
+  UserProfile? _profileForDid(String did) {
+    for (final profile in publicProfilesByQuery.values) {
+      if (profile.did == did) {
+        return profile;
+      }
+    }
+    if (publicProfile?.did == did) {
+      return publicProfile;
+    }
+    return null;
   }
 
   @override
@@ -1317,6 +1335,29 @@ class FakeProfileApplicationService implements ProfileApplicationService {
   @override
   Future<UserProfile> updateProfile(ProfilePatch patch) {
     return gateway.updateProfile(patch);
+  }
+}
+
+class FakeDirectoryApplicationService implements DirectoryApplicationService {
+  const FakeDirectoryApplicationService(this.gateway);
+
+  final FakeAwikiGateway gateway;
+
+  @override
+  Future<DirectoryPeerResolution> lookupHandle(String handle) {
+    return resolvePeer(handle);
+  }
+
+  @override
+  Future<DirectoryPeerResolution> resolvePeer(String peer) async {
+    final normalized = normalizeTestIdentity(peer);
+    final profile = await gateway.loadPublicProfile(normalized);
+    return DirectoryPeerResolution(
+      input: peer,
+      did: profile.did,
+      handle: profile.fullHandle ?? profile.handle,
+      profile: profile,
+    );
   }
 }
 

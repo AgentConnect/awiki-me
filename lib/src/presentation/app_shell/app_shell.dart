@@ -73,10 +73,18 @@ class _AppShellState extends ConsumerState<AppShell> {
         if (!mounted) {
           return;
         }
+        final implicitDetail = next.detail ?? next.message.detail;
+        final message =
+            next.message.id == 'raw' &&
+                implicitDetail != null &&
+                implicitDetail.trim().isNotEmpty
+            ? context.l10n.operationFailedRetry
+            : next.message.resolve(context.l10n);
         AwikiMeToast.show(
           context,
-          next.message.resolve(context.l10n),
+          message,
           danger: next.danger,
+          detail: implicitDetail,
         );
       });
     });

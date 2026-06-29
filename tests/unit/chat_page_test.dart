@@ -1,6 +1,7 @@
 // ignore_for_file: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/attachment_open_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
@@ -31,10 +32,6 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-// ignore: depend_on_referenced_packages
-import 'package:url_launcher_platform_interface/link.dart';
-// ignore: depend_on_referenced_packages
-import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 
 import 'test_support.dart';
 
@@ -48,40 +45,6 @@ class _StaticConversationListController extends ConversationListController {
 
   void replaceConversations(List<ConversationSummary> conversations) {
     state = ConversationListState(conversations: conversations);
-  }
-}
-
-class _FakeUrlLauncherPlatform extends UrlLauncherPlatform {
-  bool result = true;
-  final launchedUrls = <String>[];
-  final launchOptions = <LaunchOptions>[];
-
-  @override
-  LinkDelegate? get linkDelegate => null;
-
-  @override
-  Future<bool> canLaunch(String url) async => true;
-
-  @override
-  Future<bool> launchUrl(String url, LaunchOptions options) async {
-    launchedUrls.add(url);
-    launchOptions.add(options);
-    return result;
-  }
-
-  @override
-  Future<bool> launch(
-    String url, {
-    required bool useSafariVC,
-    required bool useWebView,
-    required bool enableJavaScript,
-    required bool enableDomStorage,
-    required bool universalLinksOnly,
-    required Map<String, String> headers,
-    String? webOnlyWindowName,
-  }) async {
-    launchedUrls.add(url);
-    return result;
   }
 }
 
@@ -121,6 +84,20 @@ class _StaticChatThreadsController extends ChatThreadsController {
       conversation,
       displayThreadId: displayThreadId,
     );
+  }
+}
+
+class _RecordingAttachmentOpenService extends AttachmentOpenService {
+  final openedPaths = <String>[];
+  Object? nextError;
+
+  @override
+  Future<void> open(String pathOrUri) async {
+    openedPaths.add(pathOrUri);
+    final error = nextError;
+    if (error != null) {
+      throw error;
+    }
   }
 }
 
@@ -3644,13 +3621,8 @@ void main() {
   });
 
   testWidgets('查看附件会下载后用本机应用打开文件', (tester) async {
-    final previousLauncher = UrlLauncherPlatform.instance;
-    final launcher = _FakeUrlLauncherPlatform();
-    UrlLauncherPlatform.instance = launcher;
-    addTearDown(() {
-      UrlLauncherPlatform.instance = previousLauncher;
-    });
     final gateway = FakeAwikiGateway();
+    final opener = _RecordingAttachmentOpenService();
     final picker = FakeAttachmentPickerService()
       ..nextSavedPath = '/tmp/native-open-report.txt';
     const session = SessionIdentity(
@@ -3700,6 +3672,7 @@ void main() {
         session: session,
         providerOverrides: <Override>[
           attachmentPickerServiceProvider.overrideWithValue(picker),
+          attachmentOpenServiceProvider.overrideWithValue(opener),
         ],
       ),
     );
@@ -3715,14 +3688,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(picker.saveCalls, 0);
-    expect(
-      launcher.launchedUrls.single,
-      startsWith('file:///tmp/awiki-test-cache/'),
-    );
-    expect(
-      launcher.launchOptions.single.mode,
-      PreferredLaunchMode.externalApplication,
-    );
+    expect(opener.openedPaths, hasLength(1));
+    expect(opener.openedPaths.single, startsWith('/tmp/awiki-test-cache/'));
+    expect(opener.openedPaths.single, contains('/native-open-attachment/'));
+    expect(opener.openedPaths.single, contains('/att-native-open/'));
   });
 
   testWidgets('对方附件说明按 Markdown 渲染，文件名仍按普通文本复制', (tester) async {

@@ -1302,19 +1302,36 @@ void main() {
     expect(find.text('did:test:member'), findsNothing);
     expect(find.byType(GroupDetailPage), findsNothing);
 
-    const memberRef = 'did:wba:awiki.ai:user:bob:e1_member';
+    const memberHandle = 'bob.awiki.ai';
+    const memberDid = 'did:wba:awiki.ai:user:bob:e1_member';
+    gateway.publicProfilesByQuery = const <String, UserProfile>{
+      memberHandle: UserProfile(
+        did: memberDid,
+        nickName: 'Bob',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+        handle: memberHandle,
+        fullHandle: memberHandle,
+      ),
+    };
     await tester.tap(find.byKey(const Key('mac-group-info-add-member-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('成员 handle 或 DID'), findsOneWidget);
-    await tester.enterText(find.byType(CupertinoTextField).last, memberRef);
-    await tester.tap(find.text('添加'));
+    expect(find.text('添加群成员'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('identity-lookup-input')),
+      memberHandle,
+    );
+    await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('identity-add-group-member-button')));
     await tester.pumpAndSettle();
 
     expect(gateway.lastAddedGroupId, group.groupId);
-    expect(gateway.lastAddedMemberRef, memberRef);
-    expect(find.text('bob'), findsOneWidget);
-    expect(find.text(memberRef), findsNothing);
+    expect(gateway.lastAddedMemberRef, memberDid);
+    expect(find.text(memberHandle), findsOneWidget);
+    expect(find.text(memberDid), findsNothing);
     expect(find.text('3 人'), findsOneWidget);
 
     await tester.tap(find.bySemanticsLabel('移除成员').last);
@@ -1323,8 +1340,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gateway.lastRemovedGroupId, group.groupId);
-    expect(gateway.lastRemovedMemberRef, memberRef);
-    expect(find.text('bob'), findsNothing);
+    expect(gateway.lastRemovedMemberRef, memberDid);
+    expect(find.text(memberHandle), findsNothing);
     expect(find.text('2 人'), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = null;

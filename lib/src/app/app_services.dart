@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/attachment_picker_service.dart';
 import '../application/attachment_cache_service.dart';
+import '../application/attachment_open_service.dart';
 import '../application/attachment_preview_service.dart';
 import '../application/app_session_service.dart';
 import '../application/agent/agent_control_service.dart';
@@ -197,4 +198,8 @@ final attachmentPreviewServiceProvider = Provider<AttachmentPreviewService>(
   (ref) => AttachmentPreviewService(
     cache: ref.watch(attachmentCacheServiceProvider),
   ),
+);
+
+final attachmentOpenServiceProvider = Provider<AttachmentOpenService>(
+  (ref) => AttachmentOpenService(),
 );

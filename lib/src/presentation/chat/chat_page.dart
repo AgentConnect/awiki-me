@@ -897,11 +897,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
                   message: message,
                 ),
           );
-      await _launchNativeAttachment(previewPath);
-    } catch (error) {
+      await ref.read(attachmentOpenServiceProvider).open(previewPath);
+    } catch (error, stackTrace) {
       ref
           .read(uiFeedbackProvider.notifier)
-          .showError(_attachmentOpenErrorMessage(error));
+          .showError(
+            _attachmentOpenErrorMessage(error),
+            detail: _attachmentOpenErrorDetail(error, stackTrace),
+          );
     } finally {
       if (mounted) {
         setState(() {
@@ -920,24 +923,18 @@ class _ChatViewState extends ConsumerState<ChatView> {
         raw.contains('message not found')) {
       return AppMessage.attachmentUnavailable();
     }
-    return AppMessage.fromError(error);
+    return AppMessage.attachmentOpenFailed();
   }
 
-  Future<void> _launchNativeAttachment(String pathOrUri) async {
-    final uri = _attachmentUri(pathOrUri);
-    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!launched) {
-      throw StateError('无法使用本机应用打开附件：$pathOrUri');
+  String _attachmentOpenErrorDetail(Object error, StackTrace stackTrace) {
+    final buffer = StringBuffer()..writeln(error);
+    final stack = stackTrace.toString().trim();
+    if (stack.isNotEmpty) {
+      buffer
+        ..writeln()
+        ..write(stack);
     }
-  }
-
-  Uri _attachmentUri(String pathOrUri) {
-    final value = pathOrUri.trim();
-    final parsed = Uri.tryParse(value);
-    if (parsed != null && parsed.hasScheme) {
-      return parsed;
-    }
-    return Uri.file(value);
+    return buffer.toString().trim();
   }
 
   Future<void> _refreshCurrentConversation(

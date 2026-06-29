@@ -13,6 +13,7 @@ import '../shared/awiki_me_top_bar.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/copyable_did_line.dart';
 import '../shared/formatters/display_formatters.dart';
+import '../shared/identity_flow.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../app_shell/providers/session_provider.dart';
@@ -526,90 +527,18 @@ class AddGroupMemberDialog extends ConsumerStatefulWidget {
 }
 
 class _AddGroupMemberDialogState extends ConsumerState<AddGroupMemberDialog> {
-  final TextEditingController _memberController = TextEditingController();
-  bool _isSubmitting = false;
-
-  @override
-  void dispose() {
-    _memberController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
-    return CupertinoAlertDialog(
-      title: const Text('添加成员'),
-      content: Column(
-        children: <Widget>[
-          const SizedBox(height: 10),
-          Text(
-            '支持普通用户和智能体，输入 handle 或 DID 后会直接加入群聊。',
-            style: AwikiMeTextStyles.cardSubtitle,
-          ),
-          const SizedBox(height: 12),
-          AppTextField(
-            controller: _memberController,
-            label: '成员 handle 或 DID',
-            placeholder: '输入 handle / DID',
-            keyboardType: TextInputType.text,
-            enabled: !_isSubmitting,
-          ),
-        ],
-      ),
-      actions: <Widget>[
-        CupertinoDialogAction(
-          onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(),
-          child: Text(context.l10n.commonCancel),
-        ),
-        CupertinoDialogAction(
-          isDefaultAction: !_isSubmitting,
-          onPressed: _isSubmitting ? null : _addMember,
-          child: _isSubmitting
-              ? const CupertinoActivityIndicator()
-              : const Text('添加'),
-        ),
-      ],
+    return IdentityLookupDialog(
+      config: IdentityLookupDialogConfig.addGroupMember,
+      onConfirm: (profile) async {
+        final updated = await ref
+            .read(groupProvider.notifier)
+            .addGroupMember(groupId: widget.groupId, memberRef: profile.did);
+        widget.onGroupUpdated(updated);
+      },
     );
   }
-
-  Future<void> _addMember() async {
-    final memberRef = _normalizeMemberRef(_memberController.text);
-    if (memberRef.isEmpty) {
-      return;
-    }
-    final groupNotifier = ref.read(groupProvider.notifier);
-    final feedback = ref.read(uiFeedbackProvider.notifier);
-    setState(() {
-      _isSubmitting = true;
-    });
-    try {
-      final updated = await groupNotifier.addGroupMember(
-        groupId: widget.groupId,
-        memberRef: memberRef,
-      );
-      widget.onGroupUpdated(updated);
-      if (!mounted) {
-        return;
-      }
-      Navigator.of(context).pop();
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isSubmitting = false;
-      });
-      feedback.showError(AppMessage.fromError(error));
-    }
-  }
-}
-
-String _normalizeMemberRef(String raw) {
-  final trimmed = raw.trim();
-  if (trimmed.startsWith('@')) {
-    return trimmed.substring(1).trim();
-  }
-  return trimmed;
 }
 
 class _GroupDetailIconButton extends StatelessWidget {

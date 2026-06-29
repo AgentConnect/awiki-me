@@ -1,16 +1,15 @@
 import 'dart:async';
 
-import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/group/create_group_page.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -170,9 +169,21 @@ void main() {
 
   testWidgets('群详情可以添加成员并刷新成员列表', (tester) async {
     const groupDid = 'did:wba:awiki.ai:group:e1_group';
-    const memberRef = 'did:wba:awiki.ai:user:bob:e1_member';
+    const memberHandle = 'bob.awiki.ai';
+    const memberDid = 'did:wba:awiki.ai:user:bob:e1_member';
     final gateway = FakeAwikiGateway()
       ..loginResult = session
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        memberHandle: UserProfile(
+          did: memberDid,
+          nickName: 'Bob',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          handle: memberHandle,
+          fullHandle: memberHandle,
+        ),
+      }
       ..groups = <GroupSummary>[
         GroupSummary(
           groupId: groupDid,
@@ -219,25 +230,51 @@ void main() {
     await tester.tap(find.byKey(const Key('group-detail-add-member-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('成员 handle 或 DID'), findsOneWidget);
-    expect(find.text('支持普通用户和智能体，输入 handle 或 DID 后会直接加入群聊。'), findsOneWidget);
+    expect(find.text('添加群成员'), findsOneWidget);
+    expect(
+      find.text('输入普通用户或 Agent 的 handle / DID，确认身份后加入群聊。'),
+      findsOneWidget,
+    );
 
-    await tester.enterText(find.byType(CupertinoTextField).last, memberRef);
-    await tester.tap(find.text('添加'));
+    await tester.enterText(
+      find.byKey(const Key('identity-lookup-input')),
+      '@$memberHandle',
+    );
+    await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bob'), findsOneWidget);
+    expect(find.text('@$memberHandle'), findsWidgets);
+    expect(find.text('请确认这是要加入群聊的身份。'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('identity-add-group-member-button')));
     await tester.pumpAndSettle();
 
     expect(gateway.lastAddedGroupId, groupDid);
-    expect(gateway.lastAddedMemberRef, memberRef);
-    expect(find.text('bob'), findsOneWidget);
-    expect(find.text(memberRef), findsNothing);
+    expect(gateway.lastAddedMemberRef, memberDid);
+    expect(find.text(memberHandle), findsOneWidget);
+    expect(find.text(memberDid), findsNothing);
     expect(find.text('2 人'), findsOneWidget);
   });
 
   testWidgets('群详情添加成员失败时保留对话框并提示错误', (tester) async {
     const groupDid = 'did:wba:awiki.ai:group:e1_group';
+    const memberHandle = 'bob.awiki.ai';
+    const memberDid = 'did:wba:awiki.ai:user:bob:e1_member';
     final gateway = FakeAwikiGateway()
       ..loginResult = session
       ..failNextAddGroupMember = true
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        memberHandle: UserProfile(
+          did: memberDid,
+          nickName: 'Bob',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          handle: memberHandle,
+          fullHandle: memberHandle,
+        ),
+      }
       ..groups = <GroupSummary>[
         GroupSummary(
           groupId: groupDid,
@@ -272,23 +309,17 @@ void main() {
     await tester.tap(find.byKey(const Key('group-detail-add-member-button')));
     await tester.pumpAndSettle();
     await tester.enterText(
-      find.byType(CupertinoTextField).last,
-      'did:wba:awiki.ai:user:bob:e1_member',
+      find.byKey(const Key('identity-lookup-input')),
+      memberHandle,
     );
-    await tester.tap(find.text('添加'));
+    await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('identity-add-group-member-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('添加成员'), findsOneWidget);
+    expect(find.text('添加群成员'), findsOneWidget);
+    expect(find.textContaining('add member failed'), findsOneWidget);
     expect(gateway.lastAddedGroupId, isNull);
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(GroupDetailPage)),
-    );
-    expect(container.read(uiFeedbackProvider)?.danger, isTrue);
-    expect(container.read(uiFeedbackProvider)?.message.id, 'raw');
-    expect(
-      container.read(uiFeedbackProvider)?.message.detail,
-      'add member failed',
-    );
   });
 
   testWidgets('群详情可以移除成员并刷新成员列表', (tester) async {
@@ -398,7 +429,7 @@ void main() {
     await tester.tap(addButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('成员 handle 或 DID'), findsNothing);
+    expect(find.text('添加群成员'), findsNothing);
 
     final removeButton = find.bySemanticsLabel('移除成员').last;
     expect(removeButton, findsOneWidget);
