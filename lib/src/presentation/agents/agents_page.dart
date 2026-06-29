@@ -6,6 +6,7 @@ import 'package:flutter/material.dart'
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/app_router.dart';
 import '../../app/app_services.dart';
 import '../../application/config/awiki_environment_config.dart';
 import '../../domain/entities/agent/agent_command.dart';

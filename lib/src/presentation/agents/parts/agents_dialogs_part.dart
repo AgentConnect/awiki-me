@@ -48,9 +48,9 @@ Future<void> _showRenameAgentDialog(
   AgentSummary agent,
 ) async {
   final controller = TextEditingController(text: AgentDisplayName.title(agent));
-  final result = await showCupertinoDialog<String>(
-    context: context,
-    builder: (dialogContext) => CupertinoAlertDialog(
+  final result = await AppNavigator.showDialog<String>(
+    context,
+    (dialogContext) => CupertinoAlertDialog(
       title: const Text('改名'),
       content: Padding(
         padding: const EdgeInsets.only(top: 10),
@@ -91,9 +91,9 @@ Future<void> _showCreateRuntimeDialog(
   AgentSummary daemon,
   List<AgentSummary> existingRuntimes,
 ) async {
-  final result = await showCupertinoDialog<_RuntimeAgentCreationDraft>(
-    context: context,
-    builder: (dialogContext) => _CreateRuntimeDialog(
+  final result = await AppNavigator.showDialog<_RuntimeAgentCreationDraft>(
+    context,
+    (dialogContext) => _CreateRuntimeDialog(
       initialDisplayName: _nextRuntimeDisplayName(
         existingRuntimes,
         RuntimeAgentKind.hermes,
@@ -1369,9 +1369,9 @@ Future<void> _showRetryRunDialog(
   AgentSummary agent,
 ) async {
   final controller = TextEditingController();
-  final result = await showCupertinoDialog<String>(
-    context: context,
-    builder: (dialogContext) => CupertinoAlertDialog(
+  final result = await AppNavigator.showDialog<String>(
+    context,
+    (dialogContext) => CupertinoAlertDialog(
       title: const Text('重试 Run'),
       content: Padding(
         padding: const EdgeInsets.only(top: 10),
@@ -1527,9 +1527,9 @@ Future<bool> _confirm(
   required String actionLabel,
   bool destructive = false,
 }) async {
-  final result = await showCupertinoDialog<bool>(
-    context: context,
-    builder: (dialogContext) => CupertinoAlertDialog(
+  final result = await AppNavigator.showDialog<bool>(
+    context,
+    (dialogContext) => CupertinoAlertDialog(
       title: Text(title),
       content: Text(message),
       actions: <Widget>[
@@ -1554,9 +1554,9 @@ void _showInstallCommand(
   WidgetRef ref,
   InstallCommand command,
 ) {
-  showCupertinoDialog<void>(
-    context: context,
-    builder: (context) => _InstallCommandDialog(
+  AppNavigator.showDialog<void>(
+    context,
+    (context) => _InstallCommandDialog(
       command: command,
       onClose: () {
         Navigator.of(context).pop();

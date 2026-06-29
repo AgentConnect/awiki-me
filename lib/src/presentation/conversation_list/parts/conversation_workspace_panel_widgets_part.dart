@@ -1,51 +1,5 @@
 part of '../conversation_workspace_page.dart';
 
-class _MacProfileCard extends StatelessWidget {
-  const _MacProfileCard({
-    required this.title,
-    required this.child,
-    this.trailing,
-  });
-
-  final String title;
-  final Widget child;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: CupertinoColors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE5EAF2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    color: Color(0xFF17213A),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              if (trailing != null) trailing!,
-            ],
-          ),
-          const SizedBox(height: 10),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
 class _MacPanelShell extends StatelessWidget {
   const _MacPanelShell({
     required this.title,
@@ -130,24 +84,21 @@ class _MacPanelIconButton extends StatelessWidget {
     required this.semanticLabel,
     required this.icon,
     required this.onTap,
-    this.isLoading = false,
   });
 
   final String semanticLabel;
   final IconData icon;
   final VoidCallback? onTap;
-  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    final enabled = onTap != null && !isLoading;
+    final enabled = onTap != null;
     return AppIconButton(
-      onPressed: isLoading ? null : onTap,
+      onPressed: onTap,
       semanticLabel: semanticLabel,
       tooltip: semanticLabel,
-      isLoading: isLoading,
       size: responsive.displayScaled(32),
       backgroundColor: CupertinoColors.white,
       borderColor: const Color(0xFFDDE5F0),
@@ -156,31 +107,6 @@ class _MacPanelIconButton extends StatelessWidget {
         icon,
         color: enabled ? const Color(0xFF34415C) : theme.tertiaryText,
         size: responsive.displayScaled(16),
-      ),
-    );
-  }
-}
-
-class _MacProfilePill extends StatelessWidget {
-  const _MacProfilePill({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEAF2FF),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Color(0xFF0B65F8),
-          fontSize: 11.5,
-          fontWeight: FontWeight.w500,
-        ),
       ),
     );
   }

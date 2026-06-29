@@ -1215,7 +1215,7 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('macOS 群聊信息按钮在右侧栏打开群详情而不是全屏跳转', (tester) async {
+  testWidgets('macOS 群聊信息按钮打开统一信息弹窗而不是全屏跳转', (tester) async {
     final group = GroupSummary(
       groupId: 'did:test:group:funding',
       name: '融资协作群',
@@ -1282,18 +1282,21 @@ void main() {
     await tester.tap(find.text('群聊信息'));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('mac-side-panel')), findsOneWidget);
-    expect(find.text('融资协作群 的群聊信息'), findsOneWidget);
+    expect(find.byKey(const Key('mac-side-panel')), findsNothing);
+    expect(find.text('群聊信息'), findsWidgets);
     expect(find.text('同步融资材料和里程碑'), findsOneWidget);
     expect(find.text('2 人'), findsOneWidget);
     expect(find.text('owner'), findsWidgets);
-    expect(find.byKey(const Key('mac-group-info-did-value')), findsOneWidget);
     expect(
-      find.byKey(const Key('mac-group-info-refresh-button')),
+      find.byKey(const Key('group-info-dialog-did-value')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const Key('mac-group-info-add-member-button')),
+      find.byKey(const Key('group-info-dialog-refresh-members-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('group-info-dialog-add-member-button')),
       findsOneWidget,
     );
     expect(find.text('owner.awiki'), findsOneWidget);
@@ -1315,7 +1318,9 @@ void main() {
         fullHandle: memberHandle,
       ),
     };
-    await tester.tap(find.byKey(const Key('mac-group-info-add-member-button')));
+    await tester.tap(
+      find.byKey(const Key('group-info-dialog-add-member-button')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('添加群成员'), findsOneWidget);
@@ -1416,7 +1421,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const Key('mac-group-info-add-member-button')),
+      find.byKey(const Key('group-info-dialog-add-member-button')),
       findsOneWidget,
     );
     expect(find.bySemanticsLabel('移除成员'), findsWidgets);
@@ -1436,11 +1441,11 @@ void main() {
     await container.read(groupProvider.notifier).refresh();
     await tester.pumpAndSettle();
 
-    expect(find.text('融资协作群 的群聊信息'), findsOneWidget);
+    expect(find.text('群聊信息'), findsWidgets);
     expect(find.text('同步融资材料和里程碑'), findsOneWidget);
     expect(find.text('owner'), findsWidgets);
     expect(
-      find.byKey(const Key('mac-group-info-add-member-button')),
+      find.byKey(const Key('group-info-dialog-add-member-button')),
       findsOneWidget,
     );
 
@@ -1532,7 +1537,7 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('macOS 右侧栏空间不足时在聊天区打开群聊信息', (tester) async {
+  testWidgets('macOS 右侧栏空间不足时也用弹窗打开群聊信息', (tester) async {
     final group = GroupSummary(
       groupId: 'did:test:group:funding',
       name: '融资协作群',
@@ -1592,23 +1597,23 @@ void main() {
 
     expect(find.byType(ChatView), findsOneWidget);
     expect(find.byKey(const Key('mac-side-panel')), findsNothing);
-    expect(find.text('融资协作群 的群聊信息'), findsNothing);
+    expect(find.text('群聊信息'), findsOneWidget);
 
     await tester.tap(find.text('群聊信息'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(ChatView), findsNothing);
-    expect(find.byKey(const Key('mac-inline-side-panel')), findsOneWidget);
+    expect(find.byType(ChatView), findsOneWidget);
+    expect(find.byKey(const Key('mac-inline-side-panel')), findsNothing);
     expect(find.byKey(const Key('mac-side-panel')), findsNothing);
-    expect(find.text('融资协作群 的群聊信息'), findsOneWidget);
+    expect(find.text('群聊信息'), findsWidgets);
     expect(find.text('同步融资材料和里程碑'), findsOneWidget);
     expect(find.text('owner.awiki'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('mac-compact-panel-back-button')));
+    await tester.tap(find.bySemanticsLabel('关闭信息弹窗'));
     await tester.pumpAndSettle();
 
     expect(find.byType(ChatView), findsOneWidget);
-    expect(find.text('融资协作群 的群聊信息'), findsNothing);
+    expect(find.text('同步融资材料和里程碑'), findsNothing);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -1684,7 +1689,9 @@ void main() {
       ],
     };
 
-    await tester.tap(find.byKey(const Key('mac-group-info-refresh-button')));
+    await tester.tap(
+      find.byKey(const Key('group-info-dialog-refresh-members-button')),
+    );
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -1759,12 +1766,14 @@ void main() {
     await tester.pumpAndSettle();
 
     gateway.listGroupMembersCompleter = memberRefresh;
-    await tester.tap(find.byKey(const Key('mac-group-info-refresh-button')));
+    await tester.tap(
+      find.byKey(const Key('group-info-dialog-refresh-members-button')),
+    );
     await tester.pump();
 
     expect(
       find.descendant(
-        of: find.byKey(const Key('mac-group-info-refresh-button')),
+        of: find.byKey(const Key('group-info-dialog-refresh-members-button')),
         matching: find.byType(CupertinoActivityIndicator),
       ),
       findsOneWidget,
@@ -1775,7 +1784,7 @@ void main() {
 
     expect(
       find.descendant(
-        of: find.byKey(const Key('mac-group-info-refresh-button')),
+        of: find.byKey(const Key('group-info-dialog-refresh-members-button')),
         matching: find.byType(CupertinoActivityIndicator),
       ),
       findsNothing,

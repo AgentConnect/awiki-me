@@ -16,52 +16,32 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
   Widget build(BuildContext context) {
     final targetDid = widget.conversation.targetDid?.trim() ?? '';
     final responsive = context.awikiResponsive;
-    final media = MediaQuery.of(context);
-    final maxDialogWidth = media.size.width < 640
-        ? media.size.width - 32
-        : 620.0;
-    final maxDialogHeight = media.size.height * 0.86;
+    final maxDialogHeight = MediaQuery.sizeOf(context).height * 0.86;
     final runtimeAgent = _runtimeAgent();
     final title = runtimeAgent == null ? '用户信息' : '智能体信息';
     final state = targetDid.isEmpty
         ? const PeerProfileState(isLoading: false)
         : ref.watch(peerProfileProvider(targetDid));
 
-    return SafeArea(
-      minimum: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-      child: Center(
-        child: CupertinoPopupSurface(
-          isSurfacePainted: true,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: maxDialogWidth,
-              maxHeight: maxDialogHeight,
-            ),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: CupertinoColors.white,
-                borderRadius: BorderRadius.circular(responsive.radius(14)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  _PeerInfoHeader(title: title),
-                  Flexible(
-                    child: state.isLoading
-                        ? const Center(child: CupertinoActivityIndicator())
-                        : state.profile == null
-                        ? _PeerInfoError(onClose: _close)
-                        : _buildProfileContent(
-                            state,
-                            runtimeAgent: runtimeAgent,
-                            maxDialogHeight: maxDialogHeight,
-                          ),
+    return AppDialogScaffold(
+      maxWidth: 620,
+      borderRadius: BorderRadius.circular(responsive.radius(14)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          _PeerInfoHeader(title: title),
+          Flexible(
+            child: state.isLoading
+                ? const Center(child: CupertinoActivityIndicator())
+                : state.profile == null
+                ? _PeerInfoError(onClose: _close)
+                : _buildProfileContent(
+                    state,
+                    runtimeAgent: runtimeAgent,
+                    maxDialogHeight: maxDialogHeight,
                   ),
-                ],
-              ),
-            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -387,6 +367,360 @@ class _PeerInfoError extends StatelessWidget {
           const SizedBox(height: 16),
           AppSecondaryButton(label: '关闭', onPressed: onClose),
         ],
+      ),
+    );
+  }
+}
+
+class _GroupInfoDialog extends ConsumerStatefulWidget {
+  const _GroupInfoDialog({required this.initialGroup});
+
+  final GroupSummary initialGroup;
+
+  @override
+  ConsumerState<_GroupInfoDialog> createState() => _GroupInfoDialogState();
+}
+
+class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
+  late GroupSummary _group;
+  bool _didRequestMembers = false;
+  bool _didRequestGroup = false;
+  bool _isRefreshingMembers = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _group = widget.initialGroup;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final groupId = _group.groupId;
+    final knownGroup = _knownGroup(groupId);
+    if (knownGroup != null && knownGroup != _group) {
+      _group = knownGroup;
+    }
+    _requestGroup(groupId);
+    _requestMembers(groupId);
+
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final members = ref.watch(groupMembersProvider(groupId));
+    final currentDid = ref.watch(sessionProvider).session?.did;
+    final canManageMembers = canManageGroupMembers(_group);
+    return AppDialogScaffold(
+      maxWidth: 620,
+      borderRadius: BorderRadius.circular(responsive.radius(14)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const _PeerInfoHeader(title: '群聊信息'),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                responsive.spacing(18),
+                responsive.spacing(16),
+                responsive.spacing(18),
+                responsive.spacing(20),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  SelectionArea(
+                    child: _PeerInfoSection(
+                      title: '群聊',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Row(
+                            children: <Widget>[
+                              AvatarBadge(
+                                seed: _group.displayName,
+                                size: responsive.isPhone ? 56 : 64,
+                                avatarUri: _group.avatarUri,
+                              ),
+                              SizedBox(width: responsive.spacing(14)),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Text(
+                                      _group.displayName,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Color(0xFF101B32),
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 7),
+                                    Text(
+                                      _group.description.isEmpty
+                                          ? context.l10n.groupNoDescription
+                                          : _group.description,
+                                      style: const TextStyle(
+                                        color: Color(0xFF66728A),
+                                        fontSize: 13,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: <Widget>[
+                              AppPill(
+                                label: context.l10n.groupMemberCount(
+                                  _group.memberCount,
+                                ),
+                              ),
+                              AppPill(label: _group.myRole ?? 'member'),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          CopyableDidLine(
+                            value: groupId,
+                            copySemanticLabel: '复制 Group DID',
+                            copiedMessage: 'DID 已复制',
+                            textKey: const Key('group-info-dialog-did-value'),
+                            buttonKey: const Key(
+                              'group-info-dialog-copy-did-button',
+                            ),
+                            textStyle: const TextStyle(
+                              color: Color(0xFF66728A),
+                              fontSize: 12,
+                              height: 1.25,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: responsive.spacing(16)),
+                  _PeerInfoSection(
+                    title: '成员',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Text(
+                                members.isEmpty
+                                    ? context.l10n.groupMembersEmpty
+                                    : '共 ${members.length} 位成员',
+                                style: AwikiMeTextStyles.cardSubtitle,
+                              ),
+                            ),
+                            _GroupInfoIconButton(
+                              key: const Key(
+                                'group-info-dialog-add-member-button',
+                              ),
+                              semanticLabel: '添加成员',
+                              icon: CupertinoIcons.person_add,
+                              onTap: canManageMembers
+                                  ? () => _showAddMemberDialog(members)
+                                  : null,
+                            ),
+                            const SizedBox(width: 8),
+                            _GroupInfoIconButton(
+                              key: const Key(
+                                'group-info-dialog-refresh-members-button',
+                              ),
+                              semanticLabel: '刷新成员',
+                              icon: CupertinoIcons.refresh,
+                              isLoading: _isRefreshingMembers,
+                              onTap: _isRefreshingMembers
+                                  ? null
+                                  : _refreshMembers,
+                            ),
+                          ],
+                        ),
+                        if (members.isNotEmpty) ...<Widget>[
+                          const SizedBox(height: 14),
+                          ...members.map(
+                            (item) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: GroupMemberRow(
+                                item: item,
+                                onRemove:
+                                    canRemoveGroupMember(
+                                      group: _group,
+                                      member: item,
+                                      currentDid: currentDid,
+                                    )
+                                    ? () => _confirmRemoveMember(item)
+                                    : null,
+                                showRemoveButton: true,
+                              ),
+                            ),
+                          ),
+                        ],
+                        if (ref.watch(groupProvider).isLoading) ...<Widget>[
+                          const SizedBox(height: 12),
+                          Center(
+                            child: CupertinoActivityIndicator(
+                              color: theme.primary,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  GroupSummary? _knownGroup(String groupId) {
+    for (final group in ref.watch(groupProvider).groups) {
+      if (group.groupId == groupId) {
+        return group;
+      }
+    }
+    return null;
+  }
+
+  void _requestMembers(String groupId) {
+    if (_didRequestMembers) {
+      return;
+    }
+    _didRequestMembers = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        return;
+      }
+      try {
+        await ref.read(groupProvider.notifier).loadGroupMembers(groupId);
+      } catch (_) {
+        // Keep the conversation-derived snapshot visible when background member
+        // loading fails.
+      }
+    });
+  }
+
+  void _requestGroup(String groupId) {
+    if (_didRequestGroup || hasKnownGroupRole(_group)) {
+      return;
+    }
+    _didRequestGroup = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        return;
+      }
+      try {
+        final refreshed = await ref
+            .read(groupProvider.notifier)
+            .refreshGroup(groupId);
+        if (!mounted) {
+          return;
+        }
+        setState(() => _group = refreshed);
+      } catch (_) {
+        try {
+          await ref.read(groupProvider.notifier).loadGroupMembers(groupId);
+        } catch (_) {
+          // Initial group enrichment is best effort inside the info dialog.
+        }
+      }
+    });
+  }
+
+  Future<void> _refreshMembers() async {
+    if (_isRefreshingMembers) {
+      return;
+    }
+    setState(() => _isRefreshingMembers = true);
+    try {
+      await ref.read(groupProvider.notifier).loadGroupMembers(_group.groupId);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshingMembers = false);
+      }
+    }
+  }
+
+  void _showAddMemberDialog(List<GroupMemberSummary> members) {
+    AppNavigator.showDialog<void>(
+      context,
+      (dialogContext) => AddGroupMemberDialog(
+        groupId: _group.groupId,
+        existingMembers: members,
+        onGroupUpdated: (updated) {
+          if (!mounted) {
+            return;
+          }
+          setState(() => _group = updated);
+        },
+      ),
+    );
+  }
+
+  Future<void> _confirmRemoveMember(GroupMemberSummary member) async {
+    await showRemoveGroupMemberDialog(
+      context: context,
+      ref: ref,
+      groupId: _group.groupId,
+      member: member,
+      onGroupUpdated: (updated) {
+        if (!mounted) {
+          return;
+        }
+        setState(() => _group = updated);
+      },
+    );
+  }
+}
+
+class _GroupInfoIconButton extends StatelessWidget {
+  const _GroupInfoIconButton({
+    super.key,
+    required this.semanticLabel,
+    required this.icon,
+    required this.onTap,
+    this.isLoading = false,
+  });
+
+  final String semanticLabel;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final enabled = onTap != null && !isLoading;
+    return AppIconButton(
+      onPressed: isLoading ? null : onTap,
+      semanticLabel: semanticLabel,
+      tooltip: semanticLabel,
+      isLoading: isLoading,
+      size: responsive.scaled(34),
+      backgroundColor: theme.surface,
+      borderColor: const Color(0xFFDDE5F0),
+      borderRadius: BorderRadius.circular(responsive.radius(8)),
+      child: Icon(
+        icon,
+        color: enabled ? const Color(0xFF34415C) : theme.tertiaryText,
+        size: responsive.iconSm,
       ),
     );
   }

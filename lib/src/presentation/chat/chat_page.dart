@@ -20,6 +20,7 @@ import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
+import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_summary.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
@@ -28,6 +29,7 @@ import '../agents/agent_inbox_panel.dart';
 import '../agents/agent_display_name.dart';
 import '../agents/agents_provider.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
+import '../app_shell/providers/session_provider.dart';
 import '../conversation_list/conversation_peer_classifier.dart';
 import '../conversation_list/conversation_provider.dart';
 import '../friends/friends_page.dart';
@@ -37,6 +39,7 @@ import '../group/group_provider.dart';
 import '../profile/peer_profile_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
+import '../shared/app_dialog.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/copyable_did_line.dart';
 import '../shared/formatters/display_formatters.dart';
@@ -740,16 +743,24 @@ class _ChatViewState extends ConsumerState<ChatView> {
       await _showPeerInfoDialog(conversation);
       return;
     }
-    await AppNavigator.push(
-      context,
-      (_) => GroupDetailPage(initialGroup: _findCurrentGroup()),
-    );
+    if (conversation.isGroup) {
+      await _showGroupInfoDialog(conversation);
+    }
   }
 
   Future<void> _showPeerInfoDialog(ConversationSummary conversation) async {
-    await showCupertinoDialog<void>(
-      context: context,
-      builder: (dialogContext) => _PeerInfoDialog(conversation: conversation),
+    await AppNavigator.showDialog<void>(
+      context,
+      (dialogContext) => _PeerInfoDialog(conversation: conversation),
+    );
+  }
+
+  Future<void> _showGroupInfoDialog(ConversationSummary conversation) async {
+    await AppNavigator.showDialog<void>(
+      context,
+      (dialogContext) => _GroupInfoDialog(
+        initialGroup: _groupSummaryForConversation(conversation),
+      ),
     );
   }
 
@@ -1478,17 +1489,28 @@ class _ChatViewState extends ConsumerState<ChatView> {
     return DidDisplayFormatter.compactDid(senderDid);
   }
 
-  GroupSummary _findCurrentGroup() {
+  GroupSummary _groupSummaryForConversation(ConversationSummary conversation) {
+    final groupId = conversation.groupId?.trim().isNotEmpty == true
+        ? conversation.groupId!.trim()
+        : conversation.threadId;
     final groups = ref.read(groupProvider).groups;
     for (final item in groups) {
-      if (item.groupId == widget.conversation.groupId) {
+      if (item.groupId == groupId) {
         return item;
       }
     }
-    if (groups.isNotEmpty) {
-      return groups.first;
-    }
-    throw StateError('Group not found');
+    final name = conversation.displayName.trim().isNotEmpty
+        ? conversation.displayName.trim()
+        : groupId;
+    return GroupSummary(
+      groupId: groupId,
+      displayName: name,
+      description: '',
+      memberCount: 0,
+      lastMessageAt: conversation.lastMessageAt,
+      avatarUri: conversation.avatarUri,
+      membershipStatus: null,
+    );
   }
 
   AgentSummary? _runtimeAgentForConversation(
