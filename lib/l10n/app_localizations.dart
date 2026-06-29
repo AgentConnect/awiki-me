@@ -758,10 +758,16 @@ abstract class AppLocalizations {
   /// **'更多操作'**
   String get quickActionsTitle;
 
+  /// No description provided for @quickActionStartConversation.
+  ///
+  /// In zh, this message translates to:
+  /// **'发起新消息'**
+  String get quickActionStartConversation;
+
   /// No description provided for @quickActionCreateGroup.
   ///
   /// In zh, this message translates to:
-  /// **'发起群聊'**
+  /// **'创建群聊'**
   String get quickActionCreateGroup;
 
   /// No description provided for @quickActionJoinGroup.
@@ -799,6 +805,48 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'已关注'**
   String get followContactSucceeded;
+
+  /// No description provided for @identityStartConversationSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入 handle、DID 或 Agent 地址，确认身份后开始可信会话。'**
+  String get identityStartConversationSubtitle;
+
+  /// No description provided for @identityStartConversationAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'开始聊天'**
+  String get identityStartConversationAction;
+
+  /// No description provided for @identityStartConversationNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息将通过已验证 DID 连接发送；首次联系外部身份请谨慎确认。'**
+  String get identityStartConversationNotice;
+
+  /// No description provided for @identityFollowContactTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'关注联系人 / Agent'**
+  String get identityFollowContactTitle;
+
+  /// No description provided for @identityFollowContactSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入 handle 或 DID，确认身份后关注该身份。'**
+  String get identityFollowContactSubtitle;
+
+  /// No description provided for @identityFollowContactAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'关注'**
+  String get identityFollowContactAction;
+
+  /// No description provided for @identityFollowContactNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认身份后会关注该联系人或 Agent。'**
+  String get identityFollowContactNotice;
 
   /// No description provided for @groupListTitle.
   ///
@@ -881,8 +929,14 @@ abstract class AppLocalizations {
   /// No description provided for @groupCreateTitle.
   ///
   /// In zh, this message translates to:
-  /// **'创建群组'**
+  /// **'创建群聊'**
   String get groupCreateTitle;
+
+  /// No description provided for @groupCreateAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建'**
+  String get groupCreateAction;
 
   /// No description provided for @groupFieldName.
   ///
@@ -893,68 +947,8 @@ abstract class AppLocalizations {
   /// No description provided for @groupFieldNamePlaceholder.
   ///
   /// In zh, this message translates to:
-  /// **'群组名称'**
+  /// **'输入群聊名称'**
   String get groupFieldNamePlaceholder;
-
-  /// No description provided for @groupFieldSlug.
-  ///
-  /// In zh, this message translates to:
-  /// **'短链接'**
-  String get groupFieldSlug;
-
-  /// No description provided for @groupFieldSlugPlaceholder.
-  ///
-  /// In zh, this message translates to:
-  /// **'可选，不填则自动生成'**
-  String get groupFieldSlugPlaceholder;
-
-  /// No description provided for @groupFieldDescription.
-  ///
-  /// In zh, this message translates to:
-  /// **'介绍'**
-  String get groupFieldDescription;
-
-  /// No description provided for @groupFieldDescriptionPlaceholder.
-  ///
-  /// In zh, this message translates to:
-  /// **'群资料介绍'**
-  String get groupFieldDescriptionPlaceholder;
-
-  /// No description provided for @groupFieldGoal.
-  ///
-  /// In zh, this message translates to:
-  /// **'目标'**
-  String get groupFieldGoal;
-
-  /// No description provided for @groupFieldGoalPlaceholder.
-  ///
-  /// In zh, this message translates to:
-  /// **'建群目标'**
-  String get groupFieldGoalPlaceholder;
-
-  /// No description provided for @groupFieldRules.
-  ///
-  /// In zh, this message translates to:
-  /// **'规则'**
-  String get groupFieldRules;
-
-  /// No description provided for @groupFieldRulesPlaceholder.
-  ///
-  /// In zh, this message translates to:
-  /// **'社群规则'**
-  String get groupFieldRulesPlaceholder;
-
-  /// No description provided for @groupFieldPrompt.
-  ///
-  /// In zh, this message translates to:
-  /// **'提示'**
-  String get groupFieldPrompt;
-
-  /// No description provided for @groupFieldPromptPlaceholder.
-  ///
-  /// In zh, this message translates to:
-  /// **'发声引导 Message Prompt'**
-  String get groupFieldPromptPlaceholder;
 
   /// No description provided for @groupCreating.
   ///

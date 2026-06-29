@@ -66,10 +66,18 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
     final messageAgentEnabled = ref.watch(agentImEnabledProvider);
     final responsive = context.awikiResponsive;
     final pendingAgentDids = ref.watch(pendingAgentDidsProvider);
+    final selected = _agentSelectionForLayout(
+      state,
+      fallbackToFirst: responsive.supportsTwoPane,
+    );
+    final selectedAgentDidForList = responsive.supportsTwoPane
+        ? selected?.agentDid
+        : state.selectedAgentDid;
     final list = _AgentListPane(
       state: state,
       footer: widget.listFooter,
       pendingAgentDids: pendingAgentDids,
+      selectedAgentDid: selectedAgentDidForList,
       onCreateDaemon: () =>
           ref.read(agentsProvider.notifier).createDaemonInstallCommand(),
       onRefreshDaemon: (agent) {
@@ -81,7 +89,7 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
     );
     final detail = _AgentDetailPane(
       state: state,
-      selected: state.selectedAgent,
+      selected: selected,
       pendingAgentDids: pendingAgentDids,
       onRefresh: (agent) {
         ref.read(agentsProvider.notifier).refreshDaemonStatus(agent.agentDid);
@@ -128,9 +136,11 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
         ),
       );
     }
+    final hasCompactDetailSelection =
+        state.selectedAgentDid != null && selected != null;
     return DecoratedBox(
       decoration: const BoxDecoration(color: Color(0xFFFBFDFF)),
-      child: state.selectedAgentDid == null
+      child: !hasCompactDetailSelection
           ? list
           : Column(
               children: <Widget>[
@@ -149,4 +159,23 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
             ),
     );
   }
+}
+
+AgentSummary? _agentSelectionForLayout(
+  AgentsState state, {
+  required bool fallbackToFirst,
+}) {
+  final selectedDid = state.selectedAgentDid;
+  if (selectedDid != null) {
+    for (final agent in state.agents) {
+      if (agent.agentDid == selectedDid) {
+        return agent;
+      }
+    }
+    return null;
+  }
+  if (fallbackToFirst && state.agents.isNotEmpty) {
+    return state.agents.first;
+  }
+  return null;
 }

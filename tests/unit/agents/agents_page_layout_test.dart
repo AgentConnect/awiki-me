@@ -115,6 +115,134 @@ void main() {
   });
 
   testWidgets(
+    'compact agents workspace returns to list and stays there after status payload',
+    (tester) async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            handle: 'awiki-daemon-test',
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+          AgentSummary(
+            agentDid: 'did:agent:runtime',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'hermes',
+            handle: 'awiki-agent-hermes',
+            displayName: 'Hermes',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+          ),
+          providerOverrides: <Override>[
+            agentControlServiceProvider.overrideWithValue(control),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('创建 Agent'), findsNothing);
+      expect(find.text('Hermes'), findsOneWidget);
+
+      await tester.tap(find.text('代理 1').first);
+      await tester.pumpAndSettle();
+      expect(find.text('创建 Agent'), findsOneWidget);
+
+      await tester.tap(find.byIcon(CupertinoIcons.chevron_left));
+      await tester.pumpAndSettle();
+      expect(find.text('创建 Agent'), findsNothing);
+      expect(find.text('Hermes'), findsOneWidget);
+
+      final context = tester.element(find.byType(AgentsWorkspacePage));
+      final container = ProviderScope.containerOf(context);
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'daemon',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'status': 'ready',
+          },
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': 'did:agent:runtime',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'hermes',
+              'handle': 'awiki-agent-hermes',
+              'display_name': 'Hermes',
+              'status': 'ready',
+            },
+          ],
+        },
+      );
+      await tester.pumpAndSettle();
+
+      expect(container.read(agentsProvider).selectedAgentDid, isNull);
+      expect(find.text('创建 Agent'), findsNothing);
+      expect(find.text('Hermes'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'wide agents workspace still shows first agent detail by default',
+    (tester) async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            handle: 'awiki-daemon-test',
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+          ),
+          providerOverrides: <Override>[
+            agentControlServiceProvider.overrideWithValue(control),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final context = tester.element(find.byType(AgentsWorkspacePage));
+      final container = ProviderScope.containerOf(context);
+      expect(container.read(agentsProvider).selectedAgentDid, isNull);
+      expect(find.text('创建 Agent'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'unrelated pending agent action does not disable daemon actions',
     (tester) async {
       final control = FakeAgentControlService()

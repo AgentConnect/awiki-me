@@ -13,12 +13,12 @@ import '../shared/awiki_me_top_bar.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/copyable_did_line.dart';
 import '../shared/formatters/display_formatters.dart';
-import '../shared/identity_flow.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../app_shell/providers/session_provider.dart';
-import 'create_group_page.dart';
+import 'create_group_dialog.dart';
 import 'group_chat_navigation.dart';
+import 'group_member_invite_dialog.dart';
 import 'group_provider.dart';
 
 class GroupListPage extends ConsumerWidget {
@@ -75,9 +75,13 @@ class GroupListPage extends ConsumerWidget {
                   ),
                   const SizedBox(width: 12),
                   TopBarActionButton(
-                    onTap: () => AppNavigator.push(
+                    key: const Key('group-list-create-button'),
+                    semanticsLabel: context.l10n.quickActionCreateGroup,
+                    onTap: () => showCreateGroupDialog(
                       context,
-                      (_) => const CreateGroupPage(),
+                      ref,
+                      closeCurrentRouteOnDesktop: !embedded,
+                      replaceCurrentRouteOnPhone: !embedded,
                     ),
                     child: Icon(
                       CupertinoIcons.person_3_fill,
@@ -354,7 +358,7 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                             semanticLabel: '添加成员',
                             icon: CupertinoIcons.person_add,
                             onTap: canManageMembers
-                                ? _showAddMemberDialog
+                                ? () => _showAddMemberDialog(members)
                                 : null,
                           ),
                           const SizedBox(width: 8),
@@ -480,11 +484,12 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
     }
   }
 
-  void _showAddMemberDialog() {
+  void _showAddMemberDialog(List<GroupMemberSummary> members) {
     AppNavigator.showDialog<void>(
       context,
       (ctx) => AddGroupMemberDialog(
         groupId: _group.groupId,
+        existingMembers: members,
         onGroupUpdated: (updated) {
           if (!mounted) {
             return;
@@ -511,32 +516,24 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
   }
 }
 
-class AddGroupMemberDialog extends ConsumerStatefulWidget {
+class AddGroupMemberDialog extends StatelessWidget {
   const AddGroupMemberDialog({
     super.key,
     required this.groupId,
+    required this.existingMembers,
     required this.onGroupUpdated,
   });
 
   final String groupId;
+  final List<GroupMemberSummary> existingMembers;
   final ValueChanged<GroupSummary> onGroupUpdated;
 
   @override
-  ConsumerState<AddGroupMemberDialog> createState() =>
-      _AddGroupMemberDialogState();
-}
-
-class _AddGroupMemberDialogState extends ConsumerState<AddGroupMemberDialog> {
-  @override
   Widget build(BuildContext context) {
-    return IdentityLookupDialog(
-      config: IdentityLookupDialogConfig.addGroupMember,
-      onConfirm: (profile) async {
-        final updated = await ref
-            .read(groupProvider.notifier)
-            .addGroupMember(groupId: widget.groupId, memberRef: profile.did);
-        widget.onGroupUpdated(updated);
-      },
+    return GroupMemberInviteDialog(
+      groupId: groupId,
+      existingMembers: existingMembers,
+      onGroupUpdated: onGroupUpdated,
     );
   }
 }

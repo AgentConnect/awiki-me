@@ -2171,7 +2171,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (current != null && agents.any((agent) => agent.agentDid == current)) {
       return current;
     }
-    return agents.isEmpty ? null : agents.first.agentDid;
+    return null;
   }
 
   bool _shouldAutoRefresh(AgentSummary daemon) {

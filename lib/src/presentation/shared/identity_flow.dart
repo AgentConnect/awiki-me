@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../../app/e2e_semantics.dart';
 import '../../app/app_router.dart';
@@ -72,25 +73,28 @@ class IdentityLookupDialogConfig {
   final bool loadRelationship;
   final bool showRelationship;
 
-  factory IdentityLookupDialogConfig.forMode(IdentityFlowMode mode) {
+  factory IdentityLookupDialogConfig.forMode(
+    IdentityFlowMode mode,
+    AppLocalizations l10n,
+  ) {
     switch (mode) {
       case IdentityFlowMode.startConversation:
-        return const IdentityLookupDialogConfig(
-          title: '发起新消息',
-          subtitle: '输入 handle、DID 或 Agent 地址，确认身份后开始可信会话。',
-          actionLabel: '开始聊天',
-          actionButtonKey: Key('identity-start-chat-button'),
+        return IdentityLookupDialogConfig(
+          title: l10n.quickActionStartConversation,
+          subtitle: l10n.identityStartConversationSubtitle,
+          actionLabel: l10n.identityStartConversationAction,
+          actionButtonKey: const Key('identity-start-chat-button'),
           actionSemanticsIdentifier: 'e2e-identity-start-chat-button',
-          previewNoticeText: '消息将通过已验证 DID 连接发送；首次联系外部身份请谨慎确认。',
+          previewNoticeText: l10n.identityStartConversationNotice,
         );
       case IdentityFlowMode.followContact:
-        return const IdentityLookupDialogConfig(
-          title: '关注联系人 / Agent',
-          subtitle: '输入 handle 或 DID，确认身份后关注该身份。',
-          actionLabel: '关注',
-          actionButtonKey: Key('identity-add-contact-button'),
+        return IdentityLookupDialogConfig(
+          title: l10n.identityFollowContactTitle,
+          subtitle: l10n.identityFollowContactSubtitle,
+          actionLabel: l10n.identityFollowContactAction,
+          actionButtonKey: const Key('identity-add-contact-button'),
           actionSemanticsIdentifier: 'e2e-identity-add-contact-button',
-          previewNoticeText: '确认身份后会关注该联系人或 Agent。',
+          previewNoticeText: l10n.identityFollowContactNotice,
           loadRelationship: true,
         );
     }
@@ -114,6 +118,44 @@ String normalizeDidOrHandleInput(String rawValue) {
     value = value.substring(1).trimLeft();
   }
   return value;
+}
+
+Future<UserProfile> resolveIdentityProfile(
+  WidgetRef ref,
+  String rawQuery,
+) async {
+  final query = normalizeDidOrHandleInput(rawQuery);
+  if (query.isEmpty) {
+    throw ArgumentError('请输入 handle 或 DID。');
+  }
+  try {
+    final resolution = await ref
+        .read(directoryApplicationServiceProvider)
+        .resolvePeer(query);
+    return resolution.profile ?? identityProfileFromResolution(resolution);
+  } catch (_) {
+    return ref.read(profileApplicationServiceProvider).loadPublicProfile(query);
+  }
+}
+
+UserProfile identityProfileFromResolution(DirectoryPeerResolution resolution) {
+  final did = resolution.did.trim();
+  if (did.isEmpty) {
+    throw StateError('身份解析结果缺少 DID。');
+  }
+  final handle = resolution.handle?.trim();
+  final displayName = handle == null || handle.isEmpty
+      ? DidDisplayFormatter.compactDid(did)
+      : handle;
+  return UserProfile(
+    did: did,
+    displayName: displayName,
+    bio: '',
+    tags: const <String>[],
+    profileMarkdown: '',
+    handle: handle,
+    fullHandle: handle,
+  );
 }
 
 String dmThreadIdForDids(String myDid, String peerDid) {
@@ -328,7 +370,8 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
   String? _errorText;
 
   IdentityLookupDialogConfig get _config =>
-      widget.config ?? IdentityLookupDialogConfig.forMode(widget.mode!);
+      widget.config ??
+      IdentityLookupDialogConfig.forMode(widget.mode!, context.l10n);
 
   @override
   void dispose() {
@@ -381,38 +424,8 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
   }
 
   Future<_ResolvedIdentity> _resolveIdentity(String query) async {
-    try {
-      final resolution = await ref
-          .read(directoryApplicationServiceProvider)
-          .resolvePeer(query);
-      final profile = resolution.profile ?? _profileFromResolution(resolution);
-      return _ResolvedIdentity(profile: profile);
-    } catch (_) {
-      final profile = await ref
-          .read(profileApplicationServiceProvider)
-          .loadPublicProfile(query);
-      return _ResolvedIdentity(profile: profile);
-    }
-  }
-
-  UserProfile _profileFromResolution(DirectoryPeerResolution resolution) {
-    final did = resolution.did.trim();
-    if (did.isEmpty) {
-      throw StateError('身份解析结果缺少 DID。');
-    }
-    final handle = resolution.handle?.trim();
-    final displayName = handle == null || handle.isEmpty
-        ? DidDisplayFormatter.compactDid(did)
-        : handle;
-    return UserProfile(
-      did: did,
-      displayName: displayName,
-      bio: '',
-      tags: const <String>[],
-      profileMarkdown: '',
-      handle: handle,
-      fullHandle: handle,
-    );
+    final profile = await resolveIdentityProfile(ref, query);
+    return _ResolvedIdentity(profile: profile);
   }
 
   Future<void> _submit() async {

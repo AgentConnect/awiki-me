@@ -284,7 +284,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                 SizedBox(width: responsive.displayScaled(10)),
                 _MacListIconButton(
                   key: const Key('start-conversation-button'),
-                  semanticLabel: '发起新消息',
+                  semanticLabel: context.l10n.quickActionStartConversation,
                   icon: CupertinoIcons.plus,
                   onTap: widget.onStartConversation,
                 ),
@@ -406,7 +406,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
   }
 
   List<ConversationSummary> _filterConversations(BuildContext context) {
-    final query = _normalizedSearchText(_query);
+    final query = _normalizedConversationSearchText(_query);
     if (query.isEmpty) {
       return widget.conversations;
     }
@@ -416,29 +416,9 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
         })
         .toList(growable: false);
   }
-
-  String _conversationSearchText(
-    BuildContext context,
-    ConversationSummary conversation,
-  ) {
-    return _normalizedSearchText(
-      <String>[
-        DidDisplayFormatter.conversationTitle(conversation, context.l10n),
-        conversation.displayName,
-        conversation.lastMessagePreview,
-        conversation.targetDid ?? '',
-        conversation.groupId ?? '',
-        conversation.threadId,
-      ].join(' '),
-    );
-  }
-
-  String _normalizedSearchText(String text) {
-    return text.trim().toLowerCase();
-  }
 }
 
-class _ConversationRefreshView extends ConsumerWidget {
+class _ConversationRefreshView extends ConsumerStatefulWidget {
   const _ConversationRefreshView({
     required this.conversations,
     required this.composerDrafts,
@@ -460,11 +440,130 @@ class _ConversationRefreshView extends ConsumerWidget {
   final ValueChanged<ConversationSummary> onDelete;
 
   @override
+  ConsumerState<_ConversationRefreshView> createState() =>
+      _ConversationRefreshViewState();
+}
+
+class _ConversationRefreshViewState
+    extends ConsumerState<_ConversationRefreshView> {
+  late final TextEditingController _searchController;
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ConversationRefreshView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_query.isNotEmpty &&
+        widget.conversations.isEmpty &&
+        oldWidget.conversations.isNotEmpty) {
+      _query = '';
+      _searchController.clear();
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final buildWatch = Stopwatch()..start();
+    final visibleConversations = _filterConversations(context);
+    final hasQuery = _query.trim().isNotEmpty;
+    buildWatch.stop();
+    AwikiPerformanceLogger.log(
+      'conversation_list_page.compact_build.prepare',
+      elapsed: buildWatch.elapsed,
+      fields: <String, Object?>{
+        'items': widget.conversations.length,
+        'visible': visibleConversations.length,
+        'query': hasQuery,
+        'embedded': widget.embedded,
+      },
+      minMs: 1,
+      level: AwikiPerformanceLogLevel.verbose,
+    );
+    return _ConversationSearchableRefreshView(
+      conversations: widget.conversations,
+      visibleConversations: visibleConversations,
+      composerDrafts: widget.composerDrafts,
+      selectedThreadId: widget.selectedThreadId,
+      embedded: widget.embedded,
+      bottomInset: widget.bottomInset,
+      hasQuery: hasQuery,
+      searchController: _searchController,
+      onQueryChanged: (value) {
+        setState(() {
+          _query = value;
+        });
+      },
+      onRefresh: widget.onRefresh,
+      onOpen: widget.onOpen,
+      onDelete: widget.onDelete,
+    );
+  }
+
+  List<ConversationSummary> _filterConversations(BuildContext context) {
+    final query = _normalizedConversationSearchText(_query);
+    if (query.isEmpty) {
+      return widget.conversations;
+    }
+    return widget.conversations
+        .where((conversation) {
+          return _conversationSearchText(context, conversation).contains(query);
+        })
+        .toList(growable: false);
+  }
+}
+
+class _ConversationSearchableRefreshView extends ConsumerWidget {
+  const _ConversationSearchableRefreshView({
+    required this.conversations,
+    required this.visibleConversations,
+    required this.composerDrafts,
+    required this.selectedThreadId,
+    required this.embedded,
+    required this.bottomInset,
+    required this.hasQuery,
+    required this.searchController,
+    required this.onQueryChanged,
+    required this.onRefresh,
+    required this.onOpen,
+    required this.onDelete,
+  });
+
+  final List<ConversationSummary> conversations;
+  final List<ConversationSummary> visibleConversations;
+  final Map<String, ChatComposerDraft> composerDrafts;
+  final String? selectedThreadId;
+  final bool embedded;
+  final double bottomInset;
+  final bool hasQuery;
+  final TextEditingController searchController;
+  final ValueChanged<String> onQueryChanged;
+  final Future<void> Function() onRefresh;
+  final ValueChanged<ConversationSummary> onOpen;
+  final ValueChanged<ConversationSummary> onDelete;
+
+  @override
   Widget build(BuildContext context, WidgetRef ref) {
     final responsive = context.awikiResponsive;
     return CustomScrollView(
       slivers: <Widget>[
         CupertinoSliverRefreshControl(onRefresh: onRefresh),
+        SliverToBoxAdapter(
+          child: _CompactConversationSearchField(
+            controller: searchController,
+            onChanged: onQueryChanged,
+          ),
+        ),
         if (conversations.isEmpty)
           SliverFillRemaining(
             hasScrollBody: false,
@@ -474,16 +573,25 @@ class _ConversationRefreshView extends ConsumerWidget {
               subtitle: context.l10n.conversationsEmptySubtitle,
             ),
           )
+        else if (visibleConversations.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _EmptyState(
+              embedded: embedded,
+              title: '没有找到相关会话',
+              subtitle: hasQuery ? '换个关键词试试' : '',
+            ),
+          )
         else
           SliverPadding(
             padding: EdgeInsets.only(
-              top: responsive.spacing(8),
+              top: responsive.spacing(6),
               bottom: bottomInset,
             ),
             sliver: SliverList.builder(
-              itemCount: conversations.length,
+              itemCount: visibleConversations.length,
               itemBuilder: (_, index) {
-                final item = conversations[index];
+                final item = visibleConversations[index];
                 final classification = _conversationPeerClassification(
                   ref,
                   item,
@@ -518,6 +626,67 @@ class _ConversationRefreshView extends ConsumerWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _CompactConversationSearchField extends StatelessWidget {
+  const _CompactConversationSearchField({
+    required this.controller,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        responsive.tabContentHorizontalPadding,
+        responsive.spacing(6),
+        responsive.tabContentHorizontalPadding,
+        responsive.spacing(8),
+      ),
+      child: CupertinoSearchTextField(
+        key: const Key('conversation-search-field'),
+        controller: controller,
+        placeholder: '搜索会话',
+        onChanged: onChanged,
+        style: TextStyle(fontSize: responsive.bodySm, color: theme.title),
+        placeholderStyle: TextStyle(
+          fontSize: responsive.bodySm,
+          color: theme.tertiaryText,
+        ),
+        prefixIcon: Icon(
+          CupertinoIcons.search,
+          color: theme.secondaryText,
+          size: responsive.iconSm,
+        ),
+        suffixIcon: Icon(
+          CupertinoIcons.xmark_circle_fill,
+          color: theme.tertiaryText,
+          size: responsive.iconSm,
+        ),
+        decoration: BoxDecoration(
+          color: theme.surface,
+          borderRadius: BorderRadius.circular(responsive.radius(12)),
+          border: Border.all(color: theme.border),
+          boxShadow: const <BoxShadow>[
+            BoxShadow(
+              color: Color(0x08000000),
+              blurRadius: 14,
+              offset: Offset(0, 6),
+            ),
+          ],
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: responsive.spacing(11),
+          vertical: responsive.spacing(10),
+        ),
+      ),
     );
   }
 }
@@ -936,6 +1105,26 @@ class _ConversationContextMenuRegionState
       widget.onDelete();
     }
   }
+}
+
+String _conversationSearchText(
+  BuildContext context,
+  ConversationSummary conversation,
+) {
+  return _normalizedConversationSearchText(
+    <String>[
+      DidDisplayFormatter.conversationTitle(conversation, context.l10n),
+      conversation.displayName,
+      conversation.lastMessagePreview,
+      conversation.targetDid ?? '',
+      conversation.groupId ?? '',
+      conversation.threadId,
+    ].join(' '),
+  );
+}
+
+String _normalizedConversationSearchText(String text) {
+  return text.trim().toLowerCase();
 }
 
 AgentVisualStatus? _conversationAgentStatus(
