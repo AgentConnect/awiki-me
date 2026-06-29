@@ -299,7 +299,7 @@ void main() {
     await tester.pump();
 
     expect(find.bySemanticsLabel('Agent 收件箱'), findsNothing);
-    await tester.tap(find.bySemanticsLabel('打开我的智能体信息'));
+    await tester.tap(find.bySemanticsLabel('打开智能体信息'));
     await tester.pumpAndSettle();
 
     expect(find.text('智能体信息'), findsOneWidget);
@@ -1193,7 +1193,7 @@ void main() {
     expect(find.byKey(const Key('mac-side-panel')), findsNothing);
     expect(find.text('会话信息'), findsNothing);
 
-    await tester.tap(find.text('身份卡'));
+    await tester.tap(find.text('Marcus Chen').last);
     await tester.pumpAndSettle();
 
     expect(find.text('用户信息'), findsOneWidget);
@@ -1206,6 +1206,13 @@ void main() {
     await tester.tap(find.bySemanticsLabel('关闭信息弹窗'));
     await tester.pumpAndSettle();
     expect(find.text('用户信息'), findsNothing);
+
+    await tester.tap(find.text('身份卡'));
+    await tester.pumpAndSettle();
+    expect(find.text('用户信息'), findsOneWidget);
+
+    await tester.tap(find.bySemanticsLabel('关闭信息弹窗'));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('chat-conversation-info-button')));
     await tester.pump();
@@ -1279,7 +1286,7 @@ void main() {
     expect(find.text('群聊信息'), findsOneWidget);
     expect(find.text('身份卡'), findsNothing);
 
-    await tester.tap(find.text('群聊信息'));
+    await tester.tap(find.text('融资协作群').last);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('mac-side-panel')), findsNothing);
@@ -1304,6 +1311,13 @@ void main() {
     expect(find.text('did:test:owner'), findsNothing);
     expect(find.text('did:test:member'), findsNothing);
     expect(find.byType(GroupDetailPage), findsNothing);
+
+    await tester.tap(find.bySemanticsLabel('关闭信息弹窗'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('群聊信息'));
+    await tester.pumpAndSettle();
+    expect(find.text('同步融资材料和里程碑'), findsOneWidget);
 
     const memberHandle = 'bob.awiki.ai';
     const memberDid = 'did:wba:awiki.ai:user:bob:e1_member';

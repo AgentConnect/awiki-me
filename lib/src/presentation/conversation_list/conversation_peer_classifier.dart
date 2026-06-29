@@ -117,7 +117,7 @@ class ConversationPeerClassification {
   String get detailTypeLabel {
     return switch (kind) {
       ConversationPeerKind.group => '群聊',
-      ConversationPeerKind.myRuntimeAgent => '我的智能体',
+      ConversationPeerKind.myRuntimeAgent => '智能体',
       ConversationPeerKind.agent => '智能体',
       ConversationPeerKind.human => '用户',
       ConversationPeerKind.unknown => '用户',
