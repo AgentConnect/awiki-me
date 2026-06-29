@@ -631,14 +631,12 @@ class _MacChatHeaderButton extends StatelessWidget {
     required this.semanticLabel,
     required this.icon,
     required this.onTap,
-    this.isLoading = false,
     this.isActive = false,
   });
 
   final String semanticLabel;
   final IconData icon;
   final Future<void> Function() onTap;
-  final bool isLoading;
   final bool isActive;
 
   @override
@@ -648,11 +646,10 @@ class _MacChatHeaderButton extends StatelessWidget {
         ? _macChatHeaderActionActiveColor
         : _macChatHeaderActionColor;
     return AppIconButton(
-      onPressed: isLoading ? null : () async => onTap(),
+      onPressed: () async => onTap(),
       semanticLabel: semanticLabel,
       tooltip: semanticLabel,
       isActive: isActive,
-      isLoading: isLoading,
       size: responsive.displayScaled(34),
       backgroundColor: CupertinoColors.white,
       activeBackgroundColor: _macChatHeaderActionActiveBackground,

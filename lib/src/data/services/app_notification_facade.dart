@@ -106,7 +106,9 @@ class AppNotificationFacade implements NotificationFacade {
 
   @override
   Future<void> updateBadgeCount(int count) async {
+    if (_lastBadgeCount == count) {
+      return;
+    }
     _lastBadgeCount = count;
-    debugPrint('[awiki_me][badge] unread=$_lastBadgeCount');
   }
 }
