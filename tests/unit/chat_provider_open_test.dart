@@ -368,6 +368,84 @@ void main() {
     expect(messages.map((item) => item.content), contains('repaired'));
   });
 
+  test('会话摘要变新时优先从本地 thread projection 修复当前窗口', () async {
+    final repaired = ChatMessage(
+      localId: 'summary-repair-1',
+      remoteId: 'summary-repair-1',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: '摘要之后的完整消息',
+      createdAt: DateTime(2026, 5, 8, 10, 2),
+      isMine: false,
+      sendState: MessageSendState.sent,
+      serverSequence: 2,
+    );
+    final patchMessaging = _PatchMessagingService(
+      localHistory: <ChatMessage>[],
+      repairPatch: ThreadMessagePatch(
+        kind: ThreadMessagePatchKind.reset,
+        ownerDid: 'did:me',
+        version: 2,
+        threadKind: 'direct',
+        threadId: 'did:peer',
+        messages: <ChatMessage>[repaired],
+      ),
+    );
+    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:peer': <ChatMessage>[
+        repaired.copyWith(content: '不应该先走 full history'),
+      ],
+    };
+    final patchContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(
+          gateway,
+          messageSyncService: messageSyncService,
+        ),
+        messagingServiceProvider.overrideWithValue(patchMessaging),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(patchContainer.dispose);
+
+    await patchContainer
+        .read(chatThreadsProvider.notifier)
+        .syncVisibleConversationAfterSummaryUpdate(
+          conversation.copyWith(
+            lastMessagePreview: repaired.content,
+            lastMessageAt: repaired.createdAt,
+            unreadCount: 1,
+          ),
+          displayThreadId: conversation.threadId,
+        );
+    await pumpEventQueue();
+
+    final messages = patchContainer
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    expect(patchMessaging.repairCalls, 1);
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(messageSyncService.threadAfterRequests, isEmpty);
+    expect(messages.map((item) => item.content), contains('摘要之后的完整消息'));
+    expect(
+      messages.map((item) => item.content),
+      isNot(contains('不应该先走 full history')),
+    );
+  });
+
   test(
     'hidden conversation cancels patch subscription after TTL and reopen restores',
     () async {
@@ -586,6 +664,45 @@ void main() {
     expect(conversations.single.unreadCount, 0);
     expect(notificationFacade.lastBadgeCount, 0);
     expect(throwingGateway.markReadCalls, 1);
+  });
+
+  test('当前可见会话收到新的未读摘要时本地清未读并异步上报', () async {
+    final visibleConversation = conversation.copyWith(
+      lastMessagePreview: 'new while visible',
+      lastMessageAt: DateTime(2026, 5, 8, 10, 5),
+      unreadCount: 2,
+      unreadMentionCount: 1,
+      firstUnreadMentionMessageId: 'msg-visible-unread',
+    );
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(visibleConversation);
+    container
+        .read(chatThreadsProvider.notifier)
+        .markConversationVisible(
+          visibleConversation,
+          displayThreadId: visibleConversation.threadId,
+        );
+
+    container
+        .read(chatThreadsProvider.notifier)
+        .acknowledgeVisibleConversationRead(
+          visibleConversation,
+          displayThreadId: visibleConversation.threadId,
+          reason: 'visible_summary_update',
+        );
+    await Future<void>.delayed(Duration.zero);
+
+    final updated = container
+        .read(conversationListProvider)
+        .conversations
+        .single;
+    expect(updated.unreadCount, 0);
+    expect(updated.unreadMentionCount, 0);
+    expect(updated.firstUnreadMentionMessageId, isNull);
+    expect(notificationFacade.lastBadgeCount, 0);
+    expect(gateway.markReadCalls, 1);
+    expect(gateway.lastMarkReadThreadId, 'dm:did:peer');
   });
 
   test('发送后不触发 full refresh 或 force history 补拉', () async {

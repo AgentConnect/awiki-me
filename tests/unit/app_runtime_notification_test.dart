@@ -97,7 +97,7 @@ void main() {
           isMine: false,
           sendState: MessageSendState.sent,
         ),
-        conversation: ConversationSummary(
+        conversationHint: ConversationSummary(
           threadId: 'dm:1',
           displayName: 'Peer',
           lastMessagePreview: 'hello',
@@ -346,7 +346,7 @@ void main() {
       messageSyncService.syncReasons.clear();
       gateway.nextRealtimeUpdate = RealtimeUpdate(
         message: buildUpdate().message,
-        conversation: buildUpdate().conversation,
+        conversationHint: buildUpdate().conversationHint,
         syncDirty: true,
         gapDetected: true,
         syncEventSeq: '42',
@@ -391,7 +391,7 @@ void main() {
           isMine: false,
           sendState: MessageSendState.sent,
         ),
-        conversation: ConversationSummary(
+        conversationHint: ConversationSummary(
           threadId: 'dm:2',
           displayName: 'did:wba:awiki.ai:user:alice:e1_key',
           lastMessagePreview: 'hello',
@@ -416,7 +416,7 @@ void main() {
       final slowProfile = Completer<void>();
       gateway.myProfile = null;
       final conversations = _RecordingConversationService(<ConversationSummary>[
-        buildUpdate().conversation!,
+        buildUpdate().conversationHint!,
       ]);
       container.dispose();
       container = ProviderContainer(
@@ -457,7 +457,7 @@ void main() {
       final sync = FakeMessageSyncService();
       gateway.myProfile = null;
       final conversations = _RecordingConversationService(<ConversationSummary>[
-        buildUpdate().conversation!,
+        buildUpdate().conversationHint!,
       ]);
       container.dispose();
       container = ProviderContainer(
@@ -518,7 +518,7 @@ void main() {
             mimeType: 'application/pdf',
           ),
         ),
-        conversation: ConversationSummary(
+        conversationHint: ConversationSummary(
           threadId: 'dm:attachment',
           displayName: 'Peer',
           lastMessagePreview: '[附件] report.pdf',
@@ -539,7 +539,7 @@ void main() {
       expect(notificationFacade.lastSystemBody, '[附件] report.pdf');
     });
 
-    test('实时 direct 与 group 消息会更新消息流和会话状态', () async {
+    test('实时 direct 与 group 消息只更新消息流，最近会话等待投影 patch', () async {
       container
           .read(appLifecycleProvider.notifier)
           .setLifecycle(AppLifecycleState.resumed);
@@ -551,10 +551,7 @@ void main() {
 
       var directThread = container.read(chatThreadProvider('dm:1'));
       expect(directThread.messages.single.content, 'hello');
-      expect(
-        container.read(conversationListProvider).conversations.single.threadId,
-        'dm:1',
-      );
+      expect(container.read(conversationListProvider).conversations, isEmpty);
 
       gateway.nextRealtimeUpdate = RealtimeUpdate(
         message: ChatMessage(
@@ -569,7 +566,7 @@ void main() {
           isMine: false,
           sendState: MessageSendState.sent,
         ),
-        conversation: ConversationSummary(
+        conversationHint: ConversationSummary(
           threadId: 'group:group-1',
           displayName: '融资协作群',
           lastMessagePreview: 'hello group',
@@ -591,16 +588,137 @@ void main() {
 
       final groupThread = container.read(chatThreadProvider('group:group-1'));
       expect(groupThread.messages.single.content, 'hello group');
-      expect(
-        container
-            .read(conversationListProvider)
-            .conversations
-            .map((item) => item.threadId),
-        contains('group:group-1'),
-      );
+      expect(container.read(conversationListProvider).conversations, isEmpty);
       expect(container.read(groupProvider).groups.single.groupId, 'group-1');
       directThread = container.read(chatThreadProvider('dm:1'));
       expect(directThread.messages.single.content, 'hello');
+    });
+
+    test('实时消息不会覆盖最近会话未读 @ 我状态，projection patch 才更新最近会话', () async {
+      final conversationService = _RecordingConversationService(
+        const <ConversationSummary>[],
+      );
+      addTearDown(conversationService.dispose);
+      container.dispose();
+      container = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+            messageSyncService: messageSyncService,
+          ),
+          conversationServiceProvider.overrideWithValue(conversationService),
+          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+        ],
+      );
+      addTearDown(container.dispose);
+      await activate();
+      await pumpEventQueue();
+
+      final mentionedConversation = ConversationSummary(
+        threadId: 'group:group-mention',
+        displayName: '群聊',
+        lastMessagePreview: '@me 请看',
+        lastMessageAt: DateTime(2026, 4, 5, 12),
+        unreadCount: 1,
+        unreadMentionCount: 1,
+        firstUnreadMentionMessageId: 'msg-mention-1',
+        isGroup: true,
+        groupId: 'group-mention',
+      );
+      conversationService.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerDid: 'did:test:me',
+          version: 1,
+          unreadTotal: 1,
+          item: mentionedConversation,
+        ),
+      );
+      await pumpEventQueue();
+
+      final afterMentionPatch = container
+          .read(conversationListProvider)
+          .conversations
+          .single;
+      expect(afterMentionPatch.unreadCount, 1);
+      expect(afterMentionPatch.unreadMentionCount, 1);
+      expect(afterMentionPatch.firstUnreadMentionMessageId, 'msg-mention-1');
+
+      gateway.nextRealtimeUpdate = RealtimeUpdate(
+        message: ChatMessage(
+          localId: 'msg-normal-2',
+          remoteId: 'msg-normal-2',
+          threadId: 'group:group-mention',
+          senderDid: 'did:test:peer',
+          senderName: 'Peer',
+          groupId: 'group-mention',
+          content: '普通消息',
+          createdAt: DateTime(2026, 4, 5, 12, 1),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+        conversationHint: ConversationSummary(
+          threadId: 'group:group-mention',
+          displayName: '群聊',
+          lastMessagePreview: '普通消息',
+          lastMessageAt: DateTime(2026, 4, 5, 12, 1),
+          unreadCount: 1,
+          unreadMentionCount: 0,
+          isGroup: true,
+          groupId: 'group-mention',
+        ),
+      );
+      await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+      await pumpEventQueue();
+
+      final afterRealtime = container
+          .read(conversationListProvider)
+          .conversations
+          .single;
+      expect(afterRealtime.lastMessagePreview, '@me 请看');
+      expect(afterRealtime.unreadCount, 1);
+      expect(afterRealtime.unreadMentionCount, 1);
+      expect(afterRealtime.firstUnreadMentionMessageId, 'msg-mention-1');
+      expect(
+        container
+            .read(chatThreadProvider('group:group-mention'))
+            .messages
+            .single
+            .content,
+        '普通消息',
+      );
+
+      conversationService.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerDid: 'did:test:me',
+          version: 2,
+          unreadTotal: 2,
+          item: mentionedConversation.copyWith(
+            lastMessagePreview: '普通消息',
+            lastMessageAt: DateTime(2026, 4, 5, 12, 1),
+            unreadCount: 2,
+            unreadMentionCount: 1,
+            firstUnreadMentionMessageId: 'msg-mention-1',
+          ),
+        ),
+      );
+      await pumpEventQueue();
+
+      final afterPatch = container
+          .read(conversationListProvider)
+          .conversations
+          .single;
+      expect(afterPatch.lastMessagePreview, '普通消息');
+      expect(afterPatch.unreadCount, 2);
+      expect(afterPatch.unreadMentionCount, 1);
+      expect(afterPatch.firstUnreadMentionMessageId, 'msg-mention-1');
     });
 
     test('实时 direct 消息会预热 DID、handle、message thread aliases', () async {
@@ -628,7 +746,7 @@ void main() {
           isMine: false,
           sendState: MessageSendState.sent,
         ),
-        conversation: conversation,
+        conversationHint: conversation,
       );
 
       await realtimeGateway.emit(const <String, Object?>{'type': 'direct'});
@@ -666,7 +784,7 @@ void main() {
           isMine: false,
           sendState: MessageSendState.sent,
         ),
-        conversation: conversation,
+        conversationHint: conversation,
       );
       await realtimeGateway.emit(const <String, Object?>{'type': 'direct'});
 
@@ -693,7 +811,7 @@ void main() {
           isMine: false,
           sendState: MessageSendState.sent,
         ),
-        conversation: ConversationSummary(
+        conversationHint: ConversationSummary(
           threadId: 'group:did:test:group:alpha',
           displayName: 'Alpha',
           lastMessagePreview: 'hello group alias',
@@ -754,7 +872,7 @@ void main() {
           isMine: false,
           sendState: MessageSendState.sent,
         ),
-        conversation: ConversationSummary(
+        conversationHint: ConversationSummary(
           threadId: 'dm:daemon',
           displayName: '代理 1',
           lastMessagePreview: 'control-plane text should be hidden',
@@ -779,7 +897,7 @@ void main() {
       expect(notificationFacade.lastSystemTitle, isNull);
     });
 
-    test('Runtime Agent 普通实时消息仍进入聊天、未读和通知', () async {
+    test('Runtime Agent 普通实时消息进入聊天和通知，最近会话等待投影 patch', () async {
       container.read(agentsProvider.notifier).applyControlPayload(
         const <String, Object?>{
           'schema': 'awiki.agent.status.v1',
@@ -812,7 +930,7 @@ void main() {
           isMine: false,
           sendState: MessageSendState.sent,
         ),
-        conversation: ConversationSummary(
+        conversationHint: ConversationSummary(
           threadId: 'dm:runtime',
           displayName: 'Hermes',
           lastMessagePreview: 'Hermes reply',
@@ -837,12 +955,9 @@ void main() {
             .content,
         'Hermes reply',
       );
-      expect(
-        container.read(conversationListProvider).conversations.single.targetDid,
-        'did:agent:runtime',
-      );
-      expect(container.read(conversationListProvider).unreadCount, 1);
-      expect(notificationFacade.lastBadgeCount, 1);
+      expect(container.read(conversationListProvider).conversations, isEmpty);
+      expect(container.read(conversationListProvider).unreadCount, 0);
+      expect(notificationFacade.lastBadgeCount, 0);
       expect(notificationFacade.lastInAppTitle, 'Hermes');
       expect(notificationFacade.lastInAppBody, 'Hermes reply');
     });
@@ -1009,9 +1124,19 @@ class _RecordingConversationService implements ConversationService {
   _RecordingConversationService(this.items);
 
   final List<ConversationSummary> items;
+  final StreamController<ConversationListPatch> _patches =
+      StreamController<ConversationListPatch>.broadcast(sync: true);
   int fastCalls = 0;
   int enrichCalls = 0;
   int listCalls = 0;
+
+  void emitPatch(ConversationListPatch patch) {
+    _patches.add(patch);
+  }
+
+  Future<void> dispose() {
+    return _patches.close();
+  }
 
   @override
   Future<List<ConversationSummary>> loadConversationSnapshot({
@@ -1024,7 +1149,7 @@ class _RecordingConversationService implements ConversationService {
   Stream<ConversationListPatch> watchConversationPatches({
     required String ownerDid,
   }) {
-    return StreamController<ConversationListPatch>().stream;
+    return _patches.stream;
   }
 
   @override

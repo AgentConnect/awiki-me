@@ -469,8 +469,8 @@ void main() {
 
       expect(update, isNotNull);
       expect(update!.message!.threadId, 'dm:did:cgw:did:me');
-      expect(update.conversation!.threadId, 'dm:did:cgw:did:me');
-      expect(update.conversation!.targetDid, 'did:cgw');
+      expect(update.conversationHint!.threadId, 'dm:did:cgw:did:me');
+      expect(update.conversationHint!.targetDid, 'did:cgw');
     },
   );
 

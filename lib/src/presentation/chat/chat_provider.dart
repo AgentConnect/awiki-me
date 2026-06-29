@@ -583,6 +583,12 @@ class ChatThreadsController
   final Map<String, Timer> _threadPatchSubscriptionTtlTimers =
       <String, Timer>{};
   final Map<String, Timer> _hiddenThreadCacheTrimTimers = <String, Timer>{};
+  final Map<String, ConversationSummary> _pendingVisibleSummarySyncs =
+      <String, ConversationSummary>{};
+  final Map<String, Future<void>> _activeVisibleSummarySyncs =
+      <String, Future<void>>{};
+  final Set<String> _activeReadReceipts = <String>{};
+  final Set<String> _completedReadReceipts = <String>{};
   int _trimmedMessageCount = 0;
   int _evictedThreadCount = 0;
   int _protectedOverflowCount = 0;
@@ -617,20 +623,12 @@ class ChatThreadsController
         displayThreadId: targetThreadId,
       ),
     );
-    if (conversation.unreadCount > 0) {
-      final localClearWatch = Stopwatch()..start();
-      ref
-          .read(conversationListProvider.notifier)
-          .markConversationReadLocal(conversation);
-      localClearWatch.stop();
-      AwikiPerformanceLogger.log(
-        'chat.mark_read.local_clear',
-        elapsed: localClearWatch.elapsed,
-        fields: AwikiPerformanceLogger.threadField(conversation.threadId),
-        level: AwikiPerformanceLogLevel.verbose,
-      );
-      _markConversationReadBestEffort(conversation);
-    }
+    acknowledgeVisibleConversationRead(
+      conversation,
+      displayThreadId: targetThreadId,
+      reason: 'open',
+      requireVisible: false,
+    );
   }
 
   Future<void> _openConversationLocalFirst(
@@ -745,6 +743,189 @@ class ChatThreadsController
         fields: AwikiPerformanceLogger.threadField(displayThreadId),
       );
     }
+  }
+
+  Future<void> syncVisibleConversationAfterSummaryUpdate(
+    ConversationSummary conversation, {
+    required String displayThreadId,
+  }) {
+    final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
+    if (!_needsVisibleSummarySync(thread(targetThreadId), conversation)) {
+      return Future<void>.value();
+    }
+    final pending = _pendingVisibleSummarySyncs[targetThreadId];
+    _pendingVisibleSummarySyncs[targetThreadId] = pending == null
+        ? conversation
+        : _newerConversation(conversation, pending);
+    return _ensureVisibleSummarySyncDrain(targetThreadId);
+  }
+
+  Future<void> _ensureVisibleSummarySyncDrain(String displayThreadId) {
+    final active = _activeVisibleSummarySyncs[displayThreadId];
+    if (active != null) {
+      return active;
+    }
+    late final Future<void> operation;
+    operation = _drainVisibleSummarySync(displayThreadId).whenComplete(() {
+      if (identical(_activeVisibleSummarySyncs[displayThreadId], operation)) {
+        _activeVisibleSummarySyncs.remove(displayThreadId);
+      }
+      if (mounted && _pendingVisibleSummarySyncs.containsKey(displayThreadId)) {
+        _ensureVisibleSummarySyncDrain(displayThreadId);
+      }
+    });
+    _activeVisibleSummarySyncs[displayThreadId] = operation;
+    return operation;
+  }
+
+  Future<void> _drainVisibleSummarySync(String displayThreadId) async {
+    while (mounted) {
+      final conversation = _pendingVisibleSummarySyncs.remove(displayThreadId);
+      if (conversation == null) {
+        return;
+      }
+      if (!_needsVisibleSummarySync(thread(displayThreadId), conversation)) {
+        continue;
+      }
+      await _syncVisibleConversationOnce(
+        conversation,
+        displayThreadId: displayThreadId,
+      );
+    }
+  }
+
+  Future<void> _syncVisibleConversationOnce(
+    ConversationSummary conversation, {
+    required String displayThreadId,
+  }) async {
+    _touchConversationCache(conversation, displayThreadId);
+    _ensureThreadPatchSubscription(
+      conversation,
+      displayThreadId: displayThreadId,
+    );
+    if (!_needsVisibleSummarySync(thread(displayThreadId), conversation)) {
+      return;
+    }
+    await _repairVisibleThreadFromLocalProjection(
+      conversation,
+      displayThreadId: displayThreadId,
+    );
+    if (!_needsVisibleSummarySync(thread(displayThreadId), conversation)) {
+      return;
+    }
+    await _syncThreadAfterLocalMax(
+      conversation,
+      displayThreadId: displayThreadId,
+    );
+    if (!_needsVisibleSummarySync(thread(displayThreadId), conversation)) {
+      return;
+    }
+    if (_activeRemoteHistorySyncs.contains(displayThreadId)) {
+      _queuePendingHistorySync(
+        displayThreadId,
+        conversation,
+        force: false,
+        reportFailure: false,
+        showLoading: false,
+      );
+      return;
+    }
+    await _loadHistory(
+      conversation,
+      intoThreadId: displayThreadId,
+      reportFailure: false,
+      showLoading: false,
+    );
+  }
+
+  void acknowledgeVisibleConversationRead(
+    ConversationSummary conversation, {
+    String? displayThreadId,
+    String reason = 'visible',
+    bool requireVisible = true,
+  }) {
+    if (conversation.unreadCount <= 0 && conversation.unreadMentionCount <= 0) {
+      return;
+    }
+    final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
+    final metadata = _cacheMetadataByThreadId[targetThreadId];
+    if (requireVisible && metadata?.isVisible != true) {
+      return;
+    }
+    final readToken = _readReceiptToken(conversation);
+    if (_completedReadReceipts.contains(readToken) ||
+        _activeReadReceipts.contains(readToken)) {
+      ref
+          .read(conversationListProvider.notifier)
+          .markConversationReadLocal(conversation);
+      return;
+    }
+    final localClearWatch = Stopwatch()..start();
+    ref
+        .read(conversationListProvider.notifier)
+        .markConversationReadLocal(conversation);
+    localClearWatch.stop();
+    AwikiPerformanceLogger.log(
+      'chat.mark_read.local_clear',
+      elapsed: localClearWatch.elapsed,
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(conversation.threadId),
+        'reason': reason,
+      },
+      level: AwikiPerformanceLogLevel.verbose,
+    );
+    _markConversationReadBestEffort(conversation, readToken: readToken);
+  }
+
+  Future<void> _repairVisibleThreadFromLocalProjection(
+    ConversationSummary conversation, {
+    required String displayThreadId,
+  }) async {
+    final messaging = ref.read(messagingServiceProvider);
+    if (messaging is ThreadPatchMessagingService) {
+      final threadPatchMessaging = messaging as ThreadPatchMessagingService;
+      final threadRef =
+          _threadPatchSubscriptions[displayThreadId]?.threadRef ??
+          _localHistoryThreadRefFor(conversation);
+      try {
+        final patch = await threadPatchMessaging.repairThreadStore(threadRef);
+        if (!mounted) {
+          return;
+        }
+        final ownerDid = ref.read(sessionProvider).session?.did.trim();
+        final patchOwnerDid = patch.ownerDid.trim();
+        if ((ownerDid == null ||
+                ownerDid.isEmpty ||
+                patchOwnerDid == ownerDid) &&
+            _threadPatchMatchesThreadRef(patch, threadRef)) {
+          _recordThreadPatchRepairVersion(displayThreadId, patch);
+          await _applyThreadPatchBody(displayThreadId, patch, conversation);
+          return;
+        }
+      } catch (_) {
+        // Fall through to local history. Summary-driven sync is a repair path.
+      }
+    }
+    await _loadLocalHistory(
+      conversation,
+      intoThreadId: displayThreadId,
+      limit: _initialLocalHistoryLimit,
+    );
+  }
+
+  void _recordThreadPatchRepairVersion(
+    String displayThreadId,
+    ThreadMessagePatch patch,
+  ) {
+    final subscription = _threadPatchSubscriptions[displayThreadId];
+    if (subscription == null ||
+        !_threadPatchMatchesSubscription(patch, subscription) ||
+        patch.version <= subscription.lastVersion) {
+      return;
+    }
+    _threadPatchSubscriptions[displayThreadId] = subscription.copyWith(
+      lastVersion: patch.version,
+    );
   }
 
   void _ensureThreadPatchSubscription(
@@ -922,22 +1103,31 @@ class ChatThreadsController
     }
   }
 
-  void _markConversationReadBestEffort(ConversationSummary conversation) {
+  void _markConversationReadBestEffort(
+    ConversationSummary conversation, {
+    required String readToken,
+  }) {
     try {
       final thread = _readThreadRefFor(conversation);
       final watch = Stopwatch()..start();
+      _activeReadReceipts.add(readToken);
       final operation = ref
           .read(conversationServiceProvider)
           .markThreadRead(thread)
-          .whenComplete(() {
+          .then<void>((_) {
             watch.stop();
+            _activeReadReceipts.remove(readToken);
+            _completedReadReceipts.add(readToken);
             AwikiPerformanceLogger.log(
               'chat.mark_read',
               elapsed: watch.elapsed,
               fields: AwikiPerformanceLogger.threadField(conversation.threadId),
             );
+          })
+          .catchError((_) {
+            _activeReadReceipts.remove(readToken);
           });
-      unawaited(operation.catchError((_) {}));
+      unawaited(operation);
     } catch (_) {
       // Thread-level mark-read is best effort. Opening a conversation must
       // still clear unread locally and continue rendering messages.
@@ -1529,6 +1719,10 @@ class ChatThreadsController
     _cancelThreadPatchSubscriptionTtls();
     _cancelHiddenThreadCacheTrimTimers();
     _pendingHistorySyncs.clear();
+    _pendingVisibleSummarySyncs.clear();
+    _activeVisibleSummarySyncs.clear();
+    _activeReadReceipts.clear();
+    _completedReadReceipts.clear();
     _activeLocalHistoryLoads.clear();
     _activeRemoteHistorySyncs.clear();
     _clearMemoryCacheMetadata();
@@ -3761,6 +3955,8 @@ class ChatThreadsController
     _cancelThreadPatchSubscriptions();
     _cancelThreadPatchSubscriptionTtls();
     _cancelHiddenThreadCacheTrimTimers();
+    _pendingVisibleSummarySyncs.clear();
+    _activeVisibleSummarySyncs.clear();
     _clearMemoryCacheMetadata();
     super.dispose();
   }
@@ -3815,6 +4011,40 @@ class ChatThreadsController
         .map((message) => message.createdAt)
         .reduce((a, b) => a.isAfter(b) ? a : b);
     return conversation.lastMessageAt.isAfter(latestLocalAt);
+  }
+
+  bool _needsVisibleSummarySync(
+    ChatThreadState current,
+    ConversationSummary conversation,
+  ) {
+    final latest = _latestRenderableMessage(current.messages);
+    if (latest == null) {
+      return true;
+    }
+    if (latest.createdAt.isBefore(conversation.lastMessageAt)) {
+      return true;
+    }
+    if (latest.createdAt.isAfter(conversation.lastMessageAt)) {
+      return false;
+    }
+    final preview = conversation.lastMessagePreview.trim();
+    return preview.isNotEmpty && latest.previewText.trim() != preview;
+  }
+
+  ChatMessage? _latestRenderableMessage(List<ChatMessage> messages) {
+    ChatMessage? latest;
+    for (final message in messages) {
+      if (!message.hasRenderableContent) {
+        continue;
+      }
+      if (latest == null ||
+          message.createdAt.isAfter(latest.createdAt) ||
+          (message.createdAt.isAtSameMomentAs(latest.createdAt) &&
+              (message.serverSequence ?? -1) > (latest.serverSequence ?? -1))) {
+        latest = message;
+      }
+    }
+    return latest;
   }
 
   ConversationSummary _refreshedConversationFor(ConversationSummary fallback) {
@@ -4018,6 +4248,17 @@ class ChatThreadsController
   }
 }
 
+String _readReceiptToken(ConversationSummary conversation) {
+  final thread = _readThreadRefFor(conversation).stableId;
+  return [
+    thread,
+    conversation.lastMessageAt.toUtc().microsecondsSinceEpoch,
+    conversation.unreadCount,
+    conversation.unreadMentionCount,
+    conversation.firstUnreadMentionMessageId ?? '',
+  ].join('|');
+}
+
 class _MessageMergeIndexes {
   _MessageMergeIndexes(List<ChatMessage> messages) {
     for (var i = 0; i < messages.length; i += 1) {
@@ -4195,6 +4436,11 @@ bool _threadPatchMatchesSubscription(
 ) {
   return patch.threadKind.trim() == subscription.threadKind &&
       patch.threadId.trim() == subscription.threadId;
+}
+
+bool _threadPatchMatchesThreadRef(ThreadMessagePatch patch, AppThreadRef ref) {
+  final key = _threadPatchKeyFor(ref);
+  return patch.threadKind.trim() == key.kind && patch.threadId.trim() == key.id;
 }
 
 AppThreadRef _readThreadRefFor(ConversationSummary conversation) {

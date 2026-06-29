@@ -433,7 +433,7 @@ class AwikiImCoreMappers {
     );
     return RealtimeUpdate(
       message: chatMessage,
-      conversation: conversation,
+      conversationHint: conversation,
       group: chatMessage.groupId == null
           ? null
           : GroupSummary(

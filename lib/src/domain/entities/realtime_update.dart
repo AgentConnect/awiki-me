@@ -5,7 +5,7 @@ import 'group_summary.dart';
 class RealtimeUpdate {
   const RealtimeUpdate({
     this.message,
-    this.conversation,
+    this.conversationHint,
     this.group,
     this.agentControlPayload,
     this.syncDirty = false,
@@ -15,7 +15,7 @@ class RealtimeUpdate {
   });
 
   final ChatMessage? message;
-  final ConversationSummary? conversation;
+  final ConversationSummary? conversationHint;
   final GroupSummary? group;
   final Map<String, Object?>? agentControlPayload;
   final bool syncDirty;

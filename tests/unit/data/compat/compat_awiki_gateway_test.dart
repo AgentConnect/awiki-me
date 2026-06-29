@@ -137,7 +137,7 @@ RealtimeUpdate _update() {
     isMine: false,
     sendState: MessageSendState.sent,
   );
-  return RealtimeUpdate(message: message, conversation: _conversation());
+  return RealtimeUpdate(message: message, conversationHint: _conversation());
 }
 
 ConversationSummary _conversation() {

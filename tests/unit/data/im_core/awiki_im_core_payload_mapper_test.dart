@@ -59,7 +59,7 @@ void main() {
 
       expect(update, isNotNull);
       expect(update!.message, isNull);
-      expect(update.conversation, isNull);
+      expect(update.conversationHint, isNull);
       expect(update.agentControlPayload?['schema'], 'awiki.agent.status.v1');
     },
   );
@@ -89,8 +89,8 @@ void main() {
     expect(update!.agentControlPayload, isNull);
     expect(update.message?.content, 'Hermes reply');
     expect(update.message?.hasRenderableContent, isTrue);
-    expect(update.conversation?.targetDid, 'did:agent:runtime');
-    expect(update.conversation?.lastMessagePreview, 'Hermes reply');
+    expect(update.conversationHint?.targetDid, 'did:agent:runtime');
+    expect(update.conversationHint?.lastMessagePreview, 'Hermes reply');
   });
 
   test('mention payload projects payload text and typed mention ranges', () {

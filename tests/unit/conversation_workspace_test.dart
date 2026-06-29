@@ -125,7 +125,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('项目群'), findsOneWidget);
-    expect(find.text('有人@我'), findsOneWidget);
+    expect(find.text('未读 2'), findsOneWidget);
+    expect(find.text('@我'), findsOneWidget);
   });
 
   testWidgets('macOS 宽度下消息工作区默认关闭会话信息', (tester) async {
@@ -2481,7 +2482,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('手机消息列表右侧元信息不会裁切时间状态和未读数', (tester) async {
+  testWidgets('手机消息列表右侧元信息只展示时间和智能体状态，未读展示在预览前缀', (tester) async {
     const session = SessionIdentity(
       did: 'did:human:me',
       credentialName: 'me.json',
@@ -2536,7 +2537,7 @@ void main() {
 
     expect(find.text('Mobile Runtime Agent'), findsOneWidget);
     expect(find.text('999+'), findsNothing);
-    expect(find.text('120'), findsOneWidget);
+    expect(find.text('未读 120'), findsOneWidget);
     expect(find.byType(AgentStatusDot), findsOneWidget);
     final rowRect = tester.getRect(
       find.ancestor(
@@ -2547,13 +2548,15 @@ void main() {
     final metaRect = tester.getRect(
       find.byKey(const Key('conversation-row-right-meta')),
     );
-    final unreadBadgeRect = tester.getRect(
+    expect(
       find.byKey(const Key('conversation-row-unread-badge')),
+      findsNothing,
     );
+    final unreadTagRect = tester.getRect(find.text('未读 120'));
     final timeRect = tester.getRect(find.text('12-31'));
     expect(metaRect.right, lessThanOrEqualTo(rowRect.right));
     expect(timeRect.right, lessThanOrEqualTo(rowRect.right - 2));
-    expect(unreadBadgeRect.right, lessThanOrEqualTo(rowRect.right - 2));
+    expect(unreadTagRect.left, greaterThanOrEqualTo(rowRect.left));
     expect(tester.takeException(), isNull);
   });
 

@@ -170,6 +170,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   final textController = TextEditingController();
   late final _BottomInitialScrollController scrollController;
   late final ChatThreadsController _chatThreadsController;
+  late String _displayThreadId;
   AttachmentDraft? _pendingAttachment;
   bool _isApplyingComposerDraft = false;
   bool _isRefreshingCurrentConversation = false;
@@ -177,15 +178,24 @@ class _ChatViewState extends ConsumerState<ChatView> {
   bool _hasDeferredBottomNotice = false;
   bool _userAwayFromBottom = false;
   bool _isProgrammaticScroll = false;
+  bool _scrollToBottomScheduled = false;
+  int _scrollRequestToken = 0;
+  int _visibleReadAckToken = 0;
+  bool _pendingScrollAnimated = false;
+  int _pendingScrollSettleFrames = 1;
   final Set<String> _downloadingAttachmentMessageIds = <String>{};
   static const double _nearBottomExtent = 96;
 
   @override
   void initState() {
     super.initState();
+    _displayThreadId = widget.conversation.threadId;
     scrollController = _BottomInitialScrollController();
     _chatThreadsController = ref.read(chatThreadsProvider.notifier);
-    _markConversationVisible(widget.conversation);
+    _markConversationVisible(
+      widget.conversation,
+      displayThreadId: _displayThreadId,
+    );
     _restoreComposerDraft(widget.conversation);
     textController.addListener(_persistComposerText);
     scrollController.addListener(_handleScrollPositionChanged);
@@ -193,7 +203,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   @override
   void dispose() {
-    _markConversationHidden(widget.conversation);
+    _visibleReadAckToken += 1;
+    _cancelPendingScrollRequests();
+    _markConversationHidden(
+      widget.conversation,
+      displayThreadId: _displayThreadId,
+    );
     textController.removeListener(_persistComposerText);
     scrollController.removeListener(_handleScrollPositionChanged);
     textController.dispose();
@@ -205,11 +220,20 @@ class _ChatViewState extends ConsumerState<ChatView> {
   void didUpdateWidget(covariant ChatView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!sameConversationTarget(oldWidget.conversation, widget.conversation)) {
-      _markConversationHidden(oldWidget.conversation);
-      _markConversationVisible(widget.conversation);
+      _visibleReadAckToken += 1;
+      _markConversationHidden(
+        oldWidget.conversation,
+        displayThreadId: _displayThreadId,
+      );
+      _displayThreadId = widget.conversation.threadId;
+      _markConversationVisible(
+        widget.conversation,
+        displayThreadId: _displayThreadId,
+      );
       _restoreComposerDraft(widget.conversation, updateState: true);
       _hasDeferredBottomNotice = false;
       _userAwayFromBottom = false;
+      _cancelPendingScrollRequests();
       scrollController.prepareForInitialBottomPosition();
     }
   }
@@ -222,6 +246,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
       conversation,
       displayThreadId: displayThreadId ?? conversation.threadId,
     );
+    _scheduleAcknowledgeVisibleConversationRead(
+      conversation,
+      reason: 'visible',
+    );
   }
 
   void _markConversationHidden(
@@ -231,6 +259,49 @@ class _ChatViewState extends ConsumerState<ChatView> {
     _chatThreadsController.markConversationHidden(
       conversation,
       displayThreadId: displayThreadId ?? conversation.threadId,
+    );
+  }
+
+  void _acknowledgeVisibleConversationRead(
+    ConversationSummary conversation, {
+    String reason = 'visible',
+  }) {
+    _chatThreadsController.acknowledgeVisibleConversationRead(
+      conversation,
+      displayThreadId: _displayThreadId,
+      reason: reason,
+    );
+  }
+
+  void _scheduleAcknowledgeVisibleConversationRead(
+    ConversationSummary conversation, {
+    String reason = 'visible',
+  }) {
+    final token = ++_visibleReadAckToken;
+    final displayThreadId = _displayThreadId;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          token != _visibleReadAckToken ||
+          displayThreadId != _displayThreadId ||
+          !sameConversationTarget(
+            conversation,
+            _currentConversationSnapshot(),
+          )) {
+        return;
+      }
+      _acknowledgeVisibleConversationRead(conversation, reason: reason);
+    });
+  }
+
+  void _acknowledgeCurrentVisibleConversationRead({
+    String reason = 'visible_interaction',
+  }) {
+    if (_hasDeferredBottomNotice && !_isNearBottom()) {
+      return;
+    }
+    _acknowledgeVisibleConversationRead(
+      _currentConversationSnapshot(),
+      reason: reason,
     );
   }
 
@@ -272,7 +343,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final buildWatch = Stopwatch()..start();
     final responsive = context.awikiResponsive;
     final macStyle = widget.macStyle && responsive.isMacDesktop;
-    final thread = ref.watch(chatThreadProvider(widget.conversation.threadId));
+    final displayThreadId = _displayThreadId;
+    final thread = ref.watch(chatThreadProvider(displayThreadId));
     final currentConversation = _currentConversationForTitle();
     _requestAgentsIfNeeded(currentConversation);
     final agents = ref.watch(agentsProvider).agents;
@@ -302,7 +374,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                 ),
         );
     ref.listen<ChatThreadState>(
-      chatThreadProvider(widget.conversation.threadId),
+      chatThreadProvider(displayThreadId),
       (previous, next) =>
           _handleThreadChanged(previous, next, currentConversation),
     );
@@ -311,12 +383,18 @@ class _ChatViewState extends ConsumerState<ChatView> {
       if (updated == null) {
         return;
       }
+      if (!_hasDeferredBottomNotice && !_userAwayFromBottom) {
+        _scheduleAcknowledgeVisibleConversationRead(
+          updated,
+          reason: 'visible_summary_update',
+        );
+      }
       unawaited(
         ref
             .read(chatThreadsProvider.notifier)
-            .syncHistoryForConversation(
+            .syncVisibleConversationAfterSummaryUpdate(
               updated,
-              displayThreadId: widget.conversation.threadId,
+              displayThreadId: displayThreadId,
             ),
       );
     });
@@ -374,222 +452,232 @@ class _ChatViewState extends ConsumerState<ChatView> {
             onRefresh: () => _refreshCurrentConversation(currentConversation),
           ),
           Expanded(
-            child: Stack(
-              children: <Widget>[
-                NotificationListener<ScrollNotification>(
-                  onNotification: _handleScrollNotification,
-                  child: ListView.builder(
-                    key: ValueKey(
-                      'chat-messages:${currentConversation.threadId}',
-                    ),
-                    controller: scrollController,
-                    padding: EdgeInsets.fromLTRB(
-                      macStyle
-                          ? responsive.displayScaled(28)
-                          : (widget.embedded
-                                ? responsive.spacing(32)
-                                : responsive.tabContentHorizontalPadding),
-                      macStyle
-                          ? responsive.displayScaled(20)
-                          : responsive.spacing(24),
-                      macStyle
-                          ? responsive.displayScaled(28)
-                          : (widget.embedded
-                                ? responsive.spacing(32)
-                                : responsive.tabContentHorizontalPadding),
-                      0,
-                    ),
-                    itemCount: messageListItemCount,
-                    itemBuilder: (_, index) {
-                      final isLastItem = index == messageListItemCount - 1;
-                      if (index >= messages.length) {
-                        final recoveryIndex =
-                            index -
-                            messages.length -
-                            unmatchedPendingTurns.length;
-                        if (recoveryIndex >= 0) {
-                          final item = messageAgentItems[recoveryIndex];
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: (_) => _acknowledgeCurrentVisibleConversationRead(
+                reason: 'visible_pointer',
+              ),
+              child: Stack(
+                children: <Widget>[
+                  NotificationListener<ScrollNotification>(
+                    onNotification: _handleScrollNotification,
+                    child: ListView.builder(
+                      key: ValueKey('chat-messages:$displayThreadId'),
+                      controller: scrollController,
+                      padding: EdgeInsets.fromLTRB(
+                        macStyle
+                            ? responsive.displayScaled(28)
+                            : (widget.embedded
+                                  ? responsive.spacing(32)
+                                  : responsive.tabContentHorizontalPadding),
+                        macStyle
+                            ? responsive.displayScaled(20)
+                            : responsive.spacing(24),
+                        macStyle
+                            ? responsive.displayScaled(28)
+                            : (widget.embedded
+                                  ? responsive.spacing(32)
+                                  : responsive.tabContentHorizontalPadding),
+                        0,
+                      ),
+                      itemCount: messageListItemCount,
+                      itemBuilder: (_, index) {
+                        final isLastItem = index == messageListItemCount - 1;
+                        if (index >= messages.length) {
+                          final recoveryIndex =
+                              index -
+                              messages.length -
+                              unmatchedPendingTurns.length;
+                          if (recoveryIndex >= 0) {
+                            final item = messageAgentItems[recoveryIndex];
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                bottom: isLastItem
+                                    ? 0
+                                    : macStyle
+                                    ? responsive.displayScaled(16)
+                                    : responsive.spacing(18),
+                              ),
+                              child: _MessageAgentRecoveryCard(
+                                item: item,
+                                macStyle: macStyle,
+                                onConfirm:
+                                    item is _MessageAgentActionTimelineItem
+                                    ? () async {
+                                        await ref
+                                            .read(chatThreadsProvider.notifier)
+                                            .confirmAppAction(
+                                              conversation: currentConversation,
+                                              actionId: item.record.actionId,
+                                            );
+                                        if (mounted) {
+                                          _restoreComposerDraft(
+                                            currentConversation,
+                                            updateState: true,
+                                          );
+                                        }
+                                      }
+                                    : null,
+                                onReject:
+                                    item is _MessageAgentActionTimelineItem
+                                    ? () => ref
+                                          .read(chatThreadsProvider.notifier)
+                                          .rejectAppAction(
+                                            conversation: currentConversation,
+                                            actionId: item.record.actionId,
+                                          )
+                                    : null,
+                              ),
+                            );
+                          }
+                          final turn =
+                              unmatchedPendingTurns[index - messages.length];
                           return Padding(
                             padding: EdgeInsets.only(
                               bottom: isLastItem
                                   ? 0
                                   : macStyle
                                   ? responsive.displayScaled(16)
-                                  : responsive.spacing(18),
+                                  : responsive.spacing(24),
                             ),
-                            child: _MessageAgentRecoveryCard(
-                              item: item,
+                            child: _AgentProcessingIndicator(
+                              label: _agentProcessingLabel(<AgentPendingTurn>[
+                                turn,
+                              ]),
+                              avatarSeed: _agentProcessingAvatarSeed(
+                                runtimeAgent,
+                                currentConversation,
+                              ),
                               macStyle: macStyle,
-                              onConfirm: item is _MessageAgentActionTimelineItem
-                                  ? () async {
-                                      await ref
-                                          .read(chatThreadsProvider.notifier)
-                                          .confirmAppAction(
-                                            conversation: currentConversation,
-                                            actionId: item.record.actionId,
-                                          );
-                                      if (mounted) {
-                                        _restoreComposerDraft(
-                                          currentConversation,
-                                          updateState: true,
-                                        );
-                                      }
-                                    }
-                                  : null,
-                              onReject: item is _MessageAgentActionTimelineItem
-                                  ? () => ref
-                                        .read(chatThreadsProvider.notifier)
-                                        .rejectAppAction(
-                                          conversation: currentConversation,
-                                          actionId: item.record.actionId,
-                                        )
-                                  : null,
                             ),
                           );
                         }
-                        final turn =
-                            unmatchedPendingTurns[index - messages.length];
+                        final message = messages[index];
+                        final pendingTurns = thread.pendingAgentTurnsForMessage(
+                          message,
+                        );
+                        final previous = index == 0
+                            ? null
+                            : messages[index - 1];
+                        final next = index + 1 < messages.length
+                            ? messages[index + 1]
+                            : null;
+                        final senderLabel = _displayNameForMessage(
+                          context,
+                          message,
+                        );
+                        final showSenderLabel = _shouldShowSenderLabel(
+                          previous,
+                          message,
+                        );
                         return Padding(
                           padding: EdgeInsets.only(
-                            bottom: isLastItem
-                                ? 0
-                                : macStyle
-                                ? responsive.displayScaled(16)
-                                : responsive.spacing(24),
-                          ),
-                          child: _AgentProcessingIndicator(
-                            label: _agentProcessingLabel(<AgentPendingTurn>[
-                              turn,
-                            ]),
-                            avatarSeed: _agentProcessingAvatarSeed(
-                              runtimeAgent,
-                              currentConversation,
+                            bottom: _messageBottomSpacing(
+                              responsive: responsive,
+                              macStyle: macStyle,
+                              current: message,
+                              next: next,
+                              hasAgentProcessing: pendingTurns.isNotEmpty,
+                              nextHasAgentProcessing:
+                                  next != null &&
+                                  messageIdsWithAgentProcessing.contains(
+                                    next.localId,
+                                  ),
+                              isLastItem: isLastItem,
                             ),
-                            macStyle: macStyle,
+                          ),
+                          child: KeyedSubtree(
+                            key: Key('chat-message-content:${message.localId}'),
+                            child: Column(
+                              children: <Widget>[
+                                if (_shouldShowDivider(previous, message))
+                                  _DateDivider(
+                                    label: _timeDividerLabel(
+                                      message.createdAt,
+                                      previous: previous?.createdAt,
+                                    ),
+                                  ),
+                                _MessageBubble(
+                                  message: message,
+                                  senderLabel: senderLabel,
+                                  showSenderLabel: showSenderLabel,
+                                  macStyle: macStyle,
+                                  onRetry:
+                                      message.sendState ==
+                                          MessageSendState.failed
+                                      ? (_canRetryMessage(message)
+                                            ? () async {
+                                                await ref
+                                                    .read(
+                                                      chatThreadsProvider
+                                                          .notifier,
+                                                    )
+                                                    .retryMessage(
+                                                      conversation:
+                                                          currentConversation,
+                                                      message: message,
+                                                      expectedAgentReplyDid:
+                                                          _expectedAgentReplyDidForConversation(
+                                                            currentConversation,
+                                                            runtimeAgent:
+                                                                runtimeAgent,
+                                                            classification:
+                                                                peerClassification,
+                                                          ),
+                                                      displayThreadId:
+                                                          _displayThreadId,
+                                                    );
+                                              }
+                                            : null)
+                                      : null,
+                                  onDownload:
+                                      message.attachment != null &&
+                                          message.sendState ==
+                                              MessageSendState.sent
+                                      ? () => _openAttachment(
+                                          currentConversation,
+                                          message,
+                                        )
+                                      : null,
+                                  isDownloading:
+                                      _downloadingAttachmentMessageIds.contains(
+                                        message.localId,
+                                      ),
+                                  onPeerInfoTap: _peerInfoTapForMessage(
+                                    currentConversation,
+                                    message,
+                                    senderLabel,
+                                  ),
+                                ),
+                                if (pendingTurns.isNotEmpty) ...<Widget>[
+                                  SizedBox(
+                                    height: macStyle
+                                        ? responsive.displayScaled(7)
+                                        : responsive.spacing(7),
+                                  ),
+                                  _MessageAgentProcessingStatus(
+                                    label: _agentProcessingLabel(pendingTurns),
+                                    overdue: pendingTurns.any(
+                                      (turn) => turn.isOverdue,
+                                    ),
+                                    macStyle: macStyle,
+                                    alignEnd: message.isMine,
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
                         );
-                      }
-                      final message = messages[index];
-                      final pendingTurns = thread.pendingAgentTurnsForMessage(
-                        message,
-                      );
-                      final previous = index == 0 ? null : messages[index - 1];
-                      final next = index + 1 < messages.length
-                          ? messages[index + 1]
-                          : null;
-                      final senderLabel = _displayNameForMessage(
-                        context,
-                        message,
-                      );
-                      final showSenderLabel = _shouldShowSenderLabel(
-                        previous,
-                        message,
-                      );
-                      return Padding(
-                        padding: EdgeInsets.only(
-                          bottom: _messageBottomSpacing(
-                            responsive: responsive,
-                            macStyle: macStyle,
-                            current: message,
-                            next: next,
-                            hasAgentProcessing: pendingTurns.isNotEmpty,
-                            nextHasAgentProcessing:
-                                next != null &&
-                                messageIdsWithAgentProcessing.contains(
-                                  next.localId,
-                                ),
-                            isLastItem: isLastItem,
-                          ),
-                        ),
-                        child: KeyedSubtree(
-                          key: Key('chat-message-content:${message.localId}'),
-                          child: Column(
-                            children: <Widget>[
-                              if (_shouldShowDivider(previous, message))
-                                _DateDivider(
-                                  label: _timeDividerLabel(
-                                    message.createdAt,
-                                    previous: previous?.createdAt,
-                                  ),
-                                ),
-                              _MessageBubble(
-                                message: message,
-                                senderLabel: senderLabel,
-                                showSenderLabel: showSenderLabel,
-                                macStyle: macStyle,
-                                onRetry:
-                                    message.sendState == MessageSendState.failed
-                                    ? (_canRetryMessage(message)
-                                          ? () async {
-                                              await ref
-                                                  .read(
-                                                    chatThreadsProvider
-                                                        .notifier,
-                                                  )
-                                                  .retryMessage(
-                                                    conversation:
-                                                        currentConversation,
-                                                    message: message,
-                                                    expectedAgentReplyDid:
-                                                        _expectedAgentReplyDidForConversation(
-                                                          currentConversation,
-                                                          runtimeAgent:
-                                                              runtimeAgent,
-                                                          classification:
-                                                              peerClassification,
-                                                        ),
-                                                    displayThreadId: widget
-                                                        .conversation
-                                                        .threadId,
-                                                  );
-                                            }
-                                          : null)
-                                    : null,
-                                onDownload:
-                                    message.attachment != null &&
-                                        message.sendState ==
-                                            MessageSendState.sent
-                                    ? () => _openAttachment(
-                                        currentConversation,
-                                        message,
-                                      )
-                                    : null,
-                                isDownloading: _downloadingAttachmentMessageIds
-                                    .contains(message.localId),
-                                onPeerInfoTap: _peerInfoTapForMessage(
-                                  currentConversation,
-                                  message,
-                                  senderLabel,
-                                ),
-                              ),
-                              if (pendingTurns.isNotEmpty) ...<Widget>[
-                                SizedBox(
-                                  height: macStyle
-                                      ? responsive.displayScaled(7)
-                                      : responsive.spacing(7),
-                                ),
-                                _MessageAgentProcessingStatus(
-                                  label: _agentProcessingLabel(pendingTurns),
-                                  overdue: pendingTurns.any(
-                                    (turn) => turn.isOverdue,
-                                  ),
-                                  macStyle: macStyle,
-                                  alignEnd: message.isMine,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+                      },
+                    ),
                   ),
-                ),
-                if (_hasDeferredBottomNotice)
-                  _NewMessagesButton(
-                    macStyle: macStyle,
-                    onTap: () => _scheduleScrollToBottom(animated: true),
-                  ),
-              ],
+                  if (_hasDeferredBottomNotice)
+                    _NewMessagesButton(
+                      macStyle: macStyle,
+                      onTap: () => _scheduleScrollToBottom(animated: true),
+                    ),
+                ],
+              ),
             ),
           ),
           _Composer(
@@ -768,7 +856,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
             caption: messageContent.trim().isEmpty ? null : messageContent,
             mentions: validMentionDrafts,
             expectedAgentReplyDid: expectedAgentReplyDid,
-            displayThreadId: widget.conversation.threadId,
+            displayThreadId: _displayThreadId,
           );
       return;
     }
@@ -779,7 +867,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
           content: messageContent,
           mentions: validMentionDrafts,
           expectedAgentReplyDid: expectedAgentReplyDid,
-          displayThreadId: widget.conversation.threadId,
+          displayThreadId: _displayThreadId,
         );
   }
 
@@ -865,10 +953,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     try {
       await ref
           .read(chatThreadsProvider.notifier)
-          .refreshConversation(
-            conversation,
-            displayThreadId: widget.conversation.threadId,
-          );
+          .refreshConversation(conversation, displayThreadId: _displayThreadId);
       final elapsed = DateTime.now().difference(startedAt);
       const minimumVisibleTime = Duration(milliseconds: 350);
       if (elapsed < minimumVisibleTime) {
@@ -936,6 +1021,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       setState(() {
         _hasDeferredBottomNotice = false;
       });
+      _acknowledgeCurrentVisibleConversationRead(reason: 'scroll_bottom');
     }
   }
 
@@ -996,22 +1082,48 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   void _scheduleScrollToBottom({bool animated = false, int settleFrames = 1}) {
+    _pendingScrollAnimated = _pendingScrollAnimated || animated;
+    _pendingScrollSettleFrames = _pendingScrollSettleFrames > settleFrames
+        ? _pendingScrollSettleFrames
+        : settleFrames;
+    if (_scrollToBottomScheduled) {
+      return;
+    }
+    _scrollToBottomScheduled = true;
+    final token = ++_scrollRequestToken;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      _scrollToBottom(animated: animated);
-      if (settleFrames > 1) {
-        _scheduleScrollToBottom(
-          animated: false,
-          settleFrames: settleFrames - 1,
-        );
-        return;
-      }
+      _runScheduledScrollToBottom(token);
     });
   }
 
-  void _scrollToBottom({bool animated = false}) {
+  void _runScheduledScrollToBottom(int token) {
+    if (!mounted || token != _scrollRequestToken) {
+      return;
+    }
+    _scrollToBottom(animated: _pendingScrollAnimated, token: token);
+    final remainingFrames = _pendingScrollSettleFrames - 1;
+    if (remainingFrames <= 0) {
+      _scrollToBottomScheduled = false;
+      _pendingScrollAnimated = false;
+      _pendingScrollSettleFrames = 1;
+      return;
+    }
+    _pendingScrollAnimated = false;
+    _pendingScrollSettleFrames = remainingFrames;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _runScheduledScrollToBottom(token);
+    });
+  }
+
+  void _cancelPendingScrollRequests() {
+    _scrollRequestToken += 1;
+    _scrollToBottomScheduled = false;
+    _pendingScrollAnimated = false;
+    _pendingScrollSettleFrames = 1;
+    _isProgrammaticScroll = false;
+  }
+
+  void _scrollToBottom({bool animated = false, required int token}) {
     if (!scrollController.hasClients) {
       return;
     }
@@ -1025,7 +1137,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
             curve: Curves.easeOutCubic,
           )
           .whenComplete(() {
-            if (!mounted) {
+            if (!mounted || token != _scrollRequestToken) {
               return;
             }
             _isProgrammaticScroll = false;
@@ -1045,6 +1157,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
         _hasDeferredBottomNotice = false;
       });
     }
+    _acknowledgeCurrentVisibleConversationRead(reason: 'programmatic_bottom');
   }
 
   bool _isNearBottom() {

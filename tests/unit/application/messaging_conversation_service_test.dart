@@ -404,6 +404,55 @@ void main() {
     );
 
     test(
+      'fast local summaries apply product overlays before enrichment',
+      () async {
+        final store = InMemoryAwikiProductLocalStore();
+        final now = DateTime.utc(2026, 5, 23, 9);
+        await store.upsertConversationOverlay(
+          ProductConversationOverlay(
+            ownerDid: 'did:alice',
+            threadId: 'thread-hidden',
+            hidden: true,
+            updatedAt: now,
+          ),
+        );
+        await store.upsertConversationOverlay(
+          ProductConversationOverlay(
+            ownerDid: 'did:alice',
+            threadId: 'thread-pinned',
+            pinned: true,
+            customTitle: 'Pinned local title',
+            avatarSeed: 'pinned-seed',
+            updatedAt: now,
+          ),
+        );
+        final core = _FakeConversations(
+          items: <ConversationSummary>[
+            _conversation('thread-hidden', minutesAgo: 1),
+            _conversation('thread-normal', minutesAgo: 2),
+            _conversation('thread-pinned', minutesAgo: 10),
+          ],
+        );
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: store,
+        );
+
+        final conversations = await service.listConversationSummariesFast(
+          ownerDid: 'did:alice',
+        );
+
+        expect(core.listCount, 1);
+        expect(conversations.map((item) => item.threadId), [
+          'thread-pinned',
+          'thread-normal',
+        ]);
+        expect(conversations.first.displayName, 'Pinned local title');
+        expect(conversations.first.avatarSeed, 'pinned-seed');
+      },
+    );
+
+    test(
       'enrichment applies delayed agent projection and product overlays',
       () async {
         final inventory = _BlockingAgentInventory(

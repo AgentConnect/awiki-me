@@ -440,23 +440,17 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       return;
     }
     final message = update.message;
-    final conversation = update.conversation;
-    if (message == null || conversation == null) {
+    final conversationHint = update.conversationHint;
+    if (message == null || conversationHint == null) {
       return;
     }
-    final shouldShow = _shouldShowRealtimeConversation(conversation);
+    final shouldShow = _shouldAcceptRealtimeConversationHint(conversationHint);
     if (!shouldShow) {
       return;
     }
     ref
         .read(chatThreadsProvider.notifier)
-        .applyRealtimeUpdate(message, conversation: conversation);
-    ref
-        .read(conversationListProvider.notifier)
-        .restoreConversationBestEffort(conversation);
-    ref
-        .read(conversationListProvider.notifier)
-        .upsertConversation(conversation);
+        .applyRealtimeUpdate(message, conversation: conversationHint);
     if (update.group != null) {
       ref.read(groupProvider.notifier).upsertGroup(update.group!);
     }
@@ -494,7 +488,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     );
   }
 
-  bool _shouldShowRealtimeConversation(ConversationSummary conversation) {
+  bool _shouldAcceptRealtimeConversationHint(ConversationSummary conversation) {
     return shouldShowConversationForChatList(
       conversation,
       daemonAgentDids: ref
@@ -506,8 +500,8 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   String _notificationTitle(RealtimeUpdate update) {
     final message = update.message;
-    final conversation = update.conversation;
-    if (message == null || conversation == null) {
+    final conversationHint = update.conversationHint;
+    if (message == null || conversationHint == null) {
       return AppMessage.newMessageArrived().resolveForFallback();
     }
     final title = DidDisplayFormatter.compactDisplayName(
@@ -517,7 +511,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (title.isNotEmpty) {
       return title;
     }
-    return conversation.displayName;
+    return conversationHint.displayName;
   }
 
   Future<void> _runBusy(Future<void> Function() action) async {

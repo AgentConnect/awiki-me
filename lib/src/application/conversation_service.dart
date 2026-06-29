@@ -358,6 +358,12 @@ class ImCoreConversationService implements ConversationService {
       },
       level: AwikiPerformanceLogLevel.verbose,
     );
+    final overlays = await _loadOverlaysForConversations(
+      ownerDid: ownerDid,
+      conversations: mergedItems,
+      projection: projection,
+      label: 'conversation_service.fast_local.overlays',
+    );
     final visible = AwikiPerformanceLogger.sync(
       'conversation_service.fast_local.filter_sort',
       () {
@@ -368,13 +374,24 @@ class ImCoreConversationService implements ConversationService {
                 daemonAgentDids: projection.daemonAgentDids,
               ),
             )
-            .map((item) => _applyAgentLifecycleProjection(item, projection))
+            .where((item) => !_isConversationHidden(item, overlays, projection))
+            .map(
+              (item) => _applyOverlay(
+                _applyAgentLifecycleProjection(item, projection),
+                _preferredOverlayForConversation(item, overlays, projection),
+              ),
+            )
             .toList();
-        result.sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
+        _sortConversationsForDisplay(
+          result,
+          overlays: overlays,
+          projection: projection,
+        );
         return result;
       },
       fields: <String, Object?>{
         'merged': mergedItems.length,
+        'overlays': overlays.length,
         'cache_hit': _cachedAgentProjection != null,
       },
       level: AwikiPerformanceLogLevel.verbose,

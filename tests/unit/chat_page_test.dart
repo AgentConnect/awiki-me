@@ -45,6 +45,10 @@ class _StaticConversationListController extends ConversationListController {
   ) {
     state = ConversationListState(conversations: conversations);
   }
+
+  void replaceConversations(List<ConversationSummary> conversations) {
+    state = ConversationListState(conversations: conversations);
+  }
 }
 
 class _FakeUrlLauncherPlatform extends UrlLauncherPlatform {
@@ -1118,6 +1122,102 @@ void main() {
     ]);
   });
 
+  testWidgets('ChatView 保持打开时的显示线程不被最近会话归一化切换', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final openedConversation = ConversationSummary(
+      threadId: 'dm:did:test:me:did:agent:runtime',
+      displayName: 'Runtime raw',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:agent:runtime',
+      targetPeer: 'did:agent:runtime',
+    );
+    final normalizedConversation = openedConversation.copyWith(
+      threadId: 'dm:peer-scope:v1:runtime',
+      displayName: 'Runtime normalized',
+      targetPeer: 'runtime.anpclaw.com',
+    );
+    final reply = ChatMessage(
+      localId: 'reply-opened-thread',
+      remoteId: 'reply-opened-thread',
+      threadId: openedConversation.threadId,
+      senderDid: 'did:agent:runtime',
+      receiverDid: session.did,
+      content: 'opened thread message',
+      createdAt: openedConversation.lastMessageAt,
+      isMine: false,
+      sendState: MessageSendState.sent,
+    );
+    late _StaticConversationListController conversationListController;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: openedConversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith((ref) {
+            conversationListController = _StaticConversationListController(
+              ref,
+              <ConversationSummary>[openedConversation],
+            );
+            return conversationListController;
+          }),
+          chatThreadsProvider.overrideWith(
+            (ref) =>
+                _StaticChatThreadsController(ref, <String, List<ChatMessage>>{
+                  openedConversation.threadId: <ChatMessage>[reply],
+                  normalizedConversation.threadId: const <ChatMessage>[],
+                }),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(
+        const ValueKey<String>(
+          'chat-messages:dm:did:test:me:did:agent:runtime',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('opened thread message'), findsOneWidget);
+
+    conversationListController.replaceConversations(<ConversationSummary>[
+      normalizedConversation,
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Runtime normalized'), findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey<String>(
+          'chat-messages:dm:did:test:me:did:agent:runtime',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey<String>('chat-messages:dm:peer-scope:v1:runtime'),
+      ),
+      findsNothing,
+    );
+    expect(find.text('opened thread message'), findsOneWidget);
+  });
+
   testWidgets('切换会话后保留各自输入草稿并在发送后清空', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
@@ -1482,7 +1582,8 @@ void main() {
         .setText(conversation, 'draft for alice');
     await tester.pump();
 
-    expect(find.text('[草稿] draft for alice'), findsOneWidget);
+    expect(find.text('草稿'), findsOneWidget);
+    expect(find.text('draft for alice'), findsOneWidget);
     expect(find.text('alice old preview'), findsNothing);
 
     container
@@ -1490,8 +1591,71 @@ void main() {
         .clearDraft(conversation);
     await tester.pump();
 
-    expect(find.text('[草稿] draft for alice'), findsNothing);
+    expect(find.text('草稿'), findsNothing);
+    expect(find.text('draft for alice'), findsNothing);
     expect(find.text('alice old preview'), findsOneWidget);
+  });
+
+  testWidgets('最近会话预览按未读、@我、草稿、文本的顺序展示', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:preview-tags',
+      displayName: 'Alice',
+      lastMessagePreview: 'alice mentioned me',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 3,
+      unreadMentionCount: 1,
+      firstUnreadMentionMessageId: 'msg-mention',
+      isGroup: false,
+      targetDid: 'did:test:alice',
+    );
+    gateway.conversations = <ConversationSummary>[conversation];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(embedded: true, bottomInset: 0),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ConversationListPage)),
+    );
+    container
+        .read(chatComposerDraftsProvider.notifier)
+        .setText(conversation, 'draft reply');
+    await tester.pump();
+
+    expect(
+      find.byKey(const Key('conversation-row-unread-badge')),
+      findsNothing,
+    );
+    expect(find.text('未读 3'), findsOneWidget);
+    expect(find.text('@我'), findsOneWidget);
+    expect(find.text('草稿'), findsOneWidget);
+    expect(find.text('draft reply'), findsOneWidget);
+
+    final unreadLeft = tester.getTopLeft(find.text('未读 3')).dx;
+    final mentionLeft = tester.getTopLeft(find.text('@我')).dx;
+    final draftLeft = tester.getTopLeft(find.text('草稿')).dx;
+    final previewLeft = tester.getTopLeft(find.text('draft reply')).dx;
+    expect(unreadLeft, lessThan(mentionLeft));
+    expect(mentionLeft, lessThan(draftLeft));
+    expect(draftLeft, lessThan(previewLeft));
   });
 
   testWidgets('发送中消息只在气泡左侧显示转圈标志', (tester) async {

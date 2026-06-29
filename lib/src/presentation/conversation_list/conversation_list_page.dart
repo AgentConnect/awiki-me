@@ -372,7 +372,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                           item,
                           classification,
                         );
-                        final preview = _conversationPreviewForDraft(
+                        final preview = _conversationPreviewPresentation(
                           item,
                           widget.composerDrafts,
                         );
@@ -383,11 +383,9 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                           ),
                           avatarUri: item.avatarUri,
                           preview: preview,
-                          hasUnreadMention: item.hasUnreadMention,
                           timeLabel: DateTimeFormatter.conversationTime(
                             item.lastMessageAt,
                           ),
-                          unreadCount: item.unreadCount,
                           isDeletedAgentConversation:
                               item.isDeletedAgentConversation,
                           classification: classification,
@@ -495,7 +493,7 @@ class _ConversationRefreshView extends ConsumerWidget {
                   item,
                   classification,
                 );
-                final preview = _conversationPreviewForDraft(
+                final preview = _conversationPreviewPresentation(
                   item,
                   composerDrafts,
                 );
@@ -506,11 +504,9 @@ class _ConversationRefreshView extends ConsumerWidget {
                   ),
                   avatarUri: item.avatarUri,
                   preview: preview,
-                  hasUnreadMention: item.hasUnreadMention,
                   timeLabel: DateTimeFormatter.conversationTime(
                     item.lastMessageAt,
                   ),
-                  unreadCount: item.unreadCount,
                   isDeletedAgentConversation: item.isDeletedAgentConversation,
                   classification: classification,
                   agentStatus: agentStatus,
@@ -563,9 +559,7 @@ class _MacConversationRow extends StatelessWidget {
     required this.title,
     required this.avatarUri,
     required this.preview,
-    required this.hasUnreadMention,
     required this.timeLabel,
-    required this.unreadCount,
     required this.isDeletedAgentConversation,
     required this.classification,
     required this.agentStatus,
@@ -576,10 +570,8 @@ class _MacConversationRow extends StatelessWidget {
 
   final String title;
   final String? avatarUri;
-  final String preview;
-  final bool hasUnreadMention;
+  final _ConversationPreviewPresentation preview;
   final String timeLabel;
-  final int unreadCount;
   final bool isDeletedAgentConversation;
   final ConversationPeerClassification classification;
   final AgentVisualStatus? agentStatus;
@@ -659,35 +651,14 @@ class _MacConversationRow extends StatelessWidget {
                       SizedBox(height: responsive.displayScaled(5)),
                       Row(
                         children: <Widget>[
-                          if (hasUnreadMention) ...<Widget>[
-                            const _UnreadMentionInlineBadge(compact: true),
-                            SizedBox(width: responsive.displayScaled(5)),
-                          ],
                           Expanded(
-                            child: Text(
-                              preview.isEmpty
-                                  ? context.l10n.conversationsNoMessagePreview
-                                  : preview,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: const Color(0xFF66728A),
-                                fontSize: responsive.displayScaled(11.5),
-                                height: 1.25,
-                              ),
+                            child: _ConversationPreviewLine(
+                              presentation: preview,
+                              compact: true,
+                              emptyText:
+                                  context.l10n.conversationsNoMessagePreview,
                             ),
                           ),
-                          if (unreadCount > 0) ...<Widget>[
-                            SizedBox(width: responsive.displayScaled(8)),
-                            Container(
-                              width: responsive.displayScaled(8),
-                              height: responsive.displayScaled(8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0B65F8),
-                                borderRadius: BorderRadius.circular(99),
-                              ),
-                            ),
-                          ],
                         ],
                       ),
                     ],
@@ -763,9 +734,7 @@ class _ConversationRow extends StatelessWidget {
     required this.title,
     required this.avatarUri,
     required this.preview,
-    required this.hasUnreadMention,
     required this.timeLabel,
-    required this.unreadCount,
     required this.isDeletedAgentConversation,
     required this.classification,
     required this.agentStatus,
@@ -776,10 +745,8 @@ class _ConversationRow extends StatelessWidget {
 
   final String title;
   final String? avatarUri;
-  final String preview;
-  final bool hasUnreadMention;
+  final _ConversationPreviewPresentation preview;
   final String timeLabel;
-  final int unreadCount;
   final bool isDeletedAgentConversation;
   final ConversationPeerClassification classification;
   final AgentVisualStatus? agentStatus;
@@ -856,22 +823,11 @@ class _ConversationRow extends StatelessWidget {
                   SizedBox(height: responsive.spacing(4)),
                   Row(
                     children: <Widget>[
-                      if (hasUnreadMention) ...<Widget>[
-                        const _UnreadMentionInlineBadge(compact: false),
-                        SizedBox(width: responsive.spacing(6)),
-                      ],
                       Expanded(
-                        child: Text(
-                          preview.isEmpty
-                              ? context.l10n.conversationsNoMessagePreview
-                              : preview,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: responsive.bodySm,
-                            height: 1.2,
-                            color: theme.secondaryText,
-                          ),
+                        child: _ConversationPreviewLine(
+                          presentation: preview,
+                          compact: false,
+                          emptyText: context.l10n.conversationsNoMessagePreview,
                         ),
                       ),
                     ],
@@ -903,7 +859,7 @@ class _ConversationRow extends StatelessWidget {
                         letterSpacing: 0,
                       ),
                     ),
-                    if (agentStatus != null || unreadCount > 0) ...<Widget>[
+                    if (agentStatus != null) ...<Widget>[
                       SizedBox(height: responsive.spacing(7)),
                       Row(
                         mainAxisSize: MainAxisSize.min,
@@ -913,38 +869,6 @@ class _ConversationRow extends StatelessWidget {
                             AgentStatusDot(
                               status: agentStatus!,
                               size: responsive.scaled(8),
-                            ),
-                          if (agentStatus != null && unreadCount > 0)
-                            SizedBox(width: responsive.spacing(6)),
-                          if (unreadCount > 0)
-                            Container(
-                              key: const Key('conversation-row-unread-badge'),
-                              constraints: BoxConstraints(
-                                minWidth: responsive.scaled(20),
-                              ),
-                              padding: responsive.scaledInsets(
-                                const EdgeInsets.symmetric(
-                                  horizontal: 7,
-                                  vertical: 3,
-                                ),
-                              ),
-                              decoration: BoxDecoration(
-                                color: theme.primary,
-                                borderRadius: BorderRadius.circular(
-                                  AwikiMeRadii.pill,
-                                ),
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                unreadCount > 999 ? '999+' : '$unreadCount',
-                                maxLines: 1,
-                                style: TextStyle(
-                                  fontSize: responsive.metaSm,
-                                  color: theme.primaryForeground,
-                                  fontWeight: FontWeight.w500,
-                                  height: 1,
-                                ),
-                              ),
                             ),
                         ],
                       ),
@@ -1092,23 +1016,64 @@ ConversationPeerClassification _fallbackConversationPeerClassification(
   return const ConversationPeerClassification.unknown();
 }
 
-String _conversationPreviewForDraft(
+_ConversationPreviewPresentation _conversationPreviewPresentation(
   ConversationSummary conversation,
   Map<String, ChatComposerDraft> drafts,
 ) {
   final draft = _draftForConversation(conversation, drafts);
+  final tags = <_ConversationPreviewTag>[];
+  if (conversation.unreadCount > 0) {
+    tags.add(
+      _ConversationPreviewTag(
+        text: '未读 ${_conversationCountLabel(conversation.unreadCount)}',
+        tone: _ConversationPreviewTagTone.unread,
+      ),
+    );
+  }
+  if (conversation.hasUnreadMention) {
+    tags.add(
+      const _ConversationPreviewTag(
+        text: '@我',
+        tone: _ConversationPreviewTagTone.mention,
+      ),
+    );
+  }
   if (draft.isEmpty) {
-    return conversation.lastMessagePreview;
+    return _ConversationPreviewPresentation(
+      text: conversation.lastMessagePreview,
+      tags: tags,
+    );
   }
   final text = draft.text.trim();
   if (text.isNotEmpty) {
-    return '[草稿] $text';
+    return _ConversationPreviewPresentation(
+      text: text,
+      tags: <_ConversationPreviewTag>[
+        ...tags,
+        const _ConversationPreviewTag(
+          text: '草稿',
+          tone: _ConversationPreviewTagTone.draft,
+        ),
+      ],
+    );
   }
   final attachment = draft.pendingAttachment;
   if (attachment != null) {
-    return '[草稿] 附件：${attachment.displayName}';
+    return _ConversationPreviewPresentation(
+      text: '附件：${attachment.displayName}',
+      tags: <_ConversationPreviewTag>[
+        ...tags,
+        const _ConversationPreviewTag(
+          text: '草稿',
+          tone: _ConversationPreviewTagTone.draft,
+        ),
+      ],
+    );
   }
-  return conversation.lastMessagePreview;
+  return _ConversationPreviewPresentation(
+    text: conversation.lastMessagePreview,
+    tags: tags,
+  );
 }
 
 ChatComposerDraft _draftForConversation(
@@ -1125,43 +1090,136 @@ ChatComposerDraft _draftForConversation(
   return threadDraft ?? const ChatComposerDraft();
 }
 
-class _UnreadMentionInlineBadge extends StatelessWidget {
-  const _UnreadMentionInlineBadge({required this.compact});
+String _conversationCountLabel(int count) => count > 999 ? '999+' : '$count';
 
+class _ConversationPreviewPresentation {
+  const _ConversationPreviewPresentation({
+    required this.text,
+    this.tags = const <_ConversationPreviewTag>[],
+  });
+
+  final String text;
+  final List<_ConversationPreviewTag> tags;
+}
+
+enum _ConversationPreviewTagTone { unread, mention, draft }
+
+class _ConversationPreviewTag {
+  const _ConversationPreviewTag({required this.text, required this.tone});
+
+  final String text;
+  final _ConversationPreviewTagTone tone;
+}
+
+class _ConversationPreviewLine extends StatelessWidget {
+  const _ConversationPreviewLine({
+    required this.presentation,
+    required this.compact,
+    required this.emptyText,
+  });
+
+  final _ConversationPreviewPresentation presentation;
+  final bool compact;
+  final String emptyText;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final text = presentation.text.trim();
+    return Row(
+      children: <Widget>[
+        for (final tag in presentation.tags) ...<Widget>[
+          _ConversationPreviewTagBadge(tag: tag, compact: compact),
+          SizedBox(
+            width: compact
+                ? responsive.displayScaled(4)
+                : responsive.displayScaled(5),
+          ),
+        ],
+        Expanded(
+          child: Text(
+            text.isEmpty ? emptyText : text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: compact ? const Color(0xFF66728A) : theme.secondaryText,
+              fontSize: compact
+                  ? responsive.displayScaled(11.5)
+                  : responsive.bodySm,
+              height: compact ? 1.25 : 1.2,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ConversationPreviewTagBadge extends StatelessWidget {
+  const _ConversationPreviewTagBadge({
+    required this.tag,
+    required this.compact,
+  });
+
+  final _ConversationPreviewTag tag;
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final palette = _conversationPreviewTagPalette(tag.tone);
     return Container(
+      key: Key('conversation-preview-tag:${tag.text}'),
       padding: EdgeInsets.symmetric(
         horizontal: compact
-            ? responsive.displayScaled(4)
-            : responsive.displayScaled(5),
+            ? responsive.displayScaled(4.5)
+            : responsive.displayScaled(5.5),
         vertical: compact
             ? responsive.displayScaled(1.5)
-            : responsive.displayScaled(2),
+            : responsive.displayScaled(2.5),
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFECEB),
-        borderRadius: BorderRadius.circular(responsive.displayScaled(4)),
-        border: Border.all(color: const Color(0xFFFFD6D3)),
+        color: palette.background,
+        borderRadius: BorderRadius.circular(responsive.displayScaled(4.5)),
+        border: Border.all(color: palette.border),
       ),
       child: Text(
-        '有人@我',
+        tag.text,
         maxLines: 1,
         overflow: TextOverflow.visible,
         style: TextStyle(
-          color: const Color(0xFFC22A22),
+          color: palette.foreground,
           fontSize: compact
-              ? responsive.displayScaled(10.5)
-              : responsive.metaSm,
+              ? responsive.displayScaled(10)
+              : responsive.displayScaled(10.5),
           height: 1,
           fontWeight: FontWeight.w600,
         ),
       ),
     );
   }
+}
+
+({Color background, Color border, Color foreground})
+_conversationPreviewTagPalette(_ConversationPreviewTagTone tone) {
+  return switch (tone) {
+    _ConversationPreviewTagTone.unread => (
+      background: const Color(0xFFEAF2FF),
+      border: const Color(0xFFCFE0FF),
+      foreground: const Color(0xFF0B65F8),
+    ),
+    _ConversationPreviewTagTone.mention => (
+      background: const Color(0xFFFFECEB),
+      border: const Color(0xFFFFD6D3),
+      foreground: const Color(0xFFC22A22),
+    ),
+    _ConversationPreviewTagTone.draft => (
+      background: const Color(0xFFFFF4E5),
+      border: const Color(0xFFFFDFB0),
+      foreground: const Color(0xFFB25E00),
+    ),
+  };
 }
 
 class _ConversationTitleStatusLine extends StatelessWidget {
