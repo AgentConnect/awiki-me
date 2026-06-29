@@ -103,6 +103,66 @@ void main() {
     await tester.pump(const Duration(seconds: 8));
   });
 
+  testWidgets('error detail dialog closes with Escape', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: Builder(
+          builder: (context) {
+            return CupertinoButton(
+              onPressed: () {
+                showAwikiMeErrorDetailDialog(
+                  context,
+                  message: '请求失败',
+                  detail: 'transport unavailable',
+                );
+              },
+              child: const Text('show'),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('show'));
+    await tester.pumpAndSettle();
+    expect(find.text('错误详情'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('错误详情'), findsNothing);
+  });
+
+  testWidgets('error detail dialog closes when tapping the dimmed backdrop', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: Builder(
+          builder: (context) {
+            return CupertinoButton(
+              onPressed: () {
+                showAwikiMeErrorDetailDialog(
+                  context,
+                  message: '请求失败',
+                  detail: 'transport unavailable',
+                );
+              },
+              child: const Text('show'),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('show'));
+    await tester.pumpAndSettle();
+    expect(find.text('错误详情'), findsOneWidget);
+
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+    expect(find.text('错误详情'), findsNothing);
+  });
+
   testWidgets('info toast stays passive and non-selectable', (tester) async {
     await tester.pumpWidget(
       buildLocalizedTestApp(

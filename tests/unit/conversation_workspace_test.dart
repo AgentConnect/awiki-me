@@ -3,6 +3,7 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
@@ -25,6 +26,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_provide
 import 'package:awiki_me/src/presentation/conversation_list/conversation_list_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
+import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
@@ -1076,14 +1078,16 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });
-  testWidgets('macOS 群聊头部不显示群聊信息或身份卡入口', (tester) async {
+  testWidgets('macOS 群聊头像打开统一信息弹窗且头部不显示入口', (tester) async {
+    const groupId = 'did:test:group:funding';
     final group = GroupSummary(
-      groupId: 'did:test:group:funding',
+      groupId: groupId,
       name: '融资协作群',
       description: '同步融资材料和里程碑',
       memberCount: 2,
       lastMessageAt: DateTime(2026, 3, 28, 10, 25),
       myRole: 'owner',
+      membershipStatus: 'active',
     );
     final groupConversation = ConversationSummary(
       threadId: 'group:funding',
@@ -1092,11 +1096,27 @@ void main() {
       lastMessageAt: DateTime(2026, 3, 28, 10, 25),
       unreadCount: 0,
       isGroup: true,
-      groupId: 'did:test:group:funding',
+      groupId: groupId,
     );
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[groupConversation]
-      ..groups = <GroupSummary>[group];
+      ..groups = <GroupSummary>[group]
+      ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+        groupId: const <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: 'did:test:owner',
+            did: 'did:test:owner',
+            handle: 'owner.awiki',
+            role: 'owner',
+          ),
+          GroupMemberSummary(
+            userId: 'did:test:member',
+            did: 'did:test:member',
+            handle: 'member.awiki',
+            role: 'member',
+          ),
+        ],
+      };
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
       tester.binding.setSurfaceSize(null);
@@ -1131,9 +1151,185 @@ void main() {
     expect(find.byKey(const Key('mac-side-panel')), findsNothing);
     expect(find.byType(GroupDetailPage), findsNothing);
 
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('mac-side-panel')), findsNothing);
+    expect(find.text('群聊信息'), findsWidgets);
+    expect(find.text('同步融资材料和里程碑'), findsOneWidget);
+    expect(find.text('2 人'), findsOneWidget);
+    expect(find.text('owner'), findsWidgets);
+    expect(
+      find.byKey(const Key('group-info-dialog-did-value')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('group-info-dialog-refresh-members-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('group-info-dialog-add-member-button')),
+      findsOneWidget,
+    );
+    expect(find.text('owner.awiki'), findsOneWidget);
+    expect(find.text('member.awiki'), findsOneWidget);
+    expect(find.text('did:test:owner'), findsNothing);
+    expect(find.text('did:test:member'), findsNothing);
+    expect(find.byType(GroupDetailPage), findsNothing);
+
+    const memberHandle = 'bob.awiki.ai';
+    const memberDid = 'did:wba:awiki.ai:user:bob:e1_member';
+    gateway.publicProfilesByQuery = const <String, UserProfile>{
+      memberHandle: UserProfile(
+        did: memberDid,
+        nickName: 'Bob',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+        handle: memberHandle,
+        fullHandle: memberHandle,
+      ),
+    };
+    await tester.tap(
+      find.byKey(const Key('group-info-dialog-add-member-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('添加群成员'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('identity-lookup-input')),
+      memberHandle,
+    );
+    await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bob'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('identity-add-group-member-button')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastAddedGroupId, group.groupId);
+    expect(gateway.lastAddedMemberRef, memberDid);
+    expect(find.text(memberHandle), findsOneWidget);
+    expect(find.text(memberDid), findsNothing);
+    expect(find.text('3 人'), findsOneWidget);
+
+    await tester.tap(find.bySemanticsLabel('移除成员').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('移除'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastRemovedGroupId, group.groupId);
+    expect(gateway.lastRemovedMemberRef, memberDid);
+    expect(find.text(memberHandle), findsNothing);
+    expect(find.text('2 人'), findsOneWidget);
+
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });
+
+  testWidgets('macOS 群聊信息保留完整群权限避免按钮抖动', (tester) async {
+    const groupId = 'did:test:group:funding';
+    final fullGroup = GroupSummary(
+      groupId: groupId,
+      name: '融资协作群',
+      description: '同步融资材料和里程碑',
+      memberCount: 2,
+      lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+      myRole: 'owner',
+      membershipStatus: 'active',
+    );
+    final groupConversation = ConversationSummary(
+      threadId: 'group:funding',
+      displayName: '融资协作群',
+      lastMessagePreview: 'hello group',
+      lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: groupId,
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[groupConversation]
+      ..groups = <GroupSummary>[fullGroup]
+      ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+        groupId: const <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: 'did:test:owner',
+            did: 'did:test:owner',
+            handle: 'owner.awiki',
+            role: 'owner',
+          ),
+          GroupMemberSummary(
+            userId: 'did:test:member',
+            did: 'did:test:member',
+            handle: 'member.awiki',
+            role: 'member',
+          ),
+        ],
+      };
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('融资协作群').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('group-info-dialog-add-member-button')),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsLabel('移除成员'), findsWidgets);
+
+    gateway.groups = <GroupSummary>[
+      GroupSummary(
+        groupId: groupId,
+        name: groupId,
+        description: '',
+        memberCount: 0,
+        lastMessageAt: DateTime(2026, 3, 28, 10, 26),
+      ),
+    ];
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ConversationWorkspacePage)),
+    );
+    await container.read(groupProvider.notifier).refresh();
+    await tester.pumpAndSettle();
+
+    expect(find.text('群聊信息'), findsWidgets);
+    expect(find.text('同步融资材料和里程碑'), findsOneWidget);
+    expect(find.text('owner'), findsWidgets);
+    expect(
+      find.byKey(const Key('group-info-dialog-add-member-button')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.bySemanticsLabel('移除成员').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('移除成员'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
   testWidgets('macOS 右侧栏空间不足时聊天头部仍不显示信息入口', (tester) async {
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[conversation]
@@ -1179,7 +1375,18 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });
-  testWidgets('macOS 右侧栏空间不足时群聊头部不显示群聊信息入口', (tester) async {
+
+  testWidgets('macOS 右侧栏空间不足时群聊头像打开统一信息弹窗', (tester) async {
+    const groupId = 'did:test:group:funding';
+    final group = GroupSummary(
+      groupId: groupId,
+      name: '融资协作群',
+      description: '同步融资材料和里程碑',
+      memberCount: 2,
+      lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+      myRole: 'owner',
+      membershipStatus: 'active',
+    );
     final groupConversation = ConversationSummary(
       threadId: 'group:funding',
       displayName: '融资协作群',
@@ -1187,10 +1394,21 @@ void main() {
       lastMessageAt: DateTime(2026, 3, 28, 10, 25),
       unreadCount: 0,
       isGroup: true,
-      groupId: 'did:test:group:funding',
+      groupId: groupId,
     );
     final gateway = FakeAwikiGateway()
-      ..conversations = <ConversationSummary>[groupConversation];
+      ..conversations = <ConversationSummary>[groupConversation]
+      ..groups = <GroupSummary>[group]
+      ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+        groupId: const <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: 'did:test:owner',
+            did: 'did:test:owner',
+            handle: 'owner.awiki',
+            role: 'owner',
+          ),
+        ],
+      };
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
       tester.binding.setSurfaceSize(null);
@@ -1221,7 +1439,6 @@ void main() {
     expect(find.byType(ChatView), findsOneWidget);
     expect(find.byKey(const Key('mac-side-panel')), findsNothing);
     expect(find.byKey(const Key('mac-inline-side-panel')), findsNothing);
-    expect(find.text('融资协作群 的群聊信息'), findsNothing);
     expect(find.text('群聊信息'), findsNothing);
     expect(find.byKey(const Key('chat-identity-card-button')), findsNothing);
     expect(
@@ -1229,9 +1446,201 @@ void main() {
       findsNothing,
     );
 
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatView), findsOneWidget);
+    expect(find.byKey(const Key('mac-inline-side-panel')), findsNothing);
+    expect(find.byKey(const Key('mac-side-panel')), findsNothing);
+    expect(find.text('群聊信息'), findsWidgets);
+    expect(find.text('同步融资材料和里程碑'), findsOneWidget);
+    expect(find.text('owner.awiki'), findsOneWidget);
+
+    await tester.tap(find.bySemanticsLabel('关闭信息弹窗'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatView), findsOneWidget);
+    expect(find.text('同步融资材料和里程碑'), findsNothing);
+
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });
+
+  testWidgets('macOS 群聊成员刷新不受群详情空响应影响', (tester) async {
+    final groupConversation = ConversationSummary(
+      threadId: 'group:funding',
+      displayName: '融资协作群',
+      lastMessagePreview: 'hello group',
+      lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:test:group:funding',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[groupConversation]
+      ..groups = <GroupSummary>[
+        GroupSummary(
+          groupId: groupConversation.groupId!,
+          name: '融资协作群',
+          description: '同步融资材料和里程碑',
+          memberCount: 1,
+          lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+          myRole: 'owner',
+        ),
+      ]
+      ..getGroupError = StateError(
+        'IM Core group response did not include a group.',
+      );
+    UiFeedbackEvent? feedback;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: Consumer(
+          builder: (context, ref, child) {
+            feedback = ref.watch(uiFeedbackProvider);
+            return const ConversationWorkspacePage();
+          },
+        ),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('融资协作群').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('暂无成员快照，先执行一次刷新群详情与成员。'), findsOneWidget);
+
+    gateway.groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+      groupConversation.groupId!: const <GroupMemberSummary>[
+        GroupMemberSummary(
+          userId: 'did:test:late-member',
+          did: 'did:test:late-member',
+          handle: 'late-member.awiki',
+          role: 'late-role-hidden',
+        ),
+      ],
+    };
+
+    await tester.tap(
+      find.byKey(const Key('group-info-dialog-refresh-members-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(feedback, isNull);
+    expect(find.text('late-member.awiki'), findsOneWidget);
+    expect(find.text('did:test:late-member'), findsNothing);
+    expect(find.text('late-role-hidden'), findsNothing);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 群聊成员刷新期间显示按钮级 loading', (tester) async {
+    final groupConversation = ConversationSummary(
+      threadId: 'group:funding',
+      displayName: '融资协作群',
+      lastMessagePreview: 'hello group',
+      lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:test:group:funding',
+    );
+    final group = GroupSummary(
+      groupId: groupConversation.groupId!,
+      name: '融资协作群',
+      description: '同步融资材料和里程碑',
+      memberCount: 1,
+      lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+      myRole: 'owner',
+    );
+    final memberRefresh = Completer<void>();
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[groupConversation]
+      ..groups = <GroupSummary>[group]
+      ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+        group.groupId: const <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: 'did:test:owner',
+            did: 'did:test:owner',
+            handle: 'owner.awiki',
+            role: 'owner',
+          ),
+        ],
+      };
+    addTearDown(() {
+      if (!memberRefresh.isCompleted) {
+        memberRefresh.complete();
+      }
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('融资协作群').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
+    await tester.pumpAndSettle();
+
+    gateway.listGroupMembersCompleter = memberRefresh;
+    await tester.tap(
+      find.byKey(const Key('group-info-dialog-refresh-members-button')),
+    );
+    await tester.pump();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('group-info-dialog-refresh-members-button')),
+        matching: find.byType(CupertinoActivityIndicator),
+      ),
+      findsOneWidget,
+    );
+
+    memberRefresh.complete();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('group-info-dialog-refresh-members-button')),
+        matching: find.byType(CupertinoActivityIndicator),
+      ),
+      findsNothing,
+    );
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
   testWidgets('macOS 会话信息头部按钮已移除', (tester) async {
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[conversation]

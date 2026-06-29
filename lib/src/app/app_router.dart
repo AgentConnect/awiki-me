@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show DialogRoute;
 import 'package:flutter/services.dart';
 
 import '../presentation/shared/awiki_me_design.dart';
@@ -52,8 +53,20 @@ class AppNavigator {
     ).pushReplacement<T, TO>(CupertinoPageRoute<T>(builder: builder));
   }
 
-  static Future<T?> showDialog<T>(BuildContext context, WidgetBuilder builder) {
-    return showCupertinoDialog<T>(context: context, builder: builder);
+  static Future<T?> showDialog<T>(
+    BuildContext context,
+    WidgetBuilder builder, {
+    bool barrierDismissible = true,
+  }) {
+    return Navigator.of(context, rootNavigator: true).push<T>(
+      DialogRoute<T>(
+        context: context,
+        barrierDismissible: barrierDismissible,
+        barrierColor: const Color(0x66000000),
+        builder: (dialogContext) =>
+            _AppDialogKeyboardDismissScope(child: builder(dialogContext)),
+      ),
+    );
   }
 
   static Future<T?> showSheet<T>(
@@ -69,5 +82,34 @@ class AppNavigator {
     } finally {
       SystemChrome.setSystemUIOverlayStyle(_defaultOverlayStyle);
     }
+  }
+}
+
+class _AppDialogKeyboardDismissScope extends StatelessWidget {
+  const _AppDialogKeyboardDismissScope({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: true,
+      child: Shortcuts(
+        shortcuts: const <ShortcutActivator, Intent>{
+          SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
+        },
+        child: Actions(
+          actions: <Type, Action<Intent>>{
+            DismissIntent: CallbackAction<DismissIntent>(
+              onInvoke: (_) {
+                Navigator.maybeOf(context)?.maybePop();
+                return null;
+              },
+            ),
+          },
+          child: Focus(autofocus: true, child: child),
+        ),
+      ),
+    );
   }
 }

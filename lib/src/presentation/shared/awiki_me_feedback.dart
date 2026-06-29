@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
 import 'package:flutter/services.dart';
 
+import '../../app/app_router.dart';
 import 'awiki_me_design.dart';
 import 'responsive_layout.dart';
 
@@ -138,9 +139,9 @@ Future<void> showAwikiMeErrorDetailDialog(
   required String message,
   required String detail,
 }) {
-  return showCupertinoDialog<void>(
-    context: context,
-    builder: (dialogContext) =>
+  return AppNavigator.showDialog<void>(
+    context,
+    (dialogContext) =>
         _AwikiMeErrorDetailDialog(message: message, detail: detail),
   );
 }
