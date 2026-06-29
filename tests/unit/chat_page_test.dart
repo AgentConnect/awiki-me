@@ -2409,7 +2409,7 @@ void main() {
     expect(find.text('智能体正在处理...'), findsNothing);
   });
 
-  testWidgets('聊天窗口在会话列表刷新到新消息时补拉历史', (tester) async {
+  testWidgets('聊天窗口在会话列表刷新到新消息时只清未读不补拉历史', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -2470,11 +2470,16 @@ void main() {
     await container.read(conversationListProvider.notifier).refresh();
     await tester.pumpAndSettle();
 
-    expect(find.text('你好。欢迎'), findsOneWidget);
-    expect(gateway.fetchDmHistoryCalls, 1);
+    expect(find.text('你好。欢迎'), findsNothing);
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(gateway.markReadCalls, 1);
+    expect(
+      container.read(conversationListProvider).conversations.single.unreadCount,
+      0,
+    );
   });
 
-  testWidgets('聊天窗口在会话列表切换为 canonical thread 后仍补拉到当前窗口', (tester) async {
+  testWidgets('聊天窗口在会话列表切换为 canonical thread 后不反向补拉历史', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -2538,13 +2543,11 @@ void main() {
     await container.read(conversationListProvider.notifier).refresh();
     await tester.pumpAndSettle();
 
-    expect(find.text('我在。'), findsOneWidget);
+    expect(find.text('我在。'), findsNothing);
+    expect(gateway.fetchDmHistoryCalls, 0);
     expect(
-      container
-          .read(chatThreadProvider(openedConversation.threadId))
-          .messages
-          .map((message) => message.content),
-      contains('我在。'),
+      container.read(chatThreadProvider(openedConversation.threadId)).messages,
+      isEmpty,
     );
     expect(
       container
@@ -2614,7 +2617,9 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ChatView)),
     );
-    await container.read(conversationListProvider.notifier).refresh();
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
     await tester.pumpAndSettle();
 
     final expectedTime =

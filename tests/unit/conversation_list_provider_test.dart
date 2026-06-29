@@ -168,6 +168,96 @@ void main() {
   );
 
   test(
+    'non-empty refreshed preview can replace newer empty local preview',
+    () async {
+      final baseTime = DateTime.utc(2026, 6, 27, 2);
+      final local =
+          _conversation(
+            threadId: 'dm:did:human:did:agent',
+            displayName: 'Hermes',
+            targetDid: 'did:agent',
+            targetPeer: 'did:agent',
+          ).copyWith(
+            lastMessagePreview: '',
+            lastMessageAt: baseTime.add(const Duration(minutes: 1)),
+          );
+      final refreshed = _conversation(
+        threadId: 'dm:peer-scope:v1:hermes',
+        displayName: 'Hermes Remote',
+        targetDid: 'did:agent',
+        targetPeer: 'hermes.awiki.example',
+      ).copyWith(lastMessagePreview: 'Agent 已准备好。', lastMessageAt: baseTime);
+      final service = _StaticConversationService(
+        conversations: <ConversationSummary>[refreshed],
+      );
+      final container = ProviderContainer(
+        overrides: <Override>[
+          conversationServiceProvider.overrideWithValue(service),
+          notificationFacadeProvider.overrideWithValue(
+            FakeNotificationFacade(),
+          ),
+          sessionProvider.overrideWith((ref) {
+            final controller = SessionController();
+            controller.setSession(
+              const SessionIdentity(
+                did: 'did:human',
+                credentialName: 'human',
+                displayName: 'Human',
+              ),
+            );
+            return controller;
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(local);
+
+      await notifier.refresh();
+
+      final merged = container
+          .read(conversationListProvider)
+          .conversations
+          .single;
+      expect(merged.lastMessagePreview, 'Agent 已准备好。');
+      expect(merged.threadId, 'dm:peer-scope:v1:hermes');
+    },
+  );
+
+  test('mark read is no-op when conversation is already read', () async {
+    final service = _StaticConversationService(conversations: const []);
+    final notifications = FakeNotificationFacade();
+    final container = _conversationContainer(
+      service: service,
+      notifications: notifications,
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+
+    final conversation = _conversation(
+      threadId: 'dm:alice:bob',
+      displayName: 'Bob',
+      unreadCount: 0,
+    );
+    final notifier = container.read(conversationListProvider.notifier);
+    notifier.upsertConversation(conversation);
+    await Future<void>.delayed(Duration.zero);
+
+    var emissions = 0;
+    final subscription = container.listen<ConversationListState>(
+      conversationListProvider,
+      (_, _) => emissions += 1,
+    );
+    addTearDown(subscription.close);
+
+    notifier.markConversationReadLocal(conversation);
+
+    expect(emissions, 0);
+    expect(notifications.lastBadgeCount, 0);
+  });
+
+  test(
     'refreshFastLocal shows snapshot before SQLite hydrate finishes',
     () async {
       final hydrateCompleter = Completer<List<ConversationSummary>>();

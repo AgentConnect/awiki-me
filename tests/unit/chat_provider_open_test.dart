@@ -99,6 +99,30 @@ void main() {
     expect(thread.isLoading, isFalse);
   });
 
+  test('打开会话加载到首条本地历史后同步最近会话预览', () async {
+    final emptyPreviewConversation = conversation.copyWith(
+      lastMessagePreview: '',
+    );
+    gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:peer': <ChatMessage>[message.copyWith(content: 'Agent 已准备好。')],
+    };
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(emptyPreviewConversation);
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(emptyPreviewConversation);
+    await pumpEventQueue();
+
+    final conversations = container
+        .read(conversationListProvider)
+        .conversations;
+    expect(conversations, hasLength(1));
+    expect(conversations.single.lastMessagePreview, 'Agent 已准备好。');
+    expect(gateway.fetchLocalDmHistoryCalls, 1);
+  });
+
   test('本地历史为空时仍回退远端 history', () async {
     gateway.localDmHistoryByPeerDid = const <String, List<ChatMessage>>{};
 
@@ -368,82 +392,117 @@ void main() {
     expect(messages.map((item) => item.content), contains('repaired'));
   });
 
-  test('会话摘要变新时优先从本地 thread projection 修复当前窗口', () async {
-    final repaired = ChatMessage(
-      localId: 'summary-repair-1',
-      remoteId: 'summary-repair-1',
+  test(
+    'thread patch stream done repairs from store and resubscribes without full history',
+    () async {
+      final repaired = ChatMessage(
+        localId: 'stream-repair-1',
+        remoteId: 'stream-repair-1',
+        threadId: conversation.threadId,
+        senderDid: 'did:peer',
+        receiverDid: 'did:me',
+        content: 'stream repaired message',
+        createdAt: DateTime(2026, 5, 8, 10, 2),
+        isMine: false,
+        sendState: MessageSendState.sent,
+        serverSequence: 2,
+      );
+      final patchMessaging = _PatchMessagingService(
+        localHistory: <ChatMessage>[],
+        repairPatch: ThreadMessagePatch(
+          kind: ThreadMessagePatchKind.reset,
+          ownerDid: 'did:me',
+          version: 2,
+          threadKind: 'direct',
+          threadId: 'did:peer',
+          messages: <ChatMessage>[repaired],
+        ),
+      );
+      gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
+        'did:peer': <ChatMessage>[
+          repaired.copyWith(content: '不应该走 full history'),
+        ],
+      };
+      final patchContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            messageSyncService: messageSyncService,
+          ),
+          messagingServiceProvider.overrideWithValue(patchMessaging),
+          sessionProvider.overrideWith((ref) {
+            final controller = SessionController();
+            controller.setSession(
+              const SessionIdentity(
+                did: 'did:me',
+                credentialName: 'me.json',
+                displayName: 'Me',
+              ),
+            );
+            return controller;
+          }),
+        ],
+      );
+      addTearDown(patchContainer.dispose);
+
+      patchContainer
+          .read(chatThreadsProvider.notifier)
+          .markConversationVisible(conversation);
+      await pumpEventQueue();
+      expect(patchMessaging.watchCalls, 1);
+
+      await patchMessaging.closePatches();
+      await pumpEventQueue();
+
+      final messages = patchContainer
+          .read(chatThreadProvider(conversation.threadId))
+          .messages;
+      expect(patchMessaging.repairCalls, 1);
+      expect(patchMessaging.watchCalls, 2);
+      expect(gateway.fetchDmHistoryCalls, 0);
+      expect(messageSyncService.threadAfterRequests, isEmpty);
+      expect(
+        messages.map((item) => item.content),
+        contains('stream repaired message'),
+      );
+      expect(
+        messages.map((item) => item.content),
+        isNot(contains('不应该走 full history')),
+      );
+    },
+  );
+
+  test('未读摘要不会单独触发 history load', () async {
+    final local = ChatMessage(
+      localId: 'local-visible',
+      remoteId: 'local-visible',
       threadId: conversation.threadId,
       senderDid: 'did:peer',
       receiverDid: 'did:me',
-      content: '摘要之后的完整消息',
-      createdAt: DateTime(2026, 5, 8, 10, 2),
+      content: 'local visible message',
+      createdAt: conversation.lastMessageAt,
       isMine: false,
       sendState: MessageSendState.sent,
-      serverSequence: 2,
     );
-    final patchMessaging = _PatchMessagingService(
-      localHistory: <ChatMessage>[],
-      repairPatch: ThreadMessagePatch(
-        kind: ThreadMessagePatchKind.reset,
-        ownerDid: 'did:me',
-        version: 2,
-        threadKind: 'direct',
-        threadId: 'did:peer',
-        messages: <ChatMessage>[repaired],
-      ),
-    );
-    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
-      'did:peer': <ChatMessage>[
-        repaired.copyWith(content: '不应该先走 full history'),
-      ],
-    };
-    final patchContainer = ProviderContainer(
-      overrides: <Override>[
-        awikiGatewayProvider.overrideWithValue(gateway),
-        notificationFacadeProvider.overrideWithValue(notificationFacade),
-        ...fakeApplicationServiceOverrides(
-          gateway,
-          messageSyncService: messageSyncService,
-        ),
-        messagingServiceProvider.overrideWithValue(patchMessaging),
-        sessionProvider.overrideWith((ref) {
-          final controller = SessionController();
-          controller.setSession(
-            const SessionIdentity(
-              did: 'did:me',
-              credentialName: 'me.json',
-              displayName: 'Me',
-            ),
-          );
-          return controller;
-        }),
-      ],
-    );
-    addTearDown(patchContainer.dispose);
-
-    await patchContainer
+    container
         .read(chatThreadsProvider.notifier)
-        .syncVisibleConversationAfterSummaryUpdate(
-          conversation.copyWith(
-            lastMessagePreview: repaired.content,
-            lastMessageAt: repaired.createdAt,
-            unreadCount: 1,
-          ),
-          displayThreadId: conversation.threadId,
-        );
+        .applyRealtimeUpdate(local, conversation: conversation);
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .syncHistoryForConversation(conversation.copyWith(unreadCount: 3));
     await pumpEventQueue();
 
-    final messages = patchContainer
+    final messages = container
         .read(chatThreadProvider(conversation.threadId))
         .messages;
-    expect(patchMessaging.repairCalls, 1);
-    expect(gateway.fetchDmHistoryCalls, 0);
-    expect(messageSyncService.threadAfterRequests, isEmpty);
-    expect(messages.map((item) => item.content), contains('摘要之后的完整消息'));
     expect(
       messages.map((item) => item.content),
-      isNot(contains('不应该先走 full history')),
+      contains('local visible message'),
     );
+    expect(gateway.fetchDmHistoryCalls, 0);
   });
 
   test(
@@ -594,6 +653,45 @@ void main() {
     expect(gateway.fetchDmHistoryCalls, 1);
     expect(messageSyncService.threadAfterRequests, hasLength(2));
     expect(gateway.listConversationsCalls, 0);
+  });
+
+  test('首次打开会话会从 realtime alias 预热缓存直接渲染', () async {
+    final aliasConversation = conversation.copyWith(
+      threadId: 'direct-handle:peer.awiki.info',
+      targetPeer: 'peer.awiki.info',
+    );
+    final realtimeMessage = ChatMessage(
+      localId: 'rt-alias-1',
+      remoteId: 'rt-alias-1',
+      threadId: 'dm:peer-scope:v1:peer',
+      senderDid: 'did:peer',
+      content: 'realtime alias hello',
+      createdAt: message.createdAt,
+      isMine: false,
+      sendState: MessageSendState.sent,
+      receiverDid: 'did:me',
+    );
+    container
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(realtimeMessage, conversation: aliasConversation);
+    gateway.localDmHistoryByPeerDid = const <String, List<ChatMessage>>{};
+    gateway.dmHistoryByPeerDid = const <String, List<ChatMessage>>{};
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(aliasConversation);
+    await pumpEventQueue();
+
+    final messages = container
+        .read(chatThreadProvider(aliasConversation.threadId))
+        .messages;
+    expect(
+      messages.map((item) => item.content),
+      contains('realtime alias hello'),
+    );
+    expect(gateway.fetchLocalDmHistoryCalls, 0);
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(messageSyncService.threadAfterRequests, hasLength(1));
   });
 
   test('打开未读会话时本地清未读并异步上报，不刷新会话列表', () async {
@@ -2797,7 +2895,7 @@ class _PatchMessagingService
            );
 
   final List<ChatMessage> localHistory;
-  final ThreadMessagePatch repairPatch;
+  ThreadMessagePatch repairPatch;
   final StreamController<ThreadMessagePatch> _patches =
       StreamController<ThreadMessagePatch>.broadcast();
   int repairCalls = 0;
@@ -2808,6 +2906,12 @@ class _PatchMessagingService
   void emitPatch(ThreadMessagePatch patch) {
     _patches.add(patch);
   }
+
+  void emitError(Object error) {
+    _patches.addError(error);
+  }
+
+  Future<void> closePatches() => _patches.close();
 
   @override
   Stream<ThreadMessagePatch> watchThreadPatches(
