@@ -2,7 +2,7 @@ name: awiki_me
 description: AWiki Me Flutter messaging client
 publish_to: "none"
 
-version: 0.1.0+2
+version: 0.1.0+3
 
 environment:
   sdk: ">=3.8.0 <4.0.0"
