@@ -196,6 +196,132 @@ void main() {
     expect(thread.isHydratingLocalHistory, isFalse);
   });
 
+  test('本地历史混合有无 serverSequence 时按时间线稳定排序', () async {
+    final askedTime = ChatMessage(
+      localId: 'local-question-time',
+      remoteId: 'local-question-time',
+      threadId: conversation.threadId,
+      senderDid: 'did:me',
+      receiverDid: 'did:peer',
+      content: '现在几点',
+      createdAt: DateTime(2026, 5, 8, 10, 0),
+      isMine: true,
+      sendState: MessageSendState.sent,
+    );
+    final timeReply = ChatMessage(
+      localId: 'remote-time-reply',
+      remoteId: 'remote-time-reply',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: '现在时间是 10:01',
+      createdAt: DateTime(2026, 5, 8, 10, 1),
+      isMine: false,
+      serverSequence: 101,
+      sendState: MessageSendState.sent,
+    );
+    final followUp = ChatMessage(
+      localId: 'local-follow-up',
+      remoteId: 'local-follow-up',
+      threadId: conversation.threadId,
+      senderDid: 'did:me',
+      receiverDid: 'did:peer',
+      content: 'nihao',
+      createdAt: DateTime(2026, 5, 8, 10, 2),
+      isMine: true,
+      sendState: MessageSendState.sent,
+    );
+    gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:peer': <ChatMessage>[askedTime, timeReply, followUp],
+    };
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(
+          conversation.copyWith(
+            lastMessagePreview: followUp.content,
+            lastMessageAt: followUp.createdAt,
+          ),
+        );
+    await pumpEventQueue();
+
+    final messages = container
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    expect(messages.map((item) => item.content), <String>[
+      '现在几点',
+      '现在时间是 10:01',
+      'nihao',
+    ]);
+  });
+
+  test('thread-after 补全已有消息 serverSequence 后不改变可见时间线顺序', () async {
+    final askedTime = ChatMessage(
+      localId: 'local-question-time',
+      remoteId: 'local-question-time',
+      threadId: conversation.threadId,
+      senderDid: 'did:me',
+      receiverDid: 'did:peer',
+      content: '现在几点',
+      createdAt: DateTime(2026, 5, 8, 10, 0),
+      isMine: true,
+      sendState: MessageSendState.sent,
+    );
+    final timeReplyWithoutSeq = ChatMessage(
+      localId: 'remote-time-reply',
+      remoteId: 'remote-time-reply',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: '现在时间是 10:01',
+      createdAt: DateTime(2026, 5, 8, 10, 1),
+      isMine: false,
+      sendState: MessageSendState.sent,
+    );
+    final followUp = ChatMessage(
+      localId: 'local-follow-up',
+      remoteId: 'local-follow-up',
+      threadId: conversation.threadId,
+      senderDid: 'did:me',
+      receiverDid: 'did:peer',
+      content: 'nihao',
+      createdAt: DateTime(2026, 5, 8, 10, 2),
+      isMine: true,
+      sendState: MessageSendState.sent,
+    );
+    final timeReplyWithSeq = timeReplyWithoutSeq.copyWith(serverSequence: 101);
+    gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:peer': <ChatMessage>[askedTime, timeReplyWithoutSeq, followUp],
+    };
+    messageSyncService.threadAfterMessagesByStableId['dm:did:peer'] =
+        <ChatMessage>[timeReplyWithSeq];
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(
+          conversation.copyWith(
+            lastMessagePreview: followUp.content,
+            lastMessageAt: followUp.createdAt,
+          ),
+        );
+    await pumpEventQueue();
+
+    final messages = container
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    expect(messages.map((item) => item.content), <String>[
+      '现在几点',
+      '现在时间是 10:01',
+      'nihao',
+    ]);
+    expect(
+      messages
+          .singleWhere((item) => item.content == '现在时间是 10:01')
+          .serverSequence,
+      101,
+    );
+  });
+
   test('打开会话后按本地最大 serverSequence 调用 thread-after 补新', () async {
     final local = ChatMessage(
       localId: 'local-1',
