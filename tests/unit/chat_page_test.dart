@@ -585,6 +585,96 @@ void main() {
     expect(gateway.following, isEmpty);
   });
 
+  testWidgets('智能体信息弹窗支持修改当前智能体名称', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..publicProfile = const UserProfile(
+        did: 'did:agent:runtime',
+        nickName: 'Hermes Profile',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+        handle: 'hermes.anpclaw.com',
+        fullHandle: 'hermes.anpclaw.com',
+      );
+    final control = FakeAgentControlService()
+      ..agents = <AgentSummary>[
+        const AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: 'Daemon',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        const AgentSummary(
+          agentDid: 'did:agent:runtime',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'hermes',
+          handle: 'hermes',
+          displayName: '我的智能体',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:rename-runtime-agent',
+      displayName: '我的智能体',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:agent:runtime',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+          agentsProvider.overrideWith((ref) {
+            final controller = AgentsController(ref);
+            controller.state = AgentsState(agents: control.agents);
+            return controller;
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('智能体信息'), findsOneWidget);
+    expect(find.text('我的智能体'), findsWidgets);
+    expect(
+      find.byKey(const Key('peer-info-agent-rename-button')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('peer-info-agent-rename-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('agent-rename-field')),
+      '更新后的智能体',
+    );
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(control.lastRenamedAgentDid, 'did:agent:runtime');
+    expect(control.lastDisplayName, '更新后的智能体');
+    expect(find.text('更新后的智能体'), findsOneWidget);
+  });
+
   testWidgets('聊天头部已关注按钮取消关注前需要确认', (tester) async {
     final gateway = FakeAwikiGateway()
       ..following = const <RelationshipSummary>[

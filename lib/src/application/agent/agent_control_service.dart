@@ -47,16 +47,6 @@ abstract interface class AgentControlService {
     String? runtimeRegistrationToken,
     String? runId,
   });
-  Future<void> resetRuntimeSession({
-    required String daemonAgentDid,
-    required String runtimeAgentDid,
-    String? conversationId,
-  });
-  Future<void> retryRun({
-    required String daemonAgentDid,
-    required String runtimeAgentDid,
-    required String runId,
-  });
   Future<String> queryRuntimeInbox({
     required String daemonAgentDid,
     required String runtimeAgentDid,
@@ -337,33 +327,6 @@ class DefaultAgentControlService implements AgentControlService {
         'profile': appMessageHandlerRuntimeProfile,
       },
       delegatedKeyVerificationMethod: userSubkeyPackage.verificationMethod,
-    );
-  }
-
-  @override
-  Future<void> resetRuntimeSession({
-    required String daemonAgentDid,
-    required String runtimeAgentDid,
-    String? conversationId,
-  }) {
-    return _sendDaemonPayload(
-      daemonAgentDid,
-      runtimeSessionResetPayload(
-        runtimeAgentDid: runtimeAgentDid,
-        conversationId: conversationId,
-      ),
-    );
-  }
-
-  @override
-  Future<void> retryRun({
-    required String daemonAgentDid,
-    required String runtimeAgentDid,
-    required String runId,
-  }) {
-    return _sendDaemonPayload(
-      daemonAgentDid,
-      runtimeRunRetryPayload(runtimeAgentDid: runtimeAgentDid, runId: runId),
     );
   }
 

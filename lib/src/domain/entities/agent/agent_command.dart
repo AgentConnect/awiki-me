@@ -145,38 +145,6 @@ Map<String, Object?> agentStatusQueryPayload({
   };
 }
 
-Map<String, Object?> runtimeSessionResetPayload({
-  required String runtimeAgentDid,
-  String? conversationId,
-}) {
-  return <String, Object?>{
-    'schema': AgentControlPayloads.commandSchema,
-    'command_id': agentCommandId(),
-    'command': 'runtime.session.reset',
-    'target_agent_kind': 'runtime',
-    'args': <String, Object?>{
-      'runtime_agent_did': runtimeAgentDid,
-      if (conversationId != null) 'conversation_id': conversationId,
-    },
-  };
-}
-
-Map<String, Object?> runtimeRunRetryPayload({
-  required String runtimeAgentDid,
-  required String runId,
-}) {
-  return <String, Object?>{
-    'schema': AgentControlPayloads.commandSchema,
-    'command_id': agentCommandId(),
-    'command': 'runtime.run.retry',
-    'target_agent_kind': 'runtime',
-    'args': <String, Object?>{
-      'runtime_agent_did': runtimeAgentDid,
-      'run_id': runId,
-    },
-  };
-}
-
 Map<String, Object?> runtimeInboxQueryPayload({
   required String runtimeAgentDid,
   String scope = 'all',

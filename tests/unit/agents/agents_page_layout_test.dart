@@ -278,7 +278,7 @@ void main() {
                   agents: control.agents,
                   selectedAgentDid: 'did:agent:daemon',
                   pendingActionKeys: <String>{
-                    AgentActionKeys.resetRuntime('did:agent:other-runtime'),
+                    AgentActionKeys.rename('did:agent:other-runtime'),
                   },
                 ),
               );
@@ -379,22 +379,8 @@ void main() {
       'awiki-agent-hermes.awiki.info',
     );
 
-    await tester.tap(find.text('重置 Session'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('重置').last);
-    await tester.pump(const Duration(milliseconds: 250));
-    expect(control.lastResetDaemonDid, 'did:agent:daemon');
-    expect(control.lastResetRuntimeDid, 'did:agent:runtime');
-
-    await tester.tap(find.text('重试 Run'));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const Key('agent-retry-run-field')),
-      'run_123',
-    );
-    await tester.tap(find.text('重试').last);
-    await tester.pumpAndSettle();
-    expect(control.lastRetryRunId, 'run_123');
+    expect(find.text('重置 Session'), findsNothing);
+    expect(find.text('重试 Run'), findsNothing);
   });
 
   testWidgets(

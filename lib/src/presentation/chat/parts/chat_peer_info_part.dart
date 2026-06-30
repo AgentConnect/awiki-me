@@ -52,7 +52,9 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     required double maxDialogHeight,
   }) {
     final profile = state.profile!;
-    final displayName = DidDisplayFormatter.profileName(profile);
+    final displayName = runtimeAgent == null
+        ? DidDisplayFormatter.profileName(profile)
+        : AgentDisplayName.title(runtimeAgent);
     final profileContent = profile.profileMarkdown.trim().isNotEmpty
         ? profile.profileMarkdown.trim()
         : profile.bio.trim();
@@ -82,16 +84,45 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Text(
-                            displayName,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF101B32),
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                            ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: <Widget>[
+                              Expanded(
+                                child: Text(
+                                  displayName,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Color(0xFF101B32),
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              if (runtimeAgent != null) ...<Widget>[
+                                const SizedBox(width: 6),
+                                _AgentRenameIconButton(
+                                  agent: runtimeAgent,
+                                  onRename: _renameAgent,
+                                ),
+                              ],
+                            ],
                           ),
+                          if (runtimeAgent != null &&
+                              DidDisplayFormatter.profileName(profile) !=
+                                  displayName) ...<Widget>[
+                            const SizedBox(height: 4),
+                            Text(
+                              DidDisplayFormatter.profileName(profile),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFF66728A),
+                                fontSize: 12,
+                                height: 1.25,
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 8),
                           CopyableDidLine(
                             value: profile.did,
@@ -244,6 +275,37 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     }
   }
 
+  Future<void> _renameAgent(AgentSummary agent) async {
+    final displayName = await showAgentRenameDialog(context, agent);
+    if (displayName == null || !mounted) {
+      return;
+    }
+    try {
+      await ref
+          .read(agentsProvider.notifier)
+          .renameAgent(agentDid: agent.agentDid, displayName: displayName);
+      if (!mounted) {
+        return;
+      }
+      final error = ref.read(agentsProvider).error;
+      if (error != null && error.trim().isNotEmpty) {
+        ref
+            .read(uiFeedbackProvider.notifier)
+            .showError(AppMessage.fromError(StateError(error)));
+        return;
+      }
+      ref.read(conversationListProvider.notifier).refresh();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
+      return;
+    }
+  }
+
   AgentSummary? _runtimeAgent() {
     final targetDid = widget.conversation.targetDid?.trim();
     if (targetDid == null || targetDid.isEmpty || widget.conversation.isGroup) {
@@ -270,43 +332,54 @@ class _PeerInfoHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return Container(
+    return SizedBox(
       height: responsive.displayScaled(58),
-      padding: EdgeInsets.fromLTRB(
-        responsive.spacing(18),
-        0,
-        responsive.spacing(12),
-        0,
-      ),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFFE5EAF2))),
-      ),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              title,
-              style: TextStyle(
-                color: const Color(0xFF101B32),
-                fontSize: responsive.titleLg,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: Color(0xFFE5EAF2))),
+        ),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            responsive.spacing(18),
+            0,
+            responsive.spacing(12),
+            0,
           ),
-          AppIconButton(
-            onPressed: () => Navigator.of(context).pop(),
-            semanticLabel: '关闭信息弹窗',
-            tooltip: '关闭',
-            size: responsive.displayScaled(32),
-            backgroundColor: const Color(0xFFF5F7FB),
-            borderColor: const Color(0xFFE4E9F2),
-            child: Icon(
-              CupertinoIcons.xmark,
-              color: const Color(0xFF66728A),
-              size: responsive.iconSm,
-            ),
+          child: AppDialogHeader(
+            title: title,
+            closeLabel: '关闭信息弹窗',
+            onClose: () => Navigator.of(context).pop(),
           ),
-        ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AgentRenameIconButton extends StatelessWidget {
+  const _AgentRenameIconButton({required this.agent, required this.onRename});
+
+  final AgentSummary agent;
+  final ValueChanged<AgentSummary> onRename;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return SelectionContainer.disabled(
+      child: AppIconButton(
+        key: const Key('peer-info-agent-rename-button'),
+        onPressed: () => onRename(agent),
+        semanticLabel: '修改智能体名称',
+        tooltip: '修改名称',
+        size: responsive.displayScaled(30),
+        backgroundColor: const Color(0xFFF5F7FB),
+        borderColor: const Color(0xFFE4E9F2),
+        borderRadius: BorderRadius.circular(responsive.radius(9)),
+        child: Icon(
+          CupertinoIcons.pencil,
+          color: const Color(0xFF66728A),
+          size: responsive.iconSm,
+        ),
       ),
     );
   }

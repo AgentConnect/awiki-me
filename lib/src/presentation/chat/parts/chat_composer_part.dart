@@ -160,6 +160,8 @@ class _ComposerState extends ConsumerState<_Composer> {
       final candidates = ChatMentionCandidate.forGroupMembers(
         members,
         query: trigger.query,
+        currentUserDid: ref.read(sessionProvider).session?.did,
+        currentUserHandle: ref.read(sessionProvider).session?.handle,
       );
       setState(() {
         _mentionCandidates = candidates;
@@ -178,6 +180,8 @@ class _ComposerState extends ConsumerState<_Composer> {
         _mentionCandidates = ChatMentionCandidate.forGroupMembers(
           const <Never>[],
           query: trigger.query,
+          currentUserDid: ref.read(sessionProvider).session?.did,
+          currentUserHandle: ref.read(sessionProvider).session?.handle,
         );
         _mentionCandidatesLoading = false;
         _selectedMentionIndex = 0;

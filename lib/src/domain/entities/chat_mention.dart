@@ -253,13 +253,17 @@ class ChatMentionCandidate {
   static List<ChatMentionCandidate> forGroupMembers(
     Iterable<GroupMemberSummary> members, {
     String query = '',
+    String? currentUserDid,
+    String? currentUserHandle,
   }) {
     final candidates = <ChatMentionCandidate>[
-      ChatMentionCandidate.forGroupSelector(ChatMentionSelector.all),
-      ChatMentionCandidate.forGroupSelector(ChatMentionSelector.humans),
-      ChatMentionCandidate.forGroupSelector(ChatMentionSelector.agents),
       for (final member in members)
-        if (member.membershipStatus == GroupMemberMembershipStatus.active)
+        if (member.membershipStatus == GroupMemberMembershipStatus.active &&
+            !_isCurrentUserMentionMember(
+              member,
+              currentUserDid: currentUserDid,
+              currentUserHandle: currentUserHandle,
+            ))
           ChatMentionCandidate.fromGroupMember(member),
     ];
     return candidates
@@ -828,6 +832,41 @@ String _normalizeSearch(String value) {
     text = text.substring(1).trimLeft();
   }
   return text;
+}
+
+bool _isCurrentUserMentionMember(
+  GroupMemberSummary member, {
+  required String? currentUserDid,
+  required String? currentUserHandle,
+}) {
+  final normalizedCurrentDid = currentUserDid?.trim();
+  if (normalizedCurrentDid != null && normalizedCurrentDid.isNotEmpty) {
+    final memberDid = member.did.trim();
+    if (memberDid == normalizedCurrentDid) {
+      return true;
+    }
+    final memberUserId = member.userId.trim();
+    if (memberUserId == normalizedCurrentDid) {
+      return true;
+    }
+  }
+
+  final normalizedCurrentHandle = _normalizeHandleKey(currentUserHandle);
+  if (normalizedCurrentHandle == null) {
+    return false;
+  }
+  return _normalizeHandleKey(member.handle) == normalizedCurrentHandle ||
+      _normalizeHandleKey(_handleFromDid(member.did)) ==
+          normalizedCurrentHandle;
+}
+
+String? _normalizeHandleKey(String? value) {
+  final handle = _mentionHandle(value);
+  if (handle == null) {
+    return null;
+  }
+  final normalized = handle.trim().toLowerCase();
+  return normalized.isEmpty ? null : normalized;
 }
 
 String _memberSubtitle(GroupMemberSummary member) {

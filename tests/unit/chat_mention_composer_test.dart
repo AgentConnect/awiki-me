@@ -108,6 +108,85 @@ void main() {
     },
   );
 
+  testWidgets('chat mention composer hides self and group selector shortcuts', (
+    tester,
+  ) async {
+    final gateway = FakeAwikiGateway()
+      ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+        'group-mention': const <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: 'did:wba:awiki.info:u:me',
+            did: 'did:wba:awiki.info:u:me',
+            handle: 'me',
+            role: 'owner',
+            displayName: 'Me',
+            subjectType: GroupMemberSubjectType.human,
+          ),
+          GroupMemberSummary(
+            userId: 'did:wba:awiki.info:u:alice',
+            did: 'did:wba:awiki.info:u:alice',
+            handle: 'alice',
+            role: 'member',
+            displayName: 'Alice',
+            subjectType: GroupMemberSubjectType.human,
+          ),
+          GroupMemberSummary(
+            userId: 'did:wba:awiki.info:agent:runtime:hermes:e1_agent',
+            did: 'did:wba:awiki.info:agent:runtime:hermes:e1_agent',
+            handle: 'hermes',
+            role: 'member',
+            displayName: 'Hermes',
+            subjectType: GroupMemberSubjectType.agent,
+          ),
+        ],
+      };
+    const session = SessionIdentity(
+      did: 'did:wba:awiki.info:u:me',
+      handle: 'me.awiki.info',
+      displayName: 'Me',
+      credentialName: 'me.json',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'group:group-mention',
+      displayName: 'Mention Group',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 6, 14, 20, 42),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'group-mention',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(
+            conversation: conversation,
+            embedded: true,
+            macStyle: true,
+          ),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(CupertinoTextField), '@');
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.byKey(const Key('chat-mention-candidate-panel')),
+      findsOneWidget,
+    );
+    expect(find.text('@me'), findsNothing);
+    expect(find.text('@所有人'), findsNothing);
+    expect(find.text('@所有用户'), findsNothing);
+    expect(find.text('@所有智能体'), findsNothing);
+    expect(find.text('@Alice'), findsOneWidget);
+    expect(find.text('@hermes'), findsOneWidget);
+  });
+
   testWidgets('chat mention keyboard selection stays visible in long lists', (
     tester,
   ) async {
@@ -184,7 +263,7 @@ void main() {
     );
     expect(selectedFinder, findsOneWidget);
     expect(
-      find.descendant(of: selectedFinder, matching: find.text('@User 9')),
+      find.descendant(of: selectedFinder, matching: find.text('@User 12')),
       findsOneWidget,
     );
 
@@ -270,7 +349,7 @@ void main() {
       expect(
         find.descendant(
           of: selectedFinder,
-          matching: find.text('@Compact User 9'),
+          matching: find.text('@Compact User 12'),
         ),
         findsOneWidget,
       );

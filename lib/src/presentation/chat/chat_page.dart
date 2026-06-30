@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show SelectionArea;
+import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -27,6 +27,7 @@ import '../../l10n/l10n.dart';
 import '../../app/ui_feedback.dart';
 import '../agents/agent_inbox_panel.dart';
 import '../agents/agent_display_name.dart';
+import '../agents/agent_rename_dialog.dart';
 import '../agents/agents_provider.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../app_shell/providers/session_provider.dart';

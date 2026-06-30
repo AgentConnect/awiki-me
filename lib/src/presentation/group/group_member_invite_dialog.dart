@@ -16,6 +16,7 @@ import '../conversation_list/conversation_provider.dart';
 import '../friends/friends_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
+import '../shared/app_dialog.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/identity_flow.dart';
@@ -216,11 +217,6 @@ class _GroupMemberInviteDialogState
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final mediaSize = MediaQuery.sizeOf(context);
-    final maxWidth = responsive.isPhone ? double.infinity : 620.0;
-    final maxHeight = responsive.isPhone
-        ? mediaSize.height * 0.9
-        : mediaSize.height - 48;
     final candidates = _filteredCandidates();
     final hasMore =
         !_showAllCandidates &&
@@ -230,140 +226,116 @@ class _GroupMemberInviteDialogState
         ? candidates.take(_defaultVisibleLimit).toList()
         : candidates;
     final selectedCount = _selectedDids.length;
-    return CupertinoPopupSurface(
-      isSurfacePainted: false,
-      child: Center(
-        child: SafeArea(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: maxWidth,
-              maxHeight: maxHeight,
-            ),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: CupertinoColors.white,
-                borderRadius: BorderRadius.circular(responsive.radius(22)),
-                boxShadow: const <BoxShadow>[
-                  BoxShadow(
-                    color: Color(0x240B1F3A),
-                    blurRadius: 32,
-                    offset: Offset(0, 14),
+    return AppDialogScaffold(
+      maxWidth: 620,
+      maxHeightFraction: 0.9,
+      horizontalPadding: responsive.isPhone ? 14 : 16,
+      verticalPadding: 24,
+      borderRadius: BorderRadius.circular(responsive.radius(16)),
+      avoidViewInsets: true,
+      padding: responsive.scaledInsets(
+        const EdgeInsets.fromLTRB(22, 20, 22, 20),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _InviteDialogHeader(isBusy: _isSubmitting),
+          SizedBox(height: responsive.spacing(18)),
+          _InviteSearchInput(
+            controller: _queryController,
+            enabled: !_isSubmitting && !_isResolving,
+            isResolving: _isResolving,
+            onSubmitted: _resolveQuery,
+            onResolve: _resolveQuery,
+          ),
+          if (_errorText != null) ...<Widget>[
+            SizedBox(height: responsive.spacing(10)),
+            AwikiMeErrorNotice(message: _errorText!, compact: true),
+          ],
+          SizedBox(height: responsive.spacing(14)),
+          _SelectedInviteStrip(
+            selected: _selectedCandidates(candidates),
+            onRemove: _isSubmitting
+                ? null
+                : (candidate) => _toggleCandidate(candidate),
+          ),
+          SizedBox(height: responsive.spacing(12)),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  _candidateSectionTitle,
+                  style: AwikiMeTextStyles.sectionTitle.copyWith(
+                    fontSize: responsive.bodyMd,
                   ),
-                ],
+                ),
               ),
-              child: Padding(
-                padding: responsive.scaledInsets(
-                  const EdgeInsets.fromLTRB(22, 20, 22, 20),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    _InviteDialogHeader(isBusy: _isSubmitting),
-                    SizedBox(height: responsive.spacing(18)),
-                    _InviteSearchInput(
-                      controller: _queryController,
-                      enabled: !_isSubmitting && !_isResolving,
-                      isResolving: _isResolving,
-                      onSubmitted: _resolveQuery,
-                      onResolve: _resolveQuery,
-                    ),
-                    if (_errorText != null) ...<Widget>[
-                      SizedBox(height: responsive.spacing(10)),
-                      AwikiMeErrorNotice(message: _errorText!, compact: true),
-                    ],
-                    SizedBox(height: responsive.spacing(14)),
-                    _SelectedInviteStrip(
-                      selected: _selectedCandidates(candidates),
-                      onRemove: _isSubmitting
-                          ? null
-                          : (candidate) => _toggleCandidate(candidate),
-                    ),
-                    SizedBox(height: responsive.spacing(12)),
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Text(
-                            _candidateSectionTitle,
-                            style: AwikiMeTextStyles.sectionTitle.copyWith(
-                              fontSize: responsive.bodyMd,
-                            ),
-                          ),
-                        ),
-                        if (_isLoadingLocalCandidates)
-                          const CupertinoActivityIndicator(radius: 8),
-                      ],
-                    ),
-                    SizedBox(height: responsive.spacing(10)),
-                    Flexible(
-                      fit: FlexFit.loose,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxHeight: responsive.isPhone ? 300 : 340,
-                          minHeight: 150,
-                        ),
-                        child: _InviteCandidateList(
-                          controller: _candidateScrollController,
-                          candidates: visibleCandidates,
-                          selectedDids: _selectedDids,
-                          existingMemberDids: _existingMemberDids,
-                          onToggle: _isSubmitting ? null : _toggleCandidate,
-                          query: _normalizedQuery,
-                        ),
-                      ),
-                    ),
-                    if (hasMore) ...<Widget>[
-                      SizedBox(height: responsive.spacing(8)),
-                      SizedBox(
-                        width: double.infinity,
-                        child: AppSecondaryButton(
-                          label: '查看更多',
-                          onPressed: _isSubmitting
-                              ? null
-                              : () => setState(() {
-                                  _showAllCandidates = true;
-                                }),
-                        ),
-                      ),
-                    ],
-                    SizedBox(height: responsive.spacing(16)),
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: AppSecondaryButton(
-                            label: '取消',
-                            onPressed: _isSubmitting
-                                ? null
-                                : () => Navigator.of(context).pop(),
-                          ),
-                        ),
-                        SizedBox(width: responsive.spacing(12)),
-                        Expanded(
-                          child: AppPrimaryButton(
-                            key: const Key('identity-add-group-member-button'),
-                            label: _isSubmitting
-                                ? '添加中...'
-                                : selectedCount == 0
-                                ? '确认添加'
-                                : '确认添加 ($selectedCount)',
-                            semanticsIdentifier:
-                                'e2e-identity-add-group-member-button',
-                            onPressed:
-                                selectedCount == 0 ||
-                                    _isSubmitting ||
-                                    _isResolving
-                                ? null
-                                : _submitSelected,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+              if (_isLoadingLocalCandidates)
+                const CupertinoActivityIndicator(radius: 8),
+            ],
+          ),
+          SizedBox(height: responsive.spacing(10)),
+          Flexible(
+            fit: FlexFit.loose,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: responsive.isPhone ? 300 : 340,
+                minHeight: 150,
+              ),
+              child: _InviteCandidateList(
+                controller: _candidateScrollController,
+                candidates: visibleCandidates,
+                selectedDids: _selectedDids,
+                existingMemberDids: _existingMemberDids,
+                onToggle: _isSubmitting ? null : _toggleCandidate,
+                query: _normalizedQuery,
               ),
             ),
           ),
-        ),
+          if (hasMore) ...<Widget>[
+            SizedBox(height: responsive.spacing(8)),
+            SizedBox(
+              width: double.infinity,
+              child: AppSecondaryButton(
+                label: '查看更多',
+                onPressed: _isSubmitting
+                    ? null
+                    : () => setState(() {
+                        _showAllCandidates = true;
+                      }),
+              ),
+            ),
+          ],
+          SizedBox(height: responsive.spacing(16)),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: AppSecondaryButton(
+                  label: '取消',
+                  onPressed: _isSubmitting
+                      ? null
+                      : () => Navigator.of(context).pop(),
+                ),
+              ),
+              SizedBox(width: responsive.spacing(12)),
+              Expanded(
+                child: AppPrimaryButton(
+                  key: const Key('identity-add-group-member-button'),
+                  label: _isSubmitting
+                      ? '添加中...'
+                      : selectedCount == 0
+                      ? '确认添加'
+                      : '确认添加 ($selectedCount)',
+                  semanticsIdentifier: 'e2e-identity-add-group-member-button',
+                  onPressed: selectedCount == 0 || _isSubmitting || _isResolving
+                      ? null
+                      : _submitSelected,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -721,47 +693,11 @@ class _InviteDialogHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                '添加群成员',
-                style: TextStyle(
-                  color: const Color(0xFF101B32),
-                  fontSize: responsive.isPhone ? 19 : 20,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                '搜索本地身份，或输入 handle / DID 匹配新身份。',
-                style: TextStyle(
-                  color: Color(0xFF66728A),
-                  fontSize: 13,
-                  height: 1.35,
-                ),
-              ),
-            ],
-          ),
-        ),
-        TopBarActionButton(
-          onTap: isBusy ? null : () => Navigator.of(context).pop(),
-          semanticsLabel: '关闭',
-          tooltip: '关闭',
-          child: const Padding(
-            padding: EdgeInsets.all(6),
-            child: Icon(
-              CupertinoIcons.xmark,
-              color: Color(0xFF34415C),
-              size: 20,
-            ),
-          ),
-        ),
-      ],
+    return AppDialogHeader(
+      title: '添加群成员',
+      subtitle: '搜索本地身份，或输入 handle / DID 匹配新身份。',
+      onClose: () => Navigator.of(context).pop(),
+      isCloseEnabled: !isBusy,
     );
   }
 }

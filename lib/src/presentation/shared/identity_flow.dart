@@ -20,6 +20,7 @@ import '../chat/chat_page.dart';
 import '../chat/chat_provider.dart';
 import '../conversation_list/conversation_provider.dart';
 import '../friends/friends_provider.dart';
+import 'app_dialog.dart';
 import 'awiki_me_feedback.dart';
 import 'avatar_badge.dart';
 import 'formatters/display_formatters.dart';
@@ -473,152 +474,99 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
   Widget build(BuildContext context) {
     final config = _config;
     final responsive = context.awikiResponsive;
-    final maxWidth = responsive.isPhone ? double.infinity : 560.0;
-    return CupertinoPopupSurface(
-      isSurfacePainted: false,
-      child: Center(
-        child: SafeArea(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: maxWidth,
-              maxHeight: MediaQuery.sizeOf(context).height - 48,
-            ),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: CupertinoColors.white,
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: const <BoxShadow>[
-                  BoxShadow(
-                    color: Color(0x240B1F3A),
-                    blurRadius: 32,
-                    offset: Offset(0, 14),
+    return AppDialogScaffold(
+      maxWidth: 560,
+      maxHeightFraction: 0.9,
+      horizontalPadding: responsive.isPhone ? 14 : 16,
+      verticalPadding: 24,
+      borderRadius: BorderRadius.circular(responsive.radius(16)),
+      avoidViewInsets: true,
+      padding: EdgeInsets.fromLTRB(
+        responsive.spacing(22),
+        responsive.spacing(20),
+        responsive.spacing(22),
+        responsive.spacing(22),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          AppDialogHeader(
+            title: config.title,
+            subtitle: config.subtitle,
+            onClose: () => Navigator.of(context).pop(),
+            isCloseEnabled: !_isSubmitting,
+          ),
+          const SizedBox(height: 22),
+          Flexible(
+            child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _IdentitySearchInput(
+                    controller: _queryController,
+                    enabled: !_isResolving && !_isSubmitting,
+                    keyValue: config.inputKey,
+                    semanticsIdentifier: config.inputSemanticsIdentifier,
+                    semanticsLabel: config.inputSemanticsLabel,
+                    placeholder: config.inputPlaceholder,
+                    onSubmitted: _resolve,
                   ),
-                ],
-              ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                config.title,
-                                style: const TextStyle(
-                                  color: Color(0xFF101B32),
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                config.subtitle,
-                                style: const TextStyle(
-                                  color: Color(0xFF66728A),
-                                  fontSize: 13,
-                                  height: 1.35,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        TopBarActionButton(
-                          onTap: _isSubmitting
-                              ? null
-                              : () => Navigator.of(context).pop(),
-                          semanticsLabel: '关闭',
-                          tooltip: '关闭',
-                          child: const Padding(
-                            padding: EdgeInsets.all(6),
-                            child: Icon(
-                              CupertinoIcons.xmark,
-                              color: Color(0xFF34415C),
-                              size: 20,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 22),
-                    _IdentitySearchInput(
-                      controller: _queryController,
-                      enabled: !_isResolving && !_isSubmitting,
-                      keyValue: config.inputKey,
-                      semanticsIdentifier: config.inputSemanticsIdentifier,
-                      semanticsLabel: config.inputSemanticsLabel,
-                      placeholder: config.inputPlaceholder,
-                      onSubmitted: _resolve,
-                    ),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      child: AppPrimaryButton(
-                        key: config.searchButtonKey,
-                        label: _isResolving
-                            ? config.resolvingLabel
-                            : config.searchLabel,
-                        semanticsIdentifier:
-                            'e2e-identity-lookup-search-button',
-                        onPressed: _isResolving || _isSubmitting
-                            ? null
-                            : _resolve,
-                      ),
-                    ),
-                    if (_errorText != null) ...<Widget>[
-                      const SizedBox(height: 12),
-                      _InlineNotice(text: _errorText!, danger: true),
-                    ],
-                    if (_profile != null) ...<Widget>[
-                      const SizedBox(height: 18),
-                      _IdentityPreviewCard(
-                        profile: _profile!,
-                        relationship: _relationship,
-                        showRelationship: config.showRelationship,
-                      ),
-                      const SizedBox(height: 12),
-                      _InlineNotice(text: config.previewNoticeText),
-                    ],
-                    const SizedBox(height: 22),
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: AppSecondaryButton(
-                            label: context.l10n.commonCancel,
-                            onPressed: _isSubmitting
-                                ? null
-                                : () => Navigator.of(context).pop(),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: AppPrimaryButton(
-                            key: config.actionButtonKey,
-                            label: _isSubmitting
-                                ? config.submittingLabel
-                                : config.actionLabel,
-                            semanticsIdentifier:
-                                config.actionSemanticsIdentifier,
-                            onPressed:
-                                _profile == null ||
-                                    _isResolving ||
-                                    _isSubmitting
-                                ? null
-                                : _submit,
-                          ),
-                        ),
-                      ],
-                    ),
+                  const SizedBox(height: 14),
+                  AppPrimaryButton(
+                    key: config.searchButtonKey,
+                    label: _isResolving
+                        ? config.resolvingLabel
+                        : config.searchLabel,
+                    semanticsIdentifier: 'e2e-identity-lookup-search-button',
+                    onPressed: _isResolving || _isSubmitting ? null : _resolve,
+                  ),
+                  if (_errorText != null) ...<Widget>[
+                    const SizedBox(height: 12),
+                    _InlineNotice(text: _errorText!, danger: true),
                   ],
-                ),
+                  if (_profile != null) ...<Widget>[
+                    const SizedBox(height: 18),
+                    _IdentityPreviewCard(
+                      profile: _profile!,
+                      relationship: _relationship,
+                      showRelationship: config.showRelationship,
+                    ),
+                    const SizedBox(height: 12),
+                    _InlineNotice(text: config.previewNoticeText),
+                  ],
+                ],
               ),
             ),
           ),
-        ),
+          const SizedBox(height: 22),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: AppSecondaryButton(
+                  label: context.l10n.commonCancel,
+                  onPressed: _isSubmitting
+                      ? null
+                      : () => Navigator.of(context).pop(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: AppPrimaryButton(
+                  key: config.actionButtonKey,
+                  label: _isSubmitting
+                      ? config.submittingLabel
+                      : config.actionLabel,
+                  semanticsIdentifier: config.actionSemanticsIdentifier,
+                  onPressed: _profile == null || _isResolving || _isSubmitting
+                      ? null
+                      : _submit,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -34,6 +34,41 @@ bootstrap 脚本即可。
 写入失败而表现为“注册失败”，debug/profile 构建会把账号凭证写入应用支持目录下的
 `awiki_me_credentials.json`；release 构建仍使用平台安全存储。
 
+## 打包
+
+客户端安装包的统一入口是：
+
+```bash
+scripts/package_app.sh
+```
+
+所有打包配置都放在 `scripts/package_app.config`。脚本不接受命令行参数，也不通过
+环境变量读取打包配置。需要切换发布渠道、构建模式、后端地址、版本递增策略、输出
+目录或平台目标时，直接修改这个配置文件。
+
+当前提交的配置用于线上测试环境：
+
+```text
+PACKAGE_CHANNEL="test"
+PACKAGE_BUILD_MODE="debug"
+AWIKI_BASE_URL="https://anpclaw.com"
+```
+
+如果要打线上正式版，修改同一个配置文件即可，例如：
+
+```text
+PACKAGE_CHANNEL="stable"
+PACKAGE_BUILD_MODE="release"
+AWIKI_BASE_URL="https://awiki.info"
+```
+
+产物和 `latest.json` 会输出到：
+
+```text
+dist/app/<channel>/<version>/
+dist/app/<channel>/latest.json
+```
+
 ## 项目结构
 
 - `lib/`：应用、领域、数据与界面源码

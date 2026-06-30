@@ -75,6 +75,42 @@ AWIKI_ANP_SERVICE_DID
 AWIKI_DAEMON_DOWNLOAD_BASE_URL
 ```
 
+## Packaging
+
+The installer package entrypoint is:
+
+```bash
+scripts/package_app.sh
+```
+
+All package settings live in `scripts/package_app.config`. The script accepts no
+arguments and does not read package settings from environment variables. Edit
+that config file to choose the package channel, Flutter build mode, backend base
+URL, version bump mode, output root, and platform targets.
+
+The current checked-in config builds the online test package:
+
+```text
+PACKAGE_CHANNEL="test"
+PACKAGE_BUILD_MODE="debug"
+AWIKI_BASE_URL="https://anpclaw.com"
+```
+
+For a production package, update the same config file, for example:
+
+```text
+PACKAGE_CHANNEL="stable"
+PACKAGE_BUILD_MODE="release"
+AWIKI_BASE_URL="https://awiki.info"
+```
+
+The script writes artifacts and `latest.json` under:
+
+```text
+dist/app/<channel>/<version>/
+dist/app/<channel>/latest.json
+```
+
 ## Message Sync
 
 AWiki Me keeps message views local-first and delegates reliable recovery to the

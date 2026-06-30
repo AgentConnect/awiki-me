@@ -2353,64 +2353,6 @@ void main() {
     },
   );
 
-  test('hung runtime action only marks its own action pending', () async {
-    final control = _HangingResetAgentControlService()
-      ..agents = const <AgentSummary>[
-        AgentSummary(
-          agentDid: 'did:agent:daemon',
-          kind: AgentKind.daemon,
-          displayName: '代理 1',
-          activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
-        ),
-        AgentSummary(
-          agentDid: 'did:agent:runtime',
-          kind: AgentKind.runtime,
-          daemonAgentDid: 'did:agent:daemon',
-          runtime: 'hermes',
-          displayName: 'Hermes',
-          activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
-        ),
-      ];
-    final container = _container(control);
-    addTearDown(container.dispose);
-    await container.read(agentsProvider.notifier).load();
-    final runtime = container
-        .read(agentsProvider)
-        .agents
-        .singleWhere((agent) => agent.agentDid == 'did:agent:runtime');
-
-    final future = container
-        .read(agentsProvider.notifier)
-        .resetRuntimeSession(runtime);
-    await Future<void>.delayed(Duration.zero);
-
-    var state = container.read(agentsProvider);
-    expect(
-      state.pendingActionKeys,
-      contains(AgentActionKeys.resetRuntime('did:agent:runtime')),
-    );
-    expect(
-      state.isActionPending(AgentActionKeys.rename('did:agent:runtime')),
-      isFalse,
-    );
-    expect(
-      state.isActionPending(AgentActionKeys.delete('did:agent:runtime')),
-      isFalse,
-    );
-    expect(
-      state.isActionPending(AgentActionKeys.createRuntime('did:agent:daemon')),
-      isFalse,
-    );
-
-    control.resetCompleter.complete();
-    await future;
-    state = container.read(agentsProvider);
-    expect(state.pendingActionKeys, isEmpty);
-    expect(state.error, isNull);
-  });
-
   test(
     'control status deduplicates event ids and ignores stale latest',
     () async {
@@ -3089,21 +3031,6 @@ class _HangingRefreshAgentControlService extends FakeAgentControlService {
   Future<void> refreshDaemonStatus(String daemonAgentDid, {String? commandId}) {
     lastRefreshedDaemonDid = daemonAgentDid;
     return Completer<void>().future;
-  }
-}
-
-class _HangingResetAgentControlService extends FakeAgentControlService {
-  final Completer<void> resetCompleter = Completer<void>();
-
-  @override
-  Future<void> resetRuntimeSession({
-    required String daemonAgentDid,
-    required String runtimeAgentDid,
-    String? conversationId,
-  }) {
-    lastResetDaemonDid = daemonAgentDid;
-    lastResetRuntimeDid = runtimeAgentDid;
-    return resetCompleter.future;
   }
 }
 

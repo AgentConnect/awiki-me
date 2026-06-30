@@ -19,6 +19,7 @@ import '../../domain/entities/agent/message_agent_runtime_provider.dart';
 import '../../domain/repositories/awiki_account_gateway.dart';
 import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
+import '../shared/app_dialog.dart';
 import '../shared/identity_flow.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
@@ -26,6 +27,7 @@ import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../chat/chat_provider.dart';
 import 'agent_display_name.dart';
+import 'agent_rename_dialog.dart';
 import 'agent_status_indicator.dart';
 import 'agent_visual_status.dart';
 import 'agents_provider.dart';
@@ -103,9 +105,6 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
       ),
       onOpenChat: (agent) => _openRuntimeChat(context, ref, agent),
       onRename: (agent) => _showRenameAgentDialog(context, ref, agent),
-      onRetryRun: (agent) => _showRetryRunDialog(context, ref, agent),
-      onResetRuntime: (agent) =>
-          _confirmResetRuntimeSession(context, ref, agent),
       onUpgrade: (agent) => _confirmUpgradeDaemon(context, ref, agent),
       onCancelUpgrade: (agent) =>
           ref.read(agentsProvider.notifier).cancelDaemonUpgrade(agent.agentDid),

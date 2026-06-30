@@ -47,42 +47,13 @@ Future<void> _showRenameAgentDialog(
   WidgetRef ref,
   AgentSummary agent,
 ) async {
-  final controller = TextEditingController(text: AgentDisplayName.title(agent));
-  final result = await AppNavigator.showDialog<String>(
-    context,
-    (dialogContext) => CupertinoAlertDialog(
-      title: const Text('改名'),
-      content: Padding(
-        padding: const EdgeInsets.only(top: 10),
-        child: CupertinoTextField(
-          key: const Key('agent-rename-field'),
-          controller: controller,
-          autofocus: true,
-          maxLength: 40,
-          placeholder: '显示名称',
-          textInputAction: TextInputAction.done,
-          onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
-        ),
-      ),
-      actions: <Widget>[
-        CupertinoDialogAction(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('取消'),
-        ),
-        CupertinoDialogAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-          child: const Text('保存'),
-        ),
-      ],
-    ),
-  );
-  controller.dispose();
-  final displayName = result?.trim();
-  if (displayName == null || displayName.isEmpty || displayName.length > 40) {
+  final displayName = await showAgentRenameDialog(context, agent);
+  if (displayName == null) {
     return;
   }
-  await ref.read(agentsProvider.notifier).renameSelected(displayName);
+  await ref
+      .read(agentsProvider.notifier)
+      .renameAgent(agentDid: agent.agentDid, displayName: displayName);
 }
 
 Future<void> _showCreateRuntimeDialog(
@@ -333,8 +304,6 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final dialogHorizontalInset = responsive.spacing(18);
-    final dialogVerticalInset = responsive.spacing(22);
     final contentPadding = responsive.spacing(18);
     final handle = _handleController.text.trim();
     final displayName = _nameController.text.trim();
@@ -352,190 +321,119 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
         _validateAgentHandle(handle) == null &&
         !_remoteHandleChecking &&
         remoteError == null;
-    final maxWidth = responsive.isPhone ? double.infinity : 430.0;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final viewInsets = MediaQuery.viewInsetsOf(context);
-        final verticalInset =
-            dialogVerticalInset * 2 + viewInsets.top + viewInsets.bottom;
-        final maxHeight = constraints.hasBoundedHeight
-            ? (constraints.maxHeight - verticalInset).clamp(
-                0.0,
-                constraints.maxHeight,
-              )
-            : double.infinity;
-        return CupertinoPopupSurface(
-          isSurfacePainted: false,
-          child: Center(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                dialogHorizontalInset,
-                dialogVerticalInset + viewInsets.top,
-                dialogHorizontalInset,
-                dialogVerticalInset + viewInsets.bottom,
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: maxWidth,
-                  maxHeight: maxHeight.toDouble(),
-                ),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: CupertinoColors.white,
-                    borderRadius: BorderRadius.circular(responsive.radius(14)),
-                    boxShadow: const <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x260B1220),
-                        blurRadius: 34,
-                        offset: Offset(0, 18),
-                      ),
-                    ],
+    return AppDialogScaffold(
+      maxWidth: 430,
+      maxHeightFraction: 0.9,
+      horizontalPadding: responsive.spacing(18),
+      verticalPadding: responsive.spacing(22),
+      borderRadius: BorderRadius.circular(responsive.radius(16)),
+      avoidViewInsets: true,
+      padding: EdgeInsets.all(contentPadding),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          AppDialogHeader(
+            title: '创建 Agent',
+            onClose: () => Navigator.of(context).pop(),
+          ),
+          SizedBox(height: responsive.spacing(14)),
+          Flexible(
+            child: SingleChildScrollView(
+              key: const Key('agent-create-scroll-body'),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  _AgentTypeSelector(
+                    selected: _kind,
+                    runtimeCapability: widget.runtimeCapability,
+                    onSelected: _selectKind,
                   ),
-                  child: Padding(
-                    padding: EdgeInsets.all(contentPadding),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: Text(
-                                '创建 Agent',
-                                style: TextStyle(
-                                  color: const Color(0xFF101B32),
-                                  fontSize: responsive.titleLg,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                            AppIconButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              semanticLabel: '关闭',
-                              tooltip: '关闭',
-                              size: responsive.displayScaled(32),
-                              backgroundColor: const Color(0xFFF5F7FB),
-                              borderColor: const Color(0xFFE4E9F2),
-                              child: Icon(
-                                CupertinoIcons.xmark,
-                                color: const Color(0xFF66728A),
-                                size: responsive.iconSm,
-                              ),
-                            ),
-                          ],
+                  SizedBox(height: responsive.spacing(12)),
+                  if (_kind.isGenericCli &&
+                      _shouldShowRuntimeAdvancedOptions()) ...<Widget>[
+                    _RuntimeOptionSelector(
+                      title: '工作目录策略',
+                      value: _workspaceMode,
+                      options: const <_RuntimeOption>[
+                        _RuntimeOption(
+                          value: runtimeWorkspaceModeRouteRoot,
+                          label: '按会话目录',
+                          description: '每个联系人、群组或线程使用独立上下文目录。',
                         ),
-                        SizedBox(height: responsive.spacing(14)),
-                        Flexible(
-                          child: SingleChildScrollView(
-                            key: const Key('agent-create-scroll-body'),
-                            keyboardDismissBehavior:
-                                ScrollViewKeyboardDismissBehavior.onDrag,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                _AgentTypeSelector(
-                                  selected: _kind,
-                                  runtimeCapability: widget.runtimeCapability,
-                                  onSelected: _selectKind,
-                                ),
-                                SizedBox(height: responsive.spacing(12)),
-                                if (_kind.isGenericCli &&
-                                    _shouldShowRuntimeAdvancedOptions()) ...<
-                                  Widget
-                                >[
-                                  _RuntimeOptionSelector(
-                                    title: '工作目录策略',
-                                    value: _workspaceMode,
-                                    options: const <_RuntimeOption>[
-                                      _RuntimeOption(
-                                        value: runtimeWorkspaceModeRouteRoot,
-                                        label: '按会话目录',
-                                        description: '每个联系人、群组或线程使用独立上下文目录。',
-                                      ),
-                                      _RuntimeOption(
-                                        value: runtimeWorkspaceModeSharedRoot,
-                                        label: '共享目录',
-                                        description: '该身份共用一个目录，适合手工任务。',
-                                      ),
-                                      _RuntimeOption(
-                                        value:
-                                            runtimeWorkspaceModeWorktreePerTask,
-                                        label: '每次任务 worktree',
-                                        description: '每次运行使用独立工作树。',
-                                      ),
-                                    ],
-                                    onChanged: (value) {
-                                      setState(() => _workspaceMode = value);
-                                    },
-                                  ),
-                                  SizedBox(height: responsive.spacing(12)),
-                                  const _RuntimePermissionSummary(),
-                                  SizedBox(height: responsive.spacing(12)),
-                                ],
-                                _AgentDialogField(
-                                  fieldKey: const Key(
-                                    'agent-create-name-field',
-                                  ),
-                                  label: '名称',
-                                  controller: _nameController,
-                                  placeholder: _kind.displayLabel,
-                                  errorText: nameError,
-                                  textInputAction: TextInputAction.next,
-                                ),
-                                SizedBox(height: responsive.spacing(12)),
-                                _AgentDialogField(
-                                  fieldKey: const Key(
-                                    'agent-create-handle-field',
-                                  ),
-                                  label: 'Handle',
-                                  controller: _handleController,
-                                  placeholder: _kind.handlePlaceholder,
-                                  errorText: handleError,
-                                  focusNode: _handleFocusNode,
-                                  prefix: const Text('@'),
-                                  textInputAction: TextInputAction.done,
-                                  onSubmitted: (_) => _submit(),
-                                ),
-                                SizedBox(height: responsive.spacing(8)),
-                                _HandlePreview(
-                                  handle: handle,
-                                  domain: widget.handleDomain,
-                                  isValid: _validateAgentHandle(handle) == null,
-                                  isChecking: _remoteHandleChecking,
-                                  availability: _previewAvailability(handle),
-                                  fallbackMessage: _remoteValidationError,
-                                ),
-                              ],
-                            ),
-                          ),
+                        _RuntimeOption(
+                          value: runtimeWorkspaceModeSharedRoot,
+                          label: '共享目录',
+                          description: '该身份共用一个目录，适合手工任务。',
                         ),
-                        SizedBox(height: responsive.spacing(18)),
-                        Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: _DialogSecondaryButton(
-                                label: '取消',
-                                onPressed: () => Navigator.of(context).pop(),
-                              ),
-                            ),
-                            SizedBox(width: responsive.spacing(10)),
-                            Expanded(
-                              child: AppPrimaryButton(
-                                label: '创建',
-                                onPressed: canSubmit ? _submit : null,
-                              ),
-                            ),
-                          ],
+                        _RuntimeOption(
+                          value: runtimeWorkspaceModeWorktreePerTask,
+                          label: '每次任务 worktree',
+                          description: '每次运行使用独立工作树。',
                         ),
                       ],
+                      onChanged: (value) {
+                        setState(() => _workspaceMode = value);
+                      },
                     ),
+                    SizedBox(height: responsive.spacing(12)),
+                    const _RuntimePermissionSummary(),
+                    SizedBox(height: responsive.spacing(12)),
+                  ],
+                  _AgentDialogField(
+                    fieldKey: const Key('agent-create-name-field'),
+                    label: '名称',
+                    controller: _nameController,
+                    placeholder: _kind.displayLabel,
+                    errorText: nameError,
+                    textInputAction: TextInputAction.next,
                   ),
-                ),
+                  SizedBox(height: responsive.spacing(12)),
+                  _AgentDialogField(
+                    fieldKey: const Key('agent-create-handle-field'),
+                    label: 'Handle',
+                    controller: _handleController,
+                    placeholder: _kind.handlePlaceholder,
+                    errorText: handleError,
+                    focusNode: _handleFocusNode,
+                    prefix: const Text('@'),
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _submit(),
+                  ),
+                  SizedBox(height: responsive.spacing(8)),
+                  _HandlePreview(
+                    handle: handle,
+                    domain: widget.handleDomain,
+                    isValid: _validateAgentHandle(handle) == null,
+                    isChecking: _remoteHandleChecking,
+                    availability: _previewAvailability(handle),
+                    fallbackMessage: _remoteValidationError,
+                  ),
+                ],
               ),
             ),
           ),
-        );
-      },
+          SizedBox(height: responsive.spacing(18)),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: _DialogSecondaryButton(
+                  label: '取消',
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ),
+              SizedBox(width: responsive.spacing(10)),
+              Expanded(
+                child: AppPrimaryButton(
+                  label: '创建',
+                  onPressed: canSubmit ? _submit : null,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -1363,64 +1261,6 @@ String? _validateAgentHandle(String value) {
   return null;
 }
 
-Future<void> _showRetryRunDialog(
-  BuildContext context,
-  WidgetRef ref,
-  AgentSummary agent,
-) async {
-  final controller = TextEditingController();
-  final result = await AppNavigator.showDialog<String>(
-    context,
-    (dialogContext) => CupertinoAlertDialog(
-      title: const Text('重试 Run'),
-      content: Padding(
-        padding: const EdgeInsets.only(top: 10),
-        child: CupertinoTextField(
-          key: const Key('agent-retry-run-field'),
-          controller: controller,
-          autofocus: true,
-          placeholder: 'run_id',
-          textInputAction: TextInputAction.done,
-          onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
-        ),
-      ),
-      actions: <Widget>[
-        CupertinoDialogAction(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('取消'),
-        ),
-        CupertinoDialogAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-          child: const Text('重试'),
-        ),
-      ],
-    ),
-  );
-  controller.dispose();
-  final runId = result?.trim();
-  if (runId == null || runId.isEmpty) {
-    return;
-  }
-  await ref.read(agentsProvider.notifier).retryRun(agent, runId);
-}
-
-Future<void> _confirmResetRuntimeSession(
-  BuildContext context,
-  WidgetRef ref,
-  AgentSummary agent,
-) async {
-  final confirmed = await _confirm(
-    context,
-    title: '重置 Session',
-    message: '仅归档本地 session mapping，不删除聊天历史。',
-    actionLabel: '重置',
-  );
-  if (confirmed) {
-    await ref.read(agentsProvider.notifier).resetRuntimeSession(agent);
-  }
-}
-
 Future<void> _confirmUpgradeDaemon(
   BuildContext context,
   WidgetRef ref,
@@ -1579,105 +1419,60 @@ class _InstallCommandDialog extends StatelessWidget {
     final isExpired =
         command.token.expiresAt != null &&
         !command.token.expiresAt!.isAfter(DateTime.now().toUtc());
-    final media = MediaQuery.of(context);
-    final availableWidth = media.size.width - 32;
-    final maxDialogWidth = availableWidth < 520 ? availableWidth : 520.0;
-    final maxDialogHeight = media.size.height * 0.82;
-    return SafeArea(
-      minimum: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-      child: Center(
-        child: CupertinoPopupSurface(
-          isSurfacePainted: true,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: maxDialogWidth,
-              maxHeight: maxDialogHeight,
+    return AppDialogScaffold(
+      maxWidth: 520,
+      maxHeightFraction: 0.82,
+      horizontalPadding: 16,
+      verticalPadding: 20,
+      borderRadius: BorderRadius.circular(responsive.radius(16)),
+      padding: EdgeInsets.all(responsive.spacing(20)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          AppDialogHeader(
+            title: '到宿主机安装代理',
+            onClose: onClose,
+            leading: Container(
+              width: responsive.displayScaled(34),
+              height: responsive.displayScaled(34),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF2FF),
+                borderRadius: BorderRadius.circular(responsive.radius(8)),
+              ),
+              child: Icon(
+                CupertinoIcons.desktopcomputer,
+                color: const Color(0xFF0B65F8),
+                size: responsive.iconMd,
+              ),
             ),
-            child: Padding(
-              padding: EdgeInsets.all(responsive.spacing(20)),
+          ),
+          SizedBox(height: responsive.spacing(16)),
+          Flexible(
+            child: SingleChildScrollView(
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      Container(
-                        width: responsive.displayScaled(34),
-                        height: responsive.displayScaled(34),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEAF2FF),
-                          borderRadius: BorderRadius.circular(
-                            responsive.radius(8),
-                          ),
-                        ),
-                        child: Icon(
-                          CupertinoIcons.desktopcomputer,
-                          color: const Color(0xFF0B65F8),
-                          size: responsive.iconMd,
-                        ),
-                      ),
-                      SizedBox(width: responsive.spacing(10)),
-                      Expanded(
-                        child: Text(
-                          '到宿主机安装代理',
-                          style: TextStyle(
-                            color: const Color(0xFF101B32),
-                            fontSize: responsive.titleXl,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: responsive.spacing(8)),
-                      AppIconButton(
-                        onPressed: onClose,
-                        semanticLabel: '关闭',
-                        tooltip: '关闭',
-                        size: responsive.displayScaled(30),
-                        backgroundColor: const Color(0xFFF4F6FA),
-                        borderRadius: BorderRadius.circular(
-                          responsive.radius(8),
-                        ),
-                        child: Icon(
-                          CupertinoIcons.xmark,
-                          color: const Color(0xFF66728A),
-                          size: responsive.iconSm,
-                        ),
-                      ),
-                    ],
+                  const _SupportedAgentTypeHint(),
+                  SizedBox(height: responsive.spacing(12)),
+                  _CommandText(
+                    command.command,
+                    onCopy: () async {
+                      await Clipboard.setData(
+                        ClipboardData(text: command.command),
+                      );
+                      if (context.mounted) {
+                        AwikiMeToast.show(context, '已复制');
+                      }
+                    },
                   ),
-                  SizedBox(height: responsive.spacing(16)),
-                  Flexible(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: <Widget>[
-                          const _SupportedAgentTypeHint(),
-                          SizedBox(height: responsive.spacing(12)),
-                          _CommandText(
-                            command.command,
-                            onCopy: () async {
-                              await Clipboard.setData(
-                                ClipboardData(text: command.command),
-                              );
-                              if (context.mounted) {
-                                AwikiMeToast.show(context, '已复制');
-                              }
-                            },
-                          ),
-                          SizedBox(height: responsive.spacing(12)),
-                          _TokenExpiryRow(
-                            isExpired: isExpired,
-                            expiresAt: expiresAt,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  SizedBox(height: responsive.spacing(12)),
+                  _TokenExpiryRow(isExpired: isExpired, expiresAt: expiresAt),
                 ],
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

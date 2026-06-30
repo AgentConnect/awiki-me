@@ -79,7 +79,7 @@ void main() {
           candidates
               .where((candidate) => candidate.id.startsWith('selector:'))
               .map((candidate) => candidate.surface),
-          <String>['@所有人', '@所有用户', '@所有智能体'],
+          isEmpty,
         );
         expect(human.enabled, isTrue);
         expect(human.badge, '用户');
@@ -118,7 +118,7 @@ void main() {
       },
     );
 
-    test('empty query keeps group selector shortcuts before members', () {
+    test('empty query only exposes mentionable group members', () {
       final candidates =
           ChatMentionCandidate.forGroupMembers(const <GroupMemberSummary>[
             GroupMemberSummary(
@@ -131,16 +131,47 @@ void main() {
             ),
           ]);
 
-      expect(candidates.take(3).map((candidate) => candidate.surface), [
-        '@所有人',
-        '@所有用户',
-        '@所有智能体',
-      ]);
-      expect(candidates.take(3).map((candidate) => candidate.badge), [
-        '用户 + 智能体',
-        '用户',
-        '智能体',
-      ]);
+      expect(candidates.map((candidate) => candidate.surface), ['@Zhuocheng']);
+      expect(candidates.map((candidate) => candidate.badge), ['用户']);
+      expect(
+        candidates.where((candidate) => candidate.id.startsWith('selector:')),
+        isEmpty,
+      );
+    });
+
+    test('filters current user by DID and handle', () {
+      final candidates = ChatMentionCandidate.forGroupMembers(
+        const <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: 'did:wba:awiki.info:user:me:e1_current',
+            did: 'did:wba:awiki.info:user:me:e1_current',
+            handle: 'unexpected',
+            role: 'member',
+            displayName: 'Me By DID',
+            subjectType: GroupMemberSubjectType.human,
+          ),
+          GroupMemberSummary(
+            userId: 'member-me-handle',
+            did: 'did:wba:awiki.info:user:other:e1_other',
+            handle: 'me.awiki.info',
+            role: 'member',
+            displayName: 'Me By Handle',
+            subjectType: GroupMemberSubjectType.human,
+          ),
+          GroupMemberSummary(
+            userId: 'did:wba:awiki.info:user:alice:e1_alice',
+            did: 'did:wba:awiki.info:user:alice:e1_alice',
+            handle: 'alice',
+            role: 'member',
+            displayName: 'Alice',
+            subjectType: GroupMemberSubjectType.human,
+          ),
+        ],
+        currentUserDid: 'did:wba:awiki.info:user:me:e1_current',
+        currentUserHandle: 'ME.awiki.info',
+      );
+
+      expect(candidates.map((candidate) => candidate.surface), ['@Alice']);
     });
 
     test(

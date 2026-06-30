@@ -306,21 +306,6 @@ void main() {
     expect(args.containsKey('prompt'), isFalse);
   });
 
-  test('runtime retry command references a run id without prompt text', () {
-    final payload = runtimeRunRetryPayload(
-      runtimeAgentDid: 'did:agent:runtime',
-      runId: 'run_123',
-    );
-
-    expect(payload['schema'], AgentControlPayloads.commandSchema);
-    expect(payload['command'], 'runtime.run.retry');
-    final args = payload['args'] as Map<String, Object?>;
-    expect(args['runtime_agent_did'], 'did:agent:runtime');
-    expect(args['run_id'], 'run_123');
-    expect(args.containsKey('prompt'), isFalse);
-    expect(args.containsKey('text'), isFalse);
-  });
-
   test('runtime inbox commands target daemon and carry pagination fields', () {
     final listPayload = runtimeInboxQueryPayload(
       runtimeAgentDid: 'did:agent:runtime',

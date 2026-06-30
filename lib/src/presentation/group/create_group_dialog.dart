@@ -10,6 +10,7 @@ import '../../app/ui_feedback.dart';
 import '../../domain/entities/group_summary.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
+import '../shared/app_dialog.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
@@ -119,112 +120,65 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final theme = context.awikiTheme;
-    final dialogWidth = responsive.isPhone
-        ? double.infinity
-        : responsive.displayScaled(420);
-    return SafeArea(
-      child: Center(
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: responsive.isPhone
-                ? responsive.spacing(16)
-                : responsive.spacing(24),
-            vertical: responsive.spacing(18),
+    return AppDialogScaffold(
+      maxWidth: responsive.displayScaled(420),
+      maxHeightFraction: 0.9,
+      horizontalPadding: responsive.isPhone
+          ? responsive.spacing(16)
+          : responsive.spacing(24),
+      verticalPadding: responsive.spacing(18),
+      borderRadius: BorderRadius.circular(responsive.radius(16)),
+      avoidViewInsets: true,
+      padding: EdgeInsets.fromLTRB(
+        responsive.spacing(20),
+        responsive.spacing(18),
+        responsive.spacing(20),
+        responsive.spacing(20),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          AppDialogHeader(
+            title: context.l10n.groupCreateTitle,
+            closeLabel: context.l10n.commonCancel,
+            onClose: () => Navigator.of(context).pop(),
+            isCloseEnabled: !_isLoading,
           ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: dialogWidth),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: theme.surface,
-                borderRadius: BorderRadius.circular(responsive.radius(20)),
-                boxShadow: const <BoxShadow>[
-                  BoxShadow(
-                    color: Color(0x22000000),
-                    blurRadius: 34,
-                    offset: Offset(0, 18),
-                  ),
-                ],
-              ),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  responsive.spacing(20),
-                  responsive.spacing(18),
-                  responsive.spacing(20),
-                  responsive.spacing(20),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Text(
-                            context.l10n.groupCreateTitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: theme.title,
-                              fontSize: responsive.titleXl,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        AppIconButton(
-                          size: responsive.compactControlHeight,
-                          semanticLabel: context.l10n.commonCancel,
-                          onPressed: _isLoading
-                              ? null
-                              : () => Navigator.of(context).pop(),
-                          child: Icon(
-                            CupertinoIcons.xmark,
-                            color: theme.secondaryText,
-                            size: responsive.iconSm,
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: responsive.spacing(18)),
-                    _GroupNameInput(
-                      controller: _nameController,
-                      focusNode: _nameFocusNode,
-                      enabled: !_isLoading,
-                      label: context.l10n.groupFieldName,
-                      placeholder: context.l10n.groupFieldNamePlaceholder,
-                      onSubmitted: _create,
-                    ),
-                    SizedBox(height: responsive.spacing(20)),
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: AppSecondaryButton(
-                            label: context.l10n.commonCancel,
-                            onPressed: _isLoading
-                                ? null
-                                : () => Navigator.of(context).pop(),
-                          ),
-                        ),
-                        SizedBox(width: responsive.spacing(12)),
-                        Expanded(
-                          child: AppPrimaryButton(
-                            key: const Key('create-group-submit-button'),
-                            label: _isLoading
-                                ? context.l10n.groupCreating
-                                : context.l10n.groupCreateAction,
-                            onPressed: _isLoading ? null : _create,
-                            semanticsIdentifier:
-                                'e2e-create-group-submit-button',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+          SizedBox(height: responsive.spacing(18)),
+          _GroupNameInput(
+            controller: _nameController,
+            focusNode: _nameFocusNode,
+            enabled: !_isLoading,
+            label: context.l10n.groupFieldName,
+            placeholder: context.l10n.groupFieldNamePlaceholder,
+            onSubmitted: _create,
+          ),
+          SizedBox(height: responsive.spacing(20)),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: AppSecondaryButton(
+                  label: context.l10n.commonCancel,
+                  onPressed: _isLoading
+                      ? null
+                      : () => Navigator.of(context).pop(),
                 ),
               ),
-            ),
+              SizedBox(width: responsive.spacing(12)),
+              Expanded(
+                child: AppPrimaryButton(
+                  key: const Key('create-group-submit-button'),
+                  label: _isLoading
+                      ? context.l10n.groupCreating
+                      : context.l10n.groupCreateAction,
+                  onPressed: _isLoading ? null : _create,
+                  semanticsIdentifier: 'e2e-create-group-submit-button',
+                ),
+              ),
+            ],
           ),
-        ),
+        ],
       ),
     );
   }

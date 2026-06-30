@@ -58,10 +58,6 @@ final class AgentActionKeys {
   static String revokeMessageAgent(String daemonDid) =>
       'message-agent-revoke:$daemonDid';
 
-  static String resetRuntime(String runtimeDid) => 'runtime-reset:$runtimeDid';
-
-  static String retryRun(String runtimeDid) => 'runtime-retry:$runtimeDid';
-
   static String rename(String agentDid) => 'rename:$agentDid';
 
   static String delete(String agentDid) => 'delete:$agentDid';
@@ -833,38 +829,6 @@ class AgentsController extends StateNotifier<AgentsState> {
     );
   }
 
-  Future<void> resetRuntimeSession(AgentSummary runtime) async {
-    final daemonDid = runtime.daemonAgentDid;
-    if (daemonDid == null) {
-      return;
-    }
-    await _runAction(AgentActionKeys.resetRuntime(runtime.agentDid), () {
-      return ref
-          .read(agentControlServiceProvider)
-          .resetRuntimeSession(
-            daemonAgentDid: daemonDid,
-            runtimeAgentDid: runtime.agentDid,
-          );
-    });
-  }
-
-  Future<void> retryRun(AgentSummary runtime, String runId) async {
-    final daemonDid = runtime.daemonAgentDid;
-    final normalizedRunId = runId.trim();
-    if (daemonDid == null || normalizedRunId.isEmpty) {
-      return;
-    }
-    await _runAction(AgentActionKeys.retryRun(runtime.agentDid), () {
-      return ref
-          .read(agentControlServiceProvider)
-          .retryRun(
-            daemonAgentDid: daemonDid,
-            runtimeAgentDid: runtime.agentDid,
-            runId: normalizedRunId,
-          );
-    });
-  }
-
   Future<bool> upgradeDaemon(String daemonDid) async {
     if (state.isDaemonUpgradePending(daemonDid)) {
       return false;
@@ -1198,12 +1162,24 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (selected == null) {
       return;
     }
-    await _runAction(AgentActionKeys.rename(selected.agentDid), () async {
+    await renameAgent(agentDid: selected.agentDid, displayName: displayName);
+  }
+
+  Future<void> renameAgent({
+    required String agentDid,
+    required String displayName,
+  }) async {
+    final normalizedAgentDid = agentDid.trim();
+    final normalizedDisplayName = displayName.trim();
+    if (normalizedAgentDid.isEmpty || normalizedDisplayName.isEmpty) {
+      return;
+    }
+    await _runAction(AgentActionKeys.rename(normalizedAgentDid), () async {
       await ref
           .read(agentControlServiceProvider)
           .updateDisplayName(
-            agentDid: selected.agentDid,
-            displayName: displayName,
+            agentDid: normalizedAgentDid,
+            displayName: normalizedDisplayName,
           );
       await load();
     });

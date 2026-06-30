@@ -9,8 +9,6 @@ class _AgentDetailPane extends StatelessWidget {
     required this.onCreateRuntime,
     required this.onOpenChat,
     required this.onRename,
-    required this.onRetryRun,
-    required this.onResetRuntime,
     required this.onUpgrade,
     required this.onCancelUpgrade,
     required this.onDelete,
@@ -29,8 +27,6 @@ class _AgentDetailPane extends StatelessWidget {
   final ValueChanged<AgentSummary> onCreateRuntime;
   final ValueChanged<AgentSummary> onOpenChat;
   final ValueChanged<AgentSummary> onRename;
-  final ValueChanged<AgentSummary> onRetryRun;
-  final ValueChanged<AgentSummary> onResetRuntime;
   final ValueChanged<AgentSummary> onUpgrade;
   final ValueChanged<AgentSummary> onCancelUpgrade;
   final ValueChanged<AgentSummary> onDelete;
@@ -62,12 +58,6 @@ class _AgentDetailPane extends StatelessWidget {
     final isRenaming = state.isActionPending(
       AgentActionKeys.rename(agent.agentDid),
     );
-    final isResetting =
-        agent.isRuntime &&
-        state.isActionPending(AgentActionKeys.resetRuntime(agent.agentDid));
-    final isRetrying =
-        agent.isRuntime &&
-        state.isActionPending(AgentActionKeys.retryRun(agent.agentDid));
     final isDeleteSending = state.isActionPending(
       AgentActionKeys.delete(agent.agentDid),
     );
@@ -145,20 +135,6 @@ class _AgentDetailPane extends StatelessWidget {
                     label: '改名',
                     onPressed: isRenaming ? null : () => onRename(agent),
                   ),
-                  if (agent.isRuntime)
-                    _ActionButton(
-                      icon: CupertinoIcons.arrow_counterclockwise,
-                      label: '重置 Session',
-                      onPressed: isResetting
-                          ? null
-                          : () => onResetRuntime(agent),
-                    ),
-                  if (agent.isRuntime)
-                    _ActionButton(
-                      icon: CupertinoIcons.play_arrow,
-                      label: '重试 Run',
-                      onPressed: isRetrying ? null : () => onRetryRun(agent),
-                    ),
                   if (agent.isDaemon && agent.latest.needsUpgrade)
                     _ActionButton(
                       icon: CupertinoIcons.arrow_up_circle,

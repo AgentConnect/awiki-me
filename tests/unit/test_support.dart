@@ -1943,11 +1943,6 @@ class FakeAgentControlService implements AgentControlService {
   String? lastRuntimeCreateSandbox;
   String? lastRuntimeCreateModel;
   String? lastRuntimeCreateClientRequestId;
-  String? lastResetDaemonDid;
-  String? lastResetRuntimeDid;
-  String? lastRetryDaemonDid;
-  String? lastRetryRuntimeDid;
-  String? lastRetryRunId;
   String? lastInboxDaemonDid;
   String? lastInboxRuntimeDid;
   String? lastInboxScope;
@@ -2081,27 +2076,6 @@ class FakeAgentControlService implements AgentControlService {
     String? commandId,
   }) async {
     lastRefreshedDaemonDid = daemonAgentDid;
-  }
-
-  @override
-  Future<void> resetRuntimeSession({
-    required String daemonAgentDid,
-    required String runtimeAgentDid,
-    String? conversationId,
-  }) async {
-    lastResetDaemonDid = daemonAgentDid;
-    lastResetRuntimeDid = runtimeAgentDid;
-  }
-
-  @override
-  Future<void> retryRun({
-    required String daemonAgentDid,
-    required String runtimeAgentDid,
-    required String runId,
-  }) async {
-    lastRetryDaemonDid = daemonAgentDid;
-    lastRetryRuntimeDid = runtimeAgentDid;
-    lastRetryRunId = runId;
   }
 
   @override
