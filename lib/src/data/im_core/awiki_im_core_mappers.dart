@@ -149,6 +149,68 @@ class AwikiImCoreMappers {
     );
   }
 
+  ChatMessage chatMessageFromSnapshot(
+    core.ConversationSnapshotMessage message, {
+    required String ownerDid,
+  }) {
+    final manifest = _snapshotAttachmentManifestJson(message);
+    final attachment = _attachmentFromManifest(manifest);
+    final bodyMentionPayload = ChatMentionPayload.tryParsePayloadJson(
+      message.body.payloadJson,
+    );
+    final manifestMentionPayloadJson = _mentionPayloadJson(manifest);
+    final mentionPayload =
+        bodyMentionPayload ??
+        ChatMentionPayload.tryParsePayloadJson(manifestMentionPayloadJson);
+    final payloadJson = bodyMentionPayload == null
+        ? manifestMentionPayloadJson ?? message.body.payloadJson
+        : message.body.payloadJson;
+    final bodyText = message.body.text ?? '';
+    final direction = message.direction.trim().toLowerCase();
+    final isMine = direction == 'outgoing' || message.sender == ownerDid;
+    final isGroup =
+        message.threadKind == 'group' ||
+        message.group?.trim().isNotEmpty == true ||
+        message.threadId.startsWith('group:');
+    final peerDid = isGroup
+        ? null
+        : _directPeerForSnapshotMessage(ownerDid, message);
+    final groupId =
+        _nonEmpty(message.group) ??
+        (isGroup ? _stripPrefix(message.threadId, 'group:') : null);
+    return ChatMessage(
+      localId: message.id,
+      remoteId: message.id,
+      threadId: _messageThreadId(
+        ownerDid: ownerDid,
+        isGroup: isGroup,
+        peerDid: peerDid,
+        groupId: groupId,
+        fallbackThreadId: message.threadId,
+      ),
+      senderDid: message.sender,
+      senderName:
+          _snapshotAttribute(message, 'senderName') ??
+          _snapshotAttribute(message, 'sender_name'),
+      receiverDid: _nonEmpty(message.receiver),
+      groupId: groupId,
+      content: attachment?.caption ?? mentionPayload?.text ?? bodyText,
+      originalType: attachment != null
+          ? _attachmentManifestContentType
+          : mentionPayload == null
+          ? message.body.kind ?? message.contentType ?? 'text'
+          : 'application/json',
+      createdAt: _parseDateTime(message.sentAt ?? message.receivedAt),
+      isMine: isMine,
+      sendState: MessageSendState.sent,
+      serverSequence: message.serverSequence,
+      isEncrypted: _isEncrypted(message.contentType),
+      attachment: attachment,
+      payloadJson: payloadJson,
+      mentions: mentionPayload?.mentions ?? const <ChatMessageMention>[],
+    );
+  }
+
   ConversationSummary conversationFromCore(
     core.Conversation conversation, {
     required String ownerDid,
@@ -176,6 +238,9 @@ class AwikiImCoreMappers {
     final groupId = isGroup
         ? lastMessage?.group ?? _stripPrefix(conversation.threadId, 'group:')
         : null;
+    final lastMessageSnapshot = lastMessage == null
+        ? null
+        : chatMessageFromCore(lastMessage, ownerDid: ownerDid);
     return ConversationSummary(
       threadId: _conversationThreadId(
         ownerDid: ownerDid,
@@ -209,6 +274,9 @@ class AwikiImCoreMappers {
       avatarUri: null,
       avatarSeed: overlay?.avatarSeed,
       lastMessagePayloadJson: lastMessage?.body.payloadJson,
+      lastMessageSnapshot: lastMessageSnapshot?.hasRenderableContent == true
+          ? lastMessageSnapshot
+          : null,
     );
   }
 
@@ -250,6 +318,9 @@ class AwikiImCoreMappers {
     final groupId = isGroup
         ? lastMessage?.group ?? _stripPrefix(conversation.threadId, 'group:')
         : null;
+    final lastMessageSnapshot = lastMessage == null
+        ? null
+        : chatMessageFromSnapshot(lastMessage, ownerDid: ownerDid);
     return ConversationSummary(
       threadId: _conversationThreadId(
         ownerDid: ownerDid,
@@ -282,6 +353,9 @@ class AwikiImCoreMappers {
       avatarUri: null,
       avatarSeed: overlay?.avatarSeed,
       lastMessagePayloadJson: lastMessage?.body.payloadJson,
+      lastMessageSnapshot: lastMessageSnapshot?.hasRenderableContent == true
+          ? lastMessageSnapshot
+          : null,
     );
   }
 
@@ -576,6 +650,17 @@ String _conversationThreadId({
 }
 
 String? _directPeerForMessage(String ownerDid, core.Message message) {
+  if (message.sender.trim() != ownerDid.trim()) {
+    return _nonEmpty(message.sender);
+  }
+  return _nonEmpty(message.receiver) ??
+      _directPeerFromThreadId(ownerDid, message.threadId);
+}
+
+String? _directPeerForSnapshotMessage(
+  String ownerDid,
+  core.ConversationSnapshotMessage message,
+) {
   if (message.sender.trim() != ownerDid.trim()) {
     return _nonEmpty(message.sender);
   }

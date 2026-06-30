@@ -9,6 +9,9 @@ import '../../application/models/conversation_patch.dart';
 import '../../core/group_display_name.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_display_name.dart';
+import '../../domain/entities/chat_attachment.dart';
+import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_summary.dart';
@@ -1236,8 +1239,86 @@ bool _sameConversationSummaryValue(
       first.avatarUri == second.avatarUri &&
       first.avatarSeed == second.avatarSeed &&
       first.lastMessagePayloadJson == second.lastMessagePayloadJson &&
+      _sameLastMessageSnapshot(
+        first.lastMessageSnapshot,
+        second.lastMessageSnapshot,
+      ) &&
       first.conversationKey == second.conversationKey &&
       first.peerLifecycleState == second.peerLifecycleState;
+}
+
+bool _sameLastMessageSnapshot(ChatMessage? first, ChatMessage? second) {
+  if (identical(first, second)) {
+    return true;
+  }
+  if (first == null || second == null) {
+    return false;
+  }
+  return first.localId == second.localId &&
+      first.remoteId == second.remoteId &&
+      first.threadId == second.threadId &&
+      first.senderDid == second.senderDid &&
+      first.receiverDid == second.receiverDid &&
+      first.groupId == second.groupId &&
+      first.content == second.content &&
+      first.originalType == second.originalType &&
+      first.createdAt.isAtSameMomentAs(second.createdAt) &&
+      first.isMine == second.isMine &&
+      first.serverSequence == second.serverSequence &&
+      first.sendState == second.sendState &&
+      first.payloadJson == second.payloadJson &&
+      _sameAttachmentSnapshot(first.attachment, second.attachment) &&
+      _sameMentions(first.mentions, second.mentions);
+}
+
+bool _sameAttachmentSnapshot(ChatAttachment? first, ChatAttachment? second) {
+  if (identical(first, second)) {
+    return true;
+  }
+  if (first == null || second == null) {
+    return false;
+  }
+  return first.attachmentId == second.attachmentId &&
+      first.filename == second.filename &&
+      first.mimeType == second.mimeType &&
+      first.sizeBytes == second.sizeBytes &&
+      first.caption == second.caption &&
+      first.objectUri == second.objectUri &&
+      first.localPath == second.localPath &&
+      first.hasLocalSource == second.hasLocalSource;
+}
+
+bool _sameMentions(
+  List<ChatMessageMention> first,
+  List<ChatMessageMention> second,
+) {
+  if (first.length != second.length) {
+    return false;
+  }
+  for (var index = 0; index < first.length; index += 1) {
+    final firstMention = first[index];
+    final secondMention = second[index];
+    if (firstMention.id != secondMention.id ||
+        firstMention.surface != secondMention.surface ||
+        firstMention.start != secondMention.start ||
+        firstMention.end != secondMention.end ||
+        firstMention.role != secondMention.role ||
+        !_sameMentionTarget(firstMention.target, secondMention.target)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool _sameMentionTarget(
+  ChatMentionTargetDraft first,
+  ChatMentionTargetDraft second,
+) {
+  return first.kind == second.kind &&
+      first.selector == second.selector &&
+      first.did == second.did &&
+      first.handle == second.handle &&
+      first.displayName == second.displayName;
 }
 
 List<String> _visibilityKeysFor(
@@ -1472,6 +1553,7 @@ ConversationSummary _mergeConversationTitle({
     avatarUri: refreshed.avatarUri ?? local.avatarUri,
     avatarSeed: refreshed.avatarSeed ?? local.avatarSeed,
     lastMessagePayloadJson: refreshed.lastMessagePayloadJson,
+    lastMessageSnapshot: refreshed.lastMessageSnapshot,
   );
 }
 
@@ -1520,6 +1602,7 @@ ConversationSummary _mergeConversationLastMessage({
     lastMessagePreview: local.lastMessagePreview,
     lastMessageAt: local.lastMessageAt,
     lastMessagePayloadJson: local.lastMessagePayloadJson,
+    lastMessageSnapshot: local.lastMessageSnapshot,
   );
 }
 

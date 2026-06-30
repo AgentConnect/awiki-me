@@ -373,6 +373,10 @@ void main() {
       expect(mapped.displayName, 'Pinned Bob');
       expect(mapped.threadId, 'dm:did:alice:did:bob');
       expect(mapped.lastMessagePreview, 'hi');
+      expect(mapped.lastMessageSnapshot, isNotNull);
+      expect(mapped.lastMessageSnapshot!.remoteId, 'msg-2');
+      expect(mapped.lastMessageSnapshot!.content, 'hi');
+      expect(mapped.lastMessageSnapshot!.threadId, 'dm:did:alice:did:bob');
       expect(mapped.avatarSeed, 'seed-1');
       expect(mapped.unreadCount, 2);
     },
@@ -442,6 +446,11 @@ void main() {
       expect(mapped.unreadMentionCount, 1);
       expect(mapped.firstUnreadMentionMessageId, 'msg-mention');
       expect(mapped.lastMessagePayloadJson, mentionPayload);
+      expect(mapped.lastMessageSnapshot, isNotNull);
+      expect(mapped.lastMessageSnapshot!.remoteId, 'msg-mention');
+      expect(mapped.lastMessageSnapshot!.content, '@bob 看这里');
+      expect(mapped.lastMessageSnapshot!.serverSequence, 42);
+      expect(mapped.lastMessageSnapshot!.mentions, hasLength(1));
       expect(mapped.peerLifecycleState, ConversationPeerLifecycleState.active);
     },
   );
@@ -484,6 +493,11 @@ void main() {
       );
 
       expect(mapped.lastMessagePreview, '[附件] diagram.png');
+      expect(mapped.lastMessageSnapshot?.attachment?.filename, 'diagram.png');
+      expect(
+        mapped.lastMessageSnapshot?.attachment?.objectUri,
+        'https://objects.example/att-2',
+      );
     },
   );
 
@@ -545,6 +559,7 @@ void main() {
     );
 
     expect(mapped.lastMessagePreview, '');
+    expect(mapped.lastMessageSnapshot, isNull);
     expect(mapper.shouldIncludeConversation(conversation), isFalse);
   });
 

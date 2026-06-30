@@ -423,6 +423,296 @@ void main() {
     );
   });
 
+  test('打开会话会先用最新消息快照预热并通过 thread-after 补齐多条消息', () async {
+    final firstReply = ChatMessage(
+      localId: 'msg-first-reply',
+      remoteId: 'msg-first-reply',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'first reply',
+      createdAt: DateTime(2026, 5, 8, 10, 1),
+      isMine: false,
+      sendState: MessageSendState.sent,
+      serverSequence: 11,
+    );
+    final latestReply = ChatMessage(
+      localId: 'msg-latest-reply',
+      remoteId: 'msg-latest-reply',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'latest reply',
+      createdAt: DateTime(2026, 5, 8, 10, 2),
+      isMine: false,
+      sendState: MessageSendState.sent,
+      serverSequence: 12,
+    );
+    messageSyncService.threadAfterMessagesByStableId[const AppThreadRef.direct(
+      'did:peer',
+    ).stableId] = <ChatMessage>[
+      firstReply,
+      latestReply,
+    ];
+    final localSeed = message.copyWith(serverSequence: 10);
+    final patchMessaging = _PatchMessagingService(
+      localHistory: <ChatMessage>[localSeed],
+    );
+    final patchContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(
+          gateway,
+          messageSyncService: messageSyncService,
+        ),
+        messagingServiceProvider.overrideWithValue(patchMessaging),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(patchContainer.dispose);
+
+    final snapshotConversation = conversation.copyWith(
+      lastMessagePreview: latestReply.content,
+      lastMessageAt: latestReply.createdAt,
+      unreadCount: 2,
+      lastMessageSnapshot: latestReply,
+    );
+
+    final controller = patchContainer.read(chatThreadsProvider.notifier);
+    await controller.openConversation(snapshotConversation);
+
+    final immediateMessages = patchContainer
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    expect(
+      immediateMessages.map((item) => item.remoteId),
+      contains('msg-latest-reply'),
+    );
+
+    await pumpEventQueue(times: 3);
+
+    final messages = patchContainer
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    expect(messages.map((item) => item.remoteId), [
+      'msg-1',
+      'msg-first-reply',
+      'msg-latest-reply',
+    ]);
+    expect(
+      messages.where((item) => item.remoteId == 'msg-latest-reply'),
+      hasLength(1),
+    );
+  });
+
+  test('可见会话摘要带最新消息快照时先合并快照再用补齐兜底', () async {
+    final middleReply = ChatMessage(
+      localId: 'msg-visible-middle',
+      remoteId: 'msg-visible-middle',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'visible middle reply',
+      createdAt: DateTime(2026, 5, 8, 10, 2),
+      isMine: false,
+      sendState: MessageSendState.sent,
+      serverSequence: 12,
+    );
+    final latestReply = ChatMessage(
+      localId: 'msg-visible-snapshot',
+      remoteId: 'msg-visible-snapshot',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'visible snapshot reply',
+      createdAt: DateTime(2026, 5, 8, 10, 3),
+      isMine: false,
+      sendState: MessageSendState.sent,
+      serverSequence: 13,
+    );
+    messageSyncService.threadAfterMessagesByStableId[const AppThreadRef.direct(
+      'did:peer',
+    ).stableId] = <ChatMessage>[
+      middleReply,
+      latestReply,
+    ];
+    final patchMessaging = _PatchMessagingService(
+      localHistory: const <ChatMessage>[],
+    );
+    final patchContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(
+          gateway,
+          messageSyncService: messageSyncService,
+        ),
+        messagingServiceProvider.overrideWithValue(patchMessaging),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(patchContainer.dispose);
+
+    final controller = patchContainer.read(chatThreadsProvider.notifier);
+    controller.markConversationVisible(
+      conversation,
+      displayThreadId: conversation.threadId,
+    );
+    await controller.syncVisibleConversationAfterSummaryUpdate(
+      conversation.copyWith(
+        lastMessagePreview: latestReply.content,
+        lastMessageAt: latestReply.createdAt,
+        unreadCount: 1,
+        lastMessageSnapshot: latestReply,
+      ),
+      displayThreadId: conversation.threadId,
+    );
+    await pumpEventQueue();
+
+    final messages = patchContainer
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    expect(messages.map((item) => item.remoteId), [
+      'msg-visible-middle',
+      'msg-visible-snapshot',
+    ]);
+    expect(patchMessaging.repairCalls, 0);
+    expect(messageSyncService.threadAfterRequests, hasLength(1));
+    expect(
+      messageSyncService.threadAfterRequests.single.afterServerSeq,
+      isNull,
+    );
+  });
+
+  test('可见会话摘要只带最新快照时仍按原水位补齐中间多条消息', () async {
+    final oldMessage = ChatMessage(
+      localId: 'msg-old-visible',
+      remoteId: 'msg-old-visible',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'old visible',
+      createdAt: DateTime(2026, 5, 8, 10),
+      isMine: false,
+      sendState: MessageSendState.sent,
+      serverSequence: 10,
+    );
+    final middleReply = ChatMessage(
+      localId: 'msg-middle-visible',
+      remoteId: 'msg-middle-visible',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'middle visible',
+      createdAt: DateTime(2026, 5, 8, 10, 1),
+      isMine: false,
+      sendState: MessageSendState.sent,
+      serverSequence: 11,
+    );
+    final latestReply = ChatMessage(
+      localId: 'msg-latest-visible',
+      remoteId: 'msg-latest-visible',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'latest visible',
+      createdAt: DateTime(2026, 5, 8, 10, 2),
+      isMine: false,
+      sendState: MessageSendState.sent,
+      serverSequence: 12,
+    );
+    final patchMessaging = _PatchMessagingService(
+      localHistory: <ChatMessage>[oldMessage],
+      repairPatch: ThreadMessagePatch(
+        kind: ThreadMessagePatchKind.reset,
+        ownerDid: 'did:me',
+        version: 2,
+        threadKind: 'direct',
+        threadId: 'did:peer',
+        messages: <ChatMessage>[oldMessage],
+      ),
+    );
+    final patchContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(
+          gateway,
+          messageSyncService: messageSyncService,
+        ),
+        messagingServiceProvider.overrideWithValue(patchMessaging),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(patchContainer.dispose);
+
+    final controller = patchContainer.read(chatThreadsProvider.notifier);
+    await controller.openConversation(conversation);
+    controller.markConversationVisible(
+      conversation,
+      displayThreadId: conversation.threadId,
+    );
+    await pumpEventQueue();
+
+    messageSyncService.threadAfterMessagesByStableId[const AppThreadRef.direct(
+      'did:peer',
+    ).stableId] = <ChatMessage>[
+      middleReply,
+      latestReply,
+    ];
+    await controller.syncVisibleConversationAfterSummaryUpdate(
+      conversation.copyWith(
+        lastMessagePreview: latestReply.content,
+        lastMessageAt: latestReply.createdAt,
+        unreadCount: 2,
+        lastMessageSnapshot: latestReply,
+      ),
+      displayThreadId: conversation.threadId,
+    );
+    await pumpEventQueue(times: 3);
+
+    final messages = patchContainer
+        .read(chatThreadProvider(conversation.threadId))
+        .messages;
+    expect(messages.map((item) => item.remoteId), [
+      'msg-old-visible',
+      'msg-middle-visible',
+      'msg-latest-visible',
+    ]);
+    expect(messageSyncService.threadAfterRequests.last.afterServerSeq, '10');
+  });
+
   test(
     'thread patch low fidelity upsert does not downgrade existing attachment semantics',
     () async {

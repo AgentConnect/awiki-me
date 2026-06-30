@@ -1,3 +1,5 @@
+import 'chat_message.dart';
+
 enum ConversationPeerLifecycleState { active, deletedAgent }
 
 class ConversationSummary {
@@ -16,6 +18,7 @@ class ConversationSummary {
     this.avatarUri,
     this.avatarSeed,
     this.lastMessagePayloadJson,
+    this.lastMessageSnapshot,
     this.conversationKey,
     this.peerLifecycleState = ConversationPeerLifecycleState.active,
   });
@@ -34,6 +37,7 @@ class ConversationSummary {
   final String? avatarUri;
   final String? avatarSeed;
   final String? lastMessagePayloadJson;
+  final ChatMessage? lastMessageSnapshot;
   final String? conversationKey;
   final ConversationPeerLifecycleState peerLifecycleState;
 
@@ -110,6 +114,7 @@ class ConversationSummary {
     Object? avatarUri = _conversationSummaryUnset,
     Object? avatarSeed = _conversationSummaryUnset,
     Object? lastMessagePayloadJson = _conversationSummaryUnset,
+    Object? lastMessageSnapshot = _conversationSummaryUnset,
     Object? conversationKey = _conversationSummaryUnset,
     ConversationPeerLifecycleState? peerLifecycleState,
   }) {
@@ -134,6 +139,10 @@ class ConversationSummary {
         lastMessagePayloadJson,
         this.lastMessagePayloadJson,
       ),
+      lastMessageSnapshot: _resolveNullableChatMessage(
+        lastMessageSnapshot,
+        this.lastMessageSnapshot,
+      ),
       conversationKey: _resolveNullableString(
         conversationKey,
         this.conversationKey,
@@ -150,6 +159,13 @@ String? _resolveNullableString(Object? value, String? current) {
     return current;
   }
   return value as String?;
+}
+
+ChatMessage? _resolveNullableChatMessage(Object? value, ChatMessage? current) {
+  if (identical(value, _conversationSummaryUnset)) {
+    return current;
+  }
+  return value as ChatMessage?;
 }
 
 String _normalizeDirectPeer(String value) {

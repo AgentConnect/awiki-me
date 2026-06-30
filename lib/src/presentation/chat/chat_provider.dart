@@ -389,16 +389,27 @@ class _PendingHistorySync {
 }
 
 class _PendingVisibleThreadStaleGuard {
-  const _PendingVisibleThreadStaleGuard({required this.conversation});
+  const _PendingVisibleThreadStaleGuard({
+    required this.conversation,
+    this.afterServerSeq,
+    this.forceThreadAfter = false,
+  });
 
   final ConversationSummary conversation;
+  final String? afterServerSeq;
+  final bool forceThreadAfter;
 }
 
 class _HistoryLoadResult {
-  const _HistoryLoadResult({required this.loadedCount, required this.failed});
+  const _HistoryLoadResult({
+    required this.loadedCount,
+    required this.failed,
+    this.maxServerSequence,
+  });
 
   final int loadedCount;
   final bool failed;
+  final String? maxServerSequence;
 
   bool get loadedAny => loadedCount > 0;
 }
@@ -650,9 +661,14 @@ class ChatThreadsController
     ConversationSummary conversation, {
     required String displayThreadId,
   }) async {
-    _warmDisplayThreadFromConversationAliases(
+    final aliasWarmCount = _warmDisplayThreadFromConversationAliases(
       conversation,
       displayThreadId: displayThreadId,
+    );
+    final snapshotWarmCount = _warmDisplayThreadFromConversationSnapshot(
+      conversation,
+      displayThreadId: displayThreadId,
+      source: 'open_local_first',
     );
     final currentBeforeLocal = thread(displayThreadId);
     if (currentBeforeLocal.isLoading ||
@@ -660,10 +676,20 @@ class ChatThreadsController
         _activeRemoteHistorySyncs.contains(displayThreadId)) {
       return;
     }
-    if (_hasRenderableMessages(currentBeforeLocal)) {
+    final hasOnlyFreshSnapshot =
+        snapshotWarmCount > 0 &&
+        _threadContainsOnlyConversationSnapshot(
+          currentBeforeLocal,
+          conversation,
+        );
+    if (_hasRenderableMessages(currentBeforeLocal) && !hasOnlyFreshSnapshot) {
       _logOpenFirstPaintSource(
         displayThreadId,
-        source: 'memory_tail',
+        source: snapshotWarmCount > 0
+            ? 'last_message_snapshot'
+            : aliasWarmCount > 0
+            ? 'alias_prewarm'
+            : 'memory_tail',
         items: currentBeforeLocal.messages.length,
       );
       unawaited(
@@ -684,7 +710,12 @@ class ChatThreadsController
       return;
     }
     unawaited(
-      _syncThreadAfterLocalMax(conversation, displayThreadId: displayThreadId),
+      _syncThreadAfterLocalMax(
+        conversation,
+        displayThreadId: displayThreadId,
+        afterServerSeq: localResult.maxServerSequence,
+        useExplicitAfterServerSeq: true,
+      ),
     );
     final currentAfterLocal = thread(displayThreadId);
     if (_hasRenderableMessages(currentAfterLocal)) {
@@ -757,6 +788,49 @@ class ChatThreadsController
       level: AwikiPerformanceLogLevel.verbose,
     );
     return messages.length;
+  }
+
+  int _warmDisplayThreadFromConversationSnapshot(
+    ConversationSummary conversation, {
+    required String displayThreadId,
+    required String source,
+  }) {
+    final snapshot = conversation.lastMessageSnapshot;
+    if (snapshot == null || !snapshot.hasRenderableContent) {
+      return 0;
+    }
+    final message = _withThreadId(snapshot, displayThreadId);
+    _mergeMessages(
+      displayThreadId,
+      <ChatMessage>[message],
+      isLoading: false,
+      trustIncomingAgentReply: true,
+    );
+    AwikiPerformanceLogger.log(
+      'chat.open.snapshot_prewarm',
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(displayThreadId),
+        'source': source,
+      },
+      level: AwikiPerformanceLogLevel.verbose,
+    );
+    return 1;
+  }
+
+  bool _threadContainsOnlyConversationSnapshot(
+    ChatThreadState current,
+    ConversationSummary conversation,
+  ) {
+    final snapshot = conversation.lastMessageSnapshot;
+    if (snapshot == null) {
+      return false;
+    }
+    final renderableMessages = current.messages
+        .where((message) => message.hasRenderableContent)
+        .toList();
+    return renderableMessages.length == 1 &&
+        _stableMessageId(renderableMessages.single) ==
+            _stableMessageId(snapshot);
   }
 
   List<String> _conversationCacheAliases(
@@ -833,19 +907,22 @@ class ChatThreadsController
   Future<void> _syncThreadAfterLocalMax(
     ConversationSummary conversation, {
     required String displayThreadId,
+    String? afterServerSeq,
+    bool useExplicitAfterServerSeq = false,
   }) async {
     if (!mounted) {
       return;
     }
-    final afterServerSeq = maxServerSequenceForMessages(
-      thread(displayThreadId).messages,
-    );
+    final effectiveAfterServerSeq = useExplicitAfterServerSeq
+        ? afterServerSeq
+        : afterServerSeq ??
+              maxServerSequenceForMessages(thread(displayThreadId).messages);
     try {
       final result = await ref
           .read(messageSyncServiceProvider)
           .syncThreadAfter(
             thread: _localHistoryThreadRefFor(conversation),
-            afterServerSeq: afterServerSeq,
+            afterServerSeq: effectiveAfterServerSeq,
           );
       final messages = result.messages
           .map((message) => _withThreadId(message, displayThreadId))
@@ -870,17 +947,34 @@ class ChatThreadsController
     required String displayThreadId,
   }) {
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
+    final beforeSnapshotAfterServerSeq = maxServerSequenceForMessages(
+      thread(targetThreadId).messages,
+    );
+    final snapshotWarmCount = _warmDisplayThreadFromConversationSnapshot(
+      conversation,
+      displayThreadId: targetThreadId,
+      source: 'visible_summary',
+    );
     final metadata = _cacheMetadataByThreadId[targetThreadId];
-    if (metadata?.isVisible != true ||
-        !_needsVisibleThreadStaleGuard(thread(targetThreadId), conversation)) {
+    final needsGuard = _needsVisibleThreadStaleGuard(
+      thread(targetThreadId),
+      conversation,
+    );
+    final forceThreadAfter = snapshotWarmCount > 0;
+    if (metadata?.isVisible != true || (!needsGuard && !forceThreadAfter)) {
       return Future<void>.value();
     }
     final pending = _pendingVisibleThreadStaleGuards[targetThreadId];
+    final pendingConversation = pending == null
+        ? conversation
+        : _newerConversation(conversation, pending.conversation);
     _pendingVisibleThreadStaleGuards[targetThreadId] =
         _PendingVisibleThreadStaleGuard(
-          conversation: pending == null
-              ? conversation
-              : _newerConversation(conversation, pending.conversation),
+          conversation: pendingConversation,
+          afterServerSeq:
+              pending?.afterServerSeq ?? beforeSnapshotAfterServerSeq,
+          forceThreadAfter:
+              forceThreadAfter || (pending?.forceThreadAfter ?? false),
         );
     return _ensureVisibleThreadStaleGuardDrain(targetThreadId);
   }
@@ -919,10 +1013,11 @@ class ChatThreadsController
         continue;
       }
       final conversation = pending.conversation;
-      if (!_needsVisibleThreadStaleGuard(
-        thread(displayThreadId),
-        conversation,
-      )) {
+      if (!pending.forceThreadAfter &&
+          !_needsVisibleThreadStaleGuard(
+            thread(displayThreadId),
+            conversation,
+          )) {
         continue;
       }
       if (_threadHasActiveHistoryWork(displayThreadId)) {
@@ -932,6 +1027,8 @@ class ChatThreadsController
       await _syncVisibleThreadIfStale(
         conversation,
         displayThreadId: displayThreadId,
+        afterServerSeq: pending.afterServerSeq,
+        forceThreadAfter: pending.forceThreadAfter,
       );
     }
   }
@@ -939,13 +1036,28 @@ class ChatThreadsController
   Future<void> _syncVisibleThreadIfStale(
     ConversationSummary conversation, {
     required String displayThreadId,
+    String? afterServerSeq,
+    bool forceThreadAfter = false,
   }) async {
     _touchConversationCache(conversation, displayThreadId, visible: true);
     _ensureThreadPatchSubscription(
       conversation,
       displayThreadId: displayThreadId,
     );
+    _warmDisplayThreadFromConversationSnapshot(
+      conversation,
+      displayThreadId: displayThreadId,
+      source: 'stale_guard',
+    );
     if (!_needsVisibleThreadStaleGuard(thread(displayThreadId), conversation)) {
+      if (forceThreadAfter) {
+        await _syncThreadAfterLocalMax(
+          conversation,
+          displayThreadId: displayThreadId,
+          afterServerSeq: afterServerSeq,
+          useExplicitAfterServerSeq: true,
+        );
+      }
       return;
     }
     await _repairThreadFromLocalProjection(
@@ -953,11 +1065,21 @@ class ChatThreadsController
       displayThreadId: displayThreadId,
     );
     if (!_needsVisibleThreadStaleGuard(thread(displayThreadId), conversation)) {
+      if (forceThreadAfter) {
+        await _syncThreadAfterLocalMax(
+          conversation,
+          displayThreadId: displayThreadId,
+          afterServerSeq: afterServerSeq,
+          useExplicitAfterServerSeq: true,
+        );
+      }
       return;
     }
     await _syncThreadAfterLocalMax(
       conversation,
       displayThreadId: displayThreadId,
+      afterServerSeq: afterServerSeq,
+      useExplicitAfterServerSeq: forceThreadAfter,
     );
   }
 
@@ -1380,7 +1502,11 @@ class ChatThreadsController
         level: AwikiPerformanceLogLevel.verbose,
       );
       if (!mounted) {
-        return _HistoryLoadResult(loadedCount: history.length, failed: false);
+        return _HistoryLoadResult(
+          loadedCount: history.length,
+          failed: false,
+          maxServerSequence: maxServerSequenceForMessages(history),
+        );
       }
       _mergeMessages(targetThreadId, history, isLoading: false);
       _updateConversationPreviewFromMessages(conversation, history);
@@ -1393,7 +1519,11 @@ class ChatThreadsController
           'items': history.length,
         },
       );
-      return _HistoryLoadResult(loadedCount: history.length, failed: false);
+      return _HistoryLoadResult(
+        loadedCount: history.length,
+        failed: false,
+        maxServerSequence: maxServerSequenceForMessages(history),
+      );
     } catch (_) {
       if (shouldShowLoading && mounted) {
         _setThreadLoading(targetThreadId, false);
@@ -4727,6 +4857,7 @@ ConversationSummary _withConversationPreview(
     unreadCount: message.isMine ? 0 : conversation.unreadCount,
     lastMessagePayloadJson:
         message.payloadJson ?? conversation.lastMessagePayloadJson,
+    lastMessageSnapshot: message,
   );
 }
 

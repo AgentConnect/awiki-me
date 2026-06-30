@@ -287,6 +287,7 @@ ConversationSummary _directConversationForPeer(
     avatarUri: avatarUri ?? existing.avatarUri,
     avatarSeed: avatarSeed ?? existing.avatarSeed ?? peerDid,
     lastMessagePayloadJson: existing.lastMessagePayloadJson,
+    lastMessageSnapshot: existing.lastMessageSnapshot,
   );
 }
 
