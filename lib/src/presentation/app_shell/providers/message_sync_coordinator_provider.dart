@@ -1,10 +1,17 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/app_services.dart';
 import '../../../core/performance_logger.dart';
+import '../../chat/chat_provider.dart';
 import '../../conversation_list/conversation_provider.dart';
+
+const bool _messageSyncCoordinatorTraceEnabled = bool.fromEnvironment(
+  'AWIKI_MESSAGE_SYNC_TRACE',
+  defaultValue: kDebugMode,
+);
 
 class MessageSyncCoordinatorState {
   const MessageSyncCoordinatorState({
@@ -64,8 +71,21 @@ class MessageSyncCoordinator
 
   Future<void> requestSync(String reason, {bool immediate = false}) {
     final active = _activeSync;
+    _messageSyncTrace(
+      'request',
+      fields: <String, Object?>{
+        'reason': reason,
+        'immediate': immediate,
+        'active': active != null,
+        'pending': state.pendingReason,
+      },
+    );
     if (active != null) {
       state = state.copyWith(pendingReason: reason);
+      _messageSyncTrace(
+        'request.coalesced_active',
+        fields: <String, Object?>{'reason': reason},
+      );
       return active;
     }
     final now = DateTime.now();
@@ -87,8 +107,19 @@ class MessageSyncCoordinator
       }
     }
     if (delay <= Duration.zero) {
+      _messageSyncTrace(
+        'request.run_now',
+        fields: <String, Object?>{'reason': reason},
+      );
       return _runSync(reason);
     }
+    _messageSyncTrace(
+      'request.schedule',
+      fields: <String, Object?>{
+        'reason': reason,
+        'delay_ms': delay.inMilliseconds,
+      },
+    );
     state = state.copyWith(pendingReason: reason);
     _pendingTimer?.cancel();
     final completer = Completer<void>();
@@ -112,11 +143,19 @@ class MessageSyncCoordinator
     final active = _activeSync;
     if (active != null) {
       state = state.copyWith(pendingReason: reason);
+      _messageSyncTrace(
+        'run.coalesced_active',
+        fields: <String, Object?>{'reason': reason},
+      );
       return active;
     }
     late final Future<void> operation;
     operation = (() async {
       _lastStartedAt = DateTime.now();
+      _messageSyncTrace(
+        'run.start',
+        fields: <String, Object?>{'reason': reason},
+      );
       state = state.copyWith(
         isSyncing: true,
         pendingReason: null,
@@ -127,15 +166,53 @@ class MessageSyncCoordinator
         final result = await ref
             .read(messageSyncServiceProvider)
             .syncNow(reason: reason);
+        _messageSyncTrace(
+          'run.sync_result',
+          fields: <String, Object?>{
+            'reason': reason,
+            'snapshot_required': result.snapshotRequired,
+          },
+        );
         state = state.copyWith(
           snapshotRequired: result.snapshotRequired,
           lastError: null,
         );
         if (!result.snapshotRequired) {
+          _messageSyncTrace(
+            'run.refresh_fast_local.start',
+            fields: <String, Object?>{'reason': reason},
+          );
           await ref.read(conversationListProvider.notifier).refreshFastLocal();
+          final conversations = ref
+              .read(conversationListProvider)
+              .conversations;
+          _messageSyncTrace(
+            'run.prewarm.start',
+            fields: <String, Object?>{
+              'reason': reason,
+              'conversations': conversations.length,
+            },
+          );
+          await ref
+              .read(chatThreadsProvider.notifier)
+              .prewarmLocalHistoryForConversations(conversations);
+          _messageSyncTrace(
+            'run.prewarm.done',
+            fields: <String, Object?>{
+              'reason': reason,
+              'conversations': conversations.length,
+            },
+          );
         }
       } catch (error) {
         _lastFailedAt = DateTime.now();
+        _messageSyncTrace(
+          'run.failed',
+          fields: <String, Object?>{
+            'reason': reason,
+            'error_type': error.runtimeType,
+          },
+        );
         state = state.copyWith(lastError: error);
       } finally {
         state = state.copyWith(isSyncing: false);
@@ -143,6 +220,10 @@ class MessageSyncCoordinator
           _activeSync = null;
         }
         final pending = state.pendingReason;
+        _messageSyncTrace(
+          'run.finish',
+          fields: <String, Object?>{'reason': reason, 'pending': pending},
+        );
         if (pending != null) {
           unawaited(requestSync(pending));
         }
@@ -168,6 +249,49 @@ class MessageSyncCoordinator
     _pendingCompleters.clear();
     super.dispose();
   }
+}
+
+void _messageSyncTrace(
+  String event, {
+  Map<String, Object?> fields = const <String, Object?>{},
+}) {
+  if (!_messageSyncCoordinatorTraceEnabled) {
+    return;
+  }
+  final details = <String>[];
+  for (final entry in fields.entries) {
+    final value = entry.value;
+    if (value != null) {
+      details.add('${entry.key}=${_collapseMessageSyncTrace(value)}');
+    }
+  }
+  debugPrint(
+    details.isEmpty
+        ? '[awiki_me][message_sync_trace] event=$event'
+        : '[awiki_me][message_sync_trace] event=$event ${details.join(' ')}',
+  );
+}
+
+String _collapseMessageSyncTrace(Object value) {
+  if (value is DateTime) {
+    return value.toUtc().toIso8601String();
+  }
+  final raw = value.toString();
+  final buffer = StringBuffer();
+  var lastWasWhitespace = false;
+  for (final rune in raw.runes) {
+    final char = String.fromCharCode(rune);
+    if (char.trim().isEmpty) {
+      if (!lastWasWhitespace) {
+        buffer.write('_');
+      }
+      lastWasWhitespace = true;
+    } else {
+      buffer.write(char);
+      lastWasWhitespace = false;
+    }
+  }
+  return buffer.toString();
 }
 
 final messageSyncCoordinatorProvider =

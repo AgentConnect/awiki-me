@@ -1,5 +1,6 @@
 import '../../domain/entities/conversation_summary.dart';
 import '../models/app_thread_ref.dart';
+import '../models/app_thread_read_watermark.dart';
 import '../models/conversation_patch.dart';
 
 abstract interface class ConversationCorePort {
@@ -23,5 +24,8 @@ abstract interface class ConversationCorePort {
   });
 
   /// Marks known unread messages in a thread as read through IM Core.
-  Future<void> markThreadRead(AppThreadRef thread);
+  Future<void> markThreadRead(
+    AppThreadRef thread, {
+    AppThreadReadWatermark? watermark,
+  });
 }

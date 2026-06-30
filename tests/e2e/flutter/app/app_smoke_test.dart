@@ -1,4 +1,5 @@
 import 'package:awiki_me/src/app/awiki_me_app.dart';
+import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -211,6 +212,80 @@ void main() {
       expect(control.lastBootstrapDaemonDid, isNull);
       expect(control.lastBootstrapControllerDid, isNull);
       expect(control.lastBootstrapDaemonPublicKey, isNull);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+      await tester.binding.setSurfaceSize(null);
+    }
+  });
+
+  testWidgets('AwikiMeApp macOS Agents tab re-entry reuses inventory', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'default',
+      handle: 'me',
+      displayName: 'Me',
+      jwtToken: 'test-jwt',
+    );
+    final harness = createFakeAwikiMeAppHarness(session: session);
+    final control = _CountingListAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:test:daemon:tab',
+          kind: AgentKind.daemon,
+          handle: 'daemon-tab',
+          displayName: 'Tab Smoke Daemon',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+
+    try {
+      await tester.pumpWidget(
+        AwikiMeApp(
+          bootstrap: harness.bootstrap,
+          providerOverrides: <Override>[
+            ...harness.providerOverrides,
+            agentControlServiceProvider.overrideWithValue(control),
+          ],
+        ),
+      );
+      await _pumpSmokeFrame(tester);
+
+      expect(find.byType(AppShell), findsOneWidget);
+      await _tapFirstFound(tester, <Finder>[
+        find.bySemanticsIdentifier('e2e-agents-tab'),
+        find.bySemanticsLabel('智能体'),
+        find.bySemanticsLabel('Agents'),
+        find.text('智能体'),
+        find.text('Agents'),
+      ]);
+      await _pumpSmokeFrame(tester);
+
+      expect(find.text('Tab Smoke Daemon'), findsWidgets);
+      final callsAfterFirstOpen = control.listAgentsCalls;
+      expect(callsAfterFirstOpen, greaterThanOrEqualTo(1));
+
+      await _tapFirstFound(tester, <Finder>[
+        find.bySemanticsIdentifier('e2e-messages-tab'),
+        find.bySemanticsLabel('消息'),
+        find.text('消息'),
+      ]);
+      await _pumpSmokeFrame(tester);
+      await _tapFirstFound(tester, <Finder>[
+        find.bySemanticsIdentifier('e2e-agents-tab'),
+        find.bySemanticsLabel('智能体'),
+        find.bySemanticsLabel('Agents'),
+        find.text('智能体'),
+        find.text('Agents'),
+      ]);
+      await _pumpSmokeFrame(tester);
+
+      expect(find.text('Tab Smoke Daemon'), findsWidgets);
+      expect(control.listAgentsCalls, callsAfterFirstOpen);
     } finally {
       debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);
@@ -489,4 +564,15 @@ Future<void> _tapFirstFound(
     }
   }
   fail('No tappable finder matched among ${candidates.length} candidates.');
+}
+
+class _CountingListAgentControlService
+    extends test_support.FakeAgentControlService {
+  int listAgentsCalls = 0;
+
+  @override
+  Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
+    listAgentsCalls += 1;
+    return super.listAgents(includeInactive: includeInactive);
+  }
 }

@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
 import '../../application/message_sync_service.dart';
 import '../../application/models/attachment_models.dart';
 import '../../application/models/app_thread_ref.dart';
+import '../../application/models/app_thread_read_watermark.dart';
 import '../../application/models/thread_message_patch.dart';
 import '../../application/messaging_service.dart';
 import '../../application/thread_id_utils.dart';
@@ -27,11 +29,17 @@ import '../conversation_list/conversation_provider.dart';
 const String _attachmentManifestContentType =
     'application/anp-attachment-manifest+json';
 
+const bool _chatProviderTraceEnabled = bool.fromEnvironment(
+  'AWIKI_CHAT_PROVIDER_TRACE',
+  defaultValue: kDebugMode,
+);
+
 class ChatThreadState {
   const ChatThreadState({
     required this.threadId,
     this.messages = const <ChatMessage>[],
     this.isLoading = false,
+    this.isHydratingLocalHistory = false,
     this.agentPendingTurns = const <AgentPendingTurn>[],
     this.messageAgentSyncs = const <MessageAgentSyncRecord>[],
     this.appActionRecords = const <String, AppActionRecord>{},
@@ -40,6 +48,7 @@ class ChatThreadState {
   final String threadId;
   final List<ChatMessage> messages;
   final bool isLoading;
+  final bool isHydratingLocalHistory;
   final List<AgentPendingTurn> agentPendingTurns;
   final List<MessageAgentSyncRecord> messageAgentSyncs;
   final Map<String, AppActionRecord> appActionRecords;
@@ -70,6 +79,7 @@ class ChatThreadState {
   ChatThreadState copyWith({
     List<ChatMessage>? messages,
     bool? isLoading,
+    bool? isHydratingLocalHistory,
     List<AgentPendingTurn>? agentPendingTurns,
     List<MessageAgentSyncRecord>? messageAgentSyncs,
     Map<String, AppActionRecord>? appActionRecords,
@@ -78,6 +88,8 @@ class ChatThreadState {
       threadId: threadId,
       messages: messages ?? this.messages,
       isLoading: isLoading ?? this.isLoading,
+      isHydratingLocalHistory:
+          isHydratingLocalHistory ?? this.isHydratingLocalHistory,
       agentPendingTurns: agentPendingTurns ?? this.agentPendingTurns,
       messageAgentSyncs: messageAgentSyncs ?? this.messageAgentSyncs,
       appActionRecords: appActionRecords ?? this.appActionRecords,
@@ -404,14 +416,30 @@ class _HistoryLoadResult {
   const _HistoryLoadResult({
     required this.loadedCount,
     required this.failed,
+    this.loadedFromLocalHistory = false,
     this.maxServerSequence,
   });
 
   final int loadedCount;
   final bool failed;
+  final bool loadedFromLocalHistory;
   final String? maxServerSequence;
 
   bool get loadedAny => loadedCount > 0;
+}
+
+class _PendingReadAck {
+  const _PendingReadAck({
+    required this.conversation,
+    required this.readToken,
+    this.reason = 'visible',
+    this.forcePersistentAck = false,
+  });
+
+  final ConversationSummary conversation;
+  final String readToken;
+  final String reason;
+  final bool forcePersistentAck;
 }
 
 class _ThreadPatchSubscription {
@@ -526,18 +554,21 @@ class _ThreadCacheMetadata {
     required this.lastTouchedAt,
     this.isVisible = false,
     this.hiddenAt,
+    this.hasLoadedLocalHistory = false,
   });
 
   final String canonicalKey;
   final DateTime lastTouchedAt;
   final bool isVisible;
   final DateTime? hiddenAt;
+  final bool hasLoadedLocalHistory;
 
   _ThreadCacheMetadata copyWith({
     String? canonicalKey,
     DateTime? lastTouchedAt,
     bool? isVisible,
     Object? hiddenAt = _threadCacheMetadataUnset,
+    bool? hasLoadedLocalHistory,
   }) {
     return _ThreadCacheMetadata(
       canonicalKey: canonicalKey ?? this.canonicalKey,
@@ -546,6 +577,8 @@ class _ThreadCacheMetadata {
       hiddenAt: identical(hiddenAt, _threadCacheMetadataUnset)
           ? this.hiddenAt
           : hiddenAt as DateTime?,
+      hasLoadedLocalHistory:
+          hasLoadedLocalHistory ?? this.hasLoadedLocalHistory,
     );
   }
 }
@@ -615,6 +648,8 @@ class ChatThreadsController
       <String, DateTime>{};
   final Set<String> _activeReadReceipts = <String>{};
   final Set<String> _completedReadReceipts = <String>{};
+  final Map<String, _PendingReadAck> _pendingReadAcksByThreadId =
+      <String, _PendingReadAck>{};
   int _trimmedMessageCount = 0;
   int _evictedThreadCount = 0;
   int _protectedOverflowCount = 0;
@@ -635,6 +670,7 @@ class ChatThreadsController
       fields: <String, Object?>{
         ...AwikiPerformanceLogger.threadField(targetThreadId),
         'unread': conversation.unreadCount,
+        'messages': thread(targetThreadId).messages.length,
         'is_group': conversation.isGroup,
       },
       level: AwikiPerformanceLogLevel.verbose,
@@ -657,6 +693,113 @@ class ChatThreadsController
     );
   }
 
+  Future<void> prewarmLocalHistoryForConversations(
+    List<ConversationSummary> conversations, {
+    int maxConversations = 20,
+    int limit = _initialLocalHistoryLimit,
+  }) async {
+    if (!mounted || conversations.isEmpty || maxConversations <= 0) {
+      _chatProviderTrace(
+        'local_history.prewarm.skip',
+        fields: <String, Object?>{
+          'mounted': mounted,
+          'conversations': conversations.length,
+          'max': maxConversations,
+          'reason': !mounted
+              ? 'not_mounted'
+              : conversations.isEmpty
+              ? 'empty'
+              : 'max_zero',
+        },
+      );
+      return;
+    }
+    final messaging = ref.read(messagingServiceProvider);
+    if (messaging is! LocalHistoryMessagingService) {
+      _chatProviderTrace(
+        'local_history.prewarm.skip',
+        fields: <String, Object?>{
+          'conversations': conversations.length,
+          'messaging_type': messaging.runtimeType,
+          'reason': 'unsupported_messaging',
+        },
+      );
+      return;
+    }
+    var warmed = 0;
+    final totalWatch = Stopwatch()..start();
+    for (final conversation in conversations) {
+      if (!mounted || warmed >= maxConversations) {
+        break;
+      }
+      final threadId = _displayThreadIdFor(conversation, null);
+      final current = thread(threadId);
+      final shouldLoad = _shouldLoadLocalHistoryForOpen(threadId, current);
+      final activeLocal = _activeLocalHistoryLoads.contains(threadId);
+      final activeRemote = _activeRemoteHistorySyncs.contains(threadId);
+      if (!shouldLoad || activeLocal || activeRemote) {
+        _chatProviderTrace(
+          'local_history.prewarm.item_skip',
+          fields: <String, Object?>{
+            ...AwikiPerformanceLogger.threadField(threadId),
+            'reason': !shouldLoad
+                ? 'already_loaded_or_enough_memory'
+                : activeLocal
+                ? 'active_local'
+                : 'active_remote',
+            'messages': current.messages.length,
+            'renderable': _renderableMessageCount(current),
+            'has_loaded':
+                _cacheMetadataByThreadId[threadId]?.hasLoadedLocalHistory,
+            'unread': conversation.unreadCount,
+            'last_at': conversation.lastMessageAt,
+          },
+        );
+        continue;
+      }
+      _chatProviderTrace(
+        'local_history.prewarm.item_start',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(threadId),
+          'messages': current.messages.length,
+          'renderable': _renderableMessageCount(current),
+          'unread': conversation.unreadCount,
+          'last_at': conversation.lastMessageAt,
+        },
+      );
+      final result = await _loadLocalHistory(
+        conversation,
+        intoThreadId: threadId,
+        limit: limit,
+        showHydratingState: false,
+        markLoadedWhenEmpty: false,
+      );
+      _chatProviderTrace(
+        'local_history.prewarm.item_done',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(threadId),
+          'loaded': result.loadedCount,
+          'failed': result.failed,
+          'messages_after': thread(threadId).messages.length,
+          'has_loaded':
+              _cacheMetadataByThreadId[threadId]?.hasLoadedLocalHistory,
+        },
+      );
+      warmed += 1;
+    }
+    totalWatch.stop();
+    AwikiPerformanceLogger.log(
+      'chat.local_history.prewarm',
+      elapsed: totalWatch.elapsed,
+      fields: <String, Object?>{
+        'requested': conversations.length,
+        'warmed': warmed,
+        'limit': limit,
+      },
+      level: AwikiPerformanceLogLevel.verbose,
+    );
+  }
+
   Future<void> _openConversationLocalFirst(
     ConversationSummary conversation, {
     required String displayThreadId,
@@ -671,9 +814,40 @@ class ChatThreadsController
       source: 'open_local_first',
     );
     final currentBeforeLocal = thread(displayThreadId);
+    final shouldLoadLocalHistory = _shouldLoadLocalHistoryForOpen(
+      displayThreadId,
+      currentBeforeLocal,
+    );
+    _chatProviderTrace(
+      'open.local_first.decide',
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(displayThreadId),
+        'should_load_local': shouldLoadLocalHistory,
+        'is_loading': currentBeforeLocal.isLoading,
+        'active_local': _activeLocalHistoryLoads.contains(displayThreadId),
+        'active_remote': _activeRemoteHistorySyncs.contains(displayThreadId),
+        'messages': currentBeforeLocal.messages.length,
+        'renderable': _renderableMessageCount(currentBeforeLocal),
+        'has_loaded':
+            _cacheMetadataByThreadId[displayThreadId]?.hasLoadedLocalHistory,
+        'unread': conversation.unreadCount,
+        'last_at': conversation.lastMessageAt,
+      },
+    );
     if (currentBeforeLocal.isLoading ||
         _activeLocalHistoryLoads.contains(displayThreadId) ||
         _activeRemoteHistorySyncs.contains(displayThreadId)) {
+      _chatProviderTrace(
+        'open.local_first.skip',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(displayThreadId),
+          'reason': currentBeforeLocal.isLoading
+              ? 'thread_loading'
+              : _activeLocalHistoryLoads.contains(displayThreadId)
+              ? 'active_local'
+              : 'active_remote',
+        },
+      );
       return;
     }
     final hasOnlyFreshSnapshot =
@@ -682,7 +856,19 @@ class ChatThreadsController
           currentBeforeLocal,
           conversation,
         );
-    if (_hasRenderableMessages(currentBeforeLocal) && !hasOnlyFreshSnapshot) {
+    if (!shouldLoadLocalHistory &&
+        _hasRenderableMessages(currentBeforeLocal) &&
+        !hasOnlyFreshSnapshot) {
+      _chatProviderTrace(
+        'open.local_first.memory_tail',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(displayThreadId),
+          'messages': currentBeforeLocal.messages.length,
+          'renderable': _renderableMessageCount(currentBeforeLocal),
+          'has_loaded':
+              _cacheMetadataByThreadId[displayThreadId]?.hasLoadedLocalHistory,
+        },
+      );
       _logOpenFirstPaintSource(
         displayThreadId,
         source: snapshotWarmCount > 0
@@ -701,11 +887,20 @@ class ChatThreadsController
       return;
     }
 
-    final localResult = await _loadLocalHistory(
-      conversation,
-      intoThreadId: displayThreadId,
-      limit: _initialLocalHistoryLimit,
-    );
+    final localResult = shouldLoadLocalHistory
+        ? await _loadLocalHistory(
+            conversation,
+            intoThreadId: displayThreadId,
+            limit: _initialLocalHistoryLimit,
+          )
+        : _HistoryLoadResult(
+            loadedCount: 0,
+            failed: false,
+            loadedFromLocalHistory: false,
+            maxServerSequence: maxServerSequenceForMessages(
+              thread(displayThreadId).messages,
+            ),
+          );
     if (!mounted) {
       return;
     }
@@ -714,7 +909,9 @@ class ChatThreadsController
         conversation,
         displayThreadId: displayThreadId,
         afterServerSeq: localResult.maxServerSequence,
-        useExplicitAfterServerSeq: true,
+        useExplicitAfterServerSeq:
+            localResult.loadedFromLocalHistory &&
+            localResult.maxServerSequence != null,
       ),
     );
     final currentAfterLocal = thread(displayThreadId);
@@ -740,6 +937,24 @@ class ChatThreadsController
         showLoading: true,
       ),
     );
+  }
+
+  bool _shouldLoadLocalHistoryForOpen(
+    String threadId,
+    ChatThreadState current,
+  ) {
+    final metadata = _cacheMetadataByThreadId[threadId];
+    if (metadata?.hasLoadedLocalHistory == true) {
+      return false;
+    }
+    final renderableCount = _renderableMessageCount(current);
+    return renderableCount < _initialLocalHistoryLimit;
+  }
+
+  int _renderableMessageCount(ChatThreadState current) {
+    return current.messages
+        .where((message) => message.hasRenderableContent)
+        .length;
   }
 
   int _warmDisplayThreadFromConversationAliases(
@@ -917,6 +1132,16 @@ class ChatThreadsController
         ? afterServerSeq
         : afterServerSeq ??
               maxServerSequenceForMessages(thread(displayThreadId).messages);
+    _chatProviderTrace(
+      'thread_after.start',
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(displayThreadId),
+        'after_seq': effectiveAfterServerSeq,
+        'explicit_after_seq': useExplicitAfterServerSeq,
+        'messages': thread(displayThreadId).messages.length,
+        'renderable': _renderableMessageCount(thread(displayThreadId)),
+      },
+    );
     try {
       final result = await ref
           .read(messageSyncServiceProvider)
@@ -929,16 +1154,43 @@ class ChatThreadsController
           .where((message) => message.hasRenderableContent)
           .toList();
       if (!mounted || messages.isEmpty) {
+        _chatProviderTrace(
+          'thread_after.noop',
+          fields: <String, Object?>{
+            ...AwikiPerformanceLogger.threadField(displayThreadId),
+            'mounted': mounted,
+            'returned': result.messages.length,
+            'renderable': messages.length,
+          },
+        );
         return;
       }
       _mergeMessages(displayThreadId, messages, isLoading: false);
       _updateConversationPreviewFromMessages(conversation, messages);
       await ref.read(conversationListProvider.notifier).refreshFastLocal();
+      _flushPendingReadAck(displayThreadId);
+      _chatProviderTrace(
+        'thread_after.done',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(displayThreadId),
+          'returned': result.messages.length,
+          'merged': messages.length,
+          'messages_after': thread(displayThreadId).messages.length,
+        },
+      );
     } catch (_) {
+      _chatProviderTrace(
+        'thread_after.failed',
+        fields: AwikiPerformanceLogger.threadField(displayThreadId),
+      );
       AwikiPerformanceLogger.log(
         'chat.thread_after.failed',
         fields: AwikiPerformanceLogger.threadField(displayThreadId),
       );
+    } finally {
+      if (mounted) {
+        _flushPendingReadAck(displayThreadId);
+      }
     }
   }
 
@@ -1104,18 +1356,98 @@ class ChatThreadsController
     String? displayThreadId,
     String reason = 'visible',
     bool requireVisible = true,
+    bool forcePersistentAck = false,
   }) {
-    if (conversation.unreadCount <= 0 && conversation.unreadMentionCount <= 0) {
+    final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
+    final currentThread = thread(targetThreadId);
+    final watermark = _readWatermarkForThread(targetThreadId);
+    final hasWatermark = watermark != null && !watermark.isEmpty;
+    if (!forcePersistentAck &&
+        conversation.unreadCount <= 0 &&
+        conversation.unreadMentionCount <= 0) {
+      _chatProviderTrace(
+        'mark_read.skip',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'reason': 'no_unread',
+          'unread': conversation.unreadCount,
+          'mention_unread': conversation.unreadMentionCount,
+          'force_persistent_ack': forcePersistentAck,
+        },
+      );
       return;
     }
-    final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
+    if (forcePersistentAck && !hasWatermark) {
+      _chatProviderTrace(
+        'mark_read.skip',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'reason': 'no_watermark',
+          'force_persistent_ack': true,
+          'messages': currentThread.messages.length,
+          'renderable': _renderableMessageCount(currentThread),
+        },
+      );
+      return;
+    }
     final metadata = _cacheMetadataByThreadId[targetThreadId];
     if (requireVisible && metadata?.isVisible != true) {
+      _chatProviderTrace(
+        'mark_read.skip',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'reason': 'not_visible',
+          'require_visible': requireVisible,
+          'metadata_visible': metadata?.isVisible,
+        },
+      );
       return;
     }
-    final readToken = _readReceiptToken(conversation);
+    final readToken = _readReceiptToken(conversation, watermark: watermark);
     if (_completedReadReceipts.contains(readToken) ||
         _activeReadReceipts.contains(readToken)) {
+      _chatProviderTrace(
+        'mark_read.local_only',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'reason': _completedReadReceipts.contains(readToken)
+              ? 'already_completed'
+              : 'already_active',
+          'read_token': AwikiPerformanceLogger.safeHash(readToken),
+        },
+      );
+      ref
+          .read(conversationListProvider.notifier)
+          .markConversationReadLocal(conversation);
+      return;
+    }
+    if (_activeLocalHistoryLoads.contains(targetThreadId) ||
+        currentThread.isHydratingLocalHistory ||
+        _activeRemoteHistorySyncs.contains(targetThreadId) ||
+        (_shouldLoadHistory(currentThread, conversation) && !hasWatermark)) {
+      _chatProviderTrace(
+        'mark_read.defer',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'reason': reason,
+          'active_local': _activeLocalHistoryLoads.contains(targetThreadId),
+          'active_remote': _activeRemoteHistorySyncs.contains(targetThreadId),
+          'hydrating': currentThread.isHydratingLocalHistory,
+          'should_load_history': _shouldLoadHistory(
+            currentThread,
+            conversation,
+          ),
+          'has_watermark': hasWatermark,
+          'messages': currentThread.messages.length,
+          'renderable': _renderableMessageCount(currentThread),
+        },
+      );
+      _pendingReadAcksByThreadId[targetThreadId] = _PendingReadAck(
+        conversation: conversation,
+        readToken: readToken,
+        reason: reason,
+        forcePersistentAck: forcePersistentAck,
+      );
       ref
           .read(conversationListProvider.notifier)
           .markConversationReadLocal(conversation);
@@ -1135,7 +1467,12 @@ class ChatThreadsController
       },
       level: AwikiPerformanceLogLevel.verbose,
     );
-    _markConversationReadBestEffort(conversation, readToken: readToken);
+    _markConversationReadBestEffort(
+      conversation,
+      readToken: readToken,
+      displayThreadId: targetThreadId,
+      watermark: watermark,
+    );
   }
 
   Future<int?> _repairThreadFromLocalProjection(
@@ -1421,38 +1758,200 @@ class ChatThreadsController
   void _markConversationReadBestEffort(
     ConversationSummary conversation, {
     required String readToken,
+    required String displayThreadId,
+    AppThreadReadWatermark? watermark,
   }) {
     try {
-      final thread = _readThreadRefFor(conversation);
+      final threadRef = _readThreadRefFor(conversation);
+      watermark ??= _readWatermarkForThread(displayThreadId);
+      final currentThread = thread(displayThreadId);
+      _chatProviderTrace(
+        'mark_read.remote_start',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(displayThreadId),
+          'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
+            conversation.threadId,
+          ),
+          'thread_ref': _appThreadRefDebug(threadRef),
+          'read_token': AwikiPerformanceLogger.safeHash(readToken),
+          'watermark_empty': watermark?.isEmpty ?? true,
+          'watermark_seq': watermark?.lastReadThreadSeq,
+          'watermark_message_hash': AwikiPerformanceLogger.safeHash(
+            watermark?.lastReadMessageId,
+          ),
+          'messages': currentThread.messages.length,
+          'renderable': _renderableMessageCount(currentThread),
+        },
+      );
       final watch = Stopwatch()..start();
       _activeReadReceipts.add(readToken);
       final operation = ref
           .read(conversationServiceProvider)
-          .markThreadRead(thread)
+          .markThreadRead(threadRef, watermark: watermark)
           .then<void>((_) {
             watch.stop();
             _activeReadReceipts.remove(readToken);
             _completedReadReceipts.add(readToken);
+            _chatProviderTrace(
+              'mark_read.remote_done',
+              fields: <String, Object?>{
+                ...AwikiPerformanceLogger.threadField(displayThreadId),
+                'read_token': AwikiPerformanceLogger.safeHash(readToken),
+                'watermark_seq': watermark?.lastReadThreadSeq,
+                'watermark_message': watermark?.lastReadMessageId != null,
+                'elapsed_ms': watch.elapsedMilliseconds,
+              },
+            );
             AwikiPerformanceLogger.log(
               'chat.mark_read',
               elapsed: watch.elapsed,
-              fields: AwikiPerformanceLogger.threadField(conversation.threadId),
+              fields: <String, Object?>{
+                ...AwikiPerformanceLogger.threadField(conversation.threadId),
+                'watermark_seq': watermark?.lastReadThreadSeq,
+                'watermark_message': watermark?.lastReadMessageId != null,
+              },
             );
           })
-          .catchError((_) {
+          .catchError((Object error) {
+            _chatProviderTrace(
+              'mark_read.remote_failed',
+              fields: <String, Object?>{
+                ...AwikiPerformanceLogger.threadField(displayThreadId),
+                'read_token': AwikiPerformanceLogger.safeHash(readToken),
+                'error_type': error.runtimeType,
+              },
+            );
             _activeReadReceipts.remove(readToken);
           });
       unawaited(operation);
-    } catch (_) {
+    } catch (error) {
+      _chatProviderTrace(
+        'mark_read.remote_setup_failed',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(displayThreadId),
+          'error_type': error.runtimeType,
+        },
+      );
       // Thread-level mark-read is best effort. Opening a conversation must
       // still clear unread locally and continue rendering messages.
     }
+  }
+
+  void _flushPendingReadAck(
+    String threadId, {
+    bool allowFallbackWithoutWatermark = false,
+  }) {
+    final pending = _pendingReadAcksByThreadId.remove(threadId);
+    if (pending == null) {
+      _chatProviderTrace(
+        'mark_read.flush_skip',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(threadId),
+          'reason': 'no_pending',
+        },
+      );
+      return;
+    }
+    if (_completedReadReceipts.contains(pending.readToken) ||
+        _activeReadReceipts.contains(pending.readToken)) {
+      _chatProviderTrace(
+        'mark_read.flush_skip',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(threadId),
+          'reason': _completedReadReceipts.contains(pending.readToken)
+              ? 'already_completed'
+              : 'already_active',
+        },
+      );
+      return;
+    }
+    final current = thread(threadId);
+    final watermark = _readWatermarkForThread(threadId);
+    final hasWatermark = watermark != null && !watermark.isEmpty;
+    const canFallbackWithoutWatermark = false;
+    if (current.isHydratingLocalHistory ||
+        _activeLocalHistoryLoads.contains(threadId) ||
+        _activeRemoteHistorySyncs.contains(threadId) ||
+        !hasWatermark ||
+        _shouldLoadHistory(current, pending.conversation)) {
+      final shouldLoadHistoryNow = _shouldLoadHistory(
+        current,
+        pending.conversation,
+      );
+      _chatProviderTrace(
+        'mark_read.flush_defer',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(threadId),
+          'hydrating': current.isHydratingLocalHistory,
+          'active_local': _activeLocalHistoryLoads.contains(threadId),
+          'active_remote': _activeRemoteHistorySyncs.contains(threadId),
+          'has_watermark': hasWatermark,
+          'allow_fallback': allowFallbackWithoutWatermark,
+          'can_fallback': canFallbackWithoutWatermark,
+          'should_load_history': shouldLoadHistoryNow,
+          'messages': current.messages.length,
+          'renderable': _renderableMessageCount(current),
+        },
+      );
+      _pendingReadAcksByThreadId[threadId] = pending;
+      return;
+    }
+    AwikiPerformanceLogger.log(
+      'chat.mark_read.flush_pending',
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(threadId),
+        'reason': pending.reason,
+      },
+      level: AwikiPerformanceLogLevel.verbose,
+    );
+    _markConversationReadBestEffort(
+      pending.conversation,
+      readToken: pending.readToken,
+      displayThreadId: threadId,
+      watermark: watermark,
+    );
+  }
+
+  AppThreadReadWatermark? _readWatermarkForThread(String threadId) {
+    final messages = thread(threadId).messages
+        .where((message) => message.hasRenderableContent)
+        .toList(growable: false);
+    if (messages.isEmpty) {
+      return null;
+    }
+    ChatMessage? latestBySeq;
+    ChatMessage? latestByTime;
+    for (final message in messages) {
+      if (latestByTime == null ||
+          message.createdAt.isAfter(latestByTime.createdAt)) {
+        latestByTime = message;
+      }
+      if (message.serverSequence == null) {
+        continue;
+      }
+      if (latestBySeq == null ||
+          (message.serverSequence ?? -1) > (latestBySeq.serverSequence ?? -1)) {
+        latestBySeq = message;
+      }
+    }
+    final selected = latestBySeq ?? latestByTime;
+    if (selected == null) {
+      return null;
+    }
+    final messageId = _stableMessageId(selected);
+    return AppThreadReadWatermark(
+      lastReadMessageId: messageId.isEmpty ? null : messageId,
+      lastReadThreadSeq: selected.serverSequence?.toString(),
+      readAt: DateTime.now().toUtc(),
+    );
   }
 
   Future<_HistoryLoadResult> _loadLocalHistory(
     ConversationSummary conversation, {
     String? intoThreadId,
     int limit = 100,
+    bool showHydratingState = true,
+    bool markLoadedWhenEmpty = true,
   }) async {
     if (!mounted) {
       return const _HistoryLoadResult(loadedCount: 0, failed: false);
@@ -1460,16 +1959,48 @@ class ChatThreadsController
     final targetThreadId = _displayThreadIdFor(conversation, intoThreadId);
     final totalWatch = Stopwatch()..start();
     _activeLocalHistoryLoads.add(targetThreadId);
-    final shouldShowLoading = thread(targetThreadId).messages.isEmpty;
+    final shouldShowLoading =
+        showHydratingState && thread(targetThreadId).messages.isEmpty;
+    if (showHydratingState) {
+      _setThreadLocalHistoryHydrating(targetThreadId, true);
+    }
     if (shouldShowLoading) {
       _setThreadLoading(targetThreadId, true);
     }
     final messaging = ref.read(messagingServiceProvider);
+    _chatProviderTrace(
+      'local_history.load_start',
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(targetThreadId),
+        'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
+          conversation.threadId,
+        ),
+        'thread_ref': _appThreadRefDebug(
+          _localHistoryThreadRefFor(conversation),
+        ),
+        'limit': limit,
+        'show_hydrating': showHydratingState,
+        'mark_empty_loaded': markLoadedWhenEmpty,
+        'messages_before': thread(targetThreadId).messages.length,
+        'renderable_before': _renderableMessageCount(thread(targetThreadId)),
+        'messaging_type': messaging.runtimeType,
+      },
+    );
     try {
       if (messaging is! LocalHistoryMessagingService) {
         if (shouldShowLoading && mounted) {
           _setThreadLoading(targetThreadId, false);
+          if (showHydratingState) {
+            _setThreadLocalHistoryHydrating(targetThreadId, false);
+          }
         }
+        _chatProviderTrace(
+          'local_history.unsupported',
+          fields: <String, Object?>{
+            ...AwikiPerformanceLogger.threadField(targetThreadId),
+            'messaging_type': messaging.runtimeType,
+          },
+        );
         AwikiPerformanceLogger.log(
           'chat.local_history.unsupported',
           fields: AwikiPerformanceLogger.threadField(targetThreadId),
@@ -1489,6 +2020,29 @@ class ChatThreadsController
         },
         level: AwikiPerformanceLogLevel.verbose,
       );
+      _chatProviderTrace(
+        'local_history.service_done',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'loaded_raw': loadedHistory.length,
+          'first_id_hash': loadedHistory.isEmpty
+              ? null
+              : AwikiPerformanceLogger.safeHash(
+                  _stableMessageId(loadedHistory.first),
+                ),
+          'last_id_hash': loadedHistory.isEmpty
+              ? null
+              : AwikiPerformanceLogger.safeHash(
+                  _stableMessageId(loadedHistory.last),
+                ),
+          'first_at': loadedHistory.isEmpty
+              ? null
+              : loadedHistory.first.createdAt,
+          'last_at': loadedHistory.isEmpty
+              ? null
+              : loadedHistory.last.createdAt,
+        },
+      );
       final history = AwikiPerformanceLogger.sync(
         'chat.local_history.prepare',
         () => loadedHistory
@@ -1505,12 +2059,35 @@ class ChatThreadsController
         return _HistoryLoadResult(
           loadedCount: history.length,
           failed: false,
+          loadedFromLocalHistory: true,
           maxServerSequence: maxServerSequenceForMessages(history),
         );
       }
       _mergeMessages(targetThreadId, history, isLoading: false);
-      _updateConversationPreviewFromMessages(conversation, history);
+      if (history.isNotEmpty || markLoadedWhenEmpty) {
+        _markThreadLocalHistoryLoaded(targetThreadId);
+      }
+      if (showHydratingState) {
+        _setThreadLocalHistoryHydrating(targetThreadId, false);
+      }
+      _updateConversationPreviewFromMessages(
+        conversation,
+        history,
+        clearUnreadForOutgoing: false,
+      );
       totalWatch.stop();
+      _chatProviderTrace(
+        'local_history.load_done',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'items': history.length,
+          'messages_after': thread(targetThreadId).messages.length,
+          'renderable_after': _renderableMessageCount(thread(targetThreadId)),
+          'has_loaded':
+              _cacheMetadataByThreadId[targetThreadId]?.hasLoadedLocalHistory,
+          'elapsed_ms': totalWatch.elapsedMilliseconds,
+        },
+      );
       AwikiPerformanceLogger.log(
         'chat.local_history.load',
         elapsed: totalWatch.elapsed,
@@ -1522,11 +2099,23 @@ class ChatThreadsController
       return _HistoryLoadResult(
         loadedCount: history.length,
         failed: false,
+        loadedFromLocalHistory: true,
         maxServerSequence: maxServerSequenceForMessages(history),
       );
-    } catch (_) {
+    } catch (error) {
+      _chatProviderTrace(
+        'local_history.load_failed',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'error_type': error.runtimeType,
+          'elapsed_ms': totalWatch.elapsedMilliseconds,
+        },
+      );
       if (shouldShowLoading && mounted) {
         _setThreadLoading(targetThreadId, false);
+      }
+      if (mounted && showHydratingState) {
+        _setThreadLocalHistoryHydrating(targetThreadId, false);
       }
       totalWatch.stop();
       AwikiPerformanceLogger.log(
@@ -1537,7 +2126,25 @@ class ChatThreadsController
       return const _HistoryLoadResult(loadedCount: 0, failed: true);
     } finally {
       _activeLocalHistoryLoads.remove(targetThreadId);
+      if (mounted && showHydratingState) {
+        _setThreadLocalHistoryHydrating(targetThreadId, false);
+      }
       if (mounted) {
+        _chatProviderTrace(
+          'local_history.load_finish',
+          fields: <String, Object?>{
+            ...AwikiPerformanceLogger.threadField(targetThreadId),
+            'pending_read_ack': _pendingReadAcksByThreadId.containsKey(
+              targetThreadId,
+            ),
+            'pending_history_sync': _pendingHistorySyncs.containsKey(
+              targetThreadId,
+            ),
+            'messages': thread(targetThreadId).messages.length,
+            'hydrating': thread(targetThreadId).isHydratingLocalHistory,
+          },
+        );
+        _flushPendingReadAck(targetThreadId);
         _runPendingHistorySyncIfNeeded(targetThreadId);
         _runPendingVisibleThreadStaleGuardIfNeeded(targetThreadId);
       }
@@ -1556,6 +2163,19 @@ class ChatThreadsController
     final targetThreadId = _displayThreadIdFor(conversation, intoThreadId);
     final totalWatch = Stopwatch()..start();
     _activeRemoteHistorySyncs.add(targetThreadId);
+    _chatProviderTrace(
+      'remote_history.load_start',
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(targetThreadId),
+        'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
+          conversation.threadId,
+        ),
+        'thread_ref': _appThreadRefDebug(_historyThreadRefFor(conversation)),
+        'show_loading': showLoading,
+        'messages_before': thread(targetThreadId).messages.length,
+        'renderable_before': _renderableMessageCount(thread(targetThreadId)),
+      },
+    );
     if (showLoading) {
       _setThreadLoading(targetThreadId, true);
     }
@@ -1599,6 +2219,7 @@ class ChatThreadsController
         resolveStaleSending: true,
       );
       _updateConversationPreviewFromMessages(conversation, history);
+      _flushPendingReadAck(targetThreadId);
       totalWatch.stop();
       AwikiPerformanceLogger.log(
         'chat.remote_history.load',
@@ -1623,6 +2244,10 @@ class ChatThreadsController
     } finally {
       _activeRemoteHistorySyncs.remove(targetThreadId);
       if (mounted) {
+        _flushPendingReadAck(
+          targetThreadId,
+          allowFallbackWithoutWatermark: true,
+        );
         _runPendingHistorySyncIfNeeded(targetThreadId);
         _runPendingVisibleThreadStaleGuardIfNeeded(targetThreadId);
       }
@@ -2016,8 +2641,9 @@ class ChatThreadsController
 
   void _updateConversationPreviewFromMessages(
     ConversationSummary conversation,
-    List<ChatMessage> messages,
-  ) {
+    List<ChatMessage> messages, {
+    bool clearUnreadForOutgoing = true,
+  }) {
     final latest = _latestRenderableMessage(messages);
     if (latest == null) {
       return;
@@ -2025,7 +2651,13 @@ class ChatThreadsController
     final current = _refreshedConversationFor(conversation);
     ref
         .read(conversationListProvider.notifier)
-        .upsertConversation(_withConversationPreview(current, latest));
+        .upsertConversation(
+          _withConversationPreview(
+            current,
+            latest,
+            clearUnreadForOutgoing: clearUnreadForOutgoing,
+          ),
+        );
   }
 
   Future<void> refreshConversation(
@@ -2051,6 +2683,23 @@ class ChatThreadsController
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
     final current = thread(targetThreadId);
     final shouldLoad = _shouldLoadHistory(current, conversation);
+    _chatProviderTrace(
+      'history_sync.request',
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(targetThreadId),
+        'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
+          conversation.threadId,
+        ),
+        'force': force,
+        'should_load': shouldLoad,
+        'current_loading': current.isLoading,
+        'active_remote': _activeRemoteHistorySyncs.contains(targetThreadId),
+        'messages': current.messages.length,
+        'renderable': _renderableMessageCount(current),
+        'unread': conversation.unreadCount,
+        'last_at': conversation.lastMessageAt,
+      },
+    );
     if (current.isLoading ||
         _activeRemoteHistorySyncs.contains(targetThreadId)) {
       if (force || shouldLoad) {
@@ -2061,10 +2710,25 @@ class ChatThreadsController
           reportFailure: reportFailure,
           showLoading: showLoading,
         );
+        _chatProviderTrace(
+          'history_sync.queued',
+          fields: <String, Object?>{
+            ...AwikiPerformanceLogger.threadField(targetThreadId),
+            'force': force,
+            'should_load': shouldLoad,
+          },
+        );
       }
       return Future<void>.value();
     }
     if (!force && !shouldLoad) {
+      _chatProviderTrace(
+        'history_sync.skip',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'reason': 'not_needed',
+        },
+      );
       return Future<void>.value();
     }
     return _loadHistory(
@@ -2086,6 +2750,7 @@ class ChatThreadsController
     _lastThreadPatchStreamEndAt.clear();
     _activeReadReceipts.clear();
     _completedReadReceipts.clear();
+    _pendingReadAcksByThreadId.clear();
     _activeLocalHistoryLoads.clear();
     _activeRemoteHistorySyncs.clear();
     _clearMemoryCacheMetadata();
@@ -2199,6 +2864,7 @@ class ChatThreadsController
     String? canonicalKey,
     Iterable<String> aliases = const <String>[],
     bool? visible,
+    bool? hasLoadedLocalHistory,
   }) {
     final now = DateTime.now();
     final existingMetadata = _cacheMetadataByThreadId[threadId];
@@ -2237,6 +2903,10 @@ class ChatThreadsController
       lastTouchedAt: now,
       isVisible: isVisible,
       hiddenAt: isVisible ? null : existingMetadata?.hiddenAt,
+      hasLoadedLocalHistory:
+          hasLoadedLocalHistory ??
+          existingMetadata?.hasLoadedLocalHistory ??
+          false,
     );
     final aliasSet = _canonicalAliases.putIfAbsent(canonical, () => <String>{});
     aliasSet.addAll(threadAliases);
@@ -2831,6 +3501,39 @@ class ChatThreadsController
     };
   }
 
+  void _setThreadLocalHistoryHydrating(String threadId, bool isHydrating) {
+    final current = thread(threadId);
+    if (current.isHydratingLocalHistory == isHydrating) {
+      return;
+    }
+    _chatProviderTrace(
+      'local_history.hydrating_change',
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(threadId),
+        'from': current.isHydratingLocalHistory,
+        'to': isHydrating,
+        'messages': current.messages.length,
+      },
+    );
+    state = <String, ChatThreadState>{
+      ...state,
+      threadId: current.copyWith(isHydratingLocalHistory: isHydrating),
+    };
+  }
+
+  void _markThreadLocalHistoryLoaded(String threadId) {
+    final current = thread(threadId);
+    _touchThreadCache(threadId, current.messages, hasLoadedLocalHistory: true);
+    _chatProviderTrace(
+      'local_history.mark_loaded',
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(threadId),
+        'messages': current.messages.length,
+        'renderable': _renderableMessageCount(current),
+      },
+    );
+  }
+
   void _setMessages(String threadId, List<ChatMessage> messages) {
     final current = thread(threadId);
     _touchThreadCache(threadId, messages);
@@ -3075,6 +3778,7 @@ class ChatThreadsController
         threadId: threadId,
         messages: enforced.messages,
         isLoading: isLoading ?? previous.isLoading,
+        isHydratingLocalHistory: previous.isHydratingLocalHistory,
         agentPendingTurns: nextAgentPendingTurns,
         messageAgentSyncs: previous.messageAgentSyncs,
         appActionRecords: previous.appActionRecords,
@@ -4435,6 +5139,7 @@ class ChatThreadsController
     _cancelThreadPatchSubscriptionTtls();
     _cancelHiddenThreadCacheTrimTimers();
     _lastThreadPatchStreamEndAt.clear();
+    _pendingReadAcksByThreadId.clear();
     _clearMemoryCacheMetadata();
     super.dispose();
   }
@@ -4731,7 +5436,10 @@ class ChatThreadsController
   }
 }
 
-String _readReceiptToken(ConversationSummary conversation) {
+String _readReceiptToken(
+  ConversationSummary conversation, {
+  AppThreadReadWatermark? watermark,
+}) {
   final thread = _readThreadRefFor(conversation).stableId;
   return [
     thread,
@@ -4739,6 +5447,8 @@ String _readReceiptToken(ConversationSummary conversation) {
     conversation.unreadCount,
     conversation.unreadMentionCount,
     conversation.firstUnreadMentionMessageId ?? '',
+    watermark?.lastReadThreadSeq ?? '',
+    watermark?.lastReadMessageId ?? '',
   ].join('|');
 }
 
@@ -4847,14 +5557,75 @@ class _MessageMergeIndexes {
   }
 }
 
+void _chatProviderTrace(
+  String event, {
+  Map<String, Object?> fields = const <String, Object?>{},
+}) {
+  if (!_chatProviderTraceEnabled) {
+    return;
+  }
+  final details = <String>[];
+  for (final entry in fields.entries) {
+    final value = entry.value;
+    if (value != null) {
+      details.add('${entry.key}=${_formatChatProviderTraceValue(value)}');
+    }
+  }
+  debugPrint(
+    details.isEmpty
+        ? '[awiki_me][chat_provider_trace] event=$event'
+        : '[awiki_me][chat_provider_trace] event=$event ${details.join(' ')}',
+  );
+}
+
+String _formatChatProviderTraceValue(Object value) {
+  if (value is DateTime) {
+    return value.toUtc().toIso8601String();
+  }
+  return _collapseChatProviderTraceWhitespace(value.toString());
+}
+
+String _collapseChatProviderTraceWhitespace(String value) {
+  final buffer = StringBuffer();
+  var lastWasWhitespace = false;
+  for (final rune in value.runes) {
+    final char = String.fromCharCode(rune);
+    if (char.trim().isEmpty) {
+      if (!lastWasWhitespace) {
+        buffer.write('_');
+      }
+      lastWasWhitespace = true;
+    } else {
+      buffer.write(char);
+      lastWasWhitespace = false;
+    }
+  }
+  return buffer.toString();
+}
+
+String _appThreadRefDebug(AppThreadRef ref) {
+  final kind = switch (ref) {
+    AppDirectThreadRef() => 'direct',
+    AppGroupThreadRef() => 'group',
+    AppMessageThreadRef() => 'thread',
+  };
+  return '$kind:${AwikiPerformanceLogger.safeHash(ref.stableId)}';
+}
+
 ConversationSummary _withConversationPreview(
   ConversationSummary conversation,
-  ChatMessage message,
-) {
+  ChatMessage message, {
+  bool clearUnreadForOutgoing = true,
+}) {
+  final shouldClearUnread = clearUnreadForOutgoing && message.isMine;
   return conversation.copyWith(
     lastMessagePreview: message.previewText,
     lastMessageAt: message.createdAt,
-    unreadCount: message.isMine ? 0 : conversation.unreadCount,
+    unreadCount: shouldClearUnread ? 0 : conversation.unreadCount,
+    unreadMentionCount: shouldClearUnread ? 0 : conversation.unreadMentionCount,
+    firstUnreadMentionMessageId: shouldClearUnread
+        ? null
+        : conversation.firstUnreadMentionMessageId,
     lastMessagePayloadJson:
         message.payloadJson ?? conversation.lastMessagePayloadJson,
     lastMessageSnapshot: message,
@@ -4885,19 +5656,12 @@ AppThreadRef _historyThreadRefFor(ConversationSummary conversation) {
 }
 
 AppThreadRef _localHistoryThreadRefFor(ConversationSummary conversation) {
-  final groupId = conversation.groupId?.trim();
-  if (conversation.isGroup && groupId != null && groupId.isNotEmpty) {
-    return AppThreadRef.group(groupId);
-  }
-  final peerDid = conversation.targetDid?.trim();
-  final peer = conversation.targetPeer?.trim();
-  if (!conversation.isGroup && peerDid != null && peerDid.isNotEmpty) {
-    return AppThreadRef.direct(peerDid);
-  }
-  if (!conversation.isGroup && peer != null && peer.isNotEmpty) {
-    return AppThreadRef.direct(peer);
-  }
-  return AppThreadRef.thread(conversation.threadId);
+  // Local thread stores, thread-after, and mark-read must address the same
+  // canonical thread.  For direct conversations prefer the canonical peer
+  // handle/peer key when available; DID-only history lookups can miss local
+  // rows stored under the peer-scoped direct identity and then force a remote
+  // fallback before we have a safe read watermark.
+  return _historyThreadRefFor(conversation);
 }
 
 ({String kind, String id}) _threadPatchKeyFor(AppThreadRef thread) {
@@ -4932,13 +5696,13 @@ AppThreadRef _readThreadRefFor(ConversationSummary conversation) {
   if (conversation.isGroup && groupId != null && groupId.isNotEmpty) {
     return AppThreadRef.group(groupId);
   }
-  final peer = conversation.targetPeer?.trim();
-  if (!conversation.isGroup && peer != null && peer.isNotEmpty) {
-    return AppThreadRef.direct(peer);
-  }
   final peerDid = conversation.targetDid?.trim();
   if (!conversation.isGroup && peerDid != null && peerDid.isNotEmpty) {
     return AppThreadRef.direct(peerDid);
+  }
+  final peer = conversation.targetPeer?.trim();
+  if (!conversation.isGroup && peer != null && peer.isNotEmpty) {
+    return AppThreadRef.direct(peer);
   }
   return AppThreadRef.thread(conversation.threadId);
 }

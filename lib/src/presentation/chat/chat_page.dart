@@ -22,6 +22,7 @@ import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_summary.dart';
+import '../../domain/entities/user_profile.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../../app/ui_feedback.dart';
@@ -264,11 +265,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
   void _acknowledgeVisibleConversationRead(
     ConversationSummary conversation, {
     String reason = 'visible',
+    bool forcePersistentAck = false,
   }) {
     _chatThreadsController.acknowledgeVisibleConversationRead(
       conversation,
       displayThreadId: _displayThreadId,
       reason: reason,
+      forcePersistentAck: forcePersistentAck,
     );
   }
 
@@ -294,6 +297,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   void _acknowledgeCurrentVisibleConversationRead({
     String reason = 'visible_interaction',
+    bool forcePersistentAck = false,
   }) {
     if (_hasDeferredBottomNotice && !_isNearBottom()) {
       return;
@@ -301,6 +305,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     _acknowledgeVisibleConversationRead(
       _currentConversationSnapshot(),
       reason: reason,
+      forcePersistentAck: forcePersistentAck,
     );
   }
 
@@ -399,6 +404,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
       );
     });
     final messages = thread.messages;
+    final deferRealtimeTailFirstPaint =
+        thread.isHydratingLocalHistory && messages.length <= 1;
     _settleOpeningBottomAnchorForCurrentThread(thread);
     final activePendingTurns = thread.agentPendingTurns
         .where((turn) => turn.isActive)
@@ -669,6 +676,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
                     _NewMessagesButton(
                       macStyle: macStyle,
                       onTap: () => _scheduleScrollToBottom(animated: true),
+                    ),
+                  if (deferRealtimeTailFirstPaint)
+                    const Positioned.fill(
+                      child: ColoredBox(
+                        key: Key('chat-local-history-hydrating-mask'),
+                        color: CupertinoColors.white,
+                        child: Center(child: CupertinoActivityIndicator()),
+                      ),
                     ),
                 ],
               ),
@@ -1003,6 +1018,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
     if (previous == null) {
       if (next.messages.isNotEmpty) {
         _scheduleScrollToBottom(settleFrames: 2);
+        _scheduleAcknowledgeVisibleConversationRead(
+          conversation,
+          reason: 'visible_thread_initial',
+        );
       }
       return;
     }
@@ -1020,6 +1039,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
     if (messageAdded) {
       if (nextLast.isMine || wasNearBottom) {
         _scheduleScrollToBottom(animated: !nextLast.isMine);
+        if (!nextLast.isMine) {
+          _acknowledgeVisibleConversationRead(
+            conversation,
+            reason: 'visible_message_added',
+            forcePersistentAck: true,
+          );
+        }
       } else {
         _showDeferredBottomNotice();
       }
@@ -1212,7 +1238,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
         _hasDeferredBottomNotice = false;
       });
     }
-    _acknowledgeCurrentVisibleConversationRead(reason: 'programmatic_bottom');
+    _acknowledgeCurrentVisibleConversationRead(
+      reason: 'programmatic_bottom',
+      forcePersistentAck: true,
+    );
   }
 
   bool _isNearBottom() {

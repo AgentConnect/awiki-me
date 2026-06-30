@@ -42,6 +42,40 @@ void main() {
     expect(find.text('安装命令'), findsNothing);
   });
 
+  testWidgets('agents workspace re-entry reuses loaded inventory', (
+    tester,
+  ) async {
+    final control = _CountingListAgentControlService();
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const _AgentsWorkspaceToggleHost(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(control.listAgentsCalls, 1);
+    expect(find.byType(AgentsWorkspacePage), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('hide-agents-workspace')));
+    await tester.pumpAndSettle();
+    expect(find.byType(AgentsWorkspacePage), findsNothing);
+
+    await tester.tap(find.byKey(const Key('show-agents-workspace')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AgentsWorkspacePage), findsOneWidget);
+    expect(control.listAgentsCalls, 1);
+  });
+
   testWidgets('agents workspace shows empty state and load error banner', (
     tester,
   ) async {
@@ -1997,6 +2031,16 @@ class _PendingRefreshAgentControlService extends FakeAgentControlService {
   }
 }
 
+class _CountingListAgentControlService extends FakeAgentControlService {
+  int listAgentsCalls = 0;
+
+  @override
+  Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
+    listAgentsCalls += 1;
+    return super.listAgents(includeInactive: includeInactive);
+  }
+}
+
 class _FailingListAgentControlService extends FakeAgentControlService {
   bool failList = true;
 
@@ -2012,6 +2056,39 @@ class _FailingListAgentControlService extends FakeAgentControlService {
 class _SeededAgentsController extends AgentsController {
   _SeededAgentsController(super.ref, AgentsState initialState) {
     state = initialState;
+  }
+}
+
+class _AgentsWorkspaceToggleHost extends StatefulWidget {
+  const _AgentsWorkspaceToggleHost();
+
+  @override
+  State<_AgentsWorkspaceToggleHost> createState() =>
+      _AgentsWorkspaceToggleHostState();
+}
+
+class _AgentsWorkspaceToggleHostState
+    extends State<_AgentsWorkspaceToggleHost> {
+  bool _showAgents = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: <Widget>[
+        CupertinoButton(
+          key: Key(
+            _showAgents ? 'hide-agents-workspace' : 'show-agents-workspace',
+          ),
+          onPressed: () => setState(() => _showAgents = !_showAgents),
+          child: Text(_showAgents ? '隐藏智能体' : '显示智能体'),
+        ),
+        Expanded(
+          child: _showAgents
+              ? const AgentsWorkspacePage()
+              : const SizedBox(key: Key('agents-workspace-placeholder')),
+        ),
+      ],
+    );
   }
 }
 

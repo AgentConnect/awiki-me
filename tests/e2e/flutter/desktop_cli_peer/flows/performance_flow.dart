@@ -741,8 +741,11 @@ class _CountingConversationService implements ConversationService {
   }
 
   @override
-  Future<void> markThreadRead(AppThreadRef thread) {
-    return delegate.markThreadRead(thread);
+  Future<void> markThreadRead(
+    AppThreadRef thread, {
+    AppThreadReadWatermark? watermark,
+  }) {
+    return delegate.markThreadRead(thread, watermark: watermark);
   }
 
   @override

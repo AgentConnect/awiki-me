@@ -4,6 +4,7 @@ import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
@@ -74,9 +75,18 @@ void main() {
         localStore: InMemoryAwikiProductLocalStore(),
       );
 
-      await service.markThreadRead(const AppThreadRef.direct('did:bob'));
+      const watermark = AppThreadReadWatermark(
+        lastReadMessageId: 'remote-42',
+        lastReadThreadSeq: '42',
+      );
+
+      await service.markThreadRead(
+        const AppThreadRef.direct('did:bob'),
+        watermark: watermark,
+      );
 
       expect(core.markReadCount, 1);
+      expect(core.lastMarkReadWatermark, same(watermark));
     });
 
     test(
@@ -1163,6 +1173,7 @@ class _FakeConversations implements ConversationCorePort {
   int listCount = 0;
   int snapshotCount = 0;
   int markReadCount = 0;
+  AppThreadReadWatermark? lastMarkReadWatermark;
   int repairCount = 0;
   int? lastLimit;
   String? lastCursor;
@@ -1224,8 +1235,12 @@ class _FakeConversations implements ConversationCorePort {
   }
 
   @override
-  Future<void> markThreadRead(AppThreadRef thread) async {
+  Future<void> markThreadRead(
+    AppThreadRef thread, {
+    AppThreadReadWatermark? watermark,
+  }) async {
     markReadCount += 1;
+    lastMarkReadWatermark = watermark;
   }
 }
 

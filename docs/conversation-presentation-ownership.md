@@ -106,11 +106,13 @@ Step 11 新增的关键回归是：`conversation patch upsert respects local hid
 - macOS 聊天头部不显示 `身份卡`、`群聊信息` 和 `会话信息` 按钮。
 - 窄屏 / 移动聊天头部不显示右侧竖向更多按钮。
 - 头像仍是轻量资料入口：直聊打开用户 / 智能体信息弹窗，群聊打开既有群详情路由。
+- 直聊头像弹窗采用 shell-first 渲染：点击后立即基于 `ConversationSummary`、本地 runtime `AgentSummary` 和 DID 展示标题、头像、DID、类型与 Agent 收件箱入口；`peerProfileProvider` 的公开 profile、关系状态和主页 Markdown 返回后再增量补齐昵称、头像、handle、身份卡正文和关系标签。
+- 公开 profile 或后续关系 / 主页 Markdown 加载失败不得阻塞弹窗打开，也不得清空已展示的基础信息；只在身份卡区域内提示资料暂不可用或继续保留已返回的 profile 内容。
 - 群详情里的成员刷新能力不属于聊天头部入口，保留在群详情 / 群信息组件内。
 
 相关回归覆盖在：
 
-- `tests/unit/chat_page_test.dart`
+- `tests/unit/chat_page_test.dart`：除头部入口移除外，还固定头像信息弹窗必须先展示基础信息，并在 profile 返回后补齐资料。
 - `tests/unit/conversation_workspace_test.dart`
 - `tests/e2e/flutter/app/app_smoke_test.dart`
 - `tests/e2e/flutter/app/ui_visual_verification_test.dart`

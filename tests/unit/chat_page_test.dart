@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/attachment_open_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
+import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -12,6 +13,7 @@ import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/peer_agent_identity.dart';
+import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
@@ -86,6 +88,31 @@ class _StaticChatThreadsController extends ChatThreadsController {
       conversation,
       displayThreadId: displayThreadId,
     );
+  }
+}
+
+class _DelayedProfileApplicationService implements ProfileApplicationService {
+  _DelayedProfileApplicationService(this.completer);
+
+  final Completer<UserProfile> completer;
+  int loadPublicProfileCalls = 0;
+  String? lastPublicProfileQuery;
+
+  @override
+  Future<UserProfile> loadMyProfile() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<UserProfile> loadPublicProfile(String didOrHandle) {
+    loadPublicProfileCalls += 1;
+    lastPublicProfileQuery = didOrHandle;
+    return completer.future;
+  }
+
+  @override
+  Future<UserProfile> updateProfile(ProfilePatch patch) {
+    throw UnimplementedError();
   }
 }
 
@@ -486,6 +513,85 @@ void main() {
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('聊天头像信息弹窗先展示基础信息，profile 返回后补齐资料', (tester) async {
+    final profileCompleter = Completer<UserProfile>();
+    final profileService = _DelayedProfileApplicationService(profileCompleter);
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:delayed-profile',
+      displayName: '本地智能体',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:slow-agent',
+    );
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:test:slow-agent',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:test:daemon',
+          runtime: 'slow-agent',
+          displayName: '本地智能体',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        homepageMarkdownLoader: (_) async => null,
+        providerOverrides: <Override>[
+          profileApplicationServiceProvider.overrideWithValue(profileService),
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
+    await tester.pump();
+
+    expect(profileService.loadPublicProfileCalls, 1);
+    expect(profileService.lastPublicProfileQuery, 'did:test:slow-agent');
+    expect(find.text('智能体信息'), findsOneWidget);
+    expect(find.text('本地智能体'), findsWidgets);
+    expect(find.byKey(const Key('peer-info-dialog-did-value')), findsOneWidget);
+    expect(find.text('Runtime Agent'), findsOneWidget);
+    expect(find.text('资料加载中'), findsOneWidget);
+    expect(find.text('正在加载资料…'), findsOneWidget);
+    expect(find.text('profile 加载完成后的介绍'), findsNothing);
+
+    profileCompleter.complete(
+      const UserProfile(
+        did: 'did:test:slow-agent',
+        nickName: 'Profile Agent',
+        bio: 'profile 加载完成后的介绍',
+        tags: <String>['agent'],
+        profileMarkdown: '',
+        handle: 'profile-agent',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Profile Agent'), findsOneWidget);
+    expect(find.text('profile 加载完成后的介绍'), findsOneWidget);
+    expect(find.text('@profile-agent'), findsOneWidget);
+    expect(find.text('资料加载中'), findsNothing);
   });
 
   testWidgets('聊天头部关注按钮会把对方加入我关注的列表', (tester) async {
@@ -1607,6 +1713,87 @@ void main() {
     expect(_chatScrollPixels(tester), moreOrLessEquals(_chatScrollMax(tester)));
   });
 
+  testWidgets('ChatView 已在底部时收到新消息会推进持久已读水位', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:visible-new-message',
+      displayName: 'Alice',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:alice',
+    );
+    final messages = _scrollMessages(
+      threadId: conversation.threadId,
+      peerDid: 'did:test:alice',
+      startedAt: DateTime(2026, 4, 5, 10),
+      count: 6,
+    );
+
+    await tester.binding.setSurfaceSize(const Size(390, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(
+            key: ValueKey('chat-view:${conversation.threadId}'),
+            conversation: conversation,
+            embedded: false,
+          ),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          chatThreadsProvider.overrideWith(
+            (ref) => _StaticChatThreadsController(
+              ref,
+              <String, List<ChatMessage>>{conversation.threadId: messages},
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final initialMarkReadCalls = gateway.markReadCalls;
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    container
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(
+          ChatMessage(
+            localId: 'incoming-while-visible',
+            remoteId: 'incoming-while-visible',
+            threadId: conversation.threadId,
+            senderDid: 'did:test:alice',
+            receiverDid: session.did,
+            content: 'new message while visible',
+            createdAt: DateTime(2026, 4, 5, 12, 30),
+            isMine: false,
+            serverSequence: 42,
+            sendState: MessageSendState.sent,
+          ),
+        );
+    await tester.pump();
+    await tester.pump();
+
+    expect(gateway.markReadCalls, initialMarkReadCalls + 1);
+    expect(gateway.lastMarkReadThreadId, 'dm:did:test:alice');
+    expect(
+      gateway.lastMarkThreadReadWatermark?.lastReadMessageId,
+      'incoming-while-visible',
+    );
+    expect(gateway.lastMarkThreadReadWatermark?.lastReadThreadSeq, '42');
+  });
+
   testWidgets('最近会话列表显示未发送草稿预览并在草稿清空后恢复原预览', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
@@ -2616,7 +2803,9 @@ void main() {
 
     expect(find.text('你好。欢迎'), findsNothing);
     expect(gateway.fetchDmHistoryCalls, 0);
-    expect(gateway.markReadCalls, 1);
+    // 只有列表摘要更新、消息正文尚未进入当前线程时，不应无水位上报已读；
+    // 等 realtime/thread-after/local history 带来可见消息后再携带 watermark ack。
+    expect(gateway.markReadCalls, 0);
     expect(
       container.read(conversationListProvider).conversations.single.unreadCount,
       0,

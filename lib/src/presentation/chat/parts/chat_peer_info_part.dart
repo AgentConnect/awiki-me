@@ -31,15 +31,12 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
         children: <Widget>[
           _PeerInfoHeader(title: title),
           Flexible(
-            child: state.isLoading
-                ? const Center(child: CupertinoActivityIndicator())
-                : state.profile == null
-                ? _PeerInfoError(onClose: _close)
-                : _buildProfileContent(
-                    state,
-                    runtimeAgent: runtimeAgent,
-                    maxDialogHeight: maxDialogHeight,
-                  ),
+            child: _buildProfileContent(
+              state,
+              targetDid: targetDid,
+              runtimeAgent: runtimeAgent,
+              maxDialogHeight: maxDialogHeight,
+            ),
           ),
         ],
       ),
@@ -48,20 +45,29 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
 
   Widget _buildProfileContent(
     PeerProfileState state, {
+    required String targetDid,
     required AgentSummary? runtimeAgent,
     required double maxDialogHeight,
   }) {
-    final profile = state.profile!;
-    final displayName = runtimeAgent == null
-        ? DidDisplayFormatter.profileName(profile)
-        : AgentDisplayName.title(runtimeAgent);
-    final profileContent = profile.profileMarkdown.trim().isNotEmpty
-        ? profile.profileMarkdown.trim()
-        : profile.bio.trim();
-    final homepageUrl = ref
-        .watch(profileHomepageResolverProvider)
-        .homepageUrl(profile);
-    final isFollowing = ref.watch(friendsProvider).isFollowing(profile.did);
+    final profile = state.profile;
+    final displayName = _displayName(profile, runtimeAgent, targetDid);
+    final profileDid = _profileDid(profile, fallbackDid: targetDid);
+    final profileName = profile == null
+        ? ''
+        : DidDisplayFormatter.profileName(profile);
+    final handle = profile?.handle?.trim();
+    final avatarUri = profile?.avatarUri ?? widget.conversation.avatarUri;
+    final profileContent = profile == null
+        ? ''
+        : (profile.profileMarkdown.trim().isNotEmpty
+              ? profile.profileMarkdown.trim()
+              : profile.bio.trim());
+    final homepageUrl = profile == null
+        ? ''
+        : ref.watch(profileHomepageResolverProvider).homepageUrl(profile);
+    final isFollowing = profileDid.startsWith('did:')
+        ? ref.watch(friendsProvider).isFollowing(profileDid)
+        : false;
     final inboxHeight = (maxDialogHeight * 0.48).clamp(320.0, 440.0).toDouble();
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 20),
@@ -77,7 +83,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                     AvatarBadge(
                       seed: displayName,
                       size: 64,
-                      avatarUri: profile.avatarUri,
+                      avatarUri: avatarUri,
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -109,11 +115,11 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                             ],
                           ),
                           if (runtimeAgent != null &&
-                              DidDisplayFormatter.profileName(profile) !=
-                                  displayName) ...<Widget>[
+                              profileName.isNotEmpty &&
+                              profileName != displayName) ...<Widget>[
                             const SizedBox(height: 4),
                             Text(
-                              DidDisplayFormatter.profileName(profile),
+                              profileName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -123,21 +129,23 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                               ),
                             ),
                           ],
-                          const SizedBox(height: 8),
-                          CopyableDidLine(
-                            value: profile.did,
-                            copySemanticLabel: '复制 DID',
-                            copiedMessage: 'DID 已复制',
-                            textKey: const Key('peer-info-dialog-did-value'),
-                            buttonKey: const Key(
-                              'peer-info-dialog-copy-did-button',
+                          if (profileDid.isNotEmpty) ...<Widget>[
+                            const SizedBox(height: 8),
+                            CopyableDidLine(
+                              value: profileDid,
+                              copySemanticLabel: '复制 DID',
+                              copiedMessage: 'DID 已复制',
+                              textKey: const Key('peer-info-dialog-did-value'),
+                              buttonKey: const Key(
+                                'peer-info-dialog-copy-did-button',
+                              ),
+                              textStyle: const TextStyle(
+                                color: Color(0xFF66728A),
+                                fontSize: 12,
+                                height: 1.25,
+                              ),
                             ),
-                            textStyle: const TextStyle(
-                              color: Color(0xFF66728A),
-                              fontSize: 12,
-                              height: 1.25,
-                            ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
@@ -148,14 +156,19 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                   spacing: 8,
                   runSpacing: 8,
                   children: <Widget>[
-                    AppPill(
-                      label: localizeRelationshipLabel(
-                        context.l10n,
-                        state.relationship,
+                    if (profile == null && state.isLoading)
+                      const AppPill(label: '资料加载中')
+                    else if (profile == null && state.hasError)
+                      const AppPill(label: '资料暂不可用')
+                    else
+                      AppPill(
+                        label: localizeRelationshipLabel(
+                          context.l10n,
+                          state.relationship,
+                        ),
                       ),
-                    ),
-                    if (profile.handle?.isNotEmpty == true)
-                      AppPill(label: '@${profile.handle}'),
+                    if (handle != null && handle.isNotEmpty)
+                      AppPill(label: '@$handle'),
                     AppPill(
                       label: runtimeAgent == null
                           ? 'AWiki 用户'
@@ -174,13 +187,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                 _PeerInfoSection(
                   title: '身份卡',
                   child: profileContent.isEmpty
-                      ? const Text(
-                          '暂未填写资料',
-                          style: TextStyle(
-                            color: Color(0xFF66728A),
-                            fontSize: 13,
-                          ),
-                        )
+                      ? _profilePlaceholder(state)
                       : MarkdownBody(
                           data: profileContent,
                           selectable: false,
@@ -200,12 +207,12 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
           const SizedBox(height: 16),
           Row(
             children: <Widget>[
-              if (profile.did.trim().startsWith('did:')) ...<Widget>[
+              if (profileDid.startsWith('did:')) ...<Widget>[
                 Expanded(
                   child: _ChatFollowButton(
                     isFollowing: isFollowing,
                     compact: false,
-                    onTap: () => _toggleFollow(profile.did),
+                    onTap: () => _toggleFollow(profileDid),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -241,6 +248,65 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
         ],
       ),
     );
+  }
+
+  String _displayName(
+    UserProfile? profile,
+    AgentSummary? runtimeAgent,
+    String fallbackDid,
+  ) {
+    final agentName = runtimeAgent?.displayName.trim();
+    if (agentName != null && agentName.isNotEmpty) {
+      return agentName;
+    }
+    if (profile != null) {
+      return DidDisplayFormatter.profileName(profile);
+    }
+    final conversationName = widget.conversation.displayName.trim();
+    if (conversationName.isNotEmpty && !conversationName.startsWith('did:')) {
+      return conversationName;
+    }
+    final avatarSeed = widget.conversation.avatarSeed?.trim();
+    if (avatarSeed != null &&
+        avatarSeed.isNotEmpty &&
+        !avatarSeed.startsWith('did:')) {
+      return avatarSeed;
+    }
+    return fallbackDid.isEmpty
+        ? '未知联系人'
+        : DidDisplayFormatter.compactDid(fallbackDid);
+  }
+
+  String _profileDid(UserProfile? profile, {required String fallbackDid}) {
+    final did = profile?.did.trim();
+    if (did != null && did.isNotEmpty) {
+      return did;
+    }
+    return fallbackDid.trim();
+  }
+
+  Widget _profilePlaceholder(PeerProfileState state) {
+    const textStyle = TextStyle(
+      color: Color(0xFF66728A),
+      fontSize: 13,
+      height: 1.35,
+    );
+    if (state.isLoading) {
+      return const Row(
+        children: <Widget>[
+          CupertinoActivityIndicator(radius: 8),
+          SizedBox(width: 8),
+          Expanded(child: Text('正在加载资料…', style: textStyle)),
+        ],
+      );
+    }
+    if (state.hasError) {
+      return AwikiMeErrorText(
+        message: context.l10n.peerProfileLoadFailed,
+        compact: true,
+      );
+    }
+    return const Text('暂未填写资料', style: textStyle);
   }
 
   Future<void> _toggleFollow(String did) async {
@@ -317,10 +383,6 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
       }
     }
     return null;
-  }
-
-  void _close() {
-    Navigator.of(context).pop();
   }
 }
 
@@ -414,31 +476,6 @@ class _PeerInfoSection extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           child,
-        ],
-      ),
-    );
-  }
-}
-
-class _PeerInfoError extends StatelessWidget {
-  const _PeerInfoError({required this.onClose});
-
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          AwikiMeErrorText(
-            message: context.l10n.peerProfileLoadFailed,
-            textAlign: TextAlign.center,
-            compact: true,
-          ),
-          const SizedBox(height: 16),
-          AppSecondaryButton(label: '关闭', onPressed: onClose),
         ],
       ),
     );

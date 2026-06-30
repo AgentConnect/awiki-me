@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
@@ -868,7 +869,10 @@ class _SlowEnrichConversationService implements ConversationService {
   }
 
   @override
-  Future<void> markThreadRead(AppThreadRef thread) async {}
+  Future<void> markThreadRead(
+    AppThreadRef thread, {
+    AppThreadReadWatermark? watermark,
+  }) async {}
 
   @override
   Future<ConversationSummary?> normalizeConversationForRecents({
@@ -1003,7 +1007,10 @@ class _StaticConversationService implements ConversationService {
   }
 
   @override
-  Future<void> markThreadRead(AppThreadRef thread) async {}
+  Future<void> markThreadRead(
+    AppThreadRef thread, {
+    AppThreadReadWatermark? watermark,
+  }) async {}
 
   @override
   Future<ConversationSummary?> normalizeConversationForRecents({
