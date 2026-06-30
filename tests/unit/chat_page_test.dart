@@ -1914,8 +1914,10 @@ void main() {
     expect(draftLeft, lessThan(previewLeft));
   });
 
-  testWidgets('发送中消息只在气泡左侧显示转圈标志', (tester) async {
-    final gateway = FakeAwikiGateway()..sendDelay = const Duration(seconds: 1);
+  testWidgets('发送中消息只在气泡左侧显示转圈标志且发送按钮保持禁用样式', (tester) async {
+    final sendCompleter = Completer<void>();
+    final gateway = FakeAwikiGateway()
+      ..sendTextMessageCompleter = sendCompleter;
     const session = SessionIdentity(
       did: 'did:test:me',
       handle: 'me',
@@ -1948,9 +1950,24 @@ void main() {
 
     expect(find.text('pending hello'), findsOneWidget);
     expect(find.text('发送中...'), findsNothing);
+    expect(gateway.sendTextMessageCalls, 1);
+    final sendButton = find.byKey(const Key('chat-send-button'));
+    expect(
+      find.descendant(
+        of: sendButton,
+        matching: find.byType(CupertinoActivityIndicator),
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(sendButton);
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(gateway.sendTextMessageCalls, 1);
     expect(find.byType(CupertinoActivityIndicator), findsWidgets);
 
-    await tester.pumpAndSettle(const Duration(seconds: 2));
+    sendCompleter.complete();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('发送给 Runtime Agent 时投递完成后才显示处理中提示', (tester) async {
@@ -3241,6 +3258,7 @@ void main() {
     );
 
     await tester.enterText(find.byType(CupertinoTextField), 'only text');
+    await tester.pump();
     await tester.tap(find.byKey(const Key('chat-send-button')));
     await tester.pumpAndSettle();
 

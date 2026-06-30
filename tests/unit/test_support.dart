@@ -567,6 +567,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   String? lastSentAttachmentIdempotencyKey;
   String? nextSentMessageId;
   List<String> nextSentMessageIds = <String>[];
+  int sendTextMessageCalls = 0;
+  Completer<void>? sendTextMessageCompleter;
   int listLocalCredentialsCalls = 0;
   int importCalls = 0;
   int exportCalls = 0;
@@ -1186,6 +1188,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     String? payloadJson,
     List<ChatMessageMention> mentions = const <ChatMessageMention>[],
   }) async {
+    sendTextMessageCalls += 1;
     lastSentThreadId = threadId;
     lastSentPeerDid = peerDid;
     lastSentGroupId = groupId;
@@ -1196,6 +1199,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     }
     if (sendDelay > Duration.zero) {
       await Future<void>.delayed(sendDelay);
+    }
+    final completer = sendTextMessageCompleter;
+    if (completer != null) {
+      await completer.future;
     }
     final sentId = nextSentMessageIds.isNotEmpty
         ? nextSentMessageIds.removeAt(0)

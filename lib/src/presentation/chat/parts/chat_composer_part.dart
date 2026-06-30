@@ -358,6 +358,7 @@ class _ComposerState extends ConsumerState<_Composer> {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     final canSubmit = _canSubmit;
+    final canUseSendButton = canSubmit && !_isSending && !_isComposingInput;
     final disabledReason = widget.disabledReason ?? '当前会话无法继续发送消息';
     if (widget.macStyle) {
       return SafeArea(
@@ -468,11 +469,11 @@ class _ComposerState extends ConsumerState<_Composer> {
                           SizedBox(width: responsive.displayScaled(10)),
                           AppPressable(
                             key: const Key('chat-send-button'),
-                            onTap: _submitIfNeeded,
+                            onTap: canUseSendButton ? _submitIfNeeded : null,
                             semanticLabel: '发送',
                             semanticsIdentifier: 'e2e-chat-send-button',
                             tooltip: '发送',
-                            enabled: true,
+                            enabled: canUseSendButton,
                             scaleOnPress: true,
                             pressedScale: 0.94,
                             borderRadius: BorderRadius.circular(
@@ -493,25 +494,20 @@ class _ComposerState extends ConsumerState<_Composer> {
                               width: responsive.displayScaled(36),
                               height: responsive.displayScaled(36),
                               decoration: BoxDecoration(
-                                color: canSubmit
+                                color: canUseSendButton
                                     ? const Color(0xFF0B65F8)
                                     : const Color(0xFFE5EAF2),
                                 borderRadius: BorderRadius.circular(
                                   responsive.displayScaled(9),
                                 ),
                               ),
-                              child: _isSending
-                                  ? const CupertinoActivityIndicator(
-                                      radius: 8,
-                                      color: CupertinoColors.white,
-                                    )
-                                  : Icon(
-                                      CupertinoIcons.paperplane_fill,
-                                      color: canSubmit
-                                          ? CupertinoColors.white
-                                          : const Color(0xFF8A96AA),
-                                      size: responsive.displayScaled(18),
-                                    ),
+                              child: Icon(
+                                CupertinoIcons.paperplane_fill,
+                                color: canUseSendButton
+                                    ? CupertinoColors.white
+                                    : const Color(0xFF8A96AA),
+                                size: responsive.displayScaled(18),
+                              ),
                             ),
                           ),
                         ],
@@ -631,22 +627,18 @@ class _ComposerState extends ConsumerState<_Composer> {
                       button: true,
                       child: TopBarActionButton(
                         key: const Key('chat-send-button'),
-                        onTap: _submitIfNeeded,
+                        onTap: canUseSendButton ? _submitIfNeeded : null,
                         semanticsLabel: '发送',
                         tooltip: '发送',
                         child: Padding(
                           padding: EdgeInsets.all(responsive.spacing(6)),
-                          child: _isSending
-                              ? CupertinoActivityIndicator(
-                                  radius: responsive.displayScaled(8),
-                                )
-                              : AwikiAssetIcon(
-                                  assetName: 'assets/icons/icon_send.svg',
-                                  color: canSubmit
-                                      ? theme.primary
-                                      : theme.secondaryText,
-                                  size: responsive.iconMd,
-                                ),
+                          child: AwikiAssetIcon(
+                            assetName: 'assets/icons/icon_send.svg',
+                            color: canUseSendButton
+                                ? theme.primary
+                                : theme.secondaryText,
+                            size: responsive.iconMd,
+                          ),
                         ),
                       ),
                     ),
