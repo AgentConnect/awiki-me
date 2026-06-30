@@ -814,7 +814,6 @@ void main() {
     expect(progress, isNotNull);
     expect(progress!.stage, 'downloading');
     expect(progress.percent, 42.5);
-    expect(progress.compactLabel, '正在下载安装包 43%');
     expect(state.agents.single.latest.status, 'upgrading');
 
     container.read(agentsProvider.notifier).applyControlPayload(
@@ -943,8 +942,8 @@ void main() {
         'waiting_for_daemon',
       );
       expect(
-        state.daemonUpgradeProgress['did:agent:daemon']?.displayMessage,
-        '升级请求已发送，正在等待代理确认',
+        state.daemonUpgradeProgress['did:agent:daemon']?.stage,
+        'waiting_for_daemon',
       );
       expect(state.daemonUpgradeErrors, isEmpty);
       expect(state.isActing, isFalse);

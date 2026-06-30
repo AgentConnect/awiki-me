@@ -93,46 +93,6 @@ class ConversationPeerClassification {
       kind == ConversationPeerKind.agent ||
       kind == ConversationPeerKind.myRuntimeAgent;
   bool get isMyRuntimeAgent => kind == ConversationPeerKind.myRuntimeAgent;
-
-  String? get compactBadgeLabel {
-    if (isGroup) {
-      return '群';
-    }
-    if (isAgent) {
-      return 'AI';
-    }
-    return null;
-  }
-
-  String? get chatBadgeLabel {
-    if (isMyRuntimeAgent) {
-      return '我的智能体';
-    }
-    if (isAgent) {
-      return '智能体';
-    }
-    return null;
-  }
-
-  String get detailTypeLabel {
-    return switch (kind) {
-      ConversationPeerKind.group => '群聊',
-      ConversationPeerKind.myRuntimeAgent => '智能体',
-      ConversationPeerKind.agent => '智能体',
-      ConversationPeerKind.human => '用户',
-      ConversationPeerKind.unknown => '用户',
-    };
-  }
-
-  String get detailOwnerLabel {
-    return switch (kind) {
-      ConversationPeerKind.group => 'AWiki 群组',
-      ConversationPeerKind.myRuntimeAgent => '本机 Runtime Agent',
-      ConversationPeerKind.agent => 'AWiki 智能体',
-      ConversationPeerKind.human => 'AWiki 用户',
-      ConversationPeerKind.unknown => 'AWiki 用户',
-    };
-  }
 }
 
 final conversationPeerClassificationProvider =

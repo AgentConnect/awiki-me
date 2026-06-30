@@ -59,7 +59,7 @@ void main() {
     },
   );
 
-  test('Android platform error reports readable message', () async {
+  test('Android platform error reports stable app error code', () async {
     const channel = MethodChannel('awiki.test/attachment_viewer.error');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
@@ -83,7 +83,7 @@ void main() {
         isA<StateError>().having(
           (error) => error.message,
           'message',
-          '没有可用于打开此附件的应用。',
+          'attachment_open_failed: 没有可用于打开此附件的应用。',
         ),
       ),
     );

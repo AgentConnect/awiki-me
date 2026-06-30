@@ -3394,7 +3394,7 @@ void main() {
     final conversations = sendContainer
         .read(conversationListProvider)
         .conversations;
-    expect(conversations.single.lastMessagePreview, '[附件] diagram.png');
+    expect(conversations.single.lastMessagePreview, 'diagram.png');
   });
 
   test('没有本地路径的失败附件不会触发无效重试', () async {

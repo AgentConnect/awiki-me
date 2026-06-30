@@ -21,7 +21,7 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
       if (result == null) {
         return null;
       }
-      final filename = _readString(result, 'filename') ?? '附件';
+      final filename = _readString(result, 'filename') ?? '';
       final mimeType =
           _readString(result, 'mime_type') ?? 'application/octet-stream';
       final path = _readString(result, 'path');
@@ -31,7 +31,7 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
           bytes?.length ??
           _fileSizeIfAvailable(path);
       if ((path == null || path.isEmpty) && bytes == null) {
-        throw StateError('未能读取所选文件。');
+        throw StateError('attachment_picker_empty_result');
       }
       return AttachmentDraft(
         filename: filename,
@@ -41,7 +41,9 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
         sizeBytes: sizeBytes,
       );
     } on PlatformException catch (error) {
-      throw StateError(_friendlyMessage(error, fallback: '文件选择失败，请稍后重试。'));
+      throw StateError(
+        _friendlyMessage(error, fallback: 'attachment_picker_failed'),
+      );
     }
   }
 
@@ -58,7 +60,9 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
         'bytes': bytes,
       });
     } on PlatformException catch (error) {
-      throw StateError(_friendlyMessage(error, fallback: '文件保存失败，请稍后重试。'));
+      throw StateError(
+        _friendlyMessage(error, fallback: 'attachment_save_failed'),
+      );
     }
   }
 

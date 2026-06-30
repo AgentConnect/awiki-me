@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart'
     show PopupMenuEntry, PopupMenuItem, RelativeRect, showMenu;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../../app/app_router.dart';
 import '../../app/ui_feedback.dart';
@@ -22,6 +23,7 @@ import '../shared/awiki_me_design.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/formatters/display_formatters.dart';
+import '../shared/formatters/localized_ui_formatters.dart';
 import '../shared/identity_flow.dart';
 import '../shared/quick_actions.dart';
 import '../shared/responsive_layout.dart';
@@ -161,8 +163,8 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
     final confirmed = await AppNavigator.showDialog<bool>(
       context,
       (dialogContext) => CupertinoAlertDialog(
-        title: const Text('删除会话'),
-        content: const Text('会话将从最近列表移除，历史消息仍会保留。重新打开或收到新消息后，会话会再次出现在列表中。'),
+        title: Text(context.l10n.conversationsDeleteTitle),
+        content: Text(context.l10n.conversationsDeleteContent),
         actions: <Widget>[
           CupertinoDialogAction(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -171,7 +173,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
           CupertinoDialogAction(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('删除'),
+            child: Text(context.l10n.commonDelete),
           ),
         ],
       ),
@@ -267,7 +269,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
               children: <Widget>[
                 Expanded(
                   child: Text(
-                    '最近会话',
+                    context.l10n.conversationsRecentTitle,
                     style: TextStyle(
                       color: const Color(0xFF101B32),
                       fontSize: responsive.displayScaled(16),
@@ -277,7 +279,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                 ),
                 _MacListIconButton(
                   key: const Key('conversation-quick-actions-button'),
-                  semanticLabel: '更多操作',
+                  semanticLabel: context.l10n.commonMoreActions,
                   icon: CupertinoIcons.ellipsis,
                   onTap: widget.onShowActions,
                 ),
@@ -296,7 +298,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
               horizontal: responsive.displayScaled(20),
             ),
             child: CupertinoSearchTextField(
-              placeholder: '搜索会话',
+              placeholder: context.l10n.conversationsSearchPlaceholder,
               onChanged: (value) {
                 setState(() {
                   _query = value;
@@ -339,16 +341,21 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
               slivers: <Widget>[
                 CupertinoSliverRefreshControl(onRefresh: widget.onRefresh),
                 if (widget.conversations.isEmpty)
-                  const SliverFillRemaining(
+                  SliverFillRemaining(
                     hasScrollBody: false,
-                    child: _MacConversationEmptyState(),
+                    child: _MacConversationEmptyState(
+                      title: context.l10n.conversationsEmptyTitle,
+                      subtitle: context.l10n.conversationsEmptySubtitle,
+                    ),
                   )
                 else if (visibleConversations.isEmpty)
                   SliverFillRemaining(
                     hasScrollBody: false,
                     child: _MacConversationEmptyState(
-                      title: '没有找到相关会话',
-                      subtitle: hasQuery ? '换个关键词试试' : null,
+                      title: context.l10n.conversationsNoResultsTitle,
+                      subtitle: hasQuery
+                          ? context.l10n.conversationsNoResultsSubtitle
+                          : null,
                     ),
                   )
                 else
@@ -373,6 +380,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                           classification,
                         );
                         final preview = _conversationPreviewPresentation(
+                          context.l10n,
                           item,
                           widget.composerDrafts,
                         );
@@ -578,8 +586,10 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
             hasScrollBody: false,
             child: _EmptyState(
               embedded: embedded,
-              title: '没有找到相关会话',
-              subtitle: hasQuery ? '换个关键词试试' : '',
+              title: context.l10n.conversationsNoResultsTitle,
+              subtitle: hasQuery
+                  ? context.l10n.conversationsNoResultsSubtitle
+                  : '',
             ),
           )
         else
@@ -602,6 +612,7 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
                   classification,
                 );
                 final preview = _conversationPreviewPresentation(
+                  context.l10n,
                   item,
                   composerDrafts,
                 );
@@ -653,7 +664,7 @@ class _CompactConversationSearchField extends StatelessWidget {
       child: CupertinoSearchTextField(
         key: const Key('conversation-search-field'),
         controller: controller,
-        placeholder: '搜索会话',
+        placeholder: context.l10n.conversationsSearchPlaceholder,
         onChanged: onChanged,
         style: TextStyle(fontSize: responsive.bodySm, color: theme.title),
         placeholderStyle: TextStyle(
@@ -751,7 +762,10 @@ class _MacConversationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final badgeLabel = classification.compactBadgeLabel;
+    final badgeLabel = localizeConversationCompactBadge(
+      context.l10n,
+      classification,
+    );
     return _ConversationContextMenuRegion(
       onDelete: onDelete,
       child: Padding(
@@ -858,7 +872,7 @@ class _MacConversationRow extends StatelessWidget {
 }
 
 class _MacConversationEmptyState extends StatelessWidget {
-  const _MacConversationEmptyState({this.title = '还没有会话', this.subtitle});
+  const _MacConversationEmptyState({required this.title, this.subtitle});
 
   final String title;
   final String? subtitle;
@@ -927,7 +941,10 @@ class _ConversationRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
-    final badgeLabel = classification.compactBadgeLabel;
+    final badgeLabel = localizeConversationCompactBadge(
+      context.l10n,
+      classification,
+    );
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: responsive.tabContentHorizontalPadding,
@@ -1097,8 +1114,11 @@ class _ConversationContextMenuRegionState
         Rect.fromPoints(position, position),
         Offset.zero & overlay.size,
       ),
-      items: const <PopupMenuEntry<String>>[
-        PopupMenuItem<String>(value: 'delete', child: Text('删除会话')),
+      items: <PopupMenuEntry<String>>[
+        PopupMenuItem<String>(
+          value: 'delete',
+          child: Text(context.l10n.conversationsDeleteTitle),
+        ),
       ],
     );
     if (selected == 'delete') {
@@ -1206,6 +1226,7 @@ ConversationPeerClassification _fallbackConversationPeerClassification(
 }
 
 _ConversationPreviewPresentation _conversationPreviewPresentation(
+  AppLocalizations l10n,
   ConversationSummary conversation,
   Map<String, ChatComposerDraft> drafts,
 ) {
@@ -1214,22 +1235,24 @@ _ConversationPreviewPresentation _conversationPreviewPresentation(
   if (conversation.unreadCount > 0) {
     tags.add(
       _ConversationPreviewTag(
-        text: '未读 ${_conversationCountLabel(conversation.unreadCount)}',
+        text: l10n.conversationsUnreadTag(
+          _conversationCountLabel(conversation.unreadCount),
+        ),
         tone: _ConversationPreviewTagTone.unread,
       ),
     );
   }
   if (conversation.hasUnreadMention) {
     tags.add(
-      const _ConversationPreviewTag(
-        text: '@我',
+      _ConversationPreviewTag(
+        text: l10n.conversationsMentionMeTag,
         tone: _ConversationPreviewTagTone.mention,
       ),
     );
   }
   if (draft.isEmpty) {
     return _ConversationPreviewPresentation(
-      text: conversation.lastMessagePreview,
+      text: localizeConversationPreview(l10n, conversation),
       tags: tags,
     );
   }
@@ -1239,8 +1262,8 @@ _ConversationPreviewPresentation _conversationPreviewPresentation(
       text: text,
       tags: <_ConversationPreviewTag>[
         ...tags,
-        const _ConversationPreviewTag(
-          text: '草稿',
+        _ConversationPreviewTag(
+          text: l10n.conversationsDraftTag,
           tone: _ConversationPreviewTagTone.draft,
         ),
       ],
@@ -1249,18 +1272,20 @@ _ConversationPreviewPresentation _conversationPreviewPresentation(
   final attachment = draft.pendingAttachment;
   if (attachment != null) {
     return _ConversationPreviewPresentation(
-      text: '附件：${attachment.displayName}',
+      text: l10n.conversationsAttachmentPreview(
+        localizeAttachmentDraftName(l10n, attachment),
+      ),
       tags: <_ConversationPreviewTag>[
         ...tags,
-        const _ConversationPreviewTag(
-          text: '草稿',
+        _ConversationPreviewTag(
+          text: l10n.conversationsDraftTag,
           tone: _ConversationPreviewTagTone.draft,
         ),
       ],
     );
   }
   return _ConversationPreviewPresentation(
-    text: conversation.lastMessagePreview,
+    text: localizeConversationPreview(l10n, conversation),
     tags: tags,
   );
 }
@@ -1522,7 +1547,7 @@ class _DeletedAgentConversationBadge extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE1E7F0)),
       ),
       child: Text(
-        '智能体已删除',
+        context.l10n.conversationsDeletedAgentBadge,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(

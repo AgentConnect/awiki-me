@@ -91,9 +91,9 @@ class _AgentAccessPolicyPanelState extends State<_AgentAccessPolicyPanel> {
     if (current.contains(handle)) {
       setState(() {
         if (listMode == AgentInvocationPolicyMode.whitelist) {
-          _whitelistError = '这个 Handle 已在白名单中。';
+          _whitelistError = 'duplicate_whitelist';
         } else {
-          _blacklistError = '这个 Handle 已在黑名单中。';
+          _blacklistError = 'duplicate_blacklist';
         }
       });
       return;
@@ -146,17 +146,17 @@ class _AgentAccessPolicyPanelState extends State<_AgentAccessPolicyPanel> {
   _ParsedAccessHandle _parseSingleHandle(String input) {
     final trimmed = input.trim();
     if (trimmed.isEmpty) {
-      return const _ParsedAccessHandle(error: '请输入 Handle。');
+      return const _ParsedAccessHandle(error: 'required');
     }
     if (RegExp(r'[\s,，;；]').hasMatch(trimmed)) {
-      return const _ParsedAccessHandle(error: '每次只能添加一个 Handle。');
+      return const _ParsedAccessHandle(error: 'single_only');
     }
     final normalized = trimmed.replaceFirst(RegExp(r'^@+'), '').toLowerCase();
     if (normalized.isEmpty ||
         normalized.contains('@') ||
         normalized.contains('://') ||
         normalized.startsWith('did:')) {
-      return const _ParsedAccessHandle(error: '请输入短 Handle 或完整 Handle。');
+      return const _ParsedAccessHandle(error: 'invalid');
     }
     return _ParsedAccessHandle(handle: normalized);
   }
@@ -203,7 +203,7 @@ class _AgentAccessPolicyPanelState extends State<_AgentAccessPolicyPanel> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      '访问权限',
+                      context.l10n.agentAccessTitle,
                       style: TextStyle(
                         color: const Color(0xFF101B32),
                         fontSize: responsive.bodyMd,
@@ -212,7 +212,7 @@ class _AgentAccessPolicyPanelState extends State<_AgentAccessPolicyPanel> {
                     ),
                     SizedBox(height: responsive.spacing(2)),
                     Text(
-                      '配置 Handle 对于智能体的控制权限',
+                      context.l10n.agentAccessSubtitle,
                       style: TextStyle(
                         color: const Color(0xFF66728A),
                         fontSize: responsive.metaSm,
@@ -246,7 +246,7 @@ class _AgentAccessPolicyPanelState extends State<_AgentAccessPolicyPanel> {
               final modules = <Widget>[
                 _AccessPolicyModule(
                   mode: AgentInvocationPolicyMode.whitelist,
-                  title: '白名单',
+                  title: context.l10n.agentAccessWhitelist,
                   active: whitelistActive,
                   handles: widget.policy.whitelistHandles,
                   controller: _whitelistController,
@@ -269,7 +269,7 @@ class _AgentAccessPolicyPanelState extends State<_AgentAccessPolicyPanel> {
                 ),
                 _AccessPolicyModule(
                   mode: AgentInvocationPolicyMode.blacklist,
-                  title: '黑名单',
+                  title: context.l10n.agentAccessBlacklist,
                   active: blacklistActive,
                   handles: widget.policy.blacklistHandles,
                   controller: _blacklistController,
@@ -327,6 +327,17 @@ class _ParsedAccessHandle {
   final String? error;
 }
 
+String _accessHandleErrorText(BuildContext context, String code) {
+  return switch (code) {
+    'duplicate_whitelist' => context.l10n.agentAccessDuplicateWhitelist,
+    'duplicate_blacklist' => context.l10n.agentAccessDuplicateBlacklist,
+    'required' => context.l10n.agentAccessHandleRequired,
+    'single_only' => context.l10n.agentAccessSingleHandleOnly,
+    'invalid' => context.l10n.agentAccessHandleInvalid,
+    _ => code,
+  };
+}
+
 class _AccessModeToggle extends StatelessWidget {
   const _AccessModeToggle({required this.activeMode, required this.onChanged});
 
@@ -348,7 +359,7 @@ class _AccessModeToggle extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         Text(
-          '白名单',
+          context.l10n.agentAccessWhitelist,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
@@ -362,8 +373,12 @@ class _AccessModeToggle extends StatelessWidget {
           key: const Key('agent-access-mode-toggle'),
           onTap: enabled ? () => onChanged!(nextMode) : null,
           enabled: enabled,
-          semanticLabel: blacklistActive ? '切换到白名单模式' : '切换到黑名单模式',
-          tooltip: blacklistActive ? '当前黑名单模式' : '当前白名单模式',
+          semanticLabel: blacklistActive
+              ? context.l10n.agentAccessSwitchToWhitelist
+              : context.l10n.agentAccessSwitchToBlacklist,
+          tooltip: blacklistActive
+              ? context.l10n.agentAccessCurrentBlacklist
+              : context.l10n.agentAccessCurrentWhitelist,
           borderRadius: BorderRadius.circular(99),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 140),
@@ -406,7 +421,7 @@ class _AccessModeToggle extends StatelessWidget {
         ),
         SizedBox(width: responsive.spacing(6)),
         Text(
-          '黑名单',
+          context.l10n.agentAccessBlacklist,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
@@ -507,7 +522,9 @@ class _AccessPolicyModule extends StatelessWidget {
                   borderRadius: BorderRadius.circular(99),
                 ),
                 child: Text(
-                  active ? '已启用' : '已禁用',
+                  active
+                      ? context.l10n.agentAccessEnabled
+                      : context.l10n.agentAccessDisabled,
                   style: TextStyle(
                     color: statusColor,
                     fontSize: responsive.metaSm,
@@ -525,7 +542,7 @@ class _AccessPolicyModule extends StatelessWidget {
                   key: fieldKey,
                   controller: controller,
                   enabled: enabled,
-                  placeholder: 'bob 或 bob.example.com',
+                  placeholder: context.l10n.agentAccessHandlePlaceholder,
                   padding: EdgeInsets.symmetric(
                     horizontal: responsive.spacing(11),
                     vertical: responsive.spacing(9),
@@ -562,7 +579,7 @@ class _AccessPolicyModule extends StatelessWidget {
           if (errorText != null) ...<Widget>[
             SizedBox(height: responsive.spacing(6)),
             Text(
-              errorText!,
+              _accessHandleErrorText(context, errorText!),
               style: TextStyle(
                 color: AwikiMeColors.danger,
                 fontSize: responsive.metaSm,
@@ -599,8 +616,8 @@ class _AccessAddButton extends StatelessWidget {
     return AppPressable(
       onTap: enabled ? onPressed : null,
       enabled: enabled,
-      semanticLabel: '添加 Handle',
-      tooltip: '添加',
+      semanticLabel: context.l10n.agentAccessAddHandle,
+      tooltip: context.l10n.agentAccessAddHandle,
       borderRadius: BorderRadius.circular(responsive.radius(8)),
       child: Container(
         width: responsive.displayScaled(42),
@@ -652,7 +669,7 @@ class _AccessHandleList extends StatelessWidget {
           ),
         ),
         child: Text(
-          '暂无 Handle',
+          context.l10n.agentAccessNoHandles,
           style: TextStyle(
             color: active ? const Color(0xFF8A96AA) : const Color(0xFF9CA7B8),
             fontSize: responsive.metaSm,
@@ -725,8 +742,8 @@ class _AccessHandleRow extends StatelessWidget {
           ),
           AppIconButton(
             onPressed: enabled ? onRemove : null,
-            semanticLabel: '删除 Handle',
-            tooltip: '删除',
+            semanticLabel: context.l10n.agentAccessRemoveHandle,
+            tooltip: context.l10n.commonDelete,
             size: responsive.displayScaled(30),
             borderRadius: BorderRadius.circular(responsive.radius(7)),
             child: Icon(
@@ -759,8 +776,8 @@ class _DiagnosticInfoPanelState extends State<_DiagnosticInfoPanel> {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final agent = widget.agent;
-    final essentialRows = _essentialDiagnosticRows(agent);
-    final moreRows = _expandedDiagnosticRows(agent);
+    final essentialRows = _essentialDiagnosticRows(context.l10n, agent);
+    final moreRows = _expandedDiagnosticRows(context.l10n, agent);
     final errorText = _diagnosticErrorText(agent);
     final hasMore = moreRows.isNotEmpty;
 
@@ -802,7 +819,7 @@ class _DiagnosticInfoPanelState extends State<_DiagnosticInfoPanel> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      '诊断信息',
+                      context.l10n.agentDiagnosticsTitle,
                       style: TextStyle(
                         color: const Color(0xFF101B32),
                         fontSize: responsive.bodyMd,
@@ -811,7 +828,9 @@ class _DiagnosticInfoPanelState extends State<_DiagnosticInfoPanel> {
                     ),
                     SizedBox(height: responsive.spacing(2)),
                     Text(
-                      agent.isDaemon ? '代理运行与身份信息' : '智能体身份信息',
+                      agent.isDaemon
+                          ? context.l10n.agentDiagnosticsDaemonSubtitle
+                          : context.l10n.agentDiagnosticsAgentSubtitle,
                       style: TextStyle(
                         color: const Color(0xFF66728A),
                         fontSize: responsive.metaSm,
@@ -923,12 +942,13 @@ class _AgentErrorBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final resolvedMessage = localizeAgentUiMessage(context.l10n, message);
     final retryButton = onRetry == null
         ? null
         : AppPressable(
             onTap: onRetry,
-            semanticLabel: '重试',
-            tooltip: '重试',
+            semanticLabel: context.l10n.commonRetry,
+            tooltip: context.l10n.commonRetry,
             borderRadius: BorderRadius.circular(responsive.radius(8)),
             child: Container(
               padding: EdgeInsets.symmetric(
@@ -940,7 +960,7 @@ class _AgentErrorBanner extends StatelessWidget {
                 borderRadius: BorderRadius.circular(responsive.radius(8)),
               ),
               child: Text(
-                '重试',
+                context.l10n.commonRetry,
                 style: TextStyle(
                   color: AwikiMeColors.danger,
                   fontSize: responsive.metaSm,
@@ -950,7 +970,7 @@ class _AgentErrorBanner extends StatelessWidget {
             ),
           );
     return AwikiMeErrorNotice(
-      message: message,
+      message: resolvedMessage,
       compact: true,
       trailing: retryButton,
     );
@@ -1095,8 +1115,12 @@ class _DiagnosticMoreButton extends StatelessWidget {
     final responsive = context.awikiResponsive;
     return AppPressable(
       onTap: onPressed,
-      semanticLabel: expanded ? '收起诊断详情' : '查看更多诊断',
-      tooltip: expanded ? '收起' : '查看更多',
+      semanticLabel: expanded
+          ? context.l10n.agentDiagnosticsCollapseDetails
+          : context.l10n.agentDiagnosticsShowMoreDetails,
+      tooltip: expanded
+          ? context.l10n.agentDiagnosticsCollapse
+          : context.l10n.agentDiagnosticsShowMore,
       borderRadius: BorderRadius.circular(responsive.radius(8)),
       child: Container(
         padding: EdgeInsets.symmetric(
@@ -1112,7 +1136,9 @@ class _DiagnosticMoreButton extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             Text(
-              expanded ? '收起' : '查看更多',
+              expanded
+                  ? context.l10n.agentDiagnosticsCollapse
+                  : context.l10n.agentDiagnosticsShowMore,
               style: TextStyle(
                 color: const Color(0xFF40506B),
                 fontSize: responsive.metaSm,
@@ -1150,7 +1176,10 @@ class _DiagnosticRowData {
   final bool isLong;
 }
 
-List<_DiagnosticRowData> _essentialDiagnosticRows(AgentSummary agent) {
+List<_DiagnosticRowData> _essentialDiagnosticRows(
+  AppLocalizations l10n,
+  AgentSummary agent,
+) {
   return <_DiagnosticRowData>[
     _DiagnosticRowData(
       label: 'DID',
@@ -1168,15 +1197,21 @@ List<_DiagnosticRowData> _essentialDiagnosticRows(AgentSummary agent) {
       ),
     if (agent.isDaemon && _nonEmpty(agent.latest.version) != null)
       _DiagnosticRowData(
-        label: '当前版本',
+        label: l10n.agentDiagnosticCurrentVersion,
         value: _nonEmpty(agent.latest.version)!,
       ),
     if (agent.isDaemon && _nonEmpty(agent.latest.platform) != null)
-      _DiagnosticRowData(label: '平台', value: _nonEmpty(agent.latest.platform)!),
+      _DiagnosticRowData(
+        label: l10n.agentDiagnosticPlatform,
+        value: _nonEmpty(agent.latest.platform)!,
+      ),
   ];
 }
 
-List<_DiagnosticRowData> _expandedDiagnosticRows(AgentSummary agent) {
+List<_DiagnosticRowData> _expandedDiagnosticRows(
+  AppLocalizations l10n,
+  AgentSummary agent,
+) {
   final rows = <_DiagnosticRowData>[];
   final latest = agent.latest;
   void add(String label, Object? value, {String? key, bool isLong = false}) {
@@ -1194,17 +1229,38 @@ List<_DiagnosticRowData> _expandedDiagnosticRows(AgentSummary agent) {
   }
 
   if (agent.isDaemon) {
-    add('最新版本', latest.latestVersion, key: 'latest_version');
-    add('最低可用版本', latest.minSupportedVersion, key: 'min_supported_version');
-    add('服务', latest.service, key: 'service');
-    add('最近上报', latest.lastSeenAt?.toLocal().toString(), key: 'last_seen');
+    add(
+      l10n.agentDiagnosticLatestVersion,
+      latest.latestVersion,
+      key: 'latest_version',
+    );
+    add(
+      l10n.agentDiagnosticMinSupportedVersion,
+      latest.minSupportedVersion,
+      key: 'min_supported_version',
+    );
+    add(l10n.agentDiagnosticService, latest.service, key: 'service');
+    add(
+      l10n.agentDiagnosticLastSeen,
+      latest.lastSeenAt?.toLocal().toString(),
+      key: 'last_seen',
+    );
   }
-  add('错误代码', latest.lastErrorCode, key: 'last_error_code');
+  add(
+    l10n.agentDiagnosticErrorCode,
+    latest.lastErrorCode,
+    key: 'last_error_code',
+  );
   for (final entry in latest.diagnosticsSummary.entries) {
     if (!_shouldShowDiagnosticSummaryEntry(agent, entry.key, entry.value)) {
       continue;
     }
-    add(_diagnosticLabel(entry.key), entry.value, key: entry.key, isLong: true);
+    add(
+      _diagnosticLabel(l10n, entry.key),
+      entry.value,
+      key: entry.key,
+      isLong: true,
+    );
   }
   return rows;
 }
@@ -1244,24 +1300,24 @@ bool _shouldShowDiagnosticSummaryEntry(
   return true;
 }
 
-String _diagnosticLabel(String key) {
+String _diagnosticLabel(AppLocalizations l10n, String key) {
   switch (key.trim().toLowerCase()) {
     case 'runner':
-      return '运行器';
+      return l10n.agentDiagnosticRunner;
     case 'profile_status':
-      return '配置状态';
+      return l10n.agentDiagnosticProfileStatus;
     case 'installation_status':
-      return '安装状态';
+      return l10n.agentDiagnosticInstallationStatus;
     case 'service_installed':
-      return '服务安装';
+      return l10n.agentDiagnosticServiceInstalled;
     case 'config_summary':
-      return '配置摘要';
+      return l10n.agentDiagnosticConfigSummary;
     case 'hermes_profile':
-      return 'Hermes 配置';
+      return l10n.agentDiagnosticHermesProfile;
     case 'runner_status':
-      return '运行状态';
+      return l10n.agentDiagnosticRunnerStatus;
     case 'active_session_count':
-      return '活跃会话';
+      return l10n.agentDiagnosticActiveSessionCount;
     default:
       return key;
   }
@@ -1285,11 +1341,11 @@ class _InlineCopyButton extends StatelessWidget {
         onPressed: () async {
           await Clipboard.setData(ClipboardData(text: text));
           if (context.mounted) {
-            AwikiMeToast.show(context, '已复制');
+            AwikiMeToast.show(context, context.l10n.commonCopied);
           }
         },
-        semanticLabel: '复制',
-        tooltip: '复制',
+        semanticLabel: context.l10n.commonCopy,
+        tooltip: context.l10n.commonCopy,
         size: responsive.displayScaled(28),
         padding: EdgeInsets.all(responsive.spacing(5)),
         backgroundColor: CupertinoColors.white,

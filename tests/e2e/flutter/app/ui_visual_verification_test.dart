@@ -95,7 +95,7 @@ void main() {
       await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
       await tester.pumpAndSettle();
       expect(find.text('智能体信息'), findsOneWidget);
-      expect(find.text('Runtime Agent'), findsOneWidget);
+      expect(find.text('Hermes'), findsOneWidget);
       expect(
         find.byKey(const Key('peer-info-dialog-did-value')),
         findsOneWidget,
@@ -132,7 +132,7 @@ void main() {
       _appContainer(tester).read(shellTabProvider.notifier).setTab(1);
       await tester.pumpAndSettle();
       expect(find.text('Codex UI'), findsOneWidget);
-      expect(find.text('codex · 需要配置'), findsOneWidget);
+      expect(find.text('Codex · 需要配置'), findsOneWidget);
       expect(find.textContaining('需要配置'), findsWidgets);
       await tester.tap(find.text('创建 Agent').first);
       await tester.pumpAndSettle();

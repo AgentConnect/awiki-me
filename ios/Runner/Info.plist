@@ -31,7 +31,7 @@
 		<string>_dartVmService._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>允许 AWiki Me 在调试时发现本地 Dart VM Service，以支持热重载和调试连接。</string>
+	<string>Allow AWiki Me to discover the local Dart VM Service during debugging for hot reload and debug connections.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

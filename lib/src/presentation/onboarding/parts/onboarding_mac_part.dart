@@ -155,18 +155,18 @@ class _MacOnboardingHero extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 36),
-        const Text.rich(
+        Text.rich(
           TextSpan(
             children: <InlineSpan>[
-              TextSpan(text: '连接你的 '),
+              TextSpan(text: context.l10n.onboardingMacHeroPrefix),
               TextSpan(
-                text: 'Agent',
-                style: TextStyle(color: blue),
+                text: context.l10n.onboardingMacHeroHighlight,
+                style: const TextStyle(color: blue),
               ),
-              TextSpan(text: ' 世界'),
+              TextSpan(text: context.l10n.onboardingMacHeroSuffix),
             ],
           ),
-          style: TextStyle(
+          style: const TextStyle(
             color: ink,
             fontSize: 34,
             height: 1.18,
@@ -175,9 +175,9 @@ class _MacOnboardingHero extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        const Text(
-          '安全连接人、Agent 与组织，协作更智能，决策更高效。',
-          style: TextStyle(
+        Text(
+          context.l10n.onboardingMacSubtitle,
+          style: const TextStyle(
             color: Color(0xFF64708A),
             fontSize: 16,
             height: 1.5,
@@ -187,7 +187,7 @@ class _MacOnboardingHero extends StatelessWidget {
         const SizedBox(height: 34),
         const Expanded(child: _MacAgentOrbit()),
         const SizedBox(height: 24),
-        const SizedBox(
+        SizedBox(
           width: double.infinity,
           child: FittedBox(
             fit: BoxFit.scaleDown,
@@ -197,20 +197,21 @@ class _MacOnboardingHero extends StatelessWidget {
               children: <Widget>[
                 _MacFeatureItem(
                   icon: CupertinoIcons.shield,
-                  title: '安全可靠',
-                  subtitle: '企业级安全防护体系',
+                  title: context.l10n.onboardingMacFeatureSecureTitle,
+                  subtitle: context.l10n.onboardingMacFeatureSecureSubtitle,
                 ),
-                SizedBox(width: 34),
+                const SizedBox(width: 34),
                 _MacFeatureItem(
                   icon: CupertinoIcons.person_2,
-                  title: '高效协作',
-                  subtitle: '人机协同，信息无缝流转',
+                  title: context.l10n.onboardingMacFeatureCollaborateTitle,
+                  subtitle:
+                      context.l10n.onboardingMacFeatureCollaborateSubtitle,
                 ),
-                SizedBox(width: 34),
+                const SizedBox(width: 34),
                 _MacFeatureItem(
                   icon: CupertinoIcons.lock,
-                  title: '权限可控',
-                  subtitle: '精细化权限，数据更安心',
+                  title: context.l10n.onboardingMacFeatureControlTitle,
+                  subtitle: context.l10n.onboardingMacFeatureControlSubtitle,
                 ),
               ],
             ),
@@ -268,20 +269,30 @@ class _MacAgentOrbit extends StatelessWidget {
             ),
           ),
         ),
-        const Positioned(
+        Positioned(
           top: 18,
           left: 170,
-          child: _MacAgentChip(name: '融资 Agent', seed: 'financing'),
+          child: _MacAgentChip(
+            name: context.l10n.onboardingMacChipFundingAgent,
+            seed: 'financing',
+          ),
         ),
-        const Positioned(
+        Positioned(
           top: 150,
           left: 10,
-          child: _MacAgentChip(name: '法务 Agent', seed: 'legal'),
+          child: _MacAgentChip(
+            name: context.l10n.onboardingMacChipLegalAgent,
+            seed: 'legal',
+          ),
         ),
-        const Positioned(
+        Positioned(
           right: 30,
           top: 160,
-          child: _MacAgentChip(name: '投资机构', seed: 'investor', verified: true),
+          child: _MacAgentChip(
+            name: context.l10n.onboardingMacChipInvestor,
+            seed: 'investor',
+            verified: true,
+          ),
         ),
         const Positioned(
           left: 250,
@@ -399,7 +410,9 @@ class _MacAgentChip extends StatelessWidget {
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      verified ? '已认证' : '在线',
+                      verified
+                          ? context.l10n.onboardingMacVerified
+                          : context.l10n.onboardingMacOnline,
                       style: const TextStyle(
                         color: Color(0xFF64708A),
                         fontSize: 11,
@@ -708,7 +721,7 @@ class _MacLoginForm extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const _MacFieldLabel('身份凭证'),
+        _MacFieldLabel(context.l10n.onboardingCredentialsField),
         const SizedBox(height: 10),
         _MacCredentialPicker(credentials: credentials, onLogin: onLogin),
         const SizedBox(height: 18),
@@ -743,22 +756,22 @@ class _MacCredentialPicker extends StatelessWidget {
       return Container(
         height: 106,
         decoration: _macFieldDecoration(),
-        child: const Center(
+        child: Center(
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Icon(
+                const Icon(
                   CupertinoIcons.person_crop_circle_badge_exclam,
                   color: Color(0xFF7B879D),
                   size: 20,
                 ),
-                SizedBox(width: 10),
+                const SizedBox(width: 10),
                 Flexible(
                   child: Text(
-                    '本机暂无已保存身份凭证',
-                    style: TextStyle(
+                    context.l10n.onboardingNoLocalCredentialSaved,
+                    style: const TextStyle(
                       color: Color(0xFF98A3B8),
                       fontSize: 14,
                       fontWeight: FontWeight.w500,

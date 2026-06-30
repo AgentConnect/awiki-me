@@ -3,6 +3,7 @@ import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
 import 'package:flutter/services.dart';
 
 import '../../app/app_router.dart';
+import '../../l10n/l10n.dart';
 import 'app_dialog.dart';
 import 'awiki_me_design.dart';
 import 'responsive_layout.dart';
@@ -121,7 +122,7 @@ class _ToastContent extends StatelessWidget {
               detail: detailText,
             ),
             child: Text(
-              '详情',
+              context.l10n.commonDetails,
               style: TextStyle(
                 color: theme.surface,
                 fontSize: 13,
@@ -180,7 +181,7 @@ class _AwikiMeErrorDetailDialogState extends State<_AwikiMeErrorDetailDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           AppDialogHeader(
-            title: '错误详情',
+            title: context.l10n.commonErrorDetails,
             onClose: () => Navigator.of(context).pop(),
           ),
           const SizedBox(height: 8),
@@ -229,7 +230,7 @@ class _AwikiMeErrorDetailDialogState extends State<_AwikiMeErrorDetailDialog> {
                 ),
                 onPressed: () => Navigator.of(context).pop(),
                 child: Text(
-                  '关闭',
+                  context.l10n.commonClose,
                   style: TextStyle(
                     color: theme.secondaryText,
                     fontSize: 14,
@@ -255,7 +256,9 @@ class _AwikiMeErrorDetailDialogState extends State<_AwikiMeErrorDetailDialog> {
                   }
                 },
                 child: Text(
-                  _copied ? '已复制' : '复制详情',
+                  _copied
+                      ? context.l10n.commonCopied
+                      : context.l10n.commonCopyDetails,
                   style: TextStyle(
                     color: theme.surface,
                     fontSize: 14,

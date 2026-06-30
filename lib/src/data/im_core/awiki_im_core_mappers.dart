@@ -527,6 +527,9 @@ class AwikiImCoreMappers {
       groupId: chatMessage.groupId,
       avatarUri: null,
       lastMessagePayloadJson: message.body.payloadJson,
+      lastMessageSnapshot: chatMessage.hasRenderableContent
+          ? chatMessage
+          : null,
     );
     final group = chatMessage.groupId == null
         ? null
@@ -855,7 +858,7 @@ String _messagePreview(core.Message message) {
     if (caption != null && caption.isNotEmpty) {
       return caption;
     }
-    return '[附件] ${attachment.displayName}';
+    return attachment.displayName;
   }
   final mentionPayload = ChatMentionPayload.tryParsePayloadJson(
     message.body.payloadJson,
@@ -881,7 +884,7 @@ String _snapshotMessagePreview(core.ConversationSnapshotMessage message) {
     if (caption != null && caption.isNotEmpty) {
       return caption;
     }
-    return '[附件] ${attachment.displayName}';
+    return attachment.displayName;
   }
   final mentionPayload =
       ChatMentionPayload.tryParsePayloadJson(message.body.payloadJson) ??
@@ -975,7 +978,7 @@ ChatAttachment? _attachmentFromCoreMessage(
   final filename =
       _attribute(message.metadata, 'attachment_filename') ??
       _stringFromJsonMap(manifest, 'filename') ??
-      '附件';
+      '';
   final mimeType =
       _attribute(message.metadata, 'attachment_mime_type') ??
       _attribute(message.metadata, 'attachment_content_type') ??
@@ -1101,7 +1104,7 @@ ChatAttachment? _attachmentFromManifest(Map<String, Object?>? manifest) {
   }
   return ChatAttachment(
     attachmentId: attachmentId,
-    filename: _stringFromJsonMap(attachment, 'filename') ?? '附件',
+    filename: _stringFromJsonMap(attachment, 'filename') ?? '',
     mimeType:
         _stringFromJsonMap(attachment, 'mime_type') ??
         _stringFromJsonMap(attachment, 'content_type') ??

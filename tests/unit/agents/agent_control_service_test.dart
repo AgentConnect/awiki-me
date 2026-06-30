@@ -368,6 +368,7 @@ void main() {
         messages: messages,
         messageAgentBindings: bindings,
         agentImEnabled: true,
+        preferredLanguageProvider: () => 'en-US',
       );
 
       await service.ensureMessageAgentBootstrap(
@@ -386,6 +387,7 @@ void main() {
 
       expect(inventory.runtimeTokenDaemonDid, 'did:agent:daemon');
       expect(inventory.runtimeTokenHandle, 'hermes-msg-app-1-334c10a06052');
+      expect(inventory.runtimeTokenPreferredLanguage, 'en');
       expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
       expect(messages.lastSecure, isFalse);
       expect(
@@ -438,6 +440,19 @@ void main() {
       expect(dump, isNot(contains('runtime-token')));
     },
   );
+
+  test('desired message agent serializes preferred language contract', () {
+    final desired = const DesiredMessageAgent(
+      preferredLanguage: 'en',
+      ensureOnceKey: 'app-message-agent:did:human:me:app_1',
+      runtimeRegistrationToken: 'runtime-token',
+    ).toJson();
+
+    expect(desired['preferred_language'], 'en');
+    expect(desired['runtime_registration_token'], 'runtime-token');
+    expect(desired['runtime_provider'], appMessageHandlerRuntimeProvider);
+    expect(desired['runtime_profile'], appMessageHandlerRuntimeProfile);
+  });
 
   test(
     'secure bootstrap envelope contract redacts delegated private package',
@@ -784,6 +799,7 @@ class _InventoryStub implements AgentInventoryPort {
   String? runtimeTokenHandle;
   String? runtimeTokenDisplayName;
   String? runtimeTokenRuntime;
+  String? runtimeTokenPreferredLanguage;
   String? runtimeTokenDriverId;
   String? runtimeTokenWorkspaceMode;
   String? runtimeTokenDefaultSandbox;
@@ -813,6 +829,7 @@ class _InventoryStub implements AgentInventoryPort {
     required String runtime,
     required String handle,
     required String displayName,
+    required String preferredLanguage,
     String? driverId,
     String? workspaceMode,
     String? defaultSandbox,
@@ -823,6 +840,7 @@ class _InventoryStub implements AgentInventoryPort {
     runtimeTokenHandle = handle;
     runtimeTokenDisplayName = displayName;
     runtimeTokenRuntime = runtime;
+    runtimeTokenPreferredLanguage = preferredLanguage;
     runtimeTokenDriverId = driverId;
     runtimeTokenWorkspaceMode = workspaceMode;
     runtimeTokenDefaultSandbox = defaultSandbox;

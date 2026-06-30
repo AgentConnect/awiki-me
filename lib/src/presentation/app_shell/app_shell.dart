@@ -215,15 +215,15 @@ class _AppShellState extends ConsumerState<AppShell> {
         case 2:
           return const FriendsWorkspacePage();
         case 3:
-          return const _MacDesktopPlaceholderPage(
-            title: '任务',
-            subtitle: '任务视图即将接入。当前任务状态会在会话与身份卡中展示。',
+          return _MacDesktopPlaceholderPage(
+            title: context.l10n.shellTasksPlaceholderTitle,
+            subtitle: context.l10n.shellTasksPlaceholderSubtitle,
             icon: CupertinoIcons.checkmark_square,
           );
         case 4:
-          return const _MacDesktopPlaceholderPage(
-            title: '工作台',
-            subtitle: '工作台模块即将接入。',
+          return _MacDesktopPlaceholderPage(
+            title: context.l10n.shellWorkspacePlaceholderTitle,
+            subtitle: context.l10n.shellWorkspacePlaceholderSubtitle,
             icon: CupertinoIcons.square_grid_2x2,
           );
         case 5:
@@ -390,7 +390,7 @@ class _MacDesktopRail extends StatelessWidget {
                       _MacDesktopRailItem(
                         activeIcon: CupertinoIcons.chat_bubble_2_fill,
                         inactiveIcon: CupertinoIcons.chat_bubble_2,
-                        label: '消息',
+                        label: context.l10n.shellNavMessages,
                         selected: currentIndex == 0,
                         badge: _formatUnreadBadge(unreadCount),
                         compact: compact,
@@ -400,7 +400,7 @@ class _MacDesktopRail extends StatelessWidget {
                       _MacDesktopRailItem(
                         activeIcon: CupertinoIcons.person_2_fill,
                         inactiveIcon: CupertinoIcons.person_2,
-                        label: '智能体',
+                        label: context.l10n.shellNavAgents,
                         selected: currentIndex == 1,
                         compact: compact,
                         semanticsIdentifier: 'e2e-agents-tab',
@@ -410,7 +410,7 @@ class _MacDesktopRail extends StatelessWidget {
                       _MacDesktopRailItem(
                         activeIcon: CupertinoIcons.person_fill,
                         inactiveIcon: CupertinoIcons.person,
-                        label: '联系人',
+                        label: context.l10n.shellNavContacts,
                         selected: currentIndex == 2,
                         compact: compact,
                         onTap: () => onTap(2),
@@ -419,7 +419,7 @@ class _MacDesktopRail extends StatelessWidget {
                       _MacDesktopRailItem(
                         activeIcon: CupertinoIcons.checkmark_square_fill,
                         inactiveIcon: CupertinoIcons.checkmark_square,
-                        label: '任务',
+                        label: context.l10n.shellNavTasks,
                         selected: currentIndex == 3,
                         compact: compact,
                         onTap: () => onTap(3),
@@ -428,7 +428,7 @@ class _MacDesktopRail extends StatelessWidget {
                       _MacDesktopRailItem(
                         activeIcon: CupertinoIcons.square_grid_2x2_fill,
                         inactiveIcon: CupertinoIcons.square_grid_2x2,
-                        label: '工作台',
+                        label: context.l10n.shellNavWorkspace,
                         selected: currentIndex == 4,
                         compact: compact,
                         onTap: () => onTap(4),
@@ -437,7 +437,7 @@ class _MacDesktopRail extends StatelessWidget {
                       _MacDesktopRailItem(
                         activeIcon: CupertinoIcons.gear_alt_fill,
                         inactiveIcon: CupertinoIcons.gear_alt,
-                        label: '设置',
+                        label: context.l10n.shellNavSettings,
                         semanticsIdentifier: 'e2e-settings-tab',
                         selected: currentIndex == _macSettingsTabIndex,
                         compact: compact,
@@ -652,7 +652,7 @@ class _MacRailAvatar extends StatelessWidget {
     final responsive = context.awikiResponsive;
     return AppPressable(
       onTap: onTap,
-      semanticLabel: '我',
+      semanticLabel: context.l10n.shellNavMe,
       semanticsIdentifier: 'e2e-profile-tab',
       selected: selected,
       scaleOnPress: true,
@@ -813,7 +813,7 @@ class _BottomNavBar extends StatelessWidget {
                   children: <Widget>[
                     Expanded(
                       child: _BottomNavItem(
-                        label: 'Messages',
+                        label: context.l10n.shellNavMessages,
                         semanticsIdentifier: 'e2e-messages-tab',
                         activeIcon: CupertinoIcons.chat_bubble_2_fill,
                         inactiveIcon: CupertinoIcons.chat_bubble_2,
@@ -825,7 +825,7 @@ class _BottomNavBar extends StatelessWidget {
                     ),
                     Expanded(
                       child: _BottomNavItem(
-                        label: 'Agents',
+                        label: context.l10n.shellNavAgents,
                         semanticsIdentifier: 'e2e-agents-tab',
                         activeIcon: CupertinoIcons.sparkles,
                         inactiveIcon: CupertinoIcons.sparkles,
@@ -836,7 +836,7 @@ class _BottomNavBar extends StatelessWidget {
                     ),
                     Expanded(
                       child: _BottomNavItem(
-                        label: 'Friends',
+                        label: context.l10n.shellNavFriends,
                         semanticsIdentifier: 'e2e-friends-tab',
                         activeIcon: CupertinoIcons.person_2_fill,
                         inactiveIcon: CupertinoIcons.person_2,
@@ -847,7 +847,7 @@ class _BottomNavBar extends StatelessWidget {
                     ),
                     Expanded(
                       child: _BottomNavItem(
-                        label: 'Me',
+                        label: context.l10n.shellNavMe,
                         semanticsIdentifier: 'e2e-profile-tab',
                         activeIcon: CupertinoIcons.person_fill,
                         inactiveIcon: CupertinoIcons.person,

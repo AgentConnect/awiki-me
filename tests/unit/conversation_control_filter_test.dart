@@ -245,6 +245,7 @@ class _FakeAgentInventory implements AgentInventoryPort {
     required String runtime,
     required String handle,
     required String displayName,
+    required String preferredLanguage,
     String? driverId,
     String? workspaceMode,
     String? defaultSandbox,

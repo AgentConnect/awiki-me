@@ -5,7 +5,7 @@ import '../../domain/services/e2ee_facade.dart';
 class NoopE2eeFacade implements E2eeFacade {
   @override
   Future<ChatMessage> decryptIncomingMessage(ChatMessage message) async {
-    throw UnsupportedError('AWiki Me 当前未启用 E2EE，请接入原生插件实现');
+    throw UnsupportedError('e2ee_plugin_missing');
   }
 
   @override
@@ -14,7 +14,7 @@ class NoopE2eeFacade implements E2eeFacade {
     required String originalType,
     required String plaintext,
   }) async {
-    throw UnsupportedError('AWiki Me 当前未启用 E2EE，请接入原生插件实现');
+    throw UnsupportedError('e2ee_plugin_missing');
   }
 
   @override
@@ -42,6 +42,6 @@ class NoopE2eeFacade implements E2eeFacade {
 
   @override
   Future<void> ensureSession(String peerDid) async {
-    throw UnsupportedError('AWiki Me 当前未启用 E2EE，请接入原生插件实现');
+    throw UnsupportedError('e2ee_plugin_missing');
   }
 }

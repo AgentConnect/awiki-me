@@ -164,6 +164,96 @@ abstract class AppLocalizations {
   /// **'知道了'**
   String get commonGotIt;
 
+  /// No description provided for @commonDelete.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除'**
+  String get commonDelete;
+
+  /// No description provided for @commonRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试'**
+  String get commonRetry;
+
+  /// No description provided for @commonClose.
+  ///
+  /// In zh, this message translates to:
+  /// **'关闭'**
+  String get commonClose;
+
+  /// No description provided for @commonDetails.
+  ///
+  /// In zh, this message translates to:
+  /// **'详情'**
+  String get commonDetails;
+
+  /// No description provided for @commonMoreActions.
+  ///
+  /// In zh, this message translates to:
+  /// **'更多操作'**
+  String get commonMoreActions;
+
+  /// No description provided for @commonSearch.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索'**
+  String get commonSearch;
+
+  /// No description provided for @commonCopy.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制'**
+  String get commonCopy;
+
+  /// No description provided for @commonCopied.
+  ///
+  /// In zh, this message translates to:
+  /// **'已复制'**
+  String get commonCopied;
+
+  /// No description provided for @commonCopyDetails.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制详情'**
+  String get commonCopyDetails;
+
+  /// No description provided for @commonReject.
+  ///
+  /// In zh, this message translates to:
+  /// **'拒绝'**
+  String get commonReject;
+
+  /// No description provided for @commonRemove.
+  ///
+  /// In zh, this message translates to:
+  /// **'移除'**
+  String get commonRemove;
+
+  /// No description provided for @commonPause.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂停'**
+  String get commonPause;
+
+  /// No description provided for @commonRevoke.
+  ///
+  /// In zh, this message translates to:
+  /// **'撤销授权'**
+  String get commonRevoke;
+
+  /// No description provided for @commonUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'未知'**
+  String get commonUnknown;
+
+  /// No description provided for @commonLoadMore.
+  ///
+  /// In zh, this message translates to:
+  /// **'加载更多'**
+  String get commonLoadMore;
+
   /// No description provided for @commonPleaseWait.
   ///
   /// In zh, this message translates to:
@@ -181,6 +271,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'错误'**
   String get commonError;
+
+  /// No description provided for @commonErrorDetails.
+  ///
+  /// In zh, this message translates to:
+  /// **'错误详情'**
+  String get commonErrorDetails;
 
   /// No description provided for @realtimeStatusConnecting.
   ///
@@ -428,6 +524,108 @@ abstract class AppLocalizations {
   /// **'请输入昵称。'**
   String get onboardingMissingNicknameContent;
 
+  /// No description provided for @onboardingMacHeroPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接你的 '**
+  String get onboardingMacHeroPrefix;
+
+  /// No description provided for @onboardingMacHeroHighlight.
+  ///
+  /// In zh, this message translates to:
+  /// **'Agent'**
+  String get onboardingMacHeroHighlight;
+
+  /// No description provided for @onboardingMacHeroSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **' 世界'**
+  String get onboardingMacHeroSuffix;
+
+  /// No description provided for @onboardingMacSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'安全连接人、Agent 与组织，协作更智能，决策更高效。'**
+  String get onboardingMacSubtitle;
+
+  /// No description provided for @onboardingMacFeatureSecureTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'安全可靠'**
+  String get onboardingMacFeatureSecureTitle;
+
+  /// No description provided for @onboardingMacFeatureSecureSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'企业级安全防护体系'**
+  String get onboardingMacFeatureSecureSubtitle;
+
+  /// No description provided for @onboardingMacFeatureCollaborateTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'高效协作'**
+  String get onboardingMacFeatureCollaborateTitle;
+
+  /// No description provided for @onboardingMacFeatureCollaborateSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'人机协同，信息无缝流转'**
+  String get onboardingMacFeatureCollaborateSubtitle;
+
+  /// No description provided for @onboardingMacFeatureControlTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'权限可控'**
+  String get onboardingMacFeatureControlTitle;
+
+  /// No description provided for @onboardingMacFeatureControlSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'精细化权限，数据更安心'**
+  String get onboardingMacFeatureControlSubtitle;
+
+  /// No description provided for @onboardingMacChipFundingAgent.
+  ///
+  /// In zh, this message translates to:
+  /// **'融资 Agent'**
+  String get onboardingMacChipFundingAgent;
+
+  /// No description provided for @onboardingMacChipLegalAgent.
+  ///
+  /// In zh, this message translates to:
+  /// **'法务 Agent'**
+  String get onboardingMacChipLegalAgent;
+
+  /// No description provided for @onboardingMacChipInvestor.
+  ///
+  /// In zh, this message translates to:
+  /// **'投资机构'**
+  String get onboardingMacChipInvestor;
+
+  /// No description provided for @onboardingMacVerified.
+  ///
+  /// In zh, this message translates to:
+  /// **'已认证'**
+  String get onboardingMacVerified;
+
+  /// No description provided for @onboardingMacOnline.
+  ///
+  /// In zh, this message translates to:
+  /// **'在线'**
+  String get onboardingMacOnline;
+
+  /// No description provided for @onboardingCredentialsField.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份凭证'**
+  String get onboardingCredentialsField;
+
+  /// No description provided for @onboardingNoLocalCredentialSaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机暂无已保存身份凭证'**
+  String get onboardingNoLocalCredentialSaved;
+
   /// No description provided for @secureMessagingClient.
   ///
   /// In zh, this message translates to:
@@ -440,11 +638,41 @@ abstract class AppLocalizations {
   /// **'消息'**
   String get shellNavMessages;
 
+  /// No description provided for @shellNavAgents.
+  ///
+  /// In zh, this message translates to:
+  /// **'Agents'**
+  String get shellNavAgents;
+
   /// No description provided for @shellNavFriends.
   ///
   /// In zh, this message translates to:
   /// **'朋友'**
   String get shellNavFriends;
+
+  /// No description provided for @shellNavContacts.
+  ///
+  /// In zh, this message translates to:
+  /// **'联系人'**
+  String get shellNavContacts;
+
+  /// No description provided for @shellNavTasks.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务'**
+  String get shellNavTasks;
+
+  /// No description provided for @shellNavWorkspace.
+  ///
+  /// In zh, this message translates to:
+  /// **'工作台'**
+  String get shellNavWorkspace;
+
+  /// No description provided for @shellNavSettings.
+  ///
+  /// In zh, this message translates to:
+  /// **'设置'**
+  String get shellNavSettings;
 
   /// No description provided for @shellNavMe.
   ///
@@ -452,10 +680,34 @@ abstract class AppLocalizations {
   /// **'我'**
   String get shellNavMe;
 
+  /// No description provided for @shellTasksPlaceholderTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务'**
+  String get shellTasksPlaceholderTitle;
+
+  /// No description provided for @shellTasksPlaceholderSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务视图即将接入。当前任务状态会在会话与身份卡中展示。'**
+  String get shellTasksPlaceholderSubtitle;
+
+  /// No description provided for @shellWorkspacePlaceholderTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'工作台'**
+  String get shellWorkspacePlaceholderTitle;
+
+  /// No description provided for @shellWorkspacePlaceholderSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'工作台模块即将接入。'**
+  String get shellWorkspacePlaceholderSubtitle;
+
   /// No description provided for @conversationsTitle.
   ///
   /// In zh, this message translates to:
-  /// **'信息'**
+  /// **'消息'**
   String get conversationsTitle;
 
   /// No description provided for @conversationsNoMessagePreview.
@@ -476,11 +728,311 @@ abstract class AppLocalizations {
   /// **'去关注联系人，或者先加入一个群聊吧。'**
   String get conversationsEmptySubtitle;
 
+  /// No description provided for @conversationsRecentTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'最近会话'**
+  String get conversationsRecentTitle;
+
+  /// No description provided for @conversationsSearchPlaceholder.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索会话'**
+  String get conversationsSearchPlaceholder;
+
+  /// No description provided for @conversationsNoResultsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有找到相关会话'**
+  String get conversationsNoResultsTitle;
+
+  /// No description provided for @conversationsNoResultsSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'换个关键词试试'**
+  String get conversationsNoResultsSubtitle;
+
+  /// No description provided for @conversationsDeleteTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除会话'**
+  String get conversationsDeleteTitle;
+
+  /// No description provided for @conversationsDeleteContent.
+  ///
+  /// In zh, this message translates to:
+  /// **'会话将从最近列表移除，历史消息仍会保留。重新打开或收到新消息后，会话会再次出现在列表中。'**
+  String get conversationsDeleteContent;
+
+  /// No description provided for @conversationsUnreadTag.
+  ///
+  /// In zh, this message translates to:
+  /// **'未读 {count}'**
+  String conversationsUnreadTag(Object count);
+
+  /// No description provided for @conversationsMentionMeTag.
+  ///
+  /// In zh, this message translates to:
+  /// **'@我'**
+  String get conversationsMentionMeTag;
+
+  /// No description provided for @conversationsDraftTag.
+  ///
+  /// In zh, this message translates to:
+  /// **'草稿'**
+  String get conversationsDraftTag;
+
+  /// No description provided for @conversationsAttachmentPreview.
+  ///
+  /// In zh, this message translates to:
+  /// **'附件：{name}'**
+  String conversationsAttachmentPreview(Object name);
+
+  /// No description provided for @conversationsDeletedAgentBadge.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体已删除'**
+  String get conversationsDeletedAgentBadge;
+
+  /// No description provided for @conversationsNewMessages.
+  ///
+  /// In zh, this message translates to:
+  /// **'有新消息'**
+  String get conversationsNewMessages;
+
+  /// No description provided for @conversationPeerBadgeGroup.
+  ///
+  /// In zh, this message translates to:
+  /// **'群'**
+  String get conversationPeerBadgeGroup;
+
+  /// No description provided for @conversationPeerBadgeAi.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI'**
+  String get conversationPeerBadgeAi;
+
+  /// No description provided for @conversationPeerChatBadgeMyAgent.
+  ///
+  /// In zh, this message translates to:
+  /// **'我的智能体'**
+  String get conversationPeerChatBadgeMyAgent;
+
+  /// No description provided for @conversationPeerChatBadgeAgent.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体'**
+  String get conversationPeerChatBadgeAgent;
+
+  /// No description provided for @conversationPeerTypeGroup.
+  ///
+  /// In zh, this message translates to:
+  /// **'群聊'**
+  String get conversationPeerTypeGroup;
+
+  /// No description provided for @conversationPeerTypeAgent.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体'**
+  String get conversationPeerTypeAgent;
+
+  /// No description provided for @conversationPeerTypeUser.
+  ///
+  /// In zh, this message translates to:
+  /// **'用户'**
+  String get conversationPeerTypeUser;
+
+  /// No description provided for @conversationPeerOwnerGroup.
+  ///
+  /// In zh, this message translates to:
+  /// **'AWiki 群组'**
+  String get conversationPeerOwnerGroup;
+
+  /// No description provided for @conversationPeerOwnerMyRuntimeAgent.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机 Runtime Agent'**
+  String get conversationPeerOwnerMyRuntimeAgent;
+
+  /// No description provided for @conversationPeerOwnerAgent.
+  ///
+  /// In zh, this message translates to:
+  /// **'AWiki 智能体'**
+  String get conversationPeerOwnerAgent;
+
+  /// No description provided for @conversationPeerOwnerUser.
+  ///
+  /// In zh, this message translates to:
+  /// **'AWiki 用户'**
+  String get conversationPeerOwnerUser;
+
+  /// No description provided for @conversationInfoTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'会话信息'**
+  String get conversationInfoTitle;
+
+  /// No description provided for @conversationIdentityStatus.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份状态:'**
+  String get conversationIdentityStatus;
+
+  /// No description provided for @conversationIdentityVerified.
+  ///
+  /// In zh, this message translates to:
+  /// **'已验证'**
+  String get conversationIdentityVerified;
+
+  /// No description provided for @conversationOwnerLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'所属:'**
+  String get conversationOwnerLabel;
+
+  /// No description provided for @conversationTypeLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'类型:'**
+  String get conversationTypeLabel;
+
+  /// No description provided for @conversationCapabilitiesTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'会话能力'**
+  String get conversationCapabilitiesTitle;
+
+  /// No description provided for @conversationCapabilitySendMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送消息'**
+  String get conversationCapabilitySendMessage;
+
+  /// No description provided for @conversationCapabilityViewProfile.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看资料'**
+  String get conversationCapabilityViewProfile;
+
+  /// No description provided for @conversationCapabilitySecureConnection.
+  ///
+  /// In zh, this message translates to:
+  /// **'安全连接'**
+  String get conversationCapabilitySecureConnection;
+
+  /// No description provided for @conversationCapabilityHistory.
+  ///
+  /// In zh, this message translates to:
+  /// **'会话记录'**
+  String get conversationCapabilityHistory;
+
+  /// No description provided for @conversationStatusTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'会话状态'**
+  String get conversationStatusTitle;
+
+  /// No description provided for @conversationUnreadMessagesLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'未读消息:'**
+  String get conversationUnreadMessagesLabel;
+
+  /// No description provided for @conversationUnreadMessagesValue.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 条'**
+  String conversationUnreadMessagesValue(int count);
+
+  /// No description provided for @conversationLatestPreviewLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'最近预览:'**
+  String get conversationLatestPreviewLabel;
+
+  /// No description provided for @conversationConnectionStatusLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接状态:'**
+  String get conversationConnectionStatusLabel;
+
+  /// No description provided for @conversationConnectionEstablished.
+  ///
+  /// In zh, this message translates to:
+  /// **'已建立'**
+  String get conversationConnectionEstablished;
+
+  /// No description provided for @conversationBackToChat.
+  ///
+  /// In zh, this message translates to:
+  /// **'返回会话'**
+  String get conversationBackToChat;
+
   /// No description provided for @friendsTitle.
   ///
   /// In zh, this message translates to:
   /// **'朋友'**
   String get friendsTitle;
+
+  /// No description provided for @friendsGroups.
+  ///
+  /// In zh, this message translates to:
+  /// **'群组'**
+  String get friendsGroups;
+
+  /// No description provided for @friendsFollowing.
+  ///
+  /// In zh, this message translates to:
+  /// **'我关注的'**
+  String get friendsFollowing;
+
+  /// No description provided for @friendsFollowers.
+  ///
+  /// In zh, this message translates to:
+  /// **'关注我的'**
+  String get friendsFollowers;
+
+  /// No description provided for @friendsViewAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看全部'**
+  String get friendsViewAll;
+
+  /// No description provided for @friendsFollow.
+  ///
+  /// In zh, this message translates to:
+  /// **'关注'**
+  String get friendsFollow;
+
+  /// No description provided for @friendsUnfollow.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消关注'**
+  String get friendsUnfollow;
+
+  /// No description provided for @friendsFollowingEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有关注任何人。'**
+  String get friendsFollowingEmpty;
+
+  /// No description provided for @friendsFollowersEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有新的关注者。'**
+  String get friendsFollowersEmpty;
+
+  /// No description provided for @friendsUnfollowTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消关注'**
+  String get friendsUnfollowTitle;
+
+  /// No description provided for @friendsUnfollowMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消关注后，对方会从“我关注的”列表中移除。'**
+  String get friendsUnfollowMessage;
 
   /// No description provided for @profileMeTitle.
   ///
@@ -529,6 +1081,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'标签，使用英文逗号分隔'**
   String get profileTagsPlaceholder;
+
+  /// No description provided for @profileOpenHomepage.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开主页'**
+  String get profileOpenHomepage;
 
   /// No description provided for @settingsTitle.
   ///
@@ -848,6 +1406,132 @@ abstract class AppLocalizations {
   /// **'确认身份后会关注该联系人或 Agent。'**
   String get identityFollowContactNotice;
 
+  /// No description provided for @identityInputSemantics.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入 handle 或 DID'**
+  String get identityInputSemantics;
+
+  /// No description provided for @identityInputPlaceholder.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入 @handle / DID / Agent 地址'**
+  String get identityInputPlaceholder;
+
+  /// No description provided for @identitySearchLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'匹配身份'**
+  String get identitySearchLabel;
+
+  /// No description provided for @identityResolving.
+  ///
+  /// In zh, this message translates to:
+  /// **'匹配中...'**
+  String get identityResolving;
+
+  /// No description provided for @identitySubmitting.
+  ///
+  /// In zh, this message translates to:
+  /// **'处理中...'**
+  String get identitySubmitting;
+
+  /// No description provided for @identityQueryRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入 handle 或 DID。'**
+  String get identityQueryRequired;
+
+  /// No description provided for @identityResolveFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'未找到该身份，请检查 handle / DID 是否正确。'**
+  String get identityResolveFailed;
+
+  /// No description provided for @identityInvalidContact.
+  ///
+  /// In zh, this message translates to:
+  /// **'联系人身份无效，无法打开会话。'**
+  String get identityInvalidContact;
+
+  /// No description provided for @identityMissingDid.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份解析结果缺少 DID。'**
+  String get identityMissingDid;
+
+  /// No description provided for @identityVerified.
+  ///
+  /// In zh, this message translates to:
+  /// **'已验证'**
+  String get identityVerified;
+
+  /// No description provided for @identityTypeLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'类型'**
+  String get identityTypeLabel;
+
+  /// No description provided for @identityRelationshipLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'关系'**
+  String get identityRelationshipLabel;
+
+  /// No description provided for @identityBioLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'简介'**
+  String get identityBioLabel;
+
+  /// No description provided for @identityTypeAgent.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体'**
+  String get identityTypeAgent;
+
+  /// No description provided for @identityTypeUser.
+  ///
+  /// In zh, this message translates to:
+  /// **'用户'**
+  String get identityTypeUser;
+
+  /// No description provided for @identityAddGroupMemberTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加群成员'**
+  String get identityAddGroupMemberTitle;
+
+  /// No description provided for @identityAddGroupMemberSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入普通用户或 Agent 的 handle / DID，确认身份后加入群聊。'**
+  String get identityAddGroupMemberSubtitle;
+
+  /// No description provided for @identityAddGroupMemberAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认添加'**
+  String get identityAddGroupMemberAction;
+
+  /// No description provided for @identityAddGroupMemberNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'请确认这是要加入群聊的身份。'**
+  String get identityAddGroupMemberNotice;
+
+  /// No description provided for @identityClearInput.
+  ///
+  /// In zh, this message translates to:
+  /// **'清空输入'**
+  String get identityClearInput;
+
+  /// No description provided for @identitySearchNameHandleDid.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索名称、handle、DID'**
+  String get identitySearchNameHandleDid;
+
   /// No description provided for @groupListTitle.
   ///
   /// In zh, this message translates to:
@@ -956,6 +1640,132 @@ abstract class AppLocalizations {
   /// **'正在创建群组...'**
   String get groupCreating;
 
+  /// No description provided for @groupAddMembers.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加成员'**
+  String get groupAddMembers;
+
+  /// No description provided for @groupRefreshMembers.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新成员'**
+  String get groupRefreshMembers;
+
+  /// No description provided for @groupDetails.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看群详情'**
+  String get groupDetails;
+
+  /// No description provided for @groupRemoveMember.
+  ///
+  /// In zh, this message translates to:
+  /// **'移除成员'**
+  String get groupRemoveMember;
+
+  /// No description provided for @groupInviteDialogSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索本地身份，或输入 handle / DID 匹配新身份。'**
+  String get groupInviteDialogSubtitle;
+
+  /// No description provided for @groupInviteShowMore.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看更多'**
+  String get groupInviteShowMore;
+
+  /// No description provided for @groupInviteAdding.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加中...'**
+  String get groupInviteAdding;
+
+  /// No description provided for @groupInviteConfirmCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认添加 ({count})'**
+  String groupInviteConfirmCount(int count);
+
+  /// No description provided for @groupInviteCandidates.
+  ///
+  /// In zh, this message translates to:
+  /// **'可邀请的身份'**
+  String get groupInviteCandidates;
+
+  /// No description provided for @groupInviteSearchResults.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索结果'**
+  String get groupInviteSearchResults;
+
+  /// No description provided for @groupInviteSelectHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择一个或多个身份后，统一确认添加。'**
+  String get groupInviteSelectHint;
+
+  /// No description provided for @groupInviteNoLocalCandidates.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无可邀请的本地身份。'**
+  String get groupInviteNoLocalCandidates;
+
+  /// No description provided for @groupInviteNoMatches.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有匹配的本地身份，可以尝试匹配 handle / DID。'**
+  String get groupInviteNoMatches;
+
+  /// No description provided for @groupInviteAlreadyInGroup.
+  ///
+  /// In zh, this message translates to:
+  /// **'已在群中'**
+  String get groupInviteAlreadyInGroup;
+
+  /// No description provided for @groupInviteUnnamedAgent.
+  ///
+  /// In zh, this message translates to:
+  /// **'未命名智能体'**
+  String get groupInviteUnnamedAgent;
+
+  /// No description provided for @groupInviteSourceMyAgents.
+  ///
+  /// In zh, this message translates to:
+  /// **'我的智能体'**
+  String get groupInviteSourceMyAgents;
+
+  /// No description provided for @groupInviteSourceFollowing.
+  ///
+  /// In zh, this message translates to:
+  /// **'我关注的'**
+  String get groupInviteSourceFollowing;
+
+  /// No description provided for @groupInviteSourceFollowers.
+  ///
+  /// In zh, this message translates to:
+  /// **'关注我的'**
+  String get groupInviteSourceFollowers;
+
+  /// No description provided for @groupInviteSourceRecent.
+  ///
+  /// In zh, this message translates to:
+  /// **'最近会话'**
+  String get groupInviteSourceRecent;
+
+  /// No description provided for @groupInviteSourceResolved.
+  ///
+  /// In zh, this message translates to:
+  /// **'匹配结果'**
+  String get groupInviteSourceResolved;
+
+  /// No description provided for @groupRemoveMemberContent.
+  ///
+  /// In zh, this message translates to:
+  /// **'移除 {memberTitle} 后，对方将不能继续在这个群里发送消息。'**
+  String groupRemoveMemberContent(Object memberTitle);
+
   /// No description provided for @chatUnknownUser.
   ///
   /// In zh, this message translates to:
@@ -983,8 +1793,326 @@ abstract class AppLocalizations {
   /// No description provided for @chatInputPlaceholder.
   ///
   /// In zh, this message translates to:
-  /// **'Type a message...'**
+  /// **'输入消息...'**
   String get chatInputPlaceholder;
+
+  /// No description provided for @chatDeletedAgentDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体已删除，无法继续发送消息'**
+  String get chatDeletedAgentDisabled;
+
+  /// No description provided for @chatGroupLeftDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'你已不在这个群聊中，不能继续发送消息'**
+  String get chatGroupLeftDisabled;
+
+  /// No description provided for @chatGroupSendDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前群聊暂时不能发送消息'**
+  String get chatGroupSendDisabled;
+
+  /// No description provided for @chatAgentProcessing.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体正在处理...'**
+  String get chatAgentProcessing;
+
+  /// No description provided for @chatAgentStillProcessing.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体仍在处理，稍后可刷新查看'**
+  String get chatAgentStillProcessing;
+
+  /// No description provided for @chatSubjectProcessing.
+  ///
+  /// In zh, this message translates to:
+  /// **'{subject} 正在处理...'**
+  String chatSubjectProcessing(Object subject);
+
+  /// No description provided for @chatSubjectStillProcessing.
+  ///
+  /// In zh, this message translates to:
+  /// **'{subject} 仍在处理，稍后可刷新查看'**
+  String chatSubjectStillProcessing(Object subject);
+
+  /// No description provided for @chatAgentSubject.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体'**
+  String get chatAgentSubject;
+
+  /// No description provided for @chatAgentCountSubject.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 个智能体'**
+  String chatAgentCountSubject(int count);
+
+  /// No description provided for @chatSafeCollaboration.
+  ///
+  /// In zh, this message translates to:
+  /// **'安全协作中'**
+  String get chatSafeCollaboration;
+
+  /// No description provided for @chatAddAttachment.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加附件'**
+  String get chatAddAttachment;
+
+  /// No description provided for @chatRemoveAttachment.
+  ///
+  /// In zh, this message translates to:
+  /// **'移除附件'**
+  String get chatRemoveAttachment;
+
+  /// No description provided for @chatViewAttachment.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看附件'**
+  String get chatViewAttachment;
+
+  /// No description provided for @chatAttachmentFileFallback.
+  ///
+  /// In zh, this message translates to:
+  /// **'文件'**
+  String get chatAttachmentFileFallback;
+
+  /// No description provided for @chatLoadingMentionCandidates.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在加载 mention 候选…'**
+  String get chatLoadingMentionCandidates;
+
+  /// No description provided for @mentionCandidateBadgeUser.
+  ///
+  /// In zh, this message translates to:
+  /// **'用户'**
+  String get mentionCandidateBadgeUser;
+
+  /// No description provided for @mentionCandidateBadgeAgent.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体'**
+  String get mentionCandidateBadgeAgent;
+
+  /// No description provided for @mentionCandidateBadgeUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'类型未知'**
+  String get mentionCandidateBadgeUnknown;
+
+  /// No description provided for @mentionSelectorAllSurface.
+  ///
+  /// In zh, this message translates to:
+  /// **'@所有人'**
+  String get mentionSelectorAllSurface;
+
+  /// No description provided for @mentionSelectorHumansSurface.
+  ///
+  /// In zh, this message translates to:
+  /// **'@所有用户'**
+  String get mentionSelectorHumansSurface;
+
+  /// No description provided for @mentionSelectorAgentsSurface.
+  ///
+  /// In zh, this message translates to:
+  /// **'@所有智能体'**
+  String get mentionSelectorAgentsSurface;
+
+  /// No description provided for @mentionSelectorAllSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'提醒群内所有成员'**
+  String get mentionSelectorAllSubtitle;
+
+  /// No description provided for @mentionSelectorHumansSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'只提醒群内用户'**
+  String get mentionSelectorHumansSubtitle;
+
+  /// No description provided for @mentionSelectorAgentsSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'提醒群内智能体'**
+  String get mentionSelectorAgentsSubtitle;
+
+  /// No description provided for @mentionSelectorAllBadge.
+  ///
+  /// In zh, this message translates to:
+  /// **'用户 + 智能体'**
+  String get mentionSelectorAllBadge;
+
+  /// No description provided for @mentionDisabledUnknownMemberType.
+  ///
+  /// In zh, this message translates to:
+  /// **'成员类型未知，暂不能作为单人 mention 目标'**
+  String get mentionDisabledUnknownMemberType;
+
+  /// No description provided for @mentionDisabledInactiveMember.
+  ///
+  /// In zh, this message translates to:
+  /// **'成员状态不是 active，暂不能 mention'**
+  String get mentionDisabledInactiveMember;
+
+  /// No description provided for @chatSendFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送失败'**
+  String get chatSendFailed;
+
+  /// No description provided for @chatRetrySend.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试发送'**
+  String get chatRetrySend;
+
+  /// No description provided for @chatSending.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送中'**
+  String get chatSending;
+
+  /// No description provided for @chatViewPeerInfo.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看用户或智能体信息'**
+  String get chatViewPeerInfo;
+
+  /// No description provided for @chatOpenPeerInfo.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开{type}信息'**
+  String chatOpenPeerInfo(Object type);
+
+  /// No description provided for @chatCurrentConversationCannotSend.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前会话无法继续发送消息'**
+  String get chatCurrentConversationCannotSend;
+
+  /// No description provided for @chatAgentDeletedBadge.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体已删除'**
+  String get chatAgentDeletedBadge;
+
+  /// No description provided for @chatPeerInfoUserTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'用户信息'**
+  String get chatPeerInfoUserTitle;
+
+  /// No description provided for @chatPeerInfoAgentTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体信息'**
+  String get chatPeerInfoAgentTitle;
+
+  /// No description provided for @chatPeerInfoGroupTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'群聊信息'**
+  String get chatPeerInfoGroupTitle;
+
+  /// No description provided for @chatPeerInfoGroupSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'群聊'**
+  String get chatPeerInfoGroupSection;
+
+  /// No description provided for @chatPeerInfoIdentityCard.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份卡'**
+  String get chatPeerInfoIdentityCard;
+
+  /// No description provided for @chatPeerInfoClose.
+  ///
+  /// In zh, this message translates to:
+  /// **'关闭信息弹窗'**
+  String get chatPeerInfoClose;
+
+  /// No description provided for @chatPeerInfoCopyDid.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制 DID'**
+  String get chatPeerInfoCopyDid;
+
+  /// No description provided for @chatPeerInfoDidCopied.
+  ///
+  /// In zh, this message translates to:
+  /// **'DID 已复制'**
+  String get chatPeerInfoDidCopied;
+
+  /// No description provided for @chatPeerInfoProfileLoading.
+  ///
+  /// In zh, this message translates to:
+  /// **'资料加载中'**
+  String get chatPeerInfoProfileLoading;
+
+  /// No description provided for @chatPeerInfoProfileUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'资料暂不可用'**
+  String get chatPeerInfoProfileUnavailable;
+
+  /// No description provided for @chatPeerInfoAwikiUser.
+  ///
+  /// In zh, this message translates to:
+  /// **'AWiki 用户'**
+  String get chatPeerInfoAwikiUser;
+
+  /// No description provided for @chatPeerInfoCollapseAgentInbox.
+  ///
+  /// In zh, this message translates to:
+  /// **'收起 Agent 收件箱'**
+  String get chatPeerInfoCollapseAgentInbox;
+
+  /// No description provided for @chatPeerInfoAgentInbox.
+  ///
+  /// In zh, this message translates to:
+  /// **'Agent 收件箱'**
+  String get chatPeerInfoAgentInbox;
+
+  /// No description provided for @chatPeerInfoUnknownContact.
+  ///
+  /// In zh, this message translates to:
+  /// **'未知联系人'**
+  String get chatPeerInfoUnknownContact;
+
+  /// No description provided for @chatPeerInfoLoadingProfile.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在加载资料…'**
+  String get chatPeerInfoLoadingProfile;
+
+  /// No description provided for @chatPeerInfoNoProfile.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂未填写资料'**
+  String get chatPeerInfoNoProfile;
+
+  /// No description provided for @chatPeerInfoRenameAgent.
+  ///
+  /// In zh, this message translates to:
+  /// **'修改智能体名称'**
+  String get chatPeerInfoRenameAgent;
+
+  /// No description provided for @chatPeerInfoRenameAgentTooltip.
+  ///
+  /// In zh, this message translates to:
+  /// **'修改名称'**
+  String get chatPeerInfoRenameAgentTooltip;
+
+  /// No description provided for @chatPeerInfoMemberCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'共 {count} 位成员'**
+  String chatPeerInfoMemberCount(int count);
 
   /// No description provided for @peerProfileLoadFailed.
   ///
@@ -1028,10 +2156,1420 @@ abstract class AppLocalizations {
   /// **'本地聊天记录已删除'**
   String get peerProfileThreadDeleted;
 
+  /// No description provided for @agentPageTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体'**
+  String get agentPageTitle;
+
+  /// No description provided for @agentCreateDaemon.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建 Daemon'**
+  String get agentCreateDaemon;
+
+  /// No description provided for @agentEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无代理'**
+  String get agentEmpty;
+
+  /// No description provided for @agentSelectOne.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择一个代理'**
+  String get agentSelectOne;
+
+  /// No description provided for @agentCreateRuntime.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建 Agent'**
+  String get agentCreateRuntime;
+
+  /// No description provided for @agentOpenChat.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开聊天'**
+  String get agentOpenChat;
+
+  /// No description provided for @agentRename.
+  ///
+  /// In zh, this message translates to:
+  /// **'改名'**
+  String get agentRename;
+
+  /// No description provided for @agentUpgrade.
+  ///
+  /// In zh, this message translates to:
+  /// **'升级'**
+  String get agentUpgrade;
+
+  /// No description provided for @agentUpgrading.
+  ///
+  /// In zh, this message translates to:
+  /// **'升级中'**
+  String get agentUpgrading;
+
+  /// No description provided for @agentCancelUpgrade.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消升级'**
+  String get agentCancelUpgrade;
+
+  /// No description provided for @agentCancelling.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消中'**
+  String get agentCancelling;
+
+  /// No description provided for @agentDeleteDaemon.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除代理'**
+  String get agentDeleteDaemon;
+
+  /// No description provided for @agentDeleteRuntime.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除智能体'**
+  String get agentDeleteRuntime;
+
+  /// No description provided for @agentDeleting.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除中'**
+  String get agentDeleting;
+
+  /// No description provided for @agentRecentRuns.
+  ///
+  /// In zh, this message translates to:
+  /// **'最近 Run'**
+  String get agentRecentRuns;
+
+  /// No description provided for @agentRefreshStatus.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新状态'**
+  String get agentRefreshStatus;
+
+  /// No description provided for @agentDeletingNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除请求已发送，正在等待代理同步。'**
+  String get agentDeletingNotice;
+
+  /// No description provided for @agentDaemonSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'Daemon · {count} 个 Agent · {status}'**
+  String agentDaemonSubtitle(int count, Object status);
+
+  /// No description provided for @agentRuntimeSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'{runtime} · {status}'**
+  String agentRuntimeSubtitle(Object runtime, Object status);
+
+  /// No description provided for @agentUnnamedDaemon.
+  ///
+  /// In zh, this message translates to:
+  /// **'未命名 Daemon'**
+  String get agentUnnamedDaemon;
+
+  /// No description provided for @agentUnnamedRuntime.
+  ///
+  /// In zh, this message translates to:
+  /// **'未命名智能体'**
+  String get agentUnnamedRuntime;
+
+  /// No description provided for @agentListDeletingSync.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除中 · 等待同步'**
+  String get agentListDeletingSync;
+
+  /// No description provided for @agentListUpgradeFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'升级失败'**
+  String get agentListUpgradeFailed;
+
+  /// No description provided for @agentListCancellingUpgrade.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在取消升级'**
+  String get agentListCancellingUpgrade;
+
+  /// No description provided for @agentListOrphanGroup.
+  ///
+  /// In zh, this message translates to:
+  /// **'未关联 Daemon'**
+  String get agentListOrphanGroup;
+
+  /// No description provided for @agentListNoRuntime.
+  ///
+  /// In zh, this message translates to:
+  /// **'尚未创建 Runtime Agent'**
+  String get agentListNoRuntime;
+
+  /// No description provided for @agentListRuntimeCreating.
+  ///
+  /// In zh, this message translates to:
+  /// **'{runtime} · 创建中'**
+  String agentListRuntimeCreating(Object runtime);
+
+  /// No description provided for @agentListRuntimeWaitingStatus.
+  ///
+  /// In zh, this message translates to:
+  /// **'{runtime} · 创建状态暂未返回，可刷新查看'**
+  String agentListRuntimeWaitingStatus(Object runtime);
+
+  /// No description provided for @daemonUpgradePreparingDownload.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在准备下载'**
+  String get daemonUpgradePreparingDownload;
+
+  /// No description provided for @daemonUpgradeRouteDirect.
+  ///
+  /// In zh, this message translates to:
+  /// **'直连'**
+  String get daemonUpgradeRouteDirect;
+
+  /// No description provided for @daemonUpgradeRouteEnvironmentProxy.
+  ///
+  /// In zh, this message translates to:
+  /// **'代理'**
+  String get daemonUpgradeRouteEnvironmentProxy;
+
+  /// No description provided for @daemonUpgradeRouteLocalProxy.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机代理 {route}'**
+  String daemonUpgradeRouteLocalProxy(Object route);
+
+  /// No description provided for @daemonUpgradeDownloaded.
+  ///
+  /// In zh, this message translates to:
+  /// **'已下载 {size}'**
+  String daemonUpgradeDownloaded(Object size);
+
+  /// No description provided for @daemonUpgradeRouteIndex.
+  ///
+  /// In zh, this message translates to:
+  /// **'线路 {index}/{count}'**
+  String daemonUpgradeRouteIndex(int index, int count);
+
+  /// No description provided for @agentUpgradeTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'升级代理'**
+  String get agentUpgradeTitle;
+
+  /// No description provided for @agentUpgradeMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'代理会下载 latest 版本并重启服务。'**
+  String get agentUpgradeMessage;
+
+  /// No description provided for @daemonUpgradeRequesting.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在发送升级请求'**
+  String get daemonUpgradeRequesting;
+
+  /// No description provided for @daemonUpgradeWaitingForDaemon.
+  ///
+  /// In zh, this message translates to:
+  /// **'升级请求已发送，正在等待 Daemon 确认'**
+  String get daemonUpgradeWaitingForDaemon;
+
+  /// No description provided for @daemonUpgradeFetchingManifest.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在获取版本信息'**
+  String get daemonUpgradeFetchingManifest;
+
+  /// No description provided for @daemonUpgradeSelectingSource.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在选择下载线路'**
+  String get daemonUpgradeSelectingSource;
+
+  /// No description provided for @daemonUpgradeDownloading.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在下载安装包'**
+  String get daemonUpgradeDownloading;
+
+  /// No description provided for @daemonUpgradeRetryingSource.
+  ///
+  /// In zh, this message translates to:
+  /// **'下载中断，正在重试'**
+  String get daemonUpgradeRetryingSource;
+
+  /// No description provided for @daemonUpgradeVerifying.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在校验安装包'**
+  String get daemonUpgradeVerifying;
+
+  /// No description provided for @daemonUpgradeExtracting.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在解压安装包'**
+  String get daemonUpgradeExtracting;
+
+  /// No description provided for @daemonUpgradeInstalling.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在安装新版本'**
+  String get daemonUpgradeInstalling;
+
+  /// No description provided for @daemonUpgradeRestarting.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在重启 Daemon'**
+  String get daemonUpgradeRestarting;
+
+  /// No description provided for @daemonUpgradeInProgress.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在升级'**
+  String get daemonUpgradeInProgress;
+
+  /// No description provided for @agentUpgradeIncomplete.
+  ///
+  /// In zh, this message translates to:
+  /// **'升级没有完成，请检查网络后重试。'**
+  String get agentUpgradeIncomplete;
+
+  /// No description provided for @agentUpgradeDownloadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装包下载失败，请检查网络后重试。{summary}'**
+  String agentUpgradeDownloadFailed(Object summary);
+
+  /// No description provided for @agentUpgradeNotCancellable.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前升级已经进入重启阶段，无法取消。请稍后刷新状态确认结果。'**
+  String get agentUpgradeNotCancellable;
+
+  /// No description provided for @agentUpgradeCancelFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消升级失败，请刷新状态后重试。'**
+  String get agentUpgradeCancelFailed;
+
+  /// No description provided for @agentUpgradeCancelNoResponse.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消请求已发送，但 Daemon 暂未响应。请刷新状态确认升级结果。'**
+  String get agentUpgradeCancelNoResponse;
+
+  /// No description provided for @agentDeleteDaemonMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除后会停止宿主机上的代理服务，并移除它创建的智能体。本地数据会归档保留，不会继续使用。'**
+  String get agentDeleteDaemonMessage;
+
+  /// No description provided for @agentDeleteRuntimeMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除后该智能体会从列表中移除。本地数据会归档保留，不会继续使用。'**
+  String get agentDeleteRuntimeMessage;
+
+  /// No description provided for @agentInstallTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'到宿主机安装代理'**
+  String get agentInstallTitle;
+
+  /// No description provided for @agentInstallSupportedTypes.
+  ///
+  /// In zh, this message translates to:
+  /// **'支持的 Agent 类型：Hermes、Codex、Claude Code。安装宿主代理后，可在 Daemon 下创建 Runtime Agent。'**
+  String get agentInstallSupportedTypes;
+
+  /// No description provided for @agentInstallTokenExpiresAt.
+  ///
+  /// In zh, this message translates to:
+  /// **'有效期至: {expiresAt}'**
+  String agentInstallTokenExpiresAt(Object expiresAt);
+
+  /// No description provided for @agentCopyInstallCommand.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制安装命令'**
+  String get agentCopyInstallCommand;
+
+  /// No description provided for @agentCreateTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建 Agent'**
+  String get agentCreateTitle;
+
+  /// No description provided for @agentCreateType.
+  ///
+  /// In zh, this message translates to:
+  /// **'Agent 类型'**
+  String get agentCreateType;
+
+  /// No description provided for @agentCreateWorkspacePolicy.
+  ///
+  /// In zh, this message translates to:
+  /// **'工作目录策略'**
+  String get agentCreateWorkspacePolicy;
+
+  /// No description provided for @agentCreateWorkspaceRouteRoot.
+  ///
+  /// In zh, this message translates to:
+  /// **'按会话目录'**
+  String get agentCreateWorkspaceRouteRoot;
+
+  /// No description provided for @agentCreateWorkspaceRouteRootDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'每个联系人、群组或线程使用独立上下文目录。'**
+  String get agentCreateWorkspaceRouteRootDescription;
+
+  /// No description provided for @agentCreateWorkspaceSharedRoot.
+  ///
+  /// In zh, this message translates to:
+  /// **'共享目录'**
+  String get agentCreateWorkspaceSharedRoot;
+
+  /// No description provided for @agentCreateWorkspaceSharedRootDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'该身份共用一个目录，适合手工任务。'**
+  String get agentCreateWorkspaceSharedRootDescription;
+
+  /// No description provided for @agentCreateWorkspaceWorktreePerTask.
+  ///
+  /// In zh, this message translates to:
+  /// **'每次任务 worktree'**
+  String get agentCreateWorkspaceWorktreePerTask;
+
+  /// No description provided for @agentCreateWorkspaceWorktreePerTaskDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'每次运行使用独立工作树。'**
+  String get agentCreateWorkspaceWorktreePerTaskDescription;
+
+  /// No description provided for @agentCreateHandlePreview.
+  ///
+  /// In zh, this message translates to:
+  /// **'最终 Handle：{handle}'**
+  String agentCreateHandlePreview(Object handle);
+
+  /// No description provided for @agentCreateHandleAvailabilityChecking.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在校验可用性...'**
+  String get agentCreateHandleAvailabilityChecking;
+
+  /// No description provided for @agentCreateHandleAvailabilityPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂时无法校验可用性，创建时会再次确认'**
+  String get agentCreateHandleAvailabilityPending;
+
+  /// No description provided for @agentCreateHandleChecking.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在校验 Handle 可用性'**
+  String get agentCreateHandleChecking;
+
+  /// No description provided for @agentCreateHandleAvailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个 Handle 可以使用'**
+  String get agentCreateHandleAvailable;
+
+  /// No description provided for @agentCreateHandleUnavailableUsed.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个 Handle 已被使用'**
+  String get agentCreateHandleUnavailableUsed;
+
+  /// No description provided for @agentCreateHandleUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个 Handle 不可使用'**
+  String get agentCreateHandleUnavailable;
+
+  /// No description provided for @agentCreateHandleRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入 Handle'**
+  String get agentCreateHandleRequired;
+
+  /// No description provided for @agentCreateHandleTooLong.
+  ///
+  /// In zh, this message translates to:
+  /// **'Handle 最多 {maxLength} 个字符'**
+  String agentCreateHandleTooLong(Object maxLength);
+
+  /// No description provided for @agentCreateHandleInvalidPattern.
+  ///
+  /// In zh, this message translates to:
+  /// **'仅支持小写字母、数字和连字符，且首尾必须是字母或数字'**
+  String get agentCreateHandleInvalidPattern;
+
+  /// No description provided for @agentCreateHandleNoDoubleHyphen.
+  ///
+  /// In zh, this message translates to:
+  /// **'Handle 不能包含连续连字符'**
+  String get agentCreateHandleNoDoubleHyphen;
+
+  /// No description provided for @agentCreateNeedsRouteWorkspace.
+  ///
+  /// In zh, this message translates to:
+  /// **'{agentType} 需要按会话目录工作模式。'**
+  String agentCreateNeedsRouteWorkspace(Object agentType);
+
+  /// No description provided for @agentCreateHermesDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'内置 Hermes Runtime Agent。'**
+  String get agentCreateHermesDescription;
+
+  /// No description provided for @agentCreateNeedsGenericCliCapability.
+  ///
+  /// In zh, this message translates to:
+  /// **'{agentType} 需要 Daemon 提供 generic-cli capability。'**
+  String agentCreateNeedsGenericCliCapability(Object agentType);
+
+  /// No description provided for @agentCreateUnsupportedDriver.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前 Daemon 不支持 {agentType} driver。'**
+  String agentCreateUnsupportedDriver(Object agentType);
+
+  /// No description provided for @agentCreateNeedsRouteSession.
+  ///
+  /// In zh, this message translates to:
+  /// **'{agentType} 需要 route session 和 native resume 支持。'**
+  String agentCreateNeedsRouteSession(Object agentType);
+
+  /// No description provided for @agentCreateNeedsHostAccess.
+  ///
+  /// In zh, this message translates to:
+  /// **'{agentType} 需要 Daemon 支持宿主机全权限模式。'**
+  String agentCreateNeedsHostAccess(Object agentType);
+
+  /// No description provided for @agentCreateRequiresSignedInCli.
+  ///
+  /// In zh, this message translates to:
+  /// **'需要 Daemon 上已安装并登录的 {agentType} CLI。'**
+  String agentCreateRequiresSignedInCli(Object agentType);
+
+  /// No description provided for @agentCreateHostAccessTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'宿主机全权限'**
+  String get agentCreateHostAccessTitle;
+
+  /// No description provided for @agentCreateHostAccessDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'可按用户指令使用本机文件、命令、工具和网络。'**
+  String get agentCreateHostAccessDescription;
+
+  /// No description provided for @agentRenameTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'修改智能体名称'**
+  String get agentRenameTitle;
+
+  /// No description provided for @agentRenameSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'名称会显示在智能体列表、最近会话和对话窗口中。'**
+  String get agentRenameSubtitle;
+
+  /// No description provided for @agentNameField.
+  ///
+  /// In zh, this message translates to:
+  /// **'名称'**
+  String get agentNameField;
+
+  /// No description provided for @agentNamePlaceholder.
+  ///
+  /// In zh, this message translates to:
+  /// **'显示名称'**
+  String get agentNamePlaceholder;
+
+  /// No description provided for @agentNameHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'最多 {maxLength} 个字符。'**
+  String agentNameHelp(int maxLength);
+
+  /// No description provided for @agentNameRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入智能体名称'**
+  String get agentNameRequired;
+
+  /// No description provided for @agentNameTooLong.
+  ///
+  /// In zh, this message translates to:
+  /// **'名称最多 {maxLength} 个字符'**
+  String agentNameTooLong(int maxLength);
+
+  /// No description provided for @agentStatusProcessing.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在处理'**
+  String get agentStatusProcessing;
+
+  /// No description provided for @agentStatusReady.
+  ///
+  /// In zh, this message translates to:
+  /// **'正常'**
+  String get agentStatusReady;
+
+  /// No description provided for @agentStatusNeedsConfig.
+  ///
+  /// In zh, this message translates to:
+  /// **'需要配置'**
+  String get agentStatusNeedsConfig;
+
+  /// No description provided for @agentStatusNeedsUpgrade.
+  ///
+  /// In zh, this message translates to:
+  /// **'需要升级'**
+  String get agentStatusNeedsUpgrade;
+
+  /// No description provided for @agentStatusFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'异常'**
+  String get agentStatusFailed;
+
+  /// No description provided for @agentStatusOffline.
+  ///
+  /// In zh, this message translates to:
+  /// **'离线'**
+  String get agentStatusOffline;
+
+  /// No description provided for @agentStatusDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'已停用'**
+  String get agentStatusDisabled;
+
+  /// No description provided for @agentStatusUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'未知'**
+  String get agentStatusUnknown;
+
+  /// No description provided for @agentStatusRefreshNeeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'需刷新'**
+  String get agentStatusRefreshNeeded;
+
+  /// No description provided for @agentStatusUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'未支持'**
+  String get agentStatusUnsupported;
+
+  /// No description provided for @agentStatusSemantic.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体状态：{status}'**
+  String agentStatusSemantic(Object status);
+
+  /// No description provided for @agentErrorLoginRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请先登录。'**
+  String get agentErrorLoginRequired;
+
+  /// No description provided for @agentErrorHandleUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前账号没有可用 Handle，暂时不能生成 Daemon 安装命令。'**
+  String get agentErrorHandleUnavailable;
+
+  /// No description provided for @agentErrorMessageAgentDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息处理 Agent 功能未开启。'**
+  String get agentErrorMessageAgentDisabled;
+
+  /// No description provided for @agentErrorSelectDaemon.
+  ///
+  /// In zh, this message translates to:
+  /// **'请选择运行 Daemon。'**
+  String get agentErrorSelectDaemon;
+
+  /// No description provided for @agentErrorDaemonBootstrapMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'运行 Daemon 尚未上报安全 bootstrap 公钥，请先刷新状态。'**
+  String get agentErrorDaemonBootstrapMissing;
+
+  /// No description provided for @agentErrorDaemonUnreachableDelete.
+  ///
+  /// In zh, this message translates to:
+  /// **'Daemon 当前不可达，暂时不能删除。'**
+  String get agentErrorDaemonUnreachableDelete;
+
+  /// No description provided for @agentErrorMessageAgentMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前 Daemon 尚未创建消息处理 Agent。'**
+  String get agentErrorMessageAgentMissing;
+
+  /// No description provided for @agentStatusSyncStillWaiting.
+  ///
+  /// In zh, this message translates to:
+  /// **'状态同步仍在等待，请稍后刷新查看。'**
+  String get agentStatusSyncStillWaiting;
+
+  /// No description provided for @agentErrorScopeMismatch.
+  ///
+  /// In zh, this message translates to:
+  /// **'这台电脑已经绑定到另一个 Handle 的 Daemon。请使用对应 Handle 管理，或先卸载本机 Daemon 后重新安装。'**
+  String get agentErrorScopeMismatch;
+
+  /// No description provided for @agentErrorControllerHandleMismatch.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前客户端身份和登录 Handle 不一致，请切换到正确账号后重新复制安装命令。'**
+  String get agentErrorControllerHandleMismatch;
+
+  /// No description provided for @agentErrorControllerScopeMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装命令缺少账号归属信息，请重新复制最新的 Daemon 安装命令。'**
+  String get agentErrorControllerScopeMissing;
+
+  /// No description provided for @agentErrorInstallCommandUsed.
+  ///
+  /// In zh, this message translates to:
+  /// **'这条安装命令已经使用过，请重新复制最新的 Daemon 安装命令。'**
+  String get agentErrorInstallCommandUsed;
+
+  /// No description provided for @agentErrorSessionExpired.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录状态已失效，请重新登录后再查看智能体。'**
+  String get agentErrorSessionExpired;
+
+  /// No description provided for @agentErrorRequestTimeout.
+  ///
+  /// In zh, this message translates to:
+  /// **'请求超时，请稍后重试。'**
+  String get agentErrorRequestTimeout;
+
+  /// No description provided for @agentErrorNetworkPreserved.
+  ///
+  /// In zh, this message translates to:
+  /// **'网络连接暂时不可用，已保留当前数据。'**
+  String get agentErrorNetworkPreserved;
+
+  /// No description provided for @agentErrorLoadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体信息暂时无法加载，请稍后重试。'**
+  String get agentErrorLoadFailed;
+
+  /// No description provided for @agentErrorStatusSessionExpired.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录状态已失效，请重新登录后再刷新代理状态。'**
+  String get agentErrorStatusSessionExpired;
+
+  /// No description provided for @agentErrorStatusTimeout.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新状态超时，当前数据已保留。'**
+  String get agentErrorStatusTimeout;
+
+  /// No description provided for @agentErrorStatusNetworkPreserved.
+  ///
+  /// In zh, this message translates to:
+  /// **'网络连接暂时不可用，当前数据已保留。'**
+  String get agentErrorStatusNetworkPreserved;
+
+  /// No description provided for @agentErrorStatusRefreshFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'状态刷新请求发送失败，请稍后再试。'**
+  String get agentErrorStatusRefreshFailed;
+
+  /// No description provided for @agentAccessTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'访问权限'**
+  String get agentAccessTitle;
+
+  /// No description provided for @agentAccessSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'配置 Handle 对智能体的控制权限'**
+  String get agentAccessSubtitle;
+
+  /// No description provided for @agentAccessWhitelist.
+  ///
+  /// In zh, this message translates to:
+  /// **'白名单'**
+  String get agentAccessWhitelist;
+
+  /// No description provided for @agentAccessBlacklist.
+  ///
+  /// In zh, this message translates to:
+  /// **'黑名单'**
+  String get agentAccessBlacklist;
+
+  /// No description provided for @agentAccessSwitchToWhitelist.
+  ///
+  /// In zh, this message translates to:
+  /// **'切换到白名单模式'**
+  String get agentAccessSwitchToWhitelist;
+
+  /// No description provided for @agentAccessSwitchToBlacklist.
+  ///
+  /// In zh, this message translates to:
+  /// **'切换到黑名单模式'**
+  String get agentAccessSwitchToBlacklist;
+
+  /// No description provided for @agentAccessCurrentWhitelist.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前白名单模式'**
+  String get agentAccessCurrentWhitelist;
+
+  /// No description provided for @agentAccessCurrentBlacklist.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前黑名单模式'**
+  String get agentAccessCurrentBlacklist;
+
+  /// No description provided for @agentAccessEnabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'已启用'**
+  String get agentAccessEnabled;
+
+  /// No description provided for @agentAccessDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'已禁用'**
+  String get agentAccessDisabled;
+
+  /// No description provided for @agentAccessHandlePlaceholder.
+  ///
+  /// In zh, this message translates to:
+  /// **'bob 或 bob.example.com'**
+  String get agentAccessHandlePlaceholder;
+
+  /// No description provided for @agentAccessAddHandle.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加 Handle'**
+  String get agentAccessAddHandle;
+
+  /// No description provided for @agentAccessNoHandles.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无 Handle'**
+  String get agentAccessNoHandles;
+
+  /// No description provided for @agentAccessRemoveHandle.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除 Handle'**
+  String get agentAccessRemoveHandle;
+
+  /// No description provided for @agentAccessDuplicateWhitelist.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个 Handle 已在白名单中。'**
+  String get agentAccessDuplicateWhitelist;
+
+  /// No description provided for @agentAccessDuplicateBlacklist.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个 Handle 已在黑名单中。'**
+  String get agentAccessDuplicateBlacklist;
+
+  /// No description provided for @agentAccessHandleRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入 Handle。'**
+  String get agentAccessHandleRequired;
+
+  /// No description provided for @agentAccessSingleHandleOnly.
+  ///
+  /// In zh, this message translates to:
+  /// **'每次只能添加一个 Handle。'**
+  String get agentAccessSingleHandleOnly;
+
+  /// No description provided for @agentAccessHandleInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入短 Handle 或完整 Handle。'**
+  String get agentAccessHandleInvalid;
+
+  /// No description provided for @agentDiagnosticsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'诊断信息'**
+  String get agentDiagnosticsTitle;
+
+  /// No description provided for @agentDiagnosticsDaemonSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'Daemon 运行与身份信息'**
+  String get agentDiagnosticsDaemonSubtitle;
+
+  /// No description provided for @agentDiagnosticsAgentSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体身份信息'**
+  String get agentDiagnosticsAgentSubtitle;
+
+  /// No description provided for @agentDiagnosticsShowMore.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看更多'**
+  String get agentDiagnosticsShowMore;
+
+  /// No description provided for @agentDiagnosticsCollapse.
+  ///
+  /// In zh, this message translates to:
+  /// **'收起'**
+  String get agentDiagnosticsCollapse;
+
+  /// No description provided for @agentDiagnosticsShowMoreDetails.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看更多诊断'**
+  String get agentDiagnosticsShowMoreDetails;
+
+  /// No description provided for @agentDiagnosticsCollapseDetails.
+  ///
+  /// In zh, this message translates to:
+  /// **'收起诊断详情'**
+  String get agentDiagnosticsCollapseDetails;
+
+  /// No description provided for @agentDiagnosticCurrentVersion.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前版本'**
+  String get agentDiagnosticCurrentVersion;
+
+  /// No description provided for @agentDiagnosticPlatform.
+  ///
+  /// In zh, this message translates to:
+  /// **'平台'**
+  String get agentDiagnosticPlatform;
+
+  /// No description provided for @agentDiagnosticLatestVersion.
+  ///
+  /// In zh, this message translates to:
+  /// **'最新版本'**
+  String get agentDiagnosticLatestVersion;
+
+  /// No description provided for @agentDiagnosticMinSupportedVersion.
+  ///
+  /// In zh, this message translates to:
+  /// **'最低可用版本'**
+  String get agentDiagnosticMinSupportedVersion;
+
+  /// No description provided for @agentDiagnosticService.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务'**
+  String get agentDiagnosticService;
+
+  /// No description provided for @agentDiagnosticLastSeen.
+  ///
+  /// In zh, this message translates to:
+  /// **'最近上报'**
+  String get agentDiagnosticLastSeen;
+
+  /// No description provided for @agentDiagnosticErrorCode.
+  ///
+  /// In zh, this message translates to:
+  /// **'错误代码'**
+  String get agentDiagnosticErrorCode;
+
+  /// No description provided for @agentDiagnosticRunner.
+  ///
+  /// In zh, this message translates to:
+  /// **'运行器'**
+  String get agentDiagnosticRunner;
+
+  /// No description provided for @agentDiagnosticProfileStatus.
+  ///
+  /// In zh, this message translates to:
+  /// **'配置状态'**
+  String get agentDiagnosticProfileStatus;
+
+  /// No description provided for @agentDiagnosticInstallationStatus.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装状态'**
+  String get agentDiagnosticInstallationStatus;
+
+  /// No description provided for @agentDiagnosticServiceInstalled.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务安装'**
+  String get agentDiagnosticServiceInstalled;
+
+  /// No description provided for @agentDiagnosticConfigSummary.
+  ///
+  /// In zh, this message translates to:
+  /// **'配置摘要'**
+  String get agentDiagnosticConfigSummary;
+
+  /// No description provided for @agentDiagnosticHermesProfile.
+  ///
+  /// In zh, this message translates to:
+  /// **'Hermes 配置'**
+  String get agentDiagnosticHermesProfile;
+
+  /// No description provided for @agentDiagnosticRunnerStatus.
+  ///
+  /// In zh, this message translates to:
+  /// **'运行状态'**
+  String get agentDiagnosticRunnerStatus;
+
+  /// No description provided for @agentDiagnosticActiveSessionCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'活跃会话'**
+  String get agentDiagnosticActiveSessionCount;
+
+  /// No description provided for @messageAgentSkipped.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息 Agent 跳过此消息'**
+  String get messageAgentSkipped;
+
+  /// No description provided for @messageAgentFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息 Agent 处理失败'**
+  String get messageAgentFailed;
+
+  /// No description provided for @messageAgentCompleted.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息 Agent 已完成处理'**
+  String get messageAgentCompleted;
+
+  /// No description provided for @messageAgentProcessing.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息 Agent 正在处理'**
+  String get messageAgentProcessing;
+
+  /// No description provided for @messageAgentReceived.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息 Agent 已收到消息'**
+  String get messageAgentReceived;
+
+  /// No description provided for @messageAgentResultGenerated.
+  ///
+  /// In zh, this message translates to:
+  /// **'已生成处理结果'**
+  String get messageAgentResultGenerated;
+
+  /// No description provided for @messageAgentDraftApplied.
+  ///
+  /// In zh, this message translates to:
+  /// **'草稿已放入输入框'**
+  String get messageAgentDraftApplied;
+
+  /// No description provided for @messageAgentAppActionCompleted.
+  ///
+  /// In zh, this message translates to:
+  /// **'App action 已完成'**
+  String get messageAgentAppActionCompleted;
+
+  /// No description provided for @messageAgentRequestRejected.
+  ///
+  /// In zh, this message translates to:
+  /// **'已拒绝消息 Agent 请求'**
+  String get messageAgentRequestRejected;
+
+  /// No description provided for @messageAgentAppActionFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'App action 处理失败'**
+  String get messageAgentAppActionFailed;
+
+  /// No description provided for @messageAgentWaitingConfirmation.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待确认'**
+  String get messageAgentWaitingConfirmation;
+
+  /// No description provided for @messageAgentUseDraft.
+  ///
+  /// In zh, this message translates to:
+  /// **'使用草稿'**
+  String get messageAgentUseDraft;
+
+  /// No description provided for @messageAgentActionCreateDraft.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息 Agent 生成了草稿'**
+  String get messageAgentActionCreateDraft;
+
+  /// No description provided for @messageAgentActionSummarize.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息 Agent 生成了摘要'**
+  String get messageAgentActionSummarize;
+
+  /// No description provided for @messageAgentActionReadContact.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息 Agent 请求读取联系人'**
+  String get messageAgentActionReadContact;
+
+  /// No description provided for @messageAgentActionUpdateDisplayName.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息 Agent 请求修改联系人名称'**
+  String get messageAgentActionUpdateDisplayName;
+
+  /// No description provided for @messageAgentActionUpdateNote.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息 Agent 请求修改联系人备注'**
+  String get messageAgentActionUpdateNote;
+
+  /// No description provided for @messageAgentActionGeneric.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息 Agent 请求 App action'**
+  String get messageAgentActionGeneric;
+
+  /// No description provided for @messageAgentTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息处理 Agent'**
+  String get messageAgentTitle;
+
+  /// No description provided for @messageAgentRuntimeSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'运行 Daemon 内创建 {provider} runtime'**
+  String messageAgentRuntimeSubtitle(Object provider);
+
+  /// No description provided for @messageAgentExperimentDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'实验功能关闭'**
+  String get messageAgentExperimentDisabled;
+
+  /// No description provided for @messageAgentReadyToEnable.
+  ///
+  /// In zh, this message translates to:
+  /// **'可启用'**
+  String get messageAgentReadyToEnable;
+
+  /// No description provided for @messageAgentNotReady.
+  ///
+  /// In zh, this message translates to:
+  /// **'未就绪'**
+  String get messageAgentNotReady;
+
+  /// No description provided for @messageAgentRunningDaemon.
+  ///
+  /// In zh, this message translates to:
+  /// **'运行 Daemon'**
+  String get messageAgentRunningDaemon;
+
+  /// No description provided for @messageAgentEngine.
+  ///
+  /// In zh, this message translates to:
+  /// **'引擎'**
+  String get messageAgentEngine;
+
+  /// No description provided for @messageAgentScope.
+  ///
+  /// In zh, this message translates to:
+  /// **'处理范围'**
+  String get messageAgentScope;
+
+  /// No description provided for @messageAgentAllProcessableConversations.
+  ///
+  /// In zh, this message translates to:
+  /// **'所有可处理会话'**
+  String get messageAgentAllProcessableConversations;
+
+  /// No description provided for @messageAgentDaemonVersion.
+  ///
+  /// In zh, this message translates to:
+  /// **'Daemon 版本'**
+  String get messageAgentDaemonVersion;
+
+  /// No description provided for @messageAgentCapabilities.
+  ///
+  /// In zh, this message translates to:
+  /// **'可用能力'**
+  String get messageAgentCapabilities;
+
+  /// No description provided for @messageAgentSecureBootstrap.
+  ///
+  /// In zh, this message translates to:
+  /// **'安全 bootstrap'**
+  String get messageAgentSecureBootstrap;
+
+  /// No description provided for @messageAgentPublicKeyReported.
+  ///
+  /// In zh, this message translates to:
+  /// **'已上报公钥'**
+  String get messageAgentPublicKeyReported;
+
+  /// No description provided for @messageAgentWaitingStatusRefresh.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待刷新状态'**
+  String get messageAgentWaitingStatusRefresh;
+
+  /// No description provided for @messageAgentEnable.
+  ///
+  /// In zh, this message translates to:
+  /// **'启用消息处理 Agent'**
+  String get messageAgentEnable;
+
+  /// No description provided for @messageAgentEnabling.
+  ///
+  /// In zh, this message translates to:
+  /// **'启用中'**
+  String get messageAgentEnabling;
+
+  /// No description provided for @messageAgentPause.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂停处理消息'**
+  String get messageAgentPause;
+
+  /// No description provided for @messageAgentDelete.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除消息处理 Agent'**
+  String get messageAgentDelete;
+
+  /// No description provided for @messageAgentRevokeAuthorization.
+  ///
+  /// In zh, this message translates to:
+  /// **'撤销 Daemon 消息授权'**
+  String get messageAgentRevokeAuthorization;
+
+  /// No description provided for @messageAgentPermissionSummaryEnabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'权限摘要：读取普通消息，分析、总结、生成草稿，并向 App 请求需要确认的 action。'**
+  String get messageAgentPermissionSummaryEnabled;
+
+  /// No description provided for @messageAgentPermissionSummaryDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'启用 AWIKI_AGENT_IM_ENABLED 后可配置消息处理 Agent。'**
+  String get messageAgentPermissionSummaryDisabled;
+
+  /// No description provided for @messageAgentPauseTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂停处理消息'**
+  String get messageAgentPauseTitle;
+
+  /// No description provided for @messageAgentPauseMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂停后，消息处理 Agent 不再读取和处理新消息；runtime 和授权仍会保留，可以重新启用。'**
+  String get messageAgentPauseMessage;
+
+  /// No description provided for @messageAgentDeleteTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除消息处理 Agent'**
+  String get messageAgentDeleteTitle;
+
+  /// No description provided for @messageAgentDeleteMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除前会先暂停消息处理，然后归档对应 runtime。Daemon 和授权不会被删除。'**
+  String get messageAgentDeleteMessage;
+
+  /// No description provided for @messageAgentRevokeTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'撤销 Daemon 消息授权'**
+  String get messageAgentRevokeTitle;
+
+  /// No description provided for @messageAgentRevokeMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'撤销需要先通过签名 DID Document 更新移除 daemon-key-1。未完成更新时会失败，不会把暂停误认为撤销成功。'**
+  String get messageAgentRevokeMessage;
+
+  /// No description provided for @agentInboxTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'Agent 收件箱'**
+  String get agentInboxTitle;
+
+  /// No description provided for @agentInboxThreadTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'收件箱线程'**
+  String get agentInboxThreadTitle;
+
+  /// No description provided for @agentInboxBackToInbox.
+  ///
+  /// In zh, this message translates to:
+  /// **'返回收件箱'**
+  String get agentInboxBackToInbox;
+
+  /// No description provided for @agentInboxBackToConversation.
+  ///
+  /// In zh, this message translates to:
+  /// **'返回会话'**
+  String get agentInboxBackToConversation;
+
+  /// No description provided for @agentInboxClose.
+  ///
+  /// In zh, this message translates to:
+  /// **'关闭 Agent 收件箱'**
+  String get agentInboxClose;
+
+  /// No description provided for @agentInboxNotRuntimeConversation.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前会话不是 Runtime Agent 会话'**
+  String get agentInboxNotRuntimeConversation;
+
+  /// No description provided for @agentInboxDaemonMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个 Runtime Agent 暂时没有绑定 Daemon'**
+  String get agentInboxDaemonMissing;
+
+  /// No description provided for @agentInboxRefresh.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新 Agent 收件箱'**
+  String get agentInboxRefresh;
+
+  /// No description provided for @agentInboxEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个 Agent 暂时没有收件箱消息'**
+  String get agentInboxEmpty;
+
+  /// No description provided for @agentInboxLoadMoreThreads.
+  ///
+  /// In zh, this message translates to:
+  /// **'加载更多会话'**
+  String get agentInboxLoadMoreThreads;
+
+  /// No description provided for @agentInboxScopeAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'全部'**
+  String get agentInboxScopeAll;
+
+  /// No description provided for @agentInboxScopeDirect.
+  ///
+  /// In zh, this message translates to:
+  /// **'私聊'**
+  String get agentInboxScopeDirect;
+
+  /// No description provided for @agentInboxScopeGroup.
+  ///
+  /// In zh, this message translates to:
+  /// **'群聊'**
+  String get agentInboxScopeGroup;
+
+  /// No description provided for @agentInboxLatestAttachment.
+  ///
+  /// In zh, this message translates to:
+  /// **'最新：附件'**
+  String get agentInboxLatestAttachment;
+
+  /// No description provided for @agentInboxLatestNoPreview.
+  ///
+  /// In zh, this message translates to:
+  /// **'最新：无预览'**
+  String get agentInboxLatestNoPreview;
+
+  /// No description provided for @agentInboxLatestPreview.
+  ///
+  /// In zh, this message translates to:
+  /// **'最新：{preview}'**
+  String agentInboxLatestPreview(Object preview);
+
+  /// No description provided for @agentInboxReadOnly.
+  ///
+  /// In zh, this message translates to:
+  /// **'只读收件箱'**
+  String get agentInboxReadOnly;
+
+  /// No description provided for @agentInboxRefreshThread.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新收件箱线程'**
+  String get agentInboxRefreshThread;
+
+  /// No description provided for @agentInboxThreadEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个线程暂时没有消息'**
+  String get agentInboxThreadEmpty;
+
+  /// No description provided for @agentInboxLoadEarlier.
+  ///
+  /// In zh, this message translates to:
+  /// **'加载更早消息'**
+  String get agentInboxLoadEarlier;
+
+  /// No description provided for @agentInboxContentTruncated.
+  ///
+  /// In zh, this message translates to:
+  /// **'内容较长，已截断'**
+  String get agentInboxContentTruncated;
+
+  /// No description provided for @agentInboxDaemonNoResponse.
+  ///
+  /// In zh, this message translates to:
+  /// **'Daemon 暂时没有返回，请稍后重试'**
+  String get agentInboxDaemonNoResponse;
+
+  /// No description provided for @agentInboxQueryFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'收件箱查询失败'**
+  String get agentInboxQueryFailed;
+
+  /// No description provided for @agentInboxThreadQueryFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'线程查询失败'**
+  String get agentInboxThreadQueryFailed;
+
   /// No description provided for @relationshipNone.
   ///
   /// In zh, this message translates to:
-  /// **'none'**
+  /// **'未关注'**
   String get relationshipNone;
 
   /// No description provided for @relationshipFollowing.
@@ -1315,6 +3853,36 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'文件选择失败，请稍后重试。'**
   String get documentPickerFailed;
+
+  /// No description provided for @documentSaveFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'文件保存失败，请稍后重试。'**
+  String get documentSaveFailed;
+
+  /// No description provided for @attachmentDownloadEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'附件下载结果为空。'**
+  String get attachmentDownloadEmpty;
+
+  /// No description provided for @conversationRemovedFromRecents.
+  ///
+  /// In zh, this message translates to:
+  /// **'已从最近会话移除'**
+  String get conversationRemovedFromRecents;
+
+  /// No description provided for @attachmentUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'附件文件已过期或本机缓存不存在，请让对方重新发送。'**
+  String get attachmentUnavailable;
+
+  /// No description provided for @attachmentOpenFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'附件无法打开，请稍后重试或保存后再打开。'**
+  String get attachmentOpenFailed;
 
   /// No description provided for @linkOpenFailed.
   ///

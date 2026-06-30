@@ -9,6 +9,7 @@ import '../app_shell/providers/selected_conversation_provider.dart';
 import '../chat/chat_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/copyable_did_line.dart';
+import '../shared/formatters/localized_ui_formatters.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';

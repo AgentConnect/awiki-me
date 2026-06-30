@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 
+import '../../l10n/l10n.dart';
 import 'awiki_me_design.dart';
 import 'responsive_layout.dart';
 import 'widgets/app_widgets.dart';
@@ -98,7 +99,7 @@ class AppDialogHeader extends StatelessWidget {
     this.subtitle,
     this.leading,
     this.onClose,
-    this.closeLabel = '关闭',
+    this.closeLabel,
     this.isCloseEnabled = true,
   });
 
@@ -106,13 +107,14 @@ class AppDialogHeader extends StatelessWidget {
   final String? subtitle;
   final Widget? leading;
   final VoidCallback? onClose;
-  final String closeLabel;
+  final String? closeLabel;
   final bool isCloseEnabled;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
+    final effectiveCloseLabel = closeLabel ?? context.l10n.commonClose;
     final subtitleText = subtitle?.trim();
     return Row(
       crossAxisAlignment: subtitleText == null || subtitleText.isEmpty
@@ -156,8 +158,8 @@ class AppDialogHeader extends StatelessWidget {
         SizedBox(width: responsive.spacing(10)),
         AppIconButton(
           onPressed: isCloseEnabled ? onClose : null,
-          semanticLabel: closeLabel,
-          tooltip: closeLabel,
+          semanticLabel: effectiveCloseLabel,
+          tooltip: effectiveCloseLabel,
           size: responsive.displayScaled(32),
           backgroundColor: const Color(0xFFF5F7FB),
           borderColor: const Color(0xFFE4E9F2),

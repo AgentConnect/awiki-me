@@ -188,7 +188,7 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
       'controller_did': controllerDid,
       'controller_handle': normalizedControllerHandle,
       'metadata': <String, Object?>{
-        'default_display_name': '代理 1',
+        'default_display_name': 'Daemon 1',
         'client': 'awiki-me',
         'client_platform': clientPlatform,
         'base_url': _environment.baseUrl,
@@ -205,6 +205,7 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
     required String runtime,
     required String handle,
     required String displayName,
+    required String preferredLanguage,
     String? driverId,
     String? workspaceMode,
     String? defaultSandbox,
@@ -221,6 +222,7 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
         if (driverId != null) 'driver_id': driverId,
         'daemon_agent_did': daemonAgentDid,
         'default_display_name': displayName,
+        'preferred_language': _normalizePreferredLanguage(preferredLanguage),
         if (workspaceMode != null) 'workspace_mode': workspaceMode,
         if (defaultSandbox != null) 'default_sandbox': defaultSandbox,
         if (defaultModel != null) 'default_model': defaultModel,
@@ -302,6 +304,21 @@ bool _looksSensitiveMetadataKey(String key) {
       normalized.contains('jwt') ||
       normalized.contains('oauth') ||
       normalized.contains('password');
+}
+
+String _normalizePreferredLanguage(String value) {
+  switch (value.trim().toLowerCase()) {
+    case 'en':
+    case 'en-us':
+    case 'en-gb':
+      return 'en';
+    case 'zh':
+    case 'zh-cn':
+    case 'zh-hans':
+    case 'zh_hans':
+    default:
+      return 'zh-Hans';
+  }
 }
 
 String awikiClientPlatform() {

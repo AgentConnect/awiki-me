@@ -40,6 +40,6 @@ class MethodChannelDocumentPickerService implements DocumentPickerService {
     if (message != null && message.isNotEmpty) {
       return message;
     }
-    return '文件选择失败，请稍后重试。';
+    return 'document_picker_failed';
   }
 }

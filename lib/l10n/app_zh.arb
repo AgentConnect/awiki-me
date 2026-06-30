@@ -11,9 +11,25 @@
   "commonPrevious": "上一步",
   "commonSave": "保存",
   "commonGotIt": "知道了",
+  "commonDelete": "删除",
+  "commonRetry": "重试",
+  "commonClose": "关闭",
+  "commonDetails": "详情",
+  "commonMoreActions": "更多操作",
+  "commonSearch": "搜索",
+  "commonCopy": "复制",
+  "commonCopied": "已复制",
+  "commonCopyDetails": "复制详情",
+  "commonReject": "拒绝",
+  "commonRemove": "移除",
+  "commonPause": "暂停",
+  "commonRevoke": "撤销授权",
+  "commonUnknown": "未知",
+  "commonLoadMore": "加载更多",
   "commonPleaseWait": "请稍候...",
   "commonLoading": "加载中...",
   "commonError": "错误",
+  "commonErrorDetails": "错误详情",
   "realtimeStatusConnecting": "正在连接消息服务...",
   "realtimeStatusReconnecting": "消息连接中断，正在重连...",
   "realtimeStatusDisconnected": "消息服务已断开，正在尝试恢复",
@@ -65,15 +81,108 @@
   "onboardingInvalidHandleContent": "仅支持小写字母、数字、中划线，长度 2-32。",
   "onboardingMissingNicknameTitle": "缺少昵称",
   "onboardingMissingNicknameContent": "请输入昵称。",
+  "onboardingMacHeroPrefix": "连接你的 ",
+  "onboardingMacHeroHighlight": "Agent",
+  "onboardingMacHeroSuffix": " 世界",
+  "onboardingMacSubtitle": "安全连接人、Agent 与组织，协作更智能，决策更高效。",
+  "onboardingMacFeatureSecureTitle": "安全可靠",
+  "onboardingMacFeatureSecureSubtitle": "企业级安全防护体系",
+  "onboardingMacFeatureCollaborateTitle": "高效协作",
+  "onboardingMacFeatureCollaborateSubtitle": "人机协同，信息无缝流转",
+  "onboardingMacFeatureControlTitle": "权限可控",
+  "onboardingMacFeatureControlSubtitle": "精细化权限，数据更安心",
+  "onboardingMacChipFundingAgent": "融资 Agent",
+  "onboardingMacChipLegalAgent": "法务 Agent",
+  "onboardingMacChipInvestor": "投资机构",
+  "onboardingMacVerified": "已认证",
+  "onboardingMacOnline": "在线",
+  "onboardingCredentialsField": "身份凭证",
+  "onboardingNoLocalCredentialSaved": "本机暂无已保存身份凭证",
   "secureMessagingClient": "Secure messaging client",
   "shellNavMessages": "消息",
+  "shellNavAgents": "Agents",
   "shellNavFriends": "朋友",
+  "shellNavContacts": "联系人",
+  "shellNavTasks": "任务",
+  "shellNavWorkspace": "工作台",
+  "shellNavSettings": "设置",
   "shellNavMe": "我",
-  "conversationsTitle": "信息",
+  "shellTasksPlaceholderTitle": "任务",
+  "shellTasksPlaceholderSubtitle": "任务视图即将接入。当前任务状态会在会话与身份卡中展示。",
+  "shellWorkspacePlaceholderTitle": "工作台",
+  "shellWorkspacePlaceholderSubtitle": "工作台模块即将接入。",
+  "conversationsTitle": "消息",
   "conversationsNoMessagePreview": "暂无消息",
   "conversationsEmptyTitle": "还没有消息",
   "conversationsEmptySubtitle": "去关注联系人，或者先加入一个群聊吧。",
+  "conversationsRecentTitle": "最近会话",
+  "conversationsSearchPlaceholder": "搜索会话",
+  "conversationsNoResultsTitle": "没有找到相关会话",
+  "conversationsNoResultsSubtitle": "换个关键词试试",
+  "conversationsDeleteTitle": "删除会话",
+  "conversationsDeleteContent": "会话将从最近列表移除，历史消息仍会保留。重新打开或收到新消息后，会话会再次出现在列表中。",
+  "conversationsUnreadTag": "未读 {count}",
+  "@conversationsUnreadTag": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "conversationsMentionMeTag": "@我",
+  "conversationsDraftTag": "草稿",
+  "conversationsAttachmentPreview": "附件：{name}",
+  "@conversationsAttachmentPreview": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "conversationsDeletedAgentBadge": "智能体已删除",
+  "conversationsNewMessages": "有新消息",
+  "conversationPeerBadgeGroup": "群",
+  "conversationPeerBadgeAi": "AI",
+  "conversationPeerChatBadgeMyAgent": "我的智能体",
+  "conversationPeerChatBadgeAgent": "智能体",
+  "conversationPeerTypeGroup": "群聊",
+  "conversationPeerTypeAgent": "智能体",
+  "conversationPeerTypeUser": "用户",
+  "conversationPeerOwnerGroup": "AWiki 群组",
+  "conversationPeerOwnerMyRuntimeAgent": "本机 Runtime Agent",
+  "conversationPeerOwnerAgent": "AWiki 智能体",
+  "conversationPeerOwnerUser": "AWiki 用户",
+  "conversationInfoTitle": "会话信息",
+  "conversationIdentityStatus": "身份状态:",
+  "conversationIdentityVerified": "已验证",
+  "conversationOwnerLabel": "所属:",
+  "conversationTypeLabel": "类型:",
+  "conversationCapabilitiesTitle": "会话能力",
+  "conversationCapabilitySendMessage": "发送消息",
+  "conversationCapabilityViewProfile": "查看资料",
+  "conversationCapabilitySecureConnection": "安全连接",
+  "conversationCapabilityHistory": "会话记录",
+  "conversationStatusTitle": "会话状态",
+  "conversationUnreadMessagesLabel": "未读消息:",
+  "conversationUnreadMessagesValue": "{count} 条",
+  "@conversationUnreadMessagesValue": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "conversationLatestPreviewLabel": "最近预览:",
+  "conversationConnectionStatusLabel": "连接状态:",
+  "conversationConnectionEstablished": "已建立",
+  "conversationBackToChat": "返回会话",
   "friendsTitle": "朋友",
+  "friendsGroups": "群组",
+  "friendsFollowing": "我关注的",
+  "friendsFollowers": "关注我的",
+  "friendsViewAll": "查看全部",
+  "friendsFollow": "关注",
+  "friendsUnfollow": "取消关注",
+  "friendsFollowingEmpty": "还没有关注任何人。",
+  "friendsFollowersEmpty": "还没有新的关注者。",
+  "friendsUnfollowTitle": "取消关注",
+  "friendsUnfollowMessage": "取消关注后，对方会从“我关注的”列表中移除。",
   "profileMeTitle": "我",
   "profileFollowers": "粉丝",
   "profileFollowing": "关注",
@@ -82,6 +191,7 @@
   "profileEditTitle": "编辑个人资料",
   "profileBioPlaceholder": "个人简介",
   "profileTagsPlaceholder": "标签，使用英文逗号分隔",
+  "profileOpenHomepage": "打开主页",
   "settingsTitle": "设置",
   "settingsLanguage": "语言",
   "settingsLanguageSystem": "跟随系统",
@@ -175,6 +285,27 @@
   "identityFollowContactSubtitle": "输入 handle 或 DID，确认身份后关注该身份。",
   "identityFollowContactAction": "关注",
   "identityFollowContactNotice": "确认身份后会关注该联系人或 Agent。",
+  "identityInputSemantics": "输入 handle 或 DID",
+  "identityInputPlaceholder": "输入 @handle / DID / Agent 地址",
+  "identitySearchLabel": "匹配身份",
+  "identityResolving": "匹配中...",
+  "identitySubmitting": "处理中...",
+  "identityQueryRequired": "请输入 handle 或 DID。",
+  "identityResolveFailed": "未找到该身份，请检查 handle / DID 是否正确。",
+  "identityInvalidContact": "联系人身份无效，无法打开会话。",
+  "identityMissingDid": "身份解析结果缺少 DID。",
+  "identityVerified": "已验证",
+  "identityTypeLabel": "类型",
+  "identityRelationshipLabel": "关系",
+  "identityBioLabel": "简介",
+  "identityTypeAgent": "智能体",
+  "identityTypeUser": "用户",
+  "identityAddGroupMemberTitle": "添加群成员",
+  "identityAddGroupMemberSubtitle": "输入普通用户或 Agent 的 handle / DID，确认身份后加入群聊。",
+  "identityAddGroupMemberAction": "确认添加",
+  "identityAddGroupMemberNotice": "请确认这是要加入群聊的身份。",
+  "identityClearInput": "清空输入",
+  "identitySearchNameHandleDid": "搜索名称、handle、DID",
   "groupListTitle": "群聊列表",
   "groupListEmpty": "还没有群组。先创建一个群，或使用 Group DID 加入。",
   "groupListLoading": "正在加载群数据...",
@@ -212,11 +343,126 @@
   "groupFieldName": "名称",
   "groupFieldNamePlaceholder": "输入群聊名称",
   "groupCreating": "正在创建群组...",
+  "groupAddMembers": "添加成员",
+  "groupRefreshMembers": "刷新成员",
+  "groupDetails": "查看群详情",
+  "groupRemoveMember": "移除成员",
+  "groupInviteDialogSubtitle": "搜索本地身份，或输入 handle / DID 匹配新身份。",
+  "groupInviteShowMore": "查看更多",
+  "groupInviteAdding": "添加中...",
+  "groupInviteConfirmCount": "确认添加 ({count})",
+  "@groupInviteConfirmCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupInviteCandidates": "可邀请的身份",
+  "groupInviteSearchResults": "搜索结果",
+  "groupInviteSelectHint": "选择一个或多个身份后，统一确认添加。",
+  "groupInviteNoLocalCandidates": "暂无可邀请的本地身份。",
+  "groupInviteNoMatches": "没有匹配的本地身份，可以尝试匹配 handle / DID。",
+  "groupInviteAlreadyInGroup": "已在群中",
+  "groupInviteUnnamedAgent": "未命名智能体",
+  "groupInviteSourceMyAgents": "我的智能体",
+  "groupInviteSourceFollowing": "我关注的",
+  "groupInviteSourceFollowers": "关注我的",
+  "groupInviteSourceRecent": "最近会话",
+  "groupInviteSourceResolved": "匹配结果",
+  "groupRemoveMemberContent": "移除 {memberTitle} 后，对方将不能继续在这个群里发送消息。",
+  "@groupRemoveMemberContent": {
+    "placeholders": {
+      "memberTitle": {}
+    }
+  },
   "chatUnknownUser": "Unknown",
   "chatConversationUntitled": "未命名会话",
   "chatHeaderGroup": "GROUP",
   "chatHeaderOnline": "ONLINE",
-  "chatInputPlaceholder": "Type a message...",
+  "chatInputPlaceholder": "输入消息...",
+  "chatDeletedAgentDisabled": "智能体已删除，无法继续发送消息",
+  "chatGroupLeftDisabled": "你已不在这个群聊中，不能继续发送消息",
+  "chatGroupSendDisabled": "当前群聊暂时不能发送消息",
+  "chatAgentProcessing": "智能体正在处理...",
+  "chatAgentStillProcessing": "智能体仍在处理，稍后可刷新查看",
+  "chatSubjectProcessing": "{subject} 正在处理...",
+  "@chatSubjectProcessing": {
+    "placeholders": {
+      "subject": {}
+    }
+  },
+  "chatSubjectStillProcessing": "{subject} 仍在处理，稍后可刷新查看",
+  "@chatSubjectStillProcessing": {
+    "placeholders": {
+      "subject": {}
+    }
+  },
+  "chatAgentSubject": "智能体",
+  "chatAgentCountSubject": "{count} 个智能体",
+  "@chatAgentCountSubject": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chatSafeCollaboration": "安全协作中",
+  "chatAddAttachment": "添加附件",
+  "chatRemoveAttachment": "移除附件",
+  "chatViewAttachment": "查看附件",
+  "chatAttachmentFileFallback": "文件",
+  "chatLoadingMentionCandidates": "正在加载 mention 候选…",
+  "mentionCandidateBadgeUser": "用户",
+  "mentionCandidateBadgeAgent": "智能体",
+  "mentionCandidateBadgeUnknown": "类型未知",
+  "mentionSelectorAllSurface": "@所有人",
+  "mentionSelectorHumansSurface": "@所有用户",
+  "mentionSelectorAgentsSurface": "@所有智能体",
+  "mentionSelectorAllSubtitle": "提醒群内所有成员",
+  "mentionSelectorHumansSubtitle": "只提醒群内用户",
+  "mentionSelectorAgentsSubtitle": "提醒群内智能体",
+  "mentionSelectorAllBadge": "用户 + 智能体",
+  "mentionDisabledUnknownMemberType": "成员类型未知，暂不能作为单人 mention 目标",
+  "mentionDisabledInactiveMember": "成员状态不是 active，暂不能 mention",
+  "chatSendFailed": "发送失败",
+  "chatRetrySend": "重试发送",
+  "chatSending": "发送中",
+  "chatViewPeerInfo": "查看用户或智能体信息",
+  "chatOpenPeerInfo": "打开{type}信息",
+  "@chatOpenPeerInfo": {
+    "placeholders": {
+      "type": {}
+    }
+  },
+  "chatCurrentConversationCannotSend": "当前会话无法继续发送消息",
+  "chatAgentDeletedBadge": "智能体已删除",
+  "chatPeerInfoUserTitle": "用户信息",
+  "chatPeerInfoAgentTitle": "智能体信息",
+  "chatPeerInfoGroupTitle": "群聊信息",
+  "chatPeerInfoGroupSection": "群聊",
+  "chatPeerInfoIdentityCard": "身份卡",
+  "chatPeerInfoClose": "关闭信息弹窗",
+  "chatPeerInfoCopyDid": "复制 DID",
+  "chatPeerInfoDidCopied": "DID 已复制",
+  "chatPeerInfoProfileLoading": "资料加载中",
+  "chatPeerInfoProfileUnavailable": "资料暂不可用",
+  "chatPeerInfoAwikiUser": "AWiki 用户",
+  "chatPeerInfoCollapseAgentInbox": "收起 Agent 收件箱",
+  "chatPeerInfoAgentInbox": "Agent 收件箱",
+  "chatPeerInfoUnknownContact": "未知联系人",
+  "chatPeerInfoLoadingProfile": "正在加载资料…",
+  "chatPeerInfoNoProfile": "暂未填写资料",
+  "chatPeerInfoRenameAgent": "修改智能体名称",
+  "chatPeerInfoRenameAgentTooltip": "修改名称",
+  "chatPeerInfoMemberCount": "共 {count} 位成员",
+  "@chatPeerInfoMemberCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "peerProfileLoadFailed": "无法加载该用户的信息",
   "peerProfileTitle": "个人资料",
   "peerProfileSendMessage": "发消息",
@@ -224,7 +470,365 @@
   "peerProfileDeleteThread": "删除本地聊天记录",
   "peerProfileUnfollowed": "已取消关注",
   "peerProfileThreadDeleted": "本地聊天记录已删除",
-  "relationshipNone": "none",
+  "agentPageTitle": "智能体",
+  "agentCreateDaemon": "创建 Daemon",
+  "agentEmpty": "暂无代理",
+  "agentSelectOne": "选择一个代理",
+  "agentCreateRuntime": "创建 Agent",
+  "agentOpenChat": "打开聊天",
+  "agentRename": "改名",
+  "agentUpgrade": "升级",
+  "agentUpgrading": "升级中",
+  "agentCancelUpgrade": "取消升级",
+  "agentCancelling": "取消中",
+  "agentDeleteDaemon": "删除代理",
+  "agentDeleteRuntime": "删除智能体",
+  "agentDeleting": "删除中",
+  "agentRecentRuns": "最近 Run",
+  "agentRefreshStatus": "刷新状态",
+  "agentDeletingNotice": "删除请求已发送，正在等待代理同步。",
+  "agentDaemonSubtitle": "Daemon · {count} 个 Agent · {status}",
+  "@agentDaemonSubtitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "status": {}
+    }
+  },
+  "agentRuntimeSubtitle": "{runtime} · {status}",
+  "@agentRuntimeSubtitle": {
+    "placeholders": {
+      "runtime": {},
+      "status": {}
+    }
+  },
+  "agentUnnamedDaemon": "未命名 Daemon",
+  "agentUnnamedRuntime": "未命名智能体",
+  "agentListDeletingSync": "删除中 · 等待同步",
+  "agentListUpgradeFailed": "升级失败",
+  "agentListCancellingUpgrade": "正在取消升级",
+  "agentListOrphanGroup": "未关联 Daemon",
+  "agentListNoRuntime": "尚未创建 Runtime Agent",
+  "agentListRuntimeCreating": "{runtime} · 创建中",
+  "@agentListRuntimeCreating": {
+    "placeholders": {
+      "runtime": {}
+    }
+  },
+  "agentListRuntimeWaitingStatus": "{runtime} · 创建状态暂未返回，可刷新查看",
+  "@agentListRuntimeWaitingStatus": {
+    "placeholders": {
+      "runtime": {}
+    }
+  },
+  "daemonUpgradePreparingDownload": "正在准备下载",
+  "daemonUpgradeRouteDirect": "直连",
+  "daemonUpgradeRouteEnvironmentProxy": "代理",
+  "daemonUpgradeRouteLocalProxy": "本机代理 {route}",
+  "@daemonUpgradeRouteLocalProxy": {
+    "placeholders": {
+      "route": {}
+    }
+  },
+  "daemonUpgradeDownloaded": "已下载 {size}",
+  "@daemonUpgradeDownloaded": {
+    "placeholders": {
+      "size": {}
+    }
+  },
+  "daemonUpgradeRouteIndex": "线路 {index}/{count}",
+  "@daemonUpgradeRouteIndex": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "agentUpgradeTitle": "升级代理",
+  "agentUpgradeMessage": "代理会下载 latest 版本并重启服务。",
+  "daemonUpgradeRequesting": "正在发送升级请求",
+  "daemonUpgradeWaitingForDaemon": "升级请求已发送，正在等待 Daemon 确认",
+  "daemonUpgradeFetchingManifest": "正在获取版本信息",
+  "daemonUpgradeSelectingSource": "正在选择下载线路",
+  "daemonUpgradeDownloading": "正在下载安装包",
+  "daemonUpgradeRetryingSource": "下载中断，正在重试",
+  "daemonUpgradeVerifying": "正在校验安装包",
+  "daemonUpgradeExtracting": "正在解压安装包",
+  "daemonUpgradeInstalling": "正在安装新版本",
+  "daemonUpgradeRestarting": "正在重启 Daemon",
+  "daemonUpgradeInProgress": "正在升级",
+  "agentUpgradeIncomplete": "升级没有完成，请检查网络后重试。",
+  "agentUpgradeDownloadFailed": "安装包下载失败，请检查网络后重试。{summary}",
+  "@agentUpgradeDownloadFailed": {
+    "placeholders": {
+      "summary": {}
+    }
+  },
+  "agentUpgradeNotCancellable": "当前升级已经进入重启阶段，无法取消。请稍后刷新状态确认结果。",
+  "agentUpgradeCancelFailed": "取消升级失败，请刷新状态后重试。",
+  "agentUpgradeCancelNoResponse": "取消请求已发送，但 Daemon 暂未响应。请刷新状态确认升级结果。",
+  "agentDeleteDaemonMessage": "删除后会停止宿主机上的代理服务，并移除它创建的智能体。本地数据会归档保留，不会继续使用。",
+  "agentDeleteRuntimeMessage": "删除后该智能体会从列表中移除。本地数据会归档保留，不会继续使用。",
+  "agentInstallTitle": "到宿主机安装代理",
+  "agentInstallSupportedTypes": "支持的 Agent 类型：Hermes、Codex、Claude Code。安装宿主代理后，可在 Daemon 下创建 Runtime Agent。",
+  "agentInstallTokenExpiresAt": "有效期至: {expiresAt}",
+  "@agentInstallTokenExpiresAt": {
+    "placeholders": {
+      "expiresAt": {}
+    }
+  },
+  "agentCopyInstallCommand": "复制安装命令",
+  "agentCreateTitle": "创建 Agent",
+  "agentCreateType": "Agent 类型",
+  "agentCreateWorkspacePolicy": "工作目录策略",
+  "agentCreateWorkspaceRouteRoot": "按会话目录",
+  "agentCreateWorkspaceRouteRootDescription": "每个联系人、群组或线程使用独立上下文目录。",
+  "agentCreateWorkspaceSharedRoot": "共享目录",
+  "agentCreateWorkspaceSharedRootDescription": "该身份共用一个目录，适合手工任务。",
+  "agentCreateWorkspaceWorktreePerTask": "每次任务 worktree",
+  "agentCreateWorkspaceWorktreePerTaskDescription": "每次运行使用独立工作树。",
+  "agentCreateHandlePreview": "最终 Handle：{handle}",
+  "@agentCreateHandlePreview": {
+    "placeholders": {
+      "handle": {}
+    }
+  },
+  "agentCreateHandleAvailabilityChecking": "正在校验可用性...",
+  "agentCreateHandleAvailabilityPending": "暂时无法校验可用性，创建时会再次确认",
+  "agentCreateHandleChecking": "正在校验 Handle 可用性",
+  "agentCreateHandleAvailable": "这个 Handle 可以使用",
+  "agentCreateHandleUnavailableUsed": "这个 Handle 已被使用",
+  "agentCreateHandleUnavailable": "这个 Handle 不可使用",
+  "agentCreateHandleRequired": "请输入 Handle",
+  "agentCreateHandleTooLong": "Handle 最多 {maxLength} 个字符",
+  "@agentCreateHandleTooLong": {
+    "placeholders": {
+      "maxLength": {}
+    }
+  },
+  "agentCreateHandleInvalidPattern": "仅支持小写字母、数字和连字符，且首尾必须是字母或数字",
+  "agentCreateHandleNoDoubleHyphen": "Handle 不能包含连续连字符",
+  "agentCreateNeedsRouteWorkspace": "{agentType} 需要按会话目录工作模式。",
+  "@agentCreateNeedsRouteWorkspace": {
+    "placeholders": {
+      "agentType": {}
+    }
+  },
+  "agentCreateHermesDescription": "内置 Hermes Runtime Agent。",
+  "agentCreateNeedsGenericCliCapability": "{agentType} 需要 Daemon 提供 generic-cli capability。",
+  "@agentCreateNeedsGenericCliCapability": {
+    "placeholders": {
+      "agentType": {}
+    }
+  },
+  "agentCreateUnsupportedDriver": "当前 Daemon 不支持 {agentType} driver。",
+  "@agentCreateUnsupportedDriver": {
+    "placeholders": {
+      "agentType": {}
+    }
+  },
+  "agentCreateNeedsRouteSession": "{agentType} 需要 route session 和 native resume 支持。",
+  "@agentCreateNeedsRouteSession": {
+    "placeholders": {
+      "agentType": {}
+    }
+  },
+  "agentCreateNeedsHostAccess": "{agentType} 需要 Daemon 支持宿主机全权限模式。",
+  "@agentCreateNeedsHostAccess": {
+    "placeholders": {
+      "agentType": {}
+    }
+  },
+  "agentCreateRequiresSignedInCli": "需要 Daemon 上已安装并登录的 {agentType} CLI。",
+  "@agentCreateRequiresSignedInCli": {
+    "placeholders": {
+      "agentType": {}
+    }
+  },
+  "agentCreateHostAccessTitle": "宿主机全权限",
+  "agentCreateHostAccessDescription": "可按用户指令使用本机文件、命令、工具和网络。",
+  "agentRenameTitle": "修改智能体名称",
+  "agentRenameSubtitle": "名称会显示在智能体列表、最近会话和对话窗口中。",
+  "agentNameField": "名称",
+  "agentNamePlaceholder": "显示名称",
+  "agentNameHelp": "最多 {maxLength} 个字符。",
+  "@agentNameHelp": {
+    "placeholders": {
+      "maxLength": {
+        "type": "int"
+      }
+    }
+  },
+  "agentNameRequired": "请输入智能体名称",
+  "agentNameTooLong": "名称最多 {maxLength} 个字符",
+  "@agentNameTooLong": {
+    "placeholders": {
+      "maxLength": {
+        "type": "int"
+      }
+    }
+  },
+  "agentStatusProcessing": "正在处理",
+  "agentStatusReady": "正常",
+  "agentStatusNeedsConfig": "需要配置",
+  "agentStatusNeedsUpgrade": "需要升级",
+  "agentStatusFailed": "异常",
+  "agentStatusOffline": "离线",
+  "agentStatusDisabled": "已停用",
+  "agentStatusUnknown": "未知",
+  "agentStatusRefreshNeeded": "需刷新",
+  "agentStatusUnsupported": "未支持",
+  "agentStatusSemantic": "智能体状态：{status}",
+  "@agentStatusSemantic": {
+    "placeholders": {
+      "status": {}
+    }
+  },
+  "agentErrorLoginRequired": "请先登录。",
+  "agentErrorHandleUnavailable": "当前账号没有可用 Handle，暂时不能生成 Daemon 安装命令。",
+  "agentErrorMessageAgentDisabled": "消息处理 Agent 功能未开启。",
+  "agentErrorSelectDaemon": "请选择运行 Daemon。",
+  "agentErrorDaemonBootstrapMissing": "运行 Daemon 尚未上报安全 bootstrap 公钥，请先刷新状态。",
+  "agentErrorDaemonUnreachableDelete": "Daemon 当前不可达，暂时不能删除。",
+  "agentErrorMessageAgentMissing": "当前 Daemon 尚未创建消息处理 Agent。",
+  "agentStatusSyncStillWaiting": "状态同步仍在等待，请稍后刷新查看。",
+  "agentErrorScopeMismatch": "这台电脑已经绑定到另一个 Handle 的 Daemon。请使用对应 Handle 管理，或先卸载本机 Daemon 后重新安装。",
+  "agentErrorControllerHandleMismatch": "当前客户端身份和登录 Handle 不一致，请切换到正确账号后重新复制安装命令。",
+  "agentErrorControllerScopeMissing": "安装命令缺少账号归属信息，请重新复制最新的 Daemon 安装命令。",
+  "agentErrorInstallCommandUsed": "这条安装命令已经使用过，请重新复制最新的 Daemon 安装命令。",
+  "agentErrorSessionExpired": "登录状态已失效，请重新登录后再查看智能体。",
+  "agentErrorRequestTimeout": "请求超时，请稍后重试。",
+  "agentErrorNetworkPreserved": "网络连接暂时不可用，已保留当前数据。",
+  "agentErrorLoadFailed": "智能体信息暂时无法加载，请稍后重试。",
+  "agentErrorStatusSessionExpired": "登录状态已失效，请重新登录后再刷新代理状态。",
+  "agentErrorStatusTimeout": "刷新状态超时，当前数据已保留。",
+  "agentErrorStatusNetworkPreserved": "网络连接暂时不可用，当前数据已保留。",
+  "agentErrorStatusRefreshFailed": "状态刷新请求发送失败，请稍后再试。",
+  "agentAccessTitle": "访问权限",
+  "agentAccessSubtitle": "配置 Handle 对智能体的控制权限",
+  "agentAccessWhitelist": "白名单",
+  "agentAccessBlacklist": "黑名单",
+  "agentAccessSwitchToWhitelist": "切换到白名单模式",
+  "agentAccessSwitchToBlacklist": "切换到黑名单模式",
+  "agentAccessCurrentWhitelist": "当前白名单模式",
+  "agentAccessCurrentBlacklist": "当前黑名单模式",
+  "agentAccessEnabled": "已启用",
+  "agentAccessDisabled": "已禁用",
+  "agentAccessHandlePlaceholder": "bob 或 bob.example.com",
+  "agentAccessAddHandle": "添加 Handle",
+  "agentAccessNoHandles": "暂无 Handle",
+  "agentAccessRemoveHandle": "删除 Handle",
+  "agentAccessDuplicateWhitelist": "这个 Handle 已在白名单中。",
+  "agentAccessDuplicateBlacklist": "这个 Handle 已在黑名单中。",
+  "agentAccessHandleRequired": "请输入 Handle。",
+  "agentAccessSingleHandleOnly": "每次只能添加一个 Handle。",
+  "agentAccessHandleInvalid": "请输入短 Handle 或完整 Handle。",
+  "agentDiagnosticsTitle": "诊断信息",
+  "agentDiagnosticsDaemonSubtitle": "Daemon 运行与身份信息",
+  "agentDiagnosticsAgentSubtitle": "智能体身份信息",
+  "agentDiagnosticsShowMore": "查看更多",
+  "agentDiagnosticsCollapse": "收起",
+  "agentDiagnosticsShowMoreDetails": "查看更多诊断",
+  "agentDiagnosticsCollapseDetails": "收起诊断详情",
+  "agentDiagnosticCurrentVersion": "当前版本",
+  "agentDiagnosticPlatform": "平台",
+  "agentDiagnosticLatestVersion": "最新版本",
+  "agentDiagnosticMinSupportedVersion": "最低可用版本",
+  "agentDiagnosticService": "服务",
+  "agentDiagnosticLastSeen": "最近上报",
+  "agentDiagnosticErrorCode": "错误代码",
+  "agentDiagnosticRunner": "运行器",
+  "agentDiagnosticProfileStatus": "配置状态",
+  "agentDiagnosticInstallationStatus": "安装状态",
+  "agentDiagnosticServiceInstalled": "服务安装",
+  "agentDiagnosticConfigSummary": "配置摘要",
+  "agentDiagnosticHermesProfile": "Hermes 配置",
+  "agentDiagnosticRunnerStatus": "运行状态",
+  "agentDiagnosticActiveSessionCount": "活跃会话",
+  "messageAgentSkipped": "消息 Agent 跳过此消息",
+  "messageAgentFailed": "消息 Agent 处理失败",
+  "messageAgentCompleted": "消息 Agent 已完成处理",
+  "messageAgentProcessing": "消息 Agent 正在处理",
+  "messageAgentReceived": "消息 Agent 已收到消息",
+  "messageAgentResultGenerated": "已生成处理结果",
+  "messageAgentDraftApplied": "草稿已放入输入框",
+  "messageAgentAppActionCompleted": "App action 已完成",
+  "messageAgentRequestRejected": "已拒绝消息 Agent 请求",
+  "messageAgentAppActionFailed": "App action 处理失败",
+  "messageAgentWaitingConfirmation": "等待确认",
+  "messageAgentUseDraft": "使用草稿",
+  "messageAgentActionCreateDraft": "消息 Agent 生成了草稿",
+  "messageAgentActionSummarize": "消息 Agent 生成了摘要",
+  "messageAgentActionReadContact": "消息 Agent 请求读取联系人",
+  "messageAgentActionUpdateDisplayName": "消息 Agent 请求修改联系人名称",
+  "messageAgentActionUpdateNote": "消息 Agent 请求修改联系人备注",
+  "messageAgentActionGeneric": "消息 Agent 请求 App action",
+  "messageAgentTitle": "消息处理 Agent",
+  "messageAgentRuntimeSubtitle": "运行 Daemon 内创建 {provider} runtime",
+  "@messageAgentRuntimeSubtitle": {
+    "placeholders": {
+      "provider": {}
+    }
+  },
+  "messageAgentExperimentDisabled": "实验功能关闭",
+  "messageAgentReadyToEnable": "可启用",
+  "messageAgentNotReady": "未就绪",
+  "messageAgentRunningDaemon": "运行 Daemon",
+  "messageAgentEngine": "引擎",
+  "messageAgentScope": "处理范围",
+  "messageAgentAllProcessableConversations": "所有可处理会话",
+  "messageAgentDaemonVersion": "Daemon 版本",
+  "messageAgentCapabilities": "可用能力",
+  "messageAgentSecureBootstrap": "安全 bootstrap",
+  "messageAgentPublicKeyReported": "已上报公钥",
+  "messageAgentWaitingStatusRefresh": "等待刷新状态",
+  "messageAgentEnable": "启用消息处理 Agent",
+  "messageAgentEnabling": "启用中",
+  "messageAgentPause": "暂停处理消息",
+  "messageAgentDelete": "删除消息处理 Agent",
+  "messageAgentRevokeAuthorization": "撤销 Daemon 消息授权",
+  "messageAgentPermissionSummaryEnabled": "权限摘要：读取普通消息，分析、总结、生成草稿，并向 App 请求需要确认的 action。",
+  "messageAgentPermissionSummaryDisabled": "启用 AWIKI_AGENT_IM_ENABLED 后可配置消息处理 Agent。",
+  "messageAgentPauseTitle": "暂停处理消息",
+  "messageAgentPauseMessage": "暂停后，消息处理 Agent 不再读取和处理新消息；runtime 和授权仍会保留，可以重新启用。",
+  "messageAgentDeleteTitle": "删除消息处理 Agent",
+  "messageAgentDeleteMessage": "删除前会先暂停消息处理，然后归档对应 runtime。Daemon 和授权不会被删除。",
+  "messageAgentRevokeTitle": "撤销 Daemon 消息授权",
+  "messageAgentRevokeMessage": "撤销需要先通过签名 DID Document 更新移除 daemon-key-1。未完成更新时会失败，不会把暂停误认为撤销成功。",
+  "agentInboxTitle": "Agent 收件箱",
+  "agentInboxThreadTitle": "收件箱线程",
+  "agentInboxBackToInbox": "返回收件箱",
+  "agentInboxBackToConversation": "返回会话",
+  "agentInboxClose": "关闭 Agent 收件箱",
+  "agentInboxNotRuntimeConversation": "当前会话不是 Runtime Agent 会话",
+  "agentInboxDaemonMissing": "这个 Runtime Agent 暂时没有绑定 Daemon",
+  "agentInboxRefresh": "刷新 Agent 收件箱",
+  "agentInboxEmpty": "这个 Agent 暂时没有收件箱消息",
+  "agentInboxLoadMoreThreads": "加载更多会话",
+  "agentInboxScopeAll": "全部",
+  "agentInboxScopeDirect": "私聊",
+  "agentInboxScopeGroup": "群聊",
+  "agentInboxLatestAttachment": "最新：附件",
+  "agentInboxLatestNoPreview": "最新：无预览",
+  "agentInboxLatestPreview": "最新：{preview}",
+  "@agentInboxLatestPreview": {
+    "placeholders": {
+      "preview": {}
+    }
+  },
+  "agentInboxReadOnly": "只读收件箱",
+  "agentInboxRefreshThread": "刷新收件箱线程",
+  "agentInboxThreadEmpty": "这个线程暂时没有消息",
+  "agentInboxLoadEarlier": "加载更早消息",
+  "agentInboxContentTruncated": "内容较长，已截断",
+  "agentInboxDaemonNoResponse": "Daemon 暂时没有返回，请稍后重试",
+  "agentInboxQueryFailed": "收件箱查询失败",
+  "agentInboxThreadQueryFailed": "线程查询失败",
+  "relationshipNone": "未关注",
   "relationshipFollowing": "following",
   "relationshipFollower": "follower",
   "relationshipFriend": "friend",
@@ -302,6 +906,11 @@
   "didRegistrationRefreshUnsupported": "AWiki Me 当前未接入 DID 注册插件，无法自动刷新 token。",
   "e2eePluginMissing": "AWiki Me 当前未启用 E2EE，请接入原生插件实现",
   "documentPickerFailed": "文件选择失败，请稍后重试。",
+  "documentSaveFailed": "文件保存失败，请稍后重试。",
+  "attachmentDownloadEmpty": "附件下载结果为空。",
+  "conversationRemovedFromRecents": "已从最近会话移除",
+  "attachmentUnavailable": "附件文件已过期或本机缓存不存在，请让对方重新发送。",
+  "attachmentOpenFailed": "附件无法打开，请稍后重试或保存后再打开。",
   "linkOpenFailed": "无法打开链接",
   "linkOpenFailedWithDetail": "无法打开链接: {detail}",
   "@linkOpenFailedWithDetail": {

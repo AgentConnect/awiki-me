@@ -235,11 +235,11 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       final support = ref.read(onboardingSupportServiceProvider);
       final status = await support.lookupHandleRegistration(handle: handle);
       if (status == HandleRegistrationStatus.registered) {
-        throw StateError('该 handle 已注册。邮箱当前仅支持新注册，请使用手机号验证码登录或导入身份凭证。');
+        throw StateError('email_login_unsupported_for_registered_handle');
       }
       final verified = await support.checkEmailVerified(email: email);
       if (!verified) {
-        throw StateError('邮箱尚未激活，请先点击邮件中的激活链接。');
+        throw StateError('email_not_activated');
       }
       final session = await ref
           .read(onboardingServiceProvider)

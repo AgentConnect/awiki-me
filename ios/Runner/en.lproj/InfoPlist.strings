@@ -1,0 +1,3 @@
+"CFBundleDisplayName" = "AWiki Me";
+"CFBundleName" = "AWiki Me";
+"NSLocalNetworkUsageDescription" = "Allow AWiki Me to discover the local Dart VM Service during debugging for hot reload and debug connections.";

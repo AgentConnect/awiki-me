@@ -21,7 +21,7 @@ class ChatAttachment {
 
   String get displayName {
     final value = filename.trim();
-    return value.isEmpty ? '附件' : value;
+    return value;
   }
 
   ChatAttachment copyWith({

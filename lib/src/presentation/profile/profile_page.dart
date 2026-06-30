@@ -415,8 +415,8 @@ class _ProfileHomepageLink extends StatelessWidget {
           SelectionContainer.disabled(
             child: AppIconButton(
               onPressed: onTap,
-              semanticLabel: '打开主页',
-              tooltip: '打开主页',
+              semanticLabel: context.l10n.profileOpenHomepage,
+              tooltip: context.l10n.profileOpenHomepage,
               size: responsive.compactControlHeight,
               backgroundColor: theme.surface.withValues(alpha: 0.72),
               borderColor: theme.border,

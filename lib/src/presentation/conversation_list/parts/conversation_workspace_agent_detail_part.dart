@@ -25,9 +25,9 @@ class _MacAgentDetailPanel extends ConsumerWidget {
         : conversation.groupId ?? conversation.threadId;
     final children = <Widget>[
       if (onBack == null) ...<Widget>[
-        const Text(
-          '会话信息',
-          style: TextStyle(
+        Text(
+          context.l10n.conversationInfoTitle,
+          style: const TextStyle(
             color: Color(0xFF101B32),
             fontSize: 16,
             fontWeight: FontWeight.w400,
@@ -35,19 +35,19 @@ class _MacAgentDetailPanel extends ConsumerWidget {
         ),
         const SizedBox(height: 22),
       ],
-      const _MacDetailRow(
-        label: '身份状态:',
+      _MacDetailRow(
+        label: context.l10n.conversationIdentityStatus,
         child: Row(
           children: <Widget>[
-            Icon(
+            const Icon(
               CupertinoIcons.checkmark_shield_fill,
               color: Color(0xFF17BF63),
               size: 16,
             ),
-            SizedBox(width: 6),
+            const SizedBox(width: 6),
             Text(
-              '已验证',
-              style: TextStyle(
+              context.l10n.conversationIdentityVerified,
+              style: const TextStyle(
                 color: Color(0xFF17BF63),
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -56,45 +56,59 @@ class _MacAgentDetailPanel extends ConsumerWidget {
           ],
         ),
       ),
-      _MacDetailRow(label: '所属:', text: classification.detailOwnerLabel),
+      _MacDetailRow(
+        label: context.l10n.conversationOwnerLabel,
+        text: localizeConversationPeerOwner(context.l10n, classification),
+      ),
       _MacDetailRow(
         label: 'DID:',
         child: CopyableDidLine(
           value: address,
-          copySemanticLabel: '复制 DID',
-          copiedMessage: 'DID 已复制',
+          copySemanticLabel: context.l10n.chatPeerInfoCopyDid,
+          copiedMessage: context.l10n.chatPeerInfoDidCopied,
           textKey: const Key('mac-conversation-did-value'),
           buttonKey: const Key('mac-conversation-copy-did-button'),
         ),
       ),
-      _MacDetailRow(label: '类型:', text: classification.detailTypeLabel),
+      _MacDetailRow(
+        label: context.l10n.conversationTypeLabel,
+        text: localizeConversationPeerType(context.l10n, classification),
+      ),
       const SizedBox(height: 16),
-      const _MacDetailCard(
-        title: '会话能力',
+      _MacDetailCard(
+        title: context.l10n.conversationCapabilitiesTitle,
         children: <Widget>[
           _MacAbilityGridItem(
             icon: CupertinoIcons.chat_bubble_text,
-            label: '发送消息',
+            label: context.l10n.conversationCapabilitySendMessage,
           ),
           _MacAbilityGridItem(
             icon: CupertinoIcons.person_crop_circle,
-            label: '查看资料',
+            label: context.l10n.conversationCapabilityViewProfile,
           ),
-          _MacAbilityGridItem(icon: CupertinoIcons.shield, label: '安全连接'),
-          _MacAbilityGridItem(icon: CupertinoIcons.doc_text, label: '会话记录'),
+          _MacAbilityGridItem(
+            icon: CupertinoIcons.shield,
+            label: context.l10n.conversationCapabilitySecureConnection,
+          ),
+          _MacAbilityGridItem(
+            icon: CupertinoIcons.doc_text,
+            label: context.l10n.conversationCapabilityHistory,
+          ),
         ],
       ),
       const SizedBox(height: 14),
       _MacDetailCard(
-        title: '会话状态',
+        title: context.l10n.conversationStatusTitle,
         children: <Widget>[
           _MacStatusLine(
-            label: '未读消息:',
-            value: '${conversation.unreadCount} 条',
+            label: context.l10n.conversationUnreadMessagesLabel,
+            value: context.l10n.conversationUnreadMessagesValue(
+              conversation.unreadCount,
+            ),
             color: const Color(0xFF0B65F8),
           ),
           _MacStatusLine(
-            label: '最近预览:',
+            label: context.l10n.conversationLatestPreviewLabel,
             value: conversation.lastMessagePreview.trim().isEmpty
                 ? context.l10n.conversationsNoMessagePreview
                 : conversation.lastMessagePreview.trim(),
@@ -102,21 +116,21 @@ class _MacAgentDetailPanel extends ConsumerWidget {
             indicatorKey: const Key('mac-conversation-preview-status-dot'),
             valueKey: const Key('mac-conversation-preview-status-value'),
           ),
-          const _MacStatusLine(
-            label: '连接状态:',
-            value: '已建立',
-            color: Color(0xFF17BF63),
+          _MacStatusLine(
+            label: context.l10n.conversationConnectionStatusLabel,
+            value: context.l10n.conversationConnectionEstablished,
+            color: const Color(0xFF17BF63),
           ),
         ],
       ),
     ];
     if (onBack != null) {
       return _MacPanelShell(
-        title: '会话信息',
+        title: context.l10n.conversationInfoTitle,
         onClose: onBack!,
         closeIcon: CupertinoIcons.chevron_left,
         closeButtonKey: const Key('mac-compact-panel-back-button'),
-        closeSemanticLabel: '返回会话',
+        closeSemanticLabel: context.l10n.conversationBackToChat,
         closeButtonLeading: true,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 22),

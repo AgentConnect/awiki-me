@@ -79,7 +79,7 @@ class ChatMessage {
       if (caption != null && caption.isNotEmpty) {
         return caption;
       }
-      return '[附件] ${currentAttachment.displayName}';
+      return currentAttachment.displayName;
     }
     return text;
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 
+import '../../l10n/l10n.dart';
 import 'awiki_me_design.dart';
 import 'responsive_layout.dart';
 import 'widgets/app_widgets.dart';
@@ -90,7 +91,7 @@ class AwikiMeShellTopBar extends StatelessWidget {
           : TopBarActionButton(
               onTap: onSettingsTap,
               semanticsIdentifier: 'e2e-settings-button',
-              semanticsLabel: '设置',
+              semanticsLabel: context.l10n.settingsTitle,
               child: AwikiAssetIcon(
                 assetName: 'assets/icons/icon_settings.svg',
                 size: responsive.iconLg,
@@ -102,7 +103,7 @@ class AwikiMeShellTopBar extends StatelessWidget {
           : TopBarActionButton(
               onTap: onQuickActionsTap,
               semanticsIdentifier: 'e2e-quick-actions-button',
-              semanticsLabel: '更多操作',
+              semanticsLabel: context.l10n.commonMoreActions,
               child: AwikiAssetIcon(
                 assetName: 'assets/icons/icon_add.svg',
                 size: responsive.iconLg,

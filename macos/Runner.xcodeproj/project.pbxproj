@@ -27,6 +27,7 @@
 		33CC10F32044A3C60003C045 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F22044A3C60003C045 /* Assets.xcassets */; };
 		33CC10F62044A3C60003C045 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F42044A3C60003C045 /* MainMenu.xib */; };
 		33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC11122044BFA00003C045 /* MainFlutterWindow.swift */; };
+		8F0A42012E33000100A10101 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 8F0A42002E33000100A10101 /* InfoPlist.strings */; };
 		70FFFB8B32FD7AC83198F90E /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0C928F2764DFF3CAACC4217A /* Pods_RunnerTests.framework */; };
 		D29620ED04FA247BF044EB24 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2FAAFF68E5FEB281146BC5F0 /* Pods_Runner.framework */; };
 /* End PBXBuildFile section */
@@ -78,6 +79,8 @@
 		33CEB47222A05771004F2AC0 /* Flutter-Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Flutter-Debug.xcconfig"; sourceTree = "<group>"; };
 		33CEB47422A05771004F2AC0 /* Flutter-Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Flutter-Release.xcconfig"; sourceTree = "<group>"; };
 		33CEB47722A0578A004F2AC0 /* Flutter-Generated.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "Flutter-Generated.xcconfig"; path = "ephemeral/Flutter-Generated.xcconfig"; sourceTree = "<group>"; };
+		8F0A42022E33000100A10101 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		8F0A42032E33000100A10101 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		33E51913231747F40026EE4D /* DebugProfile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DebugProfile.entitlements; sourceTree = "<group>"; };
 		33E51914231749380026EE4D /* Release.entitlements */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.entitlements; path = Release.entitlements; sourceTree = "<group>"; };
 		33E5194F232828860026EE4D /* AppInfo.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppInfo.xcconfig; sourceTree = "<group>"; };
@@ -155,6 +158,7 @@
 			children = (
 				33CC10F22044A3C60003C045 /* Assets.xcassets */,
 				33CC10F42044A3C60003C045 /* MainMenu.xib */,
+				8F0A42002E33000100A10101 /* InfoPlist.strings */,
 				33CC10F72044A3C60003C045 /* Info.plist */,
 			);
 			name = Resources;
@@ -289,6 +293,7 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				"zh-Hans",
 				Base,
 			);
 			mainGroup = 33CC10E42044A3C60003C045;
@@ -317,6 +322,7 @@
 			files = (
 				33CC10F32044A3C60003C045 /* Assets.xcassets in Resources */,
 				33CC10F62044A3C60003C045 /* MainMenu.xib in Resources */,
+				8F0A42012E33000100A10101 /* InfoPlist.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -459,6 +465,16 @@
 /* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
+		8F0A42002E33000100A10101 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				8F0A42022E33000100A10101 /* en */,
+				8F0A42032E33000100A10101 /* zh-Hans */,
+			);
+			name = InfoPlist.strings;
+			path = Runner;
+			sourceTree = "<group>";
+		};
 		33CC10F42044A3C60003C045 /* MainMenu.xib */ = {
 			isa = PBXVariantGroup;
 			children = (

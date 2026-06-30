@@ -54,6 +54,7 @@ Map<String, Object?> _createAgent(Map<String, String> options) {
     workspaceMode: options['workspace-mode'],
     defaultSandbox: options['default-sandbox'],
     defaultModel: options['default-model'],
+    preferredLanguage: options['preferred-language'] ?? 'zh-Hans',
     driverConfig: driverConfig,
   );
   return <String, Object?>{'payload': payload};
@@ -94,6 +95,7 @@ Future<Map<String, Object?>> _messageAgentBootstrap(
     runId: runId,
     userSubkeyPackage: userSubkeyPackage,
     desiredMessageAgent: DesiredMessageAgent(
+      preferredLanguage: options['preferred-language'] ?? 'zh-Hans',
       ensureOnceKey: messageAgentEnsureOnceKey(
         userDid: controllerDid,
         appInstanceId: appInstanceId,

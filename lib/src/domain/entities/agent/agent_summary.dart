@@ -34,7 +34,7 @@ class AgentSummary {
       daemonAgentDid: _optionalString(json['daemon_agent_did']),
       runtime: _optionalString(json['runtime']),
       handle: _optionalString(json['handle']),
-      displayName: json['display_name']?.toString() ?? '代理',
+      displayName: json['display_name']?.toString() ?? '',
       activeState: json['active_state']?.toString() ?? 'active',
       latest: normalizeAgentLatestStatusForKind(
         kind,

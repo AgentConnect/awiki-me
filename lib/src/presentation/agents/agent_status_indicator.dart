@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 
+import '../../l10n/l10n.dart';
 import '../shared/awiki_me_design.dart';
+import '../shared/formatters/localized_ui_formatters.dart';
 import '../shared/responsive_layout.dart';
 import 'agent_visual_status.dart';
 
@@ -22,7 +24,7 @@ class AgentStatusDot extends StatelessWidget {
     final size = this.size ?? responsive.displayScaled(9);
     final color = agentVisualStatusColor(status);
     return Semantics(
-      label: status.semanticLabel,
+      label: localizeAgentVisualStatusSemantic(context.l10n, status),
       child: SizedBox(
         width: status.isProcessing ? size * 2.15 : size,
         height: status.isProcessing ? size * 2.15 : size,
@@ -65,7 +67,7 @@ class AgentStatusPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(99),
       ),
       child: Text(
-        status.label,
+        localizeAgentVisualStatus(context.l10n, status),
         style: TextStyle(
           color: color,
           fontSize: 12,

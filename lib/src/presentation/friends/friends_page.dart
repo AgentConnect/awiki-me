@@ -66,12 +66,15 @@ class FriendsPage extends ConsumerWidget {
     final sectionWidgets = <Widget>[
       Padding(
         padding: EdgeInsets.only(top: responsive.spacing(12)),
-        child: _FriendRow.group(title: '群组', onTap: openGroups),
+        child: _FriendRow.group(
+          title: context.l10n.friendsGroups,
+          onTap: openGroups,
+        ),
       ),
       if (following.isNotEmpty)
         _FriendsSection(
-          title: '我关注的',
-          trailingLabel: '查看全部',
+          title: context.l10n.friendsFollowing,
+          trailingLabel: context.l10n.friendsViewAll,
           onTrailingTap: () => _openRelationshipList(
             context,
             FriendsRelationshipListType.following,
@@ -89,8 +92,8 @@ class FriendsPage extends ConsumerWidget {
         ),
       if (followers.isNotEmpty)
         _FriendsSection(
-          title: '关注我的',
-          trailingLabel: '查看全部',
+          title: context.l10n.friendsFollowers,
+          trailingLabel: context.l10n.friendsViewAll,
           onTrailingTap: () => _openRelationshipList(
             context,
             FriendsRelationshipListType.followers,
@@ -102,7 +105,7 @@ class FriendsPage extends ConsumerWidget {
                   title: _displayName(item),
                   avatarUri: item.avatarUri,
                   trailing: _RelationshipActionButton(
-                    label: '关注',
+                    label: context.l10n.friendsFollow,
                     onTap: () => _runRelationshipAction(
                       ref,
                       () => ref.read(friendsProvider.notifier).follow(item.did),
@@ -543,8 +546,8 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
     final friendsState = ref.watch(friendsProvider);
     final theme = context.awikiTheme;
     final title = switch (widget.type) {
-      FriendsRelationshipListType.following => '我关注的',
-      FriendsRelationshipListType.followers => '关注我的',
+      FriendsRelationshipListType.following => context.l10n.friendsFollowing,
+      FriendsRelationshipListType.followers => context.l10n.friendsFollowers,
     };
     final items = widget.type == FriendsRelationshipListType.followers
         ? listState.items
@@ -600,7 +603,7 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
                       listState.error!,
                     ).resolve(context.l10n),
                     trailing: AppSecondaryButton(
-                      label: '重试',
+                      label: context.l10n.commonRetry,
                       onPressed: () => ref
                           .read(relationshipListProvider(widget.type).notifier)
                           .refresh(),
@@ -615,8 +618,8 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
                   padding: const EdgeInsets.all(16),
                   child: Text(
                     widget.type == FriendsRelationshipListType.following
-                        ? '还没有关注任何人。'
-                        : '还没有新的关注者。',
+                        ? context.l10n.friendsFollowingEmpty
+                        : context.l10n.friendsFollowersEmpty,
                     style: AwikiMeTextStyles.cardSubtitle,
                   ),
                 ),
@@ -642,12 +645,12 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
                 avatarUri: item.avatarUri,
                 trailing: isFollowing
                     ? _RelationshipActionButton(
-                        label: '取消关注',
+                        label: context.l10n.friendsUnfollow,
                         destructive: true,
                         onTap: () => confirmAndUnfollow(context, ref, item.did),
                       )
                     : _RelationshipActionButton(
-                        label: '关注',
+                        label: context.l10n.friendsFollow,
                         onTap: () => _runRelationshipAction(
                           ref,
                           () => ref
@@ -726,7 +729,10 @@ class _RelationshipListFooter extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
       child: state.isLoadingMore
           ? const Center(child: CupertinoActivityIndicator())
-          : AppSecondaryButton(label: '加载更多', onPressed: onLoadMore),
+          : AppSecondaryButton(
+              label: context.l10n.commonLoadMore,
+              onPressed: onLoadMore,
+            ),
     );
   }
 }
@@ -739,8 +745,8 @@ Future<void> confirmAndUnfollow(
   final confirmed = await AppNavigator.showDialog<bool>(
     context,
     (ctx) => CupertinoAlertDialog(
-      title: const Text('取消关注'),
-      content: const Text('取消关注后，对方会从“我关注的”列表中移除。'),
+      title: Text(context.l10n.friendsUnfollowTitle),
+      content: Text(context.l10n.friendsUnfollowMessage),
       actions: <Widget>[
         CupertinoDialogAction(
           onPressed: () => Navigator.of(ctx).pop(false),
@@ -749,7 +755,7 @@ Future<void> confirmAndUnfollow(
         CupertinoDialogAction(
           isDestructiveAction: true,
           onPressed: () => Navigator.of(ctx).pop(true),
-          child: const Text('取消关注'),
+          child: Text(context.l10n.friendsUnfollow),
         ),
       ],
     ),

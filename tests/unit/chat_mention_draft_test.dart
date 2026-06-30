@@ -82,10 +82,10 @@ void main() {
           isEmpty,
         );
         expect(human.enabled, isTrue);
-        expect(human.badge, '用户');
+        expect(human.subjectType, GroupMemberSubjectType.human);
         expect(human.target.kind, ChatMentionTargetKind.human);
         expect(agent.enabled, isTrue);
-        expect(agent.badge, '智能体');
+        expect(agent.subjectType, GroupMemberSubjectType.agent);
         expect(agent.target.kind, ChatMentionTargetKind.agent);
       },
     );
@@ -132,7 +132,9 @@ void main() {
           ]);
 
       expect(candidates.map((candidate) => candidate.surface), ['@Zhuocheng']);
-      expect(candidates.map((candidate) => candidate.badge), ['用户']);
+      expect(candidates.map((candidate) => candidate.subjectType), [
+        GroupMemberSubjectType.human,
+      ]);
       expect(
         candidates.where((candidate) => candidate.id.startsWith('selector:')),
         isEmpty,
@@ -192,7 +194,7 @@ void main() {
           (candidate) => candidate.id.startsWith('member:'),
         );
         expect(member.enabled, isTrue);
-        expect(member.badge, '用户');
+        expect(member.subjectType, GroupMemberSubjectType.human);
         expect(member.target.kind, ChatMentionTargetKind.human);
         expect(member.surface, '@zhuocheng');
       },
@@ -275,7 +277,10 @@ void main() {
         (candidate) => candidate.id.startsWith('member:'),
       );
       expect(member.enabled, isFalse);
-      expect(member.disabledReason, contains('类型未知'));
+      expect(
+        member.disabledReasonCode,
+        ChatMentionDisabledReasonCode.unknownMemberType,
+      );
       expect(member.target.isP9Sendable, isFalse);
     });
   });

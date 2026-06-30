@@ -13,7 +13,7 @@ class AgentDisplayName {
   }
 
   static String fallbackForKind(AgentKind kind) {
-    return kind == AgentKind.daemon ? '未命名代理' : '未命名智能体';
+    return kind == AgentKind.daemon ? 'Unnamed daemon' : 'Unnamed agent';
   }
 
   static bool isUserVisibleName(String name) {

@@ -18,7 +18,9 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     final responsive = context.awikiResponsive;
     final maxDialogHeight = MediaQuery.sizeOf(context).height * 0.86;
     final runtimeAgent = _runtimeAgent();
-    final title = runtimeAgent == null ? '用户信息' : '智能体信息';
+    final title = runtimeAgent == null
+        ? context.l10n.chatPeerInfoUserTitle
+        : context.l10n.chatPeerInfoAgentTitle;
     final state = targetDid.isEmpty
         ? const PeerProfileState(isLoading: false)
         : ref.watch(peerProfileProvider(targetDid));
@@ -68,6 +70,12 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     final isFollowing = profileDid.startsWith('did:')
         ? ref.watch(friendsProvider).isFollowing(profileDid)
         : false;
+    final runtimeDisplay = runtimeAgent == null
+        ? null
+        : agentRuntimeDisplay(runtimeAgent);
+    final runtimeStatus = runtimeAgent == null
+        ? null
+        : AgentVisualStatus.fromAgent(runtimeAgent);
     final inboxHeight = (maxDialogHeight * 0.48).clamp(320.0, 440.0).toDouble();
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 20),
@@ -133,8 +141,9 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                             const SizedBox(height: 8),
                             CopyableDidLine(
                               value: profileDid,
-                              copySemanticLabel: '复制 DID',
-                              copiedMessage: 'DID 已复制',
+                              copySemanticLabel:
+                                  context.l10n.chatPeerInfoCopyDid,
+                              copiedMessage: context.l10n.chatPeerInfoDidCopied,
                               textKey: const Key('peer-info-dialog-did-value'),
                               buttonKey: const Key(
                                 'peer-info-dialog-copy-did-button',
@@ -157,23 +166,51 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                   runSpacing: 8,
                   children: <Widget>[
                     if (profile == null && state.isLoading)
-                      const AppPill(label: '资料加载中')
+                      SemanticPill(
+                        label: context.l10n.chatPeerInfoProfileLoading,
+                        tone: SemanticPillTone.muted,
+                      )
                     else if (profile == null && state.hasError)
-                      const AppPill(label: '资料暂不可用')
+                      SemanticPill(
+                        label: context.l10n.chatPeerInfoProfileUnavailable,
+                        tone: SemanticPillTone.muted,
+                      )
+                    else if (runtimeAgent == null)
+                      SemanticPill(
+                        label: context.l10n.identityTypeUser,
+                        tone: SemanticPillTone.identity,
+                      )
                     else
-                      AppPill(
+                      SemanticPill(
+                        label: context.l10n.identityTypeAgent,
+                        tone: SemanticPillTone.identity,
+                      ),
+                    if (runtimeDisplay != null)
+                      SemanticPill(
+                        label: runtimeDisplay.label,
+                        tone: SemanticPillTone.runtime,
+                      )
+                    else if (profile != null)
+                      SemanticPill(
                         label: localizeRelationshipLabel(
                           context.l10n,
                           state.relationship,
                         ),
+                        tone: SemanticPillTone.relationship,
+                      ),
+                    if (runtimeStatus != null)
+                      SemanticPill(
+                        label: localizeAgentVisualStatus(
+                          context.l10n,
+                          runtimeStatus,
+                        ),
+                        tone: SemanticPillTone.status,
                       ),
                     if (handle != null && handle.isNotEmpty)
-                      AppPill(label: '@$handle'),
-                    AppPill(
-                      label: runtimeAgent == null
-                          ? 'AWiki 用户'
-                          : 'Runtime Agent',
-                    ),
+                      SemanticPill(
+                        label: '@$handle',
+                        tone: SemanticPillTone.metadata,
+                      ),
                   ],
                 ),
                 if (homepageUrl.isNotEmpty) ...<Widget>[
@@ -185,7 +222,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                 ],
                 const SizedBox(height: 16),
                 _PeerInfoSection(
-                  title: '身份卡',
+                  title: context.l10n.chatPeerInfoIdentityCard,
                   child: profileContent.isEmpty
                       ? _profilePlaceholder(state)
                       : MarkdownBody(
@@ -220,7 +257,9 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
               if (runtimeAgent != null)
                 Expanded(
                   child: AppSecondaryButton(
-                    label: _showAgentInbox ? '收起 Agent 收件箱' : 'Agent 收件箱',
+                    label: _showAgentInbox
+                        ? context.l10n.chatPeerInfoCollapseAgentInbox
+                        : context.l10n.chatPeerInfoAgentInbox,
                     onPressed: () {
                       setState(() {
                         _showAgentInbox = !_showAgentInbox;
@@ -273,7 +312,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
       return avatarSeed;
     }
     return fallbackDid.isEmpty
-        ? '未知联系人'
+        ? context.l10n.chatPeerInfoUnknownContact
         : DidDisplayFormatter.compactDid(fallbackDid);
   }
 
@@ -292,11 +331,16 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
       height: 1.35,
     );
     if (state.isLoading) {
-      return const Row(
+      return Row(
         children: <Widget>[
-          CupertinoActivityIndicator(radius: 8),
-          SizedBox(width: 8),
-          Expanded(child: Text('正在加载资料…', style: textStyle)),
+          const CupertinoActivityIndicator(radius: 8),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              context.l10n.chatPeerInfoLoadingProfile,
+              style: textStyle,
+            ),
+          ),
         ],
       );
     }
@@ -306,7 +350,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
         compact: true,
       );
     }
-    return const Text('暂未填写资料', style: textStyle);
+    return Text(context.l10n.chatPeerInfoNoProfile, style: textStyle);
   }
 
   Future<void> _toggleFollow(String did) async {
@@ -409,7 +453,7 @@ class _PeerInfoHeader extends StatelessWidget {
           ),
           child: AppDialogHeader(
             title: title,
-            closeLabel: '关闭信息弹窗',
+            closeLabel: context.l10n.chatPeerInfoClose,
             onClose: () => Navigator.of(context).pop(),
           ),
         ),
@@ -431,8 +475,8 @@ class _AgentRenameIconButton extends StatelessWidget {
       child: AppIconButton(
         key: const Key('peer-info-agent-rename-button'),
         onPressed: () => onRename(agent),
-        semanticLabel: '修改智能体名称',
-        tooltip: '修改名称',
+        semanticLabel: context.l10n.chatPeerInfoRenameAgent,
+        tooltip: context.l10n.chatPeerInfoRenameAgentTooltip,
         size: responsive.displayScaled(30),
         backgroundColor: const Color(0xFFF5F7FB),
         borderColor: const Color(0xFFE4E9F2),
@@ -524,7 +568,7 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          const _PeerInfoHeader(title: '群聊信息'),
+          _PeerInfoHeader(title: context.l10n.chatPeerInfoGroupTitle),
           Flexible(
             child: SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(
@@ -538,7 +582,7 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
                 children: <Widget>[
                   SelectionArea(
                     child: _PeerInfoSection(
-                      title: '群聊',
+                      title: context.l10n.chatPeerInfoGroupSection,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
@@ -585,19 +629,27 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
                             spacing: 8,
                             runSpacing: 8,
                             children: <Widget>[
-                              AppPill(
+                              SemanticPill(
+                                label: context.l10n.conversationPeerTypeGroup,
+                                tone: SemanticPillTone.identity,
+                              ),
+                              SemanticPill(
                                 label: context.l10n.groupMemberCount(
                                   _group.memberCount,
                                 ),
+                                tone: SemanticPillTone.metadata,
                               ),
-                              AppPill(label: _group.myRole ?? 'member'),
+                              SemanticPill(
+                                label: _group.myRole ?? 'member',
+                                tone: SemanticPillTone.relationship,
+                              ),
                             ],
                           ),
                           const SizedBox(height: 14),
                           CopyableDidLine(
                             value: groupId,
-                            copySemanticLabel: '复制 Group DID',
-                            copiedMessage: 'DID 已复制',
+                            copySemanticLabel: context.l10n.chatPeerInfoCopyDid,
+                            copiedMessage: context.l10n.chatPeerInfoDidCopied,
                             textKey: const Key('group-info-dialog-did-value'),
                             buttonKey: const Key(
                               'group-info-dialog-copy-did-button',
@@ -614,7 +666,7 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
                   ),
                   SizedBox(height: responsive.spacing(16)),
                   _PeerInfoSection(
-                    title: '成员',
+                    title: context.l10n.groupMembersTitle,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
@@ -624,7 +676,9 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
                               child: Text(
                                 members.isEmpty
                                     ? context.l10n.groupMembersEmpty
-                                    : '共 ${members.length} 位成员',
+                                    : context.l10n.chatPeerInfoMemberCount(
+                                        members.length,
+                                      ),
                                 style: AwikiMeTextStyles.cardSubtitle,
                               ),
                             ),
@@ -632,7 +686,7 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
                               key: const Key(
                                 'group-info-dialog-add-member-button',
                               ),
-                              semanticLabel: '添加成员',
+                              semanticLabel: context.l10n.groupAddMembers,
                               icon: CupertinoIcons.person_add,
                               onTap: canManageMembers
                                   ? () => _showAddMemberDialog(members)
@@ -643,7 +697,7 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
                               key: const Key(
                                 'group-info-dialog-refresh-members-button',
                               ),
-                              semanticLabel: '刷新成员',
+                              semanticLabel: context.l10n.groupRefreshMembers,
                               icon: CupertinoIcons.refresh,
                               isLoading: _isRefreshingMembers,
                               onTap: _isRefreshingMembers
@@ -926,7 +980,9 @@ class _ChatFollowButtonState extends State<_ChatFollowButton> {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
-    final label = widget.isFollowing ? '已关注' : '关注';
+    final label = widget.isFollowing
+        ? context.l10n.followContactAlreadyFollowing
+        : context.l10n.friendsFollow;
     final foreground = widget.isFollowing
         ? const Color(0xFF34415C)
         : theme.primaryForeground;

@@ -26,14 +26,14 @@ class AuthSessionCoordinator {
   Future<String> ensureBearerToken({bool forceRefresh = false}) async {
     var session = await _sessions.currentSession();
     if (session == null) {
-      throw const AuthSessionUnavailable('当前登录状态不可用。');
+      throw const AuthSessionUnavailable('auth_session_unavailable');
     }
     if (forceRefresh || !_hasUsableToken(session)) {
       session = await _refreshSession();
     }
     final token = session?.jwtToken?.trim();
     if (session == null || token == null || token.isEmpty) {
-      throw const AuthSessionUnavailable('登录状态已失效，请重新登录。');
+      throw const AuthSessionUnavailable('session_expired');
     }
     return token;
   }

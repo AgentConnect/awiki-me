@@ -28,7 +28,6 @@ void main() {
     final status = AgentVisualStatus.fromAgent(agent);
 
     expect(status.kind, AgentVisualStatusKind.processing);
-    expect(status.label, '正在处理');
   });
 
   test('local pending turn takes precedence over latest ready status', () {

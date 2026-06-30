@@ -571,7 +571,7 @@ void main() {
     expect(find.text('智能体信息'), findsOneWidget);
     expect(find.text('本地智能体'), findsWidgets);
     expect(find.byKey(const Key('peer-info-dialog-did-value')), findsOneWidget);
-    expect(find.text('Runtime Agent'), findsOneWidget);
+    expect(find.text('智能体'), findsOneWidget);
     expect(find.text('资料加载中'), findsOneWidget);
     expect(find.text('正在加载资料…'), findsOneWidget);
     expect(find.text('profile 加载完成后的介绍'), findsNothing);

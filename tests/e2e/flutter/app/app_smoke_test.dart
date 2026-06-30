@@ -530,7 +530,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('智能体信息'), findsOneWidget);
-        expect(find.text('Runtime Agent'), findsOneWidget);
+        expect(find.text('Hermes'), findsOneWidget);
         expect(find.text('Agent 收件箱'), findsOneWidget);
         expect(
           find.byKey(const Key('peer-info-dialog-did-value')),

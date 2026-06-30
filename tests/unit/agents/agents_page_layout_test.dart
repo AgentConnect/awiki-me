@@ -483,7 +483,6 @@ void main() {
         nameFieldFinder,
       );
       expect(claudeNameField.controller?.text, 'Claude Code1');
-      expect(find.text('需要 daemon 上已安装并登录的 Claude Code CLI。'), findsOneWidget);
 
       await tester.tap(find.text('Codex'));
       await tester.pumpAndSettle();
@@ -514,7 +513,7 @@ void main() {
       expect(control.lastRuntimeCreateSandbox, 'danger-full-access');
       expect(control.lastRuntimeCreateClientRequestId, isNotNull);
       expect(find.text('写作助手'), findsWidgets);
-      expect(find.text('codex · 创建状态暂未返回，可刷新查看'), findsOneWidget);
+      expect(find.text('Codex · 创建状态暂未返回，可刷新查看'), findsOneWidget);
     },
   );
 
@@ -674,11 +673,11 @@ void main() {
 
       expect(find.text('需刷新'), findsNWidgets(2));
       expect(
-        find.text('Codex 需要 daemon 提供 generic-cli capability。'),
+        find.text('Codex 需要 Daemon 提供 generic-cli capability。'),
         findsOneWidget,
       );
       expect(
-        find.text('Claude Code 需要 daemon 提供 generic-cli capability。'),
+        find.text('Claude Code 需要 Daemon 提供 generic-cli capability。'),
         findsOneWidget,
       );
 
@@ -702,7 +701,7 @@ void main() {
 
       expect(find.text('需刷新'), findsWidgets);
       expect(
-        find.text('Codex 需要 daemon 提供 generic-cli capability。'),
+        find.text('Codex 需要 Daemon 提供 generic-cli capability。'),
         findsOneWidget,
       );
 
@@ -726,7 +725,7 @@ void main() {
         ),
       );
 
-      expect(find.text('需升级'), findsWidgets);
+      expect(find.text('需要升级'), findsWidgets);
       expect(find.text('Codex 需要按会话目录工作模式。'), findsOneWidget);
 
       await tester.tap(find.text('Codex'));
@@ -1182,7 +1181,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Daemon · 1 个 Agent · 正常'), findsNWidgets(2));
-    expect(find.text('hermes · 正常'), findsNWidgets(2));
+    expect(find.text('Hermes · 正常'), findsNWidgets(2));
 
     final listPane = find.byType(ListView).first;
     final daemonATop = tester
@@ -1369,7 +1368,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('hermes · 正在处理'), findsOneWidget);
+    expect(find.text('Hermes · 正在处理'), findsOneWidget);
 
     await tester.tap(find.text('Hermes').first);
     await tester.pump(const Duration(milliseconds: 250));
@@ -1448,8 +1447,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('codex · 需要配置'), findsOneWidget);
-    expect(find.text('claude-code · 正在处理'), findsOneWidget);
+    expect(find.text('Codex · 需要配置'), findsOneWidget);
+    expect(find.text('Claude Code · 正在处理'), findsOneWidget);
 
     await tester.tap(find.text('Codex UI').first);
     await tester.pumpAndSettle();

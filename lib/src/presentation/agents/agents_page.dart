@@ -5,6 +5,7 @@ import 'package:flutter/material.dart'
     show Color, SelectableText, SelectionArea, SelectionContainer;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../../app/app_router.dart';
 import '../../app/app_services.dart';
@@ -18,16 +19,19 @@ import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/message_agent_runtime_provider.dart';
 import '../../domain/repositories/awiki_account_gateway.dart';
 import '../../l10n/app_message.dart';
+import '../../l10n/l10n.dart';
 import '../../app/ui_feedback.dart';
 import '../shared/app_dialog.dart';
 import '../shared/identity_flow.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
+import '../shared/formatters/localized_ui_formatters.dart';
 import '../shared/responsive_layout.dart';
+import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../chat/chat_provider.dart';
-import 'agent_display_name.dart';
 import 'agent_rename_dialog.dart';
+import 'agent_runtime_display.dart';
 import 'agent_status_indicator.dart';
 import 'agent_visual_status.dart';
 import 'agents_provider.dart';
@@ -148,12 +152,12 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
           : Column(
               children: <Widget>[
                 CupertinoNavigationBar(
-                  middle: const Text('智能体'),
+                  middle: Text(context.l10n.agentPageTitle),
                   leading: TopBarActionButton(
                     onTap: () =>
                         ref.read(agentsProvider.notifier).clearSelection(),
-                    semanticsLabel: '返回',
-                    tooltip: '返回',
+                    semanticsLabel: context.l10n.commonBack,
+                    tooltip: context.l10n.commonBack,
                     child: const Icon(CupertinoIcons.chevron_left),
                   ),
                 ),

@@ -39,7 +39,7 @@ class _AgentListPane extends StatelessWidget {
               children: <Widget>[
                 Expanded(
                   child: Text(
-                    '智能体',
+                    context.l10n.agentPageTitle,
                     style: TextStyle(
                       color: const Color(0xFF101B32),
                       fontSize: responsive.titleXl,
@@ -52,8 +52,8 @@ class _AgentListPane extends StatelessWidget {
                       state.isActionPending(AgentActionKeys.installCommand)
                       ? null
                       : onCreateDaemon,
-                  semanticLabel: '创建 Daemon',
-                  tooltip: '创建 Daemon',
+                  semanticLabel: context.l10n.agentCreateDaemon,
+                  tooltip: context.l10n.agentCreateDaemon,
                   size: responsive.displayScaled(34),
                   child: const Icon(CupertinoIcons.plus_circle_fill),
                 ),
@@ -78,7 +78,7 @@ class _AgentListPane extends StatelessWidget {
                   Padding(
                     padding: EdgeInsets.all(responsive.spacing(12)),
                     child: Text(
-                      '暂无代理',
+                      context.l10n.agentEmpty,
                       style: TextStyle(
                         color: const Color(0xFF66728A),
                         fontSize: responsive.bodySm,
@@ -289,7 +289,7 @@ class _OrphanRuntimeGroup extends StatelessWidget {
             responsive.spacing(7),
           ),
           child: Text(
-            '未关联代理',
+            context.l10n.agentListOrphanGroup,
             style: TextStyle(
               color: const Color(0xFF66728A),
               fontSize: responsive.metaSm,
@@ -344,7 +344,7 @@ class _EmptyRuntimeHint extends StatelessWidget {
                 border: Border.all(color: const Color(0xFFE8EDF5)),
               ),
               child: Text(
-                '尚未创建 Runtime Agent',
+                context.l10n.agentListNoRuntime,
                 style: TextStyle(
                   color: const Color(0xFF66728A),
                   fontSize: responsive.metaSm,
@@ -367,6 +367,7 @@ class _PendingRuntimeCreationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final waiting = pending.isWaitingForStatus;
+    final runtimeDisplay = agentRuntimeDisplayFor(runtime: pending.runtime);
     final visualStatus = waiting
         ? const AgentVisualStatus(AgentVisualStatusKind.unknown)
         : const AgentVisualStatus(
@@ -439,8 +440,12 @@ class _PendingRuntimeCreationTile extends StatelessWidget {
                         SizedBox(height: responsive.spacing(3)),
                         Text(
                           waiting
-                              ? '${pending.runtime} · 创建状态暂未返回，可刷新查看'
-                              : '${pending.runtime} · 创建中',
+                              ? context.l10n.agentListRuntimeWaitingStatus(
+                                  runtimeDisplay.label,
+                                )
+                              : context.l10n.agentListRuntimeCreating(
+                                  runtimeDisplay.label,
+                                ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -498,7 +503,7 @@ class _AgentListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final isChild = depth > 0;
-    final title = AgentDisplayName.title(agent);
+    final title = localizeAgentTitle(context.l10n, agent);
     final daemonUpgradeError = daemonUpgradeErrors[agent.agentDid];
     final daemonUpgradeProgress = this.daemonUpgradeProgress[agent.agentDid];
     final visualStatus = AgentVisualStatus.fromAgent(
@@ -578,6 +583,7 @@ class _AgentListTile extends StatelessWidget {
                           SizedBox(height: responsive.spacing(3)),
                           Text(
                             _agentListSubtitle(
+                              context,
                               agent,
                               runtimeCount,
                               visualStatus,
@@ -668,8 +674,8 @@ class _DaemonRefreshIconButton extends StatelessWidget {
     final color = enabled ? const Color(0xFF0B65F8) : const Color(0xFF9AA6B8);
     return AppIconButton(
       onPressed: onPressed,
-      semanticLabel: '刷新状态',
-      tooltip: '刷新状态',
+      semanticLabel: context.l10n.agentRefreshStatus,
+      tooltip: context.l10n.agentRefreshStatus,
       size: size,
       isLoading: isLoading,
       backgroundColor: const Color(0xFFF3F7FF),
@@ -681,6 +687,7 @@ class _DaemonRefreshIconButton extends StatelessWidget {
 }
 
 String _agentListSubtitle(
+  BuildContext context,
   AgentSummary agent,
   int? runtimeCount,
   AgentVisualStatus visualStatus, {
@@ -690,22 +697,27 @@ String _agentListSubtitle(
   String? upgradeError,
   bool isDeleting = false,
 }) {
-  if (isDeleting) {
-    return '删除中 · 等待同步';
-  }
+  final l10n = context.l10n;
   if (agent.isDaemon) {
-    final count = runtimeCount ?? 0;
-    final statusLabel = upgradeError != null
-        ? '升级失败'
-        : isCancelling
-        ? '正在取消升级'
-        : isUpgrading
-        ? upgradeProgress?.compactLabel ?? '正在升级'
-        : visualStatus.label;
-    return 'Daemon · $count 个 Agent · $statusLabel';
+    return localizeAgentListSubtitle(
+      l10n,
+      const AgentRuntimeDisplay(label: 'Daemon', isKnown: true),
+      visualStatus,
+      runtimeCount: runtimeCount ?? 0,
+      isUpgrading: isUpgrading,
+      isCancelling: isCancelling,
+      upgradeProgress: upgradeProgress,
+      upgradeError: upgradeError,
+      isDeleting: isDeleting,
+    );
   }
-  final runtime = agent.runtime ?? 'Runtime';
-  return '$runtime · ${visualStatus.label}';
+  return localizeAgentListSubtitle(
+    l10n,
+    agentRuntimeDisplay(agent),
+    visualStatus,
+    isRuntime: true,
+    isDeleting: isDeleting,
+  );
 }
 
 String _formatBytes(int bytes) {
@@ -722,23 +734,30 @@ String _formatBytes(int bytes) {
   return '${value.toStringAsFixed(value >= 10 ? 1 : 2)}${units[unit]}';
 }
 
-String _upgradeSourceLabel(DaemonUpgradeProgress progress) {
+String _upgradeSourceLabel(
+  BuildContext context,
+  DaemonUpgradeProgress progress,
+) {
   final parts = <String>[
     if (progress.sourceUrl != null) progress.sourceUrl!,
-    if (progress.route != null) _upgradeRouteLabel(progress.route!),
+    if (progress.route != null) _upgradeRouteLabel(context, progress.route!),
   ];
-  return parts.isEmpty ? '正在准备下载' : parts.join(' · ');
+  return parts.isEmpty
+      ? context.l10n.daemonUpgradePreparingDownload
+      : parts.join(' · ');
 }
 
-String _upgradeRouteLabel(String route) {
+String _upgradeRouteLabel(BuildContext context, String route) {
   if (route == 'direct') {
-    return '直连';
+    return context.l10n.daemonUpgradeRouteDirect;
   }
   if (route == 'environment_proxy') {
-    return '代理';
+    return context.l10n.daemonUpgradeRouteEnvironmentProxy;
   }
   if (route.startsWith('local_proxy:')) {
-    return '本机代理 ${route.substring('local_proxy:'.length)}';
+    return context.l10n.daemonUpgradeRouteLocalProxy(
+      route.substring('local_proxy:'.length),
+    );
   }
   return route;
 }

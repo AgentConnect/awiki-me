@@ -25,6 +25,7 @@ import 'awiki_me_feedback.dart';
 import 'avatar_badge.dart';
 import 'formatters/display_formatters.dart';
 import 'responsive_layout.dart';
+import 'semantic_pill.dart';
 import 'widgets/app_widgets.dart';
 
 enum IdentityFlowMode { startConversation, followContact }
@@ -48,11 +49,11 @@ class IdentityLookupDialogConfig {
     this.searchButtonKey = const Key('identity-lookup-search-button'),
     this.inputKey = const Key('identity-lookup-input'),
     this.inputSemanticsIdentifier = 'e2e-identity-lookup-input',
-    this.inputSemanticsLabel = '输入 handle 或 DID',
-    this.inputPlaceholder = '输入 @handle / DID / Agent 地址',
-    this.searchLabel = '匹配身份',
-    this.resolvingLabel = '匹配中...',
-    this.submittingLabel = '处理中...',
+    required this.inputSemanticsLabel,
+    required this.inputPlaceholder,
+    required this.searchLabel,
+    required this.resolvingLabel,
+    required this.submittingLabel,
     this.loadRelationship = false,
     this.showRelationship = true,
   });
@@ -87,6 +88,11 @@ class IdentityLookupDialogConfig {
           actionButtonKey: const Key('identity-start-chat-button'),
           actionSemanticsIdentifier: 'e2e-identity-start-chat-button',
           previewNoticeText: l10n.identityStartConversationNotice,
+          inputSemanticsLabel: l10n.identityInputSemantics,
+          inputPlaceholder: l10n.identityInputPlaceholder,
+          searchLabel: l10n.identitySearchLabel,
+          resolvingLabel: l10n.identityResolving,
+          submittingLabel: l10n.identitySubmitting,
         );
       case IdentityFlowMode.followContact:
         return IdentityLookupDialogConfig(
@@ -96,21 +102,32 @@ class IdentityLookupDialogConfig {
           actionButtonKey: const Key('identity-add-contact-button'),
           actionSemanticsIdentifier: 'e2e-identity-add-contact-button',
           previewNoticeText: l10n.identityFollowContactNotice,
+          inputSemanticsLabel: l10n.identityInputSemantics,
+          inputPlaceholder: l10n.identityInputPlaceholder,
+          searchLabel: l10n.identitySearchLabel,
+          resolvingLabel: l10n.identityResolving,
+          submittingLabel: l10n.identitySubmitting,
           loadRelationship: true,
         );
     }
   }
 
-  static const IdentityLookupDialogConfig addGroupMember =
-      IdentityLookupDialogConfig(
-        title: '添加群成员',
-        subtitle: '输入普通用户或 Agent 的 handle / DID，确认身份后加入群聊。',
-        actionLabel: '确认添加',
-        actionButtonKey: Key('identity-add-group-member-button'),
-        actionSemanticsIdentifier: 'e2e-identity-add-group-member-button',
-        previewNoticeText: '请确认这是要加入群聊的身份。',
-        showRelationship: false,
-      );
+  factory IdentityLookupDialogConfig.addGroupMember(AppLocalizations l10n) {
+    return IdentityLookupDialogConfig(
+      title: l10n.identityAddGroupMemberTitle,
+      subtitle: l10n.identityAddGroupMemberSubtitle,
+      actionLabel: l10n.identityAddGroupMemberAction,
+      actionButtonKey: const Key('identity-add-group-member-button'),
+      actionSemanticsIdentifier: 'e2e-identity-add-group-member-button',
+      previewNoticeText: l10n.identityAddGroupMemberNotice,
+      inputSemanticsLabel: l10n.identityInputSemantics,
+      inputPlaceholder: l10n.identityInputPlaceholder,
+      searchLabel: l10n.identitySearchLabel,
+      resolvingLabel: l10n.identityResolving,
+      submittingLabel: l10n.identitySubmitting,
+      showRelationship: false,
+    );
+  }
 }
 
 String normalizeDidOrHandleInput(String rawValue) {
@@ -127,7 +144,7 @@ Future<UserProfile> resolveIdentityProfile(
 ) async {
   final query = normalizeDidOrHandleInput(rawQuery);
   if (query.isEmpty) {
-    throw ArgumentError('请输入 handle 或 DID。');
+    throw ArgumentError('identity_query_required');
   }
   try {
     final resolution = await ref
@@ -142,7 +159,7 @@ Future<UserProfile> resolveIdentityProfile(
 UserProfile identityProfileFromResolution(DirectoryPeerResolution resolution) {
   final did = resolution.did.trim();
   if (did.isEmpty) {
-    throw StateError('身份解析结果缺少 DID。');
+    throw StateError('identity_missing_did');
   }
   final handle = resolution.handle?.trim();
   final displayName = handle == null || handle.isEmpty
@@ -200,7 +217,9 @@ Future<void> openDirectConversationForDid(
   if (!peer.startsWith('did:')) {
     ref
         .read(uiFeedbackProvider.notifier)
-        .showError(AppMessage.fromError(StateError('联系人身份无效，无法打开会话。')));
+        .showError(
+          AppMessage.fromError(StateError('identity_invalid_contact')),
+        );
     return;
   }
 
@@ -384,7 +403,7 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
   Future<void> _resolve() async {
     final query = normalizeDidOrHandleInput(_queryController.text);
     if (query.isEmpty) {
-      setState(() => _errorText = '请输入 handle 或 DID。');
+      setState(() => _errorText = context.l10n.identityQueryRequired);
       return;
     }
     setState(() {
@@ -420,7 +439,7 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
       }
       setState(() {
         _isResolving = false;
-        _errorText = '未找到该身份，请检查 handle / DID 是否正确。';
+        _errorText = context.l10n.identityResolveFailed;
       });
     }
   }
@@ -708,21 +727,27 @@ class _IdentityPreviewCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const _IdentityStatusPill(label: '已验证'),
+              _IdentityStatusPill(label: context.l10n.identityVerified),
             ],
           ),
           const SizedBox(height: 14),
           _IdentityMetaLine(label: 'DID', value: profile.did),
-          _IdentityMetaLine(label: '类型', value: _inferIdentityType(profile)),
+          _IdentityMetaLine(
+            label: context.l10n.identityTypeLabel,
+            value: _inferIdentityType(context.l10n, profile),
+          ),
           if (showRelationship)
             _IdentityMetaLine(
-              label: '关系',
+              label: context.l10n.identityRelationshipLabel,
               value: relationshipLabel == null || relationshipLabel.isEmpty
-                  ? 'none'
-                  : relationshipLabel,
+                  ? localizeRelationshipLabel(context.l10n, 'none')
+                  : localizeRelationshipLabel(context.l10n, relationshipLabel),
             ),
           if (profile.bio.trim().isNotEmpty)
-            _IdentityMetaLine(label: '简介', value: profile.bio.trim()),
+            _IdentityMetaLine(
+              label: context.l10n.identityBioLabel,
+              value: profile.bio.trim(),
+            ),
           if (profile.tags.isNotEmpty) ...<Widget>[
             const SizedBox(height: 10),
             Wrap(
@@ -730,10 +755,9 @@ class _IdentityPreviewCard extends StatelessWidget {
               runSpacing: 8,
               children: profile.tags
                   .map(
-                    (tag) => AppPill(
+                    (tag) => SemanticPill(
                       label: tag,
-                      backgroundColor: const Color(0xFFEAF2FF),
-                      foregroundColor: const Color(0xFF0B65F8),
+                      tone: SemanticPillTone.metadata,
                     ),
                   )
                   .toList(),
@@ -744,7 +768,7 @@ class _IdentityPreviewCard extends StatelessWidget {
     );
   }
 
-  String _inferIdentityType(UserProfile profile) {
+  String _inferIdentityType(AppLocalizations l10n, UserProfile profile) {
     final joined = <String>[
       profile.subjectType ?? '',
       profile.displayName,
@@ -753,9 +777,9 @@ class _IdentityPreviewCard extends StatelessWidget {
       ...profile.tags,
     ].join(' ').toLowerCase();
     if (joined.contains('agent') || joined.contains('智能体')) {
-      return 'Agent';
+      return l10n.identityTypeAgent;
     }
-    return '用户';
+    return l10n.identityTypeUser;
   }
 }
 

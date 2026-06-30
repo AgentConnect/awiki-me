@@ -79,7 +79,7 @@ abstract final class MessageAgentRuntimeProviders {
     handlePrefix: 'codex-msg',
     enabled: false,
     driverId: 'codex',
-    disabledReason: 'Codex Message Agent 尚未开放',
+    disabledReason: 'Codex Message Agent is not available yet',
     runtimeAliases: <String>['codex', 'codex-cli'],
   );
 
@@ -93,7 +93,7 @@ abstract final class MessageAgentRuntimeProviders {
     handlePrefix: 'claude-msg',
     enabled: false,
     driverId: 'claude-code',
-    disabledReason: 'Claude Code Message Agent 尚未开放',
+    disabledReason: 'Claude Code Message Agent is not available yet',
     runtimeAliases: <String>['claude-code', 'claude_code'],
   );
 

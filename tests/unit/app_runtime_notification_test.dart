@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
@@ -549,6 +550,8 @@ void main() {
     });
 
     test('实时附件消息通知使用附件预览', () async {
+      container.read(appLocaleModeProvider.notifier).state =
+          AppLocaleMode.zhHans;
       gateway.nextRealtimeUpdate = RealtimeUpdate(
         message: ChatMessage(
           localId: 'remote-attachment',
@@ -586,7 +589,7 @@ void main() {
       await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
 
       expect(notificationFacade.lastSystemTitle, 'Peer');
-      expect(notificationFacade.lastSystemBody, '[附件] report.pdf');
+      expect(notificationFacade.lastSystemBody, '附件：report.pdf');
     });
 
     test('实时 direct 与 group 消息只更新消息流，最近会话等待投影 patch', () async {

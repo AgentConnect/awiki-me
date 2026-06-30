@@ -11,9 +11,25 @@
   "commonPrevious": "Previous",
   "commonSave": "Save",
   "commonGotIt": "Got it",
+  "commonDelete": "Delete",
+  "commonRetry": "Retry",
+  "commonClose": "Close",
+  "commonDetails": "Details",
+  "commonMoreActions": "More actions",
+  "commonSearch": "Search",
+  "commonCopy": "Copy",
+  "commonCopied": "Copied",
+  "commonCopyDetails": "Copy details",
+  "commonReject": "Reject",
+  "commonRemove": "Remove",
+  "commonPause": "Pause",
+  "commonRevoke": "Revoke authorization",
+  "commonUnknown": "Unknown",
+  "commonLoadMore": "Load more",
   "commonPleaseWait": "Please wait...",
   "commonLoading": "Loading...",
   "commonError": "Error",
+  "commonErrorDetails": "Error details",
   "realtimeStatusConnecting": "Connecting to message service...",
   "realtimeStatusReconnecting": "Message connection interrupted. Reconnecting...",
   "realtimeStatusDisconnected": "Message service is disconnected. Trying to recover.",
@@ -65,15 +81,108 @@
   "onboardingInvalidHandleContent": "Only lowercase letters, numbers, and hyphens are allowed, 2-32 characters.",
   "onboardingMissingNicknameTitle": "Nickname missing",
   "onboardingMissingNicknameContent": "Please enter a nickname.",
+  "onboardingMacHeroPrefix": "Connect your ",
+  "onboardingMacHeroHighlight": "Agent",
+  "onboardingMacHeroSuffix": " world",
+  "onboardingMacSubtitle": "Securely connect people, Agents, and organizations for smarter collaboration and faster decisions.",
+  "onboardingMacFeatureSecureTitle": "Secure",
+  "onboardingMacFeatureSecureSubtitle": "Enterprise-grade protection",
+  "onboardingMacFeatureCollaborateTitle": "Collaborative",
+  "onboardingMacFeatureCollaborateSubtitle": "Human-Agent teamwork with smooth information flow",
+  "onboardingMacFeatureControlTitle": "Controlled access",
+  "onboardingMacFeatureControlSubtitle": "Fine-grained permissions for safer data",
+  "onboardingMacChipFundingAgent": "Funding Agent",
+  "onboardingMacChipLegalAgent": "Legal Agent",
+  "onboardingMacChipInvestor": "Investor",
+  "onboardingMacVerified": "Verified",
+  "onboardingMacOnline": "Online",
+  "onboardingCredentialsField": "Identity credentials",
+  "onboardingNoLocalCredentialSaved": "No saved identity credentials on this device",
   "secureMessagingClient": "Secure messaging client",
   "shellNavMessages": "Messages",
+  "shellNavAgents": "Agents",
   "shellNavFriends": "Friends",
+  "shellNavContacts": "Contacts",
+  "shellNavTasks": "Tasks",
+  "shellNavWorkspace": "Workspace",
+  "shellNavSettings": "Settings",
   "shellNavMe": "Me",
+  "shellTasksPlaceholderTitle": "Tasks",
+  "shellTasksPlaceholderSubtitle": "Task views are coming soon. Current task status is shown in conversations and identity cards.",
+  "shellWorkspacePlaceholderTitle": "Workspace",
+  "shellWorkspacePlaceholderSubtitle": "The workspace module is coming soon.",
   "conversationsTitle": "Messages",
   "conversationsNoMessagePreview": "No messages yet",
   "conversationsEmptyTitle": "No messages yet",
   "conversationsEmptySubtitle": "Follow a contact or join a group chat to get started.",
+  "conversationsRecentTitle": "Recent conversations",
+  "conversationsSearchPlaceholder": "Search conversations",
+  "conversationsNoResultsTitle": "No matching conversations",
+  "conversationsNoResultsSubtitle": "Try another keyword",
+  "conversationsDeleteTitle": "Delete conversation",
+  "conversationsDeleteContent": "This conversation will be removed from recents, but message history will be kept. It will appear again when you reopen it or receive a new message.",
+  "conversationsUnreadTag": "{count} unread",
+  "@conversationsUnreadTag": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "conversationsMentionMeTag": "@me",
+  "conversationsDraftTag": "Draft",
+  "conversationsAttachmentPreview": "Attachment: {name}",
+  "@conversationsAttachmentPreview": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "conversationsDeletedAgentBadge": "Agent deleted",
+  "conversationsNewMessages": "New messages",
+  "conversationPeerBadgeGroup": "Group",
+  "conversationPeerBadgeAi": "AI",
+  "conversationPeerChatBadgeMyAgent": "My agent",
+  "conversationPeerChatBadgeAgent": "Agent",
+  "conversationPeerTypeGroup": "Group chat",
+  "conversationPeerTypeAgent": "Agent",
+  "conversationPeerTypeUser": "User",
+  "conversationPeerOwnerGroup": "AWiki group",
+  "conversationPeerOwnerMyRuntimeAgent": "Local Runtime Agent",
+  "conversationPeerOwnerAgent": "AWiki Agent",
+  "conversationPeerOwnerUser": "AWiki user",
+  "conversationInfoTitle": "Conversation info",
+  "conversationIdentityStatus": "Identity status:",
+  "conversationIdentityVerified": "Verified",
+  "conversationOwnerLabel": "Owner:",
+  "conversationTypeLabel": "Type:",
+  "conversationCapabilitiesTitle": "Capabilities",
+  "conversationCapabilitySendMessage": "Send messages",
+  "conversationCapabilityViewProfile": "View profile",
+  "conversationCapabilitySecureConnection": "Secure connection",
+  "conversationCapabilityHistory": "Conversation history",
+  "conversationStatusTitle": "Conversation status",
+  "conversationUnreadMessagesLabel": "Unread:",
+  "conversationUnreadMessagesValue": "{count} unread",
+  "@conversationUnreadMessagesValue": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "conversationLatestPreviewLabel": "Latest preview:",
+  "conversationConnectionStatusLabel": "Connection:",
+  "conversationConnectionEstablished": "Established",
+  "conversationBackToChat": "Back to chat",
   "friendsTitle": "Friends",
+  "friendsGroups": "Groups",
+  "friendsFollowing": "Following",
+  "friendsFollowers": "Followers",
+  "friendsViewAll": "View all",
+  "friendsFollow": "Follow",
+  "friendsUnfollow": "Unfollow",
+  "friendsFollowingEmpty": "You are not following anyone yet.",
+  "friendsFollowersEmpty": "No new followers yet.",
+  "friendsUnfollowTitle": "Unfollow",
+  "friendsUnfollowMessage": "After unfollowing, this contact will be removed from Following.",
   "profileMeTitle": "Me",
   "profileFollowers": "Followers",
   "profileFollowing": "Following",
@@ -82,6 +191,7 @@
   "profileEditTitle": "Edit profile",
   "profileBioPlaceholder": "Bio",
   "profileTagsPlaceholder": "Tags, separated by commas",
+  "profileOpenHomepage": "Open homepage",
   "settingsTitle": "Settings",
   "settingsLanguage": "Language",
   "settingsLanguageSystem": "Follow system",
@@ -175,6 +285,27 @@
   "identityFollowContactSubtitle": "Enter a handle or DID, then confirm the identity to follow it.",
   "identityFollowContactAction": "Follow",
   "identityFollowContactNotice": "Confirm the identity to follow this contact or Agent.",
+  "identityInputSemantics": "Enter a handle or DID",
+  "identityInputPlaceholder": "Enter @handle, DID, or Agent address",
+  "identitySearchLabel": "Resolve identity",
+  "identityResolving": "Resolving...",
+  "identitySubmitting": "Processing...",
+  "identityQueryRequired": "Enter a handle or DID.",
+  "identityResolveFailed": "Identity not found. Check the handle or DID and try again.",
+  "identityInvalidContact": "This contact identity is invalid and cannot be opened.",
+  "identityMissingDid": "Identity resolution returned no DID.",
+  "identityVerified": "Verified",
+  "identityTypeLabel": "Type",
+  "identityRelationshipLabel": "Relation",
+  "identityBioLabel": "Bio",
+  "identityTypeAgent": "Agent",
+  "identityTypeUser": "User",
+  "identityAddGroupMemberTitle": "Add group members",
+  "identityAddGroupMemberSubtitle": "Enter a user or Agent handle / DID, then confirm the identity to add it to the group.",
+  "identityAddGroupMemberAction": "Add",
+  "identityAddGroupMemberNotice": "Confirm this is the identity you want to add to the group.",
+  "identityClearInput": "Clear input",
+  "identitySearchNameHandleDid": "Search name, handle, or DID",
   "groupListTitle": "Group chats",
   "groupListEmpty": "No groups yet. Create one or join with a Group DID.",
   "groupListLoading": "Loading group data...",
@@ -212,11 +343,126 @@
   "groupFieldName": "Name",
   "groupFieldNamePlaceholder": "Enter group chat name",
   "groupCreating": "Creating group...",
+  "groupAddMembers": "Add members",
+  "groupRefreshMembers": "Refresh members",
+  "groupDetails": "View group details",
+  "groupRemoveMember": "Remove member",
+  "groupInviteDialogSubtitle": "Search local identities, or enter a handle / DID to resolve a new identity.",
+  "groupInviteShowMore": "Show more",
+  "groupInviteAdding": "Adding...",
+  "groupInviteConfirmCount": "Add ({count})",
+  "@groupInviteConfirmCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupInviteCandidates": "Available identities",
+  "groupInviteSearchResults": "Search results",
+  "groupInviteSelectHint": "Select one or more identities, then confirm once to add them.",
+  "groupInviteNoLocalCandidates": "No local identities available to invite.",
+  "groupInviteNoMatches": "No local identities matched. Try resolving a handle or DID.",
+  "groupInviteAlreadyInGroup": "Already in group",
+  "groupInviteUnnamedAgent": "Unnamed agent",
+  "groupInviteSourceMyAgents": "My agents",
+  "groupInviteSourceFollowing": "Following",
+  "groupInviteSourceFollowers": "Followers",
+  "groupInviteSourceRecent": "Recent conversations",
+  "groupInviteSourceResolved": "Resolved identity",
+  "groupRemoveMemberContent": "After removing {memberTitle}, they will no longer be able to send messages in this group.",
+  "@groupRemoveMemberContent": {
+    "placeholders": {
+      "memberTitle": {}
+    }
+  },
   "chatUnknownUser": "Unknown",
   "chatConversationUntitled": "Untitled conversation",
   "chatHeaderGroup": "GROUP",
   "chatHeaderOnline": "ONLINE",
   "chatInputPlaceholder": "Type a message...",
+  "chatDeletedAgentDisabled": "This agent has been deleted. You can no longer send messages.",
+  "chatGroupLeftDisabled": "You are no longer in this group and cannot send messages.",
+  "chatGroupSendDisabled": "This group is temporarily unavailable for sending messages.",
+  "chatAgentProcessing": "Agent is processing...",
+  "chatAgentStillProcessing": "Agent is still processing. Refresh later to check the result.",
+  "chatSubjectProcessing": "{subject} is processing...",
+  "@chatSubjectProcessing": {
+    "placeholders": {
+      "subject": {}
+    }
+  },
+  "chatSubjectStillProcessing": "{subject} is still processing. Refresh later to check the result.",
+  "@chatSubjectStillProcessing": {
+    "placeholders": {
+      "subject": {}
+    }
+  },
+  "chatAgentSubject": "Agent",
+  "chatAgentCountSubject": "{count} agents",
+  "@chatAgentCountSubject": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chatSafeCollaboration": "Secure collaboration",
+  "chatAddAttachment": "Add attachment",
+  "chatRemoveAttachment": "Remove attachment",
+  "chatViewAttachment": "View attachment",
+  "chatAttachmentFileFallback": "File",
+  "chatLoadingMentionCandidates": "Loading mention candidates...",
+  "mentionCandidateBadgeUser": "User",
+  "mentionCandidateBadgeAgent": "Agent",
+  "mentionCandidateBadgeUnknown": "Unknown",
+  "mentionSelectorAllSurface": "@everyone",
+  "mentionSelectorHumansSurface": "@users",
+  "mentionSelectorAgentsSurface": "@agents",
+  "mentionSelectorAllSubtitle": "Notify everyone in this group",
+  "mentionSelectorHumansSubtitle": "Notify group users only",
+  "mentionSelectorAgentsSubtitle": "Notify group agents",
+  "mentionSelectorAllBadge": "Users + Agents",
+  "mentionDisabledUnknownMemberType": "This member type cannot be mentioned directly yet",
+  "mentionDisabledInactiveMember": "This member is not active and cannot be mentioned",
+  "chatSendFailed": "Send failed",
+  "chatRetrySend": "Retry send",
+  "chatSending": "Sending",
+  "chatViewPeerInfo": "View user or agent info",
+  "chatOpenPeerInfo": "Open {type} info",
+  "@chatOpenPeerInfo": {
+    "placeholders": {
+      "type": {}
+    }
+  },
+  "chatCurrentConversationCannotSend": "This conversation cannot send messages right now",
+  "chatAgentDeletedBadge": "Agent deleted",
+  "chatPeerInfoUserTitle": "User info",
+  "chatPeerInfoAgentTitle": "Agent info",
+  "chatPeerInfoGroupTitle": "Group info",
+  "chatPeerInfoGroupSection": "Group",
+  "chatPeerInfoIdentityCard": "Identity card",
+  "chatPeerInfoClose": "Close info dialog",
+  "chatPeerInfoCopyDid": "Copy DID",
+  "chatPeerInfoDidCopied": "DID copied",
+  "chatPeerInfoProfileLoading": "Loading profile",
+  "chatPeerInfoProfileUnavailable": "Profile unavailable",
+  "chatPeerInfoAwikiUser": "AWiki user",
+  "chatPeerInfoCollapseAgentInbox": "Hide Agent inbox",
+  "chatPeerInfoAgentInbox": "Agent inbox",
+  "chatPeerInfoUnknownContact": "Unknown contact",
+  "chatPeerInfoLoadingProfile": "Loading profile...",
+  "chatPeerInfoNoProfile": "No profile provided yet",
+  "chatPeerInfoRenameAgent": "Rename agent",
+  "chatPeerInfoRenameAgentTooltip": "Rename",
+  "chatPeerInfoMemberCount": "{count} members",
+  "@chatPeerInfoMemberCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "peerProfileLoadFailed": "Unable to load this user's profile",
   "peerProfileTitle": "Profile",
   "peerProfileSendMessage": "Send message",
@@ -224,7 +470,365 @@
   "peerProfileDeleteThread": "Delete local chat history",
   "peerProfileUnfollowed": "Unfollowed",
   "peerProfileThreadDeleted": "Local chat history deleted",
-  "relationshipNone": "none",
+  "agentPageTitle": "Agents",
+  "agentCreateDaemon": "Create Daemon",
+  "agentEmpty": "No agents yet",
+  "agentSelectOne": "Select an agent",
+  "agentCreateRuntime": "Create Agent",
+  "agentOpenChat": "Open chat",
+  "agentRename": "Rename",
+  "agentUpgrade": "Upgrade",
+  "agentUpgrading": "Upgrading",
+  "agentCancelUpgrade": "Cancel upgrade",
+  "agentCancelling": "Cancelling",
+  "agentDeleteDaemon": "Delete daemon",
+  "agentDeleteRuntime": "Delete agent",
+  "agentDeleting": "Deleting",
+  "agentRecentRuns": "Recent runs",
+  "agentRefreshStatus": "Refresh status",
+  "agentDeletingNotice": "Delete request sent. Waiting for daemon sync.",
+  "agentDaemonSubtitle": "Daemon · {count} Agents · {status}",
+  "@agentDaemonSubtitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "status": {}
+    }
+  },
+  "agentRuntimeSubtitle": "{runtime} · {status}",
+  "@agentRuntimeSubtitle": {
+    "placeholders": {
+      "runtime": {},
+      "status": {}
+    }
+  },
+  "agentUnnamedDaemon": "Unnamed daemon",
+  "agentUnnamedRuntime": "Unnamed agent",
+  "agentListDeletingSync": "Deleting · waiting for sync",
+  "agentListUpgradeFailed": "Upgrade failed",
+  "agentListCancellingUpgrade": "Cancelling upgrade",
+  "agentListOrphanGroup": "Not linked to a daemon",
+  "agentListNoRuntime": "No Runtime Agent created yet",
+  "agentListRuntimeCreating": "{runtime} · creating",
+  "@agentListRuntimeCreating": {
+    "placeholders": {
+      "runtime": {}
+    }
+  },
+  "agentListRuntimeWaitingStatus": "{runtime} · creation status has not returned yet. Refresh to check.",
+  "@agentListRuntimeWaitingStatus": {
+    "placeholders": {
+      "runtime": {}
+    }
+  },
+  "daemonUpgradePreparingDownload": "Preparing download",
+  "daemonUpgradeRouteDirect": "Direct",
+  "daemonUpgradeRouteEnvironmentProxy": "Proxy",
+  "daemonUpgradeRouteLocalProxy": "Local proxy {route}",
+  "@daemonUpgradeRouteLocalProxy": {
+    "placeholders": {
+      "route": {}
+    }
+  },
+  "daemonUpgradeDownloaded": "Downloaded {size}",
+  "@daemonUpgradeDownloaded": {
+    "placeholders": {
+      "size": {}
+    }
+  },
+  "daemonUpgradeRouteIndex": "Route {index}/{count}",
+  "@daemonUpgradeRouteIndex": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "agentUpgradeTitle": "Upgrade daemon",
+  "agentUpgradeMessage": "The daemon will download the latest version and restart the service.",
+  "daemonUpgradeRequesting": "Sending upgrade request",
+  "daemonUpgradeWaitingForDaemon": "Upgrade request sent. Waiting for daemon confirmation.",
+  "daemonUpgradeFetchingManifest": "Fetching version information",
+  "daemonUpgradeSelectingSource": "Selecting download route",
+  "daemonUpgradeDownloading": "Downloading package",
+  "daemonUpgradeRetryingSource": "Download interrupted. Retrying",
+  "daemonUpgradeVerifying": "Verifying package",
+  "daemonUpgradeExtracting": "Extracting package",
+  "daemonUpgradeInstalling": "Installing new version",
+  "daemonUpgradeRestarting": "Restarting daemon",
+  "daemonUpgradeInProgress": "Upgrading",
+  "agentUpgradeIncomplete": "The upgrade did not complete. Check the network and try again.",
+  "agentUpgradeDownloadFailed": "Package download failed. Check the network and try again. {summary}",
+  "@agentUpgradeDownloadFailed": {
+    "placeholders": {
+      "summary": {}
+    }
+  },
+  "agentUpgradeNotCancellable": "This upgrade has already reached the restart stage and cannot be cancelled. Refresh status later to confirm the result.",
+  "agentUpgradeCancelFailed": "Failed to cancel the upgrade. Refresh status and try again.",
+  "agentUpgradeCancelNoResponse": "Cancel request sent, but the daemon has not responded yet. Refresh status to confirm the upgrade result.",
+  "agentDeleteDaemonMessage": "Deleting this daemon stops the host service and removes the agents it created. Local data is archived and will no longer be used.",
+  "agentDeleteRuntimeMessage": "Deleting this agent removes it from the list. Local data is archived and will no longer be used.",
+  "agentInstallTitle": "Install daemon on host",
+  "agentInstallSupportedTypes": "Supported Agent types: Hermes, Codex, Claude Code. After installing the host daemon, you can create Runtime Agents under it.",
+  "agentInstallTokenExpiresAt": "Expires at: {expiresAt}",
+  "@agentInstallTokenExpiresAt": {
+    "placeholders": {
+      "expiresAt": {}
+    }
+  },
+  "agentCopyInstallCommand": "Copy install command",
+  "agentCreateTitle": "Create Agent",
+  "agentCreateType": "Agent type",
+  "agentCreateWorkspacePolicy": "Working directory policy",
+  "agentCreateWorkspaceRouteRoot": "Per conversation",
+  "agentCreateWorkspaceRouteRootDescription": "Each contact, group, or thread uses its own context directory.",
+  "agentCreateWorkspaceSharedRoot": "Shared directory",
+  "agentCreateWorkspaceSharedRootDescription": "This identity shares one directory, suitable for manual tasks.",
+  "agentCreateWorkspaceWorktreePerTask": "Worktree per task",
+  "agentCreateWorkspaceWorktreePerTaskDescription": "Each run uses an isolated worktree.",
+  "agentCreateHandlePreview": "Final Handle: {handle}",
+  "@agentCreateHandlePreview": {
+    "placeholders": {
+      "handle": {}
+    }
+  },
+  "agentCreateHandleAvailabilityChecking": "Checking availability...",
+  "agentCreateHandleAvailabilityPending": "Availability cannot be checked right now. It will be checked again when creating.",
+  "agentCreateHandleChecking": "Checking Handle availability",
+  "agentCreateHandleAvailable": "This Handle is available",
+  "agentCreateHandleUnavailableUsed": "This Handle is already taken",
+  "agentCreateHandleUnavailable": "This Handle is not available",
+  "agentCreateHandleRequired": "Enter a Handle",
+  "agentCreateHandleTooLong": "Handle can be at most {maxLength} characters",
+  "@agentCreateHandleTooLong": {
+    "placeholders": {
+      "maxLength": {}
+    }
+  },
+  "agentCreateHandleInvalidPattern": "Use only lowercase letters, numbers, and hyphens. It must start and end with a letter or number.",
+  "agentCreateHandleNoDoubleHyphen": "Handle cannot contain consecutive hyphens",
+  "agentCreateNeedsRouteWorkspace": "{agentType} requires per-conversation working directories.",
+  "@agentCreateNeedsRouteWorkspace": {
+    "placeholders": {
+      "agentType": {}
+    }
+  },
+  "agentCreateHermesDescription": "Built-in Hermes Runtime Agent.",
+  "agentCreateNeedsGenericCliCapability": "{agentType} requires generic-cli capability from the daemon.",
+  "@agentCreateNeedsGenericCliCapability": {
+    "placeholders": {
+      "agentType": {}
+    }
+  },
+  "agentCreateUnsupportedDriver": "The current daemon does not support the {agentType} driver.",
+  "@agentCreateUnsupportedDriver": {
+    "placeholders": {
+      "agentType": {}
+    }
+  },
+  "agentCreateNeedsRouteSession": "{agentType} requires route session and native resume support.",
+  "@agentCreateNeedsRouteSession": {
+    "placeholders": {
+      "agentType": {}
+    }
+  },
+  "agentCreateNeedsHostAccess": "{agentType} requires daemon support for full host access.",
+  "@agentCreateNeedsHostAccess": {
+    "placeholders": {
+      "agentType": {}
+    }
+  },
+  "agentCreateRequiresSignedInCli": "Requires an installed and signed-in {agentType} CLI on the daemon host.",
+  "@agentCreateRequiresSignedInCli": {
+    "placeholders": {
+      "agentType": {}
+    }
+  },
+  "agentCreateHostAccessTitle": "Full host access",
+  "agentCreateHostAccessDescription": "Can use local files, commands, tools, and network access when the user asks.",
+  "agentRenameTitle": "Rename agent",
+  "agentRenameSubtitle": "The name appears in the agent list, recent conversations, and chat header.",
+  "agentNameField": "Name",
+  "agentNamePlaceholder": "Display name",
+  "agentNameHelp": "Up to {maxLength} characters.",
+  "@agentNameHelp": {
+    "placeholders": {
+      "maxLength": {
+        "type": "int"
+      }
+    }
+  },
+  "agentNameRequired": "Enter an agent name",
+  "agentNameTooLong": "Name can be at most {maxLength} characters",
+  "@agentNameTooLong": {
+    "placeholders": {
+      "maxLength": {
+        "type": "int"
+      }
+    }
+  },
+  "agentStatusProcessing": "Processing",
+  "agentStatusReady": "Ready",
+  "agentStatusNeedsConfig": "Needs config",
+  "agentStatusNeedsUpgrade": "Needs upgrade",
+  "agentStatusFailed": "Failed",
+  "agentStatusOffline": "Offline",
+  "agentStatusDisabled": "Disabled",
+  "agentStatusUnknown": "Unknown",
+  "agentStatusRefreshNeeded": "Refresh",
+  "agentStatusUnsupported": "Unsupported",
+  "agentStatusSemantic": "Agent status: {status}",
+  "@agentStatusSemantic": {
+    "placeholders": {
+      "status": {}
+    }
+  },
+  "agentErrorLoginRequired": "Please log in first.",
+  "agentErrorHandleUnavailable": "This account has no available Handle, so a daemon install command cannot be created right now.",
+  "agentErrorMessageAgentDisabled": "Message Agent is not enabled.",
+  "agentErrorSelectDaemon": "Select a running daemon.",
+  "agentErrorDaemonBootstrapMissing": "The running daemon has not reported a secure bootstrap public key yet. Refresh status first.",
+  "agentErrorDaemonUnreachableDelete": "The daemon is currently unreachable and cannot be deleted yet.",
+  "agentErrorMessageAgentMissing": "This daemon has not created a Message Agent yet.",
+  "agentStatusSyncStillWaiting": "Status sync is still pending. Refresh again later.",
+  "agentErrorScopeMismatch": "This computer is already bound to a daemon for another Handle. Manage it with that Handle, or uninstall the local daemon before installing again.",
+  "agentErrorControllerHandleMismatch": "The client identity does not match the signed-in Handle. Switch to the correct account and copy a new install command.",
+  "agentErrorControllerScopeMissing": "The install command is missing account ownership information. Copy the latest daemon install command again.",
+  "agentErrorInstallCommandUsed": "This install command has already been used. Copy the latest daemon install command again.",
+  "agentErrorSessionExpired": "Your sign-in session has expired. Log in again to view agents.",
+  "agentErrorRequestTimeout": "The request timed out. Please try again later.",
+  "agentErrorNetworkPreserved": "Network connection is temporarily unavailable. Current data has been kept.",
+  "agentErrorLoadFailed": "Agent information cannot be loaded right now. Please try again later.",
+  "agentErrorStatusSessionExpired": "Your sign-in session has expired. Log in again before refreshing daemon status.",
+  "agentErrorStatusTimeout": "Status refresh timed out. Current data has been kept.",
+  "agentErrorStatusNetworkPreserved": "Network connection is temporarily unavailable. Current data has been kept.",
+  "agentErrorStatusRefreshFailed": "Status refresh request failed. Please try again later.",
+  "agentAccessTitle": "Access control",
+  "agentAccessSubtitle": "Configure which Handles can control this agent.",
+  "agentAccessWhitelist": "Whitelist",
+  "agentAccessBlacklist": "Blacklist",
+  "agentAccessSwitchToWhitelist": "Switch to whitelist mode",
+  "agentAccessSwitchToBlacklist": "Switch to blacklist mode",
+  "agentAccessCurrentWhitelist": "Current whitelist mode",
+  "agentAccessCurrentBlacklist": "Current blacklist mode",
+  "agentAccessEnabled": "Enabled",
+  "agentAccessDisabled": "Disabled",
+  "agentAccessHandlePlaceholder": "bob or bob.example.com",
+  "agentAccessAddHandle": "Add Handle",
+  "agentAccessNoHandles": "No Handles yet",
+  "agentAccessRemoveHandle": "Remove Handle",
+  "agentAccessDuplicateWhitelist": "This Handle is already in the whitelist.",
+  "agentAccessDuplicateBlacklist": "This Handle is already in the blacklist.",
+  "agentAccessHandleRequired": "Enter a Handle.",
+  "agentAccessSingleHandleOnly": "Add one Handle at a time.",
+  "agentAccessHandleInvalid": "Enter a short Handle or full Handle.",
+  "agentDiagnosticsTitle": "Diagnostics",
+  "agentDiagnosticsDaemonSubtitle": "Daemon runtime and identity information",
+  "agentDiagnosticsAgentSubtitle": "Agent identity information",
+  "agentDiagnosticsShowMore": "Show more",
+  "agentDiagnosticsCollapse": "Collapse",
+  "agentDiagnosticsShowMoreDetails": "Show more diagnostics",
+  "agentDiagnosticsCollapseDetails": "Collapse diagnostics",
+  "agentDiagnosticCurrentVersion": "Current version",
+  "agentDiagnosticPlatform": "Platform",
+  "agentDiagnosticLatestVersion": "Latest version",
+  "agentDiagnosticMinSupportedVersion": "Minimum supported version",
+  "agentDiagnosticService": "Service",
+  "agentDiagnosticLastSeen": "Last seen",
+  "agentDiagnosticErrorCode": "Error code",
+  "agentDiagnosticRunner": "Runner",
+  "agentDiagnosticProfileStatus": "Profile status",
+  "agentDiagnosticInstallationStatus": "Installation status",
+  "agentDiagnosticServiceInstalled": "Service installed",
+  "agentDiagnosticConfigSummary": "Config summary",
+  "agentDiagnosticHermesProfile": "Hermes profile",
+  "agentDiagnosticRunnerStatus": "Runtime status",
+  "agentDiagnosticActiveSessionCount": "Active sessions",
+  "messageAgentSkipped": "Message Agent skipped this message",
+  "messageAgentFailed": "Message Agent failed",
+  "messageAgentCompleted": "Message Agent completed",
+  "messageAgentProcessing": "Message Agent is processing",
+  "messageAgentReceived": "Message Agent received the message",
+  "messageAgentResultGenerated": "Result generated",
+  "messageAgentDraftApplied": "Draft inserted into the composer",
+  "messageAgentAppActionCompleted": "App action completed",
+  "messageAgentRequestRejected": "Message Agent request rejected",
+  "messageAgentAppActionFailed": "App action failed",
+  "messageAgentWaitingConfirmation": "Waiting for confirmation",
+  "messageAgentUseDraft": "Use draft",
+  "messageAgentActionCreateDraft": "Message Agent created a draft",
+  "messageAgentActionSummarize": "Message Agent created a summary",
+  "messageAgentActionReadContact": "Message Agent requests contact access",
+  "messageAgentActionUpdateDisplayName": "Message Agent requests a contact name change",
+  "messageAgentActionUpdateNote": "Message Agent requests a contact note change",
+  "messageAgentActionGeneric": "Message Agent requests an app action",
+  "messageAgentTitle": "Message Agent",
+  "messageAgentRuntimeSubtitle": "Runs a {provider} runtime inside the daemon",
+  "@messageAgentRuntimeSubtitle": {
+    "placeholders": {
+      "provider": {}
+    }
+  },
+  "messageAgentExperimentDisabled": "Experimental feature disabled",
+  "messageAgentReadyToEnable": "Ready",
+  "messageAgentNotReady": "Not ready",
+  "messageAgentRunningDaemon": "Running daemon",
+  "messageAgentEngine": "Engine",
+  "messageAgentScope": "Scope",
+  "messageAgentAllProcessableConversations": "All processable conversations",
+  "messageAgentDaemonVersion": "Daemon version",
+  "messageAgentCapabilities": "Capabilities",
+  "messageAgentSecureBootstrap": "Secure bootstrap",
+  "messageAgentPublicKeyReported": "Public key reported",
+  "messageAgentWaitingStatusRefresh": "Waiting for status refresh",
+  "messageAgentEnable": "Enable Message Agent",
+  "messageAgentEnabling": "Enabling",
+  "messageAgentPause": "Pause message processing",
+  "messageAgentDelete": "Delete Message Agent",
+  "messageAgentRevokeAuthorization": "Revoke daemon message authorization",
+  "messageAgentPermissionSummaryEnabled": "Permission summary: reads regular messages, analyzes and summarizes them, creates drafts, and requests user-confirmed app actions.",
+  "messageAgentPermissionSummaryDisabled": "Enable AWIKI_AGENT_IM_ENABLED to configure Message Agent.",
+  "messageAgentPauseTitle": "Pause message processing",
+  "messageAgentPauseMessage": "After pausing, the Message Agent stops reading and processing new messages. The runtime and authorization remain and can be enabled again.",
+  "messageAgentDeleteTitle": "Delete Message Agent",
+  "messageAgentDeleteMessage": "Deletion pauses message processing first, then archives the runtime. The daemon and authorization are not deleted.",
+  "messageAgentRevokeTitle": "Revoke daemon message authorization",
+  "messageAgentRevokeMessage": "Revocation must remove daemon-key-1 through a signed DID Document update. If the update is not completed, it fails and will not treat pause as a successful revoke.",
+  "agentInboxTitle": "Agent inbox",
+  "agentInboxThreadTitle": "Inbox thread",
+  "agentInboxBackToInbox": "Back to inbox",
+  "agentInboxBackToConversation": "Back to conversation",
+  "agentInboxClose": "Close Agent inbox",
+  "agentInboxNotRuntimeConversation": "The current conversation is not a Runtime Agent conversation",
+  "agentInboxDaemonMissing": "This Runtime Agent is not bound to a daemon yet",
+  "agentInboxRefresh": "Refresh Agent inbox",
+  "agentInboxEmpty": "This Agent has no inbox messages yet",
+  "agentInboxLoadMoreThreads": "Load more conversations",
+  "agentInboxScopeAll": "All",
+  "agentInboxScopeDirect": "Direct",
+  "agentInboxScopeGroup": "Groups",
+  "agentInboxLatestAttachment": "Latest: attachment",
+  "agentInboxLatestNoPreview": "Latest: no preview",
+  "agentInboxLatestPreview": "Latest: {preview}",
+  "@agentInboxLatestPreview": {
+    "placeholders": {
+      "preview": {}
+    }
+  },
+  "agentInboxReadOnly": "Read-only inbox",
+  "agentInboxRefreshThread": "Refresh inbox thread",
+  "agentInboxThreadEmpty": "This thread has no messages yet",
+  "agentInboxLoadEarlier": "Load earlier messages",
+  "agentInboxContentTruncated": "Long content truncated",
+  "agentInboxDaemonNoResponse": "Daemon did not respond yet. Please try again later.",
+  "agentInboxQueryFailed": "Inbox query failed",
+  "agentInboxThreadQueryFailed": "Thread query failed",
+  "relationshipNone": "Not following",
   "relationshipFollowing": "following",
   "relationshipFollower": "follower",
   "relationshipFriend": "friend",
@@ -302,6 +906,11 @@
   "didRegistrationRefreshUnsupported": "AWiki Me does not currently include a DID registration plugin, so token refresh is unavailable.",
   "e2eePluginMissing": "AWiki Me does not currently have E2EE enabled. Please integrate the native plugin.",
   "documentPickerFailed": "File selection failed. Please try again later.",
+  "documentSaveFailed": "File save failed. Please try again later.",
+  "attachmentDownloadEmpty": "Attachment download returned no file.",
+  "conversationRemovedFromRecents": "Conversation removed from recents.",
+  "attachmentUnavailable": "The attachment has expired or is not cached on this device. Ask the sender to send it again.",
+  "attachmentOpenFailed": "The attachment cannot be opened. Try again later or save it before opening.",
   "linkOpenFailed": "Unable to open the link",
   "linkOpenFailedWithDetail": "Unable to open the link: {detail}",
   "@linkOpenFailedWithDetail": {

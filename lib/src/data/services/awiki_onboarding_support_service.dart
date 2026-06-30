@@ -104,14 +104,14 @@ String _normalizePhone(String phone) {
   final cnLocalPattern = RegExp(r'^1[3-9]\d{9}$');
   if (raw.startsWith('+')) {
     if (!intlPattern.hasMatch(raw)) {
-      throw ArgumentError('手机号格式不正确，请使用 +国家码手机号，例如 +8613800138000');
+      throw ArgumentError('phone_invalid_intl_example');
     }
     return raw;
   }
   if (cnLocalPattern.hasMatch(raw)) {
     return '+86$raw';
   }
-  throw ArgumentError('手机号格式不正确，请输入国际格式或中国大陆 11 位手机号');
+  throw ArgumentError('phone_invalid_intl_or_cn');
 }
 
 String _normalizeHandle(
@@ -122,7 +122,7 @@ String _normalizeHandle(
   final normalized = handle.trim().toLowerCase();
   final pattern = RegExp('^[a-z0-9-]{$minLength,$maxLength}\$');
   if (!pattern.hasMatch(normalized)) {
-    throw ArgumentError('handle 仅支持小写字母、数字、中划线，不能包含下划线');
+    throw ArgumentError('handle_invalid_pattern');
   }
   return normalized;
 }

@@ -19,3 +19,7 @@ String localizeRelationshipLabel(AppLocalizations l10n, String relationship) {
       return relationship;
   }
 }
+
+bool appLocalizationsUseChinese(AppLocalizations l10n) {
+  return l10n.localeName.toLowerCase().startsWith('zh');
+}

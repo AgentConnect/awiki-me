@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:awiki_me/l10n/app_localizations.dart';
 
+import '../../../app/app_locale.dart';
 import '../../../app/app_services.dart';
 import '../../../app/ui_feedback.dart';
 import '../../../core/performance_logger.dart';
@@ -22,6 +25,7 @@ import '../../friends/friends_provider.dart';
 import '../../group/group_provider.dart';
 import '../../profile/profile_provider.dart';
 import '../../shared/formatters/display_formatters.dart';
+import '../../shared/formatters/localized_ui_formatters.dart';
 import 'app_lifecycle_provider.dart';
 import 'message_sync_coordinator_provider.dart';
 import 'selected_conversation_provider.dart';
@@ -525,7 +529,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     if (!message.isMine) {
       final title = _notificationTitle(update);
-      final preview = message.previewText;
+      final preview = localizeMessagePreview(_currentLocalizations(), message);
       final body = preview.isNotEmpty
           ? preview
           : AppMessage.newMessageArrived().resolveForFallback();
@@ -581,6 +585,13 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       return title;
     }
     return conversationHint.displayName;
+  }
+
+  AppLocalizations _currentLocalizations() {
+    final mode = ref.read(appLocaleModeProvider);
+    final platformLocale = ui.PlatformDispatcher.instance.locale;
+    final effective = resolveEffectiveAppLanguage(mode, platformLocale);
+    return lookupAppLocalizations(effective.locale);
   }
 
   Future<void> _runBusy(Future<void> Function() action) async {

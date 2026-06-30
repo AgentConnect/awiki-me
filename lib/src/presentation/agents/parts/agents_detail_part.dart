@@ -43,7 +43,7 @@ class _AgentDetailPane extends StatelessWidget {
     final agent = selected;
     final responsive = context.awikiResponsive;
     if (agent == null) {
-      return const Center(child: Text('选择一个代理'));
+      return Center(child: Text(context.l10n.agentSelectOne));
     }
     final isRefreshing =
         agent.isDaemon && state.isStatusQueryPending(agent.agentDid);
@@ -64,7 +64,7 @@ class _AgentDetailPane extends StatelessWidget {
     final isUpgradeSending =
         agent.isDaemon &&
         state.isActionPending(AgentActionKeys.upgradeDaemon(agent.agentDid));
-    final title = AgentDisplayName.title(agent);
+    final title = localizeAgentTitle(context.l10n, agent);
     final visualStatus = AgentVisualStatus.fromAgent(
       agent,
       hasPendingTurn: isDeleting || pendingAgentDids.contains(agent.agentDid),
@@ -80,6 +80,7 @@ class _AgentDetailPane extends StatelessWidget {
     final upgradeProgress = agent.isDaemon
         ? state.daemonUpgradeProgress[agent.agentDid]
         : null;
+    final runtimeDisplay = agent.isRuntime ? agentRuntimeDisplay(agent) : null;
     return SafeArea(
       bottom: false,
       child: SelectionArea(
@@ -108,6 +109,26 @@ class _AgentDetailPane extends StatelessWidget {
                 spacing: responsive.spacing(8),
                 runSpacing: responsive.spacing(8),
                 children: <Widget>[
+                  SemanticPill(
+                    label: agent.isDaemon
+                        ? 'Daemon'
+                        : context.l10n.identityTypeAgent,
+                    tone: SemanticPillTone.identity,
+                  ),
+                  if (runtimeDisplay != null)
+                    SemanticPill(
+                      label: runtimeDisplay.label,
+                      tone: SemanticPillTone.runtime,
+                    ),
+                ],
+              ),
+            ),
+            SizedBox(height: responsive.spacing(10)),
+            SelectionContainer.disabled(
+              child: Wrap(
+                spacing: responsive.spacing(8),
+                runSpacing: responsive.spacing(8),
+                children: <Widget>[
                   if (agent.isDaemon)
                     _DaemonRefreshIconButton(
                       isLoading: isRefreshing,
@@ -117,7 +138,7 @@ class _AgentDetailPane extends StatelessWidget {
                   if (agent.isDaemon)
                     _ActionButton(
                       icon: CupertinoIcons.sparkles,
-                      label: '创建 Agent',
+                      label: context.l10n.agentCreateRuntime,
                       onPressed:
                           isCreatingRuntime ||
                               (agent.isDaemon && agent.latest.needsUpgrade)
@@ -127,18 +148,20 @@ class _AgentDetailPane extends StatelessWidget {
                   if (agent.isRuntime)
                     _ActionButton(
                       icon: CupertinoIcons.chat_bubble_2,
-                      label: '打开聊天',
+                      label: context.l10n.agentOpenChat,
                       onPressed: () => onOpenChat(agent),
                     ),
                   _ActionButton(
                     icon: CupertinoIcons.pencil,
-                    label: '改名',
+                    label: context.l10n.agentRename,
                     onPressed: isRenaming ? null : () => onRename(agent),
                   ),
                   if (agent.isDaemon && agent.latest.needsUpgrade)
                     _ActionButton(
                       icon: CupertinoIcons.arrow_up_circle,
-                      label: isUpgrading ? '升级中' : '升级',
+                      label: isUpgrading
+                          ? context.l10n.agentUpgrading
+                          : context.l10n.agentUpgrade,
                       onPressed: isUpgradeSending || isUpgrading
                           ? null
                           : () => onUpgrade(agent),
@@ -146,7 +169,9 @@ class _AgentDetailPane extends StatelessWidget {
                   if (isUpgrading)
                     _ActionButton(
                       icon: CupertinoIcons.xmark_circle,
-                      label: isCancelling ? '取消中' : '取消升级',
+                      label: isCancelling
+                          ? context.l10n.agentCancelling
+                          : context.l10n.agentCancelUpgrade,
                       danger: true,
                       onPressed: isCancelling
                           ? null
@@ -155,10 +180,10 @@ class _AgentDetailPane extends StatelessWidget {
                   _ActionButton(
                     icon: CupertinoIcons.trash,
                     label: isDeleting
-                        ? '删除中'
+                        ? context.l10n.agentDeleting
                         : agent.isDaemon
-                        ? '删除代理'
-                        : '删除智能体',
+                        ? context.l10n.agentDeleteDaemon
+                        : context.l10n.agentDeleteRuntime,
                     danger: true,
                     onPressed:
                         isDeleteSending ||
@@ -196,7 +221,7 @@ class _AgentDetailPane extends StatelessWidget {
             ],
             SizedBox(height: responsive.spacing(18)),
             if (agent.isRuntime && agent.recentRuns.isNotEmpty) ...<Widget>[
-              const _SectionTitle('最近 Run'),
+              _SectionTitle(context.l10n.agentRecentRuns),
               SizedBox(height: responsive.spacing(8)),
               _RunStatusPanel(run: agent.recentRuns.first),
               SizedBox(height: responsive.spacing(18)),
@@ -286,7 +311,7 @@ class _AgentDeletingNotice extends StatelessWidget {
           SizedBox(width: responsive.spacing(9)),
           Expanded(
             child: Text(
-              '删除请求已发送，正在等待代理同步。',
+              context.l10n.agentDeletingNotice,
               style: TextStyle(
                 color: const Color(0xFF31527A),
                 fontSize: responsive.bodySm,
@@ -368,7 +393,7 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      '消息处理 Agent',
+                      context.l10n.messageAgentTitle,
                       style: TextStyle(
                         color: const Color(0xFF101B32),
                         fontSize: responsive.bodyMd,
@@ -378,8 +403,10 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
                     SizedBox(height: responsive.spacing(2)),
                     Text(
                       enabled
-                          ? '运行 Daemon 内创建 ${provider.displayLabel} runtime'
-                          : '实验功能关闭',
+                          ? context.l10n.messageAgentRuntimeSubtitle(
+                              provider.displayLabel,
+                            )
+                          : context.l10n.messageAgentExperimentDisabled,
                       style: TextStyle(
                         color: const Color(0xFF66728A),
                         fontSize: responsive.metaSm,
@@ -389,7 +416,9 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
                 ),
               ),
               _MessageAgentStatePill(
-                text: enabled && hasBootstrapKey ? '可启用' : '未就绪',
+                text: enabled && hasBootstrapKey
+                    ? context.l10n.messageAgentReadyToEnable
+                    : context.l10n.messageAgentNotReady,
                 active: enabled && hasBootstrapKey,
               ),
             ],
@@ -398,14 +427,31 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
           SelectionContainer.disabled(
             child: _MessageAgentFactGrid(
               rows: <_MessageAgentFact>[
-                _MessageAgentFact('运行 Daemon', AgentDisplayName.title(daemon)),
-                _MessageAgentFact('引擎', provider.displayLabel),
-                const _MessageAgentFact('处理范围', '所有可处理会话'),
-                _MessageAgentFact('Daemon 版本', _daemonRuntimeSummary(daemon)),
-                _MessageAgentFact('可用能力', provider.capabilityLabel),
                 _MessageAgentFact(
-                  '安全 bootstrap',
-                  hasBootstrapKey ? '已上报公钥' : '等待刷新状态',
+                  context.l10n.messageAgentRunningDaemon,
+                  localizeAgentTitle(context.l10n, daemon),
+                ),
+                _MessageAgentFact(
+                  context.l10n.messageAgentEngine,
+                  provider.displayLabel,
+                ),
+                _MessageAgentFact(
+                  context.l10n.messageAgentScope,
+                  context.l10n.messageAgentAllProcessableConversations,
+                ),
+                _MessageAgentFact(
+                  context.l10n.messageAgentDaemonVersion,
+                  _daemonRuntimeSummary(context, daemon),
+                ),
+                _MessageAgentFact(
+                  context.l10n.messageAgentCapabilities,
+                  provider.capabilityLabel,
+                ),
+                _MessageAgentFact(
+                  context.l10n.messageAgentSecureBootstrap,
+                  hasBootstrapKey
+                      ? context.l10n.messageAgentPublicKeyReported
+                      : context.l10n.messageAgentWaitingStatusRefresh,
                 ),
               ],
             ),
@@ -420,23 +466,25 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
               children: <Widget>[
                 _ActionButton(
                   icon: CupertinoIcons.check_mark_circled,
-                  label: isEnablePending ? '启用中' : '启用消息处理 Agent',
+                  label: isEnablePending
+                      ? context.l10n.messageAgentEnabling
+                      : context.l10n.messageAgentEnable,
                   onPressed: canEnable ? onEnable : null,
                 ),
                 _ActionButton(
                   icon: CupertinoIcons.pause_circle,
-                  label: '暂停处理消息',
+                  label: context.l10n.messageAgentPause,
                   onPressed: canManage ? onPause : null,
                 ),
                 _ActionButton(
                   icon: CupertinoIcons.trash,
-                  label: '删除消息处理 Agent',
+                  label: context.l10n.messageAgentDelete,
                   danger: true,
                   onPressed: canManage ? onDelete : null,
                 ),
                 _ActionButton(
                   icon: CupertinoIcons.lock_slash,
-                  label: '撤销 Daemon 消息授权',
+                  label: context.l10n.messageAgentRevokeAuthorization,
                   danger: true,
                   onPressed: canManage ? onRevoke : null,
                 ),
@@ -469,11 +517,15 @@ class _DaemonUpgradeProgressPanel extends StatelessWidget {
       if (progress.downloadedBytes != null && progress.totalBytes != null)
         '${_formatBytes(progress.downloadedBytes!)} / ${_formatBytes(progress.totalBytes!)}'
       else if (progress.downloadedBytes != null)
-        '已下载 ${_formatBytes(progress.downloadedBytes!)}',
+        _downloadedLabel(context, progress.downloadedBytes!),
       if (progress.speedBytesPerSecond != null)
         '${_formatBytes(progress.speedBytesPerSecond!)}/s',
       if (progress.sourceIndex != null && progress.sourceCount != null)
-        '线路 ${progress.sourceIndex}/${progress.sourceCount}',
+        _sourceRouteLabel(
+          context,
+          progress.sourceIndex!,
+          progress.sourceCount!,
+        ),
     ];
     return Container(
       padding: EdgeInsets.all(responsive.spacing(14)),
@@ -491,7 +543,7 @@ class _DaemonUpgradeProgressPanel extends StatelessWidget {
               SizedBox(width: responsive.spacing(9)),
               Expanded(
                 child: Text(
-                  progress.displayMessage,
+                  localizeDaemonUpgradeProgress(context.l10n, progress),
                   style: TextStyle(
                     color: const Color(0xFF101B32),
                     fontSize: responsive.bodySm,
@@ -523,7 +575,9 @@ class _DaemonUpgradeProgressPanel extends StatelessWidget {
                 borderRadius: BorderRadius.circular(responsive.radius(7)),
                 onPressed: onCancel,
                 child: Text(
-                  isCancelling ? '取消中' : '取消',
+                  isCancelling
+                      ? context.l10n.agentCancelling
+                      : context.l10n.commonCancel,
                   style: TextStyle(
                     color: isCancelling
                         ? const Color(0xFF8A96AA)
@@ -550,7 +604,7 @@ class _DaemonUpgradeProgressPanel extends StatelessWidget {
           if (progress.sourceUrl != null || progress.route != null) ...<Widget>[
             SizedBox(height: responsive.spacing(6)),
             Text(
-              _upgradeSourceLabel(progress),
+              _upgradeSourceLabel(context, progress),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -679,8 +733,8 @@ class _MessageAgentPermissionSummary extends StatelessWidget {
       ),
       child: Text(
         enabled
-            ? '权限摘要：读取普通消息，分析、总结、生成草稿，并向 App 请求需要确认的 action。'
-            : '启用 AWIKI_AGENT_IM_ENABLED 后可配置消息处理 Agent。',
+            ? context.l10n.messageAgentPermissionSummaryEnabled
+            : context.l10n.messageAgentPermissionSummaryDisabled,
         style: TextStyle(
           color: const Color(0xFF344056),
           fontSize: responsive.bodySm,
@@ -713,13 +767,21 @@ bool _daemonHasBootstrapPublicKey(
   }
 }
 
-String _daemonRuntimeSummary(AgentSummary daemon) {
+String _daemonRuntimeSummary(BuildContext context, AgentSummary daemon) {
   final version = _nonEmpty(daemon.latest.version);
   final platform = _nonEmpty(daemon.latest.platform);
   if (version != null && platform != null) {
     return '$version · $platform';
   }
-  return version ?? platform ?? '未知';
+  return version ?? platform ?? context.l10n.commonUnknown;
+}
+
+String _downloadedLabel(BuildContext context, int bytes) {
+  return context.l10n.daemonUpgradeDownloaded(_formatBytes(bytes));
+}
+
+String _sourceRouteLabel(BuildContext context, int index, int count) {
+  return context.l10n.daemonUpgradeRouteIndex(index, count);
 }
 
 class _RunStatusPanel extends StatelessWidget {

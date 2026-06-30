@@ -42,6 +42,51 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonGotIt => 'Got it';
 
   @override
+  String get commonDelete => 'Delete';
+
+  @override
+  String get commonRetry => 'Retry';
+
+  @override
+  String get commonClose => 'Close';
+
+  @override
+  String get commonDetails => 'Details';
+
+  @override
+  String get commonMoreActions => 'More actions';
+
+  @override
+  String get commonSearch => 'Search';
+
+  @override
+  String get commonCopy => 'Copy';
+
+  @override
+  String get commonCopied => 'Copied';
+
+  @override
+  String get commonCopyDetails => 'Copy details';
+
+  @override
+  String get commonReject => 'Reject';
+
+  @override
+  String get commonRemove => 'Remove';
+
+  @override
+  String get commonPause => 'Pause';
+
+  @override
+  String get commonRevoke => 'Revoke authorization';
+
+  @override
+  String get commonUnknown => 'Unknown';
+
+  @override
+  String get commonLoadMore => 'Load more';
+
+  @override
   String get commonPleaseWait => 'Please wait...';
 
   @override
@@ -49,6 +94,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commonError => 'Error';
+
+  @override
+  String get commonErrorDetails => 'Error details';
 
   @override
   String get realtimeStatusConnecting => 'Connecting to message service...';
@@ -188,16 +236,101 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingMissingNicknameContent => 'Please enter a nickname.';
 
   @override
+  String get onboardingMacHeroPrefix => 'Connect your ';
+
+  @override
+  String get onboardingMacHeroHighlight => 'Agent';
+
+  @override
+  String get onboardingMacHeroSuffix => ' world';
+
+  @override
+  String get onboardingMacSubtitle =>
+      'Securely connect people, Agents, and organizations for smarter collaboration and faster decisions.';
+
+  @override
+  String get onboardingMacFeatureSecureTitle => 'Secure';
+
+  @override
+  String get onboardingMacFeatureSecureSubtitle =>
+      'Enterprise-grade protection';
+
+  @override
+  String get onboardingMacFeatureCollaborateTitle => 'Collaborative';
+
+  @override
+  String get onboardingMacFeatureCollaborateSubtitle =>
+      'Human-Agent teamwork with smooth information flow';
+
+  @override
+  String get onboardingMacFeatureControlTitle => 'Controlled access';
+
+  @override
+  String get onboardingMacFeatureControlSubtitle =>
+      'Fine-grained permissions for safer data';
+
+  @override
+  String get onboardingMacChipFundingAgent => 'Funding Agent';
+
+  @override
+  String get onboardingMacChipLegalAgent => 'Legal Agent';
+
+  @override
+  String get onboardingMacChipInvestor => 'Investor';
+
+  @override
+  String get onboardingMacVerified => 'Verified';
+
+  @override
+  String get onboardingMacOnline => 'Online';
+
+  @override
+  String get onboardingCredentialsField => 'Identity credentials';
+
+  @override
+  String get onboardingNoLocalCredentialSaved =>
+      'No saved identity credentials on this device';
+
+  @override
   String get secureMessagingClient => 'Secure messaging client';
 
   @override
   String get shellNavMessages => 'Messages';
 
   @override
+  String get shellNavAgents => 'Agents';
+
+  @override
   String get shellNavFriends => 'Friends';
 
   @override
+  String get shellNavContacts => 'Contacts';
+
+  @override
+  String get shellNavTasks => 'Tasks';
+
+  @override
+  String get shellNavWorkspace => 'Workspace';
+
+  @override
+  String get shellNavSettings => 'Settings';
+
+  @override
   String get shellNavMe => 'Me';
+
+  @override
+  String get shellTasksPlaceholderTitle => 'Tasks';
+
+  @override
+  String get shellTasksPlaceholderSubtitle =>
+      'Task views are coming soon. Current task status is shown in conversations and identity cards.';
+
+  @override
+  String get shellWorkspacePlaceholderTitle => 'Workspace';
+
+  @override
+  String get shellWorkspacePlaceholderSubtitle =>
+      'The workspace module is coming soon.';
 
   @override
   String get conversationsTitle => 'Messages';
@@ -213,7 +346,165 @@ class AppLocalizationsEn extends AppLocalizations {
       'Follow a contact or join a group chat to get started.';
 
   @override
+  String get conversationsRecentTitle => 'Recent conversations';
+
+  @override
+  String get conversationsSearchPlaceholder => 'Search conversations';
+
+  @override
+  String get conversationsNoResultsTitle => 'No matching conversations';
+
+  @override
+  String get conversationsNoResultsSubtitle => 'Try another keyword';
+
+  @override
+  String get conversationsDeleteTitle => 'Delete conversation';
+
+  @override
+  String get conversationsDeleteContent =>
+      'This conversation will be removed from recents, but message history will be kept. It will appear again when you reopen it or receive a new message.';
+
+  @override
+  String conversationsUnreadTag(Object count) {
+    return '$count unread';
+  }
+
+  @override
+  String get conversationsMentionMeTag => '@me';
+
+  @override
+  String get conversationsDraftTag => 'Draft';
+
+  @override
+  String conversationsAttachmentPreview(Object name) {
+    return 'Attachment: $name';
+  }
+
+  @override
+  String get conversationsDeletedAgentBadge => 'Agent deleted';
+
+  @override
+  String get conversationsNewMessages => 'New messages';
+
+  @override
+  String get conversationPeerBadgeGroup => 'Group';
+
+  @override
+  String get conversationPeerBadgeAi => 'AI';
+
+  @override
+  String get conversationPeerChatBadgeMyAgent => 'My agent';
+
+  @override
+  String get conversationPeerChatBadgeAgent => 'Agent';
+
+  @override
+  String get conversationPeerTypeGroup => 'Group chat';
+
+  @override
+  String get conversationPeerTypeAgent => 'Agent';
+
+  @override
+  String get conversationPeerTypeUser => 'User';
+
+  @override
+  String get conversationPeerOwnerGroup => 'AWiki group';
+
+  @override
+  String get conversationPeerOwnerMyRuntimeAgent => 'Local Runtime Agent';
+
+  @override
+  String get conversationPeerOwnerAgent => 'AWiki Agent';
+
+  @override
+  String get conversationPeerOwnerUser => 'AWiki user';
+
+  @override
+  String get conversationInfoTitle => 'Conversation info';
+
+  @override
+  String get conversationIdentityStatus => 'Identity status:';
+
+  @override
+  String get conversationIdentityVerified => 'Verified';
+
+  @override
+  String get conversationOwnerLabel => 'Owner:';
+
+  @override
+  String get conversationTypeLabel => 'Type:';
+
+  @override
+  String get conversationCapabilitiesTitle => 'Capabilities';
+
+  @override
+  String get conversationCapabilitySendMessage => 'Send messages';
+
+  @override
+  String get conversationCapabilityViewProfile => 'View profile';
+
+  @override
+  String get conversationCapabilitySecureConnection => 'Secure connection';
+
+  @override
+  String get conversationCapabilityHistory => 'Conversation history';
+
+  @override
+  String get conversationStatusTitle => 'Conversation status';
+
+  @override
+  String get conversationUnreadMessagesLabel => 'Unread:';
+
+  @override
+  String conversationUnreadMessagesValue(int count) {
+    return '$count unread';
+  }
+
+  @override
+  String get conversationLatestPreviewLabel => 'Latest preview:';
+
+  @override
+  String get conversationConnectionStatusLabel => 'Connection:';
+
+  @override
+  String get conversationConnectionEstablished => 'Established';
+
+  @override
+  String get conversationBackToChat => 'Back to chat';
+
+  @override
   String get friendsTitle => 'Friends';
+
+  @override
+  String get friendsGroups => 'Groups';
+
+  @override
+  String get friendsFollowing => 'Following';
+
+  @override
+  String get friendsFollowers => 'Followers';
+
+  @override
+  String get friendsViewAll => 'View all';
+
+  @override
+  String get friendsFollow => 'Follow';
+
+  @override
+  String get friendsUnfollow => 'Unfollow';
+
+  @override
+  String get friendsFollowingEmpty => 'You are not following anyone yet.';
+
+  @override
+  String get friendsFollowersEmpty => 'No new followers yet.';
+
+  @override
+  String get friendsUnfollowTitle => 'Unfollow';
+
+  @override
+  String get friendsUnfollowMessage =>
+      'After unfollowing, this contact will be removed from Following.';
 
   @override
   String get profileMeTitle => 'Me';
@@ -238,6 +529,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get profileTagsPlaceholder => 'Tags, separated by commas';
+
+  @override
+  String get profileOpenHomepage => 'Open homepage';
 
   @override
   String get settingsTitle => 'Settings';
@@ -428,6 +722,73 @@ class AppLocalizationsEn extends AppLocalizations {
       'Confirm the identity to follow this contact or Agent.';
 
   @override
+  String get identityInputSemantics => 'Enter a handle or DID';
+
+  @override
+  String get identityInputPlaceholder => 'Enter @handle, DID, or Agent address';
+
+  @override
+  String get identitySearchLabel => 'Resolve identity';
+
+  @override
+  String get identityResolving => 'Resolving...';
+
+  @override
+  String get identitySubmitting => 'Processing...';
+
+  @override
+  String get identityQueryRequired => 'Enter a handle or DID.';
+
+  @override
+  String get identityResolveFailed =>
+      'Identity not found. Check the handle or DID and try again.';
+
+  @override
+  String get identityInvalidContact =>
+      'This contact identity is invalid and cannot be opened.';
+
+  @override
+  String get identityMissingDid => 'Identity resolution returned no DID.';
+
+  @override
+  String get identityVerified => 'Verified';
+
+  @override
+  String get identityTypeLabel => 'Type';
+
+  @override
+  String get identityRelationshipLabel => 'Relation';
+
+  @override
+  String get identityBioLabel => 'Bio';
+
+  @override
+  String get identityTypeAgent => 'Agent';
+
+  @override
+  String get identityTypeUser => 'User';
+
+  @override
+  String get identityAddGroupMemberTitle => 'Add group members';
+
+  @override
+  String get identityAddGroupMemberSubtitle =>
+      'Enter a user or Agent handle / DID, then confirm the identity to add it to the group.';
+
+  @override
+  String get identityAddGroupMemberAction => 'Add';
+
+  @override
+  String get identityAddGroupMemberNotice =>
+      'Confirm this is the identity you want to add to the group.';
+
+  @override
+  String get identityClearInput => 'Clear input';
+
+  @override
+  String get identitySearchNameHandleDid => 'Search name, handle, or DID';
+
+  @override
   String get groupListTitle => 'Group chats';
 
   @override
@@ -490,6 +851,77 @@ class AppLocalizationsEn extends AppLocalizations {
   String get groupCreating => 'Creating group...';
 
   @override
+  String get groupAddMembers => 'Add members';
+
+  @override
+  String get groupRefreshMembers => 'Refresh members';
+
+  @override
+  String get groupDetails => 'View group details';
+
+  @override
+  String get groupRemoveMember => 'Remove member';
+
+  @override
+  String get groupInviteDialogSubtitle =>
+      'Search local identities, or enter a handle / DID to resolve a new identity.';
+
+  @override
+  String get groupInviteShowMore => 'Show more';
+
+  @override
+  String get groupInviteAdding => 'Adding...';
+
+  @override
+  String groupInviteConfirmCount(int count) {
+    return 'Add ($count)';
+  }
+
+  @override
+  String get groupInviteCandidates => 'Available identities';
+
+  @override
+  String get groupInviteSearchResults => 'Search results';
+
+  @override
+  String get groupInviteSelectHint =>
+      'Select one or more identities, then confirm once to add them.';
+
+  @override
+  String get groupInviteNoLocalCandidates =>
+      'No local identities available to invite.';
+
+  @override
+  String get groupInviteNoMatches =>
+      'No local identities matched. Try resolving a handle or DID.';
+
+  @override
+  String get groupInviteAlreadyInGroup => 'Already in group';
+
+  @override
+  String get groupInviteUnnamedAgent => 'Unnamed agent';
+
+  @override
+  String get groupInviteSourceMyAgents => 'My agents';
+
+  @override
+  String get groupInviteSourceFollowing => 'Following';
+
+  @override
+  String get groupInviteSourceFollowers => 'Followers';
+
+  @override
+  String get groupInviteSourceRecent => 'Recent conversations';
+
+  @override
+  String get groupInviteSourceResolved => 'Resolved identity';
+
+  @override
+  String groupRemoveMemberContent(Object memberTitle) {
+    return 'After removing $memberTitle, they will no longer be able to send messages in this group.';
+  }
+
+  @override
   String get chatUnknownUser => 'Unknown';
 
   @override
@@ -503,6 +935,182 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatInputPlaceholder => 'Type a message...';
+
+  @override
+  String get chatDeletedAgentDisabled =>
+      'This agent has been deleted. You can no longer send messages.';
+
+  @override
+  String get chatGroupLeftDisabled =>
+      'You are no longer in this group and cannot send messages.';
+
+  @override
+  String get chatGroupSendDisabled =>
+      'This group is temporarily unavailable for sending messages.';
+
+  @override
+  String get chatAgentProcessing => 'Agent is processing...';
+
+  @override
+  String get chatAgentStillProcessing =>
+      'Agent is still processing. Refresh later to check the result.';
+
+  @override
+  String chatSubjectProcessing(Object subject) {
+    return '$subject is processing...';
+  }
+
+  @override
+  String chatSubjectStillProcessing(Object subject) {
+    return '$subject is still processing. Refresh later to check the result.';
+  }
+
+  @override
+  String get chatAgentSubject => 'Agent';
+
+  @override
+  String chatAgentCountSubject(int count) {
+    return '$count agents';
+  }
+
+  @override
+  String get chatSafeCollaboration => 'Secure collaboration';
+
+  @override
+  String get chatAddAttachment => 'Add attachment';
+
+  @override
+  String get chatRemoveAttachment => 'Remove attachment';
+
+  @override
+  String get chatViewAttachment => 'View attachment';
+
+  @override
+  String get chatAttachmentFileFallback => 'File';
+
+  @override
+  String get chatLoadingMentionCandidates => 'Loading mention candidates...';
+
+  @override
+  String get mentionCandidateBadgeUser => 'User';
+
+  @override
+  String get mentionCandidateBadgeAgent => 'Agent';
+
+  @override
+  String get mentionCandidateBadgeUnknown => 'Unknown';
+
+  @override
+  String get mentionSelectorAllSurface => '@everyone';
+
+  @override
+  String get mentionSelectorHumansSurface => '@users';
+
+  @override
+  String get mentionSelectorAgentsSurface => '@agents';
+
+  @override
+  String get mentionSelectorAllSubtitle => 'Notify everyone in this group';
+
+  @override
+  String get mentionSelectorHumansSubtitle => 'Notify group users only';
+
+  @override
+  String get mentionSelectorAgentsSubtitle => 'Notify group agents';
+
+  @override
+  String get mentionSelectorAllBadge => 'Users + Agents';
+
+  @override
+  String get mentionDisabledUnknownMemberType =>
+      'This member type cannot be mentioned directly yet';
+
+  @override
+  String get mentionDisabledInactiveMember =>
+      'This member is not active and cannot be mentioned';
+
+  @override
+  String get chatSendFailed => 'Send failed';
+
+  @override
+  String get chatRetrySend => 'Retry send';
+
+  @override
+  String get chatSending => 'Sending';
+
+  @override
+  String get chatViewPeerInfo => 'View user or agent info';
+
+  @override
+  String chatOpenPeerInfo(Object type) {
+    return 'Open $type info';
+  }
+
+  @override
+  String get chatCurrentConversationCannotSend =>
+      'This conversation cannot send messages right now';
+
+  @override
+  String get chatAgentDeletedBadge => 'Agent deleted';
+
+  @override
+  String get chatPeerInfoUserTitle => 'User info';
+
+  @override
+  String get chatPeerInfoAgentTitle => 'Agent info';
+
+  @override
+  String get chatPeerInfoGroupTitle => 'Group info';
+
+  @override
+  String get chatPeerInfoGroupSection => 'Group';
+
+  @override
+  String get chatPeerInfoIdentityCard => 'Identity card';
+
+  @override
+  String get chatPeerInfoClose => 'Close info dialog';
+
+  @override
+  String get chatPeerInfoCopyDid => 'Copy DID';
+
+  @override
+  String get chatPeerInfoDidCopied => 'DID copied';
+
+  @override
+  String get chatPeerInfoProfileLoading => 'Loading profile';
+
+  @override
+  String get chatPeerInfoProfileUnavailable => 'Profile unavailable';
+
+  @override
+  String get chatPeerInfoAwikiUser => 'AWiki user';
+
+  @override
+  String get chatPeerInfoCollapseAgentInbox => 'Hide Agent inbox';
+
+  @override
+  String get chatPeerInfoAgentInbox => 'Agent inbox';
+
+  @override
+  String get chatPeerInfoUnknownContact => 'Unknown contact';
+
+  @override
+  String get chatPeerInfoLoadingProfile => 'Loading profile...';
+
+  @override
+  String get chatPeerInfoNoProfile => 'No profile provided yet';
+
+  @override
+  String get chatPeerInfoRenameAgent => 'Rename agent';
+
+  @override
+  String get chatPeerInfoRenameAgentTooltip => 'Rename';
+
+  @override
+  String chatPeerInfoMemberCount(int count) {
+    return '$count members';
+  }
 
   @override
   String get peerProfileLoadFailed => 'Unable to load this user\'s profile';
@@ -526,7 +1134,810 @@ class AppLocalizationsEn extends AppLocalizations {
   String get peerProfileThreadDeleted => 'Local chat history deleted';
 
   @override
-  String get relationshipNone => 'none';
+  String get agentPageTitle => 'Agents';
+
+  @override
+  String get agentCreateDaemon => 'Create Daemon';
+
+  @override
+  String get agentEmpty => 'No agents yet';
+
+  @override
+  String get agentSelectOne => 'Select an agent';
+
+  @override
+  String get agentCreateRuntime => 'Create Agent';
+
+  @override
+  String get agentOpenChat => 'Open chat';
+
+  @override
+  String get agentRename => 'Rename';
+
+  @override
+  String get agentUpgrade => 'Upgrade';
+
+  @override
+  String get agentUpgrading => 'Upgrading';
+
+  @override
+  String get agentCancelUpgrade => 'Cancel upgrade';
+
+  @override
+  String get agentCancelling => 'Cancelling';
+
+  @override
+  String get agentDeleteDaemon => 'Delete daemon';
+
+  @override
+  String get agentDeleteRuntime => 'Delete agent';
+
+  @override
+  String get agentDeleting => 'Deleting';
+
+  @override
+  String get agentRecentRuns => 'Recent runs';
+
+  @override
+  String get agentRefreshStatus => 'Refresh status';
+
+  @override
+  String get agentDeletingNotice =>
+      'Delete request sent. Waiting for daemon sync.';
+
+  @override
+  String agentDaemonSubtitle(int count, Object status) {
+    return 'Daemon · $count Agents · $status';
+  }
+
+  @override
+  String agentRuntimeSubtitle(Object runtime, Object status) {
+    return '$runtime · $status';
+  }
+
+  @override
+  String get agentUnnamedDaemon => 'Unnamed daemon';
+
+  @override
+  String get agentUnnamedRuntime => 'Unnamed agent';
+
+  @override
+  String get agentListDeletingSync => 'Deleting · waiting for sync';
+
+  @override
+  String get agentListUpgradeFailed => 'Upgrade failed';
+
+  @override
+  String get agentListCancellingUpgrade => 'Cancelling upgrade';
+
+  @override
+  String get agentListOrphanGroup => 'Not linked to a daemon';
+
+  @override
+  String get agentListNoRuntime => 'No Runtime Agent created yet';
+
+  @override
+  String agentListRuntimeCreating(Object runtime) {
+    return '$runtime · creating';
+  }
+
+  @override
+  String agentListRuntimeWaitingStatus(Object runtime) {
+    return '$runtime · creation status has not returned yet. Refresh to check.';
+  }
+
+  @override
+  String get daemonUpgradePreparingDownload => 'Preparing download';
+
+  @override
+  String get daemonUpgradeRouteDirect => 'Direct';
+
+  @override
+  String get daemonUpgradeRouteEnvironmentProxy => 'Proxy';
+
+  @override
+  String daemonUpgradeRouteLocalProxy(Object route) {
+    return 'Local proxy $route';
+  }
+
+  @override
+  String daemonUpgradeDownloaded(Object size) {
+    return 'Downloaded $size';
+  }
+
+  @override
+  String daemonUpgradeRouteIndex(int index, int count) {
+    return 'Route $index/$count';
+  }
+
+  @override
+  String get agentUpgradeTitle => 'Upgrade daemon';
+
+  @override
+  String get agentUpgradeMessage =>
+      'The daemon will download the latest version and restart the service.';
+
+  @override
+  String get daemonUpgradeRequesting => 'Sending upgrade request';
+
+  @override
+  String get daemonUpgradeWaitingForDaemon =>
+      'Upgrade request sent. Waiting for daemon confirmation.';
+
+  @override
+  String get daemonUpgradeFetchingManifest => 'Fetching version information';
+
+  @override
+  String get daemonUpgradeSelectingSource => 'Selecting download route';
+
+  @override
+  String get daemonUpgradeDownloading => 'Downloading package';
+
+  @override
+  String get daemonUpgradeRetryingSource => 'Download interrupted. Retrying';
+
+  @override
+  String get daemonUpgradeVerifying => 'Verifying package';
+
+  @override
+  String get daemonUpgradeExtracting => 'Extracting package';
+
+  @override
+  String get daemonUpgradeInstalling => 'Installing new version';
+
+  @override
+  String get daemonUpgradeRestarting => 'Restarting daemon';
+
+  @override
+  String get daemonUpgradeInProgress => 'Upgrading';
+
+  @override
+  String get agentUpgradeIncomplete =>
+      'The upgrade did not complete. Check the network and try again.';
+
+  @override
+  String agentUpgradeDownloadFailed(Object summary) {
+    return 'Package download failed. Check the network and try again. $summary';
+  }
+
+  @override
+  String get agentUpgradeNotCancellable =>
+      'This upgrade has already reached the restart stage and cannot be cancelled. Refresh status later to confirm the result.';
+
+  @override
+  String get agentUpgradeCancelFailed =>
+      'Failed to cancel the upgrade. Refresh status and try again.';
+
+  @override
+  String get agentUpgradeCancelNoResponse =>
+      'Cancel request sent, but the daemon has not responded yet. Refresh status to confirm the upgrade result.';
+
+  @override
+  String get agentDeleteDaemonMessage =>
+      'Deleting this daemon stops the host service and removes the agents it created. Local data is archived and will no longer be used.';
+
+  @override
+  String get agentDeleteRuntimeMessage =>
+      'Deleting this agent removes it from the list. Local data is archived and will no longer be used.';
+
+  @override
+  String get agentInstallTitle => 'Install daemon on host';
+
+  @override
+  String get agentInstallSupportedTypes =>
+      'Supported Agent types: Hermes, Codex, Claude Code. After installing the host daemon, you can create Runtime Agents under it.';
+
+  @override
+  String agentInstallTokenExpiresAt(Object expiresAt) {
+    return 'Expires at: $expiresAt';
+  }
+
+  @override
+  String get agentCopyInstallCommand => 'Copy install command';
+
+  @override
+  String get agentCreateTitle => 'Create Agent';
+
+  @override
+  String get agentCreateType => 'Agent type';
+
+  @override
+  String get agentCreateWorkspacePolicy => 'Working directory policy';
+
+  @override
+  String get agentCreateWorkspaceRouteRoot => 'Per conversation';
+
+  @override
+  String get agentCreateWorkspaceRouteRootDescription =>
+      'Each contact, group, or thread uses its own context directory.';
+
+  @override
+  String get agentCreateWorkspaceSharedRoot => 'Shared directory';
+
+  @override
+  String get agentCreateWorkspaceSharedRootDescription =>
+      'This identity shares one directory, suitable for manual tasks.';
+
+  @override
+  String get agentCreateWorkspaceWorktreePerTask => 'Worktree per task';
+
+  @override
+  String get agentCreateWorkspaceWorktreePerTaskDescription =>
+      'Each run uses an isolated worktree.';
+
+  @override
+  String agentCreateHandlePreview(Object handle) {
+    return 'Final Handle: $handle';
+  }
+
+  @override
+  String get agentCreateHandleAvailabilityChecking =>
+      'Checking availability...';
+
+  @override
+  String get agentCreateHandleAvailabilityPending =>
+      'Availability cannot be checked right now. It will be checked again when creating.';
+
+  @override
+  String get agentCreateHandleChecking => 'Checking Handle availability';
+
+  @override
+  String get agentCreateHandleAvailable => 'This Handle is available';
+
+  @override
+  String get agentCreateHandleUnavailableUsed => 'This Handle is already taken';
+
+  @override
+  String get agentCreateHandleUnavailable => 'This Handle is not available';
+
+  @override
+  String get agentCreateHandleRequired => 'Enter a Handle';
+
+  @override
+  String agentCreateHandleTooLong(Object maxLength) {
+    return 'Handle can be at most $maxLength characters';
+  }
+
+  @override
+  String get agentCreateHandleInvalidPattern =>
+      'Use only lowercase letters, numbers, and hyphens. It must start and end with a letter or number.';
+
+  @override
+  String get agentCreateHandleNoDoubleHyphen =>
+      'Handle cannot contain consecutive hyphens';
+
+  @override
+  String agentCreateNeedsRouteWorkspace(Object agentType) {
+    return '$agentType requires per-conversation working directories.';
+  }
+
+  @override
+  String get agentCreateHermesDescription => 'Built-in Hermes Runtime Agent.';
+
+  @override
+  String agentCreateNeedsGenericCliCapability(Object agentType) {
+    return '$agentType requires generic-cli capability from the daemon.';
+  }
+
+  @override
+  String agentCreateUnsupportedDriver(Object agentType) {
+    return 'The current daemon does not support the $agentType driver.';
+  }
+
+  @override
+  String agentCreateNeedsRouteSession(Object agentType) {
+    return '$agentType requires route session and native resume support.';
+  }
+
+  @override
+  String agentCreateNeedsHostAccess(Object agentType) {
+    return '$agentType requires daemon support for full host access.';
+  }
+
+  @override
+  String agentCreateRequiresSignedInCli(Object agentType) {
+    return 'Requires an installed and signed-in $agentType CLI on the daemon host.';
+  }
+
+  @override
+  String get agentCreateHostAccessTitle => 'Full host access';
+
+  @override
+  String get agentCreateHostAccessDescription =>
+      'Can use local files, commands, tools, and network access when the user asks.';
+
+  @override
+  String get agentRenameTitle => 'Rename agent';
+
+  @override
+  String get agentRenameSubtitle =>
+      'The name appears in the agent list, recent conversations, and chat header.';
+
+  @override
+  String get agentNameField => 'Name';
+
+  @override
+  String get agentNamePlaceholder => 'Display name';
+
+  @override
+  String agentNameHelp(int maxLength) {
+    return 'Up to $maxLength characters.';
+  }
+
+  @override
+  String get agentNameRequired => 'Enter an agent name';
+
+  @override
+  String agentNameTooLong(int maxLength) {
+    return 'Name can be at most $maxLength characters';
+  }
+
+  @override
+  String get agentStatusProcessing => 'Processing';
+
+  @override
+  String get agentStatusReady => 'Ready';
+
+  @override
+  String get agentStatusNeedsConfig => 'Needs config';
+
+  @override
+  String get agentStatusNeedsUpgrade => 'Needs upgrade';
+
+  @override
+  String get agentStatusFailed => 'Failed';
+
+  @override
+  String get agentStatusOffline => 'Offline';
+
+  @override
+  String get agentStatusDisabled => 'Disabled';
+
+  @override
+  String get agentStatusUnknown => 'Unknown';
+
+  @override
+  String get agentStatusRefreshNeeded => 'Refresh';
+
+  @override
+  String get agentStatusUnsupported => 'Unsupported';
+
+  @override
+  String agentStatusSemantic(Object status) {
+    return 'Agent status: $status';
+  }
+
+  @override
+  String get agentErrorLoginRequired => 'Please log in first.';
+
+  @override
+  String get agentErrorHandleUnavailable =>
+      'This account has no available Handle, so a daemon install command cannot be created right now.';
+
+  @override
+  String get agentErrorMessageAgentDisabled => 'Message Agent is not enabled.';
+
+  @override
+  String get agentErrorSelectDaemon => 'Select a running daemon.';
+
+  @override
+  String get agentErrorDaemonBootstrapMissing =>
+      'The running daemon has not reported a secure bootstrap public key yet. Refresh status first.';
+
+  @override
+  String get agentErrorDaemonUnreachableDelete =>
+      'The daemon is currently unreachable and cannot be deleted yet.';
+
+  @override
+  String get agentErrorMessageAgentMissing =>
+      'This daemon has not created a Message Agent yet.';
+
+  @override
+  String get agentStatusSyncStillWaiting =>
+      'Status sync is still pending. Refresh again later.';
+
+  @override
+  String get agentErrorScopeMismatch =>
+      'This computer is already bound to a daemon for another Handle. Manage it with that Handle, or uninstall the local daemon before installing again.';
+
+  @override
+  String get agentErrorControllerHandleMismatch =>
+      'The client identity does not match the signed-in Handle. Switch to the correct account and copy a new install command.';
+
+  @override
+  String get agentErrorControllerScopeMissing =>
+      'The install command is missing account ownership information. Copy the latest daemon install command again.';
+
+  @override
+  String get agentErrorInstallCommandUsed =>
+      'This install command has already been used. Copy the latest daemon install command again.';
+
+  @override
+  String get agentErrorSessionExpired =>
+      'Your sign-in session has expired. Log in again to view agents.';
+
+  @override
+  String get agentErrorRequestTimeout =>
+      'The request timed out. Please try again later.';
+
+  @override
+  String get agentErrorNetworkPreserved =>
+      'Network connection is temporarily unavailable. Current data has been kept.';
+
+  @override
+  String get agentErrorLoadFailed =>
+      'Agent information cannot be loaded right now. Please try again later.';
+
+  @override
+  String get agentErrorStatusSessionExpired =>
+      'Your sign-in session has expired. Log in again before refreshing daemon status.';
+
+  @override
+  String get agentErrorStatusTimeout =>
+      'Status refresh timed out. Current data has been kept.';
+
+  @override
+  String get agentErrorStatusNetworkPreserved =>
+      'Network connection is temporarily unavailable. Current data has been kept.';
+
+  @override
+  String get agentErrorStatusRefreshFailed =>
+      'Status refresh request failed. Please try again later.';
+
+  @override
+  String get agentAccessTitle => 'Access control';
+
+  @override
+  String get agentAccessSubtitle =>
+      'Configure which Handles can control this agent.';
+
+  @override
+  String get agentAccessWhitelist => 'Whitelist';
+
+  @override
+  String get agentAccessBlacklist => 'Blacklist';
+
+  @override
+  String get agentAccessSwitchToWhitelist => 'Switch to whitelist mode';
+
+  @override
+  String get agentAccessSwitchToBlacklist => 'Switch to blacklist mode';
+
+  @override
+  String get agentAccessCurrentWhitelist => 'Current whitelist mode';
+
+  @override
+  String get agentAccessCurrentBlacklist => 'Current blacklist mode';
+
+  @override
+  String get agentAccessEnabled => 'Enabled';
+
+  @override
+  String get agentAccessDisabled => 'Disabled';
+
+  @override
+  String get agentAccessHandlePlaceholder => 'bob or bob.example.com';
+
+  @override
+  String get agentAccessAddHandle => 'Add Handle';
+
+  @override
+  String get agentAccessNoHandles => 'No Handles yet';
+
+  @override
+  String get agentAccessRemoveHandle => 'Remove Handle';
+
+  @override
+  String get agentAccessDuplicateWhitelist =>
+      'This Handle is already in the whitelist.';
+
+  @override
+  String get agentAccessDuplicateBlacklist =>
+      'This Handle is already in the blacklist.';
+
+  @override
+  String get agentAccessHandleRequired => 'Enter a Handle.';
+
+  @override
+  String get agentAccessSingleHandleOnly => 'Add one Handle at a time.';
+
+  @override
+  String get agentAccessHandleInvalid => 'Enter a short Handle or full Handle.';
+
+  @override
+  String get agentDiagnosticsTitle => 'Diagnostics';
+
+  @override
+  String get agentDiagnosticsDaemonSubtitle =>
+      'Daemon runtime and identity information';
+
+  @override
+  String get agentDiagnosticsAgentSubtitle => 'Agent identity information';
+
+  @override
+  String get agentDiagnosticsShowMore => 'Show more';
+
+  @override
+  String get agentDiagnosticsCollapse => 'Collapse';
+
+  @override
+  String get agentDiagnosticsShowMoreDetails => 'Show more diagnostics';
+
+  @override
+  String get agentDiagnosticsCollapseDetails => 'Collapse diagnostics';
+
+  @override
+  String get agentDiagnosticCurrentVersion => 'Current version';
+
+  @override
+  String get agentDiagnosticPlatform => 'Platform';
+
+  @override
+  String get agentDiagnosticLatestVersion => 'Latest version';
+
+  @override
+  String get agentDiagnosticMinSupportedVersion => 'Minimum supported version';
+
+  @override
+  String get agentDiagnosticService => 'Service';
+
+  @override
+  String get agentDiagnosticLastSeen => 'Last seen';
+
+  @override
+  String get agentDiagnosticErrorCode => 'Error code';
+
+  @override
+  String get agentDiagnosticRunner => 'Runner';
+
+  @override
+  String get agentDiagnosticProfileStatus => 'Profile status';
+
+  @override
+  String get agentDiagnosticInstallationStatus => 'Installation status';
+
+  @override
+  String get agentDiagnosticServiceInstalled => 'Service installed';
+
+  @override
+  String get agentDiagnosticConfigSummary => 'Config summary';
+
+  @override
+  String get agentDiagnosticHermesProfile => 'Hermes profile';
+
+  @override
+  String get agentDiagnosticRunnerStatus => 'Runtime status';
+
+  @override
+  String get agentDiagnosticActiveSessionCount => 'Active sessions';
+
+  @override
+  String get messageAgentSkipped => 'Message Agent skipped this message';
+
+  @override
+  String get messageAgentFailed => 'Message Agent failed';
+
+  @override
+  String get messageAgentCompleted => 'Message Agent completed';
+
+  @override
+  String get messageAgentProcessing => 'Message Agent is processing';
+
+  @override
+  String get messageAgentReceived => 'Message Agent received the message';
+
+  @override
+  String get messageAgentResultGenerated => 'Result generated';
+
+  @override
+  String get messageAgentDraftApplied => 'Draft inserted into the composer';
+
+  @override
+  String get messageAgentAppActionCompleted => 'App action completed';
+
+  @override
+  String get messageAgentRequestRejected => 'Message Agent request rejected';
+
+  @override
+  String get messageAgentAppActionFailed => 'App action failed';
+
+  @override
+  String get messageAgentWaitingConfirmation => 'Waiting for confirmation';
+
+  @override
+  String get messageAgentUseDraft => 'Use draft';
+
+  @override
+  String get messageAgentActionCreateDraft => 'Message Agent created a draft';
+
+  @override
+  String get messageAgentActionSummarize => 'Message Agent created a summary';
+
+  @override
+  String get messageAgentActionReadContact =>
+      'Message Agent requests contact access';
+
+  @override
+  String get messageAgentActionUpdateDisplayName =>
+      'Message Agent requests a contact name change';
+
+  @override
+  String get messageAgentActionUpdateNote =>
+      'Message Agent requests a contact note change';
+
+  @override
+  String get messageAgentActionGeneric =>
+      'Message Agent requests an app action';
+
+  @override
+  String get messageAgentTitle => 'Message Agent';
+
+  @override
+  String messageAgentRuntimeSubtitle(Object provider) {
+    return 'Runs a $provider runtime inside the daemon';
+  }
+
+  @override
+  String get messageAgentExperimentDisabled => 'Experimental feature disabled';
+
+  @override
+  String get messageAgentReadyToEnable => 'Ready';
+
+  @override
+  String get messageAgentNotReady => 'Not ready';
+
+  @override
+  String get messageAgentRunningDaemon => 'Running daemon';
+
+  @override
+  String get messageAgentEngine => 'Engine';
+
+  @override
+  String get messageAgentScope => 'Scope';
+
+  @override
+  String get messageAgentAllProcessableConversations =>
+      'All processable conversations';
+
+  @override
+  String get messageAgentDaemonVersion => 'Daemon version';
+
+  @override
+  String get messageAgentCapabilities => 'Capabilities';
+
+  @override
+  String get messageAgentSecureBootstrap => 'Secure bootstrap';
+
+  @override
+  String get messageAgentPublicKeyReported => 'Public key reported';
+
+  @override
+  String get messageAgentWaitingStatusRefresh => 'Waiting for status refresh';
+
+  @override
+  String get messageAgentEnable => 'Enable Message Agent';
+
+  @override
+  String get messageAgentEnabling => 'Enabling';
+
+  @override
+  String get messageAgentPause => 'Pause message processing';
+
+  @override
+  String get messageAgentDelete => 'Delete Message Agent';
+
+  @override
+  String get messageAgentRevokeAuthorization =>
+      'Revoke daemon message authorization';
+
+  @override
+  String get messageAgentPermissionSummaryEnabled =>
+      'Permission summary: reads regular messages, analyzes and summarizes them, creates drafts, and requests user-confirmed app actions.';
+
+  @override
+  String get messageAgentPermissionSummaryDisabled =>
+      'Enable AWIKI_AGENT_IM_ENABLED to configure Message Agent.';
+
+  @override
+  String get messageAgentPauseTitle => 'Pause message processing';
+
+  @override
+  String get messageAgentPauseMessage =>
+      'After pausing, the Message Agent stops reading and processing new messages. The runtime and authorization remain and can be enabled again.';
+
+  @override
+  String get messageAgentDeleteTitle => 'Delete Message Agent';
+
+  @override
+  String get messageAgentDeleteMessage =>
+      'Deletion pauses message processing first, then archives the runtime. The daemon and authorization are not deleted.';
+
+  @override
+  String get messageAgentRevokeTitle => 'Revoke daemon message authorization';
+
+  @override
+  String get messageAgentRevokeMessage =>
+      'Revocation must remove daemon-key-1 through a signed DID Document update. If the update is not completed, it fails and will not treat pause as a successful revoke.';
+
+  @override
+  String get agentInboxTitle => 'Agent inbox';
+
+  @override
+  String get agentInboxThreadTitle => 'Inbox thread';
+
+  @override
+  String get agentInboxBackToInbox => 'Back to inbox';
+
+  @override
+  String get agentInboxBackToConversation => 'Back to conversation';
+
+  @override
+  String get agentInboxClose => 'Close Agent inbox';
+
+  @override
+  String get agentInboxNotRuntimeConversation =>
+      'The current conversation is not a Runtime Agent conversation';
+
+  @override
+  String get agentInboxDaemonMissing =>
+      'This Runtime Agent is not bound to a daemon yet';
+
+  @override
+  String get agentInboxRefresh => 'Refresh Agent inbox';
+
+  @override
+  String get agentInboxEmpty => 'This Agent has no inbox messages yet';
+
+  @override
+  String get agentInboxLoadMoreThreads => 'Load more conversations';
+
+  @override
+  String get agentInboxScopeAll => 'All';
+
+  @override
+  String get agentInboxScopeDirect => 'Direct';
+
+  @override
+  String get agentInboxScopeGroup => 'Groups';
+
+  @override
+  String get agentInboxLatestAttachment => 'Latest: attachment';
+
+  @override
+  String get agentInboxLatestNoPreview => 'Latest: no preview';
+
+  @override
+  String agentInboxLatestPreview(Object preview) {
+    return 'Latest: $preview';
+  }
+
+  @override
+  String get agentInboxReadOnly => 'Read-only inbox';
+
+  @override
+  String get agentInboxRefreshThread => 'Refresh inbox thread';
+
+  @override
+  String get agentInboxThreadEmpty => 'This thread has no messages yet';
+
+  @override
+  String get agentInboxLoadEarlier => 'Load earlier messages';
+
+  @override
+  String get agentInboxContentTruncated => 'Long content truncated';
+
+  @override
+  String get agentInboxDaemonNoResponse =>
+      'Daemon did not respond yet. Please try again later.';
+
+  @override
+  String get agentInboxQueryFailed => 'Inbox query failed';
+
+  @override
+  String get agentInboxThreadQueryFailed => 'Thread query failed';
+
+  @override
+  String get relationshipNone => 'Not following';
 
   @override
   String get relationshipFollowing => 'following';
@@ -710,6 +2121,24 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get documentPickerFailed =>
       'File selection failed. Please try again later.';
+
+  @override
+  String get documentSaveFailed => 'File save failed. Please try again later.';
+
+  @override
+  String get attachmentDownloadEmpty => 'Attachment download returned no file.';
+
+  @override
+  String get conversationRemovedFromRecents =>
+      'Conversation removed from recents.';
+
+  @override
+  String get attachmentUnavailable =>
+      'The attachment has expired or is not cached on this device. Ask the sender to send it again.';
+
+  @override
+  String get attachmentOpenFailed =>
+      'The attachment cannot be opened. Try again later or save it before opening.';
 
   @override
   String get linkOpenFailed => 'Unable to open the link';

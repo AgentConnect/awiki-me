@@ -19,6 +19,7 @@ import '../shared/copyable_did_line.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/identity_flow.dart';
 import '../shared/responsive_layout.dart';
+import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'peer_profile_provider.dart';
 
@@ -106,8 +107,10 @@ class PeerProfilePage extends ConsumerWidget {
                                       const SizedBox(height: 6),
                                       CopyableDidLine(
                                         value: profile.did,
-                                        copySemanticLabel: '复制 DID',
-                                        copiedMessage: 'DID 已复制',
+                                        copySemanticLabel:
+                                            context.l10n.chatPeerInfoCopyDid,
+                                        copiedMessage:
+                                            context.l10n.chatPeerInfoDidCopied,
                                         textKey: const Key(
                                           'peer-profile-did-value',
                                         ),
@@ -127,14 +130,22 @@ class PeerProfilePage extends ConsumerWidget {
                               spacing: 8,
                               runSpacing: 8,
                               children: <Widget>[
-                                AppPill(
+                                SemanticPill(
+                                  label: context.l10n.identityTypeUser,
+                                  tone: SemanticPillTone.identity,
+                                ),
+                                SemanticPill(
                                   label: localizeRelationshipLabel(
                                     context.l10n,
                                     state.relationship,
                                   ),
+                                  tone: SemanticPillTone.relationship,
                                 ),
                                 if (profile.handle?.isNotEmpty == true)
-                                  AppPill(label: '@${profile.handle}'),
+                                  SemanticPill(
+                                    label: '@${profile.handle}',
+                                    tone: SemanticPillTone.metadata,
+                                  ),
                               ],
                             ),
                             const SizedBox(height: 16),

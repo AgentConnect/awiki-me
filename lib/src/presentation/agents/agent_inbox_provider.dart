@@ -45,7 +45,7 @@ class AgentInboxItem {
     return AgentInboxItem(
       threadId: _string(json['thread_id']) ?? '',
       kind: _string(json['kind']) ?? 'direct',
-      title: _string(json['title']) ?? '未命名会话',
+      title: _string(json['title']) ?? 'Untitled conversation',
       peerDid: _string(json['peer_did']),
       peerHandle: _string(json['peer_handle']),
       peerUserId: _string(json['peer_user_id']),
@@ -96,8 +96,8 @@ class AgentInboxAttachment {
   factory AgentInboxAttachment.fromJson(Map<String, Object?> json) {
     return AgentInboxAttachment(
       attachmentId: _string(json['attachment_id']) ?? '',
-      filename: _string(json['filename']) ?? '未命名附件',
-      mimeType: _string(json['mime_type']) ?? '文件',
+      filename: _string(json['filename']) ?? '',
+      mimeType: _string(json['mime_type']) ?? 'file',
       sizeBytes: _int(json['size_bytes']),
       downloadState: _string(json['download_state']),
     );
@@ -470,7 +470,7 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
       orElse: () => AgentInboxItem(
         threadId: threadId,
         kind: kind,
-        title: state.thread.title ?? '收件箱线程',
+        title: state.thread.title ?? 'Inbox thread',
         lastMessagePreview: '',
         unreadCount: 0,
         hasAttachments: false,
@@ -555,7 +555,7 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
       state = state.copyWith(
         isLoading: false,
         isRefreshing: false,
-        error: _string(payload['message']) ?? '收件箱查询失败',
+        error: _string(payload['message']) ?? _inboxQueryFailedMessage,
       );
       return;
     }
@@ -609,7 +609,7 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
         thread: state.thread.copyWith(
           isLoading: false,
           isRefreshing: false,
-          error: _string(payload['message']) ?? '线程查询失败',
+          error: _string(payload['message']) ?? _threadQueryFailedMessage,
         ),
       );
       return;
@@ -1026,7 +1026,9 @@ bool _bool(Object? value) {
   return value?.toString().toLowerCase() == 'true';
 }
 
-const _daemonNoResponseMessage = 'Daemon 暂时没有返回，请稍后重试';
+const _daemonNoResponseMessage = 'agent_inbox.daemon_no_response';
+const _inboxQueryFailedMessage = 'agent_inbox.query_failed';
+const _threadQueryFailedMessage = 'agent_inbox.thread_query_failed';
 
 final agentInboxProvider =
     StateNotifierProvider<AgentInboxController, AgentInboxState>(

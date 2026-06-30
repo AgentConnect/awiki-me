@@ -492,7 +492,7 @@ void main() {
         ownerDid: 'did:alice',
       );
 
-      expect(mapped.lastMessagePreview, '[附件] diagram.png');
+      expect(mapped.lastMessagePreview, 'diagram.png');
       expect(mapped.lastMessageSnapshot?.attachment?.filename, 'diagram.png');
       expect(
         mapped.lastMessageSnapshot?.attachment?.objectUri,

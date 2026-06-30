@@ -51,6 +51,7 @@ class RuntimeAgentCreateOptions {
     required this.kind,
     required this.handle,
     required this.displayName,
+    this.preferredLanguage,
     this.workspaceMode = runtimeWorkspaceModeRouteRoot,
     this.sandbox = runtimeSandboxDangerFullAccess,
     this.model,
@@ -59,6 +60,7 @@ class RuntimeAgentCreateOptions {
   final RuntimeAgentKind kind;
   final String handle;
   final String displayName;
+  final String? preferredLanguage;
   final String workspaceMode;
   final String sandbox;
   final String? model;
@@ -81,6 +83,7 @@ Map<String, Object?> runtimeAgentCreatePayload({
   String? workspaceMode,
   String? defaultSandbox,
   String? defaultModel,
+  String? preferredLanguage,
   Map<String, Object?>? driverConfig,
   Map<String, Object?>? recipientPolicy,
 }) {
@@ -101,6 +104,7 @@ Map<String, Object?> runtimeAgentCreatePayload({
       if (workspaceMode != null) 'workspace_mode': workspaceMode,
       if (defaultSandbox != null) 'default_sandbox': defaultSandbox,
       if (defaultModel != null) 'default_model': defaultModel,
+      if (preferredLanguage != null) 'preferred_language': preferredLanguage,
       if (driverConfig != null && driverConfig.isNotEmpty)
         'driver_config': driverConfig,
       if (recipientPolicy != null && recipientPolicy.isNotEmpty)

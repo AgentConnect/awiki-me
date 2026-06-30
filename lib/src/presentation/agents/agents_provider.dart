@@ -21,6 +21,7 @@ import '../../domain/entities/agent/message_agent_runtime_provider.dart';
 import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/session_provider.dart';
 import 'agent_display_name.dart';
+import 'agent_ui_messages.dart';
 
 const agentStatusQueryTimeout = Duration(seconds: 10);
 const agentRuntimeCreationTimeout = Duration(seconds: 45);
@@ -133,35 +134,6 @@ class DaemonUpgradeProgress {
   final double? percent;
   final int? speedBytesPerSecond;
 
-  String get displayMessage {
-    final text = message.trim();
-    if (text.isNotEmpty) {
-      return text;
-    }
-    return switch (stage) {
-      'manifest' => '正在获取版本信息',
-      'selecting_source' => '正在选择下载线路',
-      'downloading' => '正在下载安装包',
-      'retrying_source' => '下载中断，正在重试',
-      'verifying' => '正在校验安装包',
-      'extracting' => '正在解压安装包',
-      'installing' => '正在安装新版本',
-      'restarting' => '正在重启代理服务',
-      _ => '正在升级',
-    };
-  }
-
-  String get compactLabel {
-    final p = percent;
-    if (p != null && p > 0 && p < 100) {
-      return '$displayMessage ${p.round()}%';
-    }
-    if (p != null && p >= 100) {
-      return '$displayMessage 100%';
-    }
-    return displayMessage;
-  }
-
   bool get hasDownloadDetail {
     return downloadedBytes != null ||
         totalBytes != null ||
@@ -171,13 +143,13 @@ class DaemonUpgradeProgress {
   }
 
   static DaemonUpgradeProgress started() {
-    return const DaemonUpgradeProgress(stage: 'requested', message: '正在发送升级请求');
+    return const DaemonUpgradeProgress(stage: 'requested', message: '');
   }
 
   static DaemonUpgradeProgress waitingForDaemonConfirmation() {
     return const DaemonUpgradeProgress(
       stage: 'waiting_for_daemon',
-      message: '升级请求已发送，正在等待代理确认',
+      message: '',
     );
   }
 
@@ -613,12 +585,12 @@ class AgentsController extends StateNotifier<AgentsState> {
   Future<void> createDaemonInstallCommand() async {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
-      state = state.copyWith(error: '请先登录。');
+      state = state.copyWith(error: AgentUiMessageCodes.loginRequired);
       return;
     }
     final controllerHandle = session.handle?.trim().toLowerCase();
     if (controllerHandle == null || controllerHandle.isEmpty) {
-      state = state.copyWith(error: '当前账号没有可用 handle，暂时不能生成 Daemon 安装命令。');
+      state = state.copyWith(error: AgentUiMessageCodes.handleUnavailable);
       return;
     }
     await _runAction(AgentActionKeys.installCommand, () async {
@@ -710,7 +682,7 @@ class AgentsController extends StateNotifier<AgentsState> {
   }) async {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
-      state = state.copyWith(error: '请先登录。');
+      state = state.copyWith(error: AgentUiMessageCodes.loginRequired);
       return;
     }
     await _runAction(AgentActionKeys.createRuntime(daemonDid), () async {
@@ -769,22 +741,22 @@ class AgentsController extends StateNotifier<AgentsState> {
   }) async {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
-      state = state.copyWith(error: '请先登录。');
+      state = state.copyWith(error: AgentUiMessageCodes.loginRequired);
       return;
     }
     if (!ref.read(agentImEnabledProvider)) {
-      state = state.copyWith(error: '消息处理 Agent 功能未开启。');
+      state = state.copyWith(error: AgentUiMessageCodes.messageAgentDisabled);
       return;
     }
     await ensureLoaded();
     final daemon = _agentByDid(daemonDid);
     if (daemon == null || !daemon.isDaemon) {
-      state = state.copyWith(error: '请选择运行 Daemon。');
+      state = state.copyWith(error: AgentUiMessageCodes.selectDaemon);
       return;
     }
     final daemonBootstrapPublicKey = _daemonBootstrapPublicKey(daemon);
     if (daemonBootstrapPublicKey == null) {
-      state = state.copyWith(error: '运行 Daemon 尚未上报安全 bootstrap 公钥，请先刷新状态。');
+      state = state.copyWith(error: AgentUiMessageCodes.daemonBootstrapMissing);
       return;
     }
     final resolvedAppInstanceId =
@@ -994,7 +966,9 @@ class AgentsController extends StateNotifier<AgentsState> {
         ? selected
         : state.daemonForRuntime(selected);
     if (daemon == null || !_daemonAcceptsControlCommands(daemon)) {
-      state = state.copyWith(error: '代理当前不可达，暂时不能删除。');
+      state = state.copyWith(
+        error: AgentUiMessageCodes.daemonUnreachableDelete,
+      );
       return;
     }
     final deletingDids = selected.isDaemon
@@ -1064,7 +1038,7 @@ class AgentsController extends StateNotifier<AgentsState> {
   Future<void> pauseMessageAgentForDaemon(String daemonDid) async {
     final target = _messageAgentTargetForDaemon(daemonDid);
     if (target == null) {
-      state = state.copyWith(error: '当前 Daemon 尚未创建消息处理 Agent。');
+      state = state.copyWith(error: AgentUiMessageCodes.messageAgentMissing);
       return;
     }
     await _runAction(AgentActionKeys.pauseMessageAgent(daemonDid), () async {
@@ -1080,7 +1054,7 @@ class AgentsController extends StateNotifier<AgentsState> {
   Future<void> deleteMessageAgentForDaemon(String daemonDid) async {
     final target = _messageAgentTargetForDaemon(daemonDid);
     if (target == null) {
-      state = state.copyWith(error: '当前 Daemon 尚未创建消息处理 Agent。');
+      state = state.copyWith(error: AgentUiMessageCodes.messageAgentMissing);
       return;
     }
     if (state.isDeletingAgent(target.agentDid)) {
@@ -1144,7 +1118,7 @@ class AgentsController extends StateNotifier<AgentsState> {
   ) async {
     final target = _messageAgentTargetForDaemon(daemonDid);
     if (target == null) {
-      state = state.copyWith(error: '当前 Daemon 尚未创建消息处理 Agent。');
+      state = state.copyWith(error: AgentUiMessageCodes.messageAgentMissing);
       return;
     }
     await _runAction(AgentActionKeys.revokeMessageAgent(daemonDid), () async {
@@ -1511,7 +1485,7 @@ class AgentsController extends StateNotifier<AgentsState> {
           ? state.statusQueryErrors
           : <String, String>{
               ...state.statusQueryErrors,
-              daemonDid: '状态同步仍在等待，请稍后刷新查看。',
+              daemonDid: AgentUiMessageCodes.statusSyncWaiting,
             },
     );
     if (commandId != null) {
@@ -1677,7 +1651,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       ),
       daemonUpgradeErrors: <String, String>{
         ...state.daemonUpgradeErrors,
-        daemonDid: '取消请求已发送，但代理暂未响应。请刷新状态确认升级结果。',
+        daemonDid: AgentUiMessageCodes.upgradeCancelNoResponse,
       },
     );
   }
@@ -2793,7 +2767,7 @@ bool _isFinalDaemonUpgradeSuccess(
 String _daemonUpgradeFailureMessage(Map<String, Object?> result) {
   final summary = _string(result['last_error_summary']);
   if (summary == null) {
-    return '升级没有完成，请检查网络后重试。';
+    return AgentUiMessageCodes.upgradeIncomplete;
   }
   final normalized = summary.toLowerCase();
   final looksLikeDownload =
@@ -2805,7 +2779,7 @@ String _daemonUpgradeFailureMessage(Map<String, Object?> result) {
   if (!looksLikeDownload) {
     return summary;
   }
-  return '安装包下载失败，请检查网络后重试。$summary';
+  return AgentUiMessageCodes.upgradeDownloadFailed(summary);
 }
 
 bool _daemonStatusShowsUpgradeResolved(Map<String, Object?> payload) {
@@ -2867,13 +2841,13 @@ String _daemonUpgradeCancelFailureMessage(Map<String, Object?> result) {
   if (errorCode == 'upgrade_not_cancellable' ||
       errorCode == 'upgrade_cancel_unavailable' ||
       _string(result['status']) == 'not_cancellable') {
-    return '当前升级已经进入重启阶段，无法取消。请稍后刷新状态确认结果。';
+    return AgentUiMessageCodes.upgradeNotCancellable;
   }
   final summary = _string(result['last_error_summary']);
   if (summary != null && summary.trim().isNotEmpty) {
     return summary;
   }
-  return '取消升级失败，请刷新状态后重试。';
+  return AgentUiMessageCodes.upgradeCancelFailed;
 }
 
 Map<String, DateTime> _withoutKey(Map<String, DateTime> input, String key) {
@@ -3082,32 +3056,32 @@ String _agentErrorMessage(Object error) {
   final reason = _agentErrorReason(error);
   if (reason == 'daemon_controller_scope_mismatch' ||
       reason == 'agent_controller_scope_mismatch') {
-    return '这台电脑已经绑定到另一个 handle 的 Daemon。请使用对应 handle 管理，或先卸载本机 Daemon 后重新安装。';
+    return AgentUiMessageCodes.scopeMismatch;
   }
   if (reason == 'controller_handle_mismatch') {
-    return '当前客户端身份和登录 handle 不一致，请切换到正确账号后重新复制安装命令。';
+    return AgentUiMessageCodes.controllerHandleMismatch;
   }
   if (reason == 'controller_handle_required') {
-    return '当前账号没有可用 handle，暂时不能生成 Daemon 安装命令。';
+    return AgentUiMessageCodes.handleUnavailable;
   }
   if (reason == 'controller_scope_missing') {
-    return '安装命令缺少账号归属信息，请重新复制最新的 Daemon 安装命令。';
+    return AgentUiMessageCodes.controllerScopeMissing;
   }
   if (reason == 'used') {
-    return '这条安装命令已经使用过，请重新复制最新的 Daemon 安装命令。';
+    return AgentUiMessageCodes.installCommandUsed;
   }
   switch (classifyAppError(error)) {
     case AppErrorKind.authentication:
-      return '登录状态已失效，请重新登录后再查看智能体。';
+      return AgentUiMessageCodes.sessionExpired;
     case AppErrorKind.timeout:
-      return '请求超时，请稍后重试。';
+      return AgentUiMessageCodes.requestTimeout;
     case AppErrorKind.networkUnavailable:
-      return '网络连接暂时不可用，已保留当前数据。';
+      return AgentUiMessageCodes.networkPreserved;
     case AppErrorKind.didNotFoundOrRevoked:
     case AppErrorKind.other:
       break;
   }
-  return '智能体信息暂时无法加载，请稍后重试。';
+  return AgentUiMessageCodes.loadFailed;
 }
 
 String? _agentErrorReason(Object error) {
@@ -3153,16 +3127,16 @@ String? _knownAgentErrorReason(String raw) {
 String _agentStatusRefreshErrorMessage(Object error) {
   switch (classifyAppError(error)) {
     case AppErrorKind.authentication:
-      return '登录状态已失效，请重新登录后再刷新代理状态。';
+      return AgentUiMessageCodes.statusSessionExpired;
     case AppErrorKind.timeout:
-      return '刷新状态超时，当前数据已保留。';
+      return AgentUiMessageCodes.statusTimeout;
     case AppErrorKind.networkUnavailable:
-      return '网络连接暂时不可用，当前数据已保留。';
+      return AgentUiMessageCodes.statusNetworkPreserved;
     case AppErrorKind.didNotFoundOrRevoked:
     case AppErrorKind.other:
       break;
   }
-  return '状态刷新请求发送失败，请稍后再试。';
+  return AgentUiMessageCodes.statusRefreshFailed;
 }
 
 final agentsProvider = StateNotifierProvider<AgentsController, AgentsState>(

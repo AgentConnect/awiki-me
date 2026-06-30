@@ -147,6 +147,15 @@ class AwikiMeApp extends StatelessWidget {
                     : ref.watch(identityCorePortProvider),
                 downloadBaseUrl: control.downloadBaseUrl,
                 agentImEnabled: ref.watch(agentImEnabledProvider),
+                preferredLanguageProvider: () {
+                  final mode = ref.read(appLocaleModeProvider);
+                  final platformLocale =
+                      WidgetsBinding.instance.platformDispatcher.locale;
+                  return resolveEffectiveAppLanguage(
+                    mode,
+                    platformLocale,
+                  ).wireValue;
+                },
               );
             }
             return control;

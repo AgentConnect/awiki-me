@@ -118,10 +118,11 @@ class ChatMentionCandidate {
     required this.surface,
     required this.title,
     required this.subtitle,
-    required this.badge,
     required this.target,
+    required this.subjectType,
+    this.selector,
+    this.disabledReasonCode,
     this.enabled = true,
-    this.disabledReason,
     this.searchTerms = const <String>[],
   });
 
@@ -129,10 +130,11 @@ class ChatMentionCandidate {
   final String surface;
   final String title;
   final String subtitle;
-  final String badge;
   final ChatMentionTargetDraft target;
+  final GroupMemberSubjectType subjectType;
+  final ChatMentionSelector? selector;
+  final ChatMentionDisabledReasonCode? disabledReasonCode;
   final bool enabled;
-  final String? disabledReason;
   final List<String> searchTerms;
 
   factory ChatMentionCandidate.fromGroupMember(GroupMemberSummary member) {
@@ -160,11 +162,6 @@ class ChatMentionCandidate {
       surface: '@$label',
       title: label,
       subtitle: _memberSubtitle(member),
-      badge: switch (subjectType) {
-        GroupMemberSubjectType.human => '用户',
-        GroupMemberSubjectType.agent => '智能体',
-        GroupMemberSubjectType.unknown => '类型未知',
-      },
       target: sendable
           ? ChatMentionTargetDraft.member(
               kind: targetKind,
@@ -177,12 +174,13 @@ class ChatMentionCandidate {
               handle: handle,
               displayName: displayName,
             ),
+      subjectType: subjectType,
       enabled: sendable,
-      disabledReason: sendable
+      disabledReasonCode: sendable
           ? null
           : active
-          ? '成员类型未知，暂不能作为单人 mention 目标'
-          : '成员状态不是 active，暂不能 mention',
+          ? ChatMentionDisabledReasonCode.unknownMemberType
+          : ChatMentionDisabledReasonCode.inactiveMember,
       searchTerms: <String>[
         label,
         displayName ?? '',
@@ -190,42 +188,23 @@ class ChatMentionCandidate {
         member.handle,
         did,
         member.userId,
+        _subjectTypeSearchTerms(subjectType),
       ],
     );
   }
 
   factory ChatMentionCandidate.forGroupSelector(ChatMentionSelector selector) {
-    final surface = switch (selector) {
-      ChatMentionSelector.all => '@所有人',
-      ChatMentionSelector.humans => '@所有用户',
-      ChatMentionSelector.agents => '@所有智能体',
-    };
-    final title = switch (selector) {
-      ChatMentionSelector.all => '所有人',
-      ChatMentionSelector.humans => '所有用户',
-      ChatMentionSelector.agents => '所有智能体',
-    };
-    final subtitle = switch (selector) {
-      ChatMentionSelector.all => '提醒群内所有成员',
-      ChatMentionSelector.humans => '只提醒群内用户',
-      ChatMentionSelector.agents => '提醒群内智能体',
-    };
-    final badge = switch (selector) {
-      ChatMentionSelector.all => '用户 + 智能体',
-      ChatMentionSelector.humans => '用户',
-      ChatMentionSelector.agents => '智能体',
-    };
+    final surface = '@${selector.wireValue}';
     return ChatMentionCandidate(
       id: 'selector:${selector.wireValue}',
       surface: surface,
-      title: title,
-      subtitle: subtitle,
-      badge: badge,
+      title: selector.wireValue,
+      subtitle: selector.wireValue,
       target: ChatMentionTargetDraft.groupSelector(selector),
+      subjectType: GroupMemberSubjectType.unknown,
+      selector: selector,
       searchTerms: <String>[
         surface,
-        title,
-        subtitle,
         selector.wireValue,
         switch (selector) {
           ChatMentionSelector.all => 'all everyone 全体 全部 所有人',
@@ -245,7 +224,6 @@ class ChatMentionCandidate {
       surface,
       title,
       subtitle,
-      badge,
       ...searchTerms,
     ].map(_normalizeSearch).any((term) => term.contains(normalized));
   }
@@ -271,6 +249,8 @@ class ChatMentionCandidate {
         .toList();
   }
 }
+
+enum ChatMentionDisabledReasonCode { unknownMemberType, inactiveMember }
 
 class ChatMentionDraft {
   const ChatMentionDraft({
@@ -875,7 +855,7 @@ String _memberSubtitle(GroupMemberSummary member) {
     if (handle != null) '@$handle',
     if (member.did.trim().isNotEmpty) _compactDid(member.did.trim()),
   ];
-  return fields.isEmpty ? '群成员' : fields.join(' · ');
+  return fields.isEmpty ? 'Group member' : fields.join(' · ');
 }
 
 GroupMemberSubjectType _effectiveGroupMemberSubjectType(
@@ -983,5 +963,13 @@ String _firstNonEmpty(Iterable<String?> values) {
       return trimmed;
     }
   }
-  return '成员';
+  return 'Member';
+}
+
+String _subjectTypeSearchTerms(GroupMemberSubjectType subjectType) {
+  return switch (subjectType) {
+    GroupMemberSubjectType.human => 'human user 人 用户',
+    GroupMemberSubjectType.agent => 'agent bot 智能体 代理',
+    GroupMemberSubjectType.unknown => 'unknown member 成员',
+  };
 }

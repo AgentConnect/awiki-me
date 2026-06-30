@@ -102,6 +102,7 @@ class DesiredMessageAgent {
     this.runtimeProvider = appMessageHandlerRuntimeProvider,
     this.runtimeProfile = appMessageHandlerRuntimeProfile,
     this.displayName = messageAgentProviderHermesRuntimeDisplayName,
+    required this.preferredLanguage,
     required this.ensureOnceKey,
     this.runtimeRegistrationToken,
     this.autoCreate = true,
@@ -115,6 +116,7 @@ class DesiredMessageAgent {
   final String runtimeProvider;
   final String runtimeProfile;
   final String displayName;
+  final String preferredLanguage;
   final String ensureOnceKey;
   final String? runtimeRegistrationToken;
   final bool autoCreate;
@@ -129,6 +131,7 @@ class DesiredMessageAgent {
       'runtime_provider': runtimeProvider,
       'runtime_profile': runtimeProfile,
       'display_name': displayName,
+      'preferred_language': preferredLanguage.trim(),
       'ensure_once_key': ensureOnceKey,
       if (_nonEmpty(runtimeRegistrationToken) != null)
         'runtime_registration_token': runtimeRegistrationToken!.trim(),
@@ -322,11 +325,9 @@ class DaemonBootstrapPublicKey {
         _nonEmpty(bootstrap['key_id']?.toString()) ??
         _nonEmpty(diagnostics['bootstrap_key_id']?.toString()) ??
         '$daemonDid#key-3';
-    final publicKeyB64u = _nonEmpty(
-      bootstrap['public_key_b64u']?.toString(),
-    ) ?? _nonEmpty(
-      diagnostics['bootstrap_public_key_b64u']?.toString(),
-    );
+    final publicKeyB64u =
+        _nonEmpty(bootstrap['public_key_b64u']?.toString()) ??
+        _nonEmpty(diagnostics['bootstrap_public_key_b64u']?.toString());
     if (publicKeyB64u == null) {
       throw StateError('Daemon bootstrap public key is not available.');
     }
@@ -337,11 +338,9 @@ class DaemonBootstrapPublicKey {
     return DaemonBootstrapPublicKey(
       keyId: keyId,
       publicKeyB64u: publicKeyB64u,
-      publicKeyMultibase: _nonEmpty(
-        bootstrap['public_key_multibase']?.toString(),
-      ) ?? _nonEmpty(
-        diagnostics['bootstrap_public_key_multibase']?.toString(),
-      ),
+      publicKeyMultibase:
+          _nonEmpty(bootstrap['public_key_multibase']?.toString()) ??
+          _nonEmpty(diagnostics['bootstrap_public_key_multibase']?.toString()),
       algorithm: algorithm,
     ).._validateForDaemon(daemonDid);
   }
@@ -372,7 +371,9 @@ class DaemonBootstrapPublicKey {
   }
 }
 
-Map<String, Object?> _bootstrapKeyDiagnostics(Map<String, Object?> diagnostics) {
+Map<String, Object?> _bootstrapKeyDiagnostics(
+  Map<String, Object?> diagnostics,
+) {
   final configSummary = diagnostics['config_summary'];
   if (configSummary is Map) {
     final bootstrapKey = configSummary['bootstrap_key'];

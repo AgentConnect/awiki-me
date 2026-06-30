@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 
 import '../../app/app_router.dart';
 import '../../domain/entities/agent/agent_summary.dart';
+import '../../l10n/l10n.dart';
 import '../shared/app_dialog.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/responsive_layout.dart';
@@ -37,7 +38,9 @@ class _AgentRenameDialogState extends State<AgentRenameDialog> {
   void initState() {
     super.initState();
     _controller = TextEditingController(
-      text: AgentDisplayName.title(widget.agent),
+      text: AgentDisplayName.isUserVisibleName(widget.agent.displayName)
+          ? widget.agent.displayName.trim()
+          : '',
     )..addListener(_handleChanged);
   }
 
@@ -59,7 +62,7 @@ class _AgentRenameDialogState extends State<AgentRenameDialog> {
 
   void _submit() {
     final value = _controller.text.trim();
-    final error = _validateAgentDisplayName(value);
+    final error = _validateAgentDisplayName(context, value);
     if (error != null) {
       setState(() => _submittedError = error);
       return;
@@ -72,8 +75,9 @@ class _AgentRenameDialogState extends State<AgentRenameDialog> {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     final value = _controller.text.trim();
-    final errorText = _submittedError ?? _softValidateAgentDisplayName(value);
-    final canSubmit = _validateAgentDisplayName(value) == null;
+    final errorText =
+        _submittedError ?? _softValidateAgentDisplayName(context, value);
+    final canSubmit = _validateAgentDisplayName(context, value) == null;
     final fieldBorderColor = errorText == null
         ? const Color(0xFFE4E9F2)
         : const Color(0xFFD84A4A);
@@ -89,13 +93,13 @@ class _AgentRenameDialogState extends State<AgentRenameDialog> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           AppDialogHeader(
-            title: '修改智能体名称',
-            subtitle: '名称会显示在智能体列表、最近会话和对话窗口中。',
+            title: context.l10n.agentRenameTitle,
+            subtitle: context.l10n.agentRenameSubtitle,
             onClose: () => Navigator.of(context).pop(),
           ),
           SizedBox(height: responsive.spacing(16)),
           Text(
-            '名称',
+            context.l10n.agentNameField,
             style: TextStyle(
               color: theme.secondaryText,
               fontSize: responsive.metaSm,
@@ -108,7 +112,7 @@ class _AgentRenameDialogState extends State<AgentRenameDialog> {
             controller: _controller,
             autofocus: true,
             maxLength: agentDisplayNameMaxLength,
-            placeholder: '显示名称',
+            placeholder: context.l10n.agentNamePlaceholder,
             textInputAction: TextInputAction.done,
             clearButtonMode: OverlayVisibilityMode.editing,
             onSubmitted: (_) => _submit(),
@@ -135,7 +139,7 @@ class _AgentRenameDialogState extends State<AgentRenameDialog> {
             duration: const Duration(milliseconds: 120),
             child: errorText == null
                 ? Text(
-                    '最多 $agentDisplayNameMaxLength 个字符。',
+                    context.l10n.agentNameHelp(agentDisplayNameMaxLength),
                     key: const ValueKey<String>('agent-rename-help'),
                     style: TextStyle(
                       color: theme.secondaryText,
@@ -158,14 +162,14 @@ class _AgentRenameDialogState extends State<AgentRenameDialog> {
             children: <Widget>[
               Expanded(
                 child: AppSecondaryButton(
-                  label: '取消',
+                  label: context.l10n.commonCancel,
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ),
               SizedBox(width: responsive.spacing(10)),
               Expanded(
                 child: AppPrimaryButton(
-                  label: '保存',
+                  label: context.l10n.commonSave,
                   onPressed: canSubmit ? _submit : null,
                 ),
               ),
@@ -177,19 +181,19 @@ class _AgentRenameDialogState extends State<AgentRenameDialog> {
   }
 }
 
-String? _validateAgentDisplayName(String value) {
+String? _validateAgentDisplayName(BuildContext context, String value) {
   if (value.trim().isEmpty) {
-    return '请输入智能体名称';
+    return context.l10n.agentNameRequired;
   }
   if (value.trim().length > agentDisplayNameMaxLength) {
-    return '名称最多 $agentDisplayNameMaxLength 个字符';
+    return context.l10n.agentNameTooLong(agentDisplayNameMaxLength);
   }
   return null;
 }
 
-String? _softValidateAgentDisplayName(String value) {
+String? _softValidateAgentDisplayName(BuildContext context, String value) {
   if (value.length > agentDisplayNameMaxLength) {
-    return '名称最多 $agentDisplayNameMaxLength 个字符';
+    return context.l10n.agentNameTooLong(agentDisplayNameMaxLength);
   }
   return null;
 }

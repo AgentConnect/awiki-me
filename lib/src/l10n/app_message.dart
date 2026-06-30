@@ -146,6 +146,18 @@ class AppMessage {
   factory AppMessage.groupNameRequired() =>
       const AppMessage._('groupNameRequired');
 
+  factory AppMessage.identityQueryRequired() =>
+      const AppMessage._('identityQueryRequired');
+
+  factory AppMessage.identityResolveFailed() =>
+      const AppMessage._('identityResolveFailed');
+
+  factory AppMessage.identityInvalidContact() =>
+      const AppMessage._('identityInvalidContact');
+
+  factory AppMessage.identityMissingDid() =>
+      const AppMessage._('identityMissingDid');
+
   factory AppMessage.followContactAlreadyFollowing() =>
       const AppMessage._('followContactAlreadyFollowing');
 
@@ -182,13 +194,14 @@ class AppMessage {
         break;
     }
 
-    if (raw == '邮箱尚未激活，请先点击邮件中的激活链接。') {
+    if (raw == 'email_not_activated' || raw == '邮箱尚未激活，请先点击邮件中的激活链接。') {
       return AppMessage.emailNotActivatedClickLink();
     }
-    if (raw == '该 handle 已注册。邮箱当前仅支持新注册，请使用手机号验证码登录或导入身份凭证。') {
+    if (raw == 'email_login_unsupported_for_registered_handle' ||
+        raw == '该 handle 已注册。邮箱当前仅支持新注册，请使用手机号验证码登录或导入身份凭证。') {
       return AppMessage.emailLoginUnsupportedForRegisteredHandle();
     }
-    if (raw == '登录状态已失效，请重新登录。') {
+    if (raw == 'session_expired' || raw == '登录状态已失效，请重新登录。') {
       return AppMessage.sessionExpiredRelogin();
     }
     if (raw.startsWith('本地未找到凭证：')) {
@@ -232,14 +245,29 @@ class AppMessage {
     if (raw.startsWith('文件格式不正确：')) {
       return AppMessage.invalidFileFormat(raw.substring('文件格式不正确：'.length));
     }
-    if (raw == '手机号格式不正确，请使用 +国家码手机号，例如 +8613800138000') {
+    if (raw == 'phone_invalid_intl_example' ||
+        raw == '手机号格式不正确，请使用 +国家码手机号，例如 +8613800138000') {
       return AppMessage.phoneInvalidIntlExample();
     }
-    if (raw == '手机号格式不正确，请输入国际格式或中国大陆 11 位手机号') {
+    if (raw == 'phone_invalid_intl_or_cn' ||
+        raw == '手机号格式不正确，请输入国际格式或中国大陆 11 位手机号') {
       return AppMessage.phoneInvalidIntlOrCn();
     }
-    if (raw == 'handle 仅支持小写字母、数字、中划线，长度 2-32，不能包含下划线') {
+    if (raw == 'handle_invalid_pattern' ||
+        raw == 'handle 仅支持小写字母、数字、中划线，长度 2-32，不能包含下划线') {
       return AppMessage.handleInvalidPattern();
+    }
+    if (raw == 'identity_query_required') {
+      return AppMessage.identityQueryRequired();
+    }
+    if (raw == 'identity_resolve_failed') {
+      return AppMessage.identityResolveFailed();
+    }
+    if (raw == 'identity_invalid_contact') {
+      return AppMessage.identityInvalidContact();
+    }
+    if (raw == 'identity_missing_did') {
+      return AppMessage.identityMissingDid();
     }
     if (raw.startsWith('AWiki Me 当前未接入 DID 注册插件（') &&
         raw.endsWith('或接入原生插件后再在 App 内完成注册。')) {
@@ -253,17 +281,33 @@ class AppMessage {
     if (raw == 'AWiki Me 当前未接入 DID 注册插件，无法自动刷新 token。') {
       return AppMessage.didRegistrationRefreshUnsupported();
     }
-    if (raw == 'AWiki Me 当前未启用 E2EE，请接入原生插件实现') {
+    if (raw == 'e2ee_plugin_missing' ||
+        raw == 'AWiki Me 当前未启用 E2EE，请接入原生插件实现') {
       return AppMessage.e2eePluginMissing();
+    }
+    if (raw == 'attachment_picker_empty_result' ||
+        raw == 'attachment_picker_failed') {
+      return AppMessage.documentPickerFailed();
+    }
+    if (raw == 'attachment_save_failed') {
+      return const AppMessage._('documentSaveFailed');
+    }
+    if (raw == 'attachment_open_empty_path' ||
+        raw == 'attachment_open_failed' ||
+        raw.startsWith('attachment_open_failed:')) {
+      return AppMessage.attachmentOpenFailed();
+    }
+    if (raw == 'document_picker_failed') {
+      return AppMessage.documentPickerFailed();
     }
     if (raw == '文件选择失败，请稍后重试。') {
       return AppMessage.documentPickerFailed();
     }
     if (raw == '文件保存失败，请稍后重试。') {
-      return AppMessage._('raw', detail: raw);
+      return const AppMessage._('documentSaveFailed');
     }
     if (raw == '附件下载结果为空。') {
-      return AppMessage._('raw', detail: raw);
+      return const AppMessage._('attachmentDownloadEmpty');
     }
     return AppMessage._('raw', detail: raw);
   }
@@ -358,12 +402,24 @@ class AppMessage {
         return l10n.e2eePluginMissing;
       case 'documentPickerFailed':
         return l10n.documentPickerFailed;
+      case 'documentSaveFailed':
+        return l10n.documentSaveFailed;
+      case 'attachmentDownloadEmpty':
+        return l10n.attachmentDownloadEmpty;
       case 'linkOpenFailed':
         return detail == null || detail!.isEmpty
             ? l10n.linkOpenFailed
             : l10n.linkOpenFailedWithDetail(detail!);
       case 'groupNameRequired':
         return l10n.groupNameRequired;
+      case 'identityQueryRequired':
+        return l10n.identityQueryRequired;
+      case 'identityResolveFailed':
+        return l10n.identityResolveFailed;
+      case 'identityInvalidContact':
+        return l10n.identityInvalidContact;
+      case 'identityMissingDid':
+        return l10n.identityMissingDid;
       case 'followContactAlreadyFollowing':
         return l10n.followContactAlreadyFollowing;
       case 'followContactSucceeded':
@@ -371,11 +427,11 @@ class AppMessage {
       case 'peerProfileThreadDeleted':
         return l10n.peerProfileThreadDeleted;
       case 'conversationRemovedFromRecents':
-        return '已从最近会话移除';
+        return l10n.conversationRemovedFromRecents;
       case 'attachmentUnavailable':
-        return '附件文件已过期或本机缓存不存在，请让对方重新发送。';
+        return l10n.attachmentUnavailable;
       case 'attachmentOpenFailed':
-        return '附件无法打开，请稍后重试或保存后再打开。';
+        return l10n.attachmentOpenFailed;
       case 'raw':
         return detail ?? l10n.operationFailedRetry;
       default:

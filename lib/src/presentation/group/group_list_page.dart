@@ -14,6 +14,7 @@ import '../shared/avatar_badge.dart';
 import '../shared/copyable_did_line.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/responsive_layout.dart';
+import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../app_shell/providers/session_provider.dart';
 import 'create_group_dialog.dart';
@@ -323,19 +324,27 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                         spacing: 8,
                         runSpacing: 8,
                         children: <Widget>[
-                          AppPill(
+                          SemanticPill(
+                            label: context.l10n.conversationPeerTypeGroup,
+                            tone: SemanticPillTone.identity,
+                          ),
+                          SemanticPill(
                             label: context.l10n.groupMemberCount(
                               _group.memberCount,
                             ),
+                            tone: SemanticPillTone.metadata,
                           ),
-                          AppPill(label: _group.myRole ?? 'member'),
+                          SemanticPill(
+                            label: _group.myRole ?? 'member',
+                            tone: SemanticPillTone.relationship,
+                          ),
                         ],
                       ),
                       const SizedBox(height: 14),
                       CopyableDidLine(
                         value: _group.groupId,
-                        copySemanticLabel: '复制 Group DID',
-                        copiedMessage: 'DID 已复制',
+                        copySemanticLabel: context.l10n.chatPeerInfoCopyDid,
+                        copiedMessage: context.l10n.chatPeerInfoDidCopied,
                         textKey: const Key('group-detail-did-value'),
                         buttonKey: const Key('group-detail-copy-did-button'),
                         textStyle: AwikiMeTextStyles.cardSubtitle,
@@ -353,13 +362,13 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                         children: <Widget>[
                           Expanded(
                             child: Text(
-                              '成员',
+                              context.l10n.groupMembersTitle,
                               style: AwikiMeTextStyles.sectionTitle,
                             ),
                           ),
                           _GroupDetailIconButton(
                             key: const Key('group-detail-add-member-button'),
-                            semanticLabel: '添加成员',
+                            semanticLabel: context.l10n.groupAddMembers,
                             icon: CupertinoIcons.person_add,
                             onTap: canManageMembers
                                 ? () => _showAddMemberDialog(members)
@@ -370,7 +379,7 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                             key: const Key(
                               'group-detail-refresh-members-button',
                             ),
-                            semanticLabel: '刷新成员',
+                            semanticLabel: context.l10n.groupRefreshMembers,
                             icon: CupertinoIcons.refresh,
                             isLoading: _isRefreshingMembers,
                             onTap: _isRefreshingMembers
@@ -620,10 +629,11 @@ class _GroupCard extends StatelessWidget {
                     style: AwikiMeTextStyles.cardSubtitle,
                   ),
                   const SizedBox(height: 8),
-                  AppPill(
+                  SemanticPill(
                     label: context.l10n.groupMemberCountCompact(
                       group.memberCount,
                     ),
+                    tone: SemanticPillTone.metadata,
                   ),
                 ],
               ),
@@ -631,8 +641,8 @@ class _GroupCard extends StatelessWidget {
             const SizedBox(width: 12),
             AppIconButton(
               onPressed: onOpenDetail,
-              semanticLabel: '查看群详情',
-              tooltip: '查看群详情',
+              semanticLabel: context.l10n.groupDetails,
+              tooltip: context.l10n.groupDetails,
               size: context.awikiResponsive.compactControlHeight,
               child: AwikiAssetIcon(
                 assetName: 'assets/icons/icon_right.svg',
@@ -680,8 +690,8 @@ class GroupMemberRow extends StatelessWidget {
           const SizedBox(width: 8),
           AppIconButton(
             onPressed: onRemove,
-            semanticLabel: '移除成员',
-            tooltip: '移除成员',
+            semanticLabel: context.l10n.groupRemoveMember,
+            tooltip: context.l10n.groupRemoveMember,
             size: responsive.scaled(32),
             backgroundColor: theme.subtleSurface,
             borderColor: const Color(0xFFDDE5F0),
@@ -720,10 +730,10 @@ Future<void> showRemoveGroupMemberDialog({
   await AppNavigator.showDialog<void>(
     context,
     (dialogContext) => CupertinoAlertDialog(
-      title: const Text('移除成员'),
+      title: Text(context.l10n.groupRemoveMember),
       content: Padding(
         padding: const EdgeInsets.only(top: 8),
-        child: Text('移除 $memberTitle 后，对方将不能继续在这个群里发送消息。'),
+        child: Text(context.l10n.groupRemoveMemberContent(memberTitle)),
       ),
       actions: <Widget>[
         CupertinoDialogAction(
@@ -745,7 +755,7 @@ Future<void> showRemoveGroupMemberDialog({
                   .showError(AppMessage.fromError(error));
             }
           },
-          child: const Text('移除'),
+          child: Text(context.l10n.groupRemoveMember),
         ),
       ],
     ),

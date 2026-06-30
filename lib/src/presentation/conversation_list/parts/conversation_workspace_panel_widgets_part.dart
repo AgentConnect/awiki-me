@@ -7,7 +7,7 @@ class _MacPanelShell extends StatelessWidget {
     required this.child,
     this.closeIcon,
     this.closeButtonKey,
-    this.closeSemanticLabel = '关闭身份卡',
+    this.closeSemanticLabel,
     this.closeButtonLeading = false,
   });
 
@@ -16,7 +16,7 @@ class _MacPanelShell extends StatelessWidget {
   final Widget child;
   final IconData? closeIcon;
   final Key? closeButtonKey;
-  final String closeSemanticLabel;
+  final String? closeSemanticLabel;
   final bool closeButtonLeading;
 
   @override
@@ -40,7 +40,8 @@ class _MacPanelShell extends StatelessWidget {
                       key:
                           closeButtonKey ??
                           const Key('mac-side-panel-close-button'),
-                      semanticLabel: closeSemanticLabel,
+                      semanticLabel:
+                          closeSemanticLabel ?? context.l10n.chatPeerInfoClose,
                       icon: closeIcon ?? CupertinoIcons.xmark,
                       onTap: onClose,
                     ),
@@ -63,7 +64,8 @@ class _MacPanelShell extends StatelessWidget {
                       key:
                           closeButtonKey ??
                           const Key('mac-side-panel-close-button'),
-                      semanticLabel: closeSemanticLabel,
+                      semanticLabel:
+                          closeSemanticLabel ?? context.l10n.chatPeerInfoClose,
                       icon: closeIcon ?? CupertinoIcons.xmark,
                       onTap: onClose,
                     ),

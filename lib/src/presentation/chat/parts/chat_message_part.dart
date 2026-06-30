@@ -289,9 +289,9 @@ class _MessageAgentRecoveryCard extends StatelessWidget {
     final theme = context.awikiTheme;
     final content = switch (item) {
       _MessageAgentSyncTimelineItem(:final record) =>
-        _MessageAgentCardContent.sync(record),
+        _MessageAgentCardContent.sync(record, context.l10n),
       _MessageAgentActionTimelineItem(:final record) =>
-        _MessageAgentCardContent.action(record),
+        _MessageAgentCardContent.action(record, context.l10n),
     };
     final isAttention = content.tone == _MessageAgentCardTone.attention;
     final isDanger = content.tone == _MessageAgentCardTone.danger;
@@ -567,8 +567,8 @@ class _MessageAgentCardContent {
     this.detail,
     this.preview,
     this.tone = _MessageAgentCardTone.neutral,
-    this.confirmLabel = '确认',
-    this.rejectLabel = '拒绝',
+    required this.confirmLabel,
+    required this.rejectLabel,
     this.hasActions = false,
   });
 
@@ -582,109 +582,135 @@ class _MessageAgentCardContent {
   final String rejectLabel;
   final bool hasActions;
 
-  factory _MessageAgentCardContent.sync(MessageAgentSyncRecord record) {
+  factory _MessageAgentCardContent.sync(
+    MessageAgentSyncRecord record,
+    AppLocalizations l10n,
+  ) {
     final key = record.identityKey;
     if (record.isUnsupported) {
       return _MessageAgentCardContent(
         keySuffix: key,
-        title: '消息 Agent 跳过此消息',
+        title: l10n.messageAgentSkipped,
         icon: CupertinoIcons.exclamationmark_triangle,
         detail: _messageAgentOptionalDetail(record.unsupportedReason),
         tone: _MessageAgentCardTone.attention,
+        confirmLabel: l10n.commonConfirm,
+        rejectLabel: l10n.commonReject,
       );
     }
     if (record.isFailed) {
       return _MessageAgentCardContent(
         keySuffix: key,
-        title: '消息 Agent 处理失败',
+        title: l10n.messageAgentFailed,
         icon: CupertinoIcons.exclamationmark_circle,
         detail:
             _messageAgentOptionalDetail(record.lastErrorSummary) ??
             _messageAgentOptionalDetail(record.lastErrorCode),
         tone: _MessageAgentCardTone.danger,
+        confirmLabel: l10n.commonConfirm,
+        rejectLabel: l10n.commonReject,
       );
     }
     if (record.isRuntimeFinal) {
       return _MessageAgentCardContent(
         keySuffix: key,
-        title: '消息 Agent 已完成处理',
+        title: l10n.messageAgentCompleted,
         icon: CupertinoIcons.check_mark_circled,
-        detail: record.hasText ? '已生成处理结果' : null,
+        detail: record.hasText ? l10n.messageAgentResultGenerated : null,
         preview: _messageAgentOptionalDetail(
           record.summaryText ?? record.draftText,
         ),
+        confirmLabel: l10n.commonConfirm,
+        rejectLabel: l10n.commonReject,
       );
     }
     if (record.isRuntimeStatus) {
       return _MessageAgentCardContent(
         keySuffix: key,
-        title: '消息 Agent 正在处理',
+        title: l10n.messageAgentProcessing,
         icon: CupertinoIcons.clock,
         detail: _messageAgentOptionalDetail(record.state),
+        confirmLabel: l10n.commonConfirm,
+        rejectLabel: l10n.commonReject,
       );
     }
     return _MessageAgentCardContent(
       keySuffix: key,
-      title: '消息 Agent 已收到消息',
+      title: l10n.messageAgentReceived,
       icon: CupertinoIcons.bolt_horizontal_circle,
       detail: _messageAgentOptionalDetail(record.processingStatus),
+      confirmLabel: l10n.commonConfirm,
+      rejectLabel: l10n.commonReject,
     );
   }
 
-  factory _MessageAgentCardContent.action(AppActionRecord record) {
+  factory _MessageAgentCardContent.action(
+    AppActionRecord record,
+    AppLocalizations l10n,
+  ) {
     final request = record.request;
     final draft = _draftPreviewForAppActionRecord(record);
     if (record.state == appActionStateSucceeded) {
       return _MessageAgentCardContent(
         keySuffix: record.actionId,
         title: record.action == 'message.create_draft'
-            ? '草稿已放入输入框'
-            : 'App action 已完成',
+            ? l10n.messageAgentDraftApplied
+            : l10n.messageAgentAppActionCompleted,
         icon: CupertinoIcons.check_mark_circled,
         preview: draft,
+        confirmLabel: l10n.commonConfirm,
+        rejectLabel: l10n.commonReject,
       );
     }
     if (record.state == appActionStateRejected) {
       return _MessageAgentCardContent(
         keySuffix: record.actionId,
-        title: '已拒绝消息 Agent 请求',
+        title: l10n.messageAgentRequestRejected,
         icon: CupertinoIcons.xmark_circle,
         tone: _MessageAgentCardTone.attention,
+        confirmLabel: l10n.commonConfirm,
+        rejectLabel: l10n.commonReject,
       );
     }
     if (record.state == appActionStateFailed) {
       return _MessageAgentCardContent(
         keySuffix: record.actionId,
-        title: 'App action 处理失败',
+        title: l10n.messageAgentAppActionFailed,
         icon: CupertinoIcons.exclamationmark_circle,
         detail:
             _messageAgentOptionalDetail(record.result?.errorSummary) ??
             _messageAgentOptionalDetail(record.result?.errorCode),
         preview: draft,
         tone: _MessageAgentCardTone.danger,
+        confirmLabel: l10n.commonConfirm,
+        rejectLabel: l10n.commonReject,
       );
     }
     return _MessageAgentCardContent(
       keySuffix: record.actionId,
-      title: _appActionTitle(record.action),
+      title: _appActionTitle(record.action, l10n),
       icon: CupertinoIcons.square_pencil,
-      detail: request?.needsUserConfirmation == true ? '等待确认' : null,
+      detail: request?.needsUserConfirmation == true
+          ? l10n.messageAgentWaitingConfirmation
+          : null,
       preview: draft,
       hasActions: true,
-      confirmLabel: record.action == 'message.create_draft' ? '使用草稿' : '确认',
-      rejectLabel: '拒绝',
+      confirmLabel: record.action == 'message.create_draft'
+          ? l10n.messageAgentUseDraft
+          : l10n.commonConfirm,
+      rejectLabel: l10n.commonReject,
     );
   }
 }
 
-String _appActionTitle(String action) {
+String _appActionTitle(String action, AppLocalizations l10n) {
   return switch (action) {
-    'message.create_draft' => '消息 Agent 生成了草稿',
-    'message.summarize_plain' => '消息 Agent 生成了摘要',
-    'contact.read' => '消息 Agent 请求读取联系人',
-    'contact.update_display_name' => '消息 Agent 请求修改联系人名称',
-    'contact.update_note' => '消息 Agent 请求修改联系人备注',
-    _ => '消息 Agent 请求 App action',
+    'message.create_draft' => l10n.messageAgentActionCreateDraft,
+    'message.summarize_plain' => l10n.messageAgentActionSummarize,
+    'contact.read' => l10n.messageAgentActionReadContact,
+    'contact.update_display_name' => l10n.messageAgentActionUpdateDisplayName,
+    'contact.update_note' => l10n.messageAgentActionUpdateNote,
+    _ => l10n.messageAgentActionGeneric,
   };
 }
 
@@ -739,7 +765,7 @@ class _NewMessagesButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         onPressed: onTap,
         child: Text(
-          '有新消息',
+          context.l10n.conversationsNewMessages,
           style: TextStyle(
             color: CupertinoColors.white,
             fontSize: macStyle
@@ -784,6 +810,7 @@ class _MessageBubble extends StatelessWidget {
   }
 
   Widget _withPeerInfoTap({
+    required BuildContext context,
     required Widget child,
     required double borderRadius,
   }) {
@@ -793,8 +820,8 @@ class _MessageBubble extends StatelessWidget {
     }
     return AppPressable(
       onTap: tap,
-      semanticLabel: '查看用户或智能体信息',
-      tooltip: '查看用户或智能体信息',
+      semanticLabel: context.l10n.chatViewPeerInfo,
+      tooltip: context.l10n.chatViewPeerInfo,
       borderRadius: BorderRadius.circular(borderRadius),
       child: child,
     );
@@ -923,7 +950,7 @@ class _MessageBubble extends StatelessWidget {
             children: <Widget>[
               SelectionArea(
                 child: Text(
-                  '发送失败',
+                  context.l10n.chatSendFailed,
                   style: TextStyle(
                     fontSize: responsive.displayScaled(12),
                     color: const Color(0xFFFF3B30),
@@ -935,9 +962,9 @@ class _MessageBubble extends StatelessWidget {
                 SizedBox(width: responsive.displayScaled(10)),
                 AppPressableText(
                   onTap: onRetry,
-                  semanticLabel: '重试发送',
+                  semanticLabel: context.l10n.chatRetrySend,
                   child: Text(
-                    '重试',
+                    context.l10n.commonRetry,
                     style: TextStyle(
                       fontSize: responsive.displayScaled(12),
                       color: const Color(0xFF0B65F8),
@@ -966,6 +993,7 @@ class _MessageBubble extends StatelessWidget {
                     : 0,
               ),
               child: _withPeerInfoTap(
+                context: context,
                 borderRadius: responsive.displayScaled(17),
                 child: AvatarBadge(
                   seed: senderLabel,
@@ -1018,6 +1046,7 @@ class _MessageBubble extends StatelessWidget {
                     : 0,
               ),
               child: _withPeerInfoTap(
+                context: context,
                 borderRadius: responsive.scaled(14),
                 child: AvatarBadge(
                   seed: senderLabel,
@@ -1093,7 +1122,7 @@ class _MessageBubble extends StatelessWidget {
                         children: <Widget>[
                           SelectionArea(
                             child: Text(
-                              '发送失败',
+                              context.l10n.chatSendFailed,
                               style: TextStyle(
                                 fontSize: responsive.metaSm,
                                 color: theme.danger,
@@ -1105,9 +1134,9 @@ class _MessageBubble extends StatelessWidget {
                             SizedBox(width: responsive.spacing(10)),
                             AppPressableText(
                               onTap: onRetry,
-                              semanticLabel: '重试发送',
+                              semanticLabel: context.l10n.chatRetrySend,
                               child: Text(
-                                '重试',
+                                context.l10n.commonRetry,
                                 style: TextStyle(
                                   fontSize: responsive.metaSm,
                                   color: theme.primaryDark,
@@ -1146,7 +1175,7 @@ class _SendingMessageIndicator extends StatelessWidget {
         ? responsive.displayScaled(6)
         : responsive.scaled(6);
     return Semantics(
-      label: '发送中',
+      label: context.l10n.chatSending,
       liveRegion: true,
       child: SizedBox.square(
         dimension: size,
@@ -1270,7 +1299,7 @@ class _AttachmentContent extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     _MessagePlainText(
-                      text: attachment.displayName,
+                      text: localizeAttachmentName(context.l10n, attachment),
                       maxLines: 2,
                       style: titleStyle,
                     ),
@@ -1281,6 +1310,7 @@ class _AttachmentContent extends StatelessWidget {
                     ),
                     Text(
                       _formatAttachmentMeta(
+                        context.l10n,
                         attachment.mimeType,
                         attachment.sizeBytes,
                       ),
@@ -1667,8 +1697,8 @@ class _AttachmentActionButton extends StatelessWidget {
         : responsive.scaled(34);
     return AppIconButton(
       onPressed: isLoading ? null : () async => onTap(),
-      semanticLabel: '查看附件',
-      tooltip: '查看附件',
+      semanticLabel: context.l10n.chatViewAttachment,
+      tooltip: context.l10n.chatViewAttachment,
       isLoading: isLoading,
       size: size,
       backgroundColor: macStyle ? CupertinoColors.white : theme.surface,
@@ -1685,7 +1715,11 @@ class _AttachmentActionButton extends StatelessWidget {
   }
 }
 
-String _formatAttachmentMeta(String mimeType, int? sizeBytes) {
+String _formatAttachmentMeta(
+  AppLocalizations l10n,
+  String mimeType,
+  int? sizeBytes,
+) {
   final parts = <String>[];
   final type = mimeType.trim();
   if (type.isNotEmpty && type != 'application/octet-stream') {
@@ -1694,7 +1728,7 @@ String _formatAttachmentMeta(String mimeType, int? sizeBytes) {
   if (sizeBytes != null && sizeBytes >= 0) {
     parts.add(_formatFileSize(sizeBytes));
   }
-  return parts.isEmpty ? '文件' : parts.join(' · ');
+  return parts.isEmpty ? l10n.chatAttachmentFileFallback : parts.join(' · ');
 }
 
 String _formatFileSize(int bytes) {

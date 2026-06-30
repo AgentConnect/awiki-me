@@ -1,9 +1,11 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/conversation_summary.dart';
+import '../../l10n/l10n.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/responsive_layout.dart';
@@ -70,7 +72,9 @@ class _AgentInboxPanelState extends ConsumerState<AgentInboxPanel> {
         runtime != null && state.runtimeAgentDid == runtime.agentDid;
     final inThread = stateMatchesRuntime && state.thread.threadId != null;
     return _AgentInboxShell(
-      title: inThread ? state.thread.title ?? '收件箱线程' : 'Agent 收件箱',
+      title: inThread
+          ? state.thread.title ?? context.l10n.agentInboxThreadTitle
+          : context.l10n.agentInboxTitle,
       onClose: inThread ? _closeThread : widget.onClose,
       closeIcon: inThread || widget.useBackButton
           ? CupertinoIcons.chevron_left
@@ -79,24 +83,29 @@ class _AgentInboxPanelState extends ConsumerState<AgentInboxPanel> {
           ? const Key('mac-agent-inbox-thread-back-button')
           : const Key('mac-agent-inbox-close-button'),
       closeSemanticLabel: inThread
-          ? '返回收件箱'
-          : (widget.useBackButton ? '返回会话' : '关闭 Agent 收件箱'),
+          ? context.l10n.agentInboxBackToInbox
+          : (widget.useBackButton
+                ? context.l10n.agentInboxBackToConversation
+                : context.l10n.agentInboxClose),
       closeButtonLeading: inThread || widget.useBackButton,
       child: runtime == null
-          ? const Center(
+          ? Center(
               child: Text(
-                '当前会话不是 Runtime Agent 会话',
-                style: TextStyle(color: Color(0xFF6B7280), fontSize: 13),
+                context.l10n.agentInboxNotRuntimeConversation,
+                style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13),
               ),
             )
           : daemonDid == null || daemonDid.isEmpty
-          ? const Center(
+          ? Center(
               child: Padding(
-                padding: EdgeInsets.all(24),
+                padding: const EdgeInsets.all(24),
                 child: Text(
-                  '这个 Runtime Agent 暂时没有绑定 Daemon',
+                  context.l10n.agentInboxDaemonMissing,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Color(0xFF6B7280), fontSize: 13),
+                  style: const TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 13,
+                  ),
                 ),
               ),
             )
@@ -173,7 +182,7 @@ class _AgentInboxPanelState extends ConsumerState<AgentInboxPanel> {
       orElse: () => AgentInboxItem(
         threadId: state.thread.threadId ?? '',
         kind: state.thread.kind ?? 'direct',
-        title: state.thread.title ?? '收件箱线程',
+        title: state.thread.title ?? context.l10n.agentInboxThreadTitle,
         lastMessagePreview: '',
         unreadCount: 0,
         hasAttachments: false,
@@ -245,7 +254,7 @@ class _AgentInboxListView extends StatelessWidget {
               const SizedBox(width: 12),
               _AgentInboxIconButton(
                 key: const Key('mac-agent-inbox-refresh-button'),
-                semanticLabel: '刷新 Agent 收件箱',
+                semanticLabel: context.l10n.agentInboxRefresh,
                 icon: CupertinoIcons.refresh,
                 isLoading: state.isRefreshing,
                 onTap: state.isRefreshing ? null : onRefresh,
@@ -259,10 +268,13 @@ class _AgentInboxListView extends StatelessWidget {
               : showBlockingError
               ? _AgentInboxError(message: state.error!, onRetry: onRefresh)
               : !hasItems
-              ? const Center(
+              ? Center(
                   child: Text(
-                    '这个 Agent 暂时没有收件箱消息',
-                    style: TextStyle(color: Color(0xFF6B7280), fontSize: 13),
+                    context.l10n.agentInboxEmpty,
+                    style: const TextStyle(
+                      color: Color(0xFF6B7280),
+                      fontSize: 13,
+                    ),
                   ),
                 )
               : ListView(
@@ -288,7 +300,7 @@ class _AgentInboxListView extends StatelessWidget {
                     if (state.nextCursor != null) ...<Widget>[
                       if (state.items.isNotEmpty) const SizedBox(height: 8),
                       _LoadMoreButton(
-                        label: '加载更多会话',
+                        label: context.l10n.agentInboxLoadMoreThreads,
                         isLoading: state.isRefreshing,
                         onTap: state.isRefreshing ? null : onLoadMore,
                       ),
@@ -312,19 +324,19 @@ class _AgentInboxScopeControl extends StatelessWidget {
     return Row(
       children: <Widget>[
         _ScopeButton(
-          label: '全部',
+          label: context.l10n.agentInboxScopeAll,
           selected: scope == AgentInboxScope.all,
           onTap: () => onChanged(AgentInboxScope.all),
         ),
         const SizedBox(width: 8),
         _ScopeButton(
-          label: '私聊',
+          label: context.l10n.agentInboxScopeDirect,
           selected: scope == AgentInboxScope.direct,
           onTap: () => onChanged(AgentInboxScope.direct),
         ),
         const SizedBox(width: 8),
         _ScopeButton(
-          label: '群聊',
+          label: context.l10n.agentInboxScopeGroup,
           selected: scope == AgentInboxScope.group,
           onTap: () => onChanged(AgentInboxScope.group),
         ),
@@ -390,9 +402,10 @@ class _AgentInboxRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final isGroup = item.kind == 'group';
     final timeLabel = _formatInboxTimestamp(item.lastMessageAtMs);
+    final title = _localizedInboxTitle(context.l10n, item.title);
     return AppPressableTile(
       onTap: onTap,
-      semanticLabel: item.title,
+      semanticLabel: title,
       borderRadius: BorderRadius.circular(8),
       backgroundColor: CupertinoColors.white,
       border: Border.all(color: const Color(0xFFE5EAF2)),
@@ -427,7 +440,7 @@ class _AgentInboxRow extends StatelessWidget {
                     children: <Widget>[
                       Expanded(
                         child: Text(
-                          item.title,
+                          title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -466,8 +479,12 @@ class _AgentInboxRow extends StatelessWidget {
                       Expanded(
                         child: Text(
                           item.lastMessagePreview.isEmpty
-                              ? (item.hasAttachments ? '最新：附件' : '最新：无预览')
-                              : '最新：${item.lastMessagePreview}',
+                              ? (item.hasAttachments
+                                    ? context.l10n.agentInboxLatestAttachment
+                                    : context.l10n.agentInboxLatestNoPreview)
+                              : context.l10n.agentInboxLatestPreview(
+                                  item.lastMessagePreview,
+                                ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -530,10 +547,10 @@ class _AgentInboxThreadView extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
           child: Row(
             children: <Widget>[
-              const Expanded(
+              Expanded(
                 child: Text(
-                  '只读收件箱',
-                  style: TextStyle(
+                  context.l10n.agentInboxReadOnly,
+                  style: const TextStyle(
                     color: Color(0xFF6B7280),
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
@@ -542,7 +559,7 @@ class _AgentInboxThreadView extends StatelessWidget {
               ),
               _AgentInboxIconButton(
                 key: const Key('mac-agent-inbox-thread-refresh-button'),
-                semanticLabel: '刷新收件箱线程',
+                semanticLabel: context.l10n.agentInboxRefreshThread,
                 icon: CupertinoIcons.refresh,
                 isLoading: state.isRefreshing,
                 onTap: state.isRefreshing ? null : onRefresh,
@@ -556,10 +573,13 @@ class _AgentInboxThreadView extends StatelessWidget {
               : showBlockingError
               ? _AgentInboxError(message: state.error!, onRetry: onRefresh)
               : !hasMessages
-              ? const Center(
+              ? Center(
                   child: Text(
-                    '这个线程暂时没有消息',
-                    style: TextStyle(color: Color(0xFF6B7280), fontSize: 13),
+                    context.l10n.agentInboxThreadEmpty,
+                    style: const TextStyle(
+                      color: Color(0xFF6B7280),
+                      fontSize: 13,
+                    ),
                   ),
                 )
               : ListView(
@@ -574,7 +594,7 @@ class _AgentInboxThreadView extends StatelessWidget {
                     ],
                     if (state.nextCursor != null) ...<Widget>[
                       _LoadMoreButton(
-                        label: '加载更早消息',
+                        label: context.l10n.agentInboxLoadEarlier,
                         isLoading: state.isRefreshing,
                         onTap: state.isRefreshing ? null : onLoadMore,
                       ),
@@ -665,9 +685,9 @@ class _AgentInboxMessageRow extends StatelessWidget {
             ],
             if (message.truncated) ...<Widget>[
               const SizedBox(height: 6),
-              const Text(
-                '内容较长，已截断',
-                style: TextStyle(color: Color(0xFF8A94A8), fontSize: 11),
+              Text(
+                context.l10n.agentInboxContentTruncated,
+                style: const TextStyle(color: Color(0xFF8A94A8), fontSize: 11),
               ),
             ],
             if (visibleAttachments.isNotEmpty) ...<Widget>[
@@ -709,7 +729,10 @@ class _AgentInboxAttachmentRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  attachment.filename,
+                  _localizedAttachmentFilename(
+                    context.l10n,
+                    attachment.filename,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -785,13 +808,13 @@ class _AgentInboxError extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(22),
         child: AwikiMeErrorNotice(
-          message: message,
+          message: _localizeInboxError(context.l10n, message),
           center: true,
           compact: true,
           trailing: AppPressable(
             onTap: onRetry,
-            semanticLabel: '重试',
-            tooltip: '重试',
+            semanticLabel: context.l10n.commonRetry,
+            tooltip: context.l10n.commonRetry,
             borderRadius: BorderRadius.circular(8),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -799,9 +822,12 @@ class _AgentInboxError extends StatelessWidget {
                 color: const Color(0xFF0B65F8),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Text(
-                '重试',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              child: Text(
+                context.l10n.commonRetry,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -820,18 +846,18 @@ class _AgentInboxInlineError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AwikiMeErrorNotice(
-      message: message,
+      message: _localizeInboxError(context.l10n, message),
       compact: true,
       trailing: AppPressable(
         onTap: onRetry,
-        semanticLabel: '重试',
-        tooltip: '重试',
+        semanticLabel: context.l10n.commonRetry,
+        tooltip: context.l10n.commonRetry,
         borderRadius: BorderRadius.circular(7),
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Text(
-            '重试',
-            style: TextStyle(
+            context.l10n.commonRetry,
+            style: const TextStyle(
               color: Color(0xFF0B65F8),
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -850,7 +876,7 @@ class _AgentInboxShell extends StatelessWidget {
     required this.child,
     this.closeIcon,
     this.closeButtonKey,
-    this.closeSemanticLabel = '关闭 Agent 收件箱',
+    this.closeSemanticLabel,
     this.closeButtonLeading = false,
   });
 
@@ -859,11 +885,13 @@ class _AgentInboxShell extends StatelessWidget {
   final Widget child;
   final IconData? closeIcon;
   final Key? closeButtonKey;
-  final String closeSemanticLabel;
+  final String? closeSemanticLabel;
   final bool closeButtonLeading;
 
   @override
   Widget build(BuildContext context) {
+    final resolvedCloseLabel =
+        closeSemanticLabel ?? context.l10n.agentInboxClose;
     return DecoratedBox(
       decoration: const BoxDecoration(color: Color(0xFFF8FAFD)),
       child: SafeArea(
@@ -883,7 +911,7 @@ class _AgentInboxShell extends StatelessWidget {
                       key:
                           closeButtonKey ??
                           const Key('agent-inbox-panel-close-button'),
-                      semanticLabel: closeSemanticLabel,
+                      semanticLabel: resolvedCloseLabel,
                       icon: closeIcon ?? CupertinoIcons.xmark,
                       onTap: onClose,
                     ),
@@ -906,7 +934,7 @@ class _AgentInboxShell extends StatelessWidget {
                       key:
                           closeButtonKey ??
                           const Key('agent-inbox-panel-close-button'),
-                      semanticLabel: closeSemanticLabel,
+                      semanticLabel: resolvedCloseLabel,
                       icon: closeIcon ?? CupertinoIcons.xmark,
                       onTap: onClose,
                     ),
@@ -963,6 +991,34 @@ String _attachmentSubtitle(AgentInboxAttachment attachment) {
     return attachment.mimeType;
   }
   return '${attachment.mimeType} · $sizeText';
+}
+
+String _localizeInboxError(AppLocalizations l10n, String message) {
+  return switch (message) {
+    'agent_inbox.daemon_no_response' => l10n.agentInboxDaemonNoResponse,
+    'agent_inbox.query_failed' => l10n.agentInboxQueryFailed,
+    'agent_inbox.thread_query_failed' => l10n.agentInboxThreadQueryFailed,
+    _ => message,
+  };
+}
+
+String _localizedInboxTitle(AppLocalizations l10n, String title) {
+  final normalized = title.trim();
+  if (normalized.isEmpty || normalized == 'Untitled conversation') {
+    return l10n.chatConversationUntitled;
+  }
+  if (normalized == 'Inbox thread') {
+    return l10n.agentInboxThreadTitle;
+  }
+  return normalized;
+}
+
+String _localizedAttachmentFilename(AppLocalizations l10n, String filename) {
+  final normalized = filename.trim();
+  if (normalized.isEmpty || normalized == 'Untitled attachment') {
+    return l10n.chatAttachmentFileFallback;
+  }
+  return normalized;
 }
 
 String? _formatInboxTimestamp(int? epochMs) {

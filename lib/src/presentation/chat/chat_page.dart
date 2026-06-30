@@ -5,6 +5,7 @@ import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -27,8 +28,9 @@ import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../../app/ui_feedback.dart';
 import '../agents/agent_inbox_panel.dart';
-import '../agents/agent_display_name.dart';
 import '../agents/agent_rename_dialog.dart';
+import '../agents/agent_runtime_display.dart';
+import '../agents/agent_visual_status.dart';
 import '../agents/agents_provider.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
 import '../app_shell/providers/session_provider.dart';
@@ -45,7 +47,9 @@ import '../shared/app_dialog.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/copyable_did_line.dart';
 import '../shared/formatters/display_formatters.dart';
+import '../shared/formatters/localized_ui_formatters.dart';
 import '../shared/responsive_layout.dart';
+import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'chat_provider.dart';
 
@@ -542,10 +546,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                   : responsive.spacing(24),
                             ),
                             child: _AgentProcessingIndicator(
-                              label: _agentProcessingLabel(<AgentPendingTurn>[
-                                turn,
-                              ]),
+                              label: _agentProcessingLabel(
+                                context,
+                                <AgentPendingTurn>[turn],
+                              ),
                               avatarSeed: _agentProcessingAvatarSeed(
+                                context,
                                 runtimeAgent,
                                 currentConversation,
                               ),
@@ -657,7 +663,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                         : responsive.spacing(7),
                                   ),
                                   _MessageAgentProcessingStatus(
-                                    label: _agentProcessingLabel(pendingTurns),
+                                    label: _agentProcessingLabel(
+                                      context,
+                                      pendingTurns,
+                                    ),
                                     overdue: pendingTurns.any(
                                       (turn) => turn.isOverdue,
                                     ),
@@ -698,7 +707,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
             enabled:
                 !isDeletedAgentConversation && groupSendDisabledReason == null,
             disabledReason: isDeletedAgentConversation
-                ? '智能体已删除，无法继续发送消息'
+                ? context.l10n.chatDeletedAgentDisabled
                 : groupSendDisabledReason,
             onSend: () => _submitComposer(
               currentConversation,
@@ -1364,9 +1373,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
         return null;
       }
       if (status == 'left' || status == 'removed') {
-        return '你已不在这个群聊中，不能继续发送消息';
+        return context.l10n.chatGroupLeftDisabled;
       }
-      return '当前群聊暂时不能发送消息';
+      return context.l10n.chatGroupSendDisabled;
     }
     return null;
   }
@@ -1525,28 +1534,39 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   String _agentProcessingAvatarSeed(
+    BuildContext context,
     AgentSummary? runtimeAgent,
     ConversationSummary conversation,
   ) {
     if (runtimeAgent != null) {
-      return AgentDisplayName.title(runtimeAgent);
+      return localizeAgentTitle(context.l10n, runtimeAgent);
     }
     return conversation.displayName;
   }
 
-  String _agentProcessingLabel(List<AgentPendingTurn> turns) {
+  String _agentProcessingLabel(
+    BuildContext context,
+    List<AgentPendingTurn> turns,
+  ) {
     if (turns.isEmpty) {
-      return '智能体正在处理...';
+      return context.l10n.chatAgentProcessing;
     }
     final overdue = turns.any((turn) => turn.isOverdue);
-    final subject = _agentProcessingSubject(turns);
-    if (subject == '智能体') {
-      return overdue ? '智能体仍在处理，稍后可刷新查看' : '智能体正在处理...';
+    final subject = _agentProcessingSubject(context, turns);
+    if (subject == context.l10n.chatAgentSubject) {
+      return overdue
+          ? context.l10n.chatAgentStillProcessing
+          : context.l10n.chatAgentProcessing;
     }
-    return overdue ? '$subject 仍在处理，稍后可刷新查看' : '$subject 正在处理...';
+    return overdue
+        ? context.l10n.chatSubjectStillProcessing(subject)
+        : context.l10n.chatSubjectProcessing(subject);
   }
 
-  String _agentProcessingSubject(List<AgentPendingTurn> turns) {
+  String _agentProcessingSubject(
+    BuildContext context,
+    List<AgentPendingTurn> turns,
+  ) {
     final handles = <String>[];
     final seenHandles = <String>{};
     for (final turn in turns) {
@@ -1557,11 +1577,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
       handles.add(handle);
     }
     if (handles.isEmpty) {
-      return '智能体';
+      return context.l10n.chatAgentSubject;
     }
     if (handles.length <= 2) {
-      return handles.map((handle) => '@$handle').join('、');
+      final separator = appLocalizationsUseChinese(context.l10n) ? '、' : ', ';
+      return handles.map((handle) => '@$handle').join(separator);
     }
-    return '${handles.length} 个智能体';
+    return context.l10n.chatAgentCountSubject(handles.length);
   }
 }

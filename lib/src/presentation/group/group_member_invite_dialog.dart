@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:awiki_me/l10n/app_localizations.dart';
 
+import '../../l10n/l10n.dart';
 import '../../app/e2e_semantics.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/agent_summary.dart';
@@ -123,7 +125,7 @@ class _GroupMemberInviteDialogState
     final query = normalizeDidOrHandleInput(_queryController.text);
     if (query.isEmpty) {
       setState(() {
-        _errorText = '请输入 handle 或 DID。';
+        _errorText = context.l10n.identityQueryRequired;
       });
       return;
     }
@@ -151,7 +153,7 @@ class _GroupMemberInviteDialogState
       }
       setState(() {
         _isResolving = false;
-        _errorText = '未找到该身份，请检查 handle / DID 是否正确。';
+        _errorText = context.l10n.identityResolveFailed;
       });
     }
   }
@@ -160,6 +162,7 @@ class _GroupMemberInviteDialogState
     if (_selectedDids.isEmpty || _isSubmitting || _isResolving) {
       return;
     }
+    final l10n = context.l10n;
     final candidatesByDid = <String, GroupInviteCandidate>{
       for (final candidate in _allCandidates(watch: false))
         _normalizeDid(candidate.did): candidate,
@@ -185,7 +188,7 @@ class _GroupMemberInviteDialogState
             .addGroupMember(groupId: widget.groupId, memberRef: candidate.did);
         _selectedDids.remove(_normalizeDid(candidate.did));
       } catch (error) {
-        failed.add('${candidate.displayName}: $error');
+        failed.add('${candidate.localizedDisplayName(l10n)}: $error');
       }
     }
 
@@ -226,6 +229,9 @@ class _GroupMemberInviteDialogState
         ? candidates.take(_defaultVisibleLimit).toList()
         : candidates;
     final selectedCount = _selectedDids.length;
+    final candidateSectionTitle = _normalizedQuery.isEmpty
+        ? context.l10n.groupInviteCandidates
+        : context.l10n.groupInviteSearchResults;
     return AppDialogScaffold(
       maxWidth: 620,
       maxHeightFraction: 0.9,
@@ -265,7 +271,7 @@ class _GroupMemberInviteDialogState
             children: <Widget>[
               Expanded(
                 child: Text(
-                  _candidateSectionTitle,
+                  candidateSectionTitle,
                   style: AwikiMeTextStyles.sectionTitle.copyWith(
                     fontSize: responsive.bodyMd,
                   ),
@@ -298,7 +304,7 @@ class _GroupMemberInviteDialogState
             SizedBox(
               width: double.infinity,
               child: AppSecondaryButton(
-                label: '查看更多',
+                label: context.l10n.groupInviteShowMore,
                 onPressed: _isSubmitting
                     ? null
                     : () => setState(() {
@@ -312,7 +318,7 @@ class _GroupMemberInviteDialogState
             children: <Widget>[
               Expanded(
                 child: AppSecondaryButton(
-                  label: '取消',
+                  label: context.l10n.commonCancel,
                   onPressed: _isSubmitting
                       ? null
                       : () => Navigator.of(context).pop(),
@@ -323,10 +329,10 @@ class _GroupMemberInviteDialogState
                 child: AppPrimaryButton(
                   key: const Key('identity-add-group-member-button'),
                   label: _isSubmitting
-                      ? '添加中...'
+                      ? context.l10n.groupInviteAdding
                       : selectedCount == 0
-                      ? '确认添加'
-                      : '确认添加 ($selectedCount)',
+                      ? context.l10n.identityAddGroupMemberAction
+                      : context.l10n.groupInviteConfirmCount(selectedCount),
                   semanticsIdentifier: 'e2e-identity-add-group-member-button',
                   onPressed: selectedCount == 0 || _isSubmitting || _isResolving
                       ? null
@@ -341,13 +347,6 @@ class _GroupMemberInviteDialogState
   }
 
   String get _normalizedQuery => _normalizeSearchText(_query);
-
-  String get _candidateSectionTitle {
-    if (_normalizedQuery.isEmpty) {
-      return '可邀请的身份';
-    }
-    return '搜索结果';
-  }
 
   Set<String> get _existingMemberDids => <String>{
     for (final member in widget.existingMembers)
@@ -520,7 +519,7 @@ class GroupInviteCandidate {
     }
     final displayName = agent.displayName.trim().isNotEmpty
         ? agent.displayName.trim()
-        : '未命名智能体';
+        : 'Unnamed agent';
     return GroupInviteCandidate(
       did: agent.agentDid.trim(),
       displayName: displayName,
@@ -665,12 +664,26 @@ class GroupInviteCandidate {
   }
 
   String get _searchText => _normalizeSearchText(
-    <String>[displayName, handle ?? '', did, sourceLabel, kindLabel].join(' '),
+    <String>[
+      displayName,
+      handle ?? '',
+      did,
+      source.name,
+      kind.name,
+      sourceLabelZh,
+      kindLabelZh,
+      sourceLabelEn,
+      kindLabelEn,
+    ].join(' '),
   );
 
-  String get kindLabel => kind == GroupInviteIdentityKind.agent ? '智能体' : '用户';
+  String get kindLabelZh =>
+      kind == GroupInviteIdentityKind.agent ? '智能体' : '用户';
 
-  String get sourceLabel {
+  String get kindLabelEn =>
+      kind == GroupInviteIdentityKind.agent ? 'agent' : 'user';
+
+  String get sourceLabelZh {
     switch (source) {
       case GroupInviteCandidateSource.agent:
         return '我的智能体';
@@ -684,6 +697,44 @@ class GroupInviteCandidate {
         return '匹配结果';
     }
   }
+
+  String get sourceLabelEn {
+    switch (source) {
+      case GroupInviteCandidateSource.agent:
+        return 'my agents';
+      case GroupInviteCandidateSource.following:
+        return 'following';
+      case GroupInviteCandidateSource.follower:
+        return 'followers';
+      case GroupInviteCandidateSource.recent:
+        return 'recent conversations';
+      case GroupInviteCandidateSource.resolved:
+        return 'resolved identity';
+    }
+  }
+
+  String localizedSourceLabel(AppLocalizations l10n) {
+    switch (source) {
+      case GroupInviteCandidateSource.agent:
+        return l10n.groupInviteSourceMyAgents;
+      case GroupInviteCandidateSource.following:
+        return l10n.groupInviteSourceFollowing;
+      case GroupInviteCandidateSource.follower:
+        return l10n.groupInviteSourceFollowers;
+      case GroupInviteCandidateSource.recent:
+        return l10n.groupInviteSourceRecent;
+      case GroupInviteCandidateSource.resolved:
+        return l10n.groupInviteSourceResolved;
+    }
+  }
+
+  String localizedDisplayName(AppLocalizations l10n) {
+    final normalized = displayName.trim();
+    if (normalized.isEmpty || normalized == 'Unnamed agent') {
+      return l10n.groupInviteUnnamedAgent;
+    }
+    return normalized;
+  }
 }
 
 class _InviteDialogHeader extends StatelessWidget {
@@ -694,8 +745,8 @@ class _InviteDialogHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppDialogHeader(
-      title: '添加群成员',
-      subtitle: '搜索本地身份，或输入 handle / DID 匹配新身份。',
+      title: context.l10n.identityAddGroupMemberTitle,
+      subtitle: context.l10n.groupInviteDialogSubtitle,
       onClose: () => Navigator.of(context).pop(),
       isCloseEnabled: !isBusy,
     );
@@ -769,13 +820,13 @@ class _InviteSearchInputState extends State<_InviteSearchInput> {
           Expanded(
             child: e2eSemantics(
               identifier: 'e2e-identity-lookup-input',
-              label: '输入 handle 或 DID',
+              label: context.l10n.identityInputSemantics,
               textField: true,
               child: CupertinoTextField(
                 key: const Key('identity-lookup-input'),
                 controller: widget.controller,
                 enabled: widget.enabled,
-                placeholder: '搜索名称、handle、DID',
+                placeholder: context.l10n.identitySearchNameHandleDid,
                 textInputAction: TextInputAction.search,
                 onSubmitted: (_) async {
                   if (widget.enabled) {
@@ -796,8 +847,8 @@ class _InviteSearchInputState extends State<_InviteSearchInput> {
             const SizedBox(width: 8),
             AppIconButton(
               key: const Key('identity-lookup-clear-button'),
-              semanticLabel: '清空输入',
-              tooltip: '清空输入',
+              semanticLabel: context.l10n.identityClearInput,
+              tooltip: context.l10n.identityClearInput,
               onPressed: widget.controller.clear,
               size: 28,
               backgroundColor: const Color(0xFFEAF0F7),
@@ -818,7 +869,9 @@ class _InviteSearchInputState extends State<_InviteSearchInput> {
       height: 52,
       child: AppSecondaryButton(
         key: const Key('identity-lookup-search-button'),
-        label: widget.isResolving ? '匹配中...' : '匹配身份',
+        label: widget.isResolving
+            ? context.l10n.identityResolving
+            : context.l10n.identitySearchLabel,
         semanticsIdentifier: 'e2e-identity-lookup-search-button',
         onPressed: widget.enabled && !widget.isResolving
             ? widget.onResolve
@@ -861,9 +914,9 @@ class _SelectedInviteStrip extends StatelessWidget {
           color: const Color(0xFFEAF2FF),
           borderRadius: BorderRadius.circular(10),
         ),
-        child: const Text(
-          '选择一个或多个身份后，统一确认添加。',
-          style: TextStyle(
+        child: Text(
+          context.l10n.groupInviteSelectHint,
+          style: const TextStyle(
             color: Color(0xFF0B65F8),
             fontSize: 12,
             height: 1.35,
@@ -897,6 +950,7 @@ class _SelectedInviteChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final displayName = candidate.localizedDisplayName(context.l10n);
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
       decoration: BoxDecoration(
@@ -908,7 +962,7 @@ class _SelectedInviteChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           Text(
-            candidate.displayName,
+            displayName,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
@@ -965,7 +1019,9 @@ class _InviteCandidateList extends StatelessWidget {
           border: Border.all(color: const Color(0xFFDDE5F0)),
         ),
         child: Text(
-          query.isEmpty ? '暂无可邀请的本地身份。' : '没有匹配的本地身份，可以尝试匹配 handle / DID。',
+          query.isEmpty
+              ? context.l10n.groupInviteNoLocalCandidates
+              : context.l10n.groupInviteNoMatches,
           textAlign: TextAlign.center,
           style: AwikiMeTextStyles.cardSubtitle,
         ),
@@ -997,7 +1053,7 @@ class _InviteCandidateList extends StatelessWidget {
             final did = _normalizeDid(candidate.did);
             final isSelected = selectedDids.contains(did);
             final disabledReason = existingMemberDids.contains(did)
-                ? '已在群中'
+                ? context.l10n.groupInviteAlreadyInGroup
                 : null;
             return _InviteCandidateTile(
               candidate: candidate,
@@ -1032,12 +1088,13 @@ class _InviteCandidateTile extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final isDisabled = disabledReason != null || onTap == null;
     final handle = candidate.handle?.trim();
+    final displayName = candidate.localizedDisplayName(context.l10n);
     final subtitle = handle == null || handle.isEmpty
         ? DidDisplayFormatter.compactDid(candidate.did)
         : '@$handle';
     return AppPressableTile(
       onTap: onTap,
-      semanticLabel: candidate.displayName,
+      semanticLabel: displayName,
       borderRadius: BorderRadius.circular(12),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 140),
@@ -1052,7 +1109,7 @@ class _InviteCandidateTile extends StatelessWidget {
           child: Row(
             children: <Widget>[
               AvatarBadge(
-                seed: candidate.avatarSeed ?? candidate.displayName,
+                seed: candidate.avatarSeed ?? displayName,
                 size: responsive.isPhone ? 38 : 42,
                 avatarUri: candidate.avatarUri,
               ),
@@ -1065,7 +1122,7 @@ class _InviteCandidateTile extends StatelessWidget {
                       children: <Widget>[
                         Flexible(
                           child: Text(
-                            candidate.displayName,
+                            displayName,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -1094,7 +1151,9 @@ class _InviteCandidateTile extends StatelessWidget {
                       spacing: 6,
                       runSpacing: 6,
                       children: <Widget>[
-                        _SourceBadge(label: candidate.sourceLabel),
+                        _SourceBadge(
+                          label: candidate.localizedSourceLabel(context.l10n),
+                        ),
                         if (disabledReason != null)
                           _SourceBadge(label: disabledReason!, muted: true),
                       ],
@@ -1127,7 +1186,9 @@ class _IdentityKindBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        isAgent ? '智能体' : '用户',
+        isAgent
+            ? context.l10n.identityTypeAgent
+            : context.l10n.identityTypeUser,
         style: TextStyle(
           color: isAgent ? const Color(0xFF0B65F8) : const Color(0xFF0F8A4B),
           fontSize: 11,

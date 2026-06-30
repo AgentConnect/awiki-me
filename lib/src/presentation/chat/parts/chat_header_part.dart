@@ -28,8 +28,13 @@ class _ChatHeader extends StatelessWidget {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     final agentBadgeLabel = isDeletedAgentConversation
-        ? '智能体已删除'
-        : classification.chatBadgeLabel;
+        ? context.l10n.chatAgentDeletedBadge
+        : localizeConversationChatBadge(context.l10n, classification);
+    final detailTypeLabel = localizeConversationPeerType(
+      context.l10n,
+      classification,
+    );
+    final openInfoLabel = context.l10n.chatOpenPeerInfo(detailTypeLabel);
     if (macStyle) {
       return Container(
         height: responsive.displayScaled(64),
@@ -55,7 +60,7 @@ class _ChatHeader extends StatelessWidget {
               children: <Widget>[
                 _ChatHeaderIdentityTapTarget(
                   key: const Key('chat-peer-info-avatar-button'),
-                  semanticLabel: '打开${classification.detailTypeLabel}信息',
+                  semanticLabel: openInfoLabel,
                   semanticsIdentifier: 'chat-peer-info-avatar-button',
                   onTap: onPeerInfoTap,
                   child: AvatarBadge(
@@ -72,7 +77,7 @@ class _ChatHeader extends StatelessWidget {
                     isDeletedAgentConversation: isDeletedAgentConversation,
                     showAgentBadge: width >= 500,
                     showSecurityPill: showSecurityPill,
-                    semanticLabel: '打开${classification.detailTypeLabel}信息',
+                    semanticLabel: openInfoLabel,
                     onNameTap: onPeerInfoTap,
                   ),
                 ),
@@ -100,7 +105,7 @@ class _ChatHeader extends StatelessWidget {
             child: TopBarActionButton(
               onTap: onBack,
               semanticsIdentifier: 'e2e-chat-back-button',
-              semanticsLabel: '返回',
+              semanticsLabel: context.l10n.commonBack,
               child: Padding(
                 padding: EdgeInsets.all(responsive.spacing(8)),
                 child: AwikiAssetIcon(
@@ -114,7 +119,7 @@ class _ChatHeader extends StatelessWidget {
           SizedBox(width: responsive.spacing(4)),
           _ChatHeaderIdentityTapTarget(
             key: const Key('chat-peer-info-avatar-button'),
-            semanticLabel: '打开${classification.detailTypeLabel}信息',
+            semanticLabel: openInfoLabel,
             semanticsIdentifier: 'chat-peer-info-avatar-button',
             onTap: onPeerInfoTap,
             child: AvatarBadge(
@@ -132,7 +137,7 @@ class _ChatHeader extends StatelessWidget {
                   children: <Widget>[
                     Flexible(
                       child: _ChatHeaderIdentityTapTarget(
-                        semanticLabel: '打开${classification.detailTypeLabel}信息',
+                        semanticLabel: openInfoLabel,
                         onTap: onPeerInfoTap,
                         child: Text(
                           compactName,
@@ -268,10 +273,10 @@ class _MacHeaderIdentityText extends StatelessWidget {
         ],
         if (showSecurityPill) ...<Widget>[
           SizedBox(width: responsive.displayScaled(6)),
-          const _MacChatPill(
-            label: '安全协作中',
-            color: Color(0xFFE6F8EE),
-            textColor: Color(0xFF10A85A),
+          _MacChatPill(
+            label: context.l10n.chatSafeCollaboration,
+            color: const Color(0xFFE6F8EE),
+            textColor: const Color(0xFF10A85A),
           ),
         ],
       ],

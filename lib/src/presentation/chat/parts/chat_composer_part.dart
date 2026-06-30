@@ -359,7 +359,8 @@ class _ComposerState extends ConsumerState<_Composer> {
     final responsive = context.awikiResponsive;
     final canSubmit = _canSubmit;
     final canUseSendButton = canSubmit && !_isSending && !_isComposingInput;
-    final disabledReason = widget.disabledReason ?? '当前会话无法继续发送消息';
+    final disabledReason =
+        widget.disabledReason ?? context.l10n.chatCurrentConversationCannotSend;
     if (widget.macStyle) {
       return SafeArea(
         top: false,
@@ -430,8 +431,8 @@ class _ComposerState extends ConsumerState<_Composer> {
                             AppIconButton(
                               key: const Key('chat-attachment-button'),
                               onPressed: _attachIfNeeded,
-                              semanticLabel: '添加附件',
-                              tooltip: '添加附件',
+                              semanticLabel: context.l10n.chatAddAttachment,
+                              tooltip: context.l10n.chatAddAttachment,
                               size: responsive.displayScaled(34),
                               borderRadius: BorderRadius.circular(
                                 responsive.displayScaled(9),
@@ -470,9 +471,9 @@ class _ComposerState extends ConsumerState<_Composer> {
                           AppPressable(
                             key: const Key('chat-send-button'),
                             onTap: canUseSendButton ? _submitIfNeeded : null,
-                            semanticLabel: '发送',
+                            semanticLabel: context.l10n.commonSend,
                             semanticsIdentifier: 'e2e-chat-send-button',
-                            tooltip: '发送',
+                            tooltip: context.l10n.commonSend,
                             enabled: canUseSendButton,
                             scaleOnPress: true,
                             pressedScale: 0.94,
@@ -587,8 +588,8 @@ class _ComposerState extends ConsumerState<_Composer> {
                     TopBarActionButton(
                       key: const Key('chat-attachment-button'),
                       onTap: _attachIfNeeded,
-                      semanticsLabel: '添加附件',
-                      tooltip: '添加附件',
+                      semanticsLabel: context.l10n.chatAddAttachment,
+                      tooltip: context.l10n.chatAddAttachment,
                       child: Padding(
                         padding: EdgeInsets.all(responsive.spacing(6)),
                         child: AwikiAssetIcon(
@@ -623,13 +624,13 @@ class _ComposerState extends ConsumerState<_Composer> {
                     SizedBox(width: responsive.spacing(8)),
                     e2eSemantics(
                       identifier: 'e2e-chat-send-button',
-                      label: '发送',
+                      label: context.l10n.commonSend,
                       button: true,
                       child: TopBarActionButton(
                         key: const Key('chat-send-button'),
                         onTap: canUseSendButton ? _submitIfNeeded : null,
-                        semanticsLabel: '发送',
-                        tooltip: '发送',
+                        semanticsLabel: context.l10n.commonSend,
+                        tooltip: context.l10n.commonSend,
                         child: Padding(
                           padding: EdgeInsets.all(responsive.spacing(6)),
                           child: AwikiAssetIcon(
@@ -841,12 +842,12 @@ class _MentionCandidatePanelState extends State<_MentionCandidatePanel> {
                     ? responsive.displayScaled(14)
                     : responsive.spacing(14),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  CupertinoActivityIndicator(radius: 8),
-                  SizedBox(width: 10),
-                  Text('正在加载 mention 候选…'),
+                  const CupertinoActivityIndicator(radius: 8),
+                  const SizedBox(width: 10),
+                  Text(context.l10n.chatLoadingMentionCandidates),
                 ],
               ),
             )
@@ -910,9 +911,10 @@ class _MentionCandidateTile extends StatelessWidget {
     final titleColor = enabled
         ? const Color(0xFF17213A)
         : const Color(0xFF8A96AA);
+    final presentation = _localizedMentionCandidate(context.l10n, candidate);
     final subtitle = enabled
-        ? candidate.subtitle
-        : candidate.disabledReason ?? candidate.subtitle;
+        ? presentation.subtitle
+        : presentation.disabledReason ?? presentation.subtitle;
     return CupertinoButton(
       key: Key('chat-mention-candidate-${candidate.id}'),
       padding: EdgeInsets.zero,
@@ -970,7 +972,7 @@ class _MentionCandidateTile extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
                       Text(
-                        candidate.surface,
+                        presentation.surface,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -1009,7 +1011,7 @@ class _MentionCandidateTile extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    candidate.badge,
+                    presentation.badge,
                     style: TextStyle(
                       color: const Color(0xFF44506A),
                       fontSize: macStyle
@@ -1068,6 +1070,100 @@ class _DisabledComposerNotice extends StatelessWidget {
   }
 }
 
+class _MentionCandidatePresentation {
+  const _MentionCandidatePresentation({
+    required this.surface,
+    required this.subtitle,
+    required this.badge,
+    this.disabledReason,
+  });
+
+  final String surface;
+  final String subtitle;
+  final String badge;
+  final String? disabledReason;
+}
+
+_MentionCandidatePresentation _localizedMentionCandidate(
+  AppLocalizations l10n,
+  ChatMentionCandidate candidate,
+) {
+  final selector = candidate.selector;
+  if (selector != null) {
+    return _MentionCandidatePresentation(
+      surface: _localizedMentionSelectorSurface(l10n, selector),
+      subtitle: _localizedMentionSelectorSubtitle(l10n, selector),
+      badge: _localizedMentionSelectorBadge(l10n, selector),
+    );
+  }
+  return _MentionCandidatePresentation(
+    surface: candidate.surface,
+    subtitle: candidate.subtitle,
+    badge: _localizedMentionSubjectType(l10n, candidate.subjectType),
+    disabledReason: _localizedMentionDisabledReason(
+      l10n,
+      candidate.disabledReasonCode,
+    ),
+  );
+}
+
+String _localizedMentionSubjectType(
+  AppLocalizations l10n,
+  GroupMemberSubjectType subjectType,
+) {
+  return switch (subjectType) {
+    GroupMemberSubjectType.human => l10n.mentionCandidateBadgeUser,
+    GroupMemberSubjectType.agent => l10n.mentionCandidateBadgeAgent,
+    GroupMemberSubjectType.unknown => l10n.mentionCandidateBadgeUnknown,
+  };
+}
+
+String _localizedMentionSelectorSurface(
+  AppLocalizations l10n,
+  ChatMentionSelector selector,
+) {
+  return switch (selector) {
+    ChatMentionSelector.all => l10n.mentionSelectorAllSurface,
+    ChatMentionSelector.humans => l10n.mentionSelectorHumansSurface,
+    ChatMentionSelector.agents => l10n.mentionSelectorAgentsSurface,
+  };
+}
+
+String _localizedMentionSelectorSubtitle(
+  AppLocalizations l10n,
+  ChatMentionSelector selector,
+) {
+  return switch (selector) {
+    ChatMentionSelector.all => l10n.mentionSelectorAllSubtitle,
+    ChatMentionSelector.humans => l10n.mentionSelectorHumansSubtitle,
+    ChatMentionSelector.agents => l10n.mentionSelectorAgentsSubtitle,
+  };
+}
+
+String _localizedMentionSelectorBadge(
+  AppLocalizations l10n,
+  ChatMentionSelector selector,
+) {
+  return switch (selector) {
+    ChatMentionSelector.all => l10n.mentionSelectorAllBadge,
+    ChatMentionSelector.humans => l10n.mentionCandidateBadgeUser,
+    ChatMentionSelector.agents => l10n.mentionCandidateBadgeAgent,
+  };
+}
+
+String? _localizedMentionDisabledReason(
+  AppLocalizations l10n,
+  ChatMentionDisabledReasonCode? code,
+) {
+  return switch (code) {
+    ChatMentionDisabledReasonCode.unknownMemberType =>
+      l10n.mentionDisabledUnknownMemberType,
+    ChatMentionDisabledReasonCode.inactiveMember =>
+      l10n.mentionDisabledInactiveMember,
+    null => null,
+  };
+}
+
 class _PendingAttachmentPreview extends StatelessWidget {
   const _PendingAttachmentPreview({
     required this.attachment,
@@ -1117,7 +1213,7 @@ class _PendingAttachmentPreview extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  attachment.displayName,
+                  localizeAttachmentDraftName(context.l10n, attachment),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -1131,6 +1227,7 @@ class _PendingAttachmentPreview extends StatelessWidget {
                 SizedBox(height: responsive.spacing(2)),
                 Text(
                   _formatAttachmentMeta(
+                    context.l10n,
                     attachment.mimeType,
                     attachment.sizeBytes,
                   ),
@@ -1147,8 +1244,8 @@ class _PendingAttachmentPreview extends StatelessWidget {
           AppIconButton(
             key: const Key('chat-pending-attachment-remove-button'),
             onPressed: onRemove,
-            semanticLabel: '移除附件',
-            tooltip: '移除附件',
+            semanticLabel: context.l10n.chatRemoveAttachment,
+            tooltip: context.l10n.chatRemoveAttachment,
             size: responsive.displayScaled(28),
             padding: EdgeInsets.all(responsive.spacing(4)),
             borderRadius: BorderRadius.circular(responsive.displayScaled(14)),

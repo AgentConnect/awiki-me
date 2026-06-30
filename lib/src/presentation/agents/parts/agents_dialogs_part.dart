@@ -5,7 +5,7 @@ Future<void> _openRuntimeChat(
   WidgetRef ref,
   AgentSummary agent,
 ) {
-  final title = AgentDisplayName.title(agent);
+  final title = localizeAgentTitle(context.l10n, agent);
   return openDirectConversationForDid(
     context,
     ref,
@@ -219,7 +219,7 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
   void _scheduleHandleAvailabilityCheck() {
     _handleValidationDebounce?.cancel();
     final handle = _handleController.text.trim();
-    if (_validateAgentHandle(handle) != null) {
+    if (_validateAgentHandle(context, handle) != null) {
       setState(() {
         _remoteHandle = null;
         _remoteHandleChecking = false;
@@ -262,23 +262,26 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
       setState(() {
         _remoteHandleChecking = false;
         _remoteAvailability = null;
-        _remoteValidationError = '暂时无法校验可用性，创建时会再次确认';
+        _remoteValidationError =
+            context.l10n.agentCreateHandleAvailabilityPending;
         _submittedHandleError = null;
       });
     }
   }
 
   void _submit() {
-    final kindStatus = widget.runtimeCapability.statusFor(_kind);
+    final kindStatus = widget.runtimeCapability.statusFor(context.l10n, _kind);
     if (!kindStatus.enabled) {
       return;
     }
     final displayName = _nameController.text.trim();
     final handle = _handleController.text.trim();
-    final nameError = _validateAgentDisplayName(displayName);
+    final nameError = _validateAgentDisplayName(context, displayName);
     final handleError =
-        _validateAgentHandle(handle) ??
-        (_remoteHandleChecking ? '正在校验 Handle 可用性' : null) ??
+        _validateAgentHandle(context, handle) ??
+        (_remoteHandleChecking
+            ? context.l10n.agentCreateHandleChecking
+            : null) ??
         _remoteHandleError(handle);
     if (nameError != null || handleError != null) {
       setState(() {
@@ -308,17 +311,18 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
     final handle = _handleController.text.trim();
     final displayName = _nameController.text.trim();
     final nameError =
-        _submittedNameError ?? _softValidateAgentDisplayName(displayName);
+        _submittedNameError ??
+        _softValidateAgentDisplayName(context, displayName);
     final remoteError = _remoteHandleError(handle);
     final handleError =
         _submittedHandleError ??
-        _softValidateAgentHandle(handle) ??
+        _softValidateAgentHandle(context, handle) ??
         remoteError;
-    final kindStatus = widget.runtimeCapability.statusFor(_kind);
+    final kindStatus = widget.runtimeCapability.statusFor(context.l10n, _kind);
     final canSubmit =
         kindStatus.enabled &&
-        _validateAgentDisplayName(displayName) == null &&
-        _validateAgentHandle(handle) == null &&
+        _validateAgentDisplayName(context, displayName) == null &&
+        _validateAgentHandle(context, handle) == null &&
         !_remoteHandleChecking &&
         remoteError == null;
     return AppDialogScaffold(
@@ -334,7 +338,7 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           AppDialogHeader(
-            title: '创建 Agent',
+            title: context.l10n.agentCreateTitle,
             onClose: () => Navigator.of(context).pop(),
           ),
           SizedBox(height: responsive.spacing(14)),
@@ -354,23 +358,30 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
                   if (_kind.isGenericCli &&
                       _shouldShowRuntimeAdvancedOptions()) ...<Widget>[
                     _RuntimeOptionSelector(
-                      title: '工作目录策略',
+                      title: context.l10n.agentCreateWorkspacePolicy,
                       value: _workspaceMode,
-                      options: const <_RuntimeOption>[
+                      options: <_RuntimeOption>[
                         _RuntimeOption(
                           value: runtimeWorkspaceModeRouteRoot,
-                          label: '按会话目录',
-                          description: '每个联系人、群组或线程使用独立上下文目录。',
+                          label: context.l10n.agentCreateWorkspaceRouteRoot,
+                          description: context
+                              .l10n
+                              .agentCreateWorkspaceRouteRootDescription,
                         ),
                         _RuntimeOption(
                           value: runtimeWorkspaceModeSharedRoot,
-                          label: '共享目录',
-                          description: '该身份共用一个目录，适合手工任务。',
+                          label: context.l10n.agentCreateWorkspaceSharedRoot,
+                          description: context
+                              .l10n
+                              .agentCreateWorkspaceSharedRootDescription,
                         ),
                         _RuntimeOption(
                           value: runtimeWorkspaceModeWorktreePerTask,
-                          label: '每次任务 worktree',
-                          description: '每次运行使用独立工作树。',
+                          label:
+                              context.l10n.agentCreateWorkspaceWorktreePerTask,
+                          description: context
+                              .l10n
+                              .agentCreateWorkspaceWorktreePerTaskDescription,
                         ),
                       ],
                       onChanged: (value) {
@@ -383,7 +394,7 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
                   ],
                   _AgentDialogField(
                     fieldKey: const Key('agent-create-name-field'),
-                    label: '名称',
+                    label: context.l10n.agentNameField,
                     controller: _nameController,
                     placeholder: _kind.displayLabel,
                     errorText: nameError,
@@ -405,7 +416,7 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
                   _HandlePreview(
                     handle: handle,
                     domain: widget.handleDomain,
-                    isValid: _validateAgentHandle(handle) == null,
+                    isValid: _validateAgentHandle(context, handle) == null,
                     isChecking: _remoteHandleChecking,
                     availability: _previewAvailability(handle),
                     fallbackMessage: _remoteValidationError,
@@ -419,14 +430,14 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
             children: <Widget>[
               Expanded(
                 child: _DialogSecondaryButton(
-                  label: '取消',
+                  label: context.l10n.commonCancel,
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ),
               SizedBox(width: responsive.spacing(10)),
               Expanded(
                 child: AppPrimaryButton(
-                  label: '创建',
+                  label: context.l10n.groupCreateAction,
                   onPressed: canSubmit ? _submit : null,
                 ),
               ),
@@ -438,7 +449,7 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
   }
 
   String? _remoteHandleError(String handle) {
-    if (handle.isEmpty || _validateAgentHandle(handle) != null) {
+    if (handle.isEmpty || _validateAgentHandle(context, handle) != null) {
       return null;
     }
     final availability = _previewAvailability(handle);
@@ -446,11 +457,11 @@ class _CreateRuntimeDialogState extends State<_CreateRuntimeDialog> {
       return null;
     }
     if (availability.reason == 'unavailable') {
-      return '这个 Handle 已被使用';
+      return context.l10n.agentCreateHandleUnavailableUsed;
     }
     return availability.message?.trim().isNotEmpty == true
         ? availability.message
-        : '这个 Handle 不可使用';
+        : context.l10n.agentCreateHandleUnavailable;
   }
 
   HandleAvailability? _previewAvailability(String handle) {
@@ -485,7 +496,7 @@ class _AgentTypeSelector extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
-          'Agent 类型',
+          context.l10n.agentCreateType,
           style: TextStyle(
             color: const Color(0xFF66728A),
             fontSize: responsive.metaSm,
@@ -496,21 +507,30 @@ class _AgentTypeSelector extends StatelessWidget {
         _RuntimeKindTile(
           kind: RuntimeAgentKind.hermes,
           selected: selected == RuntimeAgentKind.hermes,
-          status: runtimeCapability.statusFor(RuntimeAgentKind.hermes),
+          status: runtimeCapability.statusFor(
+            context.l10n,
+            RuntimeAgentKind.hermes,
+          ),
           onTap: () => onSelected(RuntimeAgentKind.hermes),
         ),
         SizedBox(height: responsive.spacing(8)),
         _RuntimeKindTile(
           kind: RuntimeAgentKind.codex,
           selected: selected == RuntimeAgentKind.codex,
-          status: runtimeCapability.statusFor(RuntimeAgentKind.codex),
+          status: runtimeCapability.statusFor(
+            context.l10n,
+            RuntimeAgentKind.codex,
+          ),
           onTap: () => onSelected(RuntimeAgentKind.codex),
         ),
         SizedBox(height: responsive.spacing(8)),
         _RuntimeKindTile(
           kind: RuntimeAgentKind.claudeCode,
           selected: selected == RuntimeAgentKind.claudeCode,
-          status: runtimeCapability.statusFor(RuntimeAgentKind.claudeCode),
+          status: runtimeCapability.statusFor(
+            context.l10n,
+            RuntimeAgentKind.claudeCode,
+          ),
           onTap: () => onSelected(RuntimeAgentKind.claudeCode),
         ),
       ],
@@ -590,7 +610,8 @@ class _RuntimeKindTile extends StatelessWidget {
                       if (!enabled) ...<Widget>[
                         SizedBox(width: responsive.spacing(6)),
                         Text(
-                          status.reasonLabel ?? '未启用',
+                          status.reasonLabel ??
+                              context.l10n.agentStatusDisabled,
                           style: TextStyle(
                             color: const Color(0xFF8A96AA),
                             fontSize: responsive.metaSm,
@@ -679,54 +700,54 @@ class _RuntimeCreateCapability {
   final bool routeSessionSupported;
   final bool nativeResumeSupported;
 
-  _RuntimeKindStatus statusFor(RuntimeAgentKind kind) {
+  _RuntimeKindStatus statusFor(AppLocalizations l10n, RuntimeAgentKind kind) {
     if (kind == RuntimeAgentKind.hermes) {
-      return const _RuntimeKindStatus(
+      return _RuntimeKindStatus(
         enabled: true,
-        description: '内置 Hermes Runtime Agent。',
+        description: l10n.agentCreateHermesDescription,
       );
     }
     final driverId = kind.driverId;
     if (!hasGenericCliSchema) {
       return _RuntimeKindStatus(
         enabled: false,
-        description:
-            '${kind.displayLabel} 需要 daemon 提供 generic-cli capability。',
-        reasonLabel: '需刷新',
+        description: l10n.agentCreateNeedsGenericCliCapability(
+          kind.displayLabel,
+        ),
+        reasonLabel: l10n.agentStatusRefreshNeeded,
       );
     }
     if (driverId == null || !supportedDrivers.contains(driverId)) {
       return _RuntimeKindStatus(
         enabled: false,
-        description: '当前 daemon 不支持 ${kind.displayLabel} driver。',
-        reasonLabel: '未支持',
+        description: l10n.agentCreateUnsupportedDriver(kind.displayLabel),
+        reasonLabel: l10n.agentStatusUnsupported,
       );
     }
     if (!routeSessionSupported || !nativeResumeSupported) {
       return _RuntimeKindStatus(
         enabled: false,
-        description:
-            '${kind.displayLabel} 需要 route session 和 native resume 支持。',
-        reasonLabel: '需升级',
+        description: l10n.agentCreateNeedsRouteSession(kind.displayLabel),
+        reasonLabel: l10n.agentStatusNeedsUpgrade,
       );
     }
     if (!supportedWorkspaceModes.contains(runtimeWorkspaceModeRouteRoot)) {
       return _RuntimeKindStatus(
         enabled: false,
-        description: '${kind.displayLabel} 需要按会话目录工作模式。',
-        reasonLabel: '需升级',
+        description: l10n.agentCreateNeedsRouteWorkspace(kind.displayLabel),
+        reasonLabel: l10n.agentStatusNeedsUpgrade,
       );
     }
     if (!supportedSandboxModes.contains(runtimeSandboxDangerFullAccess)) {
       return _RuntimeKindStatus(
         enabled: false,
-        description: '${kind.displayLabel} 需要 daemon 支持宿主机全权限模式。',
-        reasonLabel: '需升级',
+        description: l10n.agentCreateNeedsHostAccess(kind.displayLabel),
+        reasonLabel: l10n.agentStatusNeedsUpgrade,
       );
     }
     return _RuntimeKindStatus(
       enabled: true,
-      description: '需要 daemon 上已安装并登录的 ${kind.displayLabel} CLI。',
+      description: l10n.agentCreateRequiresSignedInCli(kind.displayLabel),
     );
   }
 }
@@ -768,7 +789,7 @@ class _RuntimePermissionSummary extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  '宿主机全权限',
+                  context.l10n.agentCreateHostAccessTitle,
                   style: TextStyle(
                     color: const Color(0xFF17213A),
                     fontSize: responsive.bodyMd,
@@ -777,7 +798,7 @@ class _RuntimePermissionSummary extends StatelessWidget {
                 ),
                 SizedBox(height: responsive.spacing(3)),
                 Text(
-                  '可按用户指令使用本机文件、命令、工具和网络。',
+                  context.l10n.agentCreateHostAccessDescription,
                   style: TextStyle(
                     color: const Color(0xFF66728A),
                     fontSize: responsive.metaSm,
@@ -1075,6 +1096,7 @@ class _HandlePreview extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final preview = handle.isEmpty ? '@handle.$domain' : '@$handle.$domain';
     final message = _handlePreviewMessage(
+      l10n: context.l10n,
       handle: handle,
       isValid: isValid,
       isChecking: isChecking,
@@ -1101,7 +1123,7 @@ class _HandlePreview extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            '最终 Handle：$preview',
+            context.l10n.agentCreateHandlePreview(preview),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -1132,6 +1154,7 @@ class _HandlePreview extends StatelessWidget {
 }
 
 String? _handlePreviewMessage({
+  required AppLocalizations l10n,
   required String handle,
   required bool isValid,
   required bool isChecking,
@@ -1142,15 +1165,15 @@ String? _handlePreviewMessage({
     return null;
   }
   if (isChecking) {
-    return '正在校验可用性...';
+    return l10n.agentCreateHandleAvailabilityChecking;
   }
   if (availability != null) {
     if (availability.available) {
-      return '这个 Handle 可以使用';
+      return l10n.agentCreateHandleAvailable;
     }
     return availability.reason == 'unavailable'
-        ? '这个 Handle 已被使用'
-        : availability.message ?? '这个 Handle 不可使用';
+        ? l10n.agentCreateHandleUnavailableUsed
+        : availability.message ?? l10n.agentCreateHandleUnavailable;
   }
   return fallbackMessage;
 }
@@ -1225,38 +1248,38 @@ String _normalizeAgentHandleInput(String value) {
   return value.trim().replaceFirst(RegExp(r'^@+'), '').toLowerCase();
 }
 
-String? _softValidateAgentDisplayName(String value) {
-  return value.isEmpty ? null : _validateAgentDisplayName(value);
+String? _softValidateAgentDisplayName(BuildContext context, String value) {
+  return value.isEmpty ? null : _validateAgentDisplayName(context, value);
 }
 
-String? _validateAgentDisplayName(String value) {
+String? _validateAgentDisplayName(BuildContext context, String value) {
   final trimmed = value.trim();
   if (trimmed.isEmpty) {
-    return '请输入智能体名称';
+    return context.l10n.agentNameRequired;
   }
   if (trimmed.length > 40) {
-    return '名称最多 40 个字符';
+    return context.l10n.agentNameTooLong(40);
   }
   return null;
 }
 
-String? _softValidateAgentHandle(String value) {
-  return value.isEmpty ? null : _validateAgentHandle(value);
+String? _softValidateAgentHandle(BuildContext context, String value) {
+  return value.isEmpty ? null : _validateAgentHandle(context, value);
 }
 
-String? _validateAgentHandle(String value) {
+String? _validateAgentHandle(BuildContext context, String value) {
   final handle = value.trim();
   if (handle.isEmpty) {
-    return '请输入 Handle';
+    return context.l10n.agentCreateHandleRequired;
   }
   if (handle.length > 63) {
-    return 'Handle 最多 63 个字符';
+    return context.l10n.agentCreateHandleTooLong(63);
   }
   if (!RegExp(r'^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$').hasMatch(handle)) {
-    return '仅支持小写字母、数字和连字符，且首尾必须是字母或数字';
+    return context.l10n.agentCreateHandleInvalidPattern;
   }
   if (handle.contains('--')) {
-    return 'Handle 不能包含连续连字符';
+    return context.l10n.agentCreateHandleNoDoubleHyphen;
   }
   return null;
 }
@@ -1268,9 +1291,9 @@ Future<void> _confirmUpgradeDaemon(
 ) async {
   final confirmed = await _confirm(
     context,
-    title: '升级代理',
-    message: '代理会下载 latest 版本并重启服务。',
-    actionLabel: '升级',
+    title: context.l10n.agentUpgradeTitle,
+    message: context.l10n.agentUpgradeMessage,
+    actionLabel: context.l10n.agentUpgrade,
   );
   if (confirmed) {
     final started = await ref
@@ -1292,11 +1315,13 @@ Future<void> _confirmDeleteAgent(
   final isDaemon = agent.isDaemon;
   final confirmed = await _confirm(
     context,
-    title: isDaemon ? '删除代理' : '删除智能体',
+    title: isDaemon
+        ? context.l10n.agentDeleteDaemon
+        : context.l10n.agentDeleteRuntime,
     message: isDaemon
-        ? '删除后会停止宿主机上的代理服务，并移除它创建的智能体。本地数据会归档保留，不会继续使用。'
-        : '删除后该智能体会从列表中移除。本地数据会归档保留，不会继续使用。',
-    actionLabel: '删除',
+        ? context.l10n.agentDeleteDaemonMessage
+        : context.l10n.agentDeleteRuntimeMessage,
+    actionLabel: context.l10n.commonDelete,
     destructive: true,
   );
   if (confirmed) {
@@ -1311,9 +1336,9 @@ Future<void> _confirmPauseMessageAgent(
 ) async {
   final confirmed = await _confirm(
     context,
-    title: '暂停处理消息',
-    message: '暂停后，消息处理 Agent 不再读取和处理新消息；runtime 和授权仍会保留，可以重新启用。',
-    actionLabel: '暂停',
+    title: context.l10n.messageAgentPauseTitle,
+    message: context.l10n.messageAgentPauseMessage,
+    actionLabel: context.l10n.commonPause,
   );
   if (confirmed) {
     await ref
@@ -1329,9 +1354,9 @@ Future<void> _confirmDeleteMessageAgent(
 ) async {
   final confirmed = await _confirm(
     context,
-    title: '删除消息处理 Agent',
-    message: '删除前会先暂停消息处理，然后归档对应 runtime。Daemon 和授权不会被删除。',
-    actionLabel: '删除',
+    title: context.l10n.messageAgentDeleteTitle,
+    message: context.l10n.messageAgentDeleteMessage,
+    actionLabel: context.l10n.commonDelete,
     destructive: true,
   );
   if (confirmed) {
@@ -1348,9 +1373,9 @@ Future<void> _confirmRevokeMessageAgentAuthorization(
 ) async {
   final confirmed = await _confirm(
     context,
-    title: '撤销 Daemon 消息授权',
-    message: '撤销需要先通过签名 DID Document 更新移除 daemon-key-1。未完成更新时会失败，不会把暂停误认为撤销成功。',
-    actionLabel: '撤销授权',
+    title: context.l10n.messageAgentRevokeTitle,
+    message: context.l10n.messageAgentRevokeMessage,
+    actionLabel: context.l10n.commonRevoke,
     destructive: true,
   );
   if (confirmed) {
@@ -1375,7 +1400,7 @@ Future<bool> _confirm(
       actions: <Widget>[
         CupertinoDialogAction(
           onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('取消'),
+          child: Text(context.l10n.commonCancel),
         ),
         CupertinoDialogAction(
           isDestructiveAction: destructive,
@@ -1431,7 +1456,7 @@ class _InstallCommandDialog extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           AppDialogHeader(
-            title: '到宿主机安装代理',
+            title: context.l10n.agentInstallTitle,
             onClose: onClose,
             leading: Container(
               width: responsive.displayScaled(34),
@@ -1462,7 +1487,7 @@ class _InstallCommandDialog extends StatelessWidget {
                         ClipboardData(text: command.command),
                       );
                       if (context.mounted) {
-                        AwikiMeToast.show(context, '已复制');
+                        AwikiMeToast.show(context, context.l10n.commonCopied);
                       }
                     },
                   ),
@@ -1500,10 +1525,10 @@ class _SupportedAgentTypeHint extends StatelessWidget {
             size: responsive.iconSm,
           ),
           SizedBox(width: responsive.spacing(8)),
-          const Expanded(
+          Expanded(
             child: Text(
-              '支持的 Agent 类型：Hermes。安装宿主代理后，可在 Daemon 下创建 Hermes Runtime Agent。',
-              style: TextStyle(
+              context.l10n.agentInstallSupportedTypes,
+              style: const TextStyle(
                 color: Color(0xFF4B5870),
                 fontSize: 12,
                 height: 1.35,
@@ -1547,7 +1572,9 @@ class _TokenExpiryRow extends StatelessWidget {
           SizedBox(width: responsive.spacing(8)),
           Expanded(
             child: Text(
-              '有效期至: ${_formatTokenExpiry(expiresAt)}',
+              context.l10n.agentInstallTokenExpiresAt(
+                _formatTokenExpiry(expiresAt),
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -1612,8 +1639,8 @@ class _CommandText extends StatelessWidget {
             child: AppIconButton(
               key: const Key('agent-install-copy-button'),
               onPressed: onCopy,
-              semanticLabel: '复制安装命令',
-              tooltip: '复制安装命令',
+              semanticLabel: context.l10n.agentCopyInstallCommand,
+              tooltip: context.l10n.agentCopyInstallCommand,
               size: responsive.displayScaled(34),
               backgroundColor: const Color(0xFF1E293B),
               borderRadius: BorderRadius.circular(responsive.radius(8)),

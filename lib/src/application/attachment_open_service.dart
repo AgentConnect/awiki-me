@@ -20,7 +20,7 @@ class AttachmentOpenService {
   Future<void> open(String pathOrUri) async {
     final value = pathOrUri.trim();
     if (value.isEmpty) {
-      throw StateError('附件路径为空，无法打开。');
+      throw StateError('attachment_open_empty_path');
     }
     if (_isAndroid()) {
       await _openAndroid(value);
@@ -32,7 +32,7 @@ class AttachmentOpenService {
       mode: LaunchMode.externalApplication,
     );
     if (!launched) {
-      throw StateError('无法使用本机应用打开附件：$value');
+      throw StateError('attachment_open_failed');
     }
   }
 
@@ -44,9 +44,9 @@ class AttachmentOpenService {
     } on PlatformException catch (error) {
       final message = error.message?.trim();
       if (message != null && message.isNotEmpty) {
-        throw StateError(message);
+        throw StateError('attachment_open_failed: $message');
       }
-      throw StateError('无法使用本机应用打开附件：$pathOrUri');
+      throw StateError('attachment_open_failed');
     }
   }
 

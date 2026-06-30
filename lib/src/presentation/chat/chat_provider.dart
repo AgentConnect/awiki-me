@@ -2397,7 +2397,7 @@ class ChatThreadsController
     final pendingId = 'pending-${DateTime.now().microsecondsSinceEpoch}';
     final pendingAttachment = ChatAttachment(
       attachmentId: pendingId,
-      filename: attachment.displayName,
+      filename: attachment.filename.trim(),
       mimeType: attachment.mimeType,
       sizeBytes: attachment.sizeBytes,
       caption: normalizedCaption,
@@ -4248,7 +4248,7 @@ class ChatThreadsController
         request: request,
         state: appActionStateFailed,
         errorCode: 'app_action_not_allowed',
-        errorSummary: '此操作不在当前版本允许范围内',
+        errorSummary: 'app action is not allowed in this version',
       );
       return;
     }
@@ -4258,7 +4258,7 @@ class ChatThreadsController
         request: request,
         state: appActionStateFailed,
         errorCode: 'app_action_handler_unavailable',
-        errorSummary: '此操作暂未接入 Human App 执行器',
+        errorSummary: 'app action handler is not available',
       );
       return;
     }
@@ -4268,7 +4268,7 @@ class ChatThreadsController
         request: request,
         state: appActionStateFailed,
         errorCode: 'app_action_result_target_missing',
-        errorSummary: '找不到 Message Agent 所属 Daemon',
+        errorSummary: 'message agent daemon target is missing',
       );
       return;
     }
@@ -4279,7 +4279,7 @@ class ChatThreadsController
         request: request,
         state: appActionStateFailed,
         errorCode: 'app_action_missing_draft',
-        errorSummary: '草稿内容为空',
+        errorSummary: 'draft content is empty',
       );
       return;
     }
@@ -4309,7 +4309,7 @@ class ChatThreadsController
       request: request,
       state: appActionStateRejected,
       errorCode: 'user_rejected',
-      errorSummary: '用户已拒绝',
+      errorSummary: 'user rejected',
     );
   }
 
@@ -4446,7 +4446,7 @@ class ChatThreadsController
         request: request,
         state: appActionStateFailed,
         errorCode: 'app_action_result_target_missing',
-        errorSummary: '找不到 Message Agent 所属 Daemon',
+        errorSummary: 'message agent daemon target is missing',
       );
       _applyLocalAppActionResult(threadId, failed);
       return;
@@ -4467,7 +4467,7 @@ class ChatThreadsController
         request: request,
         state: appActionStateFailed,
         errorCode: 'app_action_result_send_failed',
-        errorSummary: '回传执行结果失败',
+        errorSummary: 'failed to deliver app action result',
       );
       _applyLocalAppActionResult(threadId, failed);
     }

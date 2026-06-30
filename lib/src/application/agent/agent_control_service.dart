@@ -109,6 +109,7 @@ class DefaultAgentControlService implements AgentControlService {
     String? downloadBaseUrl,
     AwikiEnvironmentConfig? environment,
     bool? agentImEnabled,
+    String Function()? preferredLanguageProvider,
   }) : this._(
          inventory: inventory,
          messages: messages,
@@ -117,6 +118,7 @@ class DefaultAgentControlService implements AgentControlService {
          environment: environment ?? AwikiEnvironmentConfig.fromEnvironment(),
          downloadBaseUrl: downloadBaseUrl,
          agentImEnabled: agentImEnabled,
+         preferredLanguageProvider: preferredLanguageProvider,
        );
 
   DefaultAgentControlService._({
@@ -127,12 +129,15 @@ class DefaultAgentControlService implements AgentControlService {
     required AwikiEnvironmentConfig environment,
     String? downloadBaseUrl,
     bool? agentImEnabled,
+    String Function()? preferredLanguageProvider,
   }) : _inventory = inventory,
        _messages = messages,
        _messageAgentBindings = messageAgentBindings,
        _identities = identities,
        _environment = environment,
        _agentImEnabled = agentImEnabled ?? environment.agentImEnabled,
+       _preferredLanguageProvider =
+           preferredLanguageProvider ?? (() => 'zh-Hans'),
        downloadBaseUrl =
            _normalizeDownloadBaseUrl(downloadBaseUrl) ??
            environment.daemonDownloadBaseUrl;
@@ -143,6 +148,7 @@ class DefaultAgentControlService implements AgentControlService {
   final IdentityCorePort? _identities;
   final AwikiEnvironmentConfig _environment;
   final bool _agentImEnabled;
+  final String Function() _preferredLanguageProvider;
   final String downloadBaseUrl;
   static const Duration _messageAgentRuntimeWaitTimeout = Duration(seconds: 90);
   static const Duration _messageAgentRuntimeWaitInterval = Duration(seconds: 2);
@@ -197,6 +203,7 @@ class DefaultAgentControlService implements AgentControlService {
     required String displayName,
     String? clientRequestId,
   }) {
+    final preferredLanguage = _preferredLanguage();
     return createRuntimeAgent(
       daemonAgentDid: daemonAgentDid,
       controllerDid: controllerDid,
@@ -204,6 +211,7 @@ class DefaultAgentControlService implements AgentControlService {
         kind: RuntimeAgentKind.hermes,
         handle: handle,
         displayName: displayName,
+        preferredLanguage: preferredLanguage,
       ),
       clientRequestId: clientRequestId,
     );
@@ -218,12 +226,16 @@ class DefaultAgentControlService implements AgentControlService {
   }) async {
     final kind = options.kind;
     final driverConfig = options.driverConfig;
+    final preferredLanguage =
+        _normalizePreferredLanguage(options.preferredLanguage) ??
+        _preferredLanguage();
     final token = await _inventory.issueRuntimeToken(
       controllerDid: controllerDid,
       daemonAgentDid: daemonAgentDid,
       runtime: kind.runtime,
       handle: options.handle,
       displayName: options.displayName,
+      preferredLanguage: preferredLanguage,
       driverId: kind.driverId,
       workspaceMode: kind.isGenericCli ? options.workspaceMode : null,
       defaultSandbox: kind.isGenericCli ? options.sandbox : null,
@@ -244,6 +256,7 @@ class DefaultAgentControlService implements AgentControlService {
         workspaceMode: kind.isGenericCli ? options.workspaceMode : null,
         defaultSandbox: kind.isGenericCli ? options.sandbox : null,
         defaultModel: kind.isGenericCli ? options.model : null,
+        preferredLanguage: preferredLanguage,
         driverConfig: driverConfig,
       ),
       idempotencyKey: 'runtime-create:$daemonAgentDid:$requestId',
@@ -270,6 +283,7 @@ class DefaultAgentControlService implements AgentControlService {
       appInstanceId: appInstanceId,
       runId: runId,
     );
+    final preferredLanguage = _preferredLanguage();
     final runtimeToken =
         runtimeRegistrationToken ??
         (await _inventory.issueRuntimeToken(
@@ -281,6 +295,7 @@ class DefaultAgentControlService implements AgentControlService {
             appInstanceId: appInstanceId,
           ),
           displayName: defaultMessageAgentRuntimeProvider.runtimeDisplayName,
+          preferredLanguage: preferredLanguage,
         )).token;
     final envelope = DaemonBootstrapEnvelope(
       bootstrapId: messageAgentBootstrapAttemptId(
@@ -295,6 +310,7 @@ class DefaultAgentControlService implements AgentControlService {
       runId: runId,
       userSubkeyPackage: userSubkeyPackage,
       desiredMessageAgent: DesiredMessageAgent(
+        preferredLanguage: preferredLanguage,
         ensureOnceKey: messageAgentEnsureOnceKey(
           userDid: userDid,
           appInstanceId: appInstanceId,
@@ -328,6 +344,31 @@ class DefaultAgentControlService implements AgentControlService {
       },
       delegatedKeyVerificationMethod: userSubkeyPackage.verificationMethod,
     );
+  }
+
+  String _preferredLanguage() {
+    return _normalizePreferredLanguage(_preferredLanguageProvider()) ??
+        'zh-Hans';
+  }
+
+  static String? _normalizePreferredLanguage(String? value) {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    switch (normalized.toLowerCase()) {
+      case 'zh':
+      case 'zh-cn':
+      case 'zh-hans':
+      case 'zh_hans':
+        return 'zh-Hans';
+      case 'en':
+      case 'en-us':
+      case 'en-gb':
+        return 'en';
+      default:
+        return null;
+    }
   }
 
   @override
