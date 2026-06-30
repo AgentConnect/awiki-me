@@ -13,6 +13,7 @@ class _AgentDetailPane extends StatelessWidget {
     required this.onCancelUpgrade,
     required this.onDelete,
     required this.messageAgentEnabled,
+    required this.onOpenMessageAgentSettings,
     required this.onBootstrapMessageAgent,
     required this.onPauseMessageAgent,
     required this.onDeleteMessageAgent,
@@ -31,6 +32,7 @@ class _AgentDetailPane extends StatelessWidget {
   final ValueChanged<AgentSummary> onCancelUpgrade;
   final ValueChanged<AgentSummary> onDelete;
   final bool messageAgentEnabled;
+  final ValueChanged<AgentSummary> onOpenMessageAgentSettings;
   final ValueChanged<AgentSummary> onBootstrapMessageAgent;
   final ValueChanged<AgentSummary> onPauseMessageAgent;
   final ValueChanged<AgentSummary> onDeleteMessageAgent;
@@ -244,6 +246,13 @@ class _AgentDetailPane extends StatelessWidget {
                 onRevoke: () => onRevokeMessageAgentAuthorization(agent),
               ),
               SizedBox(height: responsive.spacing(18)),
+            ] else if (messageAgentEnabled && agent.isDaemon) ...<Widget>[
+              _MessageAgentSettingsEntryCard(
+                daemon: agent,
+                messageAgent: state.messageAgentRuntimeFor(agent.agentDid),
+                onOpen: () => onOpenMessageAgentSettings(agent),
+              ),
+              SizedBox(height: responsive.spacing(18)),
             ],
             _DiagnosticInfoPanel(
               key: ValueKey<String>('diagnostic-${agent.agentDid}'),
@@ -260,6 +269,99 @@ bool _shouldShowMessageAgentSettingsPanel() {
   // Keep the Message Agent management implementation available for future
   // rollout, but hide the daemon detail entry from the current product UI.
   return false;
+}
+
+class _MessageAgentSettingsEntryCard extends StatelessWidget {
+  const _MessageAgentSettingsEntryCard({
+    required this.daemon,
+    required this.messageAgent,
+    required this.onOpen,
+  });
+
+  final AgentSummary daemon;
+  final AgentSummary? messageAgent;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final diagnostics = daemon.latest.diagnosticsSummary;
+    final hasBootstrapKey = _daemonHasBootstrapPublicKey(daemon, diagnostics);
+    final stateText = messageAgent != null
+        ? '已创建 Message Agent'
+        : hasBootstrapKey
+        ? '可启用'
+        : '待公钥';
+    final stateActive = messageAgent != null || hasBootstrapKey;
+    return AppPressableTile(
+      key: const Key('message-agent-settings-entry-card'),
+      onTap: onOpen,
+      semanticLabel: '配置消息处理 Agent',
+      semanticsIdentifier: 'message-agent-settings-entry',
+      borderRadius: BorderRadius.circular(responsive.radius(10)),
+      backgroundColor: CupertinoColors.white,
+      border: Border.all(color: const Color(0xFFE4EAF3)),
+      child: Padding(
+        padding: EdgeInsets.all(responsive.spacing(16)),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: responsive.displayScaled(34),
+              height: responsive.displayScaled(34),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF2F7F4),
+                borderRadius: BorderRadius.circular(responsive.radius(9)),
+              ),
+              child: Icon(
+                CupertinoIcons.bubble_left_bubble_right,
+                color: const Color(0xFF1B7A43),
+                size: responsive.iconMd,
+              ),
+            ),
+            SizedBox(width: responsive.spacing(10)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    '消息处理 Agent',
+                    style: TextStyle(
+                      color: const Color(0xFF101B32),
+                      fontSize: responsive.bodyMd,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(height: responsive.spacing(3)),
+                  Text(
+                    '配置启用、暂停和撤销授权；只生成草稿，需你确认后发送。',
+                    style: TextStyle(
+                      color: const Color(0xFF66728A),
+                      fontSize: responsive.metaSm,
+                      height: 1.35,
+                    ),
+                  ),
+                  SizedBox(height: responsive.spacing(7)),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _MessageAgentStatePill(
+                      text: stateText,
+                      active: stateActive,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: responsive.spacing(10)),
+            Icon(
+              CupertinoIcons.chevron_right,
+              color: const Color(0xFF8A96AA),
+              size: responsive.iconSm,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _AgentDeletingNotice extends StatelessWidget {
@@ -679,7 +781,7 @@ class _MessageAgentPermissionSummary extends StatelessWidget {
       ),
       child: Text(
         enabled
-            ? '权限摘要：读取普通消息，分析、总结、生成草稿，并向 App 请求需要确认的 action。'
+            ? '权限摘要：读取普通 direct text，分析、总结、生成草稿；不会自动发送消息，也不处理 E2EE 明文。'
             : '启用 AWIKI_AGENT_IM_ENABLED 后可配置消息处理 Agent。',
         style: TextStyle(
           color: const Color(0xFF344056),

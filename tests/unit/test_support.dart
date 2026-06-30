@@ -24,6 +24,7 @@ import 'package:awiki_me/src/application/peer_identity_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/directory_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
+import 'package:awiki_me/src/application/ports/message_agent_binding_port.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
 import 'package:awiki_me/src/application/product_local_store.dart';
@@ -274,6 +275,9 @@ List<Override> fakeApplicationServiceOverrides(
         minInterval: Duration.zero,
         failureBackoff: Duration.zero,
       ),
+    ),
+    messageAgentBindingPortProvider.overrideWithValue(
+      FakeMessageAgentBindingPort(),
     ),
     attachmentCacheServiceProvider.overrideWithValue(
       attachmentCacheService ?? FakeAttachmentCacheService(),
@@ -2243,6 +2247,111 @@ class FakeAgentControlService implements AgentControlService {
     lastCancelledUpgradeCommandId = commandId;
     lastCancelledUpgradeTargetCommandId = upgradeCommandId;
     return commandId ?? nextCancelUpgradeCommandId;
+  }
+}
+
+class FakeMessageAgentBindingPort implements MessageAgentBindingPort {
+  MessageAgentBinding? activeBinding;
+  String? lastUserDid;
+  String? lastDaemonAgentDid;
+  String? lastMessageAgentDid;
+  String? lastRuntimeProvider;
+  Map<String, Object?>? lastRuntimeProfile;
+  String? lastDelegatedKeyVerificationMethod;
+  String? lastDisabledBindingId;
+  String? lastDisabledMessageAgentDid;
+  String? lastRevokedBindingId;
+  String? lastRevokedMessageAgentDid;
+  final List<String> calls = <String>[];
+
+  @override
+  Future<MessageAgentBinding> ensureBinding({
+    required String userDid,
+    required String daemonAgentDid,
+    required String messageAgentDid,
+    required String runtimeProvider,
+    required Map<String, Object?> runtimeProfile,
+    required String delegatedKeyVerificationMethod,
+  }) async {
+    calls.add('ensureBinding');
+    lastUserDid = userDid;
+    lastDaemonAgentDid = daemonAgentDid;
+    lastMessageAgentDid = messageAgentDid;
+    lastRuntimeProvider = runtimeProvider;
+    lastRuntimeProfile = runtimeProfile;
+    lastDelegatedKeyVerificationMethod = delegatedKeyVerificationMethod;
+    return activeBinding = MessageAgentBinding(
+      id: 'binding_$messageAgentDid',
+      userDid: userDid,
+      daemonAgentDid: daemonAgentDid,
+      messageAgentDid: messageAgentDid,
+      runtimeProvider: runtimeProvider,
+      runtimeProfile: runtimeProfile,
+      delegatedKeyVerificationMethod: delegatedKeyVerificationMethod,
+      status: 'active',
+    );
+  }
+
+  @override
+  Future<MessageAgentBinding?> getActiveBinding() async {
+    calls.add('getActiveBinding');
+    return activeBinding;
+  }
+
+  @override
+  Future<MessageAgentBinding> disableBinding({
+    String? bindingId,
+    String? messageAgentDid,
+  }) async {
+    calls.add('disableBinding');
+    lastDisabledBindingId = bindingId;
+    lastDisabledMessageAgentDid = messageAgentDid;
+    final current = activeBinding;
+    final resolved =
+        current ??
+        _messageAgentBinding(
+          daemonAgentDid: 'did:agent:daemon',
+          messageAgentDid: messageAgentDid ?? 'did:agent:message',
+          status: 'active',
+        );
+    return activeBinding = MessageAgentBinding(
+      id: bindingId ?? resolved.id,
+      userDid: resolved.userDid,
+      daemonAgentDid: resolved.daemonAgentDid,
+      messageAgentDid: messageAgentDid ?? resolved.messageAgentDid,
+      runtimeProvider: resolved.runtimeProvider,
+      runtimeProfile: resolved.runtimeProfile,
+      delegatedKeyVerificationMethod: resolved.delegatedKeyVerificationMethod,
+      status: 'disabled',
+    );
+  }
+
+  @override
+  Future<MessageAgentBinding> revokeBinding({
+    String? bindingId,
+    String? messageAgentDid,
+  }) async {
+    calls.add('revokeBinding');
+    lastRevokedBindingId = bindingId;
+    lastRevokedMessageAgentDid = messageAgentDid;
+    final current = activeBinding;
+    final resolved =
+        current ??
+        _messageAgentBinding(
+          daemonAgentDid: 'did:agent:daemon',
+          messageAgentDid: messageAgentDid ?? 'did:agent:message',
+          status: 'active',
+        );
+    return activeBinding = MessageAgentBinding(
+      id: bindingId ?? resolved.id,
+      userDid: resolved.userDid,
+      daemonAgentDid: resolved.daemonAgentDid,
+      messageAgentDid: messageAgentDid ?? resolved.messageAgentDid,
+      runtimeProvider: resolved.runtimeProvider,
+      runtimeProfile: resolved.runtimeProfile,
+      delegatedKeyVerificationMethod: resolved.delegatedKeyVerificationMethod,
+      status: 'revoked',
+    );
   }
 }
 

@@ -1,7 +1,11 @@
 import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
+import 'package:awiki_me/src/app/app_services.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -158,5 +162,172 @@ void main() {
     expect(find.text('English'), findsWidgets);
     expect(localePreferenceService.saveCalls, 1);
     expect(await localePreferenceService.loadMode(), AppLocaleMode.english);
+  });
+
+  testWidgets('设置页可进入 Message Agent 独立设置页并从真实入口启用', (tester) async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '运行 Daemon 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'ready',
+            version: '0.5.26',
+            platform: 'linux-amd64',
+            diagnosticsSummary: <String, Object?>{
+              'bootstrap_key_id': 'did:agent:daemon#key-3',
+              'bootstrap_public_key_b64u':
+                  'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+              'bootstrap_key_algorithm': 'x25519',
+            },
+          ),
+        ),
+      ];
+    final identities = FakeIdentityCorePort();
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+          handle: 'me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+          identityCorePortProvider.overrideWithValue(identities),
+          agentImEnabledProvider.overrideWithValue(true),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Message Agent'), findsOneWidget);
+    await tester.tap(find.text('Message Agent'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('message-agent-settings-page')),
+      findsOneWidget,
+    );
+    expect(find.text('消息处理 Agent'), findsWidgets);
+    expect(find.text('运行 Daemon 1'), findsWidgets);
+    expect(find.text('已上报公钥'), findsOneWidget);
+    expect(find.text('可启用'), findsWidgets);
+    expect(find.textContaining('不会自动发送消息'), findsWidgets);
+    expect(find.textContaining('不处理 E2EE 明文'), findsWidgets);
+
+    await tester.tap(find.text('启用消息处理 Agent'));
+    await tester.pumpAndSettle();
+
+    expect(identities.lastEnsuredDaemonSubkeySelector, 'default');
+    expect(control.lastBootstrapDaemonDid, 'did:agent:daemon');
+    expect(control.lastBootstrapControllerDid, 'did:human:me');
+    expect(
+      control.lastBootstrapDaemonPublicKey?.keyId,
+      'did:agent:daemon#key-3',
+    );
+    expect(find.textContaining('自动回复'), findsNothing);
+    expect(find.textContaining('代发'), findsNothing);
+  });
+
+  testWidgets('Message Agent feature 关闭时设置入口禁用且不触发授权', (tester) async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '运行 Daemon 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'ready',
+            platform: 'linux-amd64',
+            diagnosticsSummary: <String, Object?>{
+              'bootstrap_key_id': 'did:agent:daemon#key-3',
+              'bootstrap_public_key_b64u':
+                  'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+              'bootstrap_key_algorithm': 'x25519',
+            },
+          ),
+        ),
+      ];
+    final identities = FakeIdentityCorePort();
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+          identityCorePortProvider.overrideWithValue(identities),
+          agentImEnabledProvider.overrideWithValue(false),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Message Agent'), findsNothing);
+    expect(find.text('实验功能未开启'), findsOneWidget);
+    expect(find.text('消息处理 Agent'), findsNothing);
+    expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
+    expect(control.lastBootstrapDaemonDid, isNull);
+  });
+
+  testWidgets('Message Agent 设置页缺 bootstrap key 时禁用启用并提示刷新', (tester) async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '运行 Daemon 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready', platform: 'linux-amd64'),
+        ),
+      ];
+    final identities = FakeIdentityCorePort();
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+          identityCorePortProvider.overrideWithValue(identities),
+          agentImEnabledProvider.overrideWithValue(true),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Message Agent'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('message-agent-settings-page')),
+      findsOneWidget,
+    );
+    expect(find.text('未就绪'), findsOneWidget);
+    expect(find.text('等待刷新状态'), findsOneWidget);
+    expect(find.textContaining('尚未上报安全 bootstrap 公钥'), findsOneWidget);
+
+    await tester.tap(find.text('启用消息处理 Agent'));
+    await tester.pumpAndSettle();
+
+    expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
+    expect(control.lastBootstrapDaemonDid, isNull);
   });
 }

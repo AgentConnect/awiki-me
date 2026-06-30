@@ -136,6 +136,13 @@ Supported E2E cases:
 - `contacts`: App and CLI peer follow/contact flow.
 - `full`: all App + CLI peer flows.
 
+Message Agent UI changes must keep coverage in both active test domains:
+
+- Focused widget/provider/layout coverage under `tests/unit/`, including Settings entry visibility, daemon readiness, missing bootstrap key, and feature-disabled no-op behavior.
+- Durable App flow coverage under `tests/e2e/flutter/app/message_agent_full_ui_test.dart`, with root `integration_test/message_agent_full_ui_test.dart` kept as a thin Flutter shim.
+- The fake-backed Message Agent App shim expects `--dart-define=AWIKI_E2E=true` when tests assert semantics identifiers such as `message-agent-settings-entry`.
+- The product full chain is owned by `dart run tests/e2e/runner.dart --case message-agent`; selected runs must fail fast when backend, daemon, CLI, OTP, or Hermes prerequisites are missing and must not convert the case into a silent skip.
+
 All E2E runtime state and reports go under `.e2e/` and must remain untracked.
 Local config files named `tests/e2e/configs/*.local.yaml` are also ignored and
 must not be committed because they may contain OTP values.

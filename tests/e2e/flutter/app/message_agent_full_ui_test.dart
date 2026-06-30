@@ -62,7 +62,7 @@ void main() {
 
   runMessageAgentRealBackendE2e();
 
-  testWidgets('Message Agent management UI is hidden on daemon detail', (
+  testWidgets('Message Agent settings entry opens without lifecycle payloads', (
     tester,
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -139,13 +139,32 @@ void main() {
       await _pumpFrame(tester);
 
       expect(find.text('Message Daemon'), findsWidgets);
-      expect(find.text('消息处理 Agent'), findsNothing);
+      expect(
+        find.byKey(const Key('message-agent-settings-panel')),
+        findsNothing,
+      );
+      expect(
+        find.bySemanticsIdentifier('message-agent-settings-entry'),
+        findsOneWidget,
+      );
+      expect(find.text('消息处理 Agent'), findsOneWidget);
+      await tester.tap(
+        find.bySemanticsIdentifier('message-agent-settings-entry'),
+      );
+      await _pumpFrame(tester);
+
+      expect(
+        find.byKey(const Key('message-agent-settings-page')),
+        findsOneWidget,
+      );
+      expect(find.text('消息处理 Agent'), findsWidgets);
+      expect(find.text('已上报公钥'), findsOneWidget);
       expect(find.text('所有可处理会话'), findsNothing);
       expect(find.text('Hermes message runtime'), findsNothing);
-      expect(find.text('启用消息处理 Agent'), findsNothing);
-      expect(find.text('暂停处理消息'), findsNothing);
-      expect(find.text('删除消息处理 Agent'), findsNothing);
-      expect(find.text('撤销 Daemon 消息授权'), findsNothing);
+      expect(find.text('启用消息处理 Agent'), findsOneWidget);
+      expect(find.text('暂停处理消息'), findsOneWidget);
+      expect(find.text('删除消息处理 Agent'), findsOneWidget);
+      expect(find.text('撤销 Daemon 消息授权'), findsOneWidget);
       expect(find.textContaining('自动回复'), findsNothing);
       expect(find.textContaining('代发'), findsNothing);
       final nonStatusPayloads = messages.recordedPayloads.where(

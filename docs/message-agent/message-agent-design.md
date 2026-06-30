@@ -113,12 +113,20 @@ Settings / Message Agent
 - 最近处理状态或错误。
 - 停用、删除、重新连接等操作。
 
+当前实现状态（2026-06-30）：
+
+- App Settings 已提供 `Message Agent` 稳定入口，进入独立的「消息处理 Agent」设置页。
+- Agents tab 的 daemon detail 只提供「配置消息处理 Agent」摘要跳转卡，不再暴露旧的内嵌生命周期管理面板。
+- 独立设置页展示运行 daemon、Hermes runtime provider、普通 `direct text` 处理范围、安全 bootstrap 公钥状态、授权状态和权限摘要。
+- 启用按钮仅在 `AWIKI_AGENT_IM_ENABLED=true`、daemon ready 且 daemon 已上报 bootstrap public key 时可用；缺 key 或 daemon 未就绪时提示刷新 daemon 状态。
+- 页面文案必须持续强调「只生成草稿，发送前需用户确认」「不会自动发送消息」「不处理 E2EE 明文」。
+
 创建 Agent 流程可以保留「作为消息处理 Agent」的选项，但它不是唯一入口。两个入口最终进入同一套启用流程。
 
 如果 `AWIKI_AGENT_IM_ENABLED=false`：
 
 - UI 应隐藏 Message Agent 设置入口，或只显示「实验功能未开启」。
-- 当前产品 UI 已先隐藏 Agent/daemon 详情页内的 Message Agent 设置面板；底层 bootstrap、binding、revoke 能力保留，等待独立设置页或后续灰度入口重新开放。
+- 当前产品 UI 在 Settings 显示「实验功能未开启」，且 Agents/daemon detail 不展示可触发生命周期请求的管理按钮。
 - 不展示半成品创建、绑定、配置入口。
 - 不能让用户进入会失败或不可完成的流程。
 

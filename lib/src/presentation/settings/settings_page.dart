@@ -10,6 +10,8 @@ import '../../l10n/l10n.dart';
 import '../app_shell/providers/app_update_provider.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
 import '../app_shell/providers/session_provider.dart';
+import '../agents/agents_page.dart';
+import '../agents/agents_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/responsive_layout.dart';
@@ -27,6 +29,7 @@ class SettingsPage extends ConsumerWidget {
     final runtime = ref.read(appRuntimeProvider.notifier);
     final updateState = ref.watch(appUpdateProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
+    final messageAgentEnabled = ref.watch(agentImEnabledProvider);
     final theme = context.awikiTheme;
     return CupertinoPageScaffold(
       backgroundColor: theme.background,
@@ -89,6 +92,28 @@ class SettingsPage extends ConsumerWidget {
                     subtitle: _languageLabel(context, localeMode),
                     onTap: () => _showLanguageSheet(context, ref, localeMode),
                   ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            AppCardSection(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: <Widget>[
+                  if (messageAgentEnabled)
+                    AppListTile(
+                      title: 'Message Agent',
+                      subtitle: '配置消息处理 Agent：启用、暂停和撤销 Daemon 消息授权',
+                      onTap: () => AppNavigator.push<void>(
+                        context,
+                        (_) => const MessageAgentSettingsPage(),
+                      ),
+                    )
+                  else
+                    const AppListTile(
+                      title: '实验功能未开启',
+                      subtitle: 'Message Agent 已关闭，不会发送 bootstrap 或授权请求',
+                    ),
                 ],
               ),
             ),
