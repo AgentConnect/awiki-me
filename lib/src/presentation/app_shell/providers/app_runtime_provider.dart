@@ -237,7 +237,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       ),
       AwikiPerformanceLogger.async(
         'app_refresh.agents',
-        () => ref.read(agentsProvider.notifier).load(),
+        () => ref.read(agentsProvider.notifier).ensureLoaded(),
       ),
       AwikiPerformanceLogger.async(
         'app_refresh.friends',

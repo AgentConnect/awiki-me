@@ -9,6 +9,7 @@ import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
@@ -188,6 +189,54 @@ void main() {
       await pumpEventQueue();
 
       expect(messageSyncService.syncReasons, contains('app_resumed'));
+    });
+
+    test('恢复前台时不强制刷新已加载的智能体列表', () async {
+      final agentControl = _CountingAgentControlService();
+      final lifecycleContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+            messageSyncService: messageSyncService,
+          ),
+          agentControlServiceProvider.overrideWithValue(agentControl),
+          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+        ],
+      );
+      addTearDown(lifecycleContainer.dispose);
+
+      await lifecycleContainer
+          .read(appRuntimeProvider.notifier)
+          .activateSession(
+            const SessionIdentity(
+              did: 'did:test:me',
+              credentialName: 'default',
+              displayName: 'Me',
+              handle: 'me',
+              jwtToken: 'token',
+            ),
+          );
+      await pumpEventQueue();
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      final callsAfterStartup = agentControl.listAgentsCalls;
+
+      lifecycleContainer
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+      lifecycleContainer
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await pumpEventQueue();
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(messageSyncService.syncReasons, contains('app_resumed'));
+      expect(agentControl.listAgentsCalls, callsAfterStartup);
     });
 
     test('进入后台时裁剪隐藏会话缓存但保留可见会话', () async {
@@ -1330,6 +1379,16 @@ class _BlockingProfileService implements ProfileApplicationService {
   @override
   Future<UserProfile> updateProfile(ProfilePatch patch) {
     throw UnimplementedError();
+  }
+}
+
+class _CountingAgentControlService extends FakeAgentControlService {
+  int listAgentsCalls = 0;
+
+  @override
+  Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
+    listAgentsCalls += 1;
+    return super.listAgents(includeInactive: includeInactive);
   }
 }
 
