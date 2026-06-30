@@ -5272,21 +5272,25 @@ class ChatThreadsController
 
   List<ChatMessage> _sortMessages(List<ChatMessage> messages) {
     final sorted = List<ChatMessage>.from(messages);
-    sorted.sort((a, b) {
-      final aSeq = a.serverSequence;
-      final bSeq = b.serverSequence;
-      if (aSeq != null && bSeq != null && aSeq != bSeq) {
-        return aSeq.compareTo(bSeq);
-      }
-      if (aSeq != null && bSeq == null) {
-        return -1;
-      }
-      if (aSeq == null && bSeq != null) {
-        return 1;
-      }
-      return a.createdAt.compareTo(b.createdAt);
-    });
+    sorted.sort(_compareMessagesForTimeline);
     return sorted;
+  }
+
+  int _compareMessagesForTimeline(ChatMessage a, ChatMessage b) {
+    final timeCompare = a.createdAt.compareTo(b.createdAt);
+    if (timeCompare != 0) {
+      return timeCompare;
+    }
+    final aSeq = a.serverSequence;
+    final bSeq = b.serverSequence;
+    if (aSeq != null && bSeq != null && aSeq != bSeq) {
+      return aSeq.compareTo(bSeq);
+    }
+    final idCompare = _stableMessageId(a).compareTo(_stableMessageId(b));
+    if (idCompare != 0) {
+      return idCompare;
+    }
+    return a.localId.compareTo(b.localId);
   }
 }
 
