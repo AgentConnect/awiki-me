@@ -68,8 +68,8 @@ AWIKI_BASE_URL="https://awiki.info"
 产物和 `latest.json` 会输出到：
 
 ```text
-dist/app/<channel>/<version>/
-dist/app/<channel>/latest.json
+dist/<channel>/<version>/
+dist/<channel>/latest.json
 ```
 
 ## 项目结构

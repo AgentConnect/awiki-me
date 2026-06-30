@@ -111,8 +111,8 @@ AWIKI_BASE_URL="https://awiki.info"
 The script writes artifacts and `latest.json` under:
 
 ```text
-dist/app/<channel>/<version>/
-dist/app/<channel>/latest.json
+dist/<channel>/<version>/
+dist/<channel>/latest.json
 ```
 
 ## Message Sync

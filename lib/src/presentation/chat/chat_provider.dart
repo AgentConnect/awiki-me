@@ -388,6 +388,12 @@ class _PendingHistorySync {
   final bool showLoading;
 }
 
+class _PendingVisibleThreadStaleGuard {
+  const _PendingVisibleThreadStaleGuard({required this.conversation});
+
+  final ConversationSummary conversation;
+}
+
 class _HistoryLoadResult {
   const _HistoryLoadResult({required this.loadedCount, required this.failed});
 
@@ -575,6 +581,11 @@ class ChatThreadsController
   final Map<String, Timer> _agentProcessingTimers = <String, Timer>{};
   final Map<String, _PendingHistorySync> _pendingHistorySyncs =
       <String, _PendingHistorySync>{};
+  final Map<String, _PendingVisibleThreadStaleGuard>
+  _pendingVisibleThreadStaleGuards =
+      <String, _PendingVisibleThreadStaleGuard>{};
+  final Map<String, Future<void>> _activeVisibleThreadStaleGuards =
+      <String, Future<void>>{};
   final Set<String> _activeLocalHistoryLoads = <String>{};
   final Set<String> _activeRemoteHistorySyncs = <String>{};
   final Map<String, _ThreadPatchSubscription> _threadPatchSubscriptions =
@@ -852,6 +863,118 @@ class ChatThreadsController
         fields: AwikiPerformanceLogger.threadField(displayThreadId),
       );
     }
+  }
+
+  Future<void> syncVisibleConversationAfterSummaryUpdate(
+    ConversationSummary conversation, {
+    required String displayThreadId,
+  }) {
+    final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
+    final metadata = _cacheMetadataByThreadId[targetThreadId];
+    if (metadata?.isVisible != true ||
+        !_needsVisibleThreadStaleGuard(thread(targetThreadId), conversation)) {
+      return Future<void>.value();
+    }
+    final pending = _pendingVisibleThreadStaleGuards[targetThreadId];
+    _pendingVisibleThreadStaleGuards[targetThreadId] =
+        _PendingVisibleThreadStaleGuard(
+          conversation: pending == null
+              ? conversation
+              : _newerConversation(conversation, pending.conversation),
+        );
+    return _ensureVisibleThreadStaleGuardDrain(targetThreadId);
+  }
+
+  Future<void> _ensureVisibleThreadStaleGuardDrain(String displayThreadId) {
+    final active = _activeVisibleThreadStaleGuards[displayThreadId];
+    if (active != null) {
+      return active;
+    }
+    late final Future<void> operation;
+    operation = _drainVisibleThreadStaleGuard(displayThreadId).whenComplete(() {
+      if (identical(
+        _activeVisibleThreadStaleGuards[displayThreadId],
+        operation,
+      )) {
+        _activeVisibleThreadStaleGuards.remove(displayThreadId);
+      }
+      if (mounted &&
+          _pendingVisibleThreadStaleGuards.containsKey(displayThreadId) &&
+          !_threadHasActiveHistoryWork(displayThreadId)) {
+        _ensureVisibleThreadStaleGuardDrain(displayThreadId);
+      }
+    });
+    _activeVisibleThreadStaleGuards[displayThreadId] = operation;
+    return operation;
+  }
+
+  Future<void> _drainVisibleThreadStaleGuard(String displayThreadId) async {
+    while (mounted) {
+      final pending = _pendingVisibleThreadStaleGuards.remove(displayThreadId);
+      if (pending == null) {
+        return;
+      }
+      final metadata = _cacheMetadataByThreadId[displayThreadId];
+      if (metadata?.isVisible != true) {
+        continue;
+      }
+      final conversation = pending.conversation;
+      if (!_needsVisibleThreadStaleGuard(
+        thread(displayThreadId),
+        conversation,
+      )) {
+        continue;
+      }
+      if (_threadHasActiveHistoryWork(displayThreadId)) {
+        _pendingVisibleThreadStaleGuards[displayThreadId] = pending;
+        return;
+      }
+      await _syncVisibleThreadIfStale(
+        conversation,
+        displayThreadId: displayThreadId,
+      );
+    }
+  }
+
+  Future<void> _syncVisibleThreadIfStale(
+    ConversationSummary conversation, {
+    required String displayThreadId,
+  }) async {
+    _touchConversationCache(conversation, displayThreadId, visible: true);
+    _ensureThreadPatchSubscription(
+      conversation,
+      displayThreadId: displayThreadId,
+    );
+    if (!_needsVisibleThreadStaleGuard(thread(displayThreadId), conversation)) {
+      return;
+    }
+    await _repairThreadFromLocalProjection(
+      conversation,
+      displayThreadId: displayThreadId,
+    );
+    if (!_needsVisibleThreadStaleGuard(thread(displayThreadId), conversation)) {
+      return;
+    }
+    await _syncThreadAfterLocalMax(
+      conversation,
+      displayThreadId: displayThreadId,
+    );
+  }
+
+  bool _threadHasActiveHistoryWork(String displayThreadId) {
+    return _activeLocalHistoryLoads.contains(displayThreadId) ||
+        _activeRemoteHistorySyncs.contains(displayThreadId);
+  }
+
+  void _runPendingVisibleThreadStaleGuardIfNeeded(String displayThreadId) {
+    if (!mounted ||
+        !_pendingVisibleThreadStaleGuards.containsKey(displayThreadId) ||
+        _activeVisibleThreadStaleGuards.containsKey(displayThreadId) ||
+        _threadHasActiveHistoryWork(displayThreadId) ||
+        _cacheMetadataByThreadId[displayThreadId]?.isVisible != true) {
+      return;
+    }
+    unawaited(_ensureVisibleThreadStaleGuardDrain(displayThreadId));
   }
 
   void acknowledgeVisibleConversationRead(
@@ -1286,6 +1409,7 @@ class ChatThreadsController
       _activeLocalHistoryLoads.remove(targetThreadId);
       if (mounted) {
         _runPendingHistorySyncIfNeeded(targetThreadId);
+        _runPendingVisibleThreadStaleGuardIfNeeded(targetThreadId);
       }
     }
   }
@@ -1370,6 +1494,7 @@ class ChatThreadsController
       _activeRemoteHistorySyncs.remove(targetThreadId);
       if (mounted) {
         _runPendingHistorySyncIfNeeded(targetThreadId);
+        _runPendingVisibleThreadStaleGuardIfNeeded(targetThreadId);
       }
     }
   }
@@ -1826,6 +1951,8 @@ class ChatThreadsController
     _cancelThreadPatchSubscriptionTtls();
     _cancelHiddenThreadCacheTrimTimers();
     _pendingHistorySyncs.clear();
+    _pendingVisibleThreadStaleGuards.clear();
+    _activeVisibleThreadStaleGuards.clear();
     _lastThreadPatchStreamEndAt.clear();
     _activeReadReceipts.clear();
     _completedReadReceipts.clear();
@@ -4237,6 +4364,24 @@ class ChatThreadsController
     // covers the summary timestamp, repeatedly reloading history only creates
     // a conversation-list -> history-sync feedback loop.
     return conversation.lastMessageAt.isAfter(latestLocalAt);
+  }
+
+  bool _needsVisibleThreadStaleGuard(
+    ChatThreadState current,
+    ConversationSummary conversation,
+  ) {
+    final latest = _latestRenderableMessage(current.messages);
+    if (latest == null) {
+      return true;
+    }
+    if (latest.createdAt.isBefore(conversation.lastMessageAt)) {
+      return true;
+    }
+    if (latest.createdAt.isAfter(conversation.lastMessageAt)) {
+      return false;
+    }
+    final preview = conversation.lastMessagePreview.trim();
+    return preview.isNotEmpty && latest.previewText.trim() != preview;
   }
 
   ChatMessage? _latestRenderableMessage(List<ChatMessage> messages) {

@@ -391,6 +391,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
           reason: 'visible_summary_update',
         );
       }
+      unawaited(
+        _chatThreadsController.syncVisibleConversationAfterSummaryUpdate(
+          updated,
+          displayThreadId: displayThreadId,
+        ),
+      );
     });
     final messages = thread.messages;
     _settleOpeningBottomAnchorForCurrentThread(thread);
