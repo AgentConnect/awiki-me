@@ -31,7 +31,7 @@ const String _attachmentManifestContentType =
 
 const bool _chatProviderTraceEnabled = bool.fromEnvironment(
   'AWIKI_CHAT_PROVIDER_TRACE',
-  defaultValue: kDebugMode,
+  defaultValue: false,
 );
 
 class ChatThreadState {

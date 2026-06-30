@@ -10,7 +10,7 @@ import '../../conversation_list/conversation_provider.dart';
 
 const bool _messageSyncCoordinatorTraceEnabled = bool.fromEnvironment(
   'AWIKI_MESSAGE_SYNC_TRACE',
-  defaultValue: kDebugMode,
+  defaultValue: false,
 );
 
 class MessageSyncCoordinatorState {

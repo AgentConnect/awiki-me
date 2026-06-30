@@ -29,7 +29,7 @@ import 'session_provider.dart';
 
 const bool _runtimeTraceEnabled = bool.fromEnvironment(
   'AWIKI_RUNTIME_TRACE',
-  defaultValue: true,
+  defaultValue: false,
 );
 
 class AppRuntimeState {

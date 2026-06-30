@@ -18,7 +18,7 @@ import 'product_local_store.dart';
 
 const bool _conversationServiceTraceEnabled = bool.fromEnvironment(
   'AWIKI_CONVERSATION_SERVICE_TRACE',
-  defaultValue: kDebugMode,
+  defaultValue: false,
 );
 
 abstract interface class ConversationService {

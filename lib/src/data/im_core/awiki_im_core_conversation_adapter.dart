@@ -12,7 +12,7 @@ import 'awiki_im_core_runtime.dart';
 
 const bool _imCoreConversationTraceEnabled = bool.fromEnvironment(
   'AWIKI_IM_CORE_CONVERSATION_TRACE',
-  defaultValue: kDebugMode,
+  defaultValue: false,
 );
 
 class AwikiImCoreConversationAdapter implements ConversationCorePort {
