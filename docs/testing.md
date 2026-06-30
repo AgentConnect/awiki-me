@@ -134,6 +134,7 @@ Supported E2E cases:
 - `group`: App and CLI peer group-message flow.
 - `attachment`: App and CLI peer attachment flow.
 - `contacts`: App and CLI peer follow/contact flow.
+- `message-agent`: full App UI Message Agent real-backend gate.
 - `full`: all App + CLI peer flows.
 
 Message Agent UI changes must keep coverage in both active test domains:
@@ -141,7 +142,38 @@ Message Agent UI changes must keep coverage in both active test domains:
 - Focused widget/provider/layout coverage under `tests/unit/`, including Settings entry visibility, daemon readiness, missing bootstrap key, and feature-disabled no-op behavior.
 - Durable App flow coverage under `tests/e2e/flutter/app/message_agent_full_ui_test.dart`, with root `integration_test/message_agent_full_ui_test.dart` kept as a thin Flutter shim.
 - The fake-backed Message Agent App shim expects `--dart-define=AWIKI_E2E=true` when tests assert semantics identifiers such as `message-agent-settings-entry`.
-- The product full chain is owned by `dart run tests/e2e/runner.dart --case message-agent`; selected runs must fail fast when backend, daemon, CLI, OTP, or Hermes prerequisites are missing and must not convert the case into a silent skip.
+- The product full chain is owned by `flutter pub run tests/e2e/runner.dart --case message-agent`; `dart run` is acceptable only in environments where native assets can build through the Dart entrypoint. Selected runs must fail fast when backend, daemon, CLI, OTP, or Hermes prerequisites are missing and must not convert the case into a silent skip.
+- Product gate evidence must include `MSGAGENT-E2E-001` through `MSGAGENT-E2E-005`, plus report flags for `uiEnabled`, `runtimeFinalReceived`, `draftConfirmed`, `actionResultReturned`, and `authorizationRevoked`.
+
+Run the Message Agent full UI real-backend gate:
+
+```bash
+flutter pub run tests/e2e/runner.dart \
+  --case message-agent \
+  --config tests/e2e/configs/e2e.local.yaml
+```
+
+`message-agent` requires the normal backend/OTP/account/CLI values plus:
+
+- `service.messageServiceUrl`
+- `service.messageServiceWsUrl`
+- `daemon.rustRepo`
+- `daemon.binary`
+- `daemon.stateRoot`
+- `daemon.readyFile`
+- `daemon.fakeHermesGatewayCommand`
+- `messageAgent.runtimeProvider: hermes`
+- `messageAgent.realBackend: true`
+
+When `--case message-agent` is selected, omitted `messageAgent.realBackend`
+defaults to true. Setting it to false, omitting any required backend/daemon field,
+or using a provider other than `hermes` is a configuration failure. This gate uses
+the real Settings / Message Agent UI, isolates the product scenario with the
+plain-name `Message Agent full UI drives real backend daemon and recovery`, sends
+a CLI peer direct text, waits for daemon `runtime_final`, confirms the App draft
+action, checks a redacted `awiki.app.action.result.v1`, and revokes Daemon message
+authorization. Focused fake-backed shim tests can diagnose UI behavior, but they
+are not sufficient release evidence for the product chain.
 
 All E2E runtime state and reports go under `.e2e/` and must remain untracked.
 Local config files named `tests/e2e/configs/*.local.yaml` are also ignored and
