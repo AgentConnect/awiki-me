@@ -83,24 +83,28 @@ The installer package entrypoint is:
 scripts/package_app.sh
 ```
 
-All package settings live in `scripts/package_app.config`. The script accepts no
-arguments and does not read package settings from environment variables. Edit
-that config file to choose the package channel, Flutter build mode, backend base
-URL, version bump mode, output root, and platform targets.
+Package settings live in `scripts/package_app.config`. The script accepts no
+arguments and does not read package settings from environment variables. For
+normal packaging, edit `AWIKI_BASE_URL`; keep `PACKAGE_CHANNEL="test"` for
+installable non-store packages. The channel only separates output directories,
+file names, and `latest.json`; it does not control store release status or code
+signing.
 
-The current checked-in config builds the online test package:
+The script always builds release artifacts for Android arm64, macOS arm64, and
+macOS x64. It also rebuilds the native SDK artifacts before packaging.
+
+The current checked-in config builds the installable online test package:
 
 ```text
 PACKAGE_CHANNEL="test"
-PACKAGE_BUILD_MODE="debug"
 AWIKI_BASE_URL="https://anpclaw.com"
 ```
 
-For a production package, update the same config file, for example:
+For a future stable distribution track, update the same config file, for
+example:
 
 ```text
 PACKAGE_CHANNEL="stable"
-PACKAGE_BUILD_MODE="release"
 AWIKI_BASE_URL="https://awiki.info"
 ```
 

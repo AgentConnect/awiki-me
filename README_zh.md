@@ -42,23 +42,26 @@ bootstrap 脚本即可。
 scripts/package_app.sh
 ```
 
-所有打包配置都放在 `scripts/package_app.config`。脚本不接受命令行参数，也不通过
-环境变量读取打包配置。需要切换发布渠道、构建模式、后端地址、版本递增策略、输出
-目录或平台目标时，直接修改这个配置文件。
+打包配置都放在 `scripts/package_app.config`。脚本不接受命令行参数，也不通过
+环境变量读取打包配置。日常打包通常只需要修改 `AWIKI_BASE_URL`；当前这种
+可正常安装使用、但不是应用商店正式签名的安装包，保留 `PACKAGE_CHANNEL="test"`
+即可。渠道只用于隔离输出目录、文件名和 `latest.json`，不代表应用商店发布状态，
+也不控制代码签名。
 
-当前提交的配置用于线上测试环境：
+脚本固定使用 release 模式，并固定输出 Android arm64、macOS arm64 和 macOS
+x64 三个平台产物。打包前也会固定重新构建原生 SDK 产物。
+
+当前提交的配置用于线上测试环境可安装包：
 
 ```text
 PACKAGE_CHANNEL="test"
-PACKAGE_BUILD_MODE="debug"
 AWIKI_BASE_URL="https://anpclaw.com"
 ```
 
-如果要打线上正式版，修改同一个配置文件即可，例如：
+如果后续要切到稳定分发轨道，修改同一个配置文件即可，例如：
 
 ```text
 PACKAGE_CHANNEL="stable"
-PACKAGE_BUILD_MODE="release"
 AWIKI_BASE_URL="https://awiki.info"
 ```
 

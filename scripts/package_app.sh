@@ -6,6 +6,16 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG_PATH="$SCRIPT_DIR/package_app.config"
 cd "$ROOT_DIR"
 
+PACKAGE_APP_DISPLAY_NAME="AWiki Me"
+PACKAGE_ANDROID_APP_ID="ai.awiki.awikime"
+PACKAGE_MACOS_BUNDLE_ID="ai.awiki.awikiMe"
+PACKAGE_FLUTTER_BIN="flutter"
+PACKAGE_SDK_REPO_DIR="../awiki-cli-rs2"
+PACKAGE_ANDROID_EXPECTED_CERT_SHA256="F2:67:E9:18:57:54:ED:C1:2B:E5:69:69:1B:39:B9:EF:D4:EF:1E:CF:2D:7E:D8:18:81:42:69:B3:70:85:D8:75"
+PACKAGE_BUILD_MODE="release"
+XCODE_CONFIGURATION="Release"
+DIST_ROOT="$ROOT_DIR/dist/app"
+
 PUBSPEC_PATH="$ROOT_DIR/pubspec.yaml"
 PUBSPEC_BACKUP=""
 PUBSPEC_WAS_UPDATED=0
@@ -59,23 +69,6 @@ require_non_empty_config_var() {
   fi
 }
 
-config_enabled() {
-  local name="$1"
-  require_config_var "$name"
-  local value="${!name}"
-  case "$value" in
-    1|true|TRUE|yes|YES|on|ON)
-      return 0
-      ;;
-    0|false|FALSE|no|NO|off|OFF)
-      return 1
-      ;;
-    *)
-      fail "$name must be one of: 1, 0, true, false, yes, no, on, off"
-      ;;
-  esac
-}
-
 resolve_repo_path() {
   local value="$1"
   [[ -n "$value" ]] || fail "path config value must not be empty"
@@ -108,103 +101,27 @@ json_string() {
   printf '"%s"' "$value"
 }
 
-json_string_or_null() {
-  local value="$1"
-  if [[ -z "$value" ]]; then
-    printf 'null'
-  else
-    json_string "$value"
-  fi
-}
-
 for required_name in \
-  PACKAGE_APP_DISPLAY_NAME \
-  PACKAGE_ANDROID_APP_ID \
-  PACKAGE_MACOS_BUNDLE_ID \
   PACKAGE_CHANNEL \
-  PACKAGE_BUILD_MODE \
-  PACKAGE_VERSION_BUMP \
-  PACKAGE_VERSION_NAME \
-  PACKAGE_DRY_RUN \
-  PACKAGE_DIST_ROOT \
-  PACKAGE_BUILD_ANDROID_ARM64 \
-  PACKAGE_BUILD_MACOS_ARM64 \
-  PACKAGE_BUILD_MACOS_X64 \
-  PACKAGE_BUILD_SDK_NATIVE \
-  PACKAGE_SDK_REPO_DIR \
-  PACKAGE_SDK_NATIVE_BUILD_SCRIPT \
-  PACKAGE_FLUTTER_BIN \
-  PACKAGE_ANDROID_EXPECTED_CERT_SHA256 \
   AWIKI_BASE_URL \
-  AWIKI_USER_SERVICE_URL \
-  AWIKI_MESSAGE_SERVICE_URL \
-  AWIKI_MAIL_SERVICE_URL \
-  AWIKI_DID_DOMAIN \
-  AWIKI_ANP_SERVICE_URL \
-  AWIKI_ANP_SERVICE_DID \
-  AWIKI_DAEMON_DOWNLOAD_BASE_URL \
-  AWIKI_AGENT_IM_ENABLED \
-  AWIKI_UPDATE_MANIFEST_URL \
-  AWIKI_RELEASES_URL; do
+  PACKAGE_VERSION_BUMP; do
   require_config_var "$required_name"
 done
 
-require_non_empty_config_var PACKAGE_APP_DISPLAY_NAME
-require_non_empty_config_var PACKAGE_ANDROID_APP_ID
-require_non_empty_config_var PACKAGE_MACOS_BUNDLE_ID
 require_non_empty_config_var PACKAGE_CHANNEL
-require_non_empty_config_var PACKAGE_BUILD_MODE
-require_non_empty_config_var PACKAGE_VERSION_BUMP
-require_non_empty_config_var PACKAGE_DIST_ROOT
-require_non_empty_config_var PACKAGE_SDK_REPO_DIR
-require_non_empty_config_var PACKAGE_FLUTTER_BIN
 require_non_empty_config_var AWIKI_BASE_URL
+require_non_empty_config_var PACKAGE_VERSION_BUMP
 
 for value_name in \
-  PACKAGE_APP_DISPLAY_NAME \
-  PACKAGE_ANDROID_APP_ID \
-  PACKAGE_MACOS_BUNDLE_ID \
   PACKAGE_CHANNEL \
-  PACKAGE_BUILD_MODE \
-  PACKAGE_VERSION_BUMP \
-  PACKAGE_VERSION_NAME \
-  PACKAGE_DIST_ROOT \
-  PACKAGE_SDK_REPO_DIR \
-  PACKAGE_SDK_NATIVE_BUILD_SCRIPT \
-  PACKAGE_FLUTTER_BIN \
-  PACKAGE_ANDROID_EXPECTED_CERT_SHA256 \
   AWIKI_BASE_URL \
-  AWIKI_USER_SERVICE_URL \
-  AWIKI_MESSAGE_SERVICE_URL \
-  AWIKI_MAIL_SERVICE_URL \
-  AWIKI_DID_DOMAIN \
-  AWIKI_ANP_SERVICE_URL \
-  AWIKI_ANP_SERVICE_DID \
-  AWIKI_DAEMON_DOWNLOAD_BASE_URL \
-  AWIKI_AGENT_IM_ENABLED \
-  AWIKI_UPDATE_MANIFEST_URL \
-  AWIKI_RELEASES_URL; do
+  PACKAGE_VERSION_BUMP; do
   validate_no_newline "$value_name" "${!value_name}"
 done
 
 case "$PACKAGE_CHANNEL" in
   *[!A-Za-z0-9._-]*)
     fail "PACKAGE_CHANNEL may only contain letters, numbers, dot, underscore, and hyphen"
-    ;;
-esac
-
-case "$PACKAGE_BUILD_MODE" in
-  debug)
-    XCODE_CONFIGURATION="Debug"
-    ;;
-  profile)
-    XCODE_CONFIGURATION="Profile"
-    ;;
-  release)
-    XCODE_CONFIGURATION="Release"
-    ;;
-  *)
-    fail "PACKAGE_BUILD_MODE must be one of: debug, profile, release"
     ;;
 esac
 
@@ -216,39 +133,10 @@ case "$PACKAGE_VERSION_BUMP" in
     ;;
 esac
 
-if [[ -n "$PACKAGE_VERSION_NAME" && "$PACKAGE_VERSION_BUMP" != "build" ]]; then
-  fail "PACKAGE_VERSION_NAME can only be used with PACKAGE_VERSION_BUMP=build"
-fi
-
-if [[ -n "$PACKAGE_VERSION_NAME" && ! "$PACKAGE_VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  fail "PACKAGE_VERSION_NAME must use x.y.z format"
-fi
-
-if [[ -n "$AWIKI_AGENT_IM_ENABLED" ]]; then
-  case "$AWIKI_AGENT_IM_ENABLED" in
-    true|false)
-      ;;
-    *)
-      fail "AWIKI_AGENT_IM_ENABLED must be empty, true, or false"
-      ;;
-  esac
-fi
-
-if ! config_enabled PACKAGE_BUILD_ANDROID_ARM64 &&
-  ! config_enabled PACKAGE_BUILD_MACOS_ARM64 &&
-  ! config_enabled PACKAGE_BUILD_MACOS_X64; then
-  fail "at least one package build target must be enabled"
-fi
-
-DIST_ROOT="$(resolve_repo_path "$PACKAGE_DIST_ROOT")"
 CHANNEL_DIST_ROOT="$DIST_ROOT/$PACKAGE_CHANNEL"
 LATEST_MANIFEST="$CHANNEL_DIST_ROOT/latest.json"
 SDK_REPO_DIR="$(resolve_repo_path "$PACKAGE_SDK_REPO_DIR")"
-if [[ -n "$PACKAGE_SDK_NATIVE_BUILD_SCRIPT" ]]; then
-  SDK_NATIVE_BUILD_SCRIPT="$(resolve_repo_path "$PACKAGE_SDK_NATIVE_BUILD_SCRIPT")"
-else
-  SDK_NATIVE_BUILD_SCRIPT="$SDK_REPO_DIR/scripts/flutter/build-sdk-native.sh"
-fi
+SDK_NATIVE_BUILD_SCRIPT="$SDK_REPO_DIR/scripts/flutter/build-sdk-native.sh"
 
 DART_DEFINE_ARGS=()
 DART_DEFINE_KEYS=()
@@ -264,16 +152,6 @@ add_dart_define() {
 }
 
 add_dart_define "AWIKI_BASE_URL" "$AWIKI_BASE_URL"
-add_dart_define "AWIKI_USER_SERVICE_URL" "$AWIKI_USER_SERVICE_URL"
-add_dart_define "AWIKI_MESSAGE_SERVICE_URL" "$AWIKI_MESSAGE_SERVICE_URL"
-add_dart_define "AWIKI_MAIL_SERVICE_URL" "$AWIKI_MAIL_SERVICE_URL"
-add_dart_define "AWIKI_DID_DOMAIN" "$AWIKI_DID_DOMAIN"
-add_dart_define "AWIKI_ANP_SERVICE_URL" "$AWIKI_ANP_SERVICE_URL"
-add_dart_define "AWIKI_ANP_SERVICE_DID" "$AWIKI_ANP_SERVICE_DID"
-add_dart_define "AWIKI_DAEMON_DOWNLOAD_BASE_URL" "$AWIKI_DAEMON_DOWNLOAD_BASE_URL"
-add_dart_define "AWIKI_AGENT_IM_ENABLED" "$AWIKI_AGENT_IM_ENABLED"
-add_dart_define "AWIKI_UPDATE_MANIFEST_URL" "$AWIKI_UPDATE_MANIFEST_URL"
-add_dart_define "AWIKI_RELEASES_URL" "$AWIKI_RELEASES_URL"
 
 encode_dart_defines() {
   local joined=""
@@ -311,13 +189,8 @@ compute_next_version() {
   local build="${BASH_REMATCH[4]}"
   local next_build="$build"
 
-  if [[ "$PACKAGE_VERSION_BUMP" != "none" || -n "$PACKAGE_VERSION_NAME" ]]; then
+  if [[ "$PACKAGE_VERSION_BUMP" != "none" ]]; then
     next_build=$((build + 1))
-  fi
-
-  if [[ -n "$PACKAGE_VERSION_NAME" ]]; then
-    printf '%s+%s\n' "$PACKAGE_VERSION_NAME" "$next_build"
-    return
   fi
 
   case "$PACKAGE_VERSION_BUMP" in
@@ -524,11 +397,6 @@ prepare_macos_project() {
 }
 
 build_sdk_native() {
-  if ! config_enabled PACKAGE_BUILD_SDK_NATIVE; then
-    log "skipping awiki_im_core native SDK build"
-    return
-  fi
-
   [[ -x "$SDK_NATIVE_BUILD_SCRIPT" ]] ||
     fail "SDK native build script not found or not executable: $SDK_NATIVE_BUILD_SCRIPT"
 
@@ -645,14 +513,7 @@ write_manifest() {
   "buildMode": $(json_string "$PACKAGE_BUILD_MODE"),
   "publishedAt": $(json_string "$(date -u +%Y-%m-%dT%H:%M:%SZ)"),
   "backend": {
-    "baseUrl": $(json_string "$AWIKI_BASE_URL"),
-    "userServiceUrl": $(json_string_or_null "$AWIKI_USER_SERVICE_URL"),
-    "messageServiceUrl": $(json_string_or_null "$AWIKI_MESSAGE_SERVICE_URL"),
-    "mailServiceUrl": $(json_string_or_null "$AWIKI_MAIL_SERVICE_URL"),
-    "didDomain": $(json_string_or_null "$AWIKI_DID_DOMAIN"),
-    "anpServiceUrl": $(json_string_or_null "$AWIKI_ANP_SERVICE_URL"),
-    "anpServiceDid": $(json_string_or_null "$AWIKI_ANP_SERVICE_DID"),
-    "daemonDownloadBaseUrl": $(json_string_or_null "$AWIKI_DAEMON_DOWNLOAD_BASE_URL")
+    "baseUrl": $(json_string "$AWIKI_BASE_URL")
   },
   "platforms": {
 JSON
@@ -710,14 +571,9 @@ log "next version:    $NEXT_VERSION"
 log "dist root:       $DIST_ROOT"
 log "SDK repo:        $SDK_REPO_DIR"
 log "targets:"
-config_enabled PACKAGE_BUILD_ANDROID_ARM64 && log "  - android-arm64 $PACKAGE_BUILD_MODE APK"
-config_enabled PACKAGE_BUILD_MACOS_ARM64 && log "  - macos-arm64 $PACKAGE_BUILD_MODE DMG"
-config_enabled PACKAGE_BUILD_MACOS_X64 && log "  - macos-x64 $PACKAGE_BUILD_MODE DMG"
-
-if config_enabled PACKAGE_DRY_RUN; then
-  log "dry run complete; no files changed"
-  exit 0
-fi
+log "  - android-arm64 $PACKAGE_BUILD_MODE APK"
+log "  - macos-arm64 $PACKAGE_BUILD_MODE DMG"
+log "  - macos-x64 $PACKAGE_BUILD_MODE DMG"
 
 if [[ "$NEXT_VERSION" != "$CURRENT_VERSION" ]]; then
   PUBSPEC_BACKUP="$(mktemp)"
@@ -731,14 +587,10 @@ mkdir -p "$CHANNEL_DIST_ROOT"
 
 AAPT_TOOL=""
 APKSIGNER_TOOL=""
-if config_enabled PACKAGE_BUILD_ANDROID_ARM64; then
-  AAPT_TOOL="$(find_android_tool aapt)"
-  APKSIGNER_TOOL="$(find_android_tool apksigner)"
-fi
+AAPT_TOOL="$(find_android_tool aapt)"
+APKSIGNER_TOOL="$(find_android_tool apksigner)"
 
-if config_enabled PACKAGE_BUILD_MACOS_ARM64 || config_enabled PACKAGE_BUILD_MACOS_X64; then
-  prepare_macos_project
-fi
+prepare_macos_project
 
 build_sdk_native
 
@@ -749,20 +601,14 @@ ANDROID_APK=""
 MACOS_ARM64_DMG=""
 MACOS_X64_DMG=""
 
-if config_enabled PACKAGE_BUILD_ANDROID_ARM64; then
-  ANDROID_APK="$OUTPUT_DIR/awiki-me-android-arm64-$PACKAGE_CHANNEL-$PACKAGE_BUILD_MODE-$NEXT_VERSION.apk"
-  build_android_arm64 "$ANDROID_APK" "$AAPT_TOOL" "$APKSIGNER_TOOL"
-fi
+ANDROID_APK="$OUTPUT_DIR/awiki-me-android-arm64-$PACKAGE_CHANNEL-$PACKAGE_BUILD_MODE-$NEXT_VERSION.apk"
+build_android_arm64 "$ANDROID_APK" "$AAPT_TOOL" "$APKSIGNER_TOOL"
 
-if config_enabled PACKAGE_BUILD_MACOS_ARM64; then
-  MACOS_ARM64_DMG="$OUTPUT_DIR/awiki-me-macos-arm64-$PACKAGE_CHANNEL-$PACKAGE_BUILD_MODE-$NEXT_VERSION.dmg"
-  build_macos_arch "arm64" "arm64" "$MACOS_ARM64_DMG"
-fi
+MACOS_ARM64_DMG="$OUTPUT_DIR/awiki-me-macos-arm64-$PACKAGE_CHANNEL-$PACKAGE_BUILD_MODE-$NEXT_VERSION.dmg"
+build_macos_arch "arm64" "arm64" "$MACOS_ARM64_DMG"
 
-if config_enabled PACKAGE_BUILD_MACOS_X64; then
-  MACOS_X64_DMG="$OUTPUT_DIR/awiki-me-macos-x64-$PACKAGE_CHANNEL-$PACKAGE_BUILD_MODE-$NEXT_VERSION.dmg"
-  build_macos_arch "x86_64" "x64" "$MACOS_X64_DMG"
-fi
+MACOS_X64_DMG="$OUTPUT_DIR/awiki-me-macos-x64-$PACKAGE_CHANNEL-$PACKAGE_BUILD_MODE-$NEXT_VERSION.dmg"
+build_macos_arch "x86_64" "x64" "$MACOS_X64_DMG"
 
 write_manifest "$OUTPUT_DIR" "$ANDROID_APK" "$MACOS_ARM64_DMG" "$MACOS_X64_DMG"
 
