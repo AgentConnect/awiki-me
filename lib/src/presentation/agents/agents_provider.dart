@@ -2241,7 +2241,9 @@ class AgentsController extends StateNotifier<AgentsState> {
         }
       }
     }
-    if (statusScope == 'snapshot' && payloadDaemonDid != null) {
+    if (statusScope == 'snapshot' &&
+        payloadDaemonDid != null &&
+        snapshotRuntimeDids.isNotEmpty) {
       final pruned = <String, AgentSummary>{};
       for (final entry in byDid.entries) {
         final agent = entry.value;

@@ -444,24 +444,35 @@ cliHandle: legacy-cli
       );
     });
 
-    test('defaults message-agent case to enabled when YAML omits it', () {
-      final config = DesktopCliPeerConfig.from(
-        DesktopE2eOptions.parse(const <String>['--case', 'message-agent']),
-        const DesktopE2eFileConfig(
-          path: '/tmp/e2e.local.yaml',
-          platform: DesktopE2ePlatform.linux,
-          serviceBaseUrl: 'https://service.example.test',
-          didDomain: 'example.test',
-          otpPhone: 'test-phone-secret',
-          otpCode: 'test-otp-secret',
-          appHandle: 'app-from-file',
-          cliHandle: 'cli-from-file',
-          cliBin: '/tmp/file-awiki-cli',
-        ),
-      );
+    test(
+      'defaults message-agent case to enabled real backend when YAML omits it',
+      () {
+        final config = DesktopCliPeerConfig.from(
+          DesktopE2eOptions.parse(const <String>['--case', 'message-agent']),
+          const DesktopE2eFileConfig(
+            path: '/tmp/e2e.local.yaml',
+            platform: DesktopE2ePlatform.linux,
+            serviceBaseUrl: 'https://service.example.test',
+            messageServiceUrl: 'https://messages.example.test',
+            messageServiceWsUrl: 'wss://messages.example.test/im/ws',
+            didDomain: 'example.test',
+            daemonRustRepo: '../awiki-cli-rs2-message-agent',
+            daemonBinary: '/tmp/awiki-deamon',
+            daemonStateRoot: '/tmp/daemon-state',
+            daemonReadyFile: '/tmp/daemon-ready.json',
+            daemonFakeHermesGatewayCommand: 'python3 fake_hermes_gateway.py',
+            otpPhone: 'test-phone-secret',
+            otpCode: 'test-otp-secret',
+            appHandle: 'app-from-file',
+            cliHandle: 'cli-from-file',
+            cliBin: '/tmp/file-awiki-cli',
+          ),
+        );
 
-      expect(config.messageAgentEnabled, isTrue);
-    });
+        expect(config.messageAgentEnabled, isTrue);
+        expect(config.messageAgentRealBackend, isTrue);
+      },
+    );
 
     test('rejects message-agent case when YAML disables it', () {
       expect(
@@ -485,6 +496,34 @@ cliHandle: legacy-cli
             (error) => error.message,
             'message',
             'messageAgent.enabled must be true for --case message-agent '
+                'in /tmp/e2e.local.yaml.',
+          ),
+        ),
+      );
+    });
+
+    test('rejects message-agent case when YAML disables real backend', () {
+      expect(
+        () => DesktopCliPeerConfig.from(
+          DesktopE2eOptions.parse(const <String>['--case', 'message-agent']),
+          const DesktopE2eFileConfig(
+            path: '/tmp/e2e.local.yaml',
+            platform: DesktopE2ePlatform.linux,
+            serviceBaseUrl: 'https://service.example.test',
+            didDomain: 'example.test',
+            messageAgentRealBackend: false,
+            otpPhone: 'test-phone-secret',
+            otpCode: 'test-otp-secret',
+            appHandle: 'app-from-file',
+            cliHandle: 'cli-from-file',
+            cliBin: '/tmp/file-awiki-cli',
+          ),
+        ),
+        throwsA(
+          isA<E2eFailure>().having(
+            (error) => error.message,
+            'message',
+            'messageAgent.realBackend must be true for --case message-agent '
                 'in /tmp/e2e.local.yaml.',
           ),
         ),
@@ -1354,7 +1393,7 @@ performance:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/message_agent_full_ui_test.dart -d linux',
+          r"$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> --plain-name 'Message Agent full UI drives real backend daemon and recovery' integration_test/message_agent_full_ui_test.dart -d linux",
         ),
       );
       expect(log, isNot(contains('test-phone-secret')));
@@ -1384,6 +1423,11 @@ performance:
       expect(messageAgent['runtimeProvider'], 'hermes');
       expect(messageAgent['processingScope'], 'all_conversations');
       expect(messageAgent['realBackend'], isTrue);
+      expect(messageAgent['uiEnabled'], isTrue);
+      expect(messageAgent['runtimeFinalReceived'], isTrue);
+      expect(messageAgent['draftConfirmed'], isTrue);
+      expect(messageAgent['actionResultReturned'], isTrue);
+      expect(messageAgent['authorizationRevoked'], isTrue);
 
       final runConfig = File(
         '${root.path}/.e2e/message-agent/current/run_config.json',
@@ -1435,6 +1479,13 @@ performance:
           appHandle: 'message-agent-app',
           cliHandle: 'message-agent-cli',
           cliBin: '/tmp/fake-awiki-cli',
+          messageServiceUrl: 'https://messages.example.test',
+          messageServiceWsUrl: 'wss://messages.example.test/im/ws',
+          daemonRustRepo: '../awiki-cli-rs2-message-agent',
+          daemonBinary: '/tmp/awiki-deamon',
+          daemonStateRoot: '.e2e/daemon-state',
+          daemonReadyFile: '.e2e/daemon-ready.json',
+          fakeHermesGatewayCommand: 'python3 fake_hermes_gateway.py',
           includeMessageAgent: false,
         );
         final lines = <String>[];
@@ -1466,7 +1517,12 @@ performance:
             jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
         final messageAgent = decoded['messageAgent'] as Map<String, dynamic>;
         expect(messageAgent['enabled'], isTrue);
-        expect(messageAgent['realBackend'], isFalse);
+        expect(messageAgent['realBackend'], isTrue);
+        expect(messageAgent['uiEnabled'], isTrue);
+        expect(messageAgent['runtimeFinalReceived'], isTrue);
+        expect(messageAgent['draftConfirmed'], isTrue);
+        expect(messageAgent['actionResultReturned'], isTrue);
+        expect(messageAgent['authorizationRevoked'], isTrue);
 
         final runConfig = File(
           '${root.path}/.e2e/message-agent/current/run_config.json',
@@ -1476,7 +1532,7 @@ performance:
         final runMessageAgent =
             runConfigJson['messageAgent'] as Map<String, dynamic>;
         expect(runMessageAgent['enabled'], isTrue);
-        expect(runMessageAgent['realBackend'], isFalse);
+        expect(runMessageAgent['realBackend'], isTrue);
         expect(runMessageAgent['enabled'], messageAgent['enabled']);
       },
     );

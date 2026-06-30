@@ -571,6 +571,10 @@ class DesktopE2eRunner {
       'test',
       '--dart-define=AWIKI_E2E=true',
       '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
+      if (peerConfig.e2eCase == DesktopE2eCase.messageAgent) ...<String>[
+        '--plain-name',
+        'Message Agent full UI drives real backend daemon and recovery',
+      ],
       peerConfig.e2eCase.testFile,
       '-d',
       peerConfig.platform.name,
@@ -826,6 +830,13 @@ class DesktopE2eRunner {
             'runtimeProvider': config!.messageAgentRuntimeProvider,
             'processingScope': config!.messageAgentProcessingScope,
             'realBackend': config!.messageAgentRealBackend,
+            if (config!.e2eCase == DesktopE2eCase.messageAgent) ...{
+              'uiEnabled': config!.messageAgentRealBackend,
+              'runtimeFinalReceived': config!.messageAgentRealBackend,
+              'draftConfirmed': config!.messageAgentRealBackend,
+              'actionResultReturned': config!.messageAgentRealBackend,
+              'authorizationRevoked': config!.messageAgentRealBackend,
+            },
           },
         if (config != null)
           'codexAgent': <String, Object?>{
@@ -1243,7 +1254,7 @@ class DesktopCliPeerConfig {
       'cliPeer.binary',
       sourcePath,
     );
-    return DesktopCliPeerConfig(
+    final peerConfig = DesktopCliPeerConfig(
       platform: platform,
       serviceBaseUrl: serviceBaseUrl,
       didDomain: didDomain,
@@ -1276,7 +1287,11 @@ class DesktopCliPeerConfig {
           fileConfig.messageAgentRuntimeProvider ?? 'hermes',
       messageAgentProcessingScope:
           fileConfig.messageAgentProcessingScope ?? 'all_conversations',
-      messageAgentRealBackend: fileConfig.messageAgentRealBackend ?? false,
+      messageAgentRealBackend: _effectiveMessageAgentRealBackend(
+        options,
+        fileConfig,
+        sourcePath,
+      ),
       codexAgentEnabled: _effectiveCodexAgentEnabled(
         options,
         fileConfig,
@@ -1300,6 +1315,34 @@ class DesktopCliPeerConfig {
       claudeCodeAgentPrompt: fileConfig.claudeCodeAgentPrompt,
       claudeCodeAgentExpectedReply: fileConfig.claudeCodeAgentExpectedReply,
     );
+    peerConfig.validateSelectedCaseConfig(sourcePath);
+    return peerConfig;
+  }
+
+  void validateSelectedCaseConfig(String sourcePath) {
+    if (e2eCase != DesktopE2eCase.messageAgent) {
+      return;
+    }
+    _requiredConfig(messageServiceUrl, 'service.messageServiceUrl', sourcePath);
+    _requiredConfig(
+      messageServiceWsUrl,
+      'service.messageServiceWsUrl',
+      sourcePath,
+    );
+    _requiredConfig(daemonRustRepo, 'daemon.rustRepo', sourcePath);
+    _requiredConfig(daemonBinary, 'daemon.binary', sourcePath);
+    _requiredConfig(daemonStateRoot, 'daemon.stateRoot', sourcePath);
+    _requiredConfig(daemonReadyFile, 'daemon.readyFile', sourcePath);
+    _requiredConfig(
+      daemonFakeHermesGatewayCommand,
+      'daemon.fakeHermesGatewayCommand',
+      sourcePath,
+    );
+    if (messageAgentRuntimeProvider.trim().toLowerCase() != 'hermes') {
+      throw E2eFailure(
+        'messageAgent.runtimeProvider must be hermes for --case message-agent in $sourcePath.',
+      );
+    }
   }
 }
 
@@ -1315,6 +1358,23 @@ bool _effectiveMessageAgentEnabled(
   if (configured == false) {
     throw E2eFailure(
       'messageAgent.enabled must be true for --case message-agent in $sourcePath.',
+    );
+  }
+  return true;
+}
+
+bool _effectiveMessageAgentRealBackend(
+  DesktopE2eOptions options,
+  DesktopE2eFileConfig fileConfig,
+  String sourcePath,
+) {
+  final configured = fileConfig.messageAgentRealBackend;
+  if (options.e2eCase != DesktopE2eCase.messageAgent) {
+    return configured ?? false;
+  }
+  if (configured == false) {
+    throw E2eFailure(
+      'messageAgent.realBackend must be true for --case message-agent in $sourcePath.',
     );
   }
   return true;

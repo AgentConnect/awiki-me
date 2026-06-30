@@ -2657,6 +2657,66 @@ void main() {
     });
   });
 
+  test(
+    'empty daemon snapshot keeps inventory runtime during Message Agent bootstrap',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'ready',
+              lastSeenAt: DateTime.parse('2026-06-03T09:10:00Z'),
+            ),
+          ),
+          AgentSummary(
+            agentDid: 'did:agent:runtime',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'hermes',
+            handle: 'hermes-msg-controller-001',
+            displayName: 'Hermes Message Agent',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'ready',
+              lastSeenAt: DateTime.parse('2026-06-03T09:10:01Z'),
+            ),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'event_id': 'evt_empty_snapshot',
+          'sent_at': '2026-06-03T09:10:02Z',
+          'status_scope': 'snapshot',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'status': 'ready',
+          },
+          'runtimes': const <Object?>[],
+        },
+      );
+
+      final state = container.read(agentsProvider);
+      expect(
+        state.runtimesFor('did:agent:daemon').map((agent) => agent.agentDid),
+        ['did:agent:runtime'],
+      );
+      expect(
+        state.messageAgentRuntimeFor('did:agent:daemon')?.agentDid,
+        'did:agent:runtime',
+      );
+    },
+  );
+
   test('stale snapshot does not prune newer runtime state', () async {
     final control = FakeAgentControlService()
       ..agents = <AgentSummary>[
