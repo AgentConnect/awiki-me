@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/conversation_core_port.dart';
@@ -197,7 +198,10 @@ class _FakeConversations implements ConversationCorePort {
   }
 
   @override
-  Future<void> markThreadRead(AppThreadRef thread) async {}
+  Future<void> markThreadRead(
+    AppThreadRef thread, {
+    AppThreadReadWatermark? watermark,
+  }) async {}
 }
 
 class _FakeAgentInventory implements AgentInventoryPort {

@@ -52,7 +52,10 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(agentsProvider.notifier).load();
+      if (!mounted) {
+        return;
+      }
+      unawaited(ref.read(agentsProvider.notifier).ensureLoaded());
     });
   }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_config.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_conversation_adapter.dart';
@@ -69,6 +70,7 @@ void main() {
       expect(client.messages.markThreadReadCalls, 1);
       expect(client.messages.historyCalls, 0);
       expect(client.messages.markReadCalls, 0);
+      expect(client.messages.lastMarkThreadReadWatermark, isNull);
       expect(
         client.messages.lastMarkThreadReadThread,
         isA<core.DirectThreadRef>(),
@@ -80,6 +82,29 @@ void main() {
       );
     },
   );
+
+  test('mark-read forwards explicit read watermark to SDK', () async {
+    final client = _FakeClient();
+    final adapter = AwikiImCoreConversationAdapter(
+      runtime: _FakeRuntime(client),
+    );
+    final readAt = DateTime.utc(2026, 6, 29, 7, 40);
+
+    await adapter.markThreadRead(
+      const AppThreadRef.direct('did:bob'),
+      watermark: AppThreadReadWatermark(
+        lastReadMessageId: 'remote-42',
+        lastReadThreadSeq: '42',
+        readAt: readAt,
+      ),
+    );
+
+    final watermark = client.messages.lastMarkThreadReadWatermark;
+    expect(watermark, isNotNull);
+    expect(watermark!.lastReadMessageId, 'remote-42');
+    expect(watermark.lastReadThreadSeq, '42');
+    expect(watermark.readAt, readAt);
+  });
 
   test(
     'watchConversationPatches maps SDK upsert patch to app core patch',
@@ -314,6 +339,7 @@ class _FakeMessageApi implements core.MessageApi {
   int historyCalls = 0;
   int markReadCalls = 0;
   core.ThreadRef? lastMarkThreadReadThread;
+  core.ReadWatermark? lastMarkThreadReadWatermark;
 
   void emitPatch(core.ConversationStorePatch patch) {
     _patches.add(patch);
@@ -344,6 +370,7 @@ class _FakeMessageApi implements core.MessageApi {
   }) async {
     markThreadReadCalls += 1;
     lastMarkThreadReadThread = thread;
+    lastMarkThreadReadWatermark = watermark;
     return const core.MarkThreadReadResult(
       updatedCount: 1,
       remoteAcknowledged: true,

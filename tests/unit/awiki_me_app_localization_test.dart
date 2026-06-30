@@ -6,6 +6,7 @@ import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/ports/conversation_core_port.dart';
 import 'package:awiki_me/src/data/local/awiki_product_local_store.dart';
@@ -362,5 +363,8 @@ class _StaticConversationCore implements ConversationCorePort {
   }
 
   @override
-  Future<void> markThreadRead(AppThreadRef thread) async {}
+  Future<void> markThreadRead(
+    AppThreadRef thread, {
+    AppThreadReadWatermark? watermark,
+  }) async {}
 }

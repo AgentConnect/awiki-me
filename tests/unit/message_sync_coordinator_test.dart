@@ -1,9 +1,11 @@
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
+import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -58,6 +60,87 @@ void main() {
       expect(gateway.listConversationsCalls, 0);
     },
   );
+
+  test('startup sync prewarms local histories for fast first open', () async {
+    final conversation = _conversation();
+    final localMessage = ChatMessage(
+      localId: 'local-1',
+      remoteId: 'remote-1',
+      threadId: conversation.threadId,
+      senderDid: 'did:test:peer',
+      receiverDid: 'did:test:me',
+      content: 'prewarmed',
+      createdAt: conversation.lastMessageAt,
+      isMine: false,
+      serverSequence: 1,
+      sendState: MessageSendState.sent,
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation]
+      ..localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+        'did:test:peer': <ChatMessage>[localMessage],
+      };
+    final sync = FakeMessageSyncService();
+    final container = _container(gateway, sync);
+    addTearDown(container.dispose);
+
+    await container
+        .read(messageSyncCoordinatorProvider.notifier)
+        .requestSync('startup', immediate: true);
+
+    expect(gateway.fetchLocalDmHistoryCalls, 1);
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(
+      container
+          .read(chatThreadProvider(conversation.threadId))
+          .messages
+          .map((item) => item.content),
+      ['prewarmed'],
+    );
+  });
+
+  test('startup prewarm 不会因为本地尾部是自己发的消息而清掉未读', () async {
+    final conversation = _conversation().copyWith(
+      lastMessagePreview: 'remote unread',
+      lastMessageAt: DateTime.utc(2026, 6, 27, 9, 1),
+      unreadCount: 2,
+      unreadMentionCount: 1,
+      firstUnreadMentionMessageId: 'incoming-1',
+    );
+    final outgoingTail = ChatMessage(
+      localId: 'local-outgoing-tail',
+      remoteId: 'remote-outgoing-tail',
+      threadId: conversation.threadId,
+      senderDid: 'did:test:me',
+      receiverDid: 'did:test:peer',
+      content: 'my local tail',
+      createdAt: conversation.lastMessageAt.add(const Duration(seconds: 10)),
+      isMine: true,
+      serverSequence: 2,
+      sendState: MessageSendState.sent,
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation]
+      ..localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+        'did:test:peer': <ChatMessage>[outgoingTail],
+      };
+    final sync = FakeMessageSyncService();
+    final container = _container(gateway, sync);
+    addTearDown(container.dispose);
+
+    await container
+        .read(messageSyncCoordinatorProvider.notifier)
+        .requestSync('startup', immediate: true);
+
+    final updated = container
+        .read(conversationListProvider)
+        .conversations
+        .single;
+    expect(updated.lastMessagePreview, 'my local tail');
+    expect(updated.unreadCount, 2);
+    expect(updated.unreadMentionCount, 1);
+    expect(updated.firstUnreadMentionMessageId, 'incoming-1');
+  });
 
   test('replacing a delayed sync completes all coalesced waiters', () async {
     final gateway = FakeAwikiGateway()

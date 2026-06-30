@@ -17,6 +17,7 @@ import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/message_sync_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/application/peer_identity_service.dart';
@@ -579,6 +580,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int fetchLocalGroupHistoryCalls = 0;
   int markReadCalls = 0;
   String? lastMarkReadThreadId;
+  AppThreadReadWatermark? lastMarkThreadReadWatermark;
   int listConversationsCalls = 0;
   int sendOtpCalls = 0;
   int sendEmailVerificationCalls = 0;
@@ -1536,7 +1538,11 @@ class FakeConversationService implements ConversationService {
   }
 
   @override
-  Future<void> markThreadRead(AppThreadRef thread) {
+  Future<void> markThreadRead(
+    AppThreadRef thread, {
+    AppThreadReadWatermark? watermark,
+  }) {
+    gateway.lastMarkThreadReadWatermark = watermark;
     return gateway.markRead(_threadIdForFakeGateway(thread));
   }
 

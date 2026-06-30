@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
 import '../domain/entities/agent/agent_display_name.dart';
 import '../domain/entities/agent/agent_summary.dart';
 import '../domain/entities/conversation_identity.dart';
@@ -7,11 +9,17 @@ import '../domain/entities/conversation_summary.dart';
 import '../core/performance_logger.dart';
 import 'agent/agent_control_projection.dart';
 import 'models/app_thread_ref.dart';
+import 'models/app_thread_read_watermark.dart';
 import 'models/conversation_patch.dart';
 import 'models/product_local_models.dart';
 import 'ports/agent_inventory_port.dart';
 import 'ports/conversation_core_port.dart';
 import 'product_local_store.dart';
+
+const bool _conversationServiceTraceEnabled = bool.fromEnvironment(
+  'AWIKI_CONVERSATION_SERVICE_TRACE',
+  defaultValue: kDebugMode,
+);
 
 abstract interface class ConversationService {
   Future<List<ConversationSummary>> loadConversationSnapshot({
@@ -64,7 +72,10 @@ abstract interface class ConversationService {
     required ConversationSummary conversation,
   });
 
-  Future<void> markThreadRead(AppThreadRef thread);
+  Future<void> markThreadRead(
+    AppThreadRef thread, {
+    AppThreadReadWatermark? watermark,
+  });
 
   Future<void> setThreadHidden({
     required String ownerDid,
@@ -582,8 +593,22 @@ class ImCoreConversationService implements ConversationService {
   }
 
   @override
-  Future<void> markThreadRead(AppThreadRef thread) {
-    return _conversations.markThreadRead(thread);
+  Future<void> markThreadRead(
+    AppThreadRef thread, {
+    AppThreadReadWatermark? watermark,
+  }) {
+    _conversationServiceTrace(
+      'mark_read.delegate',
+      fields: <String, Object?>{
+        'thread_ref': _appThreadRefTrace(thread),
+        'has_watermark': watermark?.isEmpty == false,
+        'watermark_seq': watermark?.lastReadThreadSeq,
+        'watermark_message_hash': AwikiPerformanceLogger.safeHash(
+          watermark?.lastReadMessageId,
+        ),
+      },
+    );
+    return _conversations.markThreadRead(thread, watermark: watermark);
   }
 
   @override
@@ -1058,4 +1083,56 @@ String _handleLocalPart(String value) {
 String _trimLeadingAt(String? value) {
   final text = value ?? '';
   return text.startsWith('@') ? text.substring(1).trimLeft() : text;
+}
+
+void _conversationServiceTrace(
+  String event, {
+  Map<String, Object?> fields = const <String, Object?>{},
+}) {
+  if (!_conversationServiceTraceEnabled) {
+    return;
+  }
+  final details = <String>[];
+  for (final entry in fields.entries) {
+    final value = entry.value;
+    if (value != null) {
+      details.add('${entry.key}=${_collapseConversationServiceTrace(value)}');
+    }
+  }
+  debugPrint(
+    details.isEmpty
+        ? '[awiki_me][conversation_service_trace] event=$event'
+        : '[awiki_me][conversation_service_trace] event=$event ${details.join(' ')}',
+  );
+}
+
+String _appThreadRefTrace(AppThreadRef ref) {
+  final kind = switch (ref) {
+    AppDirectThreadRef() => 'direct',
+    AppGroupThreadRef() => 'group',
+    AppMessageThreadRef() => 'thread',
+  };
+  return '$kind:${AwikiPerformanceLogger.safeHash(ref.stableId)}';
+}
+
+String _collapseConversationServiceTrace(Object value) {
+  if (value is DateTime) {
+    return value.toUtc().toIso8601String();
+  }
+  final raw = value.toString();
+  final buffer = StringBuffer();
+  var lastWasWhitespace = false;
+  for (final rune in raw.runes) {
+    final char = String.fromCharCode(rune);
+    if (char.trim().isEmpty) {
+      if (!lastWasWhitespace) {
+        buffer.write('_');
+      }
+      lastWasWhitespace = true;
+    } else {
+      buffer.write(char);
+      lastWasWhitespace = false;
+    }
+  }
+  return buffer.toString();
 }

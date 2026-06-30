@@ -141,6 +141,17 @@ The App must not read or write the global reliable checkpoint, pass
 `sync.*` payloads, or treat realtime `sync` hints as checkpoint commits. Those
 remain `im-core` Rust/SQLite responsibilities.
 
+## Agent Inventory Refresh
+
+The Agents tab is local-first after the first load. Entering the left-rail
+Agents tab calls `ensureLoaded()`, which reuses the in-memory/cache-backed
+inventory for the active account instead of forcing a remote `list_agents`
+request on every tab re-entry. Explicit retry, session activation, foreground
+resume, and realtime reconnect still use the authenticated background refresh
+path when fresh inventory is required. Daemon status remains separate: the
+manual refresh button sends a status query to the selected daemon, while
+realtime agent-control payloads update the page automatically.
+
 ## Building on macOS with Xcode
 
 Before opening the project in Xcode, generate the CocoaPods support files:

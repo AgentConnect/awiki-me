@@ -1,12 +1,19 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:flutter/foundation.dart';
 
 import '../../application/models/app_thread_ref.dart';
+import '../../application/models/app_thread_read_watermark.dart';
 import '../../application/models/conversation_patch.dart';
 import '../../application/ports/conversation_core_port.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/conversation_summary.dart';
 import 'awiki_im_core_mappers.dart';
 import 'awiki_im_core_runtime.dart';
+
+const bool _imCoreConversationTraceEnabled = bool.fromEnvironment(
+  'AWIKI_IM_CORE_CONVERSATION_TRACE',
+  defaultValue: kDebugMode,
+);
 
 class AwikiImCoreConversationAdapter implements ConversationCorePort {
   AwikiImCoreConversationAdapter({
@@ -238,33 +245,103 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
   }
 
   @override
-  Future<void> markThreadRead(AppThreadRef thread) async {
+  Future<void> markThreadRead(
+    AppThreadRef thread, {
+    AppThreadReadWatermark? watermark,
+  }) async {
     await _runtime.withCurrentClient((client) async {
       final totalWatch = Stopwatch()..start();
       final ownerDid = (await client.identity.current()).did;
       final coreThread = coreThreadRefForMarkRead(thread, ownerDid);
-      final result = await AwikiPerformanceLogger.async(
-        'im_core_conversations.mark_read.native',
-        () => client.messages.markThreadRead(coreThread),
-        fields: <String, Object?>{'thread_kind': coreThreadKind(coreThread)},
-      );
-      totalWatch.stop();
-      AwikiPerformanceLogger.log(
-        'im_core_conversations.mark_read',
-        elapsed: totalWatch.elapsed,
+      _imCoreConversationTrace(
+        'mark_read.start',
         fields: <String, Object?>{
-          'updated': result.updatedCount,
-          'legacy_message_ids': result.legacyMessageIds.length,
-          'remote_ack': result.remoteAcknowledged,
-          'partial': result.partial,
-          'fallback_used': result.fallbackUsed,
-          'pending_remote_ack': result.pendingRemoteAck,
-          'watermark_seq': result.effectiveWatermark?.lastReadThreadSeq,
-          'warnings': result.warnings.length,
+          'app_thread_ref': _appThreadRefTrace(thread),
+          'core_thread_kind': coreThreadKind(coreThread),
+          'core_thread_hash': AwikiPerformanceLogger.safeHash(
+            _coreThreadStableId(coreThread),
+          ),
+          'has_watermark': watermark?.isEmpty == false,
+          'watermark_seq': watermark?.lastReadThreadSeq,
+          'watermark_message_hash': AwikiPerformanceLogger.safeHash(
+            watermark?.lastReadMessageId,
+          ),
         },
       );
+      try {
+        final result = await AwikiPerformanceLogger.async(
+          'im_core_conversations.mark_read.native',
+          () => client.messages.markThreadRead(
+            coreThread,
+            watermark: _coreReadWatermark(watermark),
+          ),
+          fields: <String, Object?>{
+            'thread_kind': coreThreadKind(coreThread),
+            'has_watermark': watermark?.isEmpty == false,
+            'watermark_seq': watermark?.lastReadThreadSeq,
+            'watermark_message': watermark?.lastReadMessageId != null,
+          },
+        );
+        totalWatch.stop();
+        _imCoreConversationTrace(
+          'mark_read.done',
+          fields: <String, Object?>{
+            'core_thread_kind': coreThreadKind(coreThread),
+            'updated': result.updatedCount,
+            'legacy_message_ids': result.legacyMessageIds.length,
+            'remote_ack': result.remoteAcknowledged,
+            'partial': result.partial,
+            'fallback_used': result.fallbackUsed,
+            'pending_remote_ack': result.pendingRemoteAck,
+            'watermark_seq': result.effectiveWatermark?.lastReadThreadSeq,
+            'warnings': result.warnings.length,
+            'elapsed_ms': totalWatch.elapsedMilliseconds,
+          },
+        );
+        AwikiPerformanceLogger.log(
+          'im_core_conversations.mark_read',
+          elapsed: totalWatch.elapsed,
+          fields: <String, Object?>{
+            'updated': result.updatedCount,
+            'legacy_message_ids': result.legacyMessageIds.length,
+            'remote_ack': result.remoteAcknowledged,
+            'partial': result.partial,
+            'fallback_used': result.fallbackUsed,
+            'pending_remote_ack': result.pendingRemoteAck,
+            'watermark_seq': result.effectiveWatermark?.lastReadThreadSeq,
+            'warnings': result.warnings.length,
+          },
+        );
+      } catch (error) {
+        totalWatch.stop();
+        _imCoreConversationTrace(
+          'mark_read.failed',
+          fields: <String, Object?>{
+            'core_thread_kind': coreThreadKind(coreThread),
+            'error_type': error.runtimeType,
+            'elapsed_ms': totalWatch.elapsedMilliseconds,
+          },
+        );
+        rethrow;
+      }
     });
   }
+}
+
+core.ReadWatermark? _coreReadWatermark(AppThreadReadWatermark? watermark) {
+  if (watermark == null || watermark.isEmpty) {
+    return null;
+  }
+  return core.ReadWatermark(
+    lastReadMessageId: _nonEmptyText(watermark.lastReadMessageId),
+    lastReadThreadSeq: _nonEmptyText(watermark.lastReadThreadSeq),
+    readAt: watermark.readAt,
+  );
+}
+
+String? _nonEmptyText(String? value) {
+  final trimmed = value?.trim();
+  return trimmed == null || trimmed.isEmpty ? null : trimmed;
 }
 
 core.ThreadRef coreThreadRefForMarkRead(AppThreadRef thread, String ownerDid) {
@@ -332,4 +409,64 @@ String? _directPeerFromThreadId(String ownerDid, String threadId) {
 String? _nonEmpty(String value) {
   final trimmed = value.trim();
   return trimmed.isEmpty ? null : trimmed;
+}
+
+void _imCoreConversationTrace(
+  String event, {
+  Map<String, Object?> fields = const <String, Object?>{},
+}) {
+  if (!_imCoreConversationTraceEnabled) {
+    return;
+  }
+  final details = <String>[];
+  for (final entry in fields.entries) {
+    final value = entry.value;
+    if (value != null) {
+      details.add('${entry.key}=${_collapseImCoreConversationTrace(value)}');
+    }
+  }
+  debugPrint(
+    details.isEmpty
+        ? '[awiki_me][im_core_conversation_trace] event=$event'
+        : '[awiki_me][im_core_conversation_trace] event=$event ${details.join(' ')}',
+  );
+}
+
+String _appThreadRefTrace(AppThreadRef ref) {
+  final kind = switch (ref) {
+    AppDirectThreadRef() => 'direct',
+    AppGroupThreadRef() => 'group',
+    AppMessageThreadRef() => 'thread',
+  };
+  return '$kind:${AwikiPerformanceLogger.safeHash(ref.stableId)}';
+}
+
+String _coreThreadStableId(core.ThreadRef ref) {
+  return switch (ref) {
+    core.DirectThreadRef(:final peer) => 'direct:$peer',
+    core.GroupThreadRef(:final group) => 'group:$group',
+    core.MessageThreadRef(:final threadId) => 'thread:$threadId',
+  };
+}
+
+String _collapseImCoreConversationTrace(Object value) {
+  if (value is DateTime) {
+    return value.toUtc().toIso8601String();
+  }
+  final raw = value.toString();
+  final buffer = StringBuffer();
+  var lastWasWhitespace = false;
+  for (final rune in raw.runes) {
+    final char = String.fromCharCode(rune);
+    if (char.trim().isEmpty) {
+      if (!lastWasWhitespace) {
+        buffer.write('_');
+      }
+      lastWasWhitespace = true;
+    } else {
+      buffer.write(char);
+      lastWasWhitespace = false;
+    }
+  }
+  return buffer.toString();
 }

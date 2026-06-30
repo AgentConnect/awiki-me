@@ -139,6 +139,63 @@ void main() {
     expect(thread.isLoading, isFalse);
   });
 
+  test('首次打开已有 realtime 尾消息的会话仍先水合本地历史', () async {
+    final older = ChatMessage(
+      localId: 'local-10',
+      remoteId: 'local-10',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'old local',
+      createdAt: DateTime(2026, 5, 8, 9, 59),
+      isMine: false,
+      serverSequence: 10,
+      sendState: MessageSendState.sent,
+    );
+    final realtime = ChatMessage(
+      localId: 'remote-11',
+      remoteId: 'remote-11',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'new realtime',
+      createdAt: DateTime(2026, 5, 8, 10, 1),
+      isMine: false,
+      serverSequence: 11,
+      sendState: MessageSendState.sent,
+    );
+    gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:peer': <ChatMessage>[older, realtime],
+    };
+
+    container
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(realtime, conversation: conversation);
+    expect(
+      container
+          .read(chatThreadProvider(conversation.threadId))
+          .messages
+          .map((item) => item.content),
+      ['new realtime'],
+    );
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(
+          conversation.copyWith(lastMessageAt: realtime.createdAt),
+        );
+    await pumpEventQueue();
+
+    final thread = container.read(chatThreadProvider(conversation.threadId));
+    expect(gateway.fetchLocalDmHistoryCalls, 1);
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(thread.messages.map((item) => item.content), [
+      'old local',
+      'new realtime',
+    ]);
+    expect(thread.isHydratingLocalHistory, isFalse);
+  });
+
   test('打开会话后按本地最大 serverSequence 调用 thread-after 补新', () async {
     final local = ChatMessage(
       localId: 'local-1',
@@ -860,7 +917,7 @@ void main() {
     expect(thread.isLoading, isFalse);
   });
 
-  test('有稳定 DID 的 handle 会话本地优先按 DID 读取且不触发远端 history', () async {
+  test('有稳定 DID 的 handle 会话本地优先按 canonical peer 读取且不触发远端 history', () async {
     const agentDid = 'did:agent:runtime';
     const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
     final agentConversation = ConversationSummary(
@@ -889,8 +946,8 @@ void main() {
       agentHandle: const <ChatMessage>[],
     };
     gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
-      agentDid: <ChatMessage>[outgoing],
-      agentHandle: const <ChatMessage>[],
+      agentDid: const <ChatMessage>[],
+      agentHandle: <ChatMessage>[outgoing],
     };
     gateway.publicProfilesByQuery[agentHandle] = const UserProfile(
       did: agentDid,
@@ -908,13 +965,61 @@ void main() {
         .openConversation(agentConversation);
     await pumpEventQueue();
 
-    expect(gateway.lastFetchedLocalDmPeerDid, agentDid);
+    expect(gateway.lastFetchedLocalDmPeerDid, agentHandle);
     expect(gateway.fetchDmHistoryCalls, 0);
     expect(gateway.lastFetchedDmPeerDid, isNull);
     final thread = container.read(
       chatThreadProvider(agentConversation.threadId),
     );
     expect(thread.messages.map((item) => item.content), contains('在吗'));
+  });
+
+  test('本地历史优先使用与远端补拉一致的 canonical direct peer', () async {
+    final canonicalConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:codex1',
+      displayName: 'Codex1',
+      lastMessagePreview: 'hello',
+      lastMessageAt: DateTime(2026, 6, 30, 8, 58),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:codex:runtime',
+      targetPeer: 'codex1.awiki.info',
+    );
+    final localMessage = ChatMessage(
+      localId: 'local-canonical-1',
+      remoteId: 'remote-canonical-1',
+      threadId: canonicalConversation.threadId,
+      senderDid: 'did:codex:runtime',
+      receiverDid: 'did:me',
+      content: 'canonical local',
+      createdAt: canonicalConversation.lastMessageAt,
+      isMine: false,
+      serverSequence: 16828,
+      sendState: MessageSendState.sent,
+    );
+    gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'codex1.awiki.info': <ChatMessage>[localMessage],
+      'did:codex:runtime': const <ChatMessage>[],
+    };
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(canonicalConversation);
+    await pumpEventQueue();
+
+    expect(gateway.lastFetchedLocalDmPeerDid, 'codex1.awiki.info');
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(
+      messageSyncService.threadAfterRequests.single.thread.stableId,
+      'dm:codex1.awiki.info',
+    );
+    expect(
+      container
+          .read(chatThreadProvider(canonicalConversation.threadId))
+          .messages
+          .map((item) => item.content),
+      ['canonical local'],
+    );
   });
 
   test('已加载线程再次打开不重复拉历史', () async {
@@ -933,7 +1038,7 @@ void main() {
     expect(gateway.listConversationsCalls, 0);
   });
 
-  test('首次打开会话会从 realtime alias 预热缓存直接渲染', () async {
+  test('首次打开会话会从 realtime alias 预热缓存并水合本地历史', () async {
     final aliasConversation = conversation.copyWith(
       threadId: 'direct-handle:peer.awiki.info',
       targetPeer: 'peer.awiki.info',
@@ -967,9 +1072,71 @@ void main() {
       messages.map((item) => item.content),
       contains('realtime alias hello'),
     );
-    expect(gateway.fetchLocalDmHistoryCalls, 0);
+    expect(gateway.fetchLocalDmHistoryCalls, 1);
     expect(gateway.fetchDmHistoryCalls, 0);
     expect(messageSyncService.threadAfterRequests, hasLength(1));
+  });
+
+  test('本地和增量都没有消息时不会无 watermark 上报已读', () async {
+    final unreadConversation = conversation.copyWith(
+      lastMessageAt: DateTime(2026, 5, 8, 10, 5),
+      unreadCount: 2,
+    );
+    gateway.localDmHistoryByPeerDid = const <String, List<ChatMessage>>{};
+    gateway.dmHistoryByPeerDid = const <String, List<ChatMessage>>{};
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadConversation);
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(unreadConversation);
+    await pumpEventQueue();
+
+    expect(
+      container.read(conversationListProvider).conversations.single.unreadCount,
+      0,
+    );
+    expect(gateway.fetchLocalDmHistoryCalls, 1);
+    expect(gateway.fetchDmHistoryCalls, 1);
+    expect(messageSyncService.threadAfterRequests, hasLength(1));
+    expect(gateway.markReadCalls, 0);
+    expect(gateway.lastMarkThreadReadWatermark, isNull);
+  });
+
+  test('thread-after 回补出消息后才携带 watermark 上报已读', () async {
+    final unreadConversation = conversation.copyWith(
+      lastMessageAt: DateTime(2026, 5, 8, 10, 5),
+      unreadCount: 2,
+    );
+    final synced = ChatMessage(
+      localId: 'remote-22',
+      remoteId: 'remote-22',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'synced before read ack',
+      createdAt: unreadConversation.lastMessageAt,
+      isMine: false,
+      serverSequence: 22,
+      sendState: MessageSendState.sent,
+    );
+    gateway.localDmHistoryByPeerDid = const <String, List<ChatMessage>>{};
+    gateway.dmHistoryByPeerDid = const <String, List<ChatMessage>>{};
+    messageSyncService.threadAfterMessagesByStableId['dm:did:peer'] =
+        <ChatMessage>[synced];
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadConversation);
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(unreadConversation);
+    await pumpEventQueue();
+
+    expect(gateway.markReadCalls, 1);
+    expect(gateway.lastMarkThreadReadWatermark?.lastReadMessageId, 'remote-22');
+    expect(gateway.lastMarkThreadReadWatermark?.lastReadThreadSeq, '22');
   });
 
   test('打开未读会话时本地清未读并异步上报，不刷新会话列表', () async {
@@ -985,6 +1152,9 @@ void main() {
     container
         .read(conversationListProvider.notifier)
         .upsertConversation(unreadConversation);
+    gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:peer': <ChatMessage>[message],
+    };
 
     await container
         .read(chatThreadsProvider.notifier)
@@ -998,6 +1168,104 @@ void main() {
     expect(notificationFacade.lastBadgeCount, 0);
     expect(gateway.markReadCalls, 1);
     expect(gateway.listConversationsCalls, 0);
+  });
+
+  test('打开未读会话在本地历史水合后携带最新消息 watermark 上报已读', () async {
+    final older = ChatMessage(
+      localId: 'local-10',
+      remoteId: 'local-10',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'old',
+      createdAt: DateTime(2026, 5, 8, 9, 59),
+      isMine: false,
+      serverSequence: 10,
+      sendState: MessageSendState.sent,
+    );
+    final latest = ChatMessage(
+      localId: 'remote-11',
+      remoteId: 'remote-11',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'latest',
+      createdAt: DateTime(2026, 5, 8, 10, 1),
+      isMine: false,
+      serverSequence: 11,
+      sendState: MessageSendState.sent,
+    );
+    final unreadConversation = conversation.copyWith(
+      lastMessagePreview: latest.content,
+      lastMessageAt: latest.createdAt,
+      unreadCount: 2,
+    );
+    gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:peer': <ChatMessage>[older, latest],
+    };
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadConversation);
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(unreadConversation);
+    await pumpEventQueue();
+
+    expect(
+      container.read(conversationListProvider).conversations.single.unreadCount,
+      0,
+    );
+    expect(gateway.markReadCalls, 1);
+    expect(gateway.lastMarkThreadReadWatermark?.lastReadMessageId, 'remote-11');
+    expect(gateway.lastMarkThreadReadWatermark?.lastReadThreadSeq, '11');
+  });
+
+  test('peer-scope 会话已读上报优先使用 DID 而不是 handle', () async {
+    const agentDid = 'did:agent:runtime:codex1';
+    const agentHandle = 'codex1.awiki.info';
+    final unreadPeerScopedConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:codex1',
+      displayName: 'Codex1',
+      lastMessagePreview: 'hello from peer scoped thread',
+      lastMessageAt: DateTime(2026, 5, 8, 10, 2),
+      unreadCount: 1,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentHandle,
+    );
+    final latest = ChatMessage(
+      localId: 'peer-scoped-local-12',
+      remoteId: 'peer-scoped-local-12',
+      threadId: unreadPeerScopedConversation.threadId,
+      senderDid: agentDid,
+      receiverDid: 'did:me',
+      content: unreadPeerScopedConversation.lastMessagePreview,
+      createdAt: unreadPeerScopedConversation.lastMessageAt,
+      isMine: false,
+      serverSequence: 12,
+      sendState: MessageSendState.sent,
+    );
+    gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+      agentHandle: <ChatMessage>[latest],
+    };
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadPeerScopedConversation);
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(unreadPeerScopedConversation);
+    await pumpEventQueue();
+
+    expect(gateway.lastFetchedLocalDmPeerDid, agentHandle);
+    expect(gateway.markReadCalls, 1);
+    expect(gateway.lastMarkReadThreadId, 'dm:$agentDid');
+    expect(
+      gateway.lastMarkThreadReadWatermark?.lastReadMessageId,
+      'peer-scoped-local-12',
+    );
+    expect(gateway.lastMarkThreadReadWatermark?.lastReadThreadSeq, '12');
   });
 
   test('打开未读会话时远端 mark-read 不支持也不会抛出', () async {
@@ -1025,6 +1293,9 @@ void main() {
     markReadContainer
         .read(conversationListProvider.notifier)
         .upsertConversation(unreadConversation);
+    throwingGateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:peer': <ChatMessage>[message],
+    };
 
     await expectLater(
       markReadContainer
@@ -1050,9 +1321,24 @@ void main() {
       unreadMentionCount: 1,
       firstUnreadMentionMessageId: 'msg-visible-unread',
     );
+    final visibleMessage = ChatMessage(
+      localId: 'msg-visible-unread',
+      remoteId: 'msg-visible-unread',
+      threadId: visibleConversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'new while visible',
+      createdAt: visibleConversation.lastMessageAt,
+      isMine: false,
+      serverSequence: 11,
+      sendState: MessageSendState.sent,
+    );
     container
         .read(conversationListProvider.notifier)
         .upsertConversation(visibleConversation);
+    container
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(visibleMessage, conversation: visibleConversation);
     container
         .read(chatThreadsProvider.notifier)
         .markConversationVisible(
@@ -1079,6 +1365,7 @@ void main() {
     expect(notificationFacade.lastBadgeCount, 0);
     expect(gateway.markReadCalls, 1);
     expect(gateway.lastMarkReadThreadId, 'dm:did:peer');
+    expect(gateway.lastMarkThreadReadWatermark?.lastReadThreadSeq, '11');
   });
 
   test('发送后不触发 full refresh 或 force history 补拉', () async {
@@ -2942,7 +3229,7 @@ void main() {
         .read(chatThreadProvider(conversation.threadId))
         .messages;
     expect(messages.map((item) => item.content), contains('你好。欢迎'));
-    expect(gateway.fetchLocalDmHistoryCalls, 0);
+    expect(gateway.fetchLocalDmHistoryCalls, 1);
     expect(gateway.fetchDmHistoryCalls, 0);
     expect(messageSyncService.threadAfterRequests, hasLength(1));
     expect(messageSyncService.threadAfterRequests.single.afterServerSeq, '5');
@@ -3328,11 +3615,27 @@ void main() {
     container
         .read(conversationListProvider.notifier)
         .upsertConversation(readConversation);
+    gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+      agentDid: <ChatMessage>[
+        ChatMessage(
+          localId: 'agent-msg',
+          remoteId: 'agent-msg',
+          threadId: readConversation.threadId,
+          senderDid: agentDid,
+          receiverDid: 'did:human',
+          content: readConversation.lastMessagePreview,
+          createdAt: readConversation.lastMessageAt,
+          isMine: false,
+          serverSequence: 1,
+          sendState: MessageSendState.sent,
+        ),
+      ],
+    };
 
     await container
         .read(chatThreadsProvider.notifier)
         .openConversation(readConversation);
-    await Future<void>.delayed(Duration.zero);
+    await pumpEventQueue();
 
     expect(
       container.read(conversationListProvider).conversations.single.unreadCount,
