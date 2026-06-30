@@ -85,8 +85,9 @@ dart run tests/e2e/runner.dart --case full
 `--case message-agent` is the durable acceptance entry for Message Agent
 product behavior. It must exercise the App UI path for selecting a daemon,
 enabling the Message Agent, recovering `message.sync` / `runtime_final` /
-`app.action` payloads, confirming or rejecting App actions, and the
-pause/delete/revoke lifecycle entries. Lower-level probes such as
+`app.action` payloads, confirming or rejecting App actions, returning
+`awiki.app.action.result.v1`, and the pause/delete/revoke lifecycle entries.
+Lower-level probes such as
 `tool/daemon_control_probe.dart` and daemon pytest probes may support payload,
 security, or backend diagnostics, but they do not replace this full UI E2E gate.
 The real-backend branch must also prove the received/returned/content contract:

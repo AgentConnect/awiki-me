@@ -4195,7 +4195,9 @@ void main() {
     expect(find.text('使用草稿'), findsOneWidget);
     expect(find.text('拒绝'), findsOneWidget);
 
-    await tester.tap(find.text('使用草稿'));
+    await tester.tap(
+      find.byKey(const Key('message-agent-action-confirm:act_draft')),
+    );
     await tester.pumpAndSettle();
 
     final input = tester.widget<CupertinoTextField>(
@@ -4204,6 +4206,8 @@ void main() {
     expect(input.controller?.text, '收到，我会处理。');
     expect(gateway.lastSentPayloadPeerDid, 'did:agent:daemon');
     expect(gateway.lastSentPayload?['state'], appActionStateSucceeded);
+    expect(gateway.lastSentContent, isEmpty);
+    expect(gateway.sendTextMessageCalls, 1);
     expect(find.text('草稿已放入输入框'), findsOneWidget);
   });
 

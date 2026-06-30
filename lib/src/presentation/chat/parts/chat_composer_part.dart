@@ -684,6 +684,7 @@ class _ComposerTextField extends StatelessWidget {
         label: placeholder,
         textField: true,
         child: CupertinoTextField(
+          key: const Key('chat-composer-input'),
           controller: controller,
           focusNode: focusNode,
           placeholder: placeholder,

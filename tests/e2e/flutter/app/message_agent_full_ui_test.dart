@@ -19,6 +19,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/message_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
@@ -303,12 +304,28 @@ void main() {
 
         expect(find.text('消息 Agent 已完成处理'), findsOneWidget);
         expect(find.text('消息 Agent 生成了草稿'), findsOneWidget);
-        await tester.tap(find.text('使用草稿'));
+        await tester.tap(
+          find.byKey(const Key('message-agent-action-confirm:act_draft')),
+        );
         await _pumpFrame(tester);
 
         expect(find.text('草稿已放入输入框'), findsOneWidget);
+        final input = tester.widget<CupertinoTextField>(
+          find.byKey(const Key('chat-composer-input')),
+        );
+        expect(input.controller?.text, '收到，我会处理。');
         expect(harness.gateway.lastSentPayloadPeerDid, 'did:agent:daemon');
+        expect(
+          harness.gateway.lastSentPayload?['schema'],
+          AgentControlPayloads.appActionResultSchema,
+        );
+        expect(harness.gateway.lastSentPayload?['action_id'], 'act_draft');
         expect(harness.gateway.lastSentPayload?['state'], 'succeeded');
+        expect(harness.gateway.lastSentPayload?['result'], <String, Object?>{
+          'draft_text': '收到，我会处理。',
+        });
+        expect(harness.gateway.lastSentContent, isEmpty);
+        expect(harness.gateway.sendTextMessageCalls, 1);
       } finally {
         debugDefaultTargetPlatformOverride = null;
         await tester.binding.setSurfaceSize(null);

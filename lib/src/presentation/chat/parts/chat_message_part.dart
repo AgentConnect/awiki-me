@@ -450,17 +450,27 @@ class _MessageAgentRecoveryCard extends StatelessWidget {
                         : responsive.spacing(8),
                     children: <Widget>[
                       _MessageAgentActionButton(
+                        key: Key(
+                          'message-agent-action-confirm:${content.keySuffix}',
+                        ),
                         label: content.confirmLabel,
                         icon: CupertinoIcons.check_mark_circled,
                         accent: theme.primary,
                         macStyle: macStyle,
+                        semanticsIdentifier:
+                            'message-agent-action-confirm:${content.keySuffix}',
                         onTap: onConfirm,
                       ),
                       _MessageAgentActionButton(
+                        key: Key(
+                          'message-agent-action-reject:${content.keySuffix}',
+                        ),
                         label: content.rejectLabel,
                         icon: CupertinoIcons.xmark_circle,
                         accent: theme.secondaryText,
                         macStyle: macStyle,
+                        semanticsIdentifier:
+                            'message-agent-action-reject:${content.keySuffix}',
                         onTap: onReject,
                       ),
                     ],
@@ -477,10 +487,12 @@ class _MessageAgentRecoveryCard extends StatelessWidget {
 
 class _MessageAgentActionButton extends StatelessWidget {
   const _MessageAgentActionButton({
+    super.key,
     required this.label,
     required this.icon,
     required this.accent,
     required this.macStyle,
+    required this.semanticsIdentifier,
     required this.onTap,
   });
 
@@ -488,6 +500,7 @@ class _MessageAgentActionButton extends StatelessWidget {
   final IconData icon;
   final Color accent;
   final bool macStyle;
+  final String semanticsIdentifier;
   final Future<void> Function()? onTap;
 
   @override
@@ -498,6 +511,7 @@ class _MessageAgentActionButton extends StatelessWidget {
       onTap: enabled ? () => unawaited(onTap!()) : null,
       enabled: enabled,
       semanticLabel: label,
+      semanticsIdentifier: semanticsIdentifier,
       tooltip: label,
       borderRadius: BorderRadius.circular(8),
       child: const SizedBox.shrink(),

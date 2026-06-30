@@ -1372,6 +1372,7 @@ performance:
         'MSGAGENT-E2E-002',
         'MSGAGENT-E2E-003',
         'MSGAGENT-E2E-004',
+        'MSGAGENT-E2E-005',
       ]);
       expect(
         decoded['messageServiceWsUrl'],
