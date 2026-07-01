@@ -564,10 +564,10 @@ MVP 完成时，应能验证：
   - MVP 只允许 `message.create_draft` 写入输入框草稿；用户点击「使用草稿」只填充 composer，不自动发送普通 IM 消息，发送仍由 Human App 现有链路负责。
   - `message-agent` E2E runner 已具备 real-backend fail-fast gate：选择该 case 后必须提供 backend、daemon、CLI、OTP、fake Hermes gateway 和 `messageAgent.realBackend=true`，不能退化成静默 skip。
 - `awiki-cli-rs2`
-  - daemon 发布 bootstrap public key diagnostics。
+  - daemon 在 status query、latest-status 和 heartbeat 中都发布 bootstrap public key diagnostics，避免 App 本地 cache 被不含 key 的轻量心跳覆盖。
   - daemon 接收 secure bootstrap envelope，校验 recipient、key id、TTL、nonce/replay、payload hash 和 canonical AAD，再解密内部 bootstrap payload。
   - 旧明文 `awiki.daemon.bootstrap.v1` 在 Message Agent bootstrap 路径 fail closed。
-  - daemon 处理 delegated inbox 后写入 `message.sync` / `runtime_final` / `app.action` durable outbox；App 回传 action result 后只审计 action id、state 和错误摘要，不记录草稿正文或 result body。
+  - daemon 处理 delegated inbox 后写入 `message.sync` / `runtime_final` / `app.action` durable outbox；`awiki.app.action.v1` 会携带 `daemon_agent_did` 与 `runtime_agent_did`，App 可稳定把 action result 定向回 daemon controller DID；App 回传 action result 是 daemon-readable 的 redacted control ack，不携带 `result.draft_text`，daemon audit 只记录 action id、state 和错误摘要，不记录草稿正文或 result body。
   - active Message Agent runtime 调用 `msg.send` / `attachment.send` 时会被拒绝，避免 MVP 代发；唯一 host 内部 final outbox 仍只能把 runtime final 转为发给 owner 的 message sync。
   - revoked / disabled binding 会 fail closed，不再继续拉取 delegated inbox 或启动 runtime。
 - `user-service`
@@ -641,7 +641,7 @@ handle 配额已满，可以用 `AWIKI_MESSAGE_AGENT_E2E_APP_HANDLE`、
 
 ## 当前剩余风险
 
-- 完整 App -> daemon -> user-service -> message-service -> App 的 full UI gate 当前已经启用且 fail-fast，但截至 2026-07-01 remote 运行仍暴露真实 blocker：daemon delegated inbox 已触发 Message Agent runtime run，但 Hermes session 创建失败，daemon 本地状态显示 `last_error_summary=create Hermes session`，因此 remote gate 尚未绿色通过。
+- 完整 App -> daemon -> user-service -> message-service -> App 的 full UI gate 当前已经启用且 fail-fast；直接 product gate 绿色证据为 `awiki-me/.e2e/message-agent/direct-current-f984467678/reports/timings.json`（status=success），system-test remote wrapper 绿色证据为 `awiki-me/.e2e/message-agent/full-ui-real-fc4dadc70a/reports/timings.json`（status=success）。两份报告都覆盖 UI 启用、runtime final、草稿确认、redacted action result 和撤销授权，`caseIds` 包含 `MSGAGENT-E2E-001..005`，且 selected gate 不是 skipped evidence。
 - local full UI gate 依赖本地 user-service / message-service / MySQL 等环境；缺少 MySQL 等基础服务时必须 fail-fast，不能用 skip 代替通过。
 - 当前 message-service 仍将 delegated WSS 视为 Human DID delegated client，协议层尚不能表达 `from: Agent DID` / `on_behalf_of: Human DID` 双 proof。
 - `runtime_final` 当前按 `hash_only` retention 展示完成/有结果状态；完整草稿内容依赖 `message.create_draft` action payload。

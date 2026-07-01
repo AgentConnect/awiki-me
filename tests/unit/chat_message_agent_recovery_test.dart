@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
@@ -509,6 +511,11 @@ void main() {
         AgentControlPayloads.appActionResultSchema,
       );
       expect(gateway.lastSentPayload?['state'], appActionStateSucceeded);
+      expect(gateway.lastSentPayload?.containsKey('result'), isFalse);
+      expect(
+        jsonEncode(gateway.lastSentPayload),
+        isNot(contains('draft_text')),
+      );
       expect(
         gateway.lastSentPayload?['runtime_agent_did'],
         'did:agent:runtime',

@@ -391,6 +391,7 @@ class _MacDesktopRail extends StatelessWidget {
                         activeIcon: CupertinoIcons.chat_bubble_2_fill,
                         inactiveIcon: CupertinoIcons.chat_bubble_2,
                         label: '消息',
+                        semanticsIdentifier: 'e2e-messages-tab',
                         selected: currentIndex == 0,
                         badge: _formatUnreadBadge(unreadCount),
                         compact: compact,

@@ -330,9 +330,11 @@ void main() {
         );
         expect(harness.gateway.lastSentPayload?['action_id'], 'act_draft');
         expect(harness.gateway.lastSentPayload?['state'], 'succeeded');
-        expect(harness.gateway.lastSentPayload?['result'], <String, Object?>{
-          'draft_text': '收到，我会处理。',
-        });
+        expect(harness.gateway.lastSentPayload?.containsKey('result'), isFalse);
+        expect(
+          jsonEncode(harness.gateway.lastSentPayload),
+          isNot(contains('draft_text')),
+        );
         expect(harness.gateway.lastSentContent, isEmpty);
         expect(harness.gateway.sendTextMessageCalls, 1);
       } finally {
@@ -404,29 +406,17 @@ void runMessageAgentRealBackendE2e() {
           handle: install.handle,
         );
 
-        await _tapFirstFound(tester, <Finder>[
-          find.bySemanticsIdentifier('e2e-agents-tab'),
-          find.bySemanticsLabel('智能体'),
-          find.bySemanticsLabel('Agents'),
-          find.text('智能体'),
-          find.text('Agents'),
-        ]);
-        agents.select(install.daemonDid);
-        await _pumpFrame(tester);
-
         await _waitForDaemonBootstrapKey(
           tester: tester,
           agents: agents,
           daemonDid: install.daemonDid,
         );
-        agents.select(install.daemonDid);
-        await _pumpFrame(tester);
-        await _tapFirstFound(tester, <Finder>[
-          find.bySemanticsIdentifier('message-agent-settings-entry'),
-          find.byKey(const Key('message-agent-settings-entry-card')),
-          find.text('消息处理 Agent'),
-        ]);
-        await _pumpFrame(tester);
+        await _openMessageAgentSettingsForDaemon(
+          tester: tester,
+          container: appContainer,
+          agents: agents,
+          daemonDid: install.daemonDid,
+        );
         expect(
           find.byKey(const Key('message-agent-settings-page')),
           findsOneWidget,
@@ -441,6 +431,9 @@ void runMessageAgentRealBackendE2e() {
           actionLabel: '启用消息处理 Agent',
           actionDescription: 'Message Agent enable',
           timeout: const Duration(seconds: 120),
+          actionFinders: <Finder>[
+            find.bySemanticsIdentifier('message-agent-enable-action'),
+          ],
         );
 
         await _waitForUserServiceBindingActive(
@@ -508,23 +501,12 @@ void runMessageAgentRealBackendE2e() {
           expectedDraftText: draftAction.draftText,
         );
 
-        await _tapFirstFound(tester, <Finder>[
-          find.bySemanticsIdentifier('e2e-agents-tab'),
-          find.bySemanticsLabel('智能体'),
-          find.bySemanticsLabel('Agents'),
-          find.text('智能体'),
-          find.text('Agents'),
-        ]);
-        await _pumpFrame(tester);
-        await agents.load();
-        agents.select(install.daemonDid);
-        await _pumpFrame(tester);
-        await _tapFirstFound(tester, <Finder>[
-          find.bySemanticsIdentifier('message-agent-settings-entry'),
-          find.byKey(const Key('message-agent-settings-entry-card')),
-          find.text('消息处理 Agent'),
-        ]);
-        await _pumpFrame(tester);
+        await _openMessageAgentSettingsForDaemon(
+          tester: tester,
+          container: appContainer,
+          agents: agents,
+          daemonDid: install.daemonDid,
+        );
         expect(
           find.byKey(const Key('message-agent-settings-page')),
           findsOneWidget,
@@ -537,6 +519,9 @@ void runMessageAgentRealBackendE2e() {
           timeout: const Duration(seconds: 60),
           dialogText: '签名 DID Document 更新',
           confirmLabel: '撤销授权',
+          actionFinders: <Finder>[
+            find.bySemanticsIdentifier('message-agent-revoke-action'),
+          ],
         );
         await _waitForUserServiceBindingRevoked(binding: bindingPort);
         await _waitForDaemonBindingRevoked(
@@ -696,7 +681,7 @@ Future<Process> _startRealDaemon({
       '--ready-file',
       config.daemonReadyFile,
       '--max-runtime-ms',
-      '180000',
+      '1200000',
       '--poll-interval-ms',
       '100',
     ],
@@ -960,6 +945,7 @@ Future<void> _openRealCliConversation({
     ),
   );
   final selected = conversation!;
+  await _returnFromMessageAgentSettingsIfNeeded(tester);
   await _tapFirstFound(tester, <Finder>[
     find.bySemanticsIdentifier('e2e-messages-tab'),
     find.bySemanticsLabel('消息'),
@@ -972,7 +958,91 @@ Future<void> _openRealCliConversation({
   container
       .read(selectedConversationProvider.notifier)
       .selectConversation(selected);
+  await _pumpUntil(
+    tester,
+    () => find.byKey(const Key('chat-composer-input')).evaluate().isNotEmpty,
+    timeout: const Duration(seconds: 30),
+    description: 'CLI conversation opens in chat workspace',
+    lastError: () =>
+        _messageAgentSyncDebugSummary(container.read(chatThreadsProvider)),
+  );
+}
+
+Future<void> _returnFromMessageAgentSettingsIfNeeded(
+  WidgetTester tester,
+) async {
+  if (find.byKey(const Key('message-agent-settings-page')).evaluate().isEmpty) {
+    return;
+  }
+  await _tapFirstFound(tester, <Finder>[
+    find.bySemanticsLabel('返回'),
+    find.byTooltip('返回'),
+  ]);
+  await _pumpUntil(
+    tester,
+    () =>
+        find.byKey(const Key('message-agent-settings-page')).evaluate().isEmpty,
+    timeout: const Duration(seconds: 10),
+    description: 'Message Agent settings page returns to App shell',
+  );
+}
+
+Future<void> _openMessageAgentSettingsForDaemon({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required AgentsController agents,
+  required String daemonDid,
+}) async {
+  await _returnFromMessageAgentSettingsIfNeeded(tester);
+  await _tapFirstFound(tester, <Finder>[
+    find.bySemanticsIdentifier('e2e-agents-tab'),
+    find.bySemanticsLabel('智能体'),
+    find.bySemanticsLabel('Agents'),
+    find.text('智能体'),
+    find.text('Agents'),
+  ]);
   await _pumpFrame(tester);
+  await agents.load();
+  agents.select(daemonDid);
+  await _pumpUntil(
+    tester,
+    () {
+      final state = container.read(agentsProvider);
+      return state.selectedAgentDid == daemonDid &&
+          _agentByDid(state, daemonDid) != null &&
+          find
+              .bySemanticsIdentifier('message-agent-settings-entry')
+              .evaluate()
+              .isNotEmpty;
+    },
+    timeout: const Duration(seconds: 30),
+    description: 'Message Agent settings entry is bound to installed daemon',
+    lastError: () => _agentsDebugSummary(container.read(agentsProvider)),
+  );
+  await _tapFirstFound(tester, <Finder>[
+    find.bySemanticsIdentifier('message-agent-settings-entry'),
+    find.byKey(const Key('message-agent-settings-entry-card')),
+  ]);
+  await _pumpUntil(
+    tester,
+    () => find
+        .byKey(const Key('message-agent-settings-page'))
+        .evaluate()
+        .isNotEmpty,
+    timeout: const Duration(seconds: 15),
+    description: 'Message Agent settings page opens for installed daemon',
+    lastError: () => _agentsDebugSummary(container.read(agentsProvider)),
+  );
+  await _pumpUntil(
+    tester,
+    () => find
+        .bySemanticsIdentifier('message-agent-selected-daemon:$daemonDid')
+        .evaluate()
+        .isNotEmpty,
+    timeout: const Duration(seconds: 15),
+    description: 'Message Agent settings page selects installed daemon',
+    lastError: () => _agentsDebugSummary(container.read(agentsProvider)),
+  );
 }
 
 Future<void> _runAgentUiActionWithRetry({
@@ -981,12 +1051,16 @@ Future<void> _runAgentUiActionWithRetry({
   required String actionLabel,
   required String actionDescription,
   required Duration timeout,
+  List<Finder> actionFinders = const <Finder>[],
   String? dialogText,
   String? confirmLabel,
   int attempts = 3,
 }) async {
   for (var attempt = 1; attempt <= attempts; attempt += 1) {
-    await _tapFirstFound(tester, <Finder>[find.text(actionLabel)]);
+    await _tapFirstFound(
+      tester,
+      actionFinders.isEmpty ? <Finder>[find.text(actionLabel)] : actionFinders,
+    );
     await _pumpFrame(tester);
     if (dialogText != null) {
       expect(find.textContaining(dialogText), findsOneWidget);
@@ -1147,8 +1221,31 @@ Future<void> _confirmMessageAgentDraftAction({
     timeout: const Duration(seconds: 15),
     description: 'draft text enters composer after confirmation',
   );
-  await _pumpFrame(tester);
-  expect(find.text('草稿已放入输入框'), findsOneWidget);
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(AppShell)),
+  );
+  await _pumpUntil(
+    tester,
+    () {
+      final threads = container.read(chatThreadsProvider);
+      return threads.values.any(
+        (thread) =>
+            thread.appActionRecords[actionId]?.state == appActionStateSucceeded,
+      );
+    },
+    timeout: const Duration(seconds: 30),
+    description: 'confirmed draft action reaches local succeeded state',
+    lastError: () =>
+        _messageAgentSyncDebugSummary(container.read(chatThreadsProvider)),
+  );
+  await _pumpUntil(
+    tester,
+    () => find.text('草稿已放入输入框').evaluate().isNotEmpty,
+    timeout: const Duration(seconds: 10),
+    description: 'confirmed draft action renders success card',
+    lastError: () =>
+        _messageAgentSyncDebugSummary(container.read(chatThreadsProvider)),
+  );
 }
 
 Future<void> _waitForDaemonActionResultReceived({

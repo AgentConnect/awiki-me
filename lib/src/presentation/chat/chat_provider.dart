@@ -4290,7 +4290,6 @@ class ChatThreadsController
       threadId: threadId,
       request: request,
       state: appActionStateSucceeded,
-      result: <String, Object?>{'draft_text': draftText},
     );
   }
 
@@ -4457,7 +4456,11 @@ class ChatThreadsController
           .sendPayload(
             thread: AppThreadRef.direct(targetDid),
             payload: payload,
-            secure: true,
+            // App action results are daemon-readable control acknowledgements.
+            // The payload is intentionally redacted (no draft body) so daemon
+            // can audit action id/state without depending on direct E2EE
+            // session setup or receiving user draft plaintext.
+            secure: false,
             idempotencyKey: 'app-action-result:${request.actionId}:$state',
           )
           .timeout(_sendTimeout);

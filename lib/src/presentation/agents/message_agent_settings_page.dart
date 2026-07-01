@@ -38,6 +38,9 @@ class _MessageAgentSettingsPageState
     final messageAgent = selectedDid == null
         ? null
         : state.messageAgentRuntimeFor(selectedDid);
+    final selectionLabel = selectedDaemon == null
+        ? '未选择运行 Daemon'
+        : '当前运行 Daemon：${AgentDisplayName.title(selectedDaemon)}';
     final isEnablePending =
         selectedDid != null &&
         state.isActionPending(
@@ -132,6 +135,24 @@ class _MessageAgentSettingsPageState
                             .refreshDaemonStatus(selectedDaemon.agentDid),
                 ),
                 SizedBox(height: responsive.spacing(16)),
+                E2eMarker(
+                  selectedDid == null
+                      ? 'message-agent-selected-daemon:none'
+                      : 'message-agent-selected-daemon:$selectedDid',
+                ),
+                e2eSemantics(
+                  identifier: 'message-agent-selected-daemon-label',
+                  label: selectionLabel,
+                  child: Text(
+                    selectionLabel,
+                    style: TextStyle(
+                      color: const Color(0xFF66728A),
+                      fontSize: responsive.metaSm,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                SizedBox(height: responsive.spacing(8)),
                 _MessageAgentDaemonSelector(
                   daemons: daemons,
                   selectedDaemonDid: selectedDaemon?.agentDid,
@@ -321,28 +342,33 @@ class _MessageAgentHeroCard extends StatelessWidget {
               _ActionButton(
                 icon: CupertinoIcons.check_mark_circled,
                 label: isEnablePending ? '启用中' : '启用消息处理 Agent',
+                semanticsIdentifier: 'message-agent-enable-action',
                 onPressed: canEnable ? onEnable : null,
               ),
               _ActionButton(
                 icon: CupertinoIcons.pause_circle,
                 label: '暂停处理消息',
+                semanticsIdentifier: 'message-agent-pause-action',
                 onPressed: canManage ? onPause : null,
               ),
               _ActionButton(
                 icon: CupertinoIcons.trash,
                 label: '删除消息处理 Agent',
+                semanticsIdentifier: 'message-agent-delete-action',
                 danger: true,
                 onPressed: canManage ? onDelete : null,
               ),
               _ActionButton(
                 icon: CupertinoIcons.lock_slash,
                 label: '撤销 Daemon 消息授权',
+                semanticsIdentifier: 'message-agent-revoke-action',
                 danger: true,
                 onPressed: canManage ? onRevoke : null,
               ),
               _ActionButton(
                 icon: CupertinoIcons.refresh,
                 label: '刷新 Daemon 状态',
+                semanticsIdentifier: 'message-agent-refresh-action',
                 onPressed: daemon == null || isBusy ? null : onRefresh,
               ),
             ],
@@ -454,6 +480,7 @@ class _MessageAgentDaemonOption extends StatelessWidget {
       onTap: onTap,
       selected: selected,
       semanticLabel: '选择 ${AgentDisplayName.title(daemon)}',
+      semanticsIdentifier: 'message-agent-daemon-option:${daemon.agentDid}',
       borderRadius: BorderRadius.circular(responsive.radius(10)),
       backgroundColor: const Color(0xFFF8FAFD),
       selectedBackgroundColor: const Color(0xFFEAF2FF),

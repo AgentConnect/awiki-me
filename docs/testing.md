@@ -144,6 +144,7 @@ Message Agent UI changes must keep coverage in both active test domains:
 - The fake-backed Message Agent App shim expects `--dart-define=AWIKI_E2E=true` when tests assert semantics identifiers such as `message-agent-settings-entry`.
 - The product full chain is owned by `flutter pub run tests/e2e/runner.dart --case message-agent`; `dart run` is acceptable only in environments where native assets can build through the Dart entrypoint. Selected runs must fail fast when backend, daemon, CLI, OTP, or Hermes prerequisites are missing and must not convert the case into a silent skip.
 - Product gate evidence must include `MSGAGENT-E2E-001` through `MSGAGENT-E2E-005`, plus report flags for `uiEnabled`, `runtimeFinalReceived`, `draftConfirmed`, `actionResultReturned`, and `authorizationRevoked`.
+- Treat `status: success` as the first required report condition. Failed Message Agent reports now keep evidence flags false, so old failed reports with true-looking flags must not be reused as pass evidence.
 
 Run the Message Agent full UI real-backend gate:
 

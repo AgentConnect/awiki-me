@@ -330,4 +330,102 @@ void main() {
     expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
     expect(control.lastBootstrapDaemonDid, isNull);
   });
+
+  testWidgets('Message Agent 设置页按当前 Daemon 执行撤销授权', (tester) async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon:one',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-one',
+          displayName: '运行 Daemon 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'ready',
+            platform: 'linux-amd64',
+            diagnosticsSummary: <String, Object?>{
+              'bootstrap_key_id': 'did:agent:daemon:one#key-3',
+              'bootstrap_public_key_b64u':
+                  'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+              'bootstrap_key_algorithm': 'x25519',
+            },
+          ),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:message:one',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon:one',
+          runtime: 'hermes',
+          handle: 'hermes-msg-one',
+          displayName: 'Hermes Message Agent',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:daemon:two',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-two',
+          displayName: '运行 Daemon 2',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'ready',
+            platform: 'linux-amd64',
+            diagnosticsSummary: <String, Object?>{
+              'bootstrap_key_id': 'did:agent:daemon:two#key-3',
+              'bootstrap_public_key_b64u':
+                  'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+              'bootstrap_key_algorithm': 'x25519',
+            },
+          ),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:message:two',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon:two',
+          runtime: 'hermes',
+          handle: 'hermes-msg-two',
+          displayName: 'Hermes Message Agent',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    final identities = FakeIdentityCorePort();
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+          handle: 'me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+          identityCorePortProvider.overrideWithValue(identities),
+          agentImEnabledProvider.overrideWithValue(true),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Message Agent'));
+    await tester.pumpAndSettle();
+    expect(find.text('当前运行 Daemon：运行 Daemon 1'), findsOneWidget);
+
+    await tester.tap(find.text('运行 Daemon 2').first);
+    await tester.pumpAndSettle();
+    expect(find.text('当前运行 Daemon：运行 Daemon 2'), findsOneWidget);
+
+    await tester.tap(find.text('撤销 Daemon 消息授权'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('签名 DID Document 更新'), findsOneWidget);
+
+    await tester.tap(find.text('撤销授权'));
+    await tester.pumpAndSettle();
+
+    expect(control.lastRevokedMessageAgentDaemonDid, 'did:agent:daemon:two');
+    expect(control.lastRevokedMessageAgentDid, 'did:agent:message:two');
+    expect(identities.lastRevokedDaemonSubkeySelector, isNull);
+  });
 }

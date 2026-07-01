@@ -853,18 +853,21 @@ class _ActionButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.danger = false,
+    this.semanticsIdentifier,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback? onPressed;
   final bool danger;
+  final String? semanticsIdentifier;
 
   @override
   Widget build(BuildContext context) {
     return AppPressable(
       onTap: onPressed,
       semanticLabel: label,
+      semanticsIdentifier: semanticsIdentifier,
       tooltip: label,
       enabled: onPressed != null,
       scaleOnPress: true,

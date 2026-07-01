@@ -94,6 +94,7 @@ void main() {
       expect(hyphen.e2eCase.caseName, 'message-agent');
       expect(hyphen.e2eCase.reportScope, 'message-agent');
       expect(hyphen.e2eCase.runConfigPath, contains('message-agent'));
+      expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 16));
     });
 
     test('parses codex-agent case aliases', () {
@@ -1537,6 +1538,71 @@ performance:
       },
     );
 
+    test('marks message-agent evidence flags false when the run fails', () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_message_agent_runner_failed_report_test_',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final cliBinary = File('${root.path}/fake-awiki-cli')
+        ..createSync(recursive: true);
+      _writeLocalConfig(
+        root,
+        platform: 'macos',
+        appHandle: 'message-agent-app',
+        cliHandle: 'message-agent-cli',
+        cliBin: cliBinary.path,
+        messageServiceUrl: 'https://messages.example.test',
+        messageServiceWsUrl: 'wss://messages.example.test/im/ws',
+        daemonRustRepo: '../awiki-cli-rs2-message-agent',
+        daemonBinary: '/tmp/awiki-deamon',
+        daemonStateRoot: '.e2e/daemon-state',
+        daemonReadyFile: '.e2e/daemon-ready.json',
+        fakeHermesGatewayCommand: 'python3 fake_hermes_gateway.py',
+        messageAgentEnabled: true,
+        messageAgentRealBackend: true,
+      );
+      final runner = DesktopE2eRunner(
+        root: root,
+        options: DesktopE2eOptions.parse(const <String>[
+          '--case',
+          'message-agent',
+          '--run-id',
+          'run-message-agent-failed',
+        ]),
+        commands: _FailingFlutterCommandRunner(root: root),
+      );
+
+      await expectLater(
+        runner.run(),
+        throwsA(
+          isA<E2eFailure>().having(
+            (error) => error.message,
+            'message',
+            contains('flutter exited with code 42'),
+          ),
+        ),
+      );
+
+      final timings = File(
+        '${root.path}/.e2e/message-agent/run-message-agent-failed/reports/timings.json',
+      );
+      final decoded =
+          jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
+      expect(decoded['status'], 'failed');
+      final messageAgent = decoded['messageAgent'] as Map<String, dynamic>;
+      expect(messageAgent['enabled'], isTrue);
+      expect(messageAgent['realBackend'], isTrue);
+      expect(messageAgent['uiEnabled'], isFalse);
+      expect(messageAgent['runtimeFinalReceived'], isFalse);
+      expect(messageAgent['draftConfirmed'], isFalse);
+      expect(messageAgent['actionResultReturned'], isFalse);
+      expect(messageAgent['authorizationRevoked'], isFalse);
+    });
+
     test(
       'writes Codex Agent runner report and deterministic run config',
       () async {
@@ -2153,6 +2219,44 @@ performance:
       );
     });
   });
+}
+
+class _FailingFlutterCommandRunner extends DesktopCommandRunner {
+  _FailingFlutterCommandRunner({required Directory root})
+    : super(
+        root: root,
+        dryRun: false,
+        redactor: DesktopSecretRedactor(const <String>[
+          'test-phone-secret',
+          'test-otp-secret',
+        ]),
+        logLine: (_) {},
+      );
+
+  @override
+  Future<DesktopCommandResult> captureResult(
+    String executable,
+    List<String> args, {
+    Directory? workingDirectory,
+    Map<String, String>? environment,
+    bool includeParentEnvironment = true,
+    bool allowFailure = false,
+    Duration timeout = const Duration(minutes: 5),
+  }) async {
+    if (executable == 'which') {
+      return DesktopCommandResult(
+        exitCode: 0,
+        output: '/usr/bin/${args.first}',
+      );
+    }
+    if (executable == 'flutter' && args.contains('test')) {
+      return const DesktopCommandResult(
+        exitCode: 42,
+        output: 'simulated flutter failure',
+      );
+    }
+    return const DesktopCommandResult(exitCode: 0, output: '{}');
+  }
 }
 
 DesktopProductTimingReport _completePerformanceReport({

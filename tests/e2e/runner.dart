@@ -831,11 +831,14 @@ class DesktopE2eRunner {
             'processingScope': config!.messageAgentProcessingScope,
             'realBackend': config!.messageAgentRealBackend,
             if (config!.e2eCase == DesktopE2eCase.messageAgent) ...{
-              'uiEnabled': config!.messageAgentRealBackend,
-              'runtimeFinalReceived': config!.messageAgentRealBackend,
-              'draftConfirmed': config!.messageAgentRealBackend,
-              'actionResultReturned': config!.messageAgentRealBackend,
-              'authorizationRevoked': config!.messageAgentRealBackend,
+              'uiEnabled': succeeded && config!.messageAgentRealBackend,
+              'runtimeFinalReceived':
+                  succeeded && config!.messageAgentRealBackend,
+              'draftConfirmed': succeeded && config!.messageAgentRealBackend,
+              'actionResultReturned':
+                  succeeded && config!.messageAgentRealBackend,
+              'authorizationRevoked':
+                  succeeded && config!.messageAgentRealBackend,
             },
           },
         if (config != null)
@@ -2023,7 +2026,7 @@ enum DesktopE2eCase {
     return switch (this) {
       DesktopE2eCase.claudeCodeAgent => const Duration(minutes: 15),
       DesktopE2eCase.codexAgent => const Duration(minutes: 8),
-      DesktopE2eCase.messageAgent => const Duration(minutes: 10),
+      DesktopE2eCase.messageAgent => const Duration(minutes: 16),
       DesktopE2eCase.performance => const Duration(minutes: 12),
       _ => const Duration(minutes: 5),
     };
