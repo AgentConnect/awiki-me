@@ -284,7 +284,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get shellNavMessages => '消息';
 
   @override
-  String get shellNavAgents => 'Agents';
+  String get shellNavAgents => '智能体';
 
   @override
   String get shellNavFriends => '朋友';

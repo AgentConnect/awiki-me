@@ -641,7 +641,7 @@ abstract class AppLocalizations {
   /// No description provided for @shellNavAgents.
   ///
   /// In zh, this message translates to:
-  /// **'Agents'**
+  /// **'智能体'**
   String get shellNavAgents;
 
   /// No description provided for @shellNavFriends.

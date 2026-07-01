@@ -1739,6 +1739,8 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('最近会话'), findsOneWidget);
+    expect(find.text('智能体'), findsOneWidget);
+    expect(find.text('Agents'), findsNothing);
 
     await tester.tap(find.text('任务'));
     await tester.pumpAndSettle();
@@ -1768,6 +1770,65 @@ void main() {
     await tester.tap(find.text('消息'));
     await tester.pumpAndSettle();
     expect(find.text('最近会话'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 主导航智能体标签跟随语言', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'me.json',
+      displayName: 'Mia',
+      handle: 'mia',
+      jwtToken: 'token',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1280, 720));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('智能体'), findsOneWidget);
+    expect(find.text('Agents'), findsNothing);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        locale: const Locale('en'),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Agents'), findsOneWidget);
+    expect(find.text('智能体'), findsNothing);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -1807,8 +1868,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final inactiveIcons = <IconData>[
+      CupertinoIcons.sparkles,
       CupertinoIcons.person_2,
-      CupertinoIcons.person,
       CupertinoIcons.checkmark_square,
       CupertinoIcons.square_grid_2x2,
       CupertinoIcons.gear_alt,
@@ -1819,7 +1880,6 @@ void main() {
       expect(icon.weight, 400);
     }
     expect(find.byIcon(CupertinoIcons.person_2_fill), findsNothing);
-    expect(find.byIcon(CupertinoIcons.person_fill), findsNothing);
     expect(find.byIcon(CupertinoIcons.checkmark_square_fill), findsNothing);
     expect(find.byIcon(CupertinoIcons.square_grid_2x2_fill), findsNothing);
     expect(find.byIcon(CupertinoIcons.gear_alt_fill), findsNothing);
@@ -1837,7 +1897,7 @@ void main() {
       find.byIcon(CupertinoIcons.chat_bubble_2),
     );
     final activeContactsIcon = tester.widget<Icon>(
-      find.byIcon(CupertinoIcons.person_fill),
+      find.byIcon(CupertinoIcons.person_2_fill),
     );
     expect(inactiveMessageIcon.color, const Color(0xFF7A879C));
     expect(inactiveMessageIcon.weight, 400);
@@ -2298,7 +2358,7 @@ void main() {
     expect(find.text('换个关键词试试'), findsOneWidget);
   });
 
-  testWidgets('手机主导航显示文字标签并保持切换功能', (tester) async {
+  testWidgets('手机主导航显示中文文字标签并保持切换功能', (tester) async {
     const session = SessionIdentity(
       did: 'did:test:me',
       credentialName: 'me.json',
@@ -2339,10 +2399,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Messages'), findsOneWidget);
-    expect(find.text('Agents'), findsOneWidget);
-    expect(find.text('Friends'), findsOneWidget);
-    expect(find.text('Me'), findsOneWidget);
+    expect(find.text('消息'), findsWidgets);
+    expect(find.text('智能体'), findsOneWidget);
+    expect(find.text('联系人'), findsOneWidget);
+    expect(find.text('我'), findsOneWidget);
+    expect(find.text('Agents'), findsNothing);
+    final messagesTab = find.ancestor(
+      of: find.text('消息').last,
+      matching: find.byType(Row),
+    );
+    final navRow = messagesTab.first;
     expect(
       find.byKey(const Key('mobile-messages-unread-badge')),
       findsOneWidget,
@@ -2354,36 +2420,20 @@ void main() {
       ),
       findsOneWidget,
     );
-    final messageTabSize = tester.getSize(find.text('Messages'));
-    final agentsTabSize = tester.getSize(find.text('Agents'));
-    final friendsTabSize = tester.getSize(find.text('Friends'));
-    final meTabSize = tester.getSize(find.text('Me'));
+    final messageTabSize = tester.getSize(find.text('消息').last);
+    final agentsTabSize = tester.getSize(find.text('智能体'));
+    final contactsTabSize = tester.getSize(find.text('联系人'));
+    final meTabSize = tester.getSize(find.text('我'));
     expect(messageTabSize.height, greaterThan(0));
     expect(agentsTabSize.height, greaterThan(0));
-    expect(friendsTabSize.height, greaterThan(0));
+    expect(contactsTabSize.height, greaterThan(0));
     expect(meTabSize.height, greaterThan(0));
-    final bottomNavHeight = tester
-        .getSize(
-          find
-              .ancestor(of: find.text('Messages'), matching: find.byType(Row))
-              .first,
-        )
-        .height;
+    final bottomNavHeight = tester.getSize(navRow).height;
     expect(bottomNavHeight, closeTo(52, 0.1));
-    final navRowCenterY = tester
-        .getCenter(
-          find
-              .ancestor(of: find.text('Messages'), matching: find.byType(Row))
-              .first,
-        )
-        .dy;
-    final messageLabelCenterY = tester.getCenter(find.text('Messages')).dy;
+    final navRowCenterY = tester.getCenter(navRow).dy;
+    final messageLabelCenterY = tester.getCenter(find.text('消息').last).dy;
     expect(messageLabelCenterY, lessThan(navRowCenterY + 22));
-    final navRowRect = tester.getRect(
-      find
-          .ancestor(of: find.text('Messages'), matching: find.byType(Row))
-          .first,
-    );
+    final navRowRect = tester.getRect(navRow);
     final mobileBadgeRect = tester.getRect(
       find.byKey(const Key('mobile-messages-unread-badge')),
     );
@@ -2391,34 +2441,71 @@ void main() {
     expect(mobileBadgeRect.right, lessThanOrEqualTo(navRowRect.right));
 
     final navLabels = find
-        .descendant(
-          of: find
-              .ancestor(of: find.text('Messages'), matching: find.byType(Row))
-              .first,
-          matching: find.byType(Text),
-        )
+        .descendant(of: navRow, matching: find.byType(Text))
         .evaluate()
         .map((element) => (element.widget as Text).data)
         .whereType<String>()
-        .where(
-          (label) =>
-              <String>{'Messages', 'Agents', 'Friends', 'Me'}.contains(label),
-        )
+        .where((label) => <String>{'消息', '智能体', '联系人', '我'}.contains(label))
         .toList();
-    expect(navLabels, ['Messages', 'Agents', 'Friends', 'Me']);
+    expect(navLabels, ['消息', '智能体', '联系人', '我']);
 
-    await tester.tap(find.text('Agents'));
+    await tester.tap(find.text('智能体'));
     await tester.pumpAndSettle();
     expect(find.byType(AgentsWorkspacePage), findsOneWidget);
     expect(find.text('智能体'), findsWidgets);
 
-    await tester.tap(find.text('Friends'));
+    await tester.tap(find.text('联系人'));
     await tester.pumpAndSettle();
     expect(find.text('朋友'), findsWidgets);
 
-    await tester.tap(find.text('Me'));
+    await tester.tap(find.text('我'));
     await tester.pumpAndSettle();
     expect(find.text('Product lead'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('手机主导航英文环境显示 Agents', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'me.json',
+      displayName: 'Mia',
+      handle: 'mia',
+      jwtToken: 'token',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation];
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        locale: const Locale('en'),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Messages'), findsWidgets);
+    expect(find.text('Agents'), findsOneWidget);
+    expect(find.text('Contacts'), findsOneWidget);
+    expect(find.text('Me'), findsOneWidget);
+    expect(find.text('智能体'), findsNothing);
+
+    await tester.tap(find.text('Agents'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AgentsWorkspacePage), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

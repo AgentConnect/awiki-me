@@ -398,8 +398,8 @@ class _MacDesktopRail extends StatelessWidget {
                       ),
                       SizedBox(height: gap),
                       _MacDesktopRailItem(
-                        activeIcon: CupertinoIcons.person_2_fill,
-                        inactiveIcon: CupertinoIcons.person_2,
+                        activeIcon: CupertinoIcons.sparkles,
+                        inactiveIcon: CupertinoIcons.sparkles,
                         label: context.l10n.shellNavAgents,
                         selected: currentIndex == 1,
                         compact: compact,
@@ -408,8 +408,8 @@ class _MacDesktopRail extends StatelessWidget {
                       ),
                       SizedBox(height: gap),
                       _MacDesktopRailItem(
-                        activeIcon: CupertinoIcons.person_fill,
-                        inactiveIcon: CupertinoIcons.person,
+                        activeIcon: CupertinoIcons.person_2_fill,
+                        inactiveIcon: CupertinoIcons.person_2,
                         label: context.l10n.shellNavContacts,
                         selected: currentIndex == 2,
                         compact: compact,
@@ -588,14 +588,24 @@ class _MacDesktopRailItem extends StatelessWidget {
                     ),
                   ),
                   SizedBox(height: responsive.displayScaled(compact ? 2 : 4)),
-                  Text(
-                    label,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: foreground,
-                      fontSize: responsive.displayScaled(10.5),
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                      height: 1,
+                  SizedBox(
+                    width: width - responsive.displayScaled(6),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        softWrap: false,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: foreground,
+                          fontSize: responsive.displayScaled(10.5),
+                          fontWeight: selected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                          height: 1,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -836,7 +846,7 @@ class _BottomNavBar extends StatelessWidget {
                     ),
                     Expanded(
                       child: _BottomNavItem(
-                        label: context.l10n.shellNavFriends,
+                        label: context.l10n.shellNavContacts,
                         semanticsIdentifier: 'e2e-friends-tab',
                         activeIcon: CupertinoIcons.person_2_fill,
                         inactiveIcon: CupertinoIcons.person_2,
