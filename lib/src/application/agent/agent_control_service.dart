@@ -171,12 +171,15 @@ class DefaultAgentControlService implements AgentControlService {
       clientPlatform: clientPlatform,
     );
     final installerUrl = '$downloadBaseUrl/install.sh';
+    final cleanupUrl = '$downloadBaseUrl/cleanup.sh';
     return InstallCommand(
       token: token,
       installerUrl: installerUrl,
+      cleanupUrl: cleanupUrl,
       packageUrlTemplate:
           '$downloadBaseUrl/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
       command: 'curl -fsSL $installerUrl | sh -s -- --token ${token.token}',
+      cleanupCommand: 'curl -fsSL $cleanupUrl | sh',
       fallbackCommand: _fallbackInstallCommand(
         token.token,
         environment: _environment,

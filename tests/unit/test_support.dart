@@ -1937,6 +1937,8 @@ class FakeAgentControlService implements AgentControlService {
     fallbackCommand:
         'awiki-deamon install --token daemon-token --base-url https://awiki.info',
     installerUrl: 'https://awiki.info/daemon/install.sh',
+    cleanupUrl: 'https://awiki.info/daemon/cleanup.sh',
+    cleanupCommand: 'curl -fsSL https://awiki.info/daemon/cleanup.sh | sh',
     packageUrlTemplate:
         'https://awiki.info/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
   );

@@ -1336,6 +1336,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentCopyInstallCommand => 'Copy install command';
 
   @override
+  String get agentCleanupHostTitle => 'Clean up host';
+
+  @override
+  String get agentCleanupHostToggle =>
+      'Need to clean up an old daemon on the host?';
+
+  @override
+  String get agentCleanupHostWarning =>
+      'This stops the AWiki daemon on the host and permanently deletes all daemon data on that host, including identity, databases, logs, archives, Runtime Profiles, and downloaded daemon binaries. This cannot be undone.';
+
+  @override
+  String get agentCopyCleanupCommand => 'Copy cleanup command';
+
+  @override
   String get agentCreateTitle => 'Create Agent';
 
   @override
@@ -1538,7 +1552,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentErrorScopeMismatch =>
-      'This computer is already bound to a daemon for another Handle. Manage it with that Handle, or uninstall the local daemon before installing again.';
+      'This computer is already bound to a daemon for another Handle. Manage it with that Handle, or clean up AWiki daemon data on the host before installing again.';
 
   @override
   String get agentErrorControllerHandleMismatch =>

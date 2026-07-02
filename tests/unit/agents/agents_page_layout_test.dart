@@ -1640,6 +1640,8 @@ void main() {
         fallbackCommand:
             'awiki-deamon install --token fresh-token --base-url https://awiki.info',
         installerUrl: 'https://awiki.info/daemon/install.sh',
+        cleanupUrl: 'https://awiki.info/daemon/cleanup.sh',
+        cleanupCommand: 'curl -fsSL https://awiki.info/daemon/cleanup.sh | sh',
         packageUrlTemplate:
             'https://awiki.info/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
       );
@@ -1672,6 +1674,9 @@ void main() {
     expect(find.text('installer'), findsNothing);
     expect(find.text('package'), findsNothing);
     expect(find.text('手动命令'), findsNothing);
+    expect(find.byKey(const Key('agent-cleanup-host-toggle')), findsOneWidget);
+    expect(find.byKey(const Key('agent-cleanup-host-warning')), findsNothing);
+    expect(find.byKey(const Key('agent-cleanup-command-text')), findsNothing);
     expect(
       find.text(
         '有效期至: ${expiresAt.toLocal().hour.toString().padLeft(2, '0')}:${expiresAt.toLocal().minute.toString().padLeft(2, '0')}',
@@ -1679,12 +1684,36 @@ void main() {
       findsOneWidget,
     );
 
-    final commandText = tester.widget<SelectableText>(
+    final commandText = tester.widget<CupertinoTextField>(
       find.byKey(const Key('agent-install-command-text')),
     );
-    expect(commandText.data, contains('\n'));
-    expect(commandText.data, contains('--token'));
-    expect(commandText.data, contains('fresh-token'));
+    expect(commandText.controller?.text, isNot(contains('\n')));
+    expect(commandText.controller?.text, contains('--token'));
+    expect(commandText.controller?.text, contains('fresh-token'));
+    expect(commandText.maxLines, 1);
+    expect(commandText.readOnly, isTrue);
+    expect(commandText.enableInteractiveSelection, isTrue);
+
+    await tester.tap(find.byKey(const Key('agent-cleanup-host-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('agent-cleanup-host-warning')), findsOneWidget);
+    expect(find.textContaining('此操作不可恢复'), findsOneWidget);
+    expect(find.byKey(const Key('agent-cleanup-copy-button')), findsOneWidget);
+    final cleanupText = tester.widget<CupertinoTextField>(
+      find.byKey(const Key('agent-cleanup-command-text')),
+    );
+    expect(cleanupText.controller?.text, contains('cleanup.sh'));
+    expect(cleanupText.controller?.text, isNot(contains('--yes')));
+    expect(cleanupText.maxLines, 1);
+    expect(cleanupText.readOnly, isTrue);
+
+    final commandCenter = tester.getCenter(
+      find.byKey(const Key('agent-install-command-text')),
+    );
+    final copyButtonCenter = tester.getCenter(
+      find.byKey(const Key('agent-install-copy-button')),
+    );
+    expect((commandCenter.dy - copyButtonCenter.dy).abs(), lessThan(1));
 
     await tester.tap(find.byIcon(CupertinoIcons.xmark));
     await tester.pumpAndSettle();

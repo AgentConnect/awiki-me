@@ -16,6 +16,8 @@ class InstallCommand {
     required this.command,
     required this.fallbackCommand,
     required this.installerUrl,
+    required this.cleanupCommand,
+    required this.cleanupUrl,
     required this.packageUrlTemplate,
   });
 
@@ -23,5 +25,7 @@ class InstallCommand {
   final String command;
   final String fallbackCommand;
   final String installerUrl;
+  final String cleanupCommand;
+  final String cleanupUrl;
   final String packageUrlTemplate;
 }

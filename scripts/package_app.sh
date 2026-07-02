@@ -230,6 +230,18 @@ build_number() {
   printf '%s\n' "${1##*+}"
 }
 
+download_base_url() {
+  local manifest_url="$AWIKI_UPDATE_MANIFEST_URL"
+  case "$manifest_url" in
+    */latest.json)
+      printf '%s\n' "${manifest_url%/latest.json}"
+      ;;
+    *)
+      fail "AWIKI_UPDATE_MANIFEST_URL must end with /latest.json"
+      ;;
+  esac
+}
+
 read_latest_build_number() {
   [[ -f "$LATEST_MANIFEST" ]] || return 0
   sed -n 's/.*"buildNumber"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' \
@@ -508,8 +520,7 @@ JSON
 
 download_url_for() {
   local file_name="$1"
-  printf 'https://awiki.ai/downloads/awiki-me/%s/%s/%s\n' \
-    "$PACKAGE_CHANNEL" "$VERSION_NAME" "$file_name"
+  printf '%s/%s/%s\n' "$(download_base_url)" "$VERSION_NAME" "$file_name"
 }
 
 write_app_update_manifest() {
@@ -552,6 +563,16 @@ write_app_update_manifest() {
 }
 JSON
   cp "$manifest" "$LATEST_MANIFEST"
+}
+
+publish_stable_download_aliases() {
+  local android_file="$1"
+  local macos_arm64_file="$2"
+  local macos_x64_file="$3"
+
+  cp "$android_file" "$CHANNEL_DIST_ROOT/AWiki-Me-Android-arm64.apk"
+  cp "$macos_arm64_file" "$CHANNEL_DIST_ROOT/AWiki-Me-macOS-arm64.dmg"
+  cp "$macos_x64_file" "$CHANNEL_DIST_ROOT/AWiki-Me-macOS-x64.dmg"
 }
 
 write_manifest() {
@@ -598,6 +619,10 @@ JSON
   } > "$manifest"
   write_app_update_manifest \
     "$output_dir" \
+    "$android_file" \
+    "$macos_arm64_file" \
+    "$macos_x64_file"
+  publish_stable_download_aliases \
     "$android_file" \
     "$macos_arm64_file" \
     "$macos_x64_file"

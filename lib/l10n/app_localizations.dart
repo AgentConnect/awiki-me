@@ -2504,6 +2504,30 @@ abstract class AppLocalizations {
   /// **'复制安装命令'**
   String get agentCopyInstallCommand;
 
+  /// No description provided for @agentCleanupHostTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'清理宿主机'**
+  String get agentCleanupHostTitle;
+
+  /// No description provided for @agentCleanupHostToggle.
+  ///
+  /// In zh, this message translates to:
+  /// **'需要清理宿主机上的旧 Daemon？'**
+  String get agentCleanupHostToggle;
+
+  /// No description provided for @agentCleanupHostWarning.
+  ///
+  /// In zh, this message translates to:
+  /// **'这会停止宿主机上的 AWiki Daemon，并永久删除该宿主机上的所有 Daemon 数据，包括身份、数据库、日志、归档、Runtime Profile 和已下载的 Daemon 二进制。此操作不可恢复。'**
+  String get agentCleanupHostWarning;
+
+  /// No description provided for @agentCopyCleanupCommand.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制清理命令'**
+  String get agentCopyCleanupCommand;
+
   /// No description provided for @agentCreateTitle.
   ///
   /// In zh, this message translates to:
@@ -2837,7 +2861,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentErrorScopeMismatch.
   ///
   /// In zh, this message translates to:
-  /// **'这台电脑已经绑定到另一个 Handle 的 Daemon。请使用对应 Handle 管理，或先卸载本机 Daemon 后重新安装。'**
+  /// **'这台电脑已经绑定到另一个 Handle 的 Daemon。请使用对应 Handle 管理，或先清理宿主机上的 AWiki Daemon 数据后重新安装。'**
   String get agentErrorScopeMismatch;
 
   /// No description provided for @agentErrorControllerHandleMismatch.

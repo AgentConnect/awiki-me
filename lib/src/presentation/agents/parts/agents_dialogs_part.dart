@@ -1431,15 +1431,23 @@ void _showInstallCommand(
   );
 }
 
-class _InstallCommandDialog extends StatelessWidget {
+class _InstallCommandDialog extends StatefulWidget {
   const _InstallCommandDialog({required this.command, required this.onClose});
 
   final InstallCommand command;
   final VoidCallback onClose;
 
   @override
+  State<_InstallCommandDialog> createState() => _InstallCommandDialogState();
+}
+
+class _InstallCommandDialogState extends State<_InstallCommandDialog> {
+  bool _cleanupExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final command = widget.command;
     final expiresAt = command.token.expiresAt?.toLocal();
     final isExpired =
         command.token.expiresAt != null &&
@@ -1457,7 +1465,7 @@ class _InstallCommandDialog extends StatelessWidget {
         children: <Widget>[
           AppDialogHeader(
             title: context.l10n.agentInstallTitle,
-            onClose: onClose,
+            onClose: widget.onClose,
             leading: Container(
               width: responsive.displayScaled(34),
               height: responsive.displayScaled(34),
@@ -1482,6 +1490,7 @@ class _InstallCommandDialog extends StatelessWidget {
                   SizedBox(height: responsive.spacing(12)),
                   _CommandText(
                     command.command,
+                    copyLabel: context.l10n.agentCopyInstallCommand,
                     onCopy: () async {
                       await Clipboard.setData(
                         ClipboardData(text: command.command),
@@ -1493,10 +1502,127 @@ class _InstallCommandDialog extends StatelessWidget {
                   ),
                   SizedBox(height: responsive.spacing(12)),
                   _TokenExpiryRow(isExpired: isExpired, expiresAt: expiresAt),
+                  SizedBox(height: responsive.spacing(10)),
+                  _CleanupHostDisclosure(
+                    expanded: _cleanupExpanded,
+                    command: command.cleanupCommand,
+                    onToggle: () {
+                      setState(() {
+                        _cleanupExpanded = !_cleanupExpanded;
+                      });
+                    },
+                  ),
                 ],
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CleanupHostDisclosure extends StatelessWidget {
+  const _CleanupHostDisclosure({
+    required this.expanded,
+    required this.command,
+    required this.onToggle,
+  });
+
+  final bool expanded;
+  final String command;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFCF4),
+        borderRadius: BorderRadius.circular(responsive.radius(8)),
+        border: Border.all(color: const Color(0xFFF4E4B8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          CupertinoButton(
+            key: const Key('agent-cleanup-host-toggle'),
+            padding: EdgeInsets.symmetric(
+              horizontal: responsive.spacing(12),
+              vertical: responsive.spacing(10),
+            ),
+            minSize: 0,
+            onPressed: onToggle,
+            child: Row(
+              children: <Widget>[
+                Icon(
+                  CupertinoIcons.exclamationmark_triangle_fill,
+                  color: const Color(0xFF9A6700),
+                  size: responsive.iconSm,
+                ),
+                SizedBox(width: responsive.spacing(8)),
+                Expanded(
+                  child: Text(
+                    context.l10n.agentCleanupHostToggle,
+                    style: TextStyle(
+                      color: const Color(0xFF5F4714),
+                      fontSize: responsive.metaSm,
+                      fontWeight: FontWeight.w700,
+                      height: 1.25,
+                    ),
+                  ),
+                ),
+                SizedBox(width: responsive.spacing(8)),
+                Icon(
+                  expanded
+                      ? CupertinoIcons.chevron_up
+                      : CupertinoIcons.chevron_down,
+                  color: const Color(0xFF7A5A12),
+                  size: responsive.displayScaled(13),
+                ),
+              ],
+            ),
+          ),
+          if (expanded) ...<Widget>[
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                responsive.spacing(12),
+                0,
+                responsive.spacing(12),
+                responsive.spacing(10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Text(
+                    context.l10n.agentCleanupHostWarning,
+                    key: const Key('agent-cleanup-host-warning'),
+                    style: TextStyle(
+                      color: const Color(0xFF73520B),
+                      fontSize: responsive.metaSm,
+                      height: 1.35,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: responsive.spacing(10)),
+                  _CommandText(
+                    command,
+                    copyLabel: context.l10n.agentCopyCleanupCommand,
+                    copyButtonKey: const Key('agent-cleanup-copy-button'),
+                    textKey: const Key('agent-cleanup-command-text'),
+                    scrollKey: const Key('agent-cleanup-command-scroll'),
+                    rowKey: const Key('agent-cleanup-command-row'),
+                    onCopy: () async {
+                      await Clipboard.setData(ClipboardData(text: command));
+                      if (context.mounted) {
+                        AwikiMeToast.show(context, context.l10n.commonCopied);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1601,11 +1727,56 @@ String _formatTokenExpiry(DateTime? expiresAt) {
   return '$hour:$minute';
 }
 
-class _CommandText extends StatelessWidget {
-  const _CommandText(this.value, {required this.onCopy});
+class _CommandText extends StatefulWidget {
+  const _CommandText(
+    this.value, {
+    required this.onCopy,
+    required this.copyLabel,
+    this.copyButtonKey = const Key('agent-install-copy-button'),
+    this.textKey = const Key('agent-install-command-text'),
+    this.scrollKey = const Key('agent-install-command-scroll'),
+    this.rowKey = const Key('agent-install-command-row'),
+  });
 
   final String value;
   final VoidCallback onCopy;
+  final String copyLabel;
+  final Key copyButtonKey;
+  final Key textKey;
+  final Key scrollKey;
+  final Key rowKey;
+
+  @override
+  State<_CommandText> createState() => _CommandTextState();
+}
+
+class _CommandTextState extends State<_CommandText> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _singleLineCommand(widget.value));
+  }
+
+  @override
+  void didUpdateWidget(covariant _CommandText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value == widget.value) {
+      return;
+    }
+    final next = _singleLineCommand(widget.value);
+    _controller.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: next.length),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1618,37 +1789,50 @@ class _CommandText extends StatelessWidget {
         borderRadius: BorderRadius.circular(responsive.radius(8)),
         border: Border.all(color: const Color(0xFF1E293B)),
       ),
-      child: Stack(
+      child: Row(
+        key: widget.rowKey,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
-          Padding(
-            padding: EdgeInsets.only(right: responsive.displayScaled(46)),
-            child: SelectableText(
-              key: const Key('agent-install-command-text'),
-              _wrapCommand(value),
+          Expanded(
+            key: widget.scrollKey,
+            child: CupertinoTextField(
+              key: widget.textKey,
+              controller: _controller,
+              readOnly: true,
+              showCursor: false,
+              maxLines: 1,
+              minLines: 1,
+              enableInteractiveSelection: true,
+              autocorrect: false,
+              enableSuggestions: false,
+              keyboardType: TextInputType.text,
+              textAlignVertical: TextAlignVertical.center,
+              padding: EdgeInsets.symmetric(
+                horizontal: responsive.displayScaled(1),
+                vertical: responsive.displayScaled(6),
+              ),
+              decoration: null,
               style: TextStyle(
                 color: const Color(0xFFE5E7EB),
                 fontSize: responsive.metaSm,
                 fontFamily: 'monospace',
-                height: 1.45,
+                height: 1.35,
               ),
             ),
           ),
-          Positioned(
-            top: 0,
-            right: 0,
-            child: AppIconButton(
-              key: const Key('agent-install-copy-button'),
-              onPressed: onCopy,
-              semanticLabel: context.l10n.agentCopyInstallCommand,
-              tooltip: context.l10n.agentCopyInstallCommand,
-              size: responsive.displayScaled(34),
-              backgroundColor: const Color(0xFF1E293B),
-              borderRadius: BorderRadius.circular(responsive.radius(8)),
-              child: Icon(
-                CupertinoIcons.doc_on_doc,
-                color: const Color(0xFFCBD5E1),
-                size: responsive.iconSm,
-              ),
+          SizedBox(width: responsive.spacing(10)),
+          AppIconButton(
+            key: widget.copyButtonKey,
+            onPressed: widget.onCopy,
+            semanticLabel: widget.copyLabel,
+            tooltip: widget.copyLabel,
+            size: responsive.displayScaled(34),
+            backgroundColor: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(responsive.radius(8)),
+            child: Icon(
+              CupertinoIcons.doc_on_doc,
+              color: const Color(0xFFCBD5E1),
+              size: responsive.iconSm,
             ),
           ),
         ],
@@ -1657,33 +1841,5 @@ class _CommandText extends StatelessWidget {
   }
 }
 
-String _wrapCommand(String command) {
-  final normalized = command.trim().replaceAll(RegExp(r'\s+'), ' ');
-  if (normalized.isEmpty) {
-    return normalized;
-  }
-  final parts = normalized.split(' ');
-  final lines = <String>[];
-  final buffer = StringBuffer();
-  for (final part in parts) {
-    final nextLength = buffer.isEmpty
-        ? part.length
-        : buffer.length + 1 + part.length;
-    if (buffer.isNotEmpty && nextLength > 52) {
-      lines.add(buffer.toString());
-      buffer
-        ..clear()
-        ..write('  ')
-        ..write(part);
-    } else {
-      if (buffer.isNotEmpty) {
-        buffer.write(' ');
-      }
-      buffer.write(part);
-    }
-  }
-  if (buffer.isNotEmpty) {
-    lines.add(buffer.toString());
-  }
-  return lines.join('\n');
-}
+String _singleLineCommand(String command) =>
+    command.trim().replaceAll(RegExp(r'\s+'), ' ');

@@ -1284,6 +1284,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentCopyInstallCommand => '复制安装命令';
 
   @override
+  String get agentCleanupHostTitle => '清理宿主机';
+
+  @override
+  String get agentCleanupHostToggle => '需要清理宿主机上的旧 Daemon？';
+
+  @override
+  String get agentCleanupHostWarning =>
+      '这会停止宿主机上的 AWiki Daemon，并永久删除该宿主机上的所有 Daemon 数据，包括身份、数据库、日志、归档、Runtime Profile 和已下载的 Daemon 二进制。此操作不可恢复。';
+
+  @override
+  String get agentCopyCleanupCommand => '复制清理命令';
+
+  @override
   String get agentCreateTitle => '创建 Agent';
 
   @override
@@ -1475,7 +1488,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get agentErrorScopeMismatch =>
-      '这台电脑已经绑定到另一个 Handle 的 Daemon。请使用对应 Handle 管理，或先卸载本机 Daemon 后重新安装。';
+      '这台电脑已经绑定到另一个 Handle 的 Daemon。请使用对应 Handle 管理，或先清理宿主机上的 AWiki Daemon 数据后重新安装。';
 
   @override
   String get agentErrorControllerHandleMismatch =>

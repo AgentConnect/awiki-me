@@ -759,6 +759,11 @@ void main() {
       'awiki-deamon install --token daemon-token --base-url https://awiki.info',
     );
     expect(command.installerUrl, 'https://awiki.info/daemon/install.sh');
+    expect(command.cleanupUrl, 'https://awiki.info/daemon/cleanup.sh');
+    expect(
+      command.cleanupCommand,
+      'curl -fsSL https://awiki.info/daemon/cleanup.sh | sh',
+    );
     expect(
       command.packageUrlTemplate,
       'https://awiki.info/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
