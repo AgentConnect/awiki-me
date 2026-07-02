@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart'
-    show Color, SelectableText, SelectionArea, SelectionContainer;
+    show Color, SelectionArea, SelectionContainer;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
@@ -52,15 +52,38 @@ class AgentsWorkspacePage extends ConsumerStatefulWidget {
 }
 
 class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
+  late final AgentsController _agentsController;
+
   @override
   void initState() {
     super.initState();
+    _agentsController = ref.read(agentsProvider.notifier);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
-      unawaited(ref.read(agentsProvider.notifier).ensureLoaded());
+      unawaited(_ensureLoadedAndWatchForHostInstall());
     });
+  }
+
+  @override
+  void dispose() {
+    _agentsController.stopInventoryAutoSync();
+    super.dispose();
+  }
+
+  Future<void> _ensureLoadedAndWatchForHostInstall() async {
+    await ref.read(agentsProvider.notifier).ensureLoaded();
+    if (!mounted) {
+      return;
+    }
+    final state = ref.read(agentsProvider);
+    if (state.error == null &&
+        !state.isLoading &&
+        state.agents.isEmpty &&
+        !state.isAutoSyncingInventory) {
+      ref.read(agentsProvider.notifier).startInventoryAutoSync();
+    }
   }
 
   @override
@@ -69,6 +92,18 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
       final command = next.installCommand;
       if (command != null && previous?.installCommand != command) {
         _showInstallCommand(context, ref, command);
+      }
+    });
+    ref.listen<AgentsState>(agentsProvider, (previous, next) {
+      if (next.agents.any((agent) => agent.isDaemon)) {
+        ref.read(agentsProvider.notifier).stopInventoryAutoSync();
+        return;
+      }
+      if (next.error == null &&
+          !next.isLoading &&
+          next.agents.isEmpty &&
+          previous?.isLoading == true) {
+        ref.read(agentsProvider.notifier).startInventoryAutoSync();
       }
     });
 
@@ -95,7 +130,8 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
       },
       onSelect: (agentDid) =>
           ref.read(agentsProvider.notifier).select(agentDid),
-      onRetry: () => ref.read(agentsProvider.notifier).load(),
+      onSyncInventory: () =>
+          ref.read(agentsProvider.notifier).syncRemoteInventory(),
     );
     final detail = _AgentDetailPane(
       state: state,

@@ -1095,7 +1095,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentCreateDaemon => '创建 Daemon';
 
   @override
+  String get agentRefreshList => '刷新智能体列表';
+
+  @override
   String get agentEmpty => '暂无代理';
+
+  @override
+  String get agentEmptyWaitingHost => '在宿主机完成 Daemon 安装后，这里会自动同步。';
+
+  @override
+  String get agentEmptySyncingHost => '正在同步宿主机上的 Daemon，安装完成后会自动出现。';
 
   @override
   String get agentSelectOne => '选择一个代理';

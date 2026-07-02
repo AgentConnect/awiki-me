@@ -487,6 +487,7 @@ build_android_arm64() {
   rm -f "build/app/outputs/flutter-apk/app-arm64-v8a-$PACKAGE_ANDROID_BUILD_MODE.apk"
   "$PACKAGE_FLUTTER_BIN" build apk \
     "--$PACKAGE_ANDROID_BUILD_MODE" \
+    --no-pub \
     "${DART_DEFINE_ARGS[@]}" \
     --target-platform android-arm64 \
     --split-per-abi \
@@ -511,6 +512,7 @@ build_macos_arch() {
   rm -rf "$derived_data"
   "$PACKAGE_FLUTTER_BIN" build macos \
     "--$PACKAGE_MACOS_BUILD_MODE" \
+    --no-pub \
     "${DART_DEFINE_ARGS[@]}" \
     --config-only \
     --build-name "$VERSION_NAME" \

@@ -2168,11 +2168,29 @@ abstract class AppLocalizations {
   /// **'创建 Daemon'**
   String get agentCreateDaemon;
 
+  /// No description provided for @agentRefreshList.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新智能体列表'**
+  String get agentRefreshList;
+
   /// No description provided for @agentEmpty.
   ///
   /// In zh, this message translates to:
   /// **'暂无代理'**
   String get agentEmpty;
+
+  /// No description provided for @agentEmptyWaitingHost.
+  ///
+  /// In zh, this message translates to:
+  /// **'在宿主机完成 Daemon 安装后，这里会自动同步。'**
+  String get agentEmptyWaitingHost;
+
+  /// No description provided for @agentEmptySyncingHost.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在同步宿主机上的 Daemon，安装完成后会自动出现。'**
+  String get agentEmptySyncingHost;
 
   /// No description provided for @agentSelectOne.
   ///

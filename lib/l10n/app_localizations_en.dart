@@ -1140,7 +1140,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentCreateDaemon => 'Create Daemon';
 
   @override
+  String get agentRefreshList => 'Refresh agent list';
+
+  @override
   String get agentEmpty => 'No agents yet';
+
+  @override
+  String get agentEmptyWaitingHost =>
+      'After daemon installation finishes on the host, this list will sync automatically.';
+
+  @override
+  String get agentEmptySyncingHost =>
+      'Syncing host daemons. New daemons will appear here after installation finishes.';
 
   @override
   String get agentSelectOne => 'Select an agent';

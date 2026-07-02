@@ -13,8 +13,7 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart'
-    show SelectableText, SelectionArea, SelectionContainer;
+import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../test_support.dart';
@@ -108,6 +107,51 @@ void main() {
 
     expect(find.text('智能体信息暂时无法加载，请稍后重试。'), findsNothing);
     expect(find.text('暂无代理'), findsOneWidget);
+  });
+
+  testWidgets('empty agents workspace offers host sync refresh', (
+    tester,
+  ) async {
+    final control = _SequencedListAgentControlService(<List<AgentSummary>>[
+      const <AgentSummary>[],
+      const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'edgehost-test',
+          displayName: 'Daemon 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ],
+    ]);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('暂无代理'), findsOneWidget);
+    expect(find.text('正在同步宿主机上的 Daemon，安装完成后会自动出现。'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('刷新智能体列表').first);
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(control.listAgentsCalls, greaterThanOrEqualTo(2));
+    expect(find.text('Daemon 1'), findsWidgets);
+    expect(find.text('暂无代理'), findsNothing);
   });
 
   testWidgets('daemon upgrade action appears only when upgrade is needed', (
@@ -2069,6 +2113,20 @@ class _CountingListAgentControlService extends FakeAgentControlService {
   }
 }
 
+class _SequencedListAgentControlService extends FakeAgentControlService {
+  _SequencedListAgentControlService(this.responses);
+
+  final List<List<AgentSummary>> responses;
+  int listAgentsCalls = 0;
+
+  @override
+  Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
+    listAgentsCalls += 1;
+    final index = (listAgentsCalls - 1).clamp(0, responses.length - 1);
+    return responses[index];
+  }
+}
+
 class _FailingListAgentControlService extends FakeAgentControlService {
   bool failList = true;
 
@@ -2120,4 +2178,7 @@ class _AgentsWorkspaceToggleHostState
   }
 }
 
-Finder _agentRefreshButton() => find.byIcon(CupertinoIcons.refresh);
+Finder _agentRefreshButton() => find.descendant(
+  of: find.byTooltip('刷新状态'),
+  matching: find.byIcon(CupertinoIcons.refresh),
+);

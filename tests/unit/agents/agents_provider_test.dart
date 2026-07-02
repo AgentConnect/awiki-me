@@ -96,6 +96,60 @@ void main() {
     },
   );
 
+  test('auto sync polls empty inventory until a daemon appears', () async {
+    final control = _SequencedAgentControlService(<List<AgentSummary>>[
+      const <AgentSummary>[],
+      const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: 'Daemon 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ],
+    ]);
+    final container = _container(control);
+    addTearDown(container.dispose);
+    final controller = container.read(agentsProvider.notifier);
+
+    await controller.load();
+    expect(container.read(agentsProvider).agents, isEmpty);
+
+    controller.startInventoryAutoSync();
+    expect(container.read(agentsProvider).isAutoSyncingInventory, isTrue);
+
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    final state = container.read(agentsProvider);
+    expect(control.listAgentsCalls, 2);
+    expect(state.agents.map((agent) => agent.agentDid), ['did:agent:daemon']);
+    expect(state.isAutoSyncingInventory, isFalse);
+  });
+
+  test(
+    'auto sync keeps empty state clean when a background poll fails',
+    () async {
+      final control = _SequencedAgentControlService(<List<AgentSummary>>[
+        const <AgentSummary>[],
+        const <AgentSummary>[],
+      ])..errorsByCall[2] = StateError('temporary network failure');
+      final container = _container(control);
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+
+      await controller.load();
+      controller.startInventoryAutoSync();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      final state = container.read(agentsProvider);
+      expect(control.listAgentsCalls, 2);
+      expect(state.agents, isEmpty);
+      expect(state.error, isNull);
+      expect(state.isAutoSyncingInventory, isTrue);
+      controller.stopInventoryAutoSync();
+    },
+  );
+
   test('load applies stable daemon and runtime ordering', () async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
@@ -3007,6 +3061,25 @@ class _CountingAgentControlService extends FakeAgentControlService {
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
     listAgentsCalls += 1;
     return super.listAgents(includeInactive: includeInactive);
+  }
+}
+
+class _SequencedAgentControlService extends FakeAgentControlService {
+  _SequencedAgentControlService(this.responses);
+
+  final List<List<AgentSummary>> responses;
+  final Map<int, Object> errorsByCall = <int, Object>{};
+  int listAgentsCalls = 0;
+
+  @override
+  Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
+    listAgentsCalls += 1;
+    final error = errorsByCall[listAgentsCalls];
+    if (error != null) {
+      throw error;
+    }
+    final index = (listAgentsCalls - 1).clamp(0, responses.length - 1);
+    return responses[index];
   }
 }
 

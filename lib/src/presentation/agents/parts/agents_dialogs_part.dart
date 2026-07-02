@@ -1551,7 +1551,7 @@ class _CleanupHostDisclosure extends StatelessWidget {
               horizontal: responsive.spacing(12),
               vertical: responsive.spacing(10),
             ),
-            minSize: 0,
+            minimumSize: Size.zero,
             onPressed: onToggle,
             child: Row(
               children: <Widget>[

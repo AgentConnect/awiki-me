@@ -29,6 +29,8 @@ const agentStatusRefreshMinimumIndicatorDuration = Duration(milliseconds: 1500);
 const agentDaemonUpgradeAckTimeout = Duration(seconds: 20);
 const agentDaemonUpgradeCancelAckTimeout = Duration(seconds: 12);
 const agentListLoadTimeout = Duration(seconds: 15);
+const agentInventoryAutoSyncInterval = Duration(seconds: 4);
+const agentInventoryAutoSyncMaxAttempts = 24;
 const agentLocalCacheReadTimeout = Duration(milliseconds: 1200);
 const agentLocalCacheWriteTimeout = Duration(milliseconds: 2500);
 const agentStatusRequestSendTimeout = Duration(seconds: 8);
@@ -237,6 +239,7 @@ class AgentsState {
     this.daemonUpgradeProgress = const <String, DaemonUpgradeProgress>{},
     this.pendingRuntimeCreations = const <PendingRuntimeCreation>[],
     this.pendingDeletionAgentDids = const <String>{},
+    this.isAutoSyncingInventory = false,
   });
 
   final List<AgentSummary> agents;
@@ -259,6 +262,7 @@ class AgentsState {
   final Map<String, DaemonUpgradeProgress> daemonUpgradeProgress;
   final List<PendingRuntimeCreation> pendingRuntimeCreations;
   final Set<String> pendingDeletionAgentDids;
+  final bool isAutoSyncingInventory;
 
   AgentSummary? get selectedAgent {
     final selectedDid = selectedAgentDid;
@@ -361,6 +365,7 @@ class AgentsState {
     Map<String, DaemonUpgradeProgress>? daemonUpgradeProgress,
     List<PendingRuntimeCreation>? pendingRuntimeCreations,
     Set<String>? pendingDeletionAgentDids,
+    bool? isAutoSyncingInventory,
   }) {
     return AgentsState(
       agents: agents ?? this.agents,
@@ -398,6 +403,8 @@ class AgentsState {
           pendingRuntimeCreations ?? this.pendingRuntimeCreations,
       pendingDeletionAgentDids:
           pendingDeletionAgentDids ?? this.pendingDeletionAgentDids,
+      isAutoSyncingInventory:
+          isAutoSyncingInventory ?? this.isAutoSyncingInventory,
     );
   }
 }
@@ -414,11 +421,15 @@ class AgentsController extends StateNotifier<AgentsState> {
   final Map<String, Timer> _daemonUpgradeAckTimeouts = <String, Timer>{};
   final Map<String, Timer> _daemonUpgradeCancelAckTimeouts = <String, Timer>{};
   final Map<String, Timer> _deletionRefreshTimers = <String, Timer>{};
+  Timer? _inventoryAutoSyncTimer;
   Future<void>? _loadOperation;
   String? _loadOperationOwner;
   int? _loadOperationEpoch;
   String? _loadedCacheOwner;
   int _stateEpoch = 0;
+  int _inventoryAutoSyncAttempts = 0;
+  bool _inventoryAutoSyncInFlight = false;
+  String? _inventoryAutoSyncExhaustedOwner;
 
   Future<void> ensureLoaded() {
     final session = ref.read(sessionProvider).session;
@@ -457,7 +468,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     return load();
   }
 
-  Future<void> load() async {
+  Future<void> load({bool showLoading = true, bool surfaceError = true}) async {
     final session = ref.read(sessionProvider).session;
     final cacheOwner = session == null ? null : _agentCacheOwner(session);
     final epoch = _stateEpoch;
@@ -467,7 +478,10 @@ class AgentsController extends StateNotifier<AgentsState> {
         _loadOperationEpoch == epoch) {
       return activeLoad;
     }
-    final operation = _load();
+    final operation = _load(
+      showLoading: showLoading,
+      surfaceError: surfaceError,
+    );
     _loadOperation = operation;
     _loadOperationOwner = cacheOwner;
     _loadOperationEpoch = epoch;
@@ -482,10 +496,25 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
   }
 
-  Future<void> _load() async {
+  Future<void> syncRemoteInventory({
+    bool quiet = false,
+    bool resetAutoSyncExhaustion = true,
+    bool surfaceError = true,
+  }) {
+    if (resetAutoSyncExhaustion) {
+      _inventoryAutoSyncExhaustedOwner = null;
+    }
+    return load(showLoading: !quiet, surfaceError: surfaceError);
+  }
+
+  Future<void> _load({
+    bool showLoading = true,
+    bool surfaceError = true,
+  }) async {
     final totalWatch = Stopwatch()..start();
     final session = ref.read(sessionProvider).session;
     if (session == null) {
+      _stopInventoryAutoSync();
       state = const AgentsState();
       _loadedCacheOwner = null;
       _stateEpoch += 1;
@@ -493,7 +522,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     final startedEpoch = _stateEpoch;
     final cacheOwner = _agentCacheOwner(session);
-    state = state.copyWith(isLoading: true, clearError: true);
+    state = state.copyWith(isLoading: showLoading, clearError: surfaceError);
     await AwikiPerformanceLogger.async(
       'agents.load.cache',
       () => _loadCached(cacheOwner),
@@ -531,10 +560,14 @@ class AgentsController extends StateNotifier<AgentsState> {
         pendingDaemonUpgrades,
       );
       final pendingDeletionAgentDids = _pendingDeletionAfterAgents(agents);
+      final hasDaemon = agents.any((agent) => agent.isDaemon);
       state = state.copyWith(
         agents: agents,
         selectedAgentDid: _nextSelection(agents),
         isLoading: false,
+        isAutoSyncingInventory: hasDaemon
+            ? false
+            : state.isAutoSyncingInventory,
         pendingRuntimeCreations: pendingRuntimeCreations,
         pendingDaemonUpgrades: pendingDaemonUpgrades,
         cancellingDaemonUpgrades: cancellingDaemonUpgrades,
@@ -544,6 +577,10 @@ class AgentsController extends StateNotifier<AgentsState> {
         clearError: true,
       );
       _loadedCacheOwner = cacheOwner;
+      if (hasDaemon) {
+        _inventoryAutoSyncExhaustedOwner = null;
+        _stopInventoryAutoSync();
+      }
       await _saveCacheBestEffort(cacheOwner, agents);
       final selectedAgent = state.selectedAgent;
       if (selectedAgent != null && selectedAgent.isRuntime) {
@@ -562,11 +599,13 @@ class AgentsController extends StateNotifier<AgentsState> {
       );
     } catch (error) {
       if (_isCurrentCacheOwner(cacheOwner, epoch: startedEpoch)) {
-        state = state.copyWith(
-          isLoading: false,
-          error: _agentErrorMessage(error),
-          debugLastError: error.toString(),
-        );
+        state = surfaceError
+            ? state.copyWith(
+                isLoading: false,
+                error: _agentErrorMessage(error),
+                debugLastError: error.toString(),
+              )
+            : state.copyWith(isLoading: false);
       }
     }
   }
@@ -602,7 +641,36 @@ class AgentsController extends StateNotifier<AgentsState> {
             clientPlatform: awikiClientPlatform(),
           );
       state = state.copyWith(installCommand: command, clearError: true);
+      _inventoryAutoSyncExhaustedOwner = null;
+      startInventoryAutoSync();
     });
+  }
+
+  void startInventoryAutoSync() {
+    final session = ref.read(sessionProvider).session;
+    final owner = session == null ? null : _agentCacheOwner(session);
+    if (owner == null || state.agents.any((agent) => agent.isDaemon)) {
+      return;
+    }
+    if (_inventoryAutoSyncExhaustedOwner == owner &&
+        _inventoryAutoSyncTimer == null) {
+      return;
+    }
+    if (_inventoryAutoSyncTimer != null) {
+      state = state.copyWith(isAutoSyncingInventory: true);
+      return;
+    }
+    _inventoryAutoSyncAttempts = 0;
+    state = state.copyWith(isAutoSyncingInventory: true);
+    _runInventoryAutoSyncAttempt();
+    _inventoryAutoSyncTimer = Timer.periodic(
+      agentInventoryAutoSyncInterval,
+      (_) => _runInventoryAutoSyncAttempt(),
+    );
+  }
+
+  void stopInventoryAutoSync() {
+    _stopInventoryAutoSync();
   }
 
   Future<void> refreshDaemonStatus(
@@ -1262,6 +1330,8 @@ class AgentsController extends StateNotifier<AgentsState> {
   void clear() {
     _loadedCacheOwner = null;
     _stateEpoch += 1;
+    _inventoryAutoSyncExhaustedOwner = null;
+    _stopInventoryAutoSync();
     _cancelStatusTimers();
     state = const AgentsState();
   }
@@ -1275,6 +1345,9 @@ class AgentsController extends StateNotifier<AgentsState> {
       return;
     }
     final merged = _mergeControlPayload(state.agents, payload);
+    if (merged.any((agent) => agent.isDaemon)) {
+      _stopInventoryAutoSync();
+    }
     final pendingRuntimeCreations =
         _pendingCreationsAfterControlPayloadAndAgents(
           state.pendingRuntimeCreations,
@@ -1946,8 +2019,69 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   @override
   void dispose() {
+    _stopInventoryAutoSync();
     _cancelStatusTimers();
     super.dispose();
+  }
+
+  void _runInventoryAutoSyncAttempt() {
+    if (!mounted ||
+        _inventoryAutoSyncInFlight ||
+        ref.read(sessionProvider).session == null ||
+        state.agents.any((agent) => agent.isDaemon)) {
+      if (ref.read(sessionProvider).session == null) {
+        _stopInventoryAutoSync();
+      }
+      if (state.agents.any((agent) => agent.isDaemon)) {
+        _stopInventoryAutoSync();
+      }
+      return;
+    }
+    if (_inventoryAutoSyncAttempts >= agentInventoryAutoSyncMaxAttempts) {
+      _stopInventoryAutoSync(exhausted: true);
+      return;
+    }
+    _inventoryAutoSyncAttempts += 1;
+    _inventoryAutoSyncInFlight = true;
+    unawaited(
+      syncRemoteInventory(
+        quiet: true,
+        resetAutoSyncExhaustion: false,
+        surfaceError: false,
+      ).whenComplete(() {
+        _inventoryAutoSyncInFlight = false;
+        if (!mounted) {
+          return;
+        }
+        if (state.agents.any((agent) => agent.isDaemon) ||
+            _inventoryAutoSyncAttempts >= agentInventoryAutoSyncMaxAttempts) {
+          _stopInventoryAutoSync(
+            exhausted:
+                !state.agents.any((agent) => agent.isDaemon) &&
+                _inventoryAutoSyncAttempts >= agentInventoryAutoSyncMaxAttempts,
+          );
+        } else if (_inventoryAutoSyncTimer != null &&
+            !state.isAutoSyncingInventory) {
+          state = state.copyWith(isAutoSyncingInventory: true);
+        }
+      }),
+    );
+  }
+
+  void _stopInventoryAutoSync({bool exhausted = false}) {
+    if (exhausted) {
+      final session = ref.read(sessionProvider).session;
+      _inventoryAutoSyncExhaustedOwner = session == null
+          ? null
+          : _agentCacheOwner(session);
+    }
+    _inventoryAutoSyncTimer?.cancel();
+    _inventoryAutoSyncTimer = null;
+    _inventoryAutoSyncAttempts = 0;
+    _inventoryAutoSyncInFlight = false;
+    if (mounted && state.isAutoSyncingInventory) {
+      state = state.copyWith(isAutoSyncingInventory: false);
+    }
   }
 
   void _cancelStatusTimers() {

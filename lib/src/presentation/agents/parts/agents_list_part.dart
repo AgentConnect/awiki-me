@@ -9,7 +9,7 @@ class _AgentListPane extends StatelessWidget {
     required this.onCreateDaemon,
     required this.onRefreshDaemon,
     required this.onSelect,
-    required this.onRetry,
+    required this.onSyncInventory,
   });
 
   final AgentsState state;
@@ -19,7 +19,7 @@ class _AgentListPane extends StatelessWidget {
   final VoidCallback onCreateDaemon;
   final ValueChanged<AgentSummary> onRefreshDaemon;
   final ValueChanged<String> onSelect;
-  final VoidCallback onRetry;
+  final VoidCallback onSyncInventory;
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +47,30 @@ class _AgentListPane extends StatelessWidget {
                     ),
                   ),
                 ),
+                SizedBox(width: responsive.spacing(8)),
+                AppIconButton(
+                  onPressed: state.isLoading ? null : onSyncInventory,
+                  semanticLabel: context.l10n.agentRefreshList,
+                  tooltip: context.l10n.agentRefreshList,
+                  size: responsive.displayScaled(34),
+                  isLoading: state.isLoading,
+                  child: Container(
+                    width: responsive.displayScaled(24),
+                    height: responsive.displayScaled(24),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3F7FF),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFFDCE8FF)),
+                    ),
+                    child: Icon(
+                      CupertinoIcons.refresh,
+                      size: responsive.displayScaled(14),
+                      color: const Color(0xFF46617F),
+                    ),
+                  ),
+                ),
+                SizedBox(width: responsive.spacing(8)),
                 AppIconButton(
                   onPressed:
                       state.isActionPending(AgentActionKeys.installCommand)
@@ -60,7 +84,6 @@ class _AgentListPane extends StatelessWidget {
               ],
             ),
           ),
-          if (state.isLoading) const CupertinoActivityIndicator(),
           Expanded(
             child: ListView(
               padding: EdgeInsets.fromLTRB(
@@ -71,19 +94,16 @@ class _AgentListPane extends StatelessWidget {
               ),
               children: <Widget>[
                 if (state.error != null) ...<Widget>[
-                  _AgentErrorBanner(message: state.error!, onRetry: onRetry),
+                  _AgentErrorBanner(
+                    message: state.error!,
+                    onRetry: onSyncInventory,
+                  ),
                   SizedBox(height: responsive.spacing(10)),
                 ],
                 if (state.agents.isEmpty)
-                  Padding(
-                    padding: EdgeInsets.all(responsive.spacing(12)),
-                    child: Text(
-                      context.l10n.agentEmpty,
-                      style: TextStyle(
-                        color: const Color(0xFF66728A),
-                        fontSize: responsive.bodySm,
-                      ),
-                    ),
+                  _AgentEmptyState(
+                    isSyncing: state.isAutoSyncingInventory,
+                    onRefresh: onSyncInventory,
                   ),
                 _AgentHierarchyList(
                   state: state,
@@ -97,6 +117,83 @@ class _AgentListPane extends StatelessWidget {
           ),
           if (footer != null) footer!,
         ],
+      ),
+    );
+  }
+}
+
+class _AgentEmptyState extends StatelessWidget {
+  const _AgentEmptyState({required this.isSyncing, required this.onRefresh});
+
+  final bool isSyncing;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Padding(
+      padding: EdgeInsets.all(responsive.spacing(12)),
+      child: Container(
+        padding: EdgeInsets.all(responsive.spacing(12)),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7F9FD),
+          borderRadius: BorderRadius.circular(responsive.radius(8)),
+          border: Border.all(color: const Color(0xFFE8EDF5)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            SizedBox(
+              width: responsive.displayScaled(22),
+              height: responsive.displayScaled(22),
+              child: isSyncing
+                  ? const CupertinoActivityIndicator()
+                  : Icon(
+                      CupertinoIcons.desktopcomputer,
+                      color: const Color(0xFF66728A),
+                      size: responsive.iconSm,
+                    ),
+            ),
+            SizedBox(width: responsive.spacing(10)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    context.l10n.agentEmpty,
+                    style: TextStyle(
+                      color: const Color(0xFF25324A),
+                      fontSize: responsive.bodySm,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(height: responsive.spacing(4)),
+                  Text(
+                    isSyncing
+                        ? context.l10n.agentEmptySyncingHost
+                        : context.l10n.agentEmptyWaitingHost,
+                    style: TextStyle(
+                      color: const Color(0xFF66728A),
+                      fontSize: responsive.metaSm,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: responsive.spacing(8)),
+            AppIconButton(
+              onPressed: onRefresh,
+              semanticLabel: context.l10n.agentRefreshList,
+              tooltip: context.l10n.agentRefreshList,
+              size: responsive.displayScaled(30),
+              backgroundColor: CupertinoColors.white,
+              borderColor: const Color(0xFFE1E8F2),
+              borderRadius: BorderRadius.circular(responsive.radius(8)),
+              child: const Icon(CupertinoIcons.refresh),
+            ),
+          ],
+        ),
       ),
     );
   }
