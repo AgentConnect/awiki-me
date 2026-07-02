@@ -1223,13 +1223,13 @@ abstract class AppLocalizations {
   /// No description provided for @settingsUpdateOpenGitHubHistory.
   ///
   /// In zh, this message translates to:
-  /// **'前往 GitHub 查阅历史版本'**
+  /// **'打开下载页查阅历史版本'**
   String get settingsUpdateOpenGitHubHistory;
 
   /// No description provided for @settingsUpdateOpenGitHubDownload.
   ///
   /// In zh, this message translates to:
-  /// **'前往 GitHub 下载当前版本'**
+  /// **'打开下载页下载当前版本'**
   String get settingsUpdateOpenGitHubDownload;
 
   /// No description provided for @settingsExportCredential.
@@ -3647,7 +3647,7 @@ abstract class AppLocalizations {
   /// No description provided for @updateOpenDownloadFailed.
   ///
   /// In zh, this message translates to:
-  /// **'无法打开下载页面，请前往 GitHub Release。'**
+  /// **'无法打开下载页面，请稍后重试。'**
   String get updateOpenDownloadFailed;
 
   /// No description provided for @updateReadyToInstall.
@@ -3665,7 +3665,7 @@ abstract class AppLocalizations {
   /// No description provided for @updateInstallFailed.
   ///
   /// In zh, this message translates to:
-  /// **'更新失败，请前往 GitHub 下载。'**
+  /// **'更新失败，请打开下载页手动安装。'**
   String get updateInstallFailed;
 
   /// No description provided for @daemonUpgradeStarted.

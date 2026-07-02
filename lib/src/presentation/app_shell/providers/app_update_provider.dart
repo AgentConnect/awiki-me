@@ -44,7 +44,8 @@ class AppUpdateState {
       return latestManifest!.platforms.android.downloadUrl?.isNotEmpty == true;
     }
     if (Platform.isMacOS) {
-      return latestManifest!.platforms.macos.appcastUrl?.isNotEmpty == true;
+      return latestManifest!.platforms.macos.appcastUrl?.isNotEmpty == true ||
+          latestManifest!.platforms.macos.downloadUrl?.isNotEmpty == true;
     }
     return false;
   }

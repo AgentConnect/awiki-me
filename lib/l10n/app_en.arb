@@ -239,8 +239,8 @@
       "version": {}
     }
   },
-  "settingsUpdateOpenGitHubHistory": "Open GitHub to browse release history",
-  "settingsUpdateOpenGitHubDownload": "Open GitHub to download the current build",
+  "settingsUpdateOpenGitHubHistory": "Open the download page to browse release history",
+  "settingsUpdateOpenGitHubDownload": "Open the download page to get the current build",
   "settingsExportCredential": "Export identity credential",
   "settingsExportCurrentCredential": "Export current credential: {credentialName}",
   "@settingsExportCurrentCredential": {
@@ -851,10 +851,10 @@
   "updateAlreadyLatest": "You're already on the latest version.",
   "updateCheckFailed": "Update check failed. Please try again later.",
   "updateOpenReleaseNotesFailed": "Couldn't open the release notes.",
-  "updateOpenDownloadFailed": "Couldn't open the download page. Please use GitHub Releases.",
+  "updateOpenDownloadFailed": "Couldn't open the download page. Please try again later.",
   "updateReadyToInstall": "Download complete. Ready to install.",
   "updatePermissionRequired": "Please allow installs from this source and try again.",
-  "updateInstallFailed": "Update failed. Please download it from GitHub.",
+  "updateInstallFailed": "Update failed. Please install it from the download page.",
   "daemonUpgradeStarted": "Daemon upgrade started.",
   "requestTimeoutRetry": "The request timed out. Please check your network and try again.",
   "networkUnavailableRetry": "Network connection is temporarily unavailable. Please check your network and try again.",

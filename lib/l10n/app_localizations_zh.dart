@@ -592,10 +592,10 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get settingsUpdateOpenGitHubHistory => '前往 GitHub 查阅历史版本';
+  String get settingsUpdateOpenGitHubHistory => '打开下载页查阅历史版本';
 
   @override
-  String get settingsUpdateOpenGitHubDownload => '前往 GitHub 下载当前版本';
+  String get settingsUpdateOpenGitHubDownload => '打开下载页下载当前版本';
 
   @override
   String get settingsExportCredential => '导出身份凭证';
@@ -1896,7 +1896,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updateOpenReleaseNotesFailed => '无法打开更新日志，请稍后重试。';
 
   @override
-  String get updateOpenDownloadFailed => '无法打开下载页面，请前往 GitHub Release。';
+  String get updateOpenDownloadFailed => '无法打开下载页面，请稍后重试。';
 
   @override
   String get updateReadyToInstall => '下载完成，准备安装。';
@@ -1905,7 +1905,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updatePermissionRequired => '请允许安装未知应用后重试。';
 
   @override
-  String get updateInstallFailed => '更新失败，请前往 GitHub 下载。';
+  String get updateInstallFailed => '更新失败，请打开下载页手动安装。';
 
   @override
   String get daemonUpgradeStarted => '已开始升级代理。';

@@ -12,8 +12,9 @@ PACKAGE_MACOS_BUNDLE_ID="ai.awiki.awikiMe"
 PACKAGE_FLUTTER_BIN="flutter"
 PACKAGE_SDK_REPO_DIR="../awiki-cli-rs2"
 PACKAGE_ANDROID_EXPECTED_CERT_SHA256="F2:67:E9:18:57:54:ED:C1:2B:E5:69:69:1B:39:B9:EF:D4:EF:1E:CF:2D:7E:D8:18:81:42:69:B3:70:85:D8:75"
-PACKAGE_BUILD_MODE="release"
-XCODE_CONFIGURATION="Release"
+PACKAGE_ANDROID_BUILD_MODE="debug"
+PACKAGE_MACOS_BUILD_MODE="profile"
+XCODE_CONFIGURATION="Profile"
 DIST_ROOT="$ROOT_DIR/dist"
 
 PUBSPEC_PATH="$ROOT_DIR/pubspec.yaml"
@@ -104,17 +105,23 @@ json_string() {
 for required_name in \
   PACKAGE_CHANNEL \
   AWIKI_BASE_URL \
+  AWIKI_UPDATE_MANIFEST_URL \
+  AWIKI_RELEASES_URL \
   PACKAGE_VERSION_BUMP; do
   require_config_var "$required_name"
 done
 
 require_non_empty_config_var PACKAGE_CHANNEL
 require_non_empty_config_var AWIKI_BASE_URL
+require_non_empty_config_var AWIKI_UPDATE_MANIFEST_URL
+require_non_empty_config_var AWIKI_RELEASES_URL
 require_non_empty_config_var PACKAGE_VERSION_BUMP
 
 for value_name in \
   PACKAGE_CHANNEL \
   AWIKI_BASE_URL \
+  AWIKI_UPDATE_MANIFEST_URL \
+  AWIKI_RELEASES_URL \
   PACKAGE_VERSION_BUMP; do
   validate_no_newline "$value_name" "${!value_name}"
 done
@@ -152,6 +159,8 @@ add_dart_define() {
 }
 
 add_dart_define "AWIKI_BASE_URL" "$AWIKI_BASE_URL"
+add_dart_define "AWIKI_UPDATE_MANIFEST_URL" "$AWIKI_UPDATE_MANIFEST_URL"
+add_dart_define "AWIKI_RELEASES_URL" "$AWIKI_RELEASES_URL"
 
 encode_dart_defines() {
   local joined=""
@@ -411,7 +420,7 @@ create_dmg() {
   local app="$1"
   local arch_label="$2"
   local output="$3"
-  local stage_dir="$ROOT_DIR/build/package/stage-macos-$PACKAGE_CHANNEL-$PACKAGE_BUILD_MODE-$arch_label"
+  local stage_dir="$ROOT_DIR/build/package/stage-macos-$PACKAGE_CHANNEL-$PACKAGE_MACOS_BUILD_MODE-$arch_label"
   local volume_name="$PACKAGE_APP_DISPLAY_NAME $VERSION_NAME $PACKAGE_CHANNEL $arch_label"
 
   rm -rf "$stage_dir" "$output"
@@ -431,16 +440,16 @@ build_android_arm64() {
   local aapt_tool="$2"
   local apksigner_tool="$3"
 
-  log "building Android arm64 $PACKAGE_BUILD_MODE APK"
+  log "building Android arm64 $PACKAGE_ANDROID_BUILD_MODE APK"
   "$PACKAGE_FLUTTER_BIN" build apk \
-    "--$PACKAGE_BUILD_MODE" \
+    "--$PACKAGE_ANDROID_BUILD_MODE" \
     "${DART_DEFINE_ARGS[@]}" \
     --target-platform android-arm64 \
     --split-per-abi \
     --build-name "$VERSION_NAME" \
     --build-number "$BUILD_NUMBER"
 
-  local built_apk="build/app/outputs/flutter-apk/app-arm64-v8a-$PACKAGE_BUILD_MODE.apk"
+  local built_apk="build/app/outputs/flutter-apk/app-arm64-v8a-$PACKAGE_ANDROID_BUILD_MODE.apk"
   [[ -f "$built_apk" ]] ||
     fail "expected Android arm64 APK not found: $built_apk"
   verify_android_apk "$built_apk" "$aapt_tool" "$apksigner_tool"
@@ -451,13 +460,13 @@ build_macos_arch() {
   local arch="$1"
   local arch_label="$2"
   local output_dmg="$3"
-  local derived_data="$ROOT_DIR/build/package/derived-macos-$PACKAGE_CHANNEL-$PACKAGE_BUILD_MODE-$arch_label"
+  local derived_data="$ROOT_DIR/build/package/derived-macos-$PACKAGE_CHANNEL-$PACKAGE_MACOS_BUILD_MODE-$arch_label"
   local app="$derived_data/Build/Products/$XCODE_CONFIGURATION/$PACKAGE_APP_DISPLAY_NAME.app"
 
-  log "building macOS $arch_label $PACKAGE_BUILD_MODE app"
+  log "building macOS $arch_label $PACKAGE_MACOS_BUILD_MODE app"
   rm -rf "$derived_data"
   "$PACKAGE_FLUTTER_BIN" build macos \
-    "--$PACKAGE_BUILD_MODE" \
+    "--$PACKAGE_MACOS_BUILD_MODE" \
     "${DART_DEFINE_ARGS[@]}" \
     --config-only \
     --build-name "$VERSION_NAME" \
@@ -497,12 +506,60 @@ write_platform_entry() {
 JSON
 }
 
-write_manifest() {
+download_url_for() {
+  local file_name="$1"
+  printf 'https://awiki.ai/downloads/awiki-me/%s/%s/%s\n' \
+    "$PACKAGE_CHANNEL" "$VERSION_NAME" "$file_name"
+}
+
+write_app_update_manifest() {
   local output_dir="$1"
   local android_file="$2"
   local macos_arm64_file="$3"
   local macos_x64_file="$4"
   local manifest="$output_dir/latest.json"
+  local android_name macos_arm64_name macos_x64_name
+
+  android_name="$(basename "$android_file")"
+  macos_arm64_name="$(basename "$macos_arm64_file")"
+  macos_x64_name="$(basename "$macos_x64_file")"
+
+  cat > "$manifest" <<JSON
+{
+  "version": $(json_string "$VERSION_NAME"),
+  "buildNumber": $BUILD_NUMBER,
+  "publishedAt": $(json_string "$(date -u +%Y-%m-%dT%H:%M:%SZ)"),
+  "releaseNotesUrl": $(json_string "$AWIKI_RELEASES_URL"),
+  "githubReleaseUrl": $(json_string "$AWIKI_RELEASES_URL"),
+  "platforms": {
+    "android": {
+      "downloadUrl": $(json_string "$(download_url_for "$android_name")"),
+      "sha256": $(json_string "$(file_sha256 "$output_dir/$android_name")")
+    },
+    "macos": {
+      "downloadUrl": $(json_string "$(download_url_for "$macos_arm64_name")"),
+      "sha256": $(json_string "$(file_sha256 "$output_dir/$macos_arm64_name")")
+    },
+    "macos-arm64": {
+      "downloadUrl": $(json_string "$(download_url_for "$macos_arm64_name")"),
+      "sha256": $(json_string "$(file_sha256 "$output_dir/$macos_arm64_name")")
+    },
+    "macos-x64": {
+      "downloadUrl": $(json_string "$(download_url_for "$macos_x64_name")"),
+      "sha256": $(json_string "$(file_sha256 "$output_dir/$macos_x64_name")")
+    }
+  }
+}
+JSON
+  cp "$manifest" "$LATEST_MANIFEST"
+}
+
+write_manifest() {
+  local output_dir="$1"
+  local android_file="$2"
+  local macos_arm64_file="$3"
+  local macos_x64_file="$4"
+  local manifest="$output_dir/package-manifest.json"
 
   {
     cat <<JSON
@@ -510,7 +567,10 @@ write_manifest() {
   "version": $(json_string "$VERSION_NAME"),
   "buildNumber": $BUILD_NUMBER,
   "channel": $(json_string "$PACKAGE_CHANNEL"),
-  "buildMode": $(json_string "$PACKAGE_BUILD_MODE"),
+  "buildModes": {
+    "android": $(json_string "$PACKAGE_ANDROID_BUILD_MODE"),
+    "macos": $(json_string "$PACKAGE_MACOS_BUILD_MODE")
+  },
   "publishedAt": $(json_string "$(date -u +%Y-%m-%dT%H:%M:%SZ)"),
   "backend": {
     "baseUrl": $(json_string "$AWIKI_BASE_URL")
@@ -536,7 +596,11 @@ JSON
 }
 JSON
   } > "$manifest"
-  cp "$manifest" "$LATEST_MANIFEST"
+  write_app_update_manifest \
+    "$output_dir" \
+    "$android_file" \
+    "$macos_arm64_file" \
+    "$macos_x64_file"
 }
 
 require_cmd awk
@@ -564,16 +628,19 @@ check_source_identity
 
 log "config:          $CONFIG_PATH"
 log "channel:         $PACKAGE_CHANNEL"
-log "build mode:      $PACKAGE_BUILD_MODE"
+log "android mode:    $PACKAGE_ANDROID_BUILD_MODE"
+log "macOS mode:      $PACKAGE_MACOS_BUILD_MODE"
 log "backend base:    $AWIKI_BASE_URL"
+log "update manifest: $AWIKI_UPDATE_MANIFEST_URL"
+log "download page:   $AWIKI_RELEASES_URL"
 log "current version: $CURRENT_VERSION"
 log "next version:    $NEXT_VERSION"
 log "dist root:       $DIST_ROOT"
 log "SDK repo:        $SDK_REPO_DIR"
 log "targets:"
-log "  - android-arm64 $PACKAGE_BUILD_MODE APK"
-log "  - macos-arm64 $PACKAGE_BUILD_MODE DMG"
-log "  - macos-x64 $PACKAGE_BUILD_MODE DMG"
+log "  - android-arm64 $PACKAGE_ANDROID_BUILD_MODE APK"
+log "  - macos-arm64 $PACKAGE_MACOS_BUILD_MODE DMG"
+log "  - macos-x64 $PACKAGE_MACOS_BUILD_MODE DMG"
 
 if [[ "$NEXT_VERSION" != "$CURRENT_VERSION" ]]; then
   PUBSPEC_BACKUP="$(mktemp)"
@@ -594,20 +661,20 @@ prepare_macos_project
 
 build_sdk_native
 
-OUTPUT_DIR="$CHANNEL_DIST_ROOT/$NEXT_VERSION"
+OUTPUT_DIR="$CHANNEL_DIST_ROOT/$VERSION_NAME"
 mkdir -p "$OUTPUT_DIR"
 
 ANDROID_APK=""
 MACOS_ARM64_DMG=""
 MACOS_X64_DMG=""
 
-ANDROID_APK="$OUTPUT_DIR/awiki-me-android-arm64-$PACKAGE_CHANNEL-$PACKAGE_BUILD_MODE-$NEXT_VERSION.apk"
+ANDROID_APK="$OUTPUT_DIR/AWiki-Me-Android-arm64-$VERSION_NAME.apk"
 build_android_arm64 "$ANDROID_APK" "$AAPT_TOOL" "$APKSIGNER_TOOL"
 
-MACOS_ARM64_DMG="$OUTPUT_DIR/awiki-me-macos-arm64-$PACKAGE_CHANNEL-$PACKAGE_BUILD_MODE-$NEXT_VERSION.dmg"
+MACOS_ARM64_DMG="$OUTPUT_DIR/AWiki-Me-macOS-arm64-$VERSION_NAME.dmg"
 build_macos_arch "arm64" "arm64" "$MACOS_ARM64_DMG"
 
-MACOS_X64_DMG="$OUTPUT_DIR/awiki-me-macos-x64-$PACKAGE_CHANNEL-$PACKAGE_BUILD_MODE-$NEXT_VERSION.dmg"
+MACOS_X64_DMG="$OUTPUT_DIR/AWiki-Me-macOS-x64-$VERSION_NAME.dmg"
 build_macos_arch "x86_64" "x64" "$MACOS_X64_DMG"
 
 write_manifest "$OUTPUT_DIR" "$ANDROID_APK" "$MACOS_ARM64_DMG" "$MACOS_X64_DMG"
@@ -615,4 +682,5 @@ write_manifest "$OUTPUT_DIR" "$ANDROID_APK" "$MACOS_ARM64_DMG" "$MACOS_X64_DMG"
 log "done"
 log "output: $OUTPUT_DIR"
 log "manifest: $OUTPUT_DIR/latest.json"
+log "package manifest: $OUTPUT_DIR/package-manifest.json"
 log "latest: $LATEST_MANIFEST"

@@ -239,8 +239,8 @@
       "version": {}
     }
   },
-  "settingsUpdateOpenGitHubHistory": "前往 GitHub 查阅历史版本",
-  "settingsUpdateOpenGitHubDownload": "前往 GitHub 下载当前版本",
+  "settingsUpdateOpenGitHubHistory": "打开下载页查阅历史版本",
+  "settingsUpdateOpenGitHubDownload": "打开下载页下载当前版本",
   "settingsExportCredential": "导出身份凭证",
   "settingsExportCurrentCredential": "导出当前凭证：{credentialName}",
   "@settingsExportCurrentCredential": {
@@ -851,10 +851,10 @@
   "updateAlreadyLatest": "已是最新版本",
   "updateCheckFailed": "检查更新失败，请稍后重试。",
   "updateOpenReleaseNotesFailed": "无法打开更新日志，请稍后重试。",
-  "updateOpenDownloadFailed": "无法打开下载页面，请前往 GitHub Release。",
+  "updateOpenDownloadFailed": "无法打开下载页面，请稍后重试。",
   "updateReadyToInstall": "下载完成，准备安装。",
   "updatePermissionRequired": "请允许安装未知应用后重试。",
-  "updateInstallFailed": "更新失败，请前往 GitHub 下载。",
+  "updateInstallFailed": "更新失败，请打开下载页手动安装。",
   "daemonUpgradeStarted": "已开始升级代理。",
   "requestTimeoutRetry": "请求超时，请检查网络后重试。",
   "networkUnavailableRetry": "网络连接暂时不可用，请检查网络后重试。",

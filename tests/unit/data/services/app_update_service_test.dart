@@ -128,6 +128,18 @@ void main() {
     expect(opened.single.toString(), 'https://updates.example/releases/1.2.0');
   });
 
+  test('macOS manifest can expose direct DMG download without appcast', () {
+    final manifest = AppUpdateManifest.fromJson(
+      _manifestJson(macosAppcastUrl: null),
+    );
+
+    expect(
+      manifest.platforms.macos.downloadUrl,
+      'https://updates.example/awiki-me.dmg',
+    );
+    expect(manifest.platforms.macos.appcastUrl, isNull);
+  });
+
   test('open URL failures are reported clearly', () async {
     final service = _service(
       storage: _MemoryKeyValueStore(),
@@ -163,7 +175,10 @@ AppUpdateService _service({
   );
 }
 
-Map<String, Object?> _manifestJson({int buildNumber = 12}) {
+Map<String, Object?> _manifestJson({
+  int buildNumber = 12,
+  String? macosAppcastUrl = 'https://updates.example/appcast.xml',
+}) {
   return <String, Object?>{
     'version': '1.2.0',
     'buildNumber': buildNumber,
@@ -172,7 +187,8 @@ Map<String, Object?> _manifestJson({int buildNumber = 12}) {
     'githubReleaseUrl': 'https://updates.example/releases/1.2.0',
     'platforms': <String, Object?>{
       'macos': <String, Object?>{
-        'appcastUrl': 'https://updates.example/appcast.xml',
+        if (macosAppcastUrl != null) 'appcastUrl': macosAppcastUrl,
+        'downloadUrl': 'https://updates.example/awiki-me.dmg',
       },
       'android': <String, Object?>{
         'downloadUrl': 'https://updates.example/awiki-me.apk',

@@ -16,12 +16,12 @@ import 'platform_update_bridge.dart';
 
 const String kDefaultUpdateManifestUrl = String.fromEnvironment(
   'AWIKI_UPDATE_MANIFEST_URL',
-  defaultValue: 'https://agentconnect.github.io/awiki-me/updates/latest.json',
+  defaultValue: 'https://awiki.ai/downloads/awiki-me/test/latest.json',
 );
 
 const String kDefaultReleasesUrl = String.fromEnvironment(
   'AWIKI_RELEASES_URL',
-  defaultValue: 'https://github.com/AgentConnect/awiki-me/releases',
+  defaultValue: 'https://awiki.ai/#download',
 );
 
 class AppUpdateService implements UpdateService {
@@ -198,7 +198,12 @@ class AppUpdateService implements UpdateService {
   Future<void> _installMacOsUpdate(AppUpdateManifest manifest) async {
     final appcastUrl = manifest.platforms.macos.appcastUrl;
     if (appcastUrl == null || appcastUrl.isEmpty) {
-      await openDownloadPage(manifest);
+      final downloadUrl = manifest.platforms.macos.downloadUrl;
+      await _openUrl(
+        downloadUrl == null || downloadUrl.isEmpty
+            ? manifest.githubReleaseUrl
+            : downloadUrl,
+      );
       return;
     }
     try {

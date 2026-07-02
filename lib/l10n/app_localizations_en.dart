@@ -612,11 +612,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsUpdateOpenGitHubHistory =>
-      'Open GitHub to browse release history';
+      'Open the download page to browse release history';
 
   @override
   String get settingsUpdateOpenGitHubDownload =>
-      'Open GitHub to download the current build';
+      'Open the download page to get the current build';
 
   @override
   String get settingsExportCredential => 'Export identity credential';
@@ -1984,7 +1984,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get updateOpenDownloadFailed =>
-      'Couldn\'t open the download page. Please use GitHub Releases.';
+      'Couldn\'t open the download page. Please try again later.';
 
   @override
   String get updateReadyToInstall => 'Download complete. Ready to install.';
@@ -1995,7 +1995,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get updateInstallFailed =>
-      'Update failed. Please download it from GitHub.';
+      'Update failed. Please install it from the download page.';
 
   @override
   String get daemonUpgradeStarted => 'Daemon upgrade started.';
