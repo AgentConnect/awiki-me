@@ -272,6 +272,36 @@ write_pubspec_version() {
   mv "$tmp" "$PUBSPEC_PATH"
 }
 
+write_properties_key() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+  local tmp
+  tmp="$(mktemp)"
+  if [[ -f "$file" ]] && grep -q "^${key}=" "$file"; then
+    awk -v key="$key" -v value="$value" '
+      index($0, key "=") == 1 {
+        print key "=" value
+        next
+      }
+      { print }
+    ' "$file" > "$tmp"
+  else
+    if [[ -f "$file" ]]; then
+      cat "$file" > "$tmp"
+    fi
+    printf '%s=%s\n' "$key" "$value" >> "$tmp"
+  fi
+  mv "$tmp" "$file"
+}
+
+sync_android_local_version() {
+  local local_properties="android/local.properties"
+  [[ -f "$local_properties" ]] || fail "Android local.properties is missing; run flutter pub get once before packaging"
+  write_properties_key "$local_properties" "flutter.versionName" "$VERSION_NAME"
+  write_properties_key "$local_properties" "flutter.versionCode" "$BUILD_NUMBER"
+}
+
 check_source_identity() {
   grep -Fq "namespace = \"$PACKAGE_ANDROID_APP_ID\"" \
     android/app/build.gradle ||
@@ -453,6 +483,8 @@ build_android_arm64() {
   local apksigner_tool="$3"
 
   log "building Android arm64 $PACKAGE_ANDROID_BUILD_MODE APK"
+  sync_android_local_version
+  rm -f "build/app/outputs/flutter-apk/app-arm64-v8a-$PACKAGE_ANDROID_BUILD_MODE.apk"
   "$PACKAGE_FLUTTER_BIN" build apk \
     "--$PACKAGE_ANDROID_BUILD_MODE" \
     "${DART_DEFINE_ARGS[@]}" \
