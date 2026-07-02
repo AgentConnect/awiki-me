@@ -5,6 +5,7 @@ class AwikiEnvironmentConfig {
     String? messageServiceUrl,
     String? mailServiceUrl,
     String? didDomain,
+    String? stateNamespace,
     String? anpServiceUrl,
     String? anpServiceDid,
     String? daemonDownloadBaseUrl,
@@ -28,6 +29,11 @@ class AwikiEnvironmentConfig {
       fallback: normalizedBase,
     );
     this.didDomain = _firstNonEmpty(didDomain, _hostFromUrl(normalizedBase));
+    this.stateNamespace = _normalizeStateNamespace(
+      stateNamespace,
+      didDomain: this.didDomain,
+      serviceBaseUrl: normalizedBase,
+    );
     this.anpServiceUrl = _normalizeBaseUrl(
       anpServiceUrl,
       fallback: _joinUrl(normalizedBase, '/anp-im/rpc'),
@@ -52,6 +58,7 @@ class AwikiEnvironmentConfig {
       ),
       mailServiceUrl: const String.fromEnvironment('AWIKI_MAIL_SERVICE_URL'),
       didDomain: const String.fromEnvironment('AWIKI_DID_DOMAIN'),
+      stateNamespace: const String.fromEnvironment('AWIKI_STATE_NAMESPACE'),
       anpServiceUrl: const String.fromEnvironment('AWIKI_ANP_SERVICE_URL'),
       anpServiceDid: const String.fromEnvironment('AWIKI_ANP_SERVICE_DID'),
       daemonDownloadBaseUrl: const String.fromEnvironment(
@@ -69,6 +76,7 @@ class AwikiEnvironmentConfig {
   late final String messageServiceUrl;
   late final String mailServiceUrl;
   late final String didDomain;
+  late final String stateNamespace;
   late final String anpServiceUrl;
   late final String anpServiceDid;
   late final String daemonDownloadBaseUrl;
@@ -100,4 +108,42 @@ String _joinUrl(String baseUrl, String path) {
   final normalizedBase = baseUrl.trim().replaceAll(RegExp(r'/+$'), '');
   final normalizedPath = path.startsWith('/') ? path : '/$path';
   return '$normalizedBase$normalizedPath';
+}
+
+String _normalizeStateNamespace(
+  String? value, {
+  required String didDomain,
+  required String serviceBaseUrl,
+}) {
+  final explicit = _safeNamespaceSegment(value);
+  if (explicit != null) {
+    return explicit;
+  }
+  final domain = _safeNamespaceSegment(didDomain) ?? 'default';
+  final baseHost = Uri.tryParse(serviceBaseUrl.trim())?.host.trim();
+  final basePort = Uri.tryParse(serviceBaseUrl.trim())?.hasPort == true
+      ? Uri.tryParse(serviceBaseUrl.trim())?.port
+      : null;
+  final baseIdentity = basePort == null
+      ? baseHost
+      : '${baseHost ?? ''}-$basePort';
+  final base = _safeNamespaceSegment(baseIdentity);
+  if (base == null || base == domain) {
+    return domain;
+  }
+  return '$domain-$base';
+}
+
+String? _safeNamespaceSegment(String? value) {
+  final trimmed = value?.trim().toLowerCase();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  final normalized = trimmed
+      .replaceAll(RegExp(r'^https?://'), '')
+      .replaceAll(RegExp(r'[/\\:*?"<>|#?&=%]+'), '-')
+      .replaceAll(RegExp(r'[^a-z0-9._-]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-')
+      .replaceAll(RegExp(r'^[-.]+|[-.]+$'), '');
+  return normalized.isEmpty ? null : normalized;
 }

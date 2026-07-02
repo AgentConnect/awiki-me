@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'active_session_store.dart';
 import 'models/app_session.dart';
 import 'ports/auth_core_port.dart';
 import 'ports/identity_core_port.dart';
@@ -24,19 +27,27 @@ abstract interface class AppSessionService {
 }
 
 class ImCoreAppSessionService implements AppSessionService {
+  static const Duration _logoutCleanupTimeout = Duration(seconds: 5);
+
   ImCoreAppSessionService({
     required ImCoreRuntimePort runtime,
     required IdentityCorePort identities,
     required AuthCorePort auth,
+    ActiveSessionStore? activeSessionStore,
+    String? expectedDidDomain,
     RealtimeCorePort? realtime,
   }) : _runtime = runtime,
        _identities = identities,
        _auth = auth,
+       _activeSessionStore = activeSessionStore,
+       _expectedDidDomain = _normalizeDidDomain(expectedDidDomain),
        _realtime = realtime;
 
   final ImCoreRuntimePort _runtime;
   final IdentityCorePort _identities;
   final AuthCorePort _auth;
+  final ActiveSessionStore? _activeSessionStore;
+  final String? _expectedDidDomain;
   final RealtimeCorePort? _realtime;
 
   AppSession? _current;
@@ -47,8 +58,17 @@ class ImCoreAppSessionService implements AppSessionService {
       return _current;
     }
     await _runtime.open();
-    final identity = await _identities.defaultIdentity();
+    final activeIdentityId = await _activeSessionStore?.readActiveIdentityId();
+    if (activeIdentityId == null) {
+      return null;
+    }
+    final identity = await _localIdentityFor(
+      activeIdentityId,
+      allowResolve: false,
+      throwOnDomainMismatch: false,
+    );
     if (identity == null) {
+      await _activeSessionStore?.clearActiveIdentityId();
       return null;
     }
     return activateIdentity(identity);
@@ -64,7 +84,9 @@ class ImCoreAppSessionService implements AppSessionService {
     if (!_runtime.isOpen) {
       await _runtime.open();
     }
-    return _identities.listLocalIdentities();
+    return (await _identities.listLocalIdentities())
+        .where(_isExpectedDomainIdentity)
+        .toList();
   }
 
   @override
@@ -73,6 +95,9 @@ class ImCoreAppSessionService implements AppSessionService {
       await _runtime.open();
     }
     final identity = await _localIdentityFor(identityIdOrAlias);
+    if (identity == null) {
+      throw StateError('local_identity_not_found: $identityIdOrAlias');
+    }
     return activateIdentity(identity);
   }
 
@@ -81,6 +106,7 @@ class ImCoreAppSessionService implements AppSessionService {
     if (!_runtime.isOpen) {
       await _runtime.open();
     }
+    _assertIdentityDomain(identity);
     await _runtime.switchIdentity(identity.identityId);
     try {
       final auth = await _auth.ensureSession();
@@ -99,6 +125,7 @@ class ImCoreAppSessionService implements AppSessionService {
         jwtToken: null,
       );
     }
+    await _activeSessionStore?.writeActiveIdentityId(identity.identityId);
     return _current!;
   }
 
@@ -120,8 +147,9 @@ class ImCoreAppSessionService implements AppSessionService {
   @override
   Future<void> logout() async {
     try {
-      await _realtime?.stop();
-      await _runtime.dispose();
+      await _activeSessionStore?.clearActiveIdentityId();
+      await _stopRealtimeBestEffort();
+      await _disposeRuntimeBestEffort();
     } finally {
       _current = null;
     }
@@ -149,15 +177,26 @@ class ImCoreAppSessionService implements AppSessionService {
             (deleted.handle != null &&
                 _matchesIdentity(current, deleted.handle!)))) {
       try {
+        await _activeSessionStore?.clearActiveIdentityId();
         await _runtime.dispose();
       } finally {
         _current = null;
+      }
+    } else {
+      final activeIdentityId = await _activeSessionStore
+          ?.readActiveIdentityId();
+      if (activeIdentityId == deleted.identityId) {
+        await _activeSessionStore?.clearActiveIdentityId();
       }
     }
     return deleted;
   }
 
-  Future<AppSession> _localIdentityFor(String identityIdOrAlias) async {
+  Future<AppSession?> _localIdentityFor(
+    String identityIdOrAlias, {
+    bool allowResolve = true,
+    bool throwOnDomainMismatch = true,
+  }) async {
     final trimmed = identityIdOrAlias.trim();
     if (trimmed.isEmpty) {
       throw ArgumentError.value(
@@ -168,11 +207,65 @@ class ImCoreAppSessionService implements AppSessionService {
     }
     final identities = await _identities.listLocalIdentities();
     for (final identity in identities) {
-      if (_matchesIdentity(identity, trimmed)) {
+      if (!_matchesIdentity(identity, trimmed)) {
+        continue;
+      }
+      if (_isExpectedDomainIdentity(identity)) {
         return identity;
       }
+      if (throwOnDomainMismatch) {
+        _assertIdentityDomain(identity);
+      }
+      return null;
     }
-    return _identities.resolveIdentity(trimmed);
+    if (!allowResolve) {
+      return null;
+    }
+    final resolved = await _identities.resolveIdentity(trimmed);
+    _assertIdentityDomain(resolved);
+    return resolved;
+  }
+
+  bool _isExpectedDomainIdentity(AppSession identity) {
+    final expected = _expectedDidDomain;
+    return expected == null || _didDomain(identity.did) == expected;
+  }
+
+  void _assertIdentityDomain(AppSession identity) {
+    final expected = _expectedDidDomain;
+    if (expected == null) {
+      return;
+    }
+    final actual = _didDomain(identity.did);
+    if (actual == null || actual != expected) {
+      throw StateError(
+        'identity_domain_mismatch: expected $expected, got ${actual ?? 'unknown'}',
+      );
+    }
+  }
+
+  Future<void> _stopRealtimeBestEffort() async {
+    final realtime = _realtime;
+    if (realtime == null) {
+      return;
+    }
+    try {
+      await realtime.stop().timeout(_logoutCleanupTimeout);
+    } on TimeoutException {
+      return;
+    } catch (_) {
+      return;
+    }
+  }
+
+  Future<void> _disposeRuntimeBestEffort() async {
+    try {
+      await _runtime.dispose().timeout(_logoutCleanupTimeout);
+    } on TimeoutException {
+      return;
+    } catch (_) {
+      return;
+    }
   }
 }
 
@@ -214,4 +307,18 @@ String? _trimLeadingAt(String? value) {
     start += 1;
   }
   return value.substring(start);
+}
+
+String? _normalizeDidDomain(String? value) {
+  final trimmed = value?.trim().toLowerCase();
+  return trimmed == null || trimmed.isEmpty ? null : trimmed;
+}
+
+String? _didDomain(String did) {
+  final segments = did.trim().split(':');
+  if (segments.length < 4 || segments[0] != 'did' || segments[1] != 'wba') {
+    return null;
+  }
+  final domain = segments[2].trim().toLowerCase();
+  return domain.isEmpty ? null : domain;
 }

@@ -22,9 +22,12 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
        _openCore = openCore ?? core.AwikiImCore.open;
 
   static Future<AwikiImCoreRuntime> fromEnvironment() async {
+    final config = AwikiImCoreEnvironmentConfig.fromEnvironment();
     return AwikiImCoreRuntime(
-      config: AwikiImCoreEnvironmentConfig.fromEnvironment(),
-      paths: await AwikiImCorePathLayout.fromPlatform(),
+      config: config,
+      paths: await AwikiImCorePathLayout.fromPlatform(
+        stateNamespace: config.stateNamespace,
+      ),
     );
   }
 

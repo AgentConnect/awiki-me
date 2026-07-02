@@ -136,9 +136,13 @@ final peerIdentityServiceProvider = Provider<PeerIdentityService>(
   (ref) => UserServicePeerIdentityService.fromEnvironment(),
 );
 
+final awikiEnvironmentConfigProvider = Provider<AwikiEnvironmentConfig>(
+  (ref) => AwikiEnvironmentConfig.fromEnvironment(),
+);
+
 final profileHomepageResolverProvider = Provider<ProfileHomepageResolver>(
   (ref) => ProfileHomepageResolver(
-    environment: AwikiEnvironmentConfig.fromEnvironment(),
+    environment: ref.watch(awikiEnvironmentConfigProvider),
   ),
 );
 
@@ -191,7 +195,9 @@ final attachmentPickerServiceProvider = Provider<AttachmentPickerService>(
 );
 
 final attachmentCacheServiceProvider = Provider<AttachmentCacheService>(
-  (ref) => FileAttachmentCacheService(),
+  (ref) => FileAttachmentCacheService(
+    stateNamespace: ref.watch(awikiEnvironmentConfigProvider).stateNamespace,
+  ),
 );
 
 final attachmentPreviewServiceProvider = Provider<AttachmentPreviewService>(

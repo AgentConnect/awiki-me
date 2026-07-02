@@ -7,8 +7,14 @@ import '../../application/attachment_cache_service.dart';
 import '../im_core/awiki_im_core_paths.dart';
 
 class FileAttachmentCacheService implements AttachmentCacheService {
-  FileAttachmentCacheService({Future<Directory> Function()? rootDirectory})
-    : _rootDirectory = rootDirectory ?? _defaultRootDirectory;
+  FileAttachmentCacheService({
+    Future<Directory> Function()? rootDirectory,
+    String? stateNamespace,
+  }) : _rootDirectory =
+           rootDirectory ??
+           (() => _defaultRootDirectory(
+             stateNamespace: normalizeAwikiStateNamespace(stateNamespace),
+           ));
 
   final Future<Directory> Function() _rootDirectory;
 
@@ -94,13 +100,19 @@ class FileAttachmentCacheService implements AttachmentCacheService {
     );
   }
 
-  static Future<Directory> _defaultRootDirectory() async {
+  static Future<Directory> _defaultRootDirectory({
+    required String stateNamespace,
+  }) async {
     final e2eRoot = awikiE2eAppStateRoot();
     if (e2eRoot != null) {
-      return Directory('$e2eRoot/support/awiki-me/attachments');
+      return Directory(
+        '$e2eRoot/support/awiki-me/environments/$stateNamespace/attachments',
+      );
     }
     final support = await getApplicationSupportDirectory();
-    return Directory('${support.path}/awiki-me/attachments');
+    return Directory(
+      '${support.path}/awiki-me/environments/$stateNamespace/attachments',
+    );
   }
 
   static String _safePathSegment(String value) {

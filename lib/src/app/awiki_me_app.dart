@@ -38,6 +38,7 @@ class AwikiMeApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ProviderScope(
       overrides: <Override>[
+        awikiEnvironmentConfigProvider.overrideWithValue(bootstrap.environment),
         awikiAccountGatewayProvider.overrideWithValue(bootstrap.accountGateway),
         awikiGatewayProvider.overrideWithValue(bootstrap.gateway),
         realtimeGatewayProvider.overrideWithValue(bootstrap.realtimeGateway),

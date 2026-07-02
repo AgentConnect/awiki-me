@@ -18,6 +18,7 @@ const List<String> _sqliteSidecarSuffixes = <String>[
 
 class AwikiImCorePathLayout {
   const AwikiImCorePathLayout({
+    required this.stateNamespace,
     required this.identityRootDir,
     required this.registryPath,
     required this.defaultIdentityPath,
@@ -30,14 +31,19 @@ class AwikiImCorePathLayout {
     required String appSupportRoot,
     required String cacheRoot,
     required String tempRoot,
+    String? stateNamespace,
   }) {
+    final namespace = normalizeAwikiStateNamespace(stateNamespace);
     final appSupportImCoreRoot = _joinAll(<String>[
       appSupportRoot,
       'awiki-me',
+      'environments',
+      namespace,
       'im-core',
     ]);
     final identityRoot = _joinAll(<String>[appSupportImCoreRoot, 'identities']);
     return AwikiImCorePathLayout(
+      stateNamespace: namespace,
       identityRootDir: identityRoot,
       registryPath: _joinAll(<String>[identityRoot, 'registry.json']),
       defaultIdentityPath: _joinAll(<String>[identityRoot, 'default']),
@@ -46,13 +52,26 @@ class AwikiImCorePathLayout {
         'state',
         'im_core.sqlite',
       ]),
-      cacheDir: _joinAll(<String>[cacheRoot, 'awiki-me', 'im-core']),
-      tempDir: _joinAll(<String>[tempRoot, 'awiki-me', 'im-core']),
+      cacheDir: _joinAll(<String>[
+        cacheRoot,
+        'awiki-me',
+        'environments',
+        namespace,
+        'im-core',
+      ]),
+      tempDir: _joinAll(<String>[
+        tempRoot,
+        'awiki-me',
+        'environments',
+        namespace,
+        'im-core',
+      ]),
     );
   }
 
   static Future<AwikiImCorePathLayout> fromPlatform({
     String? appStateRoot,
+    String? stateNamespace,
   }) async {
     final stateRoot = _firstNonEmpty(appStateRoot, _e2eAppStateRoot());
     if (stateRoot != null) {
@@ -60,6 +79,7 @@ class AwikiImCorePathLayout {
         appSupportRoot: _joinAll(<String>[stateRoot, 'support']),
         cacheRoot: _joinAll(<String>[stateRoot, 'cache']),
         tempRoot: _joinAll(<String>[stateRoot, 'tmp']),
+        stateNamespace: stateNamespace,
       );
     }
     final appSupport = await getApplicationSupportDirectory();
@@ -69,9 +89,11 @@ class AwikiImCorePathLayout {
       appSupportRoot: appSupport.path,
       cacheRoot: cache.path,
       tempRoot: temp.path,
+      stateNamespace: stateNamespace,
     );
   }
 
+  final String stateNamespace;
   final String identityRootDir;
   final String registryPath;
   final String defaultIdentityPath;
@@ -177,6 +199,20 @@ String? _firstNonEmpty(String? first, String? second) {
     return secondTrimmed;
   }
   return null;
+}
+
+String normalizeAwikiStateNamespace(String? value) {
+  final raw = value?.trim().toLowerCase();
+  if (raw == null || raw.isEmpty) {
+    return 'default';
+  }
+  final safe = raw
+      .replaceAll(RegExp(r'^https?://'), '')
+      .replaceAll(RegExp(r'[/\\:*?"<>|#?&=%]+'), '-')
+      .replaceAll(RegExp(r'[^a-z0-9._-]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-')
+      .replaceAll(RegExp(r'^[-.]+|[-.]+$'), '');
+  return safe.isEmpty ? 'default' : safe;
 }
 
 class ArchivedLocalState {

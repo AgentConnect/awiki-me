@@ -43,6 +43,7 @@ FakeAwikiMeAppHarness createFakeAwikiMeAppHarness({
   final notificationFacade = FakeNotificationFacade();
 
   final bootstrap = AppBootstrap(
+    environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
     accountGateway: gateway,
     gateway: gateway,
     realtimeGateway: realtimeGateway,

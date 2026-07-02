@@ -1,3 +1,4 @@
+import 'package:awiki_me/src/application/active_session_store.dart';
 import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/models/app_auth_state.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
@@ -14,7 +15,29 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('ImCoreAppSessionService', () {
     test(
-      'restoreSession activates SDK default identity and ensures auth',
+      'restoreSession does not treat SDK default identity as login state',
+      () async {
+        final runtime = _FakeRuntime();
+        final identity = _session('id-default');
+        final auth = _FakeAuth();
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: _FakeIdentities(defaultIdentity: identity),
+          auth: auth,
+          activeSessionStore: _FakeActiveSessionStore(),
+        );
+
+        final restored = await service.restoreSession();
+
+        expect(restored, isNull);
+        expect(runtime.openCount, 1);
+        expect(runtime.switchedIdentities, isEmpty);
+        expect(auth.ensureCount, 0);
+      },
+    );
+
+    test(
+      'restoreSession activates stored active identity and ensures auth',
       () async {
         final runtime = _FakeRuntime();
         final identity = _session('id-default');
@@ -30,6 +53,7 @@ void main() {
           runtime: runtime,
           identities: _FakeIdentities(defaultIdentity: identity),
           auth: auth,
+          activeSessionStore: _FakeActiveSessionStore('id-default'),
         );
 
         final restored = await service.restoreSession();
@@ -58,6 +82,7 @@ void main() {
           runtime: runtime,
           identities: _FakeIdentities(defaultIdentity: identity),
           auth: auth,
+          activeSessionStore: _FakeActiveSessionStore('id-offline'),
         );
 
         final restored = await service.restoreSession();
@@ -75,6 +100,7 @@ void main() {
         runtime: _FakeRuntime(),
         identities: _FakeIdentities(defaultIdentity: _session('id-auth')),
         auth: _FakeAuth(ensureError: StateError('private key missing')),
+        activeSessionStore: _FakeActiveSessionStore('id-auth'),
       );
 
       await expectLater(service.restoreSession(), throwsStateError);
@@ -89,6 +115,7 @@ void main() {
           runtime: runtime,
           identities: _FakeIdentities(defaultIdentity: identity),
           auth: _FakeAuth(),
+          activeSessionStore: _FakeActiveSessionStore(),
         );
 
         final session = await service.loginWithIdentity('alice-local');
@@ -111,6 +138,7 @@ void main() {
           runtime: runtime,
           identities: _FakeIdentities(defaultIdentity: identity),
           auth: _FakeAuth(),
+          activeSessionStore: _FakeActiveSessionStore(),
         );
 
         final session = await service.loginWithIdentity('@Alice');
@@ -131,6 +159,7 @@ void main() {
           runtime: runtime,
           identities: identities,
           auth: _FakeAuth(),
+          activeSessionStore: _FakeActiveSessionStore(),
         );
 
         final session = await service.loginWithIdentity('id-resolved');
@@ -161,6 +190,7 @@ void main() {
           runtime: _FakeRuntime(),
           identities: _FakeIdentities(defaultIdentity: identity),
           auth: auth,
+          activeSessionStore: _FakeActiveSessionStore('id-default'),
         );
 
         await service.restoreSession();
@@ -175,10 +205,12 @@ void main() {
     test('logout stops realtime and disposes runtime', () async {
       final runtime = _FakeRuntime();
       final realtime = _FakeRealtime();
+      final active = _FakeActiveSessionStore('id-default');
       final service = ImCoreAppSessionService(
         runtime: runtime,
         identities: _FakeIdentities(defaultIdentity: _session('id-default')),
         auth: _FakeAuth(),
+        activeSessionStore: active,
         realtime: realtime,
       );
 
@@ -188,6 +220,7 @@ void main() {
       expect(realtime.stopCount, 1);
       expect(runtime.disposeCount, 1);
       expect(await service.currentSession(), isNull);
+      expect(await active.readActiveIdentityId(), isNull);
     });
 
     test('logout keeps the current session while stopping realtime', () async {
@@ -202,6 +235,7 @@ void main() {
         runtime: runtime,
         identities: _FakeIdentities(defaultIdentity: _session('id-default')),
         auth: _FakeAuth(),
+        activeSessionStore: _FakeActiveSessionStore('id-default'),
         realtime: realtime,
       );
 
@@ -222,6 +256,7 @@ void main() {
           runtime: runtime,
           identities: identities,
           auth: _FakeAuth(),
+          activeSessionStore: _FakeActiveSessionStore('id-default'),
           realtime: realtime,
         );
 
@@ -233,6 +268,51 @@ void main() {
         expect(realtime.stopCount, 1);
         expect(runtime.disposeCount, 1);
         expect(await service.currentSession(), isNull);
+      },
+    );
+
+    test(
+      'listLocalIdentities filters identities from another DID domain',
+      () async {
+        final identities = _FakeIdentities(
+          defaultIdentity: _session('id-default'),
+          extraIdentities: <AppSession>[
+            _session(
+              'id-test',
+            ).copyWith(did: 'did:wba:anpclaw.com:alice:e1_id-test'),
+          ],
+        );
+        final service = ImCoreAppSessionService(
+          runtime: _FakeRuntime(),
+          identities: identities,
+          auth: _FakeAuth(),
+          expectedDidDomain: 'awiki.ai',
+        );
+
+        final local = await service.listLocalIdentities();
+
+        expect(local.map((item) => item.identityId), ['id-default']);
+      },
+    );
+
+    test(
+      'loginWithIdentity rejects cross-domain local identities locally',
+      () async {
+        final service = ImCoreAppSessionService(
+          runtime: _FakeRuntime(),
+          identities: _FakeIdentities(
+            defaultIdentity: _session(
+              'id-test',
+            ).copyWith(did: 'did:wba:anpclaw.com:alice:e1_id-test'),
+          ),
+          auth: _FakeAuth(),
+          expectedDidDomain: 'awiki.ai',
+        );
+
+        await expectLater(
+          service.loginWithIdentity('alice-local'),
+          throwsStateError,
+        );
       },
     );
   });
@@ -276,12 +356,17 @@ class _FakeRuntime implements ImCoreRuntimePort {
 }
 
 class _FakeIdentities implements IdentityCorePort {
-  _FakeIdentities({AppSession? defaultIdentity, AppSession? resolvedIdentity})
-    : _defaultIdentity = defaultIdentity,
-      _resolvedIdentity = resolvedIdentity;
+  _FakeIdentities({
+    AppSession? defaultIdentity,
+    AppSession? resolvedIdentity,
+    List<AppSession> extraIdentities = const <AppSession>[],
+  }) : _defaultIdentity = defaultIdentity,
+       _resolvedIdentity = resolvedIdentity,
+       _extraIdentities = extraIdentities;
 
   final AppSession? _defaultIdentity;
   final AppSession? _resolvedIdentity;
+  final List<AppSession> _extraIdentities;
   final List<String> resolvedSelectors = <String>[];
   final List<String> deletedSelectors = <String>[];
 
@@ -291,6 +376,7 @@ class _FakeIdentities implements IdentityCorePort {
   @override
   Future<List<AppSession>> listLocalIdentities() async => <AppSession>[
     if (_defaultIdentity != null) _defaultIdentity,
+    ..._extraIdentities,
   ];
 
   @override
@@ -346,6 +432,25 @@ class _FakeIdentities implements IdentityCorePort {
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
     deletedSelectors.add(identityIdOrAlias);
     return _defaultIdentity ?? _session(identityIdOrAlias);
+  }
+}
+
+class _FakeActiveSessionStore implements ActiveSessionStore {
+  _FakeActiveSessionStore([this.activeIdentityId]);
+
+  String? activeIdentityId;
+
+  @override
+  Future<void> clearActiveIdentityId() async {
+    activeIdentityId = null;
+  }
+
+  @override
+  Future<String?> readActiveIdentityId() async => activeIdentityId;
+
+  @override
+  Future<void> writeActiveIdentityId(String identityId) async {
+    activeIdentityId = identityId;
   }
 }
 

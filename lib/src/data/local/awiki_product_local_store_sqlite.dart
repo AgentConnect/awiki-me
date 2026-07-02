@@ -15,9 +15,11 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
     Database? database,
     String? databasePath,
     String? legacyDatabasePath,
+    String? stateNamespace,
   }) : _database = database,
        _databasePath = databasePath,
-       _legacyDatabasePath = legacyDatabasePath;
+       _legacyDatabasePath = legacyDatabasePath,
+       _stateNamespace = normalizeAwikiStateNamespace(stateNamespace);
 
   static const String databaseName = 'awiki_me_product_store.db';
   static const int databaseVersion = 2;
@@ -26,6 +28,7 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
   Future<Database>? _databaseOpening;
   final String? _databasePath;
   final String? _legacyDatabasePath;
+  final String _stateNamespace;
 
   @override
   Future<void> warmUp() async {
@@ -98,9 +101,18 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
         ? p.join(
             (await getApplicationSupportDirectory()).path,
             'awiki-me',
+            'environments',
+            _stateNamespace,
             'product',
           )
-        : p.join(e2eRoot, 'support', 'awiki-me', 'product');
+        : p.join(
+            e2eRoot,
+            'support',
+            'awiki-me',
+            'environments',
+            _stateNamespace,
+            'product',
+          );
     await Directory(base).create(recursive: true);
     return p.join(base, databaseName);
   }

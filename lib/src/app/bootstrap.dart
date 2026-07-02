@@ -45,6 +45,7 @@ import '../data/services/app_key_value_store.dart';
 import '../data/services/app_notification_facade.dart';
 import '../data/services/app_update_service.dart';
 import '../data/services/awiki_onboarding_support_service.dart';
+import '../data/services/key_value_active_session_store.dart';
 import '../data/services/locale_preference_service.dart';
 import '../data/services/user_service_peer_identity_service.dart';
 import '../domain/repositories/awiki_account_gateway.dart';
@@ -58,6 +59,7 @@ import '../core/performance_logger.dart';
 
 class AppBootstrap {
   AppBootstrap({
+    required this.environment,
     required this.accountGateway,
     required this.gateway,
     required this.realtimeGateway,
@@ -85,6 +87,7 @@ class AppBootstrap {
     this.peerIdentityService,
   });
 
+  final AwikiEnvironmentConfig environment;
   final AwikiAccountGateway accountGateway;
   final AwikiGateway gateway;
   final RealtimeGateway realtimeGateway;
@@ -125,7 +128,10 @@ class AppBootstrap {
 
     final pathLayout = await AwikiPerformanceLogger.async(
       'bootstrap.im_core_paths',
-      () => AwikiImCorePathLayout.fromPlatform(appStateRoot: appStateRoot),
+      () => AwikiImCorePathLayout.fromPlatform(
+        appStateRoot: appStateRoot,
+        stateNamespace: effectiveEnvironment.stateNamespace,
+      ),
     );
     final runtime = AwikiImCoreRuntime(
       config: AwikiImCoreEnvironmentConfig.fromAwikiEnvironment(
@@ -133,7 +139,13 @@ class AppBootstrap {
       ),
       paths: pathLayout,
     );
-    final productLocalStore = AwikiProductLocalStoreSqlite();
+    final productLocalStore = AwikiProductLocalStoreSqlite(
+      stateNamespace: effectiveEnvironment.stateNamespace,
+    );
+    final activeSessionStore = KeyValueActiveSessionStore(
+      storage: preferenceStorage,
+      stateNamespace: effectiveEnvironment.stateNamespace,
+    );
 
     final identityAdapter = AwikiImCoreIdentityAdapter(runtime: runtime);
     final authAdapter = AwikiImCoreAuthAdapter(runtime: runtime);
@@ -192,6 +204,8 @@ class AppBootstrap {
       runtime: runtime,
       identities: identityAdapter,
       auth: authAdapter,
+      activeSessionStore: activeSessionStore,
+      expectedDidDomain: effectiveEnvironment.didDomain,
       realtime: realtimeAdapter,
     );
     final onboardingService = ImCoreOnboardingService(
@@ -230,6 +244,7 @@ class AppBootstrap {
     );
     final updateService = AppUpdateService(storage: preferenceStorage);
     final bootstrap = AppBootstrap(
+      environment: effectiveEnvironment,
       accountGateway: accountGateway,
       gateway: gateway,
       realtimeGateway: realtimeGateway,
@@ -262,6 +277,7 @@ class AppBootstrap {
       elapsed: totalWatch.elapsed,
       fields: <String, Object?>{
         'custom_state_root': appStateRoot?.trim().isNotEmpty == true,
+        'state_namespace': effectiveEnvironment.stateNamespace,
       },
     );
     return bootstrap;

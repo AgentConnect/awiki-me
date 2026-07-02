@@ -4,6 +4,7 @@ import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
@@ -32,6 +33,7 @@ void main() {
       final gateway = FakeAwikiGateway();
       final realtimeGateway = FakeRealtimeGateway();
       bootstrap = AppBootstrap(
+        environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
         accountGateway: gateway,
         gateway: gateway,
         realtimeGateway: realtimeGateway,
@@ -239,6 +241,7 @@ void main() {
       );
       final app = AwikiMeApp(
         bootstrap: AppBootstrap(
+          environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
           accountGateway: gateway,
           gateway: gateway,
           realtimeGateway: realtimeGateway,

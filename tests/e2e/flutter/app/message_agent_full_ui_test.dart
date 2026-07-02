@@ -509,6 +509,7 @@ AppBootstrap _copyBootstrapForMessageAgentUiTest(
   required AgentControlService agentControlService,
 }) {
   return AppBootstrap(
+    environment: source.environment,
     accountGateway: source.accountGateway,
     gateway: source.gateway,
     realtimeGateway: source.realtimeGateway,

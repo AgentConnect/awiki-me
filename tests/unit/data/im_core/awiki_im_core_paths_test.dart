@@ -11,23 +11,34 @@ void main() {
       appSupportRoot: '/app/support/',
       cacheRoot: '/cache/',
       tempRoot: '/tmp/',
+      stateNamespace: 'Tenant Alpha / US',
     );
 
-    expect(layout.identityRootDir, '/app/support/awiki-me/im-core/identities');
+    expect(layout.stateNamespace, 'tenant-alpha-us');
+    expect(
+      layout.identityRootDir,
+      '/app/support/awiki-me/environments/tenant-alpha-us/im-core/identities',
+    );
     expect(
       layout.registryPath,
-      '/app/support/awiki-me/im-core/identities/registry.json',
+      '/app/support/awiki-me/environments/tenant-alpha-us/im-core/identities/registry.json',
     );
     expect(
       layout.defaultIdentityPath,
-      '/app/support/awiki-me/im-core/identities/default',
+      '/app/support/awiki-me/environments/tenant-alpha-us/im-core/identities/default',
     );
     expect(
       layout.sqlitePath,
-      '/app/support/awiki-me/im-core/state/im_core.sqlite',
+      '/app/support/awiki-me/environments/tenant-alpha-us/im-core/state/im_core.sqlite',
     );
-    expect(layout.cacheDir, '/cache/awiki-me/im-core');
-    expect(layout.tempDir, '/tmp/awiki-me/im-core');
+    expect(
+      layout.cacheDir,
+      '/cache/awiki-me/environments/tenant-alpha-us/im-core',
+    );
+    expect(
+      layout.tempDir,
+      '/tmp/awiki-me/environments/tenant-alpha-us/im-core',
+    );
 
     final corePaths = layout.toCorePaths();
     expect(corePaths, isA<core.AwikiImCorePaths>());
@@ -57,7 +68,9 @@ void main() {
 
       expect(await Directory(layout.identityRootDir).exists(), isTrue);
       expect(
-        await Directory('${root.path}/support/awiki-me/im-core/state').exists(),
+        await Directory(
+          '${root.path}/support/awiki-me/environments/default/im-core/state',
+        ).exists(),
         isTrue,
       );
       expect(await Directory(layout.cacheDir).exists(), isTrue);
@@ -121,6 +134,14 @@ void main() {
 
     expect(archived, isNull);
     expect(await File(layout.sqlitePath).exists(), isTrue);
+  });
+
+  test('normalizes arbitrary namespace values into safe path segments', () {
+    expect(
+      normalizeAwikiStateNamespace('https://Tenant.Example:8443/a?b=c'),
+      'tenant.example-8443-a-b-c',
+    );
+    expect(normalizeAwikiStateNamespace(''), 'default');
   });
 }
 
