@@ -3183,7 +3183,7 @@ String _agentCacheOwner(SessionIdentity session) {
 }
 
 DateTime? _dateTime(Object? value) {
-  return DateTime.tryParse(value?.toString() ?? '')?.toUtc();
+  return parseAgentStatusTimestamp(value);
 }
 
 String _agentErrorMessage(Object error) {

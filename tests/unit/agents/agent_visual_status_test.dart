@@ -215,6 +215,17 @@ void main() {
     expect(status.rawStatus, 'ready');
   });
 
+  test('agent status timestamps without timezone are interpreted as UTC', () {
+    expect(
+      parseAgentStatusTimestamp('2026-07-03T07:39:32'),
+      DateTime.parse('2026-07-03T07:39:32Z'),
+    );
+    expect(
+      parseAgentStatusTimestamp('2026-07-03T07:39:32+08:00'),
+      DateTime.parse('2026-07-02T23:39:32Z'),
+    );
+  });
+
   test('critical runtime card state overrides stale active run signals', () {
     final agent = _runtimeWithCard(
       'needs_setup',

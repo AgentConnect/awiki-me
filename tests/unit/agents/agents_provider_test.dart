@@ -2544,6 +2544,96 @@ void main() {
   );
 
   test(
+    'timezone-naive inventory timestamp keeps stale v1 dead-letter snapshot from overriding ready',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: 'Daemon',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'ready',
+              lastSeenAt: parseAgentStatusTimestamp('2026-07-03T07:39:32'),
+            ),
+          ),
+          AgentSummary(
+            agentDid: 'did:agent:runtime-codex',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'generic-cli',
+            displayName: 'Codex',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'ready',
+              lastSeenAt: parseAgentStatusTimestamp('2026-07-03T07:39:32'),
+              diagnosticsSummary: genericCliRuntimeCardDiagnostics(
+                lifecycleState: 'created',
+                operationalState: 'created',
+                setupReady: true,
+                setupState: 'ready',
+                routeSessionState: 'active',
+                nextAction: 'none',
+                deadLetterCount: 2,
+                attentionState: 'needs_review',
+                attentionItemCount: 2,
+                attentionNextAction: 'review_dead_letters',
+              ),
+            ),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+
+      await container.read(agentsProvider.notifier).load();
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'event_id': 'evt_old_v1_dead_letter',
+          'sent_at': '2026-07-03T05:52:49.104682878Z',
+          'status_scope': 'snapshot',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'status': 'ready',
+          },
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': 'did:agent:runtime-codex',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'generic-cli',
+              'display_name': 'Codex',
+              'status': 'ready',
+              'last_seen_at': '2026-07-03T05:52:48.659413772Z',
+              'needs_config': false,
+              'diagnostics_summary': genericCliRuntimeCardDiagnostics(
+                statusSchemaVersion: 1,
+                lifecycleState: 'dead_letter',
+                setupReady: true,
+                setupState: 'ready',
+                queueState: 'dead_letter',
+                routeSessionState: 'active',
+                deadLetterCount: 2,
+                nextAction: 'manual_review_required',
+              ),
+            },
+          ],
+        },
+      );
+
+      final runtime = container
+          .read(agentsProvider)
+          .agents
+          .singleWhere((agent) => agent.agentDid == 'did:agent:runtime-codex');
+      expect(runtime.latest.status, 'ready');
+      expect(runtime.latest.lastSeenAt, DateTime.parse('2026-07-03T07:39:32Z'));
+      expect(runtime.latest.runtimeCard?.statusSchemaVersion, 2);
+      expect(runtime.latest.runtimeCard?.operationalState, 'created');
+    },
+  );
+
+  test(
     'snapshot replaces only the same daemon runtime set and cache',
     () async {
       final control = FakeAgentControlService()
