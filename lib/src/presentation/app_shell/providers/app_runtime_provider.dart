@@ -522,6 +522,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       },
     );
     ref
+        .read(conversationListProvider.notifier)
+        .upsertRealtimeMessageBestEffort(conversationHint, message: message);
+    ref
         .read(chatThreadsProvider.notifier)
         .applyRealtimeUpdate(message, conversation: conversationHint);
     if (update.group != null) {

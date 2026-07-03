@@ -54,6 +54,20 @@ ConversationVisibilityIdentity conversationVisibilityIdentity(
     );
   }
 
+  if (isPeerScopedDirectConversation(conversation)) {
+    final threadId = conversation.threadId.trim();
+    final threadKey = threadId.isEmpty
+        ? 'thread:${conversation.threadId}'
+        : threadId;
+    if (threadId.isNotEmpty) {
+      addAlias('thread:$threadId');
+    }
+    return ConversationVisibilityIdentity(
+      primaryKey: threadKey,
+      aliasKeys: aliases,
+    );
+  }
+
   final explicitKey = conversation.conversationKey?.trim();
   final normalizedRuntimeAgentDid = _normalizedDid(runtimeAgentDid);
   final targetDid = _normalizedDid(conversation.targetDid);
@@ -157,7 +171,7 @@ bool sameConversationTarget(
   ConversationSummary first,
   ConversationSummary second,
 ) {
-  if (first.threadId == second.threadId) {
+  if (sameConversationThread(first, second)) {
     return true;
   }
   if (first.isGroup || second.isGroup) {
@@ -166,6 +180,24 @@ bool sameConversationTarget(
         sameNonEmpty(first.groupId, second.groupId);
   }
   return sameDirectConversationTarget(first, second);
+}
+
+bool sameConversationThread(
+  ConversationSummary first,
+  ConversationSummary second,
+) {
+  final firstThread = first.threadId.trim();
+  final secondThread = second.threadId.trim();
+  return firstThread.isNotEmpty && firstThread == secondThread;
+}
+
+bool isPeerScopedDirectConversation(ConversationSummary conversation) {
+  return isPeerScopedDirectThreadId(conversation.threadId) &&
+      !conversation.isGroup;
+}
+
+bool isPeerScopedDirectThreadId(String threadId) {
+  return threadId.trim().startsWith('dm:peer-scope:');
 }
 
 bool sameDirectConversationTarget(

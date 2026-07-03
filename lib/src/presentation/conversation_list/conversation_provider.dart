@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_services.dart';
 import '../../application/conversation_service.dart';
 import '../../application/models/conversation_patch.dart';
+import '../../application/thread_id_utils.dart';
 import '../../core/group_display_name.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_display_name.dart';
@@ -784,6 +785,29 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     }
   }
 
+  void upsertRealtimeMessageBestEffort(
+    ConversationSummary conversation, {
+    required ChatMessage message,
+  }) {
+    try {
+      final realtimeConversation = _realtimeConversationForMessage(
+        conversation,
+        message,
+      );
+      if (realtimeConversation == null ||
+          _isLocallyHidden(realtimeConversation)) {
+        return;
+      }
+      _upsertRealtimeConversation(
+        realtimeConversation,
+        message: message,
+        source: 'realtime_message',
+      );
+    } catch (_) {
+      // Background realtime paths must not fail message delivery or notification.
+    }
+  }
+
   void _upsertConversation(
     ConversationSummary conversation, {
     bool preferLocalTitle = false,
@@ -857,6 +881,76 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     unawaited(_updateBadgeCountBestEffort(state.unreadCount, source: source));
   }
 
+  void _upsertRealtimeConversation(
+    ConversationSummary conversation, {
+    required ChatMessage message,
+    required String source,
+  }) {
+    final existing = _matchingConversationForUpsert(
+      state.conversations,
+      conversation,
+    );
+    final titledConversation = _mergeConversationTitle(
+      refreshed: conversation,
+      local: existing,
+    );
+    final mergedConversation = _mergeConversationLifecycle(
+      refreshed: _mergeRealtimeConversationReadState(
+        refreshed: _mergeConversationLastMessage(
+          refreshed: titledConversation,
+          local: existing,
+        ),
+        local: existing,
+        message: message,
+      ),
+      local: existing,
+    );
+    final byThread = <String, ConversationSummary>{
+      for (final item in state.conversations)
+        if (item.threadId != existing?.threadId) item.threadId: item,
+    };
+    byThread[mergedConversation.threadId] = mergedConversation;
+    final merged = byThread.values.toList()
+      ..sort((a, b) => b.lastMessageAt.compareTo(a.lastMessageAt));
+    final beforeUnread = state.unreadCount;
+    final beforeItems = state.conversations.length;
+    if (_sameConversationSummaryList(state.conversations, merged)) {
+      _trace(
+        'state.realtime_upsert_noop',
+        fields: <String, Object?>{
+          'source': source,
+          'matched': existing != null,
+          'items': beforeItems,
+          'unread': beforeUnread,
+          'incoming_unread': conversation.unreadCount,
+          'merged_unread': mergedConversation.unreadCount,
+          'thread_hash': _safeHash(mergedConversation.threadId),
+          'preview_hash': _safeHash(mergedConversation.lastMessagePreview),
+          'last_at': mergedConversation.lastMessageAt,
+        },
+      );
+      return;
+    }
+    state = state.copyWith(conversations: merged);
+    _trace(
+      'state.realtime_upsert',
+      fields: <String, Object?>{
+        'source': source,
+        'matched': existing != null,
+        'before_items': beforeItems,
+        'after_items': state.conversations.length,
+        'before_unread': beforeUnread,
+        'after_unread': state.unreadCount,
+        'incoming_unread': conversation.unreadCount,
+        'merged_unread': mergedConversation.unreadCount,
+        'thread_hash': _safeHash(mergedConversation.threadId),
+        'preview_hash': _safeHash(mergedConversation.lastMessagePreview),
+        'last_at': mergedConversation.lastMessageAt,
+      },
+    );
+    unawaited(_updateBadgeCountBestEffort(state.unreadCount, source: source));
+  }
+
   Future<void> restoreConversation(ConversationSummary conversation) async {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
@@ -902,7 +996,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       rethrow;
     }
     final selected = ref.read(selectedConversationProvider);
-    if (selected != null && sameConversationTarget(selected, conversation)) {
+    if (selected != null && sameConversationThread(selected, conversation)) {
       ref.read(selectedConversationProvider.notifier).clearSelection();
     }
     await _updateBadgeCountBestEffort(
@@ -991,7 +1085,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final beforeUnread = state.unreadCount;
     final next = currentConversations.map((item) {
       if ((item.unreadCount == 0 && item.unreadMentionCount == 0) ||
-          !_sameConversationForList(item, conversation)) {
+          !sameConversationThread(item, conversation)) {
         return item;
       }
       return item.copyWith(
@@ -1088,7 +1182,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
 
   void _removeConversationLocally(ConversationSummary conversation) {
     final next = state.conversations
-        .where((item) => !_sameConversationForList(item, conversation))
+        .where((item) => !sameConversationThread(item, conversation))
         .toList(growable: false);
     final beforeUnread = state.unreadCount;
     state = state.copyWith(conversations: next);
@@ -1118,7 +1212,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
 
   DateTime? _latestLocalHiddenAt(ConversationSummary conversation) {
     DateTime? latest;
-    for (final key in _visibilityKeysFor(conversation)) {
+    for (final key in _hiddenLookupKeysFor(conversation)) {
       final hiddenAt = _locallyHiddenConversationKeys[key];
       if (hiddenAt == null) {
         continue;
@@ -1325,11 +1419,39 @@ List<String> _visibilityKeysFor(
   ConversationSummary conversation, {
   bool includeHandleAliasesForStrongIdentity = false,
 }) {
+  if (isPeerScopedDirectConversation(conversation)) {
+    final threadId = conversation.threadId.trim();
+    return threadId.isEmpty ? const <String>[] : <String>[threadId];
+  }
   return conversationVisibilityIdentity(
     conversation,
     includeHandleAliasesForStrongIdentity:
         includeHandleAliasesForStrongIdentity,
   ).keys;
+}
+
+List<String> _hiddenLookupKeysFor(ConversationSummary conversation) {
+  if (!isPeerScopedDirectConversation(conversation)) {
+    return _visibilityKeysFor(conversation);
+  }
+  final keys = <String>[];
+  void add(String value) {
+    final key = value.trim();
+    if (key.isNotEmpty && !keys.contains(key)) {
+      keys.add(key);
+    }
+  }
+
+  for (final key in _visibilityKeysFor(conversation)) {
+    add(key);
+  }
+  for (final key in conversationVisibilityIdentity(
+    conversation,
+    includeHandleAliasesForStrongIdentity: true,
+  ).keys) {
+    add(key);
+  }
+  return keys;
 }
 
 List<ConversationSummary> _mergeConversationRefresh({
@@ -1389,14 +1511,17 @@ class _ConversationMergeIndex {
       if (threadId != null) {
         _byThreadId.putIfAbsent(threadId, () => conversation);
       }
-      for (final key in conversation.visibilityKeys) {
+      for (final key in _visibilityKeysFor(conversation)) {
         final normalized = _nonEmptyKey(key);
         if (normalized != null) {
           _byVisibilityKey.putIfAbsent(normalized, () => conversation);
         }
       }
+      if (isPeerScopedDirectConversation(conversation)) {
+        continue;
+      }
       for (final key in _directTargetKeys(conversation)) {
-        _byDirectTarget.putIfAbsent(key, () => conversation);
+        _addDirectTarget(key, conversation);
       }
     }
   }
@@ -1407,6 +1532,7 @@ class _ConversationMergeIndex {
       <String, ConversationSummary>{};
   final Map<String, ConversationSummary> _byDirectTarget =
       <String, ConversationSummary>{};
+  final Set<String> _ambiguousDirectTargetKeys = <String>{};
 
   ConversationSummary? match(
     ConversationSummary incoming, {
@@ -1419,9 +1545,13 @@ class _ConversationMergeIndex {
     if (candidate != null) {
       return candidate;
     }
+    if (isPeerScopedDirectConversation(incoming)) {
+      return null;
+    }
     for (final key in incoming.visibilityKeys) {
-      candidate = _candidateIfAvailable(
+      candidate = _aliasCandidateIfAvailable(
         _byVisibilityKey[_nonEmptyKey(key)],
+        incoming,
         consumedThreadIds,
       );
       if (candidate != null) {
@@ -1432,8 +1562,9 @@ class _ConversationMergeIndex {
       return null;
     }
     for (final key in _directTargetKeys(incoming)) {
-      candidate = _candidateIfAvailable(
-        _byDirectTarget[key],
+      candidate = _aliasCandidateIfAvailable(
+        _directTargetCandidate(key),
+        incoming,
         consumedThreadIds,
       );
       if (candidate != null) {
@@ -1441,6 +1572,24 @@ class _ConversationMergeIndex {
       }
     }
     return null;
+  }
+
+  void _addDirectTarget(String key, ConversationSummary conversation) {
+    final existing = _byDirectTarget[key];
+    if (existing == null) {
+      _byDirectTarget[key] = conversation;
+      return;
+    }
+    if (existing.threadId.trim() != conversation.threadId.trim()) {
+      _ambiguousDirectTargetKeys.add(key);
+    }
+  }
+
+  ConversationSummary? _directTargetCandidate(String key) {
+    if (_ambiguousDirectTargetKeys.contains(key)) {
+      return null;
+    }
+    return _byDirectTarget[key];
   }
 
   static ConversationSummary? _candidateIfAvailable(
@@ -1451,6 +1600,36 @@ class _ConversationMergeIndex {
       return null;
     }
     return candidate;
+  }
+
+  static ConversationSummary? _aliasCandidateIfAvailable(
+    ConversationSummary? candidate,
+    ConversationSummary incoming,
+    Set<String> consumedThreadIds,
+  ) {
+    candidate = _candidateIfAvailable(candidate, consumedThreadIds);
+    if (candidate == null || !_canAliasMatch(candidate, incoming)) {
+      return null;
+    }
+    return candidate;
+  }
+
+  static bool _canAliasMatch(
+    ConversationSummary candidate,
+    ConversationSummary incoming,
+  ) {
+    if (candidate.threadId.trim() == incoming.threadId.trim()) {
+      return true;
+    }
+    if (_isPeerScopedDirectThread(candidate) &&
+        _isPeerScopedDirectThread(incoming)) {
+      return false;
+    }
+    return true;
+  }
+
+  static bool _isPeerScopedDirectThread(ConversationSummary conversation) {
+    return isPeerScopedDirectConversation(conversation);
   }
 
   static Iterable<String> _directTargetKeys(ConversationSummary conversation) {
@@ -1482,44 +1661,7 @@ ConversationSummary? _matchingConversationForUpsert(
   Iterable<ConversationSummary> conversations,
   ConversationSummary incoming,
 ) {
-  if (conversations is List<ConversationSummary>) {
-    return _ConversationMergeIndex(conversations).match(incoming);
-  }
-  for (final item in conversations) {
-    if (item.threadId == incoming.threadId) {
-      return item;
-    }
-  }
-  final incomingKeys =
-      incoming.visibilityKeys
-          .map((key) => key.trim())
-          .where((key) => key.isNotEmpty)
-          .toSet()
-        ..addAll(_visibilityKeysFor(incoming));
-  if (incomingKeys.isNotEmpty) {
-    for (final item in conversations) {
-      if (_visibilityKeysFor(item).any(incomingKeys.contains)) {
-        return item;
-      }
-    }
-  }
-  if (incoming.isGroup) {
-    return null;
-  }
-  for (final item in conversations) {
-    if (!item.isGroup && sameDirectConversationTarget(item, incoming)) {
-      return item;
-    }
-  }
-  return null;
-}
-
-bool _sameConversationForList(
-  ConversationSummary first,
-  ConversationSummary second,
-) {
-  return _matchingConversationForUpsert(<ConversationSummary>[first], second) !=
-      null;
+  return _ConversationMergeIndex(conversations.toList()).match(incoming);
 }
 
 ConversationSummary _mergeConversationTitle({
@@ -1574,6 +1716,33 @@ ConversationSummary _mergeConversationReadState({
   );
 }
 
+ConversationSummary _mergeRealtimeConversationReadState({
+  required ConversationSummary refreshed,
+  required ConversationSummary? local,
+  required ChatMessage message,
+}) {
+  if (message.isMine) {
+    return refreshed.copyWith(
+      unreadCount: 0,
+      unreadMentionCount: 0,
+      firstUnreadMentionMessageId: null,
+    );
+  }
+  if (local == null) {
+    return refreshed;
+  }
+  final localUnread = local.unreadCount;
+  final incomingUnread = refreshed.unreadCount;
+  final nextUnread = incomingUnread > localUnread
+      ? incomingUnread
+      : localUnread + 1;
+  return refreshed.copyWith(
+    unreadCount: nextUnread,
+    unreadMentionCount: local.unreadMentionCount,
+    firstUnreadMentionMessageId: local.firstUnreadMentionMessageId,
+  );
+}
+
 ConversationSummary _mergeConversationLifecycle({
   required ConversationSummary refreshed,
   required ConversationSummary? local,
@@ -1591,7 +1760,20 @@ ConversationSummary _mergeConversationLastMessage({
   required ConversationSummary refreshed,
   required ConversationSummary? local,
 }) {
-  if (local == null || !local.lastMessageAt.isAfter(refreshed.lastMessageAt)) {
+  if (local == null) {
+    return refreshed;
+  }
+  final localPreview = local.lastMessagePreview.trim();
+  final refreshedPreview = refreshed.lastMessagePreview.trim();
+  if (refreshedPreview.isEmpty && localPreview.isNotEmpty) {
+    return refreshed.copyWith(
+      lastMessagePreview: local.lastMessagePreview,
+      lastMessageAt: local.lastMessageAt,
+      lastMessagePayloadJson: local.lastMessagePayloadJson,
+      lastMessageSnapshot: local.lastMessageSnapshot,
+    );
+  }
+  if (!local.lastMessageAt.isAfter(refreshed.lastMessageAt)) {
     return refreshed;
   }
   if (local.lastMessagePreview.trim().isEmpty &&
@@ -1643,6 +1825,165 @@ bool _isBetterDirectConversationTitle(String localName, String refreshedName) {
   }
   return AgentDisplayName.isUserVisibleName(localName) &&
       !AgentDisplayName.isUserVisibleName(refreshedName);
+}
+
+ConversationSummary? _realtimeConversationForMessage(
+  ConversationSummary conversation,
+  ChatMessage message,
+) {
+  final messageThreadId = message.threadId.trim();
+  if (messageThreadId.isEmpty || !message.hasRenderableContent) {
+    return null;
+  }
+  if (conversation.isGroup) {
+    if (!_realtimeGroupMessageMatchesConversation(message, conversation)) {
+      return null;
+    }
+    final groupId = message.groupId?.trim();
+    final threadId =
+        _firstNonEmptyString(<String?>[
+          conversation.threadId,
+          groupId == null ? null : canonicalGroupThreadId(groupId),
+          messageThreadId,
+        ]) ??
+        messageThreadId;
+    return conversation.copyWith(
+      threadId: threadId,
+      lastMessagePreview: message.previewText,
+      lastMessageAt: message.createdAt,
+      unreadCount: message.isMine ? 0 : conversation.unreadCount,
+      lastMessagePayloadJson: message.payloadJson,
+      lastMessageSnapshot: message,
+    );
+  }
+  if (!_realtimeDirectMessageMatchesConversation(message, conversation)) {
+    return null;
+  }
+  final threadId = isPeerScopedDirectThreadId(messageThreadId)
+      ? messageThreadId
+      : conversation.threadId;
+  return conversation.copyWith(
+    threadId: threadId,
+    lastMessagePreview: message.previewText,
+    lastMessageAt: message.createdAt,
+    unreadCount: message.isMine ? 0 : conversation.unreadCount,
+    unreadMentionCount: message.isMine ? 0 : conversation.unreadMentionCount,
+    firstUnreadMentionMessageId: message.isMine
+        ? null
+        : conversation.firstUnreadMentionMessageId,
+    targetDid: _firstNonEmptyString(<String?>[
+      conversation.targetDid,
+      _directMessagePeerDid(message),
+    ]),
+    targetPeer: _firstNonEmptyString(<String?>[
+      conversation.targetPeer,
+      _directMessagePeerDid(message),
+    ]),
+    lastMessagePayloadJson: message.payloadJson,
+    lastMessageSnapshot: message,
+  );
+}
+
+bool _realtimeGroupMessageMatchesConversation(
+  ChatMessage message,
+  ConversationSummary conversation,
+) {
+  final messageThreadId = message.threadId.trim();
+  if (messageThreadId == conversation.threadId.trim()) {
+    return true;
+  }
+  final messageGroupId = message.groupId?.trim();
+  final conversationGroupId = conversation.groupId?.trim();
+  if (messageGroupId != null &&
+      messageGroupId.isNotEmpty &&
+      conversationGroupId != null &&
+      conversationGroupId.isNotEmpty &&
+      messageGroupId == conversationGroupId) {
+    return true;
+  }
+  return messageGroupId != null &&
+      messageGroupId.isNotEmpty &&
+      canonicalGroupThreadId(messageGroupId) == conversation.threadId.trim();
+}
+
+bool _realtimeDirectMessageMatchesConversation(
+  ChatMessage message,
+  ConversationSummary conversation,
+) {
+  final messageThreadId = message.threadId.trim();
+  final conversationThreadId = conversation.threadId.trim();
+  if (messageThreadId == conversationThreadId) {
+    return true;
+  }
+  if (isPeerScopedDirectThreadId(messageThreadId) ||
+      isPeerScopedDirectConversation(conversation)) {
+    return false;
+  }
+  final targetDid = conversation.targetDid?.trim();
+  if (targetDid != null &&
+      targetDid.isNotEmpty &&
+      _directMessagePeerDids(message).contains(targetDid)) {
+    return true;
+  }
+  final targetPeer = normalizedDirectPeer(conversation.targetPeer);
+  if (targetPeer != null &&
+      _directMessagePeerDids(message).contains(targetPeer)) {
+    return true;
+  }
+  if (targetDid != null && targetDid.isNotEmpty) {
+    final canonical = canonicalDirectThreadId(
+      _directMessageOwnerDid(message, targetDid),
+      targetDid,
+    );
+    if (messageThreadId == canonical || messageThreadId == 'dm:$targetDid') {
+      return true;
+    }
+  }
+  return conversation.visibilityKeys.contains(messageThreadId) ||
+      conversation.visibilityKeys.contains('thread:$messageThreadId');
+}
+
+String _directMessageOwnerDid(ChatMessage message, String fallbackPeerDid) {
+  if (message.isMine) {
+    return message.senderDid;
+  }
+  final receiver = message.receiverDid?.trim();
+  if (receiver != null && receiver.isNotEmpty) {
+    return receiver;
+  }
+  return fallbackPeerDid;
+}
+
+String? _directMessagePeerDid(ChatMessage message) {
+  if (message.isMine) {
+    final receiver = message.receiverDid?.trim();
+    return receiver != null && receiver.isNotEmpty ? receiver : null;
+  }
+  final sender = message.senderDid.trim();
+  return sender.isNotEmpty ? sender : null;
+}
+
+Set<String> _directMessagePeerDids(ChatMessage message) {
+  final peers = <String>{};
+  void add(String? value) {
+    final normalized = normalizedDirectPeer(value);
+    if (normalized != null) {
+      peers.add(normalized);
+    }
+  }
+
+  add(_directMessagePeerDid(message));
+  return peers;
+}
+
+String? _firstNonEmptyString(Iterable<String?> values) {
+  for (final value in values) {
+    final trimmed = value?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) {
+      return trimmed;
+    }
+  }
+  return null;
 }
 
 final conversationListProvider =

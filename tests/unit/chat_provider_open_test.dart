@@ -196,6 +196,251 @@ void main() {
     expect(thread.isHydratingLocalHistory, isFalse);
   });
 
+  test('runtime realtime reply does not fan out into controller thread', () {
+    const agentDid = 'did:wba:awiki.ai:agent:runtime:test';
+    const agentHandle = 'test-agent.awiki.ai';
+    final controllerConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:controller',
+      displayName: 'Controller',
+      lastMessagePreview: '今天几号了',
+      lastMessageAt: DateTime(2026, 7, 3, 7, 9),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentHandle,
+    );
+    final runtimeConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:runtime',
+      displayName: 'Runtime Agent',
+      lastMessagePreview: '今天是 2026年7月3日。',
+      lastMessageAt: DateTime(2026, 7, 3, 7, 10),
+      unreadCount: 1,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentHandle,
+    );
+    final existingControllerMessage = ChatMessage(
+      localId: 'controller-msg',
+      remoteId: 'controller-msg',
+      threadId: controllerConversation.threadId,
+      senderDid: 'did:me',
+      receiverDid: agentDid,
+      content: '今天几号了',
+      createdAt: controllerConversation.lastMessageAt,
+      isMine: true,
+      sendState: MessageSendState.sent,
+    );
+    final runtimeReply = ChatMessage(
+      localId: 'runtime-final',
+      remoteId: 'runtime-final',
+      threadId: runtimeConversation.threadId,
+      senderDid: agentDid,
+      receiverDid: 'did:me',
+      content: '今天是 2026年7月3日。',
+      createdAt: runtimeConversation.lastMessageAt,
+      isMine: false,
+      serverSequence: 2899,
+      sendState: MessageSendState.sent,
+    );
+
+    container
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(
+          existingControllerMessage,
+          conversation: controllerConversation,
+        );
+    container
+        .read(chatThreadsProvider.notifier)
+        .applyRealtimeUpdate(runtimeReply, conversation: runtimeConversation);
+
+    expect(
+      container
+          .read(chatThreadProvider(controllerConversation.threadId))
+          .messages
+          .map((item) => item.content),
+      ['今天几号了'],
+    );
+    expect(
+      container
+          .read(chatThreadProvider(runtimeConversation.threadId))
+          .messages
+          .map((item) => item.content),
+      ['今天是 2026年7月3日。'],
+    );
+  });
+
+  test('runtime realtime reply ignores stale controller conversation hint', () {
+    const agentDid = 'did:wba:awiki.ai:agent:runtime:test';
+    const agentHandle = 'test-agent.awiki.ai';
+    final controllerConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:controller',
+      displayName: 'Controller',
+      lastMessagePreview: '今天几号了',
+      lastMessageAt: DateTime(2026, 7, 3, 7, 9),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentHandle,
+    );
+    final runtimeConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:runtime',
+      displayName: 'Runtime Agent',
+      lastMessagePreview: '今天是 2026年7月3日。',
+      lastMessageAt: DateTime(2026, 7, 3, 7, 10),
+      unreadCount: 1,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentHandle,
+    );
+    final controllerMessage = ChatMessage(
+      localId: 'controller-msg',
+      remoteId: 'controller-msg',
+      threadId: controllerConversation.threadId,
+      senderDid: 'did:me',
+      receiverDid: agentDid,
+      content: '今天几号了',
+      createdAt: controllerConversation.lastMessageAt,
+      isMine: true,
+      sendState: MessageSendState.sent,
+    );
+    final runtimeReply = ChatMessage(
+      localId: 'runtime-final',
+      remoteId: 'runtime-final',
+      threadId: runtimeConversation.threadId,
+      senderDid: agentDid,
+      receiverDid: 'did:me',
+      content: '今天是 2026年7月3日。',
+      createdAt: runtimeConversation.lastMessageAt,
+      isMine: false,
+      serverSequence: 2899,
+      sendState: MessageSendState.sent,
+    );
+    final controller = container.read(chatThreadsProvider.notifier);
+
+    controller.applyRealtimeUpdate(
+      controllerMessage,
+      conversation: controllerConversation,
+    );
+    controller.applyRealtimeUpdate(
+      runtimeReply,
+      conversation: controllerConversation,
+    );
+
+    expect(
+      container
+          .read(chatThreadProvider(controllerConversation.threadId))
+          .messages
+          .map((item) => item.content),
+      ['今天几号了'],
+    );
+    expect(
+      container
+          .read(chatThreadProvider(runtimeConversation.threadId))
+          .messages
+          .map((item) => item.content),
+      ['今天是 2026年7月3日。'],
+    );
+  });
+
+  test('peer-scoped direct conversations do not share composer drafts', () {
+    const agentDid = 'did:wba:awiki.ai:agent:runtime:test';
+    const agentHandle = 'test-agent.awiki.ai';
+    final controllerConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:controller',
+      displayName: 'Controller',
+      lastMessagePreview: 'controller preview',
+      lastMessageAt: DateTime(2026, 7, 3, 7, 9),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentHandle,
+    );
+    final runtimeConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:runtime',
+      displayName: 'Runtime Agent',
+      lastMessagePreview: 'runtime preview',
+      lastMessageAt: DateTime(2026, 7, 3, 7, 10),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentHandle,
+    );
+
+    final drafts = container.read(chatComposerDraftsProvider.notifier);
+    drafts.setText(controllerConversation, 'controller draft');
+
+    expect(drafts.draftFor(controllerConversation).text, 'controller draft');
+    expect(drafts.draftFor(runtimeConversation).isEmpty, isTrue);
+
+    drafts.setText(runtimeConversation, 'runtime draft');
+
+    expect(drafts.draftFor(controllerConversation).text, 'controller draft');
+    expect(drafts.draftFor(runtimeConversation).text, 'runtime draft');
+  });
+
+  test(
+    'ambiguous agent run status does not attach to peer-scoped conversations',
+    () {
+      const agentDid = 'did:wba:awiki.ai:agent:runtime:test';
+      const agentHandle = 'test-agent.awiki.ai';
+      final controllerConversation = ConversationSummary(
+        threadId: 'dm:peer-scope:v1:controller',
+        displayName: 'Controller',
+        lastMessagePreview: 'controller preview',
+        lastMessageAt: DateTime(2026, 7, 3, 7, 9),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: agentDid,
+        targetPeer: agentHandle,
+      );
+      final runtimeConversation = ConversationSummary(
+        threadId: 'dm:peer-scope:v1:runtime',
+        displayName: 'Runtime Agent',
+        lastMessagePreview: 'runtime preview',
+        lastMessageAt: DateTime(2026, 7, 3, 7, 10),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: agentDid,
+        targetPeer: agentHandle,
+      );
+      final conversations = container.read(conversationListProvider.notifier);
+      conversations.upsertConversation(controllerConversation);
+      conversations.upsertConversation(runtimeConversation);
+
+      container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+        const <String, Object?>{
+          'schema': 'awiki.agent.status.v1',
+          'status_scope': 'run',
+          'runs': <Object?>[
+            <String, Object?>{
+              'run_id': 'run_ambiguous_peer_scoped',
+              'runtime_agent_did': agentDid,
+              'status': 'running',
+            },
+          ],
+        },
+      );
+
+      expect(
+        container
+            .read(chatThreadProvider(controllerConversation.threadId))
+            .pendingAgentReplyCount,
+        0,
+      );
+      expect(
+        container
+            .read(chatThreadProvider(runtimeConversation.threadId))
+            .pendingAgentReplyCount,
+        0,
+      );
+      final fallbackThread = container.read(
+        chatThreadProvider('direct:$agentDid'),
+      );
+      expect(fallbackThread.pendingAgentReplyCount, 1);
+      expect(fallbackThread.agentPendingTurns.single.agentDid, agentDid);
+    },
+  );
+
   test('本地历史混合有无 serverSequence 时按时间线稳定排序', () async {
     final askedTime = ChatMessage(
       localId: 'local-question-time',
@@ -696,6 +941,48 @@ void main() {
     expect(
       messages.where((item) => item.remoteId == 'msg-latest-reply'),
       hasLength(1),
+    );
+  });
+
+  test('peer-scoped 会话打开时忽略其他 storage thread 的最新快照', () async {
+    const agentDid = 'did:agent:runtime:zhuochengtestcodex0703';
+    const agentHandle = 'zhuochengtestcodex0703.awiki.ai';
+    final controllerConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:controller',
+      displayName: 'zhuocheng',
+      lastMessagePreview: '今天几号了',
+      lastMessageAt: DateTime(2026, 7, 3, 7, 9),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentHandle,
+      lastMessageSnapshot: ChatMessage(
+        localId: 'runtime-weather-reply',
+        remoteId: 'runtime-weather-reply',
+        threadId: 'dm:peer-scope:v1:runtime',
+        senderDid: agentDid,
+        receiverDid: 'did:me',
+        content: '杭州明天 **2026年7月4日，星期六** 天气整体偏热',
+        createdAt: DateTime(2026, 7, 3, 8, 51),
+        isMine: false,
+        serverSequence: 2899,
+        sendState: MessageSendState.sent,
+      ),
+    );
+    gateway.localDmHistoryByPeerDid = const <String, List<ChatMessage>>{};
+    gateway.dmHistoryByPeerDid = const <String, List<ChatMessage>>{};
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(controllerConversation);
+    await pumpEventQueue(times: 3);
+
+    final messages = container
+        .read(chatThreadProvider(controllerConversation.threadId))
+        .messages;
+    expect(
+      messages.map((message) => message.content),
+      isNot(contains('杭州明天 **2026年7月4日，星期六** 天气整体偏热')),
     );
   });
 
@@ -1333,7 +1620,7 @@ void main() {
     expect(thread.isLoading, isFalse);
   });
 
-  test('有稳定 DID 的 handle 会话本地优先按 canonical peer 读取且不触发远端 history', () async {
+  test('peer-scope 会话本地历史按精确 storage thread 读取且不触发远端 history', () async {
     const agentDid = 'did:agent:runtime';
     const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
     final agentConversation = ConversationSummary(
@@ -1349,7 +1636,7 @@ void main() {
     final outgoing = ChatMessage(
       localId: 'msg-user',
       remoteId: 'msg-user',
-      threadId: 'dm:did:human:$agentDid',
+      threadId: agentConversation.threadId,
       senderDid: 'did:human',
       receiverDid: agentDid,
       content: '在吗',
@@ -1363,7 +1650,8 @@ void main() {
     };
     gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
       agentDid: const <ChatMessage>[],
-      agentHandle: <ChatMessage>[outgoing],
+      agentHandle: const <ChatMessage>[],
+      'peer-scope:v1:zhuocheng-test-hermes': <ChatMessage>[outgoing],
     };
     gateway.publicProfilesByQuery[agentHandle] = const UserProfile(
       did: agentDid,
@@ -1381,7 +1669,10 @@ void main() {
         .openConversation(agentConversation);
     await pumpEventQueue();
 
-    expect(gateway.lastFetchedLocalDmPeerDid, agentHandle);
+    expect(
+      gateway.lastFetchedLocalDmPeerDid,
+      'peer-scope:v1:zhuocheng-test-hermes',
+    );
     expect(gateway.fetchDmHistoryCalls, 0);
     expect(gateway.lastFetchedDmPeerDid, isNull);
     final thread = container.read(
@@ -1390,7 +1681,7 @@ void main() {
     expect(thread.messages.map((item) => item.content), contains('在吗'));
   });
 
-  test('本地历史优先使用与远端补拉一致的 canonical direct peer', () async {
+  test('peer-scope 本地历史和增量同步使用同一个精确 storage thread', () async {
     final canonicalConversation = ConversationSummary(
       threadId: 'dm:peer-scope:v1:codex1',
       displayName: 'Codex1',
@@ -1414,7 +1705,8 @@ void main() {
       sendState: MessageSendState.sent,
     );
     gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
-      'codex1.awiki.info': <ChatMessage>[localMessage],
+      'peer-scope:v1:codex1': <ChatMessage>[localMessage],
+      'codex1.awiki.info': const <ChatMessage>[],
       'did:codex:runtime': const <ChatMessage>[],
     };
 
@@ -1423,11 +1715,11 @@ void main() {
         .openConversation(canonicalConversation);
     await pumpEventQueue();
 
-    expect(gateway.lastFetchedLocalDmPeerDid, 'codex1.awiki.info');
+    expect(gateway.lastFetchedLocalDmPeerDid, 'peer-scope:v1:codex1');
     expect(gateway.fetchDmHistoryCalls, 0);
     expect(
       messageSyncService.threadAfterRequests.single.thread.stableId,
-      'dm:codex1.awiki.info',
+      'dm:peer-scope:v1:codex1',
     );
     expect(
       container
@@ -1454,7 +1746,7 @@ void main() {
     expect(gateway.listConversationsCalls, 0);
   });
 
-  test('首次打开会话会从 realtime alias 预热缓存并水合本地历史', () async {
+  test('peer-scoped realtime cache does not prewarm handle alias', () async {
     final aliasConversation = conversation.copyWith(
       threadId: 'direct-handle:peer.awiki.info',
       targetPeer: 'peer.awiki.info',
@@ -1486,10 +1778,10 @@ void main() {
         .messages;
     expect(
       messages.map((item) => item.content),
-      contains('realtime alias hello'),
+      isNot(contains('realtime alias hello')),
     );
     expect(gateway.fetchLocalDmHistoryCalls, 1);
-    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(gateway.fetchDmHistoryCalls, 1);
     expect(messageSyncService.threadAfterRequests, hasLength(1));
   });
 
@@ -1637,7 +1929,7 @@ void main() {
     expect(gateway.lastMarkThreadReadWatermark?.lastReadThreadSeq, '11');
   });
 
-  test('peer-scope 会话已读上报优先使用 DID 而不是 handle', () async {
+  test('peer-scope 会话历史和已读使用精确 storage thread', () async {
     const agentDid = 'did:agent:runtime:codex1';
     const agentHandle = 'codex1.awiki.info';
     final unreadPeerScopedConversation = ConversationSummary(
@@ -1663,7 +1955,7 @@ void main() {
       sendState: MessageSendState.sent,
     );
     gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
-      agentHandle: <ChatMessage>[latest],
+      'peer-scope:v1:codex1': <ChatMessage>[latest],
     };
     container
         .read(conversationListProvider.notifier)
@@ -1674,9 +1966,9 @@ void main() {
         .openConversation(unreadPeerScopedConversation);
     await pumpEventQueue();
 
-    expect(gateway.lastFetchedLocalDmPeerDid, agentHandle);
+    expect(gateway.lastFetchedLocalDmPeerDid, 'peer-scope:v1:codex1');
     expect(gateway.markReadCalls, 1);
-    expect(gateway.lastMarkReadThreadId, 'dm:$agentDid');
+    expect(gateway.lastMarkReadThreadId, 'dm:peer-scope:v1:codex1');
     expect(
       gateway.lastMarkThreadReadWatermark?.lastReadMessageId,
       'peer-scoped-local-12',
@@ -2163,7 +2455,7 @@ void main() {
     );
   });
 
-  test('智能体实时回复使用刷新后的线程标识时仍合并到当前打开会话', () async {
+  test('智能体实时回复使用不同 storage thread 时不会污染当前打开会话', () async {
     const agentDid = 'did:agent:runtime';
     const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
     final openedConversation = ConversationSummary(
@@ -2240,10 +2532,10 @@ void main() {
     openedThread = sendContainer.read(
       chatThreadProvider(openedConversation.threadId),
     );
-    expect(openedThread.agentPendingTurns, isEmpty);
+    expect(openedThread.isAgentProcessing, isTrue);
     expect(
       openedThread.messages.map((message) => message.content),
-      contains('我在。'),
+      isNot(contains('我在。')),
     );
     final canonicalThread = sendContainer.read(
       chatThreadProvider(realtimeConversation.threadId),
@@ -3902,6 +4194,11 @@ void main() {
   });
 
   test('删除最近会话后旧实时不复活，新实时会重新显示', () async {
+    final peerScopedConversation = conversation.copyWith(
+      threadId: 'dm:peer-scope:v1:peer',
+      targetDid: null,
+      targetPeer: 'peer.anpclaw.com',
+    );
     container
         .read(sessionProvider.notifier)
         .setSession(
@@ -3914,23 +4211,16 @@ void main() {
         );
     container
         .read(conversationListProvider.notifier)
-        .upsertConversation(
-          conversation.copyWith(targetPeer: 'peer.anpclaw.com'),
-        );
+        .upsertConversation(peerScopedConversation);
 
     await container
         .read(conversationListProvider.notifier)
-        .deleteFromRecents(
-          conversation.copyWith(targetPeer: 'peer.anpclaw.com'),
-        );
+        .deleteFromRecents(peerScopedConversation);
 
     container
         .read(conversationListProvider.notifier)
         .upsertConversation(
-          conversation.copyWith(
-            threadId: 'dm:peer-scope:peer',
-            targetDid: null,
-            targetPeer: 'peer.anpclaw.com',
+          peerScopedConversation.copyWith(
             lastMessagePreview: '旧消息',
             lastMessageAt: conversation.lastMessageAt,
           ),
@@ -3940,7 +4230,7 @@ void main() {
     container
         .read(conversationListProvider.notifier)
         .upsertConversation(
-          conversation.copyWith(
+          peerScopedConversation.copyWith(
             lastMessagePreview: '新消息',
             lastMessageAt: DateTime.now().add(const Duration(seconds: 1)),
           ),
@@ -3953,7 +4243,7 @@ void main() {
     expect(conversations.single.lastMessagePreview, '新消息');
   });
 
-  test('本地 DID 会话和刷新的 full handle 会话会合并为同一个智能体会话', () async {
+  test('本地 DID 会话和刷新的 peer-scoped 会话保持独立 storage thread', () async {
     const agentDid = 'did:agent:runtime';
     const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
     container
@@ -3998,14 +4288,19 @@ void main() {
     final conversations = container
         .read(conversationListProvider)
         .conversations;
-    expect(conversations, hasLength(1));
-    expect(conversations.single.threadId, 'dm:peer-scope:v1:runtime');
-    expect(conversations.single.targetDid, agentDid);
-    expect(conversations.single.targetPeer, agentHandle);
-    expect(conversations.single.displayName, '改名后的智能体');
+    expect(conversations, hasLength(2));
+    final byThread = {
+      for (final conversation in conversations)
+        conversation.threadId: conversation,
+    };
+    expect(byThread['dm:did:human:$agentDid']?.lastMessagePreview, '本地消息');
+    expect(byThread['dm:peer-scope:v1:runtime']?.lastMessagePreview, '刷新消息');
+    expect(byThread['dm:peer-scope:v1:runtime']?.targetDid, agentDid);
+    expect(byThread['dm:peer-scope:v1:runtime']?.targetPeer, agentHandle);
+    expect(byThread['dm:peer-scope:v1:runtime']?.displayName, '改名后的智能体');
   });
 
-  test('已读的同一目标会话刷新为 canonical thread 后不会重新变未读', () async {
+  test('已读状态不会从 legacy DID 会话迁移到新的 peer-scoped storage thread', () async {
     const agentDid = 'did:agent:runtime';
     const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
     final readConversation = ConversationSummary(
@@ -4077,9 +4372,12 @@ void main() {
     final refreshed = container
         .read(conversationListProvider)
         .conversations
-        .single;
+        .singleWhere(
+          (conversation) =>
+              conversation.threadId == 'dm:peer-scope:v1:zhuocheng-test-hermes',
+        );
     expect(refreshed.threadId, 'dm:peer-scope:v1:zhuocheng-test-hermes');
-    expect(refreshed.unreadCount, 0);
+    expect(refreshed.unreadCount, 1);
   });
 
   test('连续发送不会触发会话刷新或远端历史 reconcile', () async {

@@ -876,6 +876,13 @@ ConversationVisibilityIdentity _conversationIdentity(
   _AgentConversationProjection projection, {
   bool includeHandleAliasesForStrongIdentity = false,
 }) {
+  if (isPeerScopedDirectConversation(item)) {
+    final threadId = item.threadId.trim();
+    return ConversationVisibilityIdentity(
+      primaryKey: threadId.isEmpty ? 'thread:${item.threadId}' : threadId,
+      aliasKeys: threadId.isEmpty ? const <String>[] : <String>[threadId],
+    );
+  }
   final agent = _agentForConversation(item, projection);
   return conversationVisibilityIdentity(
     item,

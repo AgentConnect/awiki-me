@@ -223,7 +223,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   @override
   void didUpdateWidget(covariant ChatView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!sameConversationTarget(oldWidget.conversation, widget.conversation)) {
+    if (!sameConversationThread(oldWidget.conversation, widget.conversation)) {
       _visibleReadAckToken += 1;
       _markConversationHidden(
         oldWidget.conversation,
@@ -289,7 +289,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       if (!mounted ||
           token != _visibleReadAckToken ||
           displayThreadId != _displayThreadId ||
-          !sameConversationTarget(
+          !sameConversationThread(
             conversation,
             _currentConversationSnapshot(),
           )) {
@@ -390,7 +390,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
           _handleThreadChanged(previous, next, currentConversation),
     );
     ref.listen<ConversationListState>(conversationListProvider, (_, next) {
-      final updated = _matchingConversation(next.conversations);
+      final updated = _matchingConversationByThread(next.conversations);
       if (updated == null) {
         return;
       }
@@ -1294,25 +1294,43 @@ class _ChatViewState extends ConsumerState<ChatView> {
     ];
   }
 
-  ConversationSummary? _matchingConversation(
+  ConversationSummary? _matchingConversationByThread(
     List<ConversationSummary> conversations,
   ) {
     for (final conversation in conversations) {
-      if (conversation.threadId == widget.conversation.threadId) {
-        return conversation;
-      }
-    }
-    for (final conversation in conversations) {
-      if (sameConversationTarget(conversation, widget.conversation)) {
+      if (sameConversationThread(conversation, widget.conversation)) {
         return conversation;
       }
     }
     return null;
   }
 
+  ConversationSummary? _matchingConversationForDisplay(
+    List<ConversationSummary> conversations,
+  ) {
+    final exact = _matchingConversationByThread(conversations);
+    if (exact != null) {
+      return exact;
+    }
+    for (final conversation in conversations) {
+      if (_canUseConversationAliasForDisplay(conversation)) {
+        return conversation;
+      }
+    }
+    return null;
+  }
+
+  bool _canUseConversationAliasForDisplay(ConversationSummary candidate) {
+    if (!sameConversationTarget(candidate, widget.conversation)) {
+      return false;
+    }
+    return !(isPeerScopedDirectConversation(candidate) &&
+        isPeerScopedDirectConversation(widget.conversation));
+  }
+
   ConversationSummary _currentConversationForTitle() {
     final conversations = ref.watch(conversationListProvider).conversations;
-    final latest = _matchingConversation(conversations);
+    final latest = _matchingConversationForDisplay(conversations);
     final base = latest ?? widget.conversation;
     if (!base.isGroup || base.groupId == null || base.groupId!.isEmpty) {
       return base;
@@ -1331,7 +1349,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   ConversationSummary _currentConversationSnapshot() {
     final conversations = ref.read(conversationListProvider).conversations;
-    final latest = _matchingConversation(conversations);
+    final latest = _matchingConversationByThread(conversations);
     return latest ?? widget.conversation;
   }
 

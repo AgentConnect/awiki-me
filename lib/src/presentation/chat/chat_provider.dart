@@ -378,6 +378,10 @@ class ChatComposerDraftsController
       }
     }
 
+    if (isPeerScopedDirectConversation(conversation)) {
+      add(conversation.threadId);
+      return keys;
+    }
     for (final key in conversation.visibilityKeys) {
       add(key);
     }
@@ -976,6 +980,13 @@ class ChatThreadsController
       if (aliasThread == null || !_hasRenderableMessages(aliasThread)) {
         continue;
       }
+      if (!_canPrewarmThreadFromAlias(
+        aliasThread,
+        conversation: conversation,
+        displayThreadId: displayThreadId,
+      )) {
+        continue;
+      }
       sourceThreadIds.add(alias);
       for (final message in aliasThread.messages) {
         if (!message.hasRenderableContent) {
@@ -1005,6 +1016,31 @@ class ChatThreadsController
     return messages.length;
   }
 
+  bool _canPrewarmThreadFromAlias(
+    ChatThreadState aliasThread, {
+    required ConversationSummary conversation,
+    required String displayThreadId,
+  }) {
+    final aliasThreadId = aliasThread.threadId.trim();
+    final conversationThreadId = conversation.threadId.trim();
+    if (aliasThreadId.isEmpty) {
+      return false;
+    }
+    if (aliasThreadId == displayThreadId ||
+        aliasThreadId == conversationThreadId) {
+      return true;
+    }
+    final renderableMessages = aliasThread.messages
+        .where((message) => message.hasRenderableContent)
+        .toList(growable: false);
+    if (renderableMessages.isEmpty) {
+      return false;
+    }
+    return renderableMessages.every(
+      (message) => _messageBelongsToConversationThread(message, conversation),
+    );
+  }
+
   int _warmDisplayThreadFromConversationSnapshot(
     ConversationSummary conversation, {
     required String displayThreadId,
@@ -1012,6 +1048,23 @@ class ChatThreadsController
   }) {
     final snapshot = conversation.lastMessageSnapshot;
     if (snapshot == null || !snapshot.hasRenderableContent) {
+      return 0;
+    }
+    if (!_messageBelongsToConversationThread(snapshot, conversation)) {
+      _chatProviderTrace(
+        'open.snapshot_prewarm.skip',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(displayThreadId),
+          'source': source,
+          'reason': 'thread_mismatch',
+          'snapshot_thread_hash': AwikiPerformanceLogger.safeHash(
+            snapshot.threadId,
+          ),
+          'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
+            conversation.threadId,
+          ),
+        },
+      );
       return 0;
     }
     final message = _withThreadId(snapshot, displayThreadId);
@@ -1048,6 +1101,128 @@ class ChatThreadsController
             _stableMessageId(snapshot);
   }
 
+  bool _messageBelongsToConversationThread(
+    ChatMessage message,
+    ConversationSummary conversation,
+  ) {
+    final messageThreadId = message.threadId.trim();
+    if (messageThreadId.isEmpty) {
+      return false;
+    }
+    if (_messageMatchesConversation(message, conversation)) {
+      return true;
+    }
+    if (isPeerScopedDirectConversation(conversation)) {
+      return false;
+    }
+    final messageId = _stableMessageId(message);
+    final snapshot = conversation.lastMessageSnapshot;
+    if (snapshot != null &&
+        messageId.isNotEmpty &&
+        messageId == _stableMessageId(snapshot)) {
+      return true;
+    }
+    return false;
+  }
+
+  List<ChatMessage> _messagesForConversationThread(
+    Iterable<ChatMessage> messages, {
+    required ConversationSummary conversation,
+    required String displayThreadId,
+    required String source,
+  }) {
+    final filtered = <ChatMessage>[];
+    var rawCount = 0;
+    var nonRenderableCount = 0;
+    var droppedCount = 0;
+    for (final message in messages) {
+      rawCount += 1;
+      if (!message.hasRenderableContent) {
+        nonRenderableCount += 1;
+        continue;
+      }
+      if (!_messageBelongsToConversationThread(message, conversation)) {
+        droppedCount += 1;
+        continue;
+      }
+      filtered.add(_withThreadId(message, displayThreadId));
+    }
+    if (droppedCount > 0) {
+      _chatProviderTrace(
+        'messages.filter_dropped',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(displayThreadId),
+          'source': source,
+          'raw': rawCount,
+          'dropped': droppedCount,
+          'non_renderable': nonRenderableCount,
+          'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
+            conversation.threadId,
+          ),
+        },
+      );
+      AwikiPerformanceLogger.log(
+        'chat.messages.filter_dropped',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(displayThreadId),
+          'source': source,
+          'raw': rawCount,
+          'dropped': droppedCount,
+          'non_renderable': nonRenderableCount,
+          'conversation_thread': AwikiPerformanceLogger.safeHash(
+            conversation.threadId,
+          ),
+        },
+      );
+    }
+    return filtered;
+  }
+
+  bool _sentMessageBelongsToConversation(
+    ChatMessage message, {
+    required ConversationSummary conversation,
+    required ChatMessage pending,
+    required String displayThreadId,
+    required String source,
+  }) {
+    final belongs =
+        _messageBelongsToConversationThread(message, conversation) ||
+        _isSameSentConfirmation(pending, message, conversation);
+    if (!belongs) {
+      _chatProviderTrace(
+        'messages.sent_rejected',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(displayThreadId),
+          'source': source,
+          'message_thread_hash': AwikiPerformanceLogger.safeHash(
+            message.threadId,
+          ),
+          'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
+            conversation.threadId,
+          ),
+          'message_id_hash': AwikiPerformanceLogger.safeHash(
+            _stableMessageId(message),
+          ),
+          'pending_id_hash': AwikiPerformanceLogger.safeHash(
+            _stableMessageId(pending),
+          ),
+        },
+      );
+      AwikiPerformanceLogger.log(
+        'chat.messages.sent_rejected',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(displayThreadId),
+          'source': source,
+          'message_thread': AwikiPerformanceLogger.safeHash(message.threadId),
+          'conversation_thread': AwikiPerformanceLogger.safeHash(
+            conversation.threadId,
+          ),
+        },
+      );
+    }
+    return belongs;
+  }
+
   List<String> _conversationCacheAliases(
     ConversationSummary conversation, {
     required String displayThreadId,
@@ -1062,6 +1237,9 @@ class ChatThreadsController
 
     add(displayThreadId);
     add(conversation.threadId);
+    if (isPeerScopedDirectConversation(conversation)) {
+      return aliases.toList();
+    }
     for (final key in conversation.visibilityKeys) {
       add(key);
     }
@@ -1149,10 +1327,12 @@ class ChatThreadsController
             thread: _localHistoryThreadRefFor(conversation),
             afterServerSeq: effectiveAfterServerSeq,
           );
-      final messages = result.messages
-          .map((message) => _withThreadId(message, displayThreadId))
-          .where((message) => message.hasRenderableContent)
-          .toList();
+      final messages = _messagesForConversationThread(
+        result.messages,
+        conversation: conversation,
+        displayThreadId: displayThreadId,
+        source: 'thread_after',
+      );
       if (!mounted || messages.isEmpty) {
         _chatProviderTrace(
           'thread_after.noop',
@@ -1359,6 +1539,19 @@ class ChatThreadsController
     bool forcePersistentAck = false,
   }) {
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
+    if (!_isExactConversationThread(conversation, targetThreadId)) {
+      _chatProviderTrace(
+        'mark_read.skip',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'reason': 'thread_mismatch',
+          'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
+            conversation.threadId,
+          ),
+        },
+      );
+      return;
+    }
     final currentThread = thread(targetThreadId);
     final watermark = _readWatermarkForThread(targetThreadId);
     final hasWatermark = watermark != null && !watermark.isEmpty;
@@ -1685,9 +1878,12 @@ class ChatThreadsController
   ) async {
     switch (patch.kind) {
       case ThreadMessagePatchKind.reset:
-        final messages = patch.messages
-            .map((message) => _withThreadId(message, displayThreadId))
-            .toList();
+        final messages = _messagesForConversationThread(
+          patch.messages,
+          conversation: conversation,
+          displayThreadId: displayThreadId,
+          source: 'thread_patch_reset',
+        );
         _mergeMessages(displayThreadId, messages, isLoading: false);
         _updateConversationPreviewFromMessages(conversation, messages);
       case ThreadMessagePatchKind.upsert:
@@ -1695,7 +1891,15 @@ class ChatThreadsController
         if (message == null) {
           return;
         }
-        final messages = <ChatMessage>[_withThreadId(message, displayThreadId)];
+        final messages = _messagesForConversationThread(
+          <ChatMessage>[message],
+          conversation: conversation,
+          displayThreadId: displayThreadId,
+          source: 'thread_patch_upsert',
+        );
+        if (messages.isEmpty) {
+          return;
+        }
         _mergeMessages(displayThreadId, messages, isLoading: false);
         _updateConversationPreviewFromMessages(conversation, messages);
       case ThreadMessagePatchKind.remove:
@@ -1868,6 +2072,19 @@ class ChatThreadsController
     final current = thread(threadId);
     final watermark = _readWatermarkForThread(threadId);
     final hasWatermark = watermark != null && !watermark.isEmpty;
+    if (!_isExactConversationThread(pending.conversation, threadId)) {
+      _chatProviderTrace(
+        'mark_read.flush_skip',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(threadId),
+          'reason': 'thread_mismatch',
+          'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
+            pending.conversation.threadId,
+          ),
+        },
+      );
+      return;
+    }
     const canFallbackWithoutWatermark = false;
     if (current.isHydratingLocalHistory ||
         _activeLocalHistoryLoads.contains(threadId) ||
@@ -1944,6 +2161,17 @@ class ChatThreadsController
       lastReadThreadSeq: selected.serverSequence?.toString(),
       readAt: DateTime.now().toUtc(),
     );
+  }
+
+  bool _isExactConversationThread(
+    ConversationSummary conversation,
+    String threadId,
+  ) {
+    final conversationThreadId = conversation.threadId.trim();
+    final displayThreadId = threadId.trim();
+    return conversationThreadId.isNotEmpty &&
+        displayThreadId.isNotEmpty &&
+        conversationThreadId == displayThreadId;
   }
 
   Future<_HistoryLoadResult> _loadLocalHistory(
@@ -2045,10 +2273,12 @@ class ChatThreadsController
       );
       final history = AwikiPerformanceLogger.sync(
         'chat.local_history.prepare',
-        () => loadedHistory
-            .map((message) => _withThreadId(message, targetThreadId))
-            .where((message) => message.hasRenderableContent)
-            .toList(),
+        () => _messagesForConversationThread(
+          loadedHistory,
+          conversation: conversation,
+          displayThreadId: targetThreadId,
+          source: 'local_history',
+        ),
         fields: <String, Object?>{
           ...AwikiPerformanceLogger.threadField(targetThreadId),
           'items': loadedHistory.length,
@@ -2190,10 +2420,12 @@ class ChatThreadsController
       );
       final history = AwikiPerformanceLogger.sync(
         'chat.remote_history.prepare',
-        () => loadedHistory
-            .map((message) => _withThreadId(message, targetThreadId))
-            .where((message) => message.hasRenderableContent)
-            .toList(),
+        () => _messagesForConversationThread(
+          loadedHistory,
+          conversation: conversation,
+          displayThreadId: targetThreadId,
+          source: 'remote_history',
+        ),
         fields: <String, Object?>{
           ...AwikiPerformanceLogger.threadField(targetThreadId),
           'items': loadedHistory.length,
@@ -2326,6 +2558,15 @@ class ChatThreadsController
                   idempotencyKey: pending.localId,
                 )
                 .timeout(_sendTimeout);
+      if (!_sentMessageBelongsToConversation(
+        sent,
+        conversation: conversation,
+        pending: pending,
+        displayThreadId: targetThreadId,
+        source: 'send_text',
+      )) {
+        throw StateError('Sent message belongs to a different conversation.');
+      }
       final sentInThread = _withThreadId(sent, targetThreadId);
       final deliveredMessage = _replaceMessage(
         targetThreadId,
@@ -2444,6 +2685,17 @@ class ChatThreadsController
             idempotencyKey: pending.localId,
           )
           .timeout(_attachmentSendTimeout);
+      if (!_sentMessageBelongsToConversation(
+        sent,
+        conversation: conversation,
+        pending: pending,
+        displayThreadId: targetThreadId,
+        source: 'send_attachment',
+      )) {
+        throw StateError(
+          'Sent attachment belongs to a different conversation.',
+        );
+      }
       final sentInThread = await _withCachedSentAttachment(
         sent: _withThreadId(sent, targetThreadId),
         originalAttachment: attachment,
@@ -2531,6 +2783,17 @@ class ChatThreadsController
           .read(messagingServiceProvider)
           .retryByResendOriginalContent(retrying)
           .timeout(_sendTimeout);
+      if (!_sentMessageBelongsToConversation(
+        retried,
+        conversation: conversation,
+        pending: retrying,
+        displayThreadId: targetThreadId,
+        source: 'retry_text',
+      )) {
+        throw StateError(
+          'Retried message belongs to a different conversation.',
+        );
+      }
       final retriedInThread = _withThreadId(retried, targetThreadId);
       _replaceMessage(targetThreadId, message.localId, retriedInThread);
       _startAgentProcessingForDeliveredMessage(
@@ -2584,6 +2847,17 @@ class ChatThreadsController
             idempotencyKey: message.localId,
           )
           .timeout(_attachmentSendTimeout);
+      if (!_sentMessageBelongsToConversation(
+        retried,
+        conversation: conversation,
+        pending: retrying,
+        displayThreadId: targetThreadId,
+        source: 'retry_attachment',
+      )) {
+        throw StateError(
+          'Retried attachment belongs to a different conversation.',
+        );
+      }
       final retriedInThread = await _withCachedSentAttachment(
         sent: _withThreadId(retried, targetThreadId),
         originalAttachment: AttachmentDraft(
@@ -2633,9 +2907,26 @@ class ChatThreadsController
   }) {
     final targetThreadIds = _threadIdsForRealtimeMessage(message, conversation);
     for (final targetThreadId in targetThreadIds) {
-      _mergeMessages(targetThreadId, <ChatMessage>[
-        _withThreadId(message, targetThreadId),
-      ], trustIncomingAgentReply: true);
+      final filterConversation = conversation == null
+          ? null
+          : targetThreadId == message.threadId.trim()
+          ? _conversationForRealtimeMessageThread(message, targetThreadId)
+          : conversation;
+      final messages = conversation == null
+          ? <ChatMessage>[
+              if (message.hasRenderableContent)
+                _withThreadId(message, targetThreadId),
+            ]
+          : _messagesForConversationThread(
+              <ChatMessage>[message],
+              conversation: filterConversation!,
+              displayThreadId: targetThreadId,
+              source: 'realtime',
+            );
+      if (messages.isEmpty) {
+        continue;
+      }
+      _mergeMessages(targetThreadId, messages, trustIncomingAgentReply: true);
     }
   }
 
@@ -2839,16 +3130,18 @@ class ChatThreadsController
     String threadId, {
     bool? visible,
   }) {
-    final aliases = <String>{
-      threadId,
-      conversation.threadId,
-      for (final key in conversation.visibilityKeys) key,
-      for (final key in conversationVisibilityIdentity(
-        conversation,
-        includeHandleAliasesForStrongIdentity: true,
-      ).keys)
-        key,
-    };
+    final aliases = isPeerScopedDirectConversation(conversation)
+        ? <String>{threadId, conversation.threadId}
+        : <String>{
+            threadId,
+            conversation.threadId,
+            for (final key in conversation.visibilityKeys) key,
+            for (final key in conversationVisibilityIdentity(
+              conversation,
+              includeHandleAliasesForStrongIdentity: true,
+            ).keys)
+              key,
+          };
     _touchThreadCache(
       threadId,
       const <ChatMessage>[],
@@ -2913,6 +3206,9 @@ class ChatThreadsController
   }
 
   String? _canonicalKeyForConversation(ConversationSummary conversation) {
+    if (isPeerScopedDirectConversation(conversation)) {
+      return conversation.threadId.trim();
+    }
     if (conversation.isGroup) {
       final group = conversation.groupId?.trim();
       if (group != null && group.isNotEmpty) {
@@ -2938,6 +3234,10 @@ class ChatThreadsController
     String threadId,
     List<ChatMessage> messages,
   ) {
+    final normalizedThread = threadId.trim();
+    if (isPeerScopedDirectThreadId(normalizedThread)) {
+      return normalizedThread;
+    }
     for (final message in messages.reversed) {
       final group = message.groupId?.trim();
       if (group != null && group.isNotEmpty) {
@@ -2948,7 +3248,6 @@ class ChatThreadsController
     if (peerDid != null && peerDid.isNotEmpty) {
       return canonicalDirectThreadId(_ownerDidForCache(), peerDid);
     }
-    final normalizedThread = threadId.trim();
     return normalizedThread.isEmpty ? null : normalizedThread;
   }
 
@@ -2970,6 +3269,7 @@ class ChatThreadsController
         _cacheMetadataByThreadId[threadId]?.canonicalKey ??
         _canonicalKeyForMessages(threadId, messages) ??
         threadId;
+    final exactPeerScopedThread = isPeerScopedDirectThreadId(threadId.trim());
     for (final message in messages) {
       for (final id in <String>[message.localId, ?message.remoteId]) {
         final key = id.trim();
@@ -2977,7 +3277,9 @@ class ChatThreadsController
           continue;
         }
         final existing = _messageThreadRoutes[key];
-        if (existing != null && state.containsKey(existing.threadId)) {
+        if (!exactPeerScopedThread &&
+            existing != null &&
+            state.containsKey(existing.threadId)) {
           _messageThreadRoutes[key] = _MessageThreadRoute(
             threadId: existing.threadId,
             canonicalKey: existing.canonicalKey,
@@ -4567,14 +4869,20 @@ class ChatThreadsController
     }
     for (final conversation
         in ref.read(conversationListProvider).conversations) {
-      if (conversation.threadId == explicit ||
+      if (conversation.threadId == explicit) {
+        return conversation.threadId;
+      }
+      if (!isPeerScopedDirectConversation(conversation) &&
           conversation.visibilityKeys.contains(explicit)) {
         return conversation.threadId;
       }
     }
     for (final entry in state.entries) {
       final identity = _conversationIdentityForThread(entry.key, entry.value);
-      if (identity.threadId == explicit ||
+      if (identity.threadId == explicit) {
+        return entry.key;
+      }
+      if (!isPeerScopedDirectConversation(identity) &&
           identity.visibilityKeys.contains(explicit)) {
         return entry.key;
       }
@@ -4846,14 +5154,24 @@ class ChatThreadsController
   }
 
   String _threadIdForAgentDid(String agentDid) {
+    final matches = <ConversationSummary>[];
     for (final conversation
         in ref.read(conversationListProvider).conversations) {
       if (!conversation.isGroup &&
           (conversation.targetDid == agentDid ||
               conversation.targetPeer == agentDid ||
               conversation.threadId == 'direct:$agentDid')) {
-        return conversation.threadId;
+        matches.add(conversation);
       }
+    }
+    if (matches.length == 1) {
+      return matches.single.threadId;
+    }
+    if (matches.any(isPeerScopedDirectConversation)) {
+      return 'direct:$agentDid';
+    }
+    if (matches.isNotEmpty) {
+      return matches.first.threadId;
     }
     return 'direct:$agentDid';
   }
@@ -5176,6 +5494,50 @@ class ChatThreadsController
     return delta <= _pendingMatchWindow;
   }
 
+  bool _isSameSentConfirmation(
+    ChatMessage pending,
+    ChatMessage sent,
+    ConversationSummary conversation,
+  ) {
+    if (!pending.isMine || pending.sendState == MessageSendState.sent) {
+      return false;
+    }
+    final pendingId = _stableMessageId(pending);
+    final sentId = _stableMessageId(sent);
+    final sameKnownId = pendingId.isNotEmpty && pendingId == sentId;
+    final sameOutgoingShape =
+        pending.previewText == sent.previewText &&
+        sent.isMine &&
+        sent.sendState == MessageSendState.sent &&
+        pending.createdAt.difference(sent.createdAt).abs() <=
+            _pendingMatchWindow;
+    if (!sameKnownId && !sameOutgoingShape) {
+      return false;
+    }
+    if (conversation.isGroup) {
+      return sameNonEmpty(sent.groupId, conversation.groupId) ||
+          sameNonEmpty(pending.groupId, conversation.groupId);
+    }
+    final sentReceiver = normalizedDirectPeer(sent.receiverDid);
+    final pendingReceiver = normalizedDirectPeer(pending.receiverDid);
+    final targetDid = normalizedDirectPeer(conversation.targetDid);
+    final targetPeer = normalizedDirectPeer(conversation.targetPeer);
+    return _directPeerMatchesTarget(sentReceiver, targetDid, targetPeer) ||
+        _directPeerMatchesTarget(pendingReceiver, targetDid, targetPeer);
+  }
+
+  bool _directPeerMatchesTarget(
+    String? peer,
+    String? targetDid,
+    String? targetPeer,
+  ) {
+    if (peer == null) {
+      return false;
+    }
+    return (targetDid != null && peer == targetDid) ||
+        (targetPeer != null && peer == targetPeer);
+  }
+
   bool _shouldLoadHistory(
     ChatThreadState current,
     ConversationSummary conversation,
@@ -5232,154 +5594,174 @@ class ChatThreadsController
   }
 
   ConversationSummary _refreshedConversationFor(ConversationSummary fallback) {
-    final refreshed = ref
-        .read(conversationListProvider)
-        .conversations
-        .where((item) => sameConversationTarget(item, fallback));
-    return refreshed.isEmpty ? fallback : refreshed.first;
+    final conversations = ref.read(conversationListProvider).conversations;
+    for (final item in conversations) {
+      if (sameConversationThread(item, fallback)) {
+        return item;
+      }
+    }
+    for (final item in conversations) {
+      if (_canUseConversationAliasForState(item, fallback)) {
+        return item;
+      }
+    }
+    return fallback;
+  }
+
+  bool _canUseConversationAliasForState(
+    ConversationSummary candidate,
+    ConversationSummary fallback,
+  ) {
+    if (!sameConversationTarget(candidate, fallback)) {
+      return false;
+    }
+    return !(isPeerScopedDirectConversation(candidate) &&
+        isPeerScopedDirectConversation(fallback));
   }
 
   List<String> _threadIdsForRealtimeMessage(
     ChatMessage message,
     ConversationSummary? conversation,
   ) {
-    final aliases = <String>[];
+    final threadIds = <String>[];
     void add(String? value) {
       final key = value?.trim();
-      if (key != null && key.isNotEmpty && !aliases.contains(key)) {
-        aliases.add(key);
+      if (key != null && key.isNotEmpty && !threadIds.contains(key)) {
+        threadIds.add(key);
       }
     }
 
     if (conversation == null) {
       add(message.threadId);
-      return aliases;
+      return threadIds;
     }
 
-    for (final entry in state.entries) {
-      if (sameConversationTarget(
-        _conversationIdentityForThread(entry.key, entry.value),
-        conversation,
-      )) {
-        add(entry.key);
-      }
+    final messageThreadId = message.threadId.trim();
+    if (messageThreadId.isNotEmpty) {
+      add(messageThreadId);
     }
-    add(conversation.threadId);
-    add(message.threadId);
-    for (final key in conversation.visibilityKeys) {
-      add(key);
+    if (_messageMatchesConversation(message, conversation)) {
+      add(conversation.threadId);
     }
-    for (final key in conversationVisibilityIdentity(
-      conversation,
-      includeHandleAliasesForStrongIdentity: true,
-    ).keys) {
-      add(key);
-    }
-
-    final ownerDid = ref.read(sessionProvider).session?.did.trim() ?? '';
-    if (conversation.isGroup) {
-      _addRealtimeGroupAliases(
-        add,
-        conversation.groupId,
-        message.groupId,
-        conversation.threadId,
-        message.threadId,
-      );
-    } else {
-      _addRealtimeDirectAliases(add, conversation, message, ownerDid);
-    }
-    if (aliases.isEmpty) {
+    if (threadIds.isEmpty) {
       add(message.threadId);
     }
-    return aliases;
+    return threadIds;
   }
 
-  void _addRealtimeGroupAliases(
-    void Function(String? value) add,
-    String? conversationGroupId,
-    String? messageGroupId,
-    String conversationThreadId,
-    String messageThreadId,
-  ) {
-    for (final value in <String?>[
-      conversationGroupId,
-      messageGroupId,
-      conversationThreadId,
-      messageThreadId,
-    ]) {
-      final group = value?.trim();
-      if (group == null || group.isEmpty) {
-        continue;
-      }
-      add(group);
-      add(canonicalGroupThreadId(group));
-    }
-  }
-
-  void _addRealtimeDirectAliases(
-    void Function(String? value) add,
-    ConversationSummary conversation,
+  ConversationSummary _conversationForRealtimeMessageThread(
     ChatMessage message,
-    String ownerDid,
+    String threadId,
   ) {
-    final peerDid = _directPeerDidForRealtimeMessage(message, ownerDid);
-    final targetDid = conversation.targetDid?.trim();
-    final normalizedTargetPeer = normalizedDirectPeer(conversation.targetPeer);
-    final peerDids = <String?>[
-      targetDid,
-      normalizedTargetPeer != null && normalizedTargetPeer.startsWith('did:')
-          ? normalizedTargetPeer
+    final groupId = message.groupId?.trim();
+    final isGroup =
+        (groupId != null && groupId.isNotEmpty) ||
+        threadId.startsWith('group:');
+    final targetDid = isGroup
+        ? null
+        : (message.isMine ? message.receiverDid?.trim() : message.senderDid);
+    return ConversationSummary(
+      threadId: threadId,
+      displayName: groupId ?? targetDid ?? threadId,
+      lastMessagePreview: message.previewText,
+      lastMessageAt: message.createdAt,
+      unreadCount: message.isMine ? 0 : 1,
+      isGroup: isGroup,
+      targetDid: targetDid,
+      targetPeer: targetDid,
+      groupId: isGroup
+          ? groupId ?? _stripThreadPrefix(threadId, 'group:')
           : null,
-      peerDid,
-    ];
-    for (final did in peerDids) {
-      final peer = did?.trim();
-      if (peer == null || peer.isEmpty) {
-        continue;
-      }
-      add(peer);
-      add('direct:$peer');
-      add('direct-did:$peer');
-      if (ownerDid.isNotEmpty) {
-        add(canonicalDirectThreadId(ownerDid, peer));
-      }
-    }
-
-    if (normalizedTargetPeer == null ||
-        normalizedTargetPeer.startsWith('did:')) {
-      return;
-    }
-    add(normalizedTargetPeer);
-    add('direct:$normalizedTargetPeer');
-    add('direct-handle:$normalizedTargetPeer');
-    add('dm:pending:$normalizedTargetPeer');
-    final localPart = _handleLocalPart(normalizedTargetPeer);
-    add('direct:$localPart');
-    add('direct-handle:$localPart');
+      lastMessageSnapshot: message.hasRenderableContent ? message : null,
+    );
   }
 
-  String? _directPeerDidForRealtimeMessage(
+  String _stripThreadPrefix(String value, String prefix) {
+    return value.startsWith(prefix) ? value.substring(prefix.length) : value;
+  }
+
+  bool _messageMatchesConversation(
     ChatMessage message,
-    String ownerDid,
+    ConversationSummary conversation,
   ) {
-    final owner = ownerDid.trim();
-    final sender = message.senderDid.trim();
-    final receiver = message.receiverDid?.trim();
-    if (owner.isNotEmpty) {
-      if (sender == owner && receiver != null && receiver.isNotEmpty) {
-        return receiver;
+    final messageThreadId = message.threadId.trim();
+    if (_messageThreadMatchesConversation(messageThreadId, conversation)) {
+      return true;
+    }
+    if (!conversation.isGroup) {
+      return false;
+    }
+    final messageGroupId = message.groupId?.trim();
+    final conversationGroupId = conversation.groupId?.trim();
+    return messageGroupId != null &&
+        messageGroupId.isNotEmpty &&
+        conversationGroupId != null &&
+        conversationGroupId.isNotEmpty &&
+        messageGroupId == conversationGroupId;
+  }
+
+  bool _messageThreadMatchesConversation(
+    String messageThreadId,
+    ConversationSummary conversation,
+  ) {
+    if (messageThreadId == conversation.threadId) {
+      return true;
+    }
+    if (conversation.isGroup) {
+      final groupId = conversation.groupId?.trim();
+      return groupId != null &&
+          groupId.isNotEmpty &&
+          canonicalGroupThreadId(groupId) == messageThreadId;
+    }
+    if (isPeerScopedDirectConversation(conversation)) {
+      return false;
+    }
+    final sessionDid = ref.read(sessionProvider).session?.did.trim();
+    final directThreadIds = _directThreadAliasesForConversation(
+      conversation,
+      ownerDid: sessionDid,
+    );
+    if (directThreadIds.contains(messageThreadId)) {
+      return true;
+    }
+    final threadKey = 'thread:$messageThreadId';
+    return conversation.visibilityKeys.contains(messageThreadId) ||
+        conversation.visibilityKeys.contains(threadKey) ||
+        conversationVisibilityIdentity(
+          conversation,
+          includeHandleAliasesForStrongIdentity: false,
+        ).keys.contains(threadKey);
+  }
+
+  Set<String> _directThreadAliasesForConversation(
+    ConversationSummary conversation, {
+    required String? ownerDid,
+  }) {
+    if (conversation.isGroup || isPeerScopedDirectConversation(conversation)) {
+      return const <String>{};
+    }
+    final aliases = <String>{};
+    void add(String? value) {
+      final key = value?.trim();
+      if (key != null && key.isNotEmpty) {
+        aliases.add(key);
       }
-      if (receiver == owner && sender.isNotEmpty) {
-        return sender;
+    }
+
+    add(conversation.threadId);
+    final did = conversation.targetDid?.trim();
+    final peer = conversation.targetPeer?.trim();
+    for (final value in <String?>[did, peer]) {
+      final key = value?.trim();
+      if (key == null || key.isEmpty) {
+        continue;
+      }
+      add('dm:$key');
+      if (ownerDid != null && ownerDid.isNotEmpty && key.startsWith('did:')) {
+        add(canonicalDirectThreadId(ownerDid, key));
       }
     }
-    if (!message.isMine && sender.isNotEmpty) {
-      return sender;
-    }
-    if (receiver != null && receiver.isNotEmpty) {
-      return receiver;
-    }
-    return sender.isEmpty ? null : sender;
+    return aliases;
   }
 
   ConversationSummary _conversationIdentityForThread(
@@ -5640,6 +6022,9 @@ ConversationSummary _newerConversation(
 }
 
 AppThreadRef _historyThreadRefFor(ConversationSummary conversation) {
+  if (isPeerScopedDirectConversation(conversation)) {
+    return AppThreadRef.thread(conversation.threadId);
+  }
   final groupId = conversation.groupId?.trim();
   if (conversation.isGroup && groupId != null && groupId.isNotEmpty) {
     return AppThreadRef.group(groupId);
@@ -5656,11 +6041,9 @@ AppThreadRef _historyThreadRefFor(ConversationSummary conversation) {
 }
 
 AppThreadRef _localHistoryThreadRefFor(ConversationSummary conversation) {
-  // Local thread stores, thread-after, and mark-read must address the same
-  // canonical thread.  For direct conversations prefer the canonical peer
-  // handle/peer key when available; DID-only history lookups can miss local
-  // rows stored under the peer-scoped direct identity and then force a remote
-  // fallback before we have a safe read watermark.
+  // Peer-scoped direct conversations are storage threads, not aliases of the
+  // same direct target. History, patch repair, and thread-after must therefore
+  // address the exact thread id to avoid mixing agent controller/runtime rows.
   return _historyThreadRefFor(conversation);
 }
 
@@ -5692,6 +6075,9 @@ bool _threadPatchMatchesThreadRef(ThreadMessagePatch patch, AppThreadRef ref) {
 }
 
 AppThreadRef _readThreadRefFor(ConversationSummary conversation) {
+  if (isPeerScopedDirectConversation(conversation)) {
+    return AppThreadRef.thread(conversation.threadId);
+  }
   final groupId = conversation.groupId?.trim();
   if (conversation.isGroup && groupId != null && groupId.isNotEmpty) {
     return AppThreadRef.group(groupId);

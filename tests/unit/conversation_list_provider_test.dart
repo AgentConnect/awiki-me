@@ -5,6 +5,7 @@ import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
+import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
@@ -86,7 +87,7 @@ void main() {
   );
 
   test(
-    'refresh merge uses indexed identity and keeps one local row per target',
+    'refresh merge keeps peer-scoped storage rows separate from legacy direct targets',
     () async {
       final baseTime = DateTime.utc(2026, 6, 27, 2);
       final local = <ConversationSummary>[
@@ -156,15 +157,96 @@ void main() {
           .conversations;
       expect(
         conversations.where((item) => item.targetDid == 'did:agent'),
-        hasLength(1),
+        hasLength(2),
       );
-      final merged = conversations.singleWhere(
-        (item) => item.targetDid == 'did:agent',
+      final refreshedAgent = conversations.singleWhere(
+        (item) => item.threadId == 'dm:peer-scope:v1:hermes',
       );
-      expect(merged.threadId, 'dm:peer-scope:v1:hermes');
-      expect(merged.lastMessagePreview, '新回复');
-      expect(conversations.length, local.length);
+      final localAgent = conversations.singleWhere(
+        (item) => item.threadId == 'dm:did:human:did:agent',
+      );
+      expect(refreshedAgent.lastMessagePreview, '新回复');
+      expect(localAgent.lastMessagePreview, '旧回复');
+      expect(conversations.length, local.length + 1);
       expect(service.listCalls, 1);
+    },
+  );
+
+  test(
+    'ambiguous peer-scoped direct targets are not merged by target alias',
+    () {
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: _StaticConversationService(conversations: const []),
+        notifications: notifications,
+        ownerDid: 'did:human',
+      );
+      addTearDown(container.dispose);
+
+      const agentDid = 'did:agent:runtime';
+      const agentHandle = 'hermes.awiki.example';
+      final controllerConversation =
+          _conversation(
+            threadId: 'dm:peer-scope:v1:controller',
+            displayName: 'Controller',
+            targetDid: agentDid,
+            targetPeer: agentHandle,
+          ).copyWith(
+            lastMessagePreview: 'controller preview',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 7, 9),
+          );
+      final runtimeConversation =
+          _conversation(
+            threadId: 'dm:peer-scope:v1:runtime',
+            displayName: 'Runtime',
+            targetDid: agentDid,
+            targetPeer: agentHandle,
+          ).copyWith(
+            lastMessagePreview: 'runtime preview',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 7, 10),
+          );
+      final genericUpdate =
+          _conversation(
+            threadId: 'direct:$agentDid',
+            displayName: 'Generic',
+            targetDid: agentDid,
+            targetPeer: agentDid,
+          ).copyWith(
+            lastMessagePreview: 'generic update',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 7, 11),
+          );
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(controllerConversation);
+      notifier.upsertConversation(runtimeConversation);
+      notifier.upsertConversation(genericUpdate);
+
+      final conversations = container
+          .read(conversationListProvider)
+          .conversations;
+      expect(conversations, hasLength(3));
+      expect(
+        conversations
+            .singleWhere(
+              (item) => item.threadId == controllerConversation.threadId,
+            )
+            .lastMessagePreview,
+        'controller preview',
+      );
+      expect(
+        conversations
+            .singleWhere(
+              (item) => item.threadId == runtimeConversation.threadId,
+            )
+            .lastMessagePreview,
+        'runtime preview',
+      );
+      expect(
+        conversations
+            .singleWhere((item) => item.threadId == genericUpdate.threadId)
+            .lastMessagePreview,
+        'generic update',
+      );
     },
   );
 
@@ -226,6 +308,49 @@ void main() {
     },
   );
 
+  test(
+    'empty refreshed group preview does not overwrite visible local preview',
+    () async {
+      final baseTime = DateTime.utc(2026, 7, 3, 7, 8, 52);
+      final local = _conversation(
+        threadId: 'group:did:wba:awiki.ai:groups:8b13',
+        displayName: '群聊',
+        isGroup: true,
+        groupId: 'did:wba:awiki.ai:groups:8b13',
+      ).copyWith(lastMessagePreview: '111', lastMessageAt: baseTime);
+      final refreshed =
+          _conversation(
+            threadId: local.threadId,
+            displayName: local.displayName,
+            isGroup: true,
+            groupId: local.groupId,
+          ).copyWith(
+            lastMessagePreview: '',
+            lastMessageAt: baseTime.add(const Duration(seconds: 1)),
+          );
+      final service = _StaticConversationService(
+        conversations: <ConversationSummary>[refreshed],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(local);
+      await notifier.refresh();
+
+      final conversation = container
+          .read(conversationListProvider)
+          .conversations
+          .single;
+      expect(conversation.lastMessagePreview, '111');
+      expect(conversation.lastMessageAt, baseTime);
+    },
+  );
+
   test('mark read is no-op when conversation is already read', () async {
     final service = _StaticConversationService(conversations: const []);
     final notifications = FakeNotificationFacade();
@@ -256,6 +381,49 @@ void main() {
 
     expect(emissions, 0);
     expect(notifications.lastBadgeCount, 0);
+  });
+
+  test('mark read only clears the exact storage thread', () async {
+    final service = _StaticConversationService(conversations: const []);
+    final notifications = FakeNotificationFacade();
+    final container = _conversationContainer(
+      service: service,
+      notifications: notifications,
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+
+    final controllerConversation = _conversation(
+      threadId: 'dm:peer-scope:v1:controller',
+      displayName: 'Controller',
+      unreadCount: 3,
+      targetDid: 'did:agent:runtime',
+      targetPeer: 'agent.awiki.ai',
+    );
+    final runtimeConversation = _conversation(
+      threadId: 'dm:peer-scope:v1:runtime',
+      displayName: 'Runtime Agent',
+      unreadCount: 2,
+      targetDid: 'did:agent:runtime',
+      targetPeer: 'agent.awiki.ai',
+    );
+    final notifier = container.read(conversationListProvider.notifier);
+    notifier.upsertConversation(controllerConversation);
+    notifier.upsertConversation(runtimeConversation);
+    await Future<void>.delayed(Duration.zero);
+
+    notifier.markConversationReadLocal(runtimeConversation);
+
+    final byThread = {
+      for (final item in container.read(conversationListProvider).conversations)
+        item.threadId: item,
+    };
+    expect(
+      byThread[controllerConversation.threadId]?.unreadCount,
+      controllerConversation.unreadCount,
+    );
+    expect(byThread[runtimeConversation.threadId]?.unreadCount, 0);
+    expect(notifications.lastBadgeCount, controllerConversation.unreadCount);
   });
 
   test(
@@ -719,6 +887,149 @@ void main() {
     expect(container.read(conversationListProvider).conversations, isEmpty);
     expect(notifications.lastBadgeCount, 0);
   });
+
+  test(
+    'realtime message increments unread without clobbering local mention state',
+    () {
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: _StaticConversationService(
+          conversations: const <ConversationSummary>[],
+        ),
+        notifications: notifications,
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(conversationListProvider.notifier);
+      final local =
+          _conversation(
+            threadId: 'group:team',
+            displayName: 'Team',
+            unreadCount: 3,
+            isGroup: true,
+            groupId: 'team',
+          ).copyWith(
+            unreadMentionCount: 1,
+            firstUnreadMentionMessageId: 'mention-1',
+          );
+      notifier.upsertConversation(local);
+
+      notifier.upsertRealtimeMessageBestEffort(
+        local.copyWith(
+          lastMessagePreview: 'new realtime',
+          lastMessageAt: DateTime.utc(2026, 6, 27, 2, 1),
+          unreadCount: 1,
+          unreadMentionCount: 0,
+          firstUnreadMentionMessageId: null,
+        ),
+        message: ChatMessage(
+          localId: 'realtime-1',
+          remoteId: 'realtime-1',
+          threadId: 'group:team',
+          senderDid: 'did:bob',
+          senderName: 'Bob',
+          receiverDid: 'did:alice',
+          groupId: 'team',
+          content: 'new realtime',
+          createdAt: DateTime.utc(2026, 6, 27, 2, 1),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+      );
+
+      final updated = container
+          .read(conversationListProvider)
+          .conversations
+          .single;
+      expect(updated.lastMessagePreview, 'new realtime');
+      expect(updated.unreadCount, 4);
+      expect(updated.unreadMentionCount, 1);
+      expect(updated.firstUnreadMentionMessageId, 'mention-1');
+      expect(notifications.lastBadgeCount, 4);
+    },
+  );
+
+  test(
+    'realtime peer-scoped message does not merge into legacy direct target',
+    () {
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: _StaticConversationService(
+          conversations: const <ConversationSummary>[],
+        ),
+        notifications: notifications,
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(conversationListProvider.notifier);
+      final legacy = _conversation(
+        threadId: 'dm:did:alice:did:agent',
+        displayName: 'Agent legacy',
+        targetDid: 'did:agent',
+        targetPeer: 'did:agent',
+      );
+      notifier.upsertConversation(legacy);
+
+      notifier.upsertRealtimeMessageBestEffort(
+        _conversation(
+          threadId: 'direct:did:agent',
+          displayName: 'Agent',
+          unreadCount: 1,
+          targetDid: 'did:agent',
+          targetPeer: 'agent.awiki.example',
+          lastMessageAt: DateTime.utc(2026, 6, 27, 2, 2),
+        ).copyWith(lastMessagePreview: 'runtime reply'),
+        message: ChatMessage(
+          localId: 'runtime-1',
+          remoteId: 'runtime-1',
+          threadId: 'dm:peer-scope:v1:agent',
+          senderDid: 'did:agent',
+          senderName: 'Agent',
+          receiverDid: 'did:alice',
+          content: 'runtime reply',
+          createdAt: DateTime.utc(2026, 6, 27, 2, 2),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+      );
+      expect(
+        container.read(conversationListProvider).conversations.single.threadId,
+        'dm:did:alice:did:agent',
+      );
+
+      notifier.upsertRealtimeMessageBestEffort(
+        _conversation(
+          threadId: 'dm:peer-scope:v1:agent',
+          displayName: 'Agent',
+          unreadCount: 1,
+          targetDid: 'did:agent',
+          targetPeer: 'agent.awiki.example',
+          lastMessageAt: DateTime.utc(2026, 6, 27, 2, 2),
+        ).copyWith(lastMessagePreview: 'runtime reply'),
+        message: ChatMessage(
+          localId: 'runtime-1',
+          remoteId: 'runtime-1',
+          threadId: 'dm:peer-scope:v1:agent',
+          senderDid: 'did:agent',
+          senderName: 'Agent',
+          receiverDid: 'did:alice',
+          content: 'runtime reply',
+          createdAt: DateTime.utc(2026, 6, 27, 2, 2),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+      );
+
+      final rows = container.read(conversationListProvider).conversations;
+      expect(rows.map((item) => item.threadId), <String>[
+        'dm:peer-scope:v1:agent',
+        'dm:did:alice:did:agent',
+      ]);
+      expect(rows.first.lastMessagePreview, 'runtime reply');
+      expect(rows.first.unreadCount, 1);
+      expect(notifications.lastBadgeCount, 1);
+    },
+  );
 }
 
 ConversationSummary _conversation({
@@ -727,6 +1038,8 @@ ConversationSummary _conversation({
   int unreadCount = 0,
   String targetDid = 'did:bob',
   String? targetPeer,
+  bool isGroup = false,
+  String? groupId,
   DateTime? lastMessageAt,
 }) {
   return ConversationSummary(
@@ -735,9 +1048,10 @@ ConversationSummary _conversation({
     lastMessagePreview: 'hello',
     lastMessageAt: lastMessageAt ?? DateTime.utc(2026, 6, 27, 2),
     unreadCount: unreadCount,
-    isGroup: false,
-    targetDid: targetDid,
-    targetPeer: targetPeer,
+    isGroup: isGroup,
+    targetDid: isGroup ? null : targetDid,
+    targetPeer: isGroup ? null : targetPeer,
+    groupId: groupId,
   );
 }
 

@@ -307,8 +307,31 @@ void main() {
     );
 
     test(
-      'snapshot load merges cached runtime DID and handle agent rows',
+      'snapshot load keeps peer-scoped runtime rows on exact storage threads',
       () async {
+        final didMessage = ChatMessage(
+          localId: 'legacy-did-msg',
+          remoteId: 'legacy-did-msg',
+          threadId: 'dm:did:human:did:agent:runtime',
+          senderDid: 'did:agent:runtime',
+          receiverDid: 'did:human',
+          content: 'legacy reply',
+          createdAt: DateTime.utc(2026, 5, 23, 8, 58),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        );
+        final runtimeReply = ChatMessage(
+          localId: 'runtime-reply',
+          remoteId: 'runtime-reply',
+          threadId: 'dm:peer-scope:v1:runtime',
+          senderDid: 'did:agent:runtime',
+          receiverDid: 'did:human',
+          content: '杭州明天 **2026年7月4日，星期六** 天气整体偏热',
+          createdAt: DateTime.utc(2026, 5, 23, 8, 59),
+          isMine: false,
+          serverSequence: 2899,
+          sendState: MessageSendState.sent,
+        );
         final core = _FakeConversations(
           items: <ConversationSummary>[
             _conversation(
@@ -317,6 +340,8 @@ void main() {
               targetPeer: 'did:agent:runtime',
               minutesAgo: 2,
               displayName: 'zhuocheng-test-hermes',
+              lastMessagePreview: didMessage.content,
+              lastMessageSnapshot: didMessage,
             ),
           ],
           snapshotItems: <ConversationSummary>[
@@ -326,6 +351,8 @@ void main() {
               targetPeer: 'did:agent:runtime',
               minutesAgo: 2,
               displayName: 'zhuocheng-test-hermes',
+              lastMessagePreview: didMessage.content,
+              lastMessageSnapshot: didMessage,
             ),
             _conversation(
               'dm:peer-scope:v1:runtime',
@@ -333,6 +360,9 @@ void main() {
               targetPeer: 'zhuocheng-test-hermes.anpclaw.com',
               minutesAgo: 1,
               displayName: 'zhuocheng-test-hermes.anpclaw.com',
+              lastMessagePreview: runtimeReply.content,
+              lastMessageSnapshot: runtimeReply,
+              unreadCount: 1,
             ),
           ],
         );
@@ -361,14 +391,41 @@ void main() {
         );
 
         expect(core.snapshotCount, 1);
-        expect(conversations, hasLength(1));
-        expect(conversations.single.threadId, 'dm:peer-scope:v1:runtime');
-        expect(conversations.single.targetDid, 'did:agent:runtime');
+        expect(conversations, hasLength(2));
+        final byThread = {
+          for (final conversation in conversations)
+            conversation.threadId: conversation,
+        };
         expect(
-          conversations.single.targetPeer,
+          byThread['dm:did:human:did:agent:runtime']?.conversationKey,
+          'runtime:did:agent:runtime',
+        );
+        expect(
+          byThread['dm:did:human:did:agent:runtime']
+              ?.lastMessageSnapshot
+              ?.threadId,
+          'dm:did:human:did:agent:runtime',
+        );
+        expect(
+          byThread['dm:peer-scope:v1:runtime']?.conversationKey,
+          'dm:peer-scope:v1:runtime',
+        );
+        expect(
+          byThread['dm:peer-scope:v1:runtime']?.targetPeer,
           'zhuocheng-test-hermes.anpclaw.com',
         );
-        expect(conversations.single.displayName, '改名后的智能体');
+        expect(
+          byThread['dm:peer-scope:v1:runtime']?.lastMessageSnapshot?.threadId,
+          'dm:peer-scope:v1:runtime',
+        );
+        expect(
+          byThread['dm:peer-scope:v1:runtime']?.lastMessagePreview,
+          runtimeReply.content,
+        );
+        expect(
+          byThread.values.map((conversation) => conversation.displayName),
+          everyElement('改名后的智能体'),
+        );
       },
     );
 
@@ -795,8 +852,31 @@ void main() {
     );
 
     test(
-      'merges runtime DID and handle conversations into one current agent row',
+      'does not merge runtime DID and peer-scoped storage conversations',
       () async {
+        final legacyMessage = ChatMessage(
+          localId: 'legacy-runtime-reply',
+          remoteId: 'legacy-runtime-reply',
+          threadId: 'dm:did:human:did:agent:runtime',
+          senderDid: 'did:agent:runtime',
+          receiverDid: 'did:human',
+          content: 'legacy runtime reply',
+          createdAt: DateTime.utc(2026, 5, 23, 8, 58),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        );
+        final runtimeMessage = ChatMessage(
+          localId: 'runtime-weather-reply',
+          remoteId: 'runtime-weather-reply',
+          threadId: 'dm:peer-scope:v1:runtime',
+          senderDid: 'did:agent:runtime',
+          receiverDid: 'did:human',
+          content: '杭州明天 **2026年7月4日，星期六** 天气整体偏热',
+          createdAt: DateTime.utc(2026, 5, 23, 8, 59),
+          isMine: false,
+          serverSequence: 2899,
+          sendState: MessageSendState.sent,
+        );
         final core = _FakeConversations(
           items: <ConversationSummary>[
             _conversation(
@@ -805,6 +885,8 @@ void main() {
               targetPeer: 'did:agent:runtime',
               minutesAgo: 2,
               displayName: 'zhuocheng-test-hermes',
+              lastMessagePreview: legacyMessage.content,
+              lastMessageSnapshot: legacyMessage,
             ),
             _conversation(
               'dm:peer-scope:v1:runtime',
@@ -812,6 +894,9 @@ void main() {
               targetPeer: 'zhuocheng-test-hermes.anpclaw.com',
               minutesAgo: 1,
               displayName: 'zhuocheng-test-hermes.anpclaw.com',
+              lastMessagePreview: runtimeMessage.content,
+              lastMessageSnapshot: runtimeMessage,
+              unreadCount: 1,
             ),
           ],
         );
@@ -838,19 +923,147 @@ void main() {
           ownerDid: 'did:human',
         );
 
-        expect(conversations, hasLength(1));
-        expect(conversations.single.threadId, 'dm:peer-scope:v1:runtime');
-        expect(conversations.single.targetDid, 'did:agent:runtime');
+        expect(conversations, hasLength(2));
+        final byThread = {
+          for (final conversation in conversations)
+            conversation.threadId: conversation,
+        };
         expect(
-          conversations.single.targetPeer,
+          byThread['dm:did:human:did:agent:runtime']?.conversationKey,
+          'runtime:did:agent:runtime',
+        );
+        expect(
+          byThread['dm:did:human:did:agent:runtime']?.lastMessagePreview,
+          legacyMessage.content,
+        );
+        expect(
+          byThread['dm:did:human:did:agent:runtime']
+              ?.lastMessageSnapshot
+              ?.threadId,
+          'dm:did:human:did:agent:runtime',
+        );
+        expect(
+          byThread['dm:peer-scope:v1:runtime']?.conversationKey,
+          'dm:peer-scope:v1:runtime',
+        );
+        expect(
+          byThread['dm:peer-scope:v1:runtime']?.targetPeer,
           'zhuocheng-test-hermes.anpclaw.com',
         );
-        expect(conversations.single.displayName, '改名后的智能体');
+        expect(
+          byThread['dm:peer-scope:v1:runtime']?.lastMessagePreview,
+          runtimeMessage.content,
+        );
+        expect(
+          byThread['dm:peer-scope:v1:runtime']?.lastMessageSnapshot?.threadId,
+          'dm:peer-scope:v1:runtime',
+        );
       },
     );
 
     test(
-      'hides merged runtime conversation by agent key across DID and handle rows',
+      'keeps peer-scoped controller and runtime snapshots isolated',
+      () async {
+        const agentDid =
+            'did:wba:awiki.ai:agent:runtime:zhuochengtestcodex0703';
+        const agentHandle = 'zhuochengtestcodex0703.awiki.ai';
+        final controllerMessage = ChatMessage(
+          localId: 'controller-msg',
+          remoteId: 'controller-msg',
+          threadId: 'dm:peer-scope:v1:controller',
+          senderDid: 'did:human',
+          receiverDid: agentDid,
+          content: '今天几号了',
+          createdAt: DateTime.utc(2026, 7, 3, 7, 9),
+          isMine: true,
+          sendState: MessageSendState.sent,
+        );
+        final runtimeReply = ChatMessage(
+          localId: 'runtime-weather-reply',
+          remoteId: 'runtime-weather-reply',
+          threadId: 'dm:peer-scope:v1:runtime',
+          senderDid: agentDid,
+          receiverDid: 'did:human',
+          content: '杭州明天 **2026年7月4日，星期六** 天气整体偏热',
+          createdAt: DateTime.utc(2026, 7, 3, 8, 51),
+          isMine: false,
+          serverSequence: 2899,
+          sendState: MessageSendState.sent,
+        );
+        final core = _FakeConversations(
+          items: <ConversationSummary>[
+            _conversation(
+              'dm:peer-scope:v1:controller',
+              targetDid: agentDid,
+              targetPeer: agentHandle,
+              minutesAgo: 10,
+              displayName: 'zhuocheng',
+              lastMessagePreview: controllerMessage.content,
+              lastMessageSnapshot: controllerMessage,
+            ),
+            _conversation(
+              'dm:peer-scope:v1:runtime',
+              targetDid: agentDid,
+              targetPeer: agentHandle,
+              minutesAgo: 1,
+              displayName: 'zhuochengtestcodex0703',
+              lastMessagePreview: runtimeReply.content,
+              lastMessageSnapshot: runtimeReply,
+              unreadCount: 1,
+            ),
+          ],
+        );
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: InMemoryAwikiProductLocalStore(),
+          agentInventory: const _FakeAgentInventory(
+            agents: <AgentSummary>[
+              AgentSummary(
+                agentDid: agentDid,
+                kind: AgentKind.runtime,
+                daemonAgentDid: 'did:wba:awiki.ai:agent:daemon:test',
+                runtime: 'hermes',
+                handle: 'zhuochengtestcodex0703',
+                displayName: 'zhuochengtestcodex0703',
+                activeState: 'active',
+                latest: AgentLatestStatus(status: 'ready'),
+              ),
+            ],
+          ),
+        );
+
+        final conversations = await service.listConversations(
+          ownerDid: 'did:human',
+        );
+
+        expect(conversations, hasLength(2));
+        final byThread = {
+          for (final conversation in conversations)
+            conversation.threadId: conversation,
+        };
+        expect(
+          byThread['dm:peer-scope:v1:controller']?.lastMessagePreview,
+          '今天几号了',
+        );
+        expect(
+          byThread['dm:peer-scope:v1:controller']
+              ?.lastMessageSnapshot
+              ?.threadId,
+          'dm:peer-scope:v1:controller',
+        );
+        expect(
+          byThread['dm:peer-scope:v1:runtime']?.lastMessagePreview,
+          runtimeReply.content,
+        );
+        expect(
+          byThread['dm:peer-scope:v1:runtime']?.lastMessageSnapshot?.threadId,
+          'dm:peer-scope:v1:runtime',
+        );
+      },
+    );
+
+    test(
+      'hides peer-scoped runtime conversation by exact storage thread only',
       () async {
         final didRow = _conversation(
           'dm:did:human:did:agent:runtime',
@@ -889,33 +1102,46 @@ void main() {
           ),
         );
 
-        final merged = await service.listConversations(ownerDid: 'did:human');
+        final beforeHide = await service.listConversations(
+          ownerDid: 'did:human',
+        );
+        final peerScoped = beforeHide.singleWhere(
+          (conversation) => conversation.threadId == handleRow.threadId,
+        );
         await service.hideConversationFromRecents(
           ownerDid: 'did:human',
-          conversation: merged.single,
+          conversation: peerScoped,
         );
         final conversations = await service.listConversations(
           ownerDid: 'did:human',
         );
 
-        expect(merged.single.visibilityKey, 'runtime:did:agent:runtime');
+        expect(peerScoped.visibilityKey, 'dm:peer-scope:v1:runtime');
+        expect(
+          (await store.loadConversationOverlay(
+            ownerDid: 'did:human',
+            threadId: 'dm:peer-scope:v1:runtime',
+          ))?.hidden,
+          isTrue,
+        );
         for (final key in <String>[
           'runtime:did:agent:runtime',
           'direct:did:agent:runtime',
           'direct-handle:zhuocheng-test-hermes.anpclaw.com',
           'direct-handle:zhuocheng-test-hermes',
-          'dm:peer-scope:v1:runtime',
         ]) {
           expect(
-            (await store.loadConversationOverlay(
+            await store.loadConversationOverlay(
               ownerDid: 'did:human',
               threadId: key,
-            ))?.hidden,
-            isTrue,
+            ),
+            isNull,
             reason: key,
           );
         }
-        expect(conversations, isEmpty);
+        expect(conversations.map((conversation) => conversation.threadId), [
+          'dm:did:human:did:agent:runtime',
+        ]);
       },
     );
 
@@ -959,7 +1185,7 @@ void main() {
     );
 
     test(
-      'hidden DID conversation also suppresses an older handle-only projection',
+      'hidden DID conversation does not suppress a peer-scoped storage thread',
       () async {
         final conversation = _conversation(
           'dm:alice:old-bob',
@@ -968,7 +1194,7 @@ void main() {
           minutesAgo: 1,
         );
         final handleOnlyConversation = _conversation(
-          'dm:peer-scope:bob',
+          'dm:peer-scope:v1:bob',
           targetDid: '',
           targetPeer: 'bob.anpclaw.com',
           minutesAgo: 1,
@@ -990,7 +1216,9 @@ void main() {
           ownerDid: 'did:alice',
         );
 
-        expect(conversations, isEmpty);
+        expect(conversations.map((conversation) => conversation.threadId), [
+          'dm:peer-scope:v1:bob',
+        ]);
       },
     );
 
@@ -1027,7 +1255,7 @@ void main() {
     );
 
     test(
-      'restores hidden runtime conversation by agent key from a raw row',
+      'restores hidden peer-scoped runtime conversation by exact storage thread',
       () async {
         final didRow = _conversation(
           'dm:did:human:did:agent:runtime',
@@ -1066,14 +1294,26 @@ void main() {
           ),
         );
 
-        final merged = await service.listConversations(ownerDid: 'did:human');
+        final beforeHide = await service.listConversations(
+          ownerDid: 'did:human',
+        );
+        final peerScoped = beforeHide.singleWhere(
+          (conversation) => conversation.threadId == handleRow.threadId,
+        );
         await service.hideConversationFromRecents(
           ownerDid: 'did:human',
-          conversation: merged.single,
+          conversation: peerScoped,
+        );
+        expect(
+          (await store.loadConversationOverlay(
+            ownerDid: 'did:human',
+            threadId: 'dm:peer-scope:v1:runtime',
+          ))?.hidden,
+          isTrue,
         );
         await service.restoreConversationToRecents(
           ownerDid: 'did:human',
-          conversation: didRow,
+          conversation: handleRow,
         );
         final conversations = await service.listConversations(
           ownerDid: 'did:human',
@@ -1082,12 +1322,21 @@ void main() {
         expect(
           (await store.loadConversationOverlay(
             ownerDid: 'did:human',
-            threadId: 'runtime:did:agent:runtime',
+            threadId: 'dm:peer-scope:v1:runtime',
           ))?.hidden,
           isFalse,
         );
-        expect(conversations, hasLength(1));
-        expect(conversations.single.visibilityKey, 'runtime:did:agent:runtime');
+        expect(
+          await store.loadConversationOverlay(
+            ownerDid: 'did:human',
+            threadId: 'runtime:did:agent:runtime',
+          ),
+          isNull,
+        );
+        expect(conversations.map((conversation) => conversation.threadId), [
+          'dm:peer-scope:v1:runtime',
+          'dm:did:human:did:agent:runtime',
+        ]);
       },
     );
   });
@@ -1125,21 +1374,26 @@ ConversationSummary _conversation(
   String targetDid = 'did:bob',
   String? targetPeer,
   String? displayName,
+  String lastMessagePreview = 'preview',
+  ChatMessage? lastMessageSnapshot,
+  int unreadCount = 0,
 }) {
+  final lastMessageAt = DateTime.utc(
+    2026,
+    5,
+    23,
+    9,
+  ).subtract(Duration(minutes: minutesAgo));
   return ConversationSummary(
     threadId: threadId,
     displayName: displayName ?? threadId,
-    lastMessagePreview: 'preview',
-    lastMessageAt: DateTime.utc(
-      2026,
-      5,
-      23,
-      9,
-    ).subtract(Duration(minutes: minutesAgo)),
-    unreadCount: 0,
+    lastMessagePreview: lastMessagePreview,
+    lastMessageAt: lastMessageAt,
+    unreadCount: unreadCount,
     isGroup: false,
     targetDid: targetDid,
     targetPeer: targetPeer,
+    lastMessageSnapshot: lastMessageSnapshot,
   );
 }
 

@@ -10,6 +10,7 @@ import '../../app/app_router.dart';
 import '../../app/ui_feedback.dart';
 import '../../core/date_time_formatter.dart';
 import '../../core/performance_logger.dart';
+import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/peer_agent_identity.dart';
 import '../../l10n/app_message.dart';
@@ -24,6 +25,7 @@ import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/formatters/localized_ui_formatters.dart';
+import '../shared/formatters/markdown_preview_formatter.dart';
 import '../shared/identity_flow.dart';
 import '../shared/quick_actions.dart';
 import '../shared/responsive_layout.dart';
@@ -1259,7 +1261,7 @@ _ConversationPreviewPresentation _conversationPreviewPresentation(
   final text = draft.text.trim();
   if (text.isNotEmpty) {
     return _ConversationPreviewPresentation(
-      text: text,
+      text: markdownPlainTextPreview(text),
       tags: <_ConversationPreviewTag>[
         ...tags,
         _ConversationPreviewTag(
@@ -1294,6 +1296,9 @@ ChatComposerDraft _draftForConversation(
   ConversationSummary conversation,
   Map<String, ChatComposerDraft> drafts,
 ) {
+  if (isPeerScopedDirectConversation(conversation)) {
+    return drafts[conversation.threadId.trim()] ?? const ChatComposerDraft();
+  }
   for (final key in conversation.visibilityKeys) {
     final draft = drafts[key.trim()];
     if (draft != null) {

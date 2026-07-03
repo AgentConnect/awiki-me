@@ -184,7 +184,7 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
   }
 }
 
-class _GroupNameInput extends StatefulWidget {
+class _GroupNameInput extends StatelessWidget {
   const _GroupNameInput({
     required this.controller,
     required this.focusNode,
@@ -202,45 +202,14 @@ class _GroupNameInput extends StatefulWidget {
   final FutureOr<void> Function() onSubmitted;
 
   @override
-  State<_GroupNameInput> createState() => _GroupNameInputState();
-}
-
-class _GroupNameInputState extends State<_GroupNameInput> {
-  @override
-  void initState() {
-    super.initState();
-    widget.controller.addListener(_handleTextChanged);
-  }
-
-  @override
-  void didUpdateWidget(covariant _GroupNameInput oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_handleTextChanged);
-      widget.controller.addListener(_handleTextChanged);
-    }
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_handleTextChanged);
-    super.dispose();
-  }
-
-  void _handleTextChanged() {
-    setState(() {});
-  }
-
-  @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    final hasText = widget.controller.text.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
-          widget.label,
+          label,
           style: TextStyle(
             color: theme.secondaryText,
             fontSize: responsive.metaSm,
@@ -250,7 +219,7 @@ class _GroupNameInputState extends State<_GroupNameInput> {
         SizedBox(height: responsive.spacing(8)),
         GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: widget.enabled ? widget.focusNode.requestFocus : null,
+          onTap: enabled ? focusNode.requestFocus : null,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 120),
             curve: Curves.easeOutCubic,
@@ -260,15 +229,13 @@ class _GroupNameInputState extends State<_GroupNameInput> {
               vertical: responsive.spacing(12),
             ),
             decoration: BoxDecoration(
-              color: widget.enabled
-                  ? const Color(0xFFFBFDFF)
-                  : theme.subtleSurface,
+              color: enabled ? const Color(0xFFFBFDFF) : theme.subtleSurface,
               borderRadius: BorderRadius.circular(responsive.radius(12)),
               border: Border.all(
-                color: widget.focusNode.hasFocus
+                color: focusNode.hasFocus
                     ? theme.primary.withValues(alpha: 0.56)
                     : const Color(0xFFDDE5F0),
-                width: widget.focusNode.hasFocus ? 1.2 : 1,
+                width: focusNode.hasFocus ? 1.2 : 1,
               ),
             ),
             child: Row(
@@ -280,52 +247,41 @@ class _GroupNameInputState extends State<_GroupNameInput> {
                 ),
                 SizedBox(width: responsive.spacing(10)),
                 Expanded(
-                  child: Stack(
-                    alignment: Alignment.centerLeft,
-                    children: <Widget>[
-                      if (!hasText)
-                        IgnorePointer(
-                          child: Text(
-                            widget.placeholder,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: theme.secondaryText,
-                              fontSize: responsive.bodyMd,
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                        ),
-                      e2eSemantics(
-                        identifier: 'e2e-create-group-name-input',
-                        label: widget.label,
-                        textField: true,
-                        child: EditableText(
-                          key: const Key('create-group-name-input'),
-                          controller: widget.controller,
-                          focusNode: widget.focusNode,
-                          readOnly: !widget.enabled,
-                          maxLines: 1,
-                          keyboardType: TextInputType.text,
-                          textInputAction: TextInputAction.done,
-                          inputFormatters: <TextInputFormatter>[
-                            LengthLimitingTextInputFormatter(80),
-                          ],
-                          onSubmitted: (_) async {
-                            if (widget.enabled) {
-                              await widget.onSubmitted();
-                            }
-                          },
-                          style: TextStyle(
-                            color: theme.title,
-                            fontSize: responsive.bodyMd,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          cursorColor: theme.primary,
-                          backgroundCursorColor: theme.secondaryText,
-                        ),
+                  child: e2eSemantics(
+                    identifier: 'e2e-create-group-name-input',
+                    label: label,
+                    textField: true,
+                    child: CupertinoTextField(
+                      key: const Key('create-group-name-input'),
+                      controller: controller,
+                      focusNode: focusNode,
+                      enabled: enabled,
+                      maxLines: 1,
+                      keyboardType: TextInputType.text,
+                      textInputAction: TextInputAction.done,
+                      inputFormatters: <TextInputFormatter>[
+                        LengthLimitingTextInputFormatter(80),
+                      ],
+                      onSubmitted: (_) async {
+                        if (enabled) {
+                          await onSubmitted();
+                        }
+                      },
+                      decoration: null,
+                      padding: EdgeInsets.zero,
+                      placeholder: placeholder,
+                      style: TextStyle(
+                        color: theme.title,
+                        fontSize: responsive.bodyMd,
+                        fontWeight: FontWeight.w500,
                       ),
-                    ],
+                      placeholderStyle: TextStyle(
+                        color: theme.secondaryText,
+                        fontSize: responsive.bodyMd,
+                        fontWeight: FontWeight.w400,
+                      ),
+                      cursorColor: theme.primary,
+                    ),
                   ),
                 ),
               ],

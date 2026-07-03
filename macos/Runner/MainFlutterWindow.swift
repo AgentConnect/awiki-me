@@ -24,7 +24,9 @@ class MainFlutterWindow: NSWindow {
 
     RegisterGeneratedPlugins(registry: flutterViewController)
     registerWindowChromeChannel(flutterViewController: flutterViewController)
+    registerMenuBarStatusChannel(flutterViewController: flutterViewController)
     registerAttachmentChannel(flutterViewController: flutterViewController)
+    MenuBarStatusController.shared.configure(mainWindow: self)
 
     super.awakeFromNib()
     scheduleTrafficLightLayout()
@@ -133,6 +135,33 @@ class MainFlutterWindow: NSWindow {
     }
     trafficLightRailWidth = CGFloat(truncating: width)
     scheduleTrafficLightLayout()
+    result(nil)
+  }
+
+  private func registerMenuBarStatusChannel(flutterViewController: FlutterViewController) {
+    let channel = FlutterMethodChannel(
+      name: "ai.awiki.awikime/menu_bar_status",
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "setUnreadCount":
+        self.setMenuBarUnreadCount(arguments: call.arguments, result: result)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private func setMenuBarUnreadCount(arguments: Any?, result: @escaping FlutterResult) {
+    guard
+      let args = arguments as? [String: Any],
+      let count = args["count"] as? NSNumber
+    else {
+      result(FlutterError(code: "bad_args", message: "count is required", details: nil))
+      return
+    }
+    MenuBarStatusController.shared.setUnreadCount(count.intValue)
     result(nil)
   }
 

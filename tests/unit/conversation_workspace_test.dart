@@ -45,6 +45,10 @@ class _StaticConversationListController extends ConversationListController {
   ) {
     state = ConversationListState(conversations: items);
   }
+
+  void replaceConversations(List<ConversationSummary> conversations) {
+    state = ConversationListState(conversations: conversations);
+  }
 }
 
 class _BlockingRestoreConversationListController
@@ -1222,7 +1226,7 @@ void main() {
 
     await tester.tap(find.bySemanticsLabel('移除成员').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('移除'));
+    await tester.tap(find.text('移除成员').last);
     await tester.pumpAndSettle();
 
     expect(gateway.lastRemovedGroupId, group.groupId);
@@ -1331,7 +1335,7 @@ void main() {
     await tester.tap(find.bySemanticsLabel('移除成员').last);
     await tester.pumpAndSettle();
 
-    expect(find.text('移除成员'), findsOneWidget);
+    expect(find.text('移除成员'), findsNWidgets(2));
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -2616,5 +2620,85 @@ void main() {
     expect(find.byType(ChatPage), findsNothing);
     expect(find.byType(ChatView), findsOneWidget);
     expect(find.text('Marcus Chen'), findsWidgets);
+  });
+
+  testWidgets('macOS 双栏刷新后按 exact thread 保持 peer-scoped 选中会话', (tester) async {
+    const agentDid = 'did:wba:awiki.ai:agent:runtime:test';
+    const agentHandle = 'test-agent.awiki.ai';
+    final controllerConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:controller',
+      displayName: 'Controller',
+      lastMessagePreview: 'controller preview',
+      lastMessageAt: DateTime(2026, 7, 3, 7, 9),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentHandle,
+    );
+    final runtimeConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:runtime',
+      displayName: 'Runtime Agent',
+      lastMessagePreview: 'runtime preview',
+      lastMessageAt: DateTime(2026, 7, 3, 7, 10),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentHandle,
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[
+        runtimeConversation,
+        controllerConversation,
+      ]
+      ..localDmHistoryByPeerDid = const <String, List<ChatMessage>>{};
+    late _StaticConversationListController listController;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1280, 720));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith((ref) {
+            listController = _StaticConversationListController(
+              ref,
+              gateway.conversations,
+            );
+            return listController;
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Controller'));
+    await tester.pumpAndSettle();
+
+    ChatView chatView() => tester.widget<ChatView>(find.byType(ChatView));
+    expect(chatView().conversation.threadId, controllerConversation.threadId);
+
+    listController.replaceConversations(<ConversationSummary>[
+      runtimeConversation.copyWith(
+        lastMessagePreview: 'runtime refreshed',
+        lastMessageAt: DateTime(2026, 7, 3, 7, 12),
+      ),
+      controllerConversation.copyWith(
+        displayName: 'Controller Refreshed',
+        lastMessagePreview: 'controller refreshed',
+        lastMessageAt: DateTime(2026, 7, 3, 7, 11),
+      ),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(chatView().conversation.threadId, controllerConversation.threadId);
+    expect(chatView().conversation.displayName, 'Controller Refreshed');
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
   });
 }
