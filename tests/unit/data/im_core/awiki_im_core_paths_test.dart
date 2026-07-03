@@ -20,6 +20,11 @@ void main() {
       '/app/support/awiki-me/environments/tenant-alpha-us/im-core/identities',
     );
     expect(
+      layout.vaultDir,
+      '/app/support/awiki-me/environments/tenant-alpha-us/im-core/identity-vault',
+    );
+    expect(layout.vaultWorkspaceId, 'awiki-me-tenant-alpha-us');
+    expect(
       layout.registryPath,
       '/app/support/awiki-me/environments/tenant-alpha-us/im-core/identities/registry.json',
     );
@@ -67,6 +72,7 @@ void main() {
       await layout.ensureDirectories();
 
       expect(await Directory(layout.identityRootDir).exists(), isTrue);
+      expect(await Directory(layout.vaultDir).exists(), isTrue);
       expect(
         await Directory(
           '${root.path}/support/awiki-me/environments/default/im-core/state',

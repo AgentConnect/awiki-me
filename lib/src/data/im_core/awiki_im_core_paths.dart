@@ -20,6 +20,8 @@ class AwikiImCorePathLayout {
   const AwikiImCorePathLayout({
     required this.stateNamespace,
     required this.identityRootDir,
+    required this.vaultDir,
+    required this.vaultWorkspaceId,
     required this.registryPath,
     required this.defaultIdentityPath,
     required this.sqlitePath,
@@ -45,6 +47,8 @@ class AwikiImCorePathLayout {
     return AwikiImCorePathLayout(
       stateNamespace: namespace,
       identityRootDir: identityRoot,
+      vaultDir: _joinAll(<String>[appSupportImCoreRoot, 'identity-vault']),
+      vaultWorkspaceId: 'awiki-me-$namespace',
       registryPath: _joinAll(<String>[identityRoot, 'registry.json']),
       defaultIdentityPath: _joinAll(<String>[identityRoot, 'default']),
       sqlitePath: _joinAll(<String>[
@@ -95,6 +99,8 @@ class AwikiImCorePathLayout {
 
   final String stateNamespace;
   final String identityRootDir;
+  final String vaultDir;
+  final String vaultWorkspaceId;
   final String registryPath;
   final String defaultIdentityPath;
   final String sqlitePath;
@@ -104,6 +110,7 @@ class AwikiImCorePathLayout {
   Future<void> ensureDirectories() async {
     await Future.wait(<Future<Directory>>[
       Directory(identityRootDir).create(recursive: true),
+      Directory(vaultDir).create(recursive: true),
       Directory(_dirname(sqlitePath)).create(recursive: true),
       Directory(cacheDir).create(recursive: true),
       Directory(tempDir).create(recursive: true),

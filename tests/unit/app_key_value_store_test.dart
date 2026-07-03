@@ -24,4 +24,62 @@ void main() {
     final thirdStore = FileAppKeyValueStore.forFile(file);
     expect(await thirdStore.read(key: 'session_token'), isNull);
   });
+
+  test('FileAppKeyValueStore strict mode rejects invalid json', () async {
+    final tempDir = await Directory.systemTemp.createTemp('awiki-store-test-');
+    addTearDown(() async {
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    final file = File('${tempDir.path}/store.json');
+    await file.writeAsString('{not-json');
+    final store = FileAppKeyValueStore.forFile(file, strictRead: true);
+
+    await expectLater(
+      store.read(key: 'session_token'),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.toString(),
+          'message',
+          contains('key_value_store_file_invalid_json'),
+        ),
+      ),
+    );
+  });
+
+  test(
+    'FileAppKeyValueStore private mode writes private file permissions',
+    () async {
+      if (!(Platform.isLinux || Platform.isMacOS)) {
+        return;
+      }
+      final tempDir = await Directory.systemTemp.createTemp(
+        'awiki-store-test-',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      final file = File('${tempDir.path}/secret/store.json');
+      final store = FileAppKeyValueStore.forFile(file, privateFile: true);
+      await store.write(key: 'root_key_b64', value: 'redacted-test-value');
+
+      final dirMode = await _mode('${tempDir.path}/secret');
+      final fileMode = await _mode(file.path);
+      expect(dirMode, '700');
+      expect(fileMode, '600');
+    },
+  );
+}
+
+Future<String> _mode(String path) async {
+  final result = await Process.run('stat', <String>['-c', '%a', path]);
+  if (result.exitCode != 0) {
+    throw StateError('stat failed: ${result.stderr}');
+  }
+  return result.stdout.toString().trim();
 }

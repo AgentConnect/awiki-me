@@ -44,4 +44,24 @@ void main() {
       expect(await restored.read(key: 'credential'), 'ok');
     },
   );
+
+  test(
+    'custom app state root does not move im-core vault root key to file json',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'awiki-bootstrap-test-',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      final store = await AppBootstrap.buildVaultSecretStoreForTesting(
+        appStateRoot: tempDir.path,
+      );
+
+      expect(store, isNot(isA<FileAppKeyValueStore>()));
+    },
+  );
 }

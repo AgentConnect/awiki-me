@@ -40,6 +40,7 @@ import '../data/im_core/awiki_im_core_profile_adapter.dart';
 import '../data/im_core/awiki_im_core_realtime_adapter.dart';
 import '../data/im_core/awiki_im_core_relationship_adapter.dart';
 import '../data/im_core/awiki_im_core_runtime.dart';
+import '../data/im_core/awiki_im_core_secret_storage.dart';
 import '../data/local/awiki_product_local_store_sqlite.dart';
 import '../data/services/app_key_value_store.dart';
 import '../data/services/app_notification_facade.dart';
@@ -133,11 +134,18 @@ class AppBootstrap {
         stateNamespace: effectiveEnvironment.stateNamespace,
       ),
     );
+    final vaultSecretStorage = await AwikiPerformanceLogger.async(
+      'bootstrap.im_core_vault_secret_store',
+      () => _buildVaultSecretStore(appStateRoot: appStateRoot),
+    );
     final runtime = AwikiImCoreRuntime(
       config: AwikiImCoreEnvironmentConfig.fromAwikiEnvironment(
         effectiveEnvironment,
       ),
       paths: pathLayout,
+      vaultSecretProvider: StoredAwikiImCoreVaultSecretProvider(
+        storage: vaultSecretStorage,
+      ),
     );
     final productLocalStore = AwikiProductLocalStoreSqlite(
       stateNamespace: effectiveEnvironment.stateNamespace,
@@ -288,6 +296,13 @@ class AppBootstrap {
     return _buildAccountStore();
   }
 
+  @visibleForTesting
+  static Future<AppKeyValueStore> buildVaultSecretStoreForTesting({
+    String? appStateRoot,
+  }) {
+    return _buildVaultSecretStore(appStateRoot: appStateRoot);
+  }
+
   static Future<AppKeyValueStore> _buildAccountStore({
     String? appStateRoot,
   }) async {
@@ -314,6 +329,21 @@ class AppBootstrap {
     if (Platform.isMacOS) {
       // macOS debug builds are not consistently signed for Keychain access.
       return FileAppKeyValueStore.create();
+    }
+    return SecureAppKeyValueStore();
+  }
+
+  static Future<AppKeyValueStore> _buildVaultSecretStore({
+    String? appStateRoot,
+  }) async {
+    final e2eRoot = awikiE2eAppStateRoot();
+    if (e2eRoot != null) {
+      return FileAppKeyValueStore.create(
+        fileName: 'awiki_me_im_core_vault.json',
+        appStateRoot: e2eRoot,
+        strictRead: true,
+        privateFile: true,
+      );
     }
     return SecureAppKeyValueStore();
   }
