@@ -52,8 +52,8 @@ class AgentRunStatus {
       requesterFullHandle: _optionalString(json['requester_full_handle']),
       triggerKind: _optionalString(json['trigger_kind']),
       status: json['status']?.toString() ?? 'queued',
-      startedAt: DateTime.tryParse(json['started_at']?.toString() ?? ''),
-      updatedAt: DateTime.tryParse(json['updated_at']?.toString() ?? ''),
+      startedAt: parseAgentStatusTimestamp(json['started_at']),
+      updatedAt: parseAgentStatusTimestamp(json['updated_at']),
       lastErrorCode: _optionalString(json['last_error_code']),
       lastErrorSummary: _optionalString(json['last_error_summary']),
     );
@@ -117,7 +117,7 @@ class AgentLatestStatus {
   factory AgentLatestStatus.fromJson(Map<String, Object?> json) {
     return AgentLatestStatus(
       status: json['status']?.toString() ?? 'offline',
-      lastSeenAt: DateTime.tryParse(json['last_seen_at']?.toString() ?? ''),
+      lastSeenAt: parseAgentStatusTimestamp(json['last_seen_at']),
       version: _optionalString(json['version']),
       latestVersion: _optionalString(json['latest_version']),
       minSupportedVersion: _optionalString(json['min_supported_version']),
@@ -159,6 +159,7 @@ class AgentRuntimeCardStatus {
     required this.runtimeFamily,
     required this.driverId,
     required this.lifecycleState,
+    required this.operationalState,
     required this.setupReady,
     this.setupState,
     this.queueState,
@@ -170,6 +171,9 @@ class AgentRuntimeCardStatus {
     this.failedCount,
     this.oldestQueuedAgeMs,
     this.nextAction,
+    this.attentionState,
+    this.attentionItemCount,
+    this.attentionNextAction,
     required this.containsUserContent,
     required this.containsProviderAuthMaterial,
     this.lastMessageIdWatermarkPolicy,
@@ -180,6 +184,7 @@ class AgentRuntimeCardStatus {
   final String runtimeFamily;
   final String? driverId;
   final String lifecycleState;
+  final String operationalState;
   final bool setupReady;
   final String? setupState;
   final String? queueState;
@@ -191,6 +196,9 @@ class AgentRuntimeCardStatus {
   final int? failedCount;
   final int? oldestQueuedAgeMs;
   final String? nextAction;
+  final String? attentionState;
+  final int? attentionItemCount;
+  final String? attentionNextAction;
   final bool containsUserContent;
   final bool containsProviderAuthMaterial;
   final String? lastMessageIdWatermarkPolicy;
@@ -212,9 +220,11 @@ class AgentRuntimeCardStatus {
     );
     final runtimeFamily = _optionalString(json['runtime_family']);
     final lifecycleState = _optionalString(json['lifecycle_state']);
-    if (statusSchemaVersion != 1 ||
+    final operationalState = _optionalString(json['operational_state']);
+    if (statusSchemaVersion != 2 ||
         runtimeFamily != 'generic-cli' ||
-        lifecycleState == null) {
+        lifecycleState == null ||
+        operationalState == null) {
       return null;
     }
     final supported = _optionalBool(json['supported']) ?? false;
@@ -228,10 +238,11 @@ class AgentRuntimeCardStatus {
     }
     return AgentRuntimeCardStatus(
       supported: supported,
-      statusSchemaVersion: 1,
+      statusSchemaVersion: 2,
       runtimeFamily: 'generic-cli',
       driverId: _optionalString(json['driver_id']),
       lifecycleState: lifecycleState,
+      operationalState: operationalState,
       setupReady: setupReady,
       setupState: _optionalString(json['setup_state']),
       queueState: _optionalString(json['queue_state']),
@@ -243,6 +254,9 @@ class AgentRuntimeCardStatus {
       failedCount: _optionalNonNegativeInt(json['failed_count']),
       oldestQueuedAgeMs: _optionalNonNegativeInt(json['oldest_queued_age_ms']),
       nextAction: _optionalString(json['next_action']),
+      attentionState: _optionalString(json['attention_state']),
+      attentionItemCount: _optionalNonNegativeInt(json['attention_item_count']),
+      attentionNextAction: _optionalString(json['attention_next_action']),
       containsUserContent: containsUserContent,
       containsProviderAuthMaterial: containsProviderAuthMaterial,
       lastMessageIdWatermarkPolicy: _optionalString(
@@ -250,6 +264,34 @@ class AgentRuntimeCardStatus {
       ),
     );
   }
+}
+
+DateTime? parseAgentStatusTimestamp(Object? value) {
+  if (value is DateTime) {
+    return value.toUtc();
+  }
+  final text = value?.toString().trim();
+  if (text == null || text.isEmpty) {
+    return null;
+  }
+  final parsed = DateTime.tryParse(text);
+  if (parsed == null) {
+    return null;
+  }
+  final hasExplicitZone = RegExp(r'(?:[zZ]|[+-]\d{2}:?\d{2})$').hasMatch(text);
+  if (hasExplicitZone) {
+    return parsed.toUtc();
+  }
+  return DateTime.utc(
+    parsed.year,
+    parsed.month,
+    parsed.day,
+    parsed.hour,
+    parsed.minute,
+    parsed.second,
+    parsed.millisecond,
+    parsed.microsecond,
+  );
 }
 
 String? _optionalString(Object? value) {

@@ -4737,11 +4737,7 @@ class ChatThreadsController
   }
 
   DateTime? _parseRunTimestamp(Object? value) {
-    final text = value?.toString().trim();
-    if (text == null || text.isEmpty) {
-      return null;
-    }
-    return DateTime.tryParse(text);
+    return parseAgentStatusTimestamp(value);
   }
 
   void _upsertAgentPendingTurnFromStatus({
