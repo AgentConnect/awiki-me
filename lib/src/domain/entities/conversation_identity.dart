@@ -54,6 +54,20 @@ ConversationVisibilityIdentity conversationVisibilityIdentity(
     );
   }
 
+  if (isPeerScopedDirectConversation(conversation)) {
+    final threadId = conversation.threadId.trim();
+    final threadKey = threadId.isEmpty
+        ? 'thread:${conversation.threadId}'
+        : threadId;
+    if (threadId.isNotEmpty) {
+      addAlias('thread:$threadId');
+    }
+    return ConversationVisibilityIdentity(
+      primaryKey: threadKey,
+      aliasKeys: aliases,
+    );
+  }
+
   final explicitKey = conversation.conversationKey?.trim();
   final normalizedRuntimeAgentDid = _normalizedDid(runtimeAgentDid);
   final targetDid = _normalizedDid(conversation.targetDid);
@@ -157,7 +171,7 @@ bool sameConversationTarget(
   ConversationSummary first,
   ConversationSummary second,
 ) {
-  if (first.threadId == second.threadId) {
+  if (sameConversationThread(first, second)) {
     return true;
   }
   if (first.isGroup || second.isGroup) {
@@ -166,6 +180,102 @@ bool sameConversationTarget(
         sameNonEmpty(first.groupId, second.groupId);
   }
   return sameDirectConversationTarget(first, second);
+}
+
+bool sameConversationThread(
+  ConversationSummary first,
+  ConversationSummary second,
+) {
+  final firstThread = first.threadId.trim();
+  final secondThread = second.threadId.trim();
+  return firstThread.isNotEmpty && firstThread == secondThread;
+}
+
+bool isPeerScopedDirectConversation(ConversationSummary conversation) {
+  return isPeerScopedDirectThreadId(conversation.threadId) &&
+      !conversation.isGroup;
+}
+
+bool isPeerScopedDirectThreadId(String threadId) {
+  return threadId.trim().startsWith('dm:peer-scope:');
+}
+
+bool isPresentationOnlyDirectConversationAlias(
+  ConversationSummary conversation,
+) {
+  if (conversation.isGroup || isPeerScopedDirectConversation(conversation)) {
+    return false;
+  }
+  final threadId = conversation.threadId.trim();
+  return threadId.startsWith('dm:pending:') ||
+      threadId.startsWith('direct:') ||
+      threadId.startsWith('direct-handle:') ||
+      threadId.startsWith('direct-did:') ||
+      threadId.startsWith('profile:');
+}
+
+bool isReplaceableLegacyDirectConversation(
+  ConversationSummary conversation, {
+  String? ownerDid,
+}) {
+  if (conversation.isGroup || isPeerScopedDirectConversation(conversation)) {
+    return false;
+  }
+  if (isPresentationOnlyDirectConversationAlias(conversation)) {
+    return true;
+  }
+  final threadId = conversation.threadId.trim();
+  final targetDid = _normalizedDid(conversation.targetDid);
+  if (targetDid == null || targetDid.isEmpty) {
+    return false;
+  }
+  if (threadId == 'dm:$targetDid') {
+    return true;
+  }
+  final owner = _normalizedDid(ownerDid);
+  if (owner == null || owner.isEmpty) {
+    return false;
+  }
+  if (threadId == 'dm:$owner:$targetDid' ||
+      threadId == 'dm:$targetDid:$owner') {
+    return true;
+  }
+  final participants = <String>[owner, targetDid]..sort();
+  return threadId == 'dm:${participants[0]}:${participants[1]}';
+}
+
+bool sameDirectPresentationTarget(
+  ConversationSummary first,
+  ConversationSummary second,
+) {
+  if (first.isGroup || second.isGroup) {
+    return false;
+  }
+  if (hasConflictingDirectDid(first, second)) {
+    return false;
+  }
+  return directPresentationTargetKeys(
+    first,
+  ).intersection(directPresentationTargetKeys(second)).isNotEmpty;
+}
+
+Set<String> directPresentationTargetKeys(ConversationSummary conversation) {
+  if (conversation.isGroup) {
+    return const <String>{};
+  }
+  final keys = <String>{};
+  final did = _normalizedDid(conversation.targetDid);
+  if (did != null && did.isNotEmpty) {
+    keys.add('did:$did');
+  }
+  final peer = normalizedDirectPeer(conversation.targetPeer);
+  if (peer != null && peer.isNotEmpty) {
+    keys.add('peer:$peer');
+    if (peer.startsWith('did:')) {
+      keys.add('did:$peer');
+    }
+  }
+  return keys;
 }
 
 bool sameDirectConversationTarget(

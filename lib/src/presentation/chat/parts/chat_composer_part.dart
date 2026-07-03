@@ -52,7 +52,7 @@ class _ComposerState extends ConsumerState<_Composer> {
       oldWidget.controller.removeListener(_handleTextChanged);
       widget.controller.addListener(_handleTextChanged);
     }
-    if (!sameConversationTarget(oldWidget.conversation, widget.conversation)) {
+    if (!sameConversationThread(oldWidget.conversation, widget.conversation)) {
       _clearMentionTrigger();
     } else {
       _syncMentionTrigger();

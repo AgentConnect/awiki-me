@@ -501,7 +501,7 @@ void main() {
     },
   );
 
-  test('conversation preview keeps visible agent control text', () {
+  test('conversation preview maps visible control text but excludes recents', () {
     const conversation = core.Conversation(
       threadKind: 'direct',
       threadId: 'did:daemon',
@@ -529,7 +529,7 @@ void main() {
     );
 
     expect(mapped.lastMessagePreview, 'Agent 已准备好。');
-    expect(mapper.shouldIncludeConversation(conversation), isTrue);
+    expect(mapper.shouldIncludeConversation(conversation), isFalse);
   });
 
   test('conversation preview suppresses payload-only agent control', () {
@@ -616,38 +616,34 @@ void main() {
     expect(update.agentControlPayload?['status_scope'], 'daemon');
   });
 
-  test(
-    'realtime control payload with visible text updates recents preview',
-    () {
-      const event = core.RealtimeEvent(
-        kind: 'message_received',
-        message: core.Message(
-          id: 'msg-control-visible-realtime',
-          threadKind: 'direct',
-          threadId: 'did:agent:runtime',
-          direction: core.MessageDirection.incoming,
-          sender: 'did:agent:runtime',
-          receiver: 'did:me',
-          body: core.MessageBodyView(
-            text: 'Agent 已准备好。',
-            payloadJson:
-                '{"schema":"awiki.agent.status.v1","status_scope":"runtime"}',
-          ),
-          sentAt: '2026-05-23T09:02:00Z',
-          metadata: core.MessageMetadata(),
+  test('realtime control payload with visible text stays out of recents', () {
+    const event = core.RealtimeEvent(
+      kind: 'message_received',
+      message: core.Message(
+        id: 'msg-control-visible-realtime',
+        threadKind: 'direct',
+        threadId: 'did:agent:runtime',
+        direction: core.MessageDirection.incoming,
+        sender: 'did:agent:runtime',
+        receiver: 'did:me',
+        body: core.MessageBodyView(
+          text: 'Agent 已准备好。',
+          payloadJson:
+              '{"schema":"awiki.agent.status.v1","status_scope":"runtime"}',
         ),
-      );
+        sentAt: '2026-05-23T09:02:00Z',
+        metadata: core.MessageMetadata(),
+      ),
+    );
 
-      final update = mapper.realtimeUpdateFromCore(event, ownerDid: 'did:me');
+    final update = mapper.realtimeUpdateFromCore(event, ownerDid: 'did:me');
 
-      expect(update, isNotNull);
-      expect(update!.message, isNull);
-      expect(update.agentControlPayload?['schema'], 'awiki.agent.status.v1');
-      expect(update.conversation, isNotNull);
-      expect(update.conversation!.lastMessagePreview, 'Agent 已准备好。');
-      expect(update.conversation!.targetDid, 'did:agent:runtime');
-    },
-  );
+    expect(update, isNotNull);
+    expect(update!.message, isNull);
+    expect(update.agentControlPayload?['schema'], 'awiki.agent.status.v1');
+    expect(update.conversation, isNull);
+    expect(update.conversationHint, isNull);
+  });
 
   test('direct conversation keeps an already canonical thread id', () {
     const conversation = core.Conversation(

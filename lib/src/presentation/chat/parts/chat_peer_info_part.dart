@@ -13,6 +13,20 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
   bool _showAgentInbox = false;
 
   @override
+  void initState() {
+    super.initState();
+    if (!widget.conversation.isGroup &&
+        (widget.conversation.targetDid?.trim().isNotEmpty ?? false)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        unawaited(ref.read(agentsProvider.notifier).ensureLoaded());
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final targetDid = widget.conversation.targetDid?.trim() ?? '';
     final responsive = context.awikiResponsive;
@@ -76,6 +90,8 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     final runtimeStatus = runtimeAgent == null
         ? null
         : AgentVisualStatus.fromAgent(runtimeAgent);
+    final looksLikeAgent =
+        runtimeAgent != null || conversationTargetDidLooksLikeAgent(targetDid);
     final inboxHeight = (maxDialogHeight * 0.48).clamp(320.0, 440.0).toDouble();
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 20),
@@ -165,6 +181,12 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                   spacing: 8,
                   runSpacing: 8,
                   children: <Widget>[
+                    SemanticPill(
+                      label: looksLikeAgent
+                          ? context.l10n.identityTypeAgent
+                          : context.l10n.identityTypeUser,
+                      tone: SemanticPillTone.identity,
+                    ),
                     if (profile == null && state.isLoading)
                       SemanticPill(
                         label: context.l10n.chatPeerInfoProfileLoading,
@@ -175,22 +197,20 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                         label: context.l10n.chatPeerInfoProfileUnavailable,
                         tone: SemanticPillTone.muted,
                       )
-                    else if (runtimeAgent == null)
+                    else if (!looksLikeAgent && profile != null)
                       SemanticPill(
-                        label: context.l10n.identityTypeUser,
-                        tone: SemanticPillTone.identity,
-                      )
-                    else
-                      SemanticPill(
-                        label: context.l10n.identityTypeAgent,
-                        tone: SemanticPillTone.identity,
+                        label: localizeRelationshipLabel(
+                          context.l10n,
+                          state.relationship,
+                        ),
+                        tone: SemanticPillTone.relationship,
                       ),
                     if (runtimeDisplay != null)
                       SemanticPill(
                         label: runtimeDisplay.label,
                         tone: SemanticPillTone.runtime,
                       )
-                    else if (profile != null)
+                    else if (looksLikeAgent && profile != null)
                       SemanticPill(
                         label: localizeRelationshipLabel(
                           context.l10n,

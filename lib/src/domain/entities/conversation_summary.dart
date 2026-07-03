@@ -47,6 +47,10 @@ class ConversationSummary {
   bool get hasUnreadMention => unreadMentionCount > 0;
 
   String get visibilityKey {
+    if (!isGroup && _isPeerScopedDirectThreadId(threadId)) {
+      final thread = threadId.trim();
+      return thread.isEmpty ? 'thread:' : thread;
+    }
     final explicitKey = conversationKey?.trim();
     if (explicitKey != null && explicitKey.isNotEmpty) {
       return explicitKey;
@@ -80,6 +84,11 @@ class ConversationSummary {
     }
 
     add(visibilityKey);
+    if (!isGroup && _isPeerScopedDirectThreadId(threadId)) {
+      add(threadId);
+      add('thread:${threadId.trim()}');
+      return keys;
+    }
     if (isGroup) {
       final group = groupId?.trim();
       if (group != null && group.isNotEmpty) {
@@ -171,4 +180,8 @@ ChatMessage? _resolveNullableChatMessage(Object? value, ChatMessage? current) {
 String _normalizeDirectPeer(String value) {
   final peer = value.trim();
   return peer.startsWith('did:') ? peer : peer.toLowerCase();
+}
+
+bool _isPeerScopedDirectThreadId(String value) {
+  return value.trim().startsWith('dm:peer-scope:');
 }

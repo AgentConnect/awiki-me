@@ -57,26 +57,23 @@ void main() {
     ]);
   });
 
-  test(
-    'inventory failure keeps conversations visible instead of over-filtering',
-    () async {
-      final service = ImCoreConversationService(
-        conversations: _FakeConversations(
-          items: <ConversationSummary>[
-            _conversation('dm:human:daemon', targetDid: 'did:agent:daemon'),
-          ],
-        ),
-        localStore: InMemoryAwikiProductLocalStore(),
-        agentInventory: const _ThrowingAgentInventory(),
-      );
+  test('inventory failure keeps ordinary conversations visible', () async {
+    final service = ImCoreConversationService(
+      conversations: _FakeConversations(
+        items: <ConversationSummary>[
+          _conversation('dm:human:runtime', targetDid: 'did:agent:runtime'),
+        ],
+      ),
+      localStore: InMemoryAwikiProductLocalStore(),
+      agentInventory: const _ThrowingAgentInventory(),
+    );
 
-      final conversations = await service.listConversations(
-        ownerDid: 'did:human:me',
-      );
+    final conversations = await service.listConversations(
+      ownerDid: 'did:human:me',
+    );
 
-      expect(conversations.single.targetDid, 'did:agent:daemon');
-    },
-  );
+    expect(conversations.single.targetDid, 'did:agent:runtime');
+  });
 
   test('control payload conversation is hidden without inventory', () async {
     final service = ImCoreConversationService(
@@ -103,17 +100,48 @@ void main() {
     expect(conversations.map((item) => item.targetDid), ['did:agent:runtime']);
   });
 
-  test('visible control payload preview remains in recent messages', () async {
+  test(
+    'visible control payload preview stays out of recent messages',
+    () async {
+      final service = ImCoreConversationService(
+        conversations: _FakeConversations(
+          items: <ConversationSummary>[
+            _conversation(
+              'dm:human:runtime-control',
+              targetDid: 'did:agent:runtime',
+              lastMessagePayloadJson:
+                  '{"schema":"awiki.agent.status.v1","status_scope":"runtime"}',
+              lastMessagePreview: 'Agent 已准备好。',
+            ),
+          ],
+        ),
+        localStore: InMemoryAwikiProductLocalStore(),
+        agentInventory: const _ThrowingAgentInventory(),
+      );
+
+      final conversations = await service.listConversations(
+        ownerDid: 'did:human:me',
+      );
+
+      expect(conversations, isEmpty);
+    },
+  );
+
+  test('self and daemon fallback conversations stay out of recents', () async {
     final service = ImCoreConversationService(
       conversations: _FakeConversations(
         items: <ConversationSummary>[
           _conversation(
-            'dm:human:runtime-control',
-            targetDid: 'did:agent:runtime',
-            lastMessagePayloadJson:
-                '{"schema":"awiki.agent.status.v1","status_scope":"runtime"}',
-            lastMessagePreview: 'Agent 已准备好。',
+            'dm:self',
+            targetDid: 'did:human:me',
+            targetPeer: 'did:human:me',
           ),
+          _conversation(
+            'dm:daemon',
+            targetDid: 'did:wba:awiki.ai:agent:daemon:edgehost_1:e1_owner',
+            targetPeer: 'edgehost-1.awiki.ai',
+          ),
+          _conversation('dm:human:runtime', targetDid: 'did:agent:runtime'),
         ],
       ),
       localStore: InMemoryAwikiProductLocalStore(),
@@ -124,24 +152,108 @@ void main() {
       ownerDid: 'did:human:me',
     );
 
-    expect(conversations.single.lastMessagePreview, 'Agent 已准备好。');
+    expect(conversations.map((item) => item.threadId), ['dm:human:runtime']);
   });
+
+  test(
+    'service list collapses legacy direct row when peer-scoped thread exists',
+    () async {
+      final service = ImCoreConversationService(
+        conversations: _FakeConversations(
+          items: <ConversationSummary>[
+            _conversation(
+              'dm:did:human:me:did:agent:runtime',
+              targetDid: 'did:agent:runtime',
+              targetPeer: 'did:agent:runtime',
+              lastMessagePreview: 'legacy preview',
+              lastMessageAt: DateTime.utc(2026, 7, 3, 10),
+            ),
+            _conversation(
+              'dm:peer-scope:v1:runtime-thread',
+              targetDid: 'did:agent:runtime',
+              targetPeer: 'runtime.awiki.ai',
+              lastMessagePreview: 'peer scoped reply',
+              lastMessageAt: DateTime.utc(2026, 7, 3, 10, 1),
+              unreadCount: 1,
+            ),
+          ],
+        ),
+        localStore: InMemoryAwikiProductLocalStore(),
+        agentInventory: const _ThrowingAgentInventory(),
+      );
+
+      final conversations = await service.listConversations(
+        ownerDid: 'did:human:me',
+      );
+
+      expect(conversations, hasLength(1));
+      expect(conversations.single.threadId, 'dm:peer-scope:v1:runtime-thread');
+      expect(conversations.single.lastMessagePreview, 'peer scoped reply');
+      expect(conversations.single.unreadCount, 1);
+    },
+  );
+
+  test(
+    'service list keeps ambiguous peer-scoped direct rows separate',
+    () async {
+      final service = ImCoreConversationService(
+        conversations: _FakeConversations(
+          items: <ConversationSummary>[
+            _conversation(
+              'dm:did:human:me:did:agent:runtime',
+              targetDid: 'did:agent:runtime',
+              targetPeer: 'did:agent:runtime',
+            ),
+            _conversation(
+              'dm:peer-scope:v1:controller',
+              targetDid: 'did:agent:runtime',
+              targetPeer: 'runtime.awiki.ai',
+            ),
+            _conversation(
+              'dm:peer-scope:v1:runtime',
+              targetDid: 'did:agent:runtime',
+              targetPeer: 'runtime.awiki.ai',
+            ),
+          ],
+        ),
+        localStore: InMemoryAwikiProductLocalStore(),
+        agentInventory: const _ThrowingAgentInventory(),
+      );
+
+      final conversations = await service.listConversations(
+        ownerDid: 'did:human:me',
+      );
+
+      expect(
+        conversations.map((item) => item.threadId),
+        containsAll(<String>[
+          'dm:did:human:me:did:agent:runtime',
+          'dm:peer-scope:v1:controller',
+          'dm:peer-scope:v1:runtime',
+        ]),
+      );
+    },
+  );
 }
 
 ConversationSummary _conversation(
   String threadId, {
   required String targetDid,
+  String? targetPeer,
   String? lastMessagePayloadJson,
   String lastMessagePreview = 'preview',
+  DateTime? lastMessageAt,
+  int unreadCount = 0,
 }) {
   return ConversationSummary(
     threadId: threadId,
     displayName: threadId,
     lastMessagePreview: lastMessagePreview,
-    lastMessageAt: DateTime.utc(2026, 6, 4),
-    unreadCount: 0,
+    lastMessageAt: lastMessageAt ?? DateTime.utc(2026, 6, 4),
+    unreadCount: unreadCount,
     isGroup: false,
     targetDid: targetDid,
+    targetPeer: targetPeer,
     lastMessagePayloadJson: lastMessagePayloadJson,
   );
 }

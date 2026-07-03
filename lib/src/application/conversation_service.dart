@@ -135,7 +135,11 @@ class ImCoreConversationService implements ConversationService {
         _cachedAgentProjection ?? const _AgentConversationProjection();
     final mergedItems = AwikiPerformanceLogger.sync(
       'conversation_service.snapshot.merge_cached_agents',
-      () => _mergeAgentConversationDuplicates(items, projection),
+      () => _mergeAgentConversationDuplicates(
+        items,
+        projection,
+        ownerDid: ownerDid,
+      ),
       fields: <String, Object?>{
         'items': items.length,
         'cache_hit': _cachedAgentProjection != null,
@@ -157,6 +161,7 @@ class ImCoreConversationService implements ConversationService {
             .where(
               (item) => shouldShowConversationForChatList(
                 item,
+                ownerDid: ownerDid,
                 daemonAgentDids: projection.daemonAgentDids,
               ),
             )
@@ -360,7 +365,11 @@ class ImCoreConversationService implements ConversationService {
         _cachedAgentProjection ?? const _AgentConversationProjection();
     final mergedItems = AwikiPerformanceLogger.sync(
       'conversation_service.fast_local.merge_cached_agents',
-      () => _mergeAgentConversationDuplicates(items, projection),
+      () => _mergeAgentConversationDuplicates(
+        items,
+        projection,
+        ownerDid: ownerDid,
+      ),
       fields: <String, Object?>{
         'items': items.length,
         'cache_hit': _cachedAgentProjection != null,
@@ -382,6 +391,7 @@ class ImCoreConversationService implements ConversationService {
             .where(
               (item) => shouldShowConversationForChatList(
                 item,
+                ownerDid: ownerDid,
                 daemonAgentDids: projection.daemonAgentDids,
               ),
             )
@@ -439,7 +449,11 @@ class ImCoreConversationService implements ConversationService {
     );
     final mergedItems = AwikiPerformanceLogger.sync(
       'conversation_service.merge_agents',
-      () => _mergeAgentConversationDuplicates(conversations, agentProjection),
+      () => _mergeAgentConversationDuplicates(
+        conversations,
+        agentProjection,
+        ownerDid: ownerDid,
+      ),
       fields: <String, Object?>{
         'items': conversations.length,
         'agents': agentProjection.agentCount,
@@ -464,6 +478,7 @@ class ImCoreConversationService implements ConversationService {
             .where(
               (item) => shouldShowConversationForChatList(
                 item,
+                ownerDid: ownerDid,
                 daemonAgentDids: agentProjection.daemonAgentDids,
               ),
             )
@@ -561,15 +576,18 @@ class ImCoreConversationService implements ConversationService {
     required ConversationSummary conversation,
   }) async {
     final projection = await _loadAgentConversationProjection();
-    final merged = _mergeAgentConversationDuplicates(<ConversationSummary>[
-      conversation,
-    ], projection);
+    final merged = _mergeAgentConversationDuplicates(
+      <ConversationSummary>[conversation],
+      projection,
+      ownerDid: ownerDid,
+    );
     if (merged.isEmpty) {
       return null;
     }
     final normalized = merged.single;
     if (!shouldShowConversationForChatList(
       normalized,
+      ownerDid: ownerDid,
       daemonAgentDids: projection.daemonAgentDids,
     )) {
       return null;
@@ -843,19 +861,26 @@ List<String> _conversationOverlayKeys(
 
 List<ConversationSummary> _mergeAgentConversationDuplicates(
   List<ConversationSummary> items,
-  _AgentConversationProjection projection,
-) {
+  _AgentConversationProjection projection, {
+  required String ownerDid,
+}) {
   if (items.isEmpty) {
     return items;
   }
   if (items.length < 2 || projection.runtimeAgents.isEmpty) {
-    return items
-        .map(
-          (item) => item.copyWith(
-            conversationKey: _conversationIdentity(item, projection).primaryKey,
-          ),
-        )
-        .toList(growable: false);
+    return _collapseLegacyDirectConversations(
+      items
+          .map(
+            (item) => item.copyWith(
+              conversationKey: _conversationIdentity(
+                item,
+                projection,
+              ).primaryKey,
+            ),
+          )
+          .toList(growable: false),
+      ownerDid: ownerDid,
+    );
   }
   final byKey = <String, ConversationSummary>{};
   for (final item in items) {
@@ -868,7 +893,60 @@ List<ConversationSummary> _mergeAgentConversationDuplicates(
             item,
           ).copyWith(conversationKey: key);
   }
-  return byKey.values.toList();
+  return _collapseLegacyDirectConversations(
+    byKey.values.toList(),
+    ownerDid: ownerDid,
+  );
+}
+
+List<ConversationSummary> _collapseLegacyDirectConversations(
+  List<ConversationSummary> items, {
+  required String ownerDid,
+}) {
+  if (items.length < 2) {
+    return items;
+  }
+  final peerScopedByTarget = <String, ConversationSummary>{};
+  final ambiguousTargets = <String>{};
+  for (final item in items.where(isPeerScopedDirectConversation)) {
+    for (final key in directPresentationTargetKeys(item)) {
+      final existing = peerScopedByTarget[key];
+      if (existing == null || sameConversationThread(existing, item)) {
+        peerScopedByTarget[key] = item;
+      } else {
+        ambiguousTargets.add(key);
+      }
+    }
+  }
+  if (peerScopedByTarget.isEmpty) {
+    return items;
+  }
+  final byThread = <String, ConversationSummary>{};
+  final consumedLegacy = <String>{};
+  for (final item in items) {
+    if (!isReplaceableLegacyDirectConversation(item, ownerDid: ownerDid)) {
+      byThread[item.threadId] = item;
+      continue;
+    }
+    final targetKeys = directPresentationTargetKeys(
+      item,
+    ).where((key) => !ambiguousTargets.contains(key)).toList(growable: false);
+    final peerScoped = targetKeys
+        .map((key) => peerScopedByTarget[key])
+        .whereType<ConversationSummary>()
+        .toSet();
+    if (peerScoped.length != 1) {
+      byThread[item.threadId] = item;
+      continue;
+    }
+    final target = peerScoped.single;
+    consumedLegacy.add(item.threadId);
+    byThread[target.threadId] = _mergeConversationDuplicate(target, item);
+  }
+  return items
+      .where((item) => !consumedLegacy.contains(item.threadId))
+      .map((item) => byThread[item.threadId] ?? item)
+      .toList(growable: false);
 }
 
 ConversationVisibilityIdentity _conversationIdentity(
@@ -876,6 +954,13 @@ ConversationVisibilityIdentity _conversationIdentity(
   _AgentConversationProjection projection, {
   bool includeHandleAliasesForStrongIdentity = false,
 }) {
+  if (isPeerScopedDirectConversation(item)) {
+    final threadId = item.threadId.trim();
+    return ConversationVisibilityIdentity(
+      primaryKey: threadId.isEmpty ? 'thread:${item.threadId}' : threadId,
+      aliasKeys: threadId.isEmpty ? const <String>[] : <String>[threadId],
+    );
+  }
   final agent = _agentForConversation(item, projection);
   return conversationVisibilityIdentity(
     item,

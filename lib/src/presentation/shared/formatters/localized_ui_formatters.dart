@@ -12,6 +12,7 @@ import '../../agents/agent_ui_messages.dart';
 import '../../agents/agent_visual_status.dart';
 import '../../agents/agents_provider.dart';
 import '../../conversation_list/conversation_peer_classifier.dart';
+import 'markdown_preview_formatter.dart';
 
 String localizeAgentTitle(AppLocalizations l10n, AgentSummary agent) {
   final title = AgentDisplayName.title(agent).trim();
@@ -248,7 +249,7 @@ String localizeMessagePreview(AppLocalizations l10n, ChatMessage message) {
   if (attachment != null) {
     final caption = attachment.caption?.trim();
     if (caption != null && caption.isNotEmpty) {
-      return caption;
+      return markdownPlainTextPreview(caption);
     }
     return l10n.conversationsAttachmentPreview(
       localizeAttachmentName(l10n, attachment),
@@ -292,7 +293,7 @@ String localizeLegacyConversationPreview(
       );
     }
   }
-  return normalized;
+  return markdownPlainTextPreview(normalized);
 }
 
 bool _isLegacyUntitledAttachment(String value) {

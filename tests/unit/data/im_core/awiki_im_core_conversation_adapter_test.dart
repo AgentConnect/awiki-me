@@ -156,7 +156,7 @@ void main() {
     },
   );
 
-  test('visible control patch updates recents preview', () async {
+  test('visible control patch removes hidden recents row', () async {
     final client = _FakeClient();
     final adapter = AwikiImCoreConversationAdapter(
       runtime: _FakeRuntime(client),
@@ -196,9 +196,9 @@ void main() {
     );
 
     final patch = await patchFuture.timeout(const Duration(seconds: 1));
-    expect(patch.kind, CoreConversationPatchKind.upsert);
-    expect(patch.item?.lastMessagePreview, 'Agent 已准备好。');
-    expect(patch.item?.lastMessagePayloadJson, contains('awiki.agent.status'));
+    expect(patch.kind, CoreConversationPatchKind.remove);
+    expect(patch.threadId, 'did:agent:runtime');
+    expect(patch.item, isNull);
   });
 
   test('payload-only control patch removes hidden row', () async {

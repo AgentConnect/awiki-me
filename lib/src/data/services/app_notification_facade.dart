@@ -5,16 +5,21 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../../domain/services/notification_facade.dart';
+import 'mac_menu_bar_status_service.dart';
 
 class AppNotificationFacade implements NotificationFacade {
-  AppNotificationFacade._(this._plugin);
+  AppNotificationFacade._(this._plugin, this._menuBarStatus);
 
   final FlutterLocalNotificationsPlugin _plugin;
+  final MacMenuBarStatusService _menuBarStatus;
   int _lastBadgeCount = 0;
   Future<void>? _initialization;
 
   static Future<AppNotificationFacade> create() async {
-    final facade = AppNotificationFacade._(FlutterLocalNotificationsPlugin());
+    final facade = AppNotificationFacade._(
+      FlutterLocalNotificationsPlugin(),
+      MacMenuBarStatusService(),
+    );
     facade._initializeInBackground();
     return facade;
   }
@@ -106,9 +111,15 @@ class AppNotificationFacade implements NotificationFacade {
 
   @override
   Future<void> updateBadgeCount(int count) async {
-    if (_lastBadgeCount == count) {
+    final normalizedCount = max(0, count);
+    if (_lastBadgeCount == normalizedCount) {
       return;
     }
-    _lastBadgeCount = count;
+    _lastBadgeCount = normalizedCount;
+    try {
+      await _menuBarStatus.setUnreadCount(normalizedCount);
+    } catch (error) {
+      debugPrint('[awiki_me][menu-bar-status][error] $error');
+    }
   }
 }

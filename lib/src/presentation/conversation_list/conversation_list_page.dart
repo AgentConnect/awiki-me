@@ -10,6 +10,7 @@ import '../../app/app_router.dart';
 import '../../app/ui_feedback.dart';
 import '../../core/date_time_formatter.dart';
 import '../../core/performance_logger.dart';
+import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/peer_agent_identity.dart';
 import '../../l10n/app_message.dart';
@@ -24,11 +25,13 @@ import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/formatters/localized_ui_formatters.dart';
+import '../shared/formatters/markdown_preview_formatter.dart';
 import '../shared/identity_flow.dart';
 import '../shared/quick_actions.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../settings/settings_page.dart';
+import 'conversation_list_ordering.dart';
 import 'conversation_peer_classifier.dart';
 import 'conversation_provider.dart';
 
@@ -415,15 +418,31 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
 
   List<ConversationSummary> _filterConversations(BuildContext context) {
     final query = _normalizedConversationSearchText(_query);
-    if (query.isEmpty) {
-      return widget.conversations;
-    }
-    return widget.conversations
-        .where((conversation) {
-          return _conversationSearchText(context, conversation).contains(query);
-        })
-        .toList(growable: false);
+    final conversations = query.isEmpty
+        ? widget.conversations
+        : widget.conversations.where((conversation) {
+            return _conversationSearchText(
+              context,
+              conversation,
+            ).contains(query);
+          });
+    return sortConversationsForPresentation(
+      conversations,
+      draftFor: (conversation) =>
+          _draftSortStateForConversation(conversation, widget.composerDrafts),
+    );
   }
+}
+
+ConversationDraftSortState? _draftSortStateForConversation(
+  ConversationSummary conversation,
+  Map<String, ChatComposerDraft> drafts,
+) {
+  final draft = _draftForConversation(conversation, drafts);
+  if (draft.isEmpty) {
+    return null;
+  }
+  return ConversationDraftSortState(updatedAt: draft.updatedAt);
 }
 
 class _ConversationRefreshView extends ConsumerStatefulWidget {
@@ -520,14 +539,19 @@ class _ConversationRefreshViewState
 
   List<ConversationSummary> _filterConversations(BuildContext context) {
     final query = _normalizedConversationSearchText(_query);
-    if (query.isEmpty) {
-      return widget.conversations;
-    }
-    return widget.conversations
-        .where((conversation) {
-          return _conversationSearchText(context, conversation).contains(query);
-        })
-        .toList(growable: false);
+    final conversations = query.isEmpty
+        ? widget.conversations
+        : widget.conversations.where((conversation) {
+            return _conversationSearchText(
+              context,
+              conversation,
+            ).contains(query);
+          });
+    return sortConversationsForPresentation(
+      conversations,
+      draftFor: (conversation) =>
+          _draftSortStateForConversation(conversation, widget.composerDrafts),
+    );
   }
 }
 
@@ -1259,7 +1283,7 @@ _ConversationPreviewPresentation _conversationPreviewPresentation(
   final text = draft.text.trim();
   if (text.isNotEmpty) {
     return _ConversationPreviewPresentation(
-      text: text,
+      text: markdownPlainTextPreview(text),
       tags: <_ConversationPreviewTag>[
         ...tags,
         _ConversationPreviewTag(
@@ -1294,6 +1318,9 @@ ChatComposerDraft _draftForConversation(
   ConversationSummary conversation,
   Map<String, ChatComposerDraft> drafts,
 ) {
+  if (isPeerScopedDirectConversation(conversation)) {
+    return drafts[conversation.threadId.trim()] ?? const ChatComposerDraft();
+  }
   for (final key in conversation.visibilityKeys) {
     final draft = drafts[key.trim()];
     if (draft != null) {

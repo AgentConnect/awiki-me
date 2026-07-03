@@ -247,7 +247,7 @@ void main() {
     },
   );
 
-  test('cache stats count canonical conversations and route entries', () {
+  test('cache stats isolate peer-scoped conversations and route entries', () {
     final controller = container.read(chatThreadsProvider.notifier);
     controller.applyRealtimeUpdate(message);
     controller.applyRealtimeUpdate(
@@ -267,12 +267,42 @@ void main() {
 
     final stats = controller.debugCacheStats();
     expect(stats.rawThreadStateCount, greaterThanOrEqualTo(2));
-    expect(stats.canonicalThreadCount, 1);
+    expect(stats.canonicalThreadCount, 2);
     expect(stats.messageRouteEntryCount, greaterThanOrEqualTo(4));
     expect(stats.totalRetainedMessages, greaterThanOrEqualTo(2));
     expect(
       stats.toJson()['cache.message_route_entry_count'],
       stats.messageRouteEntryCount,
+    );
+  });
+
+  test('peer-scoped source message route corrects stale direct route', () {
+    final controller = container.read(chatThreadsProvider.notifier);
+    controller.applyRealtimeUpdate(message);
+    expect(
+      controller.debugThreadIdForSourceMessage('msg_1'),
+      conversation.threadId,
+    );
+
+    const peerScopedThreadId = 'dm:peer-scope:v1:stable-bob';
+    controller.applyRealtimeUpdate(
+      ChatMessage(
+        localId: message.localId,
+        remoteId: message.remoteId,
+        threadId: peerScopedThreadId,
+        senderDid: message.senderDid,
+        receiverDid: message.receiverDid,
+        content: message.content,
+        createdAt: message.createdAt,
+        isMine: message.isMine,
+        sendState: message.sendState,
+      ),
+      conversation: conversation.copyWith(threadId: peerScopedThreadId),
+    );
+
+    expect(
+      controller.debugThreadIdForSourceMessage('msg_1'),
+      peerScopedThreadId,
     );
   });
 
@@ -409,7 +439,7 @@ void main() {
     expect(controller.debugCacheStats().protectedOverflowCount, greaterThan(0));
   });
 
-  test('global quota trims by canonical conversation instead of raw alias', () {
+  test('global quota trims by exact storage conversation', () {
     final trimContainer = _containerWithCachePolicy(
       gateway,
       conversation,

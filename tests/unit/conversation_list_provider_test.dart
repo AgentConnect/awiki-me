@@ -5,8 +5,13 @@ import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
+import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -86,7 +91,7 @@ void main() {
   );
 
   test(
-    'refresh merge uses indexed identity and keeps one local row per target',
+    'refresh merge replaces legacy direct DID row with peer-scoped identity',
     () async {
       final baseTime = DateTime.utc(2026, 6, 27, 2);
       final local = <ConversationSummary>[
@@ -158,13 +163,593 @@ void main() {
         conversations.where((item) => item.targetDid == 'did:agent'),
         hasLength(1),
       );
-      final merged = conversations.singleWhere(
-        (item) => item.targetDid == 'did:agent',
+      final agent = conversations.singleWhere(
+        (item) => item.threadId == 'dm:peer-scope:v1:hermes',
       );
-      expect(merged.threadId, 'dm:peer-scope:v1:hermes');
-      expect(merged.lastMessagePreview, '新回复');
+      expect(agent.lastMessagePreview, '新回复');
       expect(conversations.length, local.length);
       expect(service.listCalls, 1);
+    },
+  );
+
+  test(
+    'public upsert does not flash conversations rejected by normalization',
+    () async {
+      final notifications = FakeNotificationFacade();
+      final rejected =
+          _conversation(
+            threadId: 'dm:daemon-control',
+            displayName: 'Daemon',
+            targetDid: 'did:agent:daemon',
+          ).copyWith(
+            lastMessagePayloadJson:
+                '{"schema":"awiki.agent.status.v1","status_scope":"daemon"}',
+          );
+      final service = _NormalizingConversationService(
+        normalize: (conversation) async =>
+            conversation.threadId == rejected.threadId ? null : conversation,
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: notifications,
+        ownerDid: 'did:human',
+      );
+      addTearDown(container.dispose);
+
+      container
+          .read(conversationListProvider.notifier)
+          .upsertConversation(rejected);
+
+      expect(container.read(conversationListProvider).conversations, isEmpty);
+      await pumpEventQueue();
+      expect(container.read(conversationListProvider).conversations, isEmpty);
+      expect(notifications.lastBadgeCount, 0);
+    },
+  );
+
+  test(
+    'ambiguous peer-scoped direct targets are not merged by target alias',
+    () {
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: _StaticConversationService(conversations: const []),
+        notifications: notifications,
+        ownerDid: 'did:human',
+      );
+      addTearDown(container.dispose);
+
+      const agentDid = 'did:agent:runtime';
+      const agentHandle = 'hermes.awiki.example';
+      final controllerConversation =
+          _conversation(
+            threadId: 'dm:peer-scope:v1:controller',
+            displayName: 'Controller',
+            targetDid: agentDid,
+            targetPeer: agentHandle,
+          ).copyWith(
+            lastMessagePreview: 'controller preview',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 7, 9),
+          );
+      final runtimeConversation =
+          _conversation(
+            threadId: 'dm:peer-scope:v1:runtime',
+            displayName: 'Runtime',
+            targetDid: agentDid,
+            targetPeer: agentHandle,
+          ).copyWith(
+            lastMessagePreview: 'runtime preview',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 7, 10),
+          );
+      final genericUpdate =
+          _conversation(
+            threadId: 'direct:$agentDid',
+            displayName: 'Generic',
+            targetDid: agentDid,
+            targetPeer: agentDid,
+          ).copyWith(
+            lastMessagePreview: 'generic update',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 7, 11),
+          );
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(controllerConversation);
+      notifier.upsertConversation(runtimeConversation);
+      notifier.upsertConversation(genericUpdate);
+
+      final conversations = container
+          .read(conversationListProvider)
+          .conversations;
+      expect(conversations, hasLength(3));
+      expect(
+        conversations
+            .singleWhere(
+              (item) => item.threadId == controllerConversation.threadId,
+            )
+            .lastMessagePreview,
+        'controller preview',
+      );
+      expect(
+        conversations
+            .singleWhere(
+              (item) => item.threadId == runtimeConversation.threadId,
+            )
+            .lastMessagePreview,
+        'runtime preview',
+      );
+      expect(
+        conversations
+            .singleWhere((item) => item.threadId == genericUpdate.threadId)
+            .lastMessagePreview,
+        'generic update',
+      );
+    },
+  );
+
+  test(
+    'peer-scoped realtime reply collapses pending direct alias in recents',
+    () {
+      final notifications = FakeNotificationFacade();
+      const agentDid = 'did:agent:runtime:hermes';
+      const agentHandle = 'hermes';
+      const agentFullHandle = 'hermes.awiki.info';
+      final container = _conversationContainer(
+        service: _StaticConversationService(conversations: const []),
+        notifications: notifications,
+        ownerDid: 'did:human',
+        agents: const <AgentSummary>[
+          AgentSummary(
+            agentDid: agentDid,
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'hermes',
+            handle: agentHandle,
+            displayName: 'Hermes',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final pendingAlias =
+          _conversation(
+            threadId: 'dm:pending:$agentFullHandle',
+            displayName: 'Hermes',
+            targetDid: agentDid,
+            targetPeer: agentFullHandle,
+          ).copyWith(
+            lastMessagePreview: '在吗？',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 12),
+          );
+      final runtimeHint =
+          _conversation(
+            threadId: 'dm:peer-scope:v1:hermes-runtime',
+            displayName: agentHandle,
+            targetDid: agentHandle,
+            targetPeer: agentHandle,
+            unreadCount: 1,
+          ).copyWith(
+            lastMessagePreview: '在的',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 12, 1),
+          );
+      final runtimeReply = ChatMessage(
+        localId: 'runtime-reply-1',
+        remoteId: 'runtime-reply-1',
+        threadId: runtimeHint.threadId,
+        senderDid: agentDid,
+        senderName: 'Hermes',
+        receiverDid: 'did:human',
+        content: '在的',
+        createdAt: runtimeHint.lastMessageAt,
+        isMine: false,
+        sendState: MessageSendState.sent,
+      );
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(pendingAlias);
+      notifier.upsertRealtimeMessageBestEffort(
+        runtimeHint,
+        message: runtimeReply,
+      );
+
+      final conversations = container
+          .read(conversationListProvider)
+          .conversations;
+      expect(conversations, hasLength(1));
+      expect(conversations.single.threadId, runtimeHint.threadId);
+      expect(conversations.single.targetDid, agentDid);
+      expect(conversations.single.targetPeer, agentFullHandle);
+      expect(conversations.single.lastMessagePreview, '在的');
+      expect(conversations.single.unreadCount, 1);
+      expect(notifications.lastBadgeCount, 1);
+    },
+  );
+
+  test(
+    'ambiguous local handle realtime hint does not collapse direct aliases',
+    () {
+      final notifications = FakeNotificationFacade();
+      const firstDid = 'did:agent:runtime:hermes-a';
+      const secondDid = 'did:agent:runtime:hermes-b';
+      const localHandle = 'hermes';
+      const firstFullHandle = 'hermes.awiki.info';
+      final container = _conversationContainer(
+        service: _StaticConversationService(conversations: const []),
+        notifications: notifications,
+        ownerDid: 'did:human',
+        agents: const <AgentSummary>[
+          AgentSummary(
+            agentDid: firstDid,
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon-a',
+            runtime: 'hermes',
+            handle: localHandle,
+            displayName: 'Hermes A',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+          AgentSummary(
+            agentDid: secondDid,
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon-b',
+            runtime: 'hermes',
+            handle: 'hermes.awiki.ai',
+            displayName: 'Hermes B',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final pendingAlias =
+          _conversation(
+            threadId: 'dm:pending:$firstFullHandle',
+            displayName: 'Hermes A',
+            targetDid: firstDid,
+            targetPeer: firstFullHandle,
+          ).copyWith(
+            lastMessagePreview: '在吗？',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 12),
+          );
+      final runtimeHint =
+          _conversation(
+            threadId: 'dm:peer-scope:v1:ambiguous-hermes',
+            displayName: localHandle,
+            targetDid: localHandle,
+            targetPeer: localHandle,
+            unreadCount: 1,
+          ).copyWith(
+            lastMessagePreview: '在的',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 12, 1),
+          );
+      final runtimeReply = ChatMessage(
+        localId: 'runtime-reply-ambiguous',
+        remoteId: 'runtime-reply-ambiguous',
+        threadId: runtimeHint.threadId,
+        senderDid: firstDid,
+        senderName: 'Hermes',
+        receiverDid: 'did:human',
+        content: '在的',
+        createdAt: runtimeHint.lastMessageAt,
+        isMine: false,
+        sendState: MessageSendState.sent,
+      );
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(pendingAlias);
+      notifier.upsertRealtimeMessageBestEffort(
+        runtimeHint,
+        message: runtimeReply,
+      );
+
+      final conversations = container
+          .read(conversationListProvider)
+          .conversations;
+      expect(conversations, hasLength(2));
+      expect(
+        conversations.map((item) => item.threadId),
+        containsAll(<String>[pendingAlias.threadId, runtimeHint.threadId]),
+      );
+    },
+  );
+
+  test(
+    'explicit non-runtime did is not corrected to runtime agent by handle',
+    () {
+      final notifications = FakeNotificationFacade();
+      const agentDid = 'did:agent:runtime:hermes';
+      const agentFullHandle = 'hermes.awiki.info';
+      final container = _conversationContainer(
+        service: _StaticConversationService(conversations: const []),
+        notifications: notifications,
+        ownerDid: 'did:human',
+        agents: const <AgentSummary>[
+          AgentSummary(
+            agentDid: agentDid,
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'hermes',
+            handle: 'hermes',
+            displayName: 'Hermes',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final pendingAlias =
+          _conversation(
+            threadId: 'dm:pending:$agentFullHandle',
+            displayName: 'Hermes',
+            targetDid: agentDid,
+            targetPeer: agentFullHandle,
+          ).copyWith(
+            lastMessagePreview: '在吗？',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 12),
+          );
+      final humanHint =
+          _conversation(
+            threadId: 'dm:peer-scope:v1:human',
+            displayName: 'Hermes',
+            targetDid: 'did:human:hermes',
+            targetPeer: agentFullHandle,
+            unreadCount: 1,
+          ).copyWith(
+            lastMessagePreview: 'human reply',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 12, 1),
+          );
+      final humanReply = ChatMessage(
+        localId: 'human-reply',
+        remoteId: 'human-reply',
+        threadId: humanHint.threadId,
+        senderDid: 'did:human:hermes',
+        senderName: 'Hermes',
+        receiverDid: 'did:human',
+        content: 'human reply',
+        createdAt: humanHint.lastMessageAt,
+        isMine: false,
+        sendState: MessageSendState.sent,
+      );
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(pendingAlias);
+      notifier.upsertRealtimeMessageBestEffort(humanHint, message: humanReply);
+
+      final conversations = container
+          .read(conversationListProvider)
+          .conversations;
+      expect(conversations, hasLength(2));
+      expect(
+        conversations
+            .singleWhere((item) => item.threadId == humanHint.threadId)
+            .targetDid,
+        'did:human:hermes',
+      );
+    },
+  );
+
+  test(
+    'direct alias upsert keeps single existing peer-scoped presentation row',
+    () {
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: _StaticConversationService(conversations: const []),
+        notifications: notifications,
+        ownerDid: 'did:human',
+      );
+      addTearDown(container.dispose);
+
+      const agentDid = 'did:agent:runtime:hermes';
+      const agentHandle = 'hermes.awiki.example';
+      final runtime =
+          _conversation(
+            threadId: 'dm:peer-scope:v1:hermes-runtime',
+            displayName: 'Hermes',
+            targetDid: agentDid,
+            targetPeer: agentHandle,
+          ).copyWith(
+            lastMessagePreview: '在的',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 12, 1),
+          );
+      final alias =
+          _conversation(
+            threadId: 'direct:$agentDid',
+            displayName: 'Hermes',
+            targetDid: agentDid,
+            targetPeer: agentDid,
+          ).copyWith(
+            lastMessagePreview: '新的本地输入',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 12, 2),
+          );
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(runtime);
+      notifier.upsertConversation(alias);
+
+      final conversations = container
+          .read(conversationListProvider)
+          .conversations;
+      expect(conversations, hasLength(1));
+      expect(conversations.single.threadId, runtime.threadId);
+      expect(conversations.single.lastMessagePreview, '新的本地输入');
+    },
+  );
+
+  test('selected direct alias migrates to peer-scoped presentation row', () {
+    final notifications = FakeNotificationFacade();
+    final container = _conversationContainer(
+      service: _StaticConversationService(conversations: const []),
+      notifications: notifications,
+      ownerDid: 'did:human',
+    );
+    addTearDown(container.dispose);
+
+    const agentDid = 'did:agent:runtime:hermes';
+    const agentHandle = 'hermes.awiki.example';
+    final pendingAlias =
+        _conversation(
+          threadId: 'dm:pending:$agentHandle',
+          displayName: 'Hermes',
+          targetDid: agentDid,
+          targetPeer: agentHandle,
+        ).copyWith(
+          lastMessagePreview: '在吗？',
+          lastMessageAt: DateTime.utc(2026, 7, 3, 12),
+        );
+    final runtime =
+        _conversation(
+          threadId: 'dm:peer-scope:v1:hermes-runtime',
+          displayName: 'Hermes',
+          targetDid: agentDid,
+          targetPeer: agentHandle,
+          unreadCount: 1,
+        ).copyWith(
+          lastMessagePreview: '在的',
+          lastMessageAt: DateTime.utc(2026, 7, 3, 12, 1),
+        );
+
+    final notifier = container.read(conversationListProvider.notifier);
+    notifier.upsertConversation(pendingAlias);
+    container
+        .read(selectedConversationProvider.notifier)
+        .selectConversation(pendingAlias);
+    notifier.upsertConversation(runtime);
+
+    final selected = container.read(selectedConversationProvider);
+    expect(selected?.threadId, runtime.threadId);
+    expect(selected?.lastMessagePreview, '在的');
+    expect(selected?.displayName, 'Hermes');
+  });
+
+  test(
+    'generic direct alias does not collapse ambiguous peer-scoped targets',
+    () {
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: _StaticConversationService(conversations: const []),
+        notifications: notifications,
+        ownerDid: 'did:human',
+      );
+      addTearDown(container.dispose);
+
+      const agentDid = 'did:agent:runtime:hermes';
+      const agentHandle = 'hermes.awiki.example';
+      final controller =
+          _conversation(
+            threadId: 'dm:peer-scope:v1:controller',
+            displayName: 'Controller',
+            targetDid: agentDid,
+            targetPeer: agentHandle,
+          ).copyWith(
+            lastMessagePreview: 'controller preview',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 12),
+          );
+      final runtime =
+          _conversation(
+            threadId: 'dm:peer-scope:v1:runtime',
+            displayName: 'Runtime',
+            targetDid: agentDid,
+            targetPeer: agentHandle,
+          ).copyWith(
+            lastMessagePreview: 'runtime preview',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 12, 1),
+          );
+      final generic =
+          _conversation(
+            threadId: 'direct:$agentDid',
+            displayName: 'Generic',
+            targetDid: agentDid,
+            targetPeer: agentDid,
+          ).copyWith(
+            lastMessagePreview: 'generic preview',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 12, 2),
+          );
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(controller);
+      notifier.upsertConversation(runtime);
+      notifier.upsertConversation(generic);
+
+      final conversations = container
+          .read(conversationListProvider)
+          .conversations;
+      expect(conversations, hasLength(3));
+      expect(
+        conversations.map((item) => item.threadId),
+        containsAll(<String>[
+          controller.threadId,
+          runtime.threadId,
+          generic.threadId,
+        ]),
+      );
+    },
+  );
+
+  test(
+    'refresh generic direct alias does not consume ambiguous peer-scoped rows',
+    () async {
+      final notifications = FakeNotificationFacade();
+      const agentDid = 'did:agent:runtime:hermes';
+      const agentHandle = 'hermes.awiki.example';
+      final controller =
+          _conversation(
+            threadId: 'dm:peer-scope:v1:controller',
+            displayName: 'Controller',
+            targetDid: agentDid,
+            targetPeer: agentHandle,
+          ).copyWith(
+            lastMessagePreview: 'controller preview',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 12),
+          );
+      final runtime =
+          _conversation(
+            threadId: 'dm:peer-scope:v1:runtime',
+            displayName: 'Runtime',
+            targetDid: agentDid,
+            targetPeer: agentHandle,
+          ).copyWith(
+            lastMessagePreview: 'runtime preview',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 12, 1),
+          );
+      final generic =
+          _conversation(
+            threadId: 'direct:$agentDid',
+            displayName: 'Generic',
+            targetDid: agentDid,
+            targetPeer: agentDid,
+          ).copyWith(
+            lastMessagePreview: 'generic preview',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 12, 2),
+          );
+      final container = _conversationContainer(
+        service: _StaticConversationService(
+          conversations: <ConversationSummary>[generic],
+        ),
+        notifications: notifications,
+        ownerDid: 'did:human',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(controller);
+      notifier.upsertConversation(runtime);
+
+      await notifier.refresh();
+
+      final conversations = container
+          .read(conversationListProvider)
+          .conversations;
+      expect(conversations, hasLength(3));
+      expect(
+        conversations.map((item) => item.threadId),
+        containsAll(<String>[
+          controller.threadId,
+          runtime.threadId,
+          generic.threadId,
+        ]),
+      );
     },
   );
 
@@ -226,6 +811,49 @@ void main() {
     },
   );
 
+  test(
+    'empty refreshed group preview does not overwrite visible local preview',
+    () async {
+      final baseTime = DateTime.utc(2026, 7, 3, 7, 8, 52);
+      final local = _conversation(
+        threadId: 'group:did:wba:awiki.ai:groups:8b13',
+        displayName: '群聊',
+        isGroup: true,
+        groupId: 'did:wba:awiki.ai:groups:8b13',
+      ).copyWith(lastMessagePreview: '111', lastMessageAt: baseTime);
+      final refreshed =
+          _conversation(
+            threadId: local.threadId,
+            displayName: local.displayName,
+            isGroup: true,
+            groupId: local.groupId,
+          ).copyWith(
+            lastMessagePreview: '',
+            lastMessageAt: baseTime.add(const Duration(seconds: 1)),
+          );
+      final service = _StaticConversationService(
+        conversations: <ConversationSummary>[refreshed],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(local);
+      await notifier.refresh();
+
+      final conversation = container
+          .read(conversationListProvider)
+          .conversations
+          .single;
+      expect(conversation.lastMessagePreview, '111');
+      expect(conversation.lastMessageAt, baseTime);
+    },
+  );
+
   test('mark read is no-op when conversation is already read', () async {
     final service = _StaticConversationService(conversations: const []);
     final notifications = FakeNotificationFacade();
@@ -256,6 +884,49 @@ void main() {
 
     expect(emissions, 0);
     expect(notifications.lastBadgeCount, 0);
+  });
+
+  test('mark read only clears the exact storage thread', () async {
+    final service = _StaticConversationService(conversations: const []);
+    final notifications = FakeNotificationFacade();
+    final container = _conversationContainer(
+      service: service,
+      notifications: notifications,
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+
+    final controllerConversation = _conversation(
+      threadId: 'dm:peer-scope:v1:controller',
+      displayName: 'Controller',
+      unreadCount: 3,
+      targetDid: 'did:agent:runtime',
+      targetPeer: 'agent.awiki.ai',
+    );
+    final runtimeConversation = _conversation(
+      threadId: 'dm:peer-scope:v1:runtime',
+      displayName: 'Runtime Agent',
+      unreadCount: 2,
+      targetDid: 'did:agent:runtime',
+      targetPeer: 'agent.awiki.ai',
+    );
+    final notifier = container.read(conversationListProvider.notifier);
+    notifier.upsertConversation(controllerConversation);
+    notifier.upsertConversation(runtimeConversation);
+    await Future<void>.delayed(Duration.zero);
+
+    notifier.markConversationReadLocal(runtimeConversation);
+
+    final byThread = {
+      for (final item in container.read(conversationListProvider).conversations)
+        item.threadId: item,
+    };
+    expect(
+      byThread[controllerConversation.threadId]?.unreadCount,
+      controllerConversation.unreadCount,
+    );
+    expect(byThread[runtimeConversation.threadId]?.unreadCount, 0);
+    expect(notifications.lastBadgeCount, controllerConversation.unreadCount);
   });
 
   test(
@@ -436,7 +1107,7 @@ void main() {
   });
 
   test(
-    'conversation patch reorder moves existing row without repair',
+    'conversation patch reorder does not bypass stable ordering or repair',
     () async {
       final service = _PatchConversationService(
         conversations: const <ConversationSummary>[],
@@ -492,7 +1163,7 @@ void main() {
             .read(conversationListProvider)
             .conversations
             .map((item) => item.threadId),
-        <String>['thread-b', 'thread-a'],
+        <String>['thread-a', 'thread-b'],
       );
       expect(service.repairCalls, 0);
     },
@@ -719,6 +1390,229 @@ void main() {
     expect(container.read(conversationListProvider).conversations, isEmpty);
     expect(notifications.lastBadgeCount, 0);
   });
+
+  test(
+    'realtime message increments unread without clobbering local mention state',
+    () {
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: _StaticConversationService(
+          conversations: const <ConversationSummary>[],
+        ),
+        notifications: notifications,
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(conversationListProvider.notifier);
+      final local =
+          _conversation(
+            threadId: 'group:team',
+            displayName: 'Team',
+            unreadCount: 3,
+            isGroup: true,
+            groupId: 'team',
+          ).copyWith(
+            unreadMentionCount: 1,
+            firstUnreadMentionMessageId: 'mention-1',
+          );
+      notifier.upsertConversation(local);
+
+      notifier.upsertRealtimeMessageBestEffort(
+        local.copyWith(
+          lastMessagePreview: 'new realtime',
+          lastMessageAt: DateTime.utc(2026, 6, 27, 2, 1),
+          unreadCount: 1,
+          unreadMentionCount: 0,
+          firstUnreadMentionMessageId: null,
+        ),
+        message: ChatMessage(
+          localId: 'realtime-1',
+          remoteId: 'realtime-1',
+          threadId: 'group:team',
+          senderDid: 'did:bob',
+          senderName: 'Bob',
+          receiverDid: 'did:alice',
+          groupId: 'team',
+          content: 'new realtime',
+          createdAt: DateTime.utc(2026, 6, 27, 2, 1),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+      );
+
+      final updated = container
+          .read(conversationListProvider)
+          .conversations
+          .single;
+      expect(updated.lastMessagePreview, 'new realtime');
+      expect(updated.unreadCount, 4);
+      expect(updated.unreadMentionCount, 1);
+      expect(updated.firstUnreadMentionMessageId, 'mention-1');
+      expect(notifications.lastBadgeCount, 4);
+    },
+  );
+
+  test('realtime peer-scoped message replaces legacy direct target', () {
+    final notifications = FakeNotificationFacade();
+    final container = _conversationContainer(
+      service: _StaticConversationService(
+        conversations: const <ConversationSummary>[],
+      ),
+      notifications: notifications,
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(conversationListProvider.notifier);
+    final legacy = _conversation(
+      threadId: 'dm:did:alice:did:agent',
+      displayName: 'Agent legacy',
+      targetDid: 'did:agent',
+      targetPeer: 'did:agent',
+    );
+    notifier.upsertConversation(legacy);
+
+    notifier.upsertRealtimeMessageBestEffort(
+      _conversation(
+        threadId: 'direct:did:agent',
+        displayName: 'Agent',
+        unreadCount: 1,
+        targetDid: 'did:agent',
+        targetPeer: 'agent.awiki.example',
+        lastMessageAt: DateTime.utc(2026, 6, 27, 2, 2),
+      ).copyWith(lastMessagePreview: 'runtime reply'),
+      message: ChatMessage(
+        localId: 'runtime-1',
+        remoteId: 'runtime-1',
+        threadId: 'dm:peer-scope:v1:agent',
+        senderDid: 'did:agent',
+        senderName: 'Agent',
+        receiverDid: 'did:alice',
+        content: 'runtime reply',
+        createdAt: DateTime.utc(2026, 6, 27, 2, 2),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      ),
+    );
+    expect(
+      container.read(conversationListProvider).conversations.single.threadId,
+      'dm:did:alice:did:agent',
+    );
+
+    notifier.upsertRealtimeMessageBestEffort(
+      _conversation(
+        threadId: 'dm:peer-scope:v1:agent',
+        displayName: 'Agent',
+        unreadCount: 1,
+        targetDid: 'did:agent',
+        targetPeer: 'agent.awiki.example',
+        lastMessageAt: DateTime.utc(2026, 6, 27, 2, 2),
+      ).copyWith(lastMessagePreview: 'runtime reply'),
+      message: ChatMessage(
+        localId: 'runtime-1',
+        remoteId: 'runtime-1',
+        threadId: 'dm:peer-scope:v1:agent',
+        senderDid: 'did:agent',
+        senderName: 'Agent',
+        receiverDid: 'did:alice',
+        content: 'runtime reply',
+        createdAt: DateTime.utc(2026, 6, 27, 2, 2),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      ),
+    );
+
+    final rows = container.read(conversationListProvider).conversations;
+    expect(rows.map((item) => item.threadId), <String>[
+      'dm:peer-scope:v1:agent',
+    ]);
+    expect(rows.single.lastMessagePreview, 'runtime reply');
+    expect(rows.single.unreadCount, 1);
+    expect(notifications.lastBadgeCount, 1);
+  });
+
+  test('conversation upserts use stable unread-first ordering', () async {
+    final notifications = FakeNotificationFacade();
+    final container = _conversationContainer(
+      service: _StaticConversationService(conversations: const []),
+      notifications: notifications,
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(conversationListProvider.notifier);
+    final baseTime = DateTime.utc(2026, 6, 27, 2);
+
+    notifier.upsertConversation(
+      _conversation(
+        threadId: 'dm:read-newer',
+        displayName: 'Read newer',
+        targetDid: 'did:read-newer',
+        lastMessageAt: baseTime.add(const Duration(minutes: 2)),
+      ),
+    );
+    notifier.upsertConversation(
+      _conversation(
+        threadId: 'dm:unread-older',
+        displayName: 'Unread older',
+        unreadCount: 1,
+        targetDid: 'did:unread-older',
+        lastMessageAt: baseTime,
+      ),
+    );
+    notifier.upsertConversation(
+      _conversation(
+        threadId: 'dm:mention-oldest',
+        displayName: 'Mention oldest',
+        unreadCount: 1,
+        targetDid: 'did:mention-oldest',
+        lastMessageAt: baseTime.subtract(const Duration(minutes: 1)),
+      ).copyWith(unreadMentionCount: 1),
+    );
+
+    expect(
+      container
+          .read(conversationListProvider)
+          .conversations
+          .map((item) => item.threadId),
+      <String>['dm:mention-oldest', 'dm:unread-older', 'dm:read-newer'],
+    );
+  });
+
+  test('conversation ordering has a deterministic tie-breaker', () {
+    final notifications = FakeNotificationFacade();
+    final container = _conversationContainer(
+      service: _StaticConversationService(conversations: const []),
+      notifications: notifications,
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(conversationListProvider.notifier);
+    final sameTime = DateTime.utc(2026, 6, 27, 2);
+
+    notifier.upsertConversation(
+      _conversation(
+        threadId: 'dm:z-thread',
+        displayName: 'Zed',
+        targetDid: 'did:z',
+        lastMessageAt: sameTime,
+      ),
+    );
+    notifier.upsertConversation(
+      _conversation(
+        threadId: 'dm:a-thread',
+        displayName: 'Amy',
+        targetDid: 'did:a',
+        lastMessageAt: sameTime,
+      ),
+    );
+
+    expect(
+      container
+          .read(conversationListProvider)
+          .conversations
+          .map((item) => item.threadId),
+      <String>['dm:a-thread', 'dm:z-thread'],
+    );
+  });
 }
 
 ConversationSummary _conversation({
@@ -727,6 +1621,8 @@ ConversationSummary _conversation({
   int unreadCount = 0,
   String targetDid = 'did:bob',
   String? targetPeer,
+  bool isGroup = false,
+  String? groupId,
   DateTime? lastMessageAt,
 }) {
   return ConversationSummary(
@@ -735,9 +1631,10 @@ ConversationSummary _conversation({
     lastMessagePreview: 'hello',
     lastMessageAt: lastMessageAt ?? DateTime.utc(2026, 6, 27, 2),
     unreadCount: unreadCount,
-    isGroup: false,
-    targetDid: targetDid,
-    targetPeer: targetPeer,
+    isGroup: isGroup,
+    targetDid: isGroup ? null : targetDid,
+    targetPeer: isGroup ? null : targetPeer,
+    groupId: groupId,
   );
 }
 
@@ -745,11 +1642,15 @@ ProviderContainer _conversationContainer({
   required ConversationService service,
   required FakeNotificationFacade notifications,
   required String ownerDid,
+  List<AgentSummary> agents = const <AgentSummary>[],
 }) {
   return ProviderContainer(
     overrides: <Override>[
       conversationServiceProvider.overrideWithValue(service),
       notificationFacadeProvider.overrideWithValue(notifications),
+      agentsProvider.overrideWith(
+        (ref) => _StaticAgentsController(ref, agents),
+      ),
       sessionProvider.overrideWith((ref) {
         final controller = SessionController();
         controller.setSession(
@@ -763,6 +1664,12 @@ ProviderContainer _conversationContainer({
       }),
     ],
   );
+}
+
+class _StaticAgentsController extends AgentsController {
+  _StaticAgentsController(super.ref, List<AgentSummary> agents) {
+    state = AgentsState(agents: agents);
+  }
 }
 
 class _SlowEnrichConversationService implements ConversationService {
@@ -1041,6 +1948,22 @@ class _StaticConversationService implements ConversationService {
     required ConversationSummary conversation,
     DateTime? updatedAt,
   }) async {}
+}
+
+class _NormalizingConversationService extends _StaticConversationService {
+  _NormalizingConversationService({required this.normalize})
+    : super(conversations: const <ConversationSummary>[]);
+
+  final Future<ConversationSummary?> Function(ConversationSummary conversation)
+  normalize;
+
+  @override
+  Future<ConversationSummary?> normalizeConversationForRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+  }) {
+    return normalize(conversation);
+  }
 }
 
 class _CompleterConversationService extends _StaticConversationService {

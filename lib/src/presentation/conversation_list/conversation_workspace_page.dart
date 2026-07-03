@@ -15,6 +15,7 @@ import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'conversation_list_page.dart';
 import 'conversation_peer_classifier.dart';
+import 'conversation_provider.dart';
 
 part 'parts/conversation_workspace_mac_layout_part.dart';
 part 'parts/conversation_workspace_panel_widgets_part.dart';
@@ -32,7 +33,10 @@ class ConversationWorkspacePage extends ConsumerWidget {
       return const ConversationListPage();
     }
 
-    final selectedConversation = ref.watch(selectedConversationProvider);
+    final selectedConversation = _effectiveSelectedConversation(
+      ref.watch(selectedConversationProvider),
+      ref.watch(conversationListProvider).conversations,
+    );
     if (responsive.isMacDesktop) {
       return _MacConversationWorkspace(
         selectedConversation: selectedConversation,
@@ -72,4 +76,23 @@ class ConversationWorkspacePage extends ConsumerWidget {
             ),
     );
   }
+}
+
+ConversationSummary? _effectiveSelectedConversation(
+  ConversationSummary? selected,
+  List<ConversationSummary> conversations,
+) {
+  if (selected == null) {
+    return null;
+  }
+  final selectedThreadId = selected.threadId.trim();
+  if (selectedThreadId.isEmpty) {
+    return selected;
+  }
+  for (final conversation in conversations) {
+    if (conversation.threadId.trim() == selectedThreadId) {
+      return conversation;
+    }
+  }
+  return selected;
 }

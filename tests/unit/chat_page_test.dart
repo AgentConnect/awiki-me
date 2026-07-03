@@ -193,6 +193,105 @@ List<ChatMessage> _scrollMessages({
 }
 
 void main() {
+  testWidgets('ChatView migrates pending direct alias to peer-scoped thread', (
+    tester,
+  ) async {
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    const agentDid = 'did:agent:runtime:hermes';
+    const agentHandle = 'hermes.awiki.example';
+    final pendingAlias = ConversationSummary(
+      threadId: 'dm:pending:$agentHandle',
+      displayName: 'Hermes',
+      lastMessagePreview: '在吗？',
+      lastMessageAt: DateTime(2026, 7, 3, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentHandle,
+    );
+    final runtimeConversation = pendingAlias.copyWith(
+      threadId: 'dm:peer-scope:v1:hermes-runtime',
+      lastMessagePreview: '在的',
+      lastMessageAt: DateTime(2026, 7, 3, 12, 1),
+      unreadCount: 1,
+    );
+    final pendingMessage = ChatMessage(
+      localId: 'pending-only',
+      remoteId: 'pending-only',
+      threadId: pendingAlias.threadId,
+      senderDid: session.did,
+      receiverDid: agentDid,
+      content: 'partial pending',
+      createdAt: pendingAlias.lastMessageAt,
+      isMine: true,
+      sendState: MessageSendState.sent,
+    );
+    final runtimeMessage = ChatMessage(
+      localId: 'runtime-reply',
+      remoteId: 'runtime-reply',
+      threadId: runtimeConversation.threadId,
+      senderDid: agentDid,
+      receiverDid: session.did,
+      content: '完整回复',
+      createdAt: runtimeConversation.lastMessageAt,
+      isMine: false,
+      sendState: MessageSendState.sent,
+    );
+    late _StaticConversationListController listController;
+    late _StaticChatThreadsController chatController;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: pendingAlias, embedded: false),
+        ),
+        gateway: FakeAwikiGateway(),
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith((ref) {
+            listController = _StaticConversationListController(
+              ref,
+              <ConversationSummary>[pendingAlias],
+            );
+            return listController;
+          }),
+          chatThreadsProvider.overrideWith((ref) {
+            chatController = _StaticChatThreadsController(
+              ref,
+              <String, List<ChatMessage>>{
+                pendingAlias.threadId: <ChatMessage>[pendingMessage],
+                runtimeConversation.threadId: <ChatMessage>[runtimeMessage],
+              },
+            );
+            return chatController;
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('partial pending'), findsOneWidget);
+    expect(find.text('完整回复'), findsNothing);
+
+    listController.replaceConversations(<ConversationSummary>[
+      runtimeConversation,
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('partial pending'), findsNothing);
+    expect(find.text('完整回复'), findsOneWidget);
+    expect(chatController.hiddenThreadIds, contains(pendingAlias.threadId));
+    expect(
+      chatController.visibleThreadIds,
+      contains(runtimeConversation.threadId),
+    );
+  });
+
   testWidgets('macOS 聊天输入条保持发送能力', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
@@ -1230,6 +1329,81 @@ void main() {
     ]);
   });
 
+  testWidgets('ChatView switches when thread changes even if target is same', (
+    tester,
+  ) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversationA = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:controller',
+      displayName: 'Agent Controller',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 7, 3, 7, 9),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:agent',
+      targetPeer: 'agent.awiki.ai',
+    );
+    final conversationB = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:runtime',
+      displayName: 'Agent Runtime',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 7, 3, 7, 10),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:agent',
+      targetPeer: 'agent.awiki.ai',
+    );
+    late _StaticChatThreadsController controller;
+    late StateSetter setHostState;
+    var currentConversation = conversationA;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            setHostState = setState;
+            return CupertinoPageScaffold(
+              child: ChatView(
+                key: const ValueKey<String>('chat-view-same-target-switch'),
+                conversation: currentConversation,
+                embedded: false,
+              ),
+            );
+          },
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          chatThreadsProvider.overrideWith((ref) {
+            controller = _StaticChatThreadsController(
+              ref,
+              const <String, List<ChatMessage>>{},
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    setHostState(() {
+      currentConversation = conversationB;
+    });
+    await tester.pumpAndSettle();
+
+    expect(controller.visibleThreadIds, <String>[
+      conversationA.threadId,
+      conversationB.threadId,
+    ]);
+    expect(controller.hiddenThreadIds, <String>[conversationA.threadId]);
+  });
+
   testWidgets('ChatView 保持打开时的显示线程不被最近会话归一化切换', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
@@ -1835,11 +2009,15 @@ void main() {
     );
     container
         .read(chatComposerDraftsProvider.notifier)
-        .setText(conversation, 'draft for alice');
+        .setText(conversation, '**draft** [for alice](https://example.com)');
     await tester.pump();
 
     expect(find.text('草稿'), findsOneWidget);
     expect(find.text('draft for alice'), findsOneWidget);
+    expect(
+      find.text('**draft** [for alice](https://example.com)'),
+      findsNothing,
+    );
     expect(find.text('alice old preview'), findsNothing);
 
     container
@@ -1850,6 +2028,152 @@ void main() {
     expect(find.text('草稿'), findsNothing);
     expect(find.text('draft for alice'), findsNothing);
     expect(find.text('alice old preview'), findsOneWidget);
+  });
+
+  testWidgets('最近会话按未读、草稿、消息时间稳定排序', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final base = DateTime(2026, 4, 5, 12);
+    final unread = ConversationSummary(
+      threadId: 'dm:sort-unread',
+      displayName: 'Unread',
+      lastMessagePreview: 'unread old preview',
+      lastMessageAt: base.subtract(const Duration(minutes: 20)),
+      unreadCount: 1,
+      isGroup: false,
+      targetDid: 'did:test:unread',
+    );
+    final draft = ConversationSummary(
+      threadId: 'dm:sort-draft',
+      displayName: 'Draft',
+      lastMessagePreview: 'draft old preview',
+      lastMessageAt: base.subtract(const Duration(minutes: 10)),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:draft',
+    );
+    final read = ConversationSummary(
+      threadId: 'dm:sort-read',
+      displayName: 'Read',
+      lastMessagePreview: 'read latest preview',
+      lastMessageAt: base,
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:read',
+    );
+    gateway.conversations = <ConversationSummary>[read, draft, unread];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(embedded: true, bottomInset: 0),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ConversationListPage)),
+    );
+    container
+        .read(chatComposerDraftsProvider.notifier)
+        .setText(draft, 'draft content');
+    await tester.pump();
+
+    expect(
+      tester.getTopLeft(find.text('Unread')).dy,
+      lessThan(tester.getTopLeft(find.text('Draft')).dy),
+    );
+    expect(
+      tester.getTopLeft(find.text('Draft')).dy,
+      lessThan(tester.getTopLeft(find.text('Read')).dy),
+    );
+
+    container.read(chatComposerDraftsProvider.notifier).clearDraft(draft);
+    await tester.pump();
+
+    expect(
+      tester.getTopLeft(find.text('Unread')).dy,
+      lessThan(tester.getTopLeft(find.text('Read')).dy),
+    );
+    expect(
+      tester.getTopLeft(find.text('Read')).dy,
+      lessThan(tester.getTopLeft(find.text('Draft')).dy),
+    );
+  });
+
+  testWidgets('peer-scoped 最近会话草稿预览只显示在同一线程', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    const agentDid = 'did:wba:awiki.ai:agent:runtime:test';
+    const agentHandle = 'test-agent.awiki.ai';
+    final controllerConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:controller',
+      displayName: 'Controller',
+      lastMessagePreview: 'controller old preview',
+      lastMessageAt: DateTime(2026, 7, 3, 7, 9),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentHandle,
+    );
+    final runtimeConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:runtime',
+      displayName: 'Runtime Agent',
+      lastMessagePreview: 'runtime old preview',
+      lastMessageAt: DateTime(2026, 7, 3, 7, 10),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: agentHandle,
+    );
+    gateway.conversations = <ConversationSummary>[
+      runtimeConversation,
+      controllerConversation,
+    ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(embedded: true, bottomInset: 0),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ConversationListPage)),
+    );
+    container
+        .read(chatComposerDraftsProvider.notifier)
+        .setText(runtimeConversation, 'runtime draft');
+    await tester.pump();
+
+    expect(find.text('runtime draft'), findsOneWidget);
+    expect(find.text('controller old preview'), findsOneWidget);
+    expect(find.text('runtime old preview'), findsNothing);
   });
 
   testWidgets('最近会话预览按未读、@我、草稿、文本的顺序展示', (tester) async {
@@ -2757,7 +3081,7 @@ void main() {
     expect(find.text('智能体正在处理...'), findsNothing);
   });
 
-  testWidgets('聊天窗口在会话列表刷新到新消息时只清未读不补拉历史', (tester) async {
+  testWidgets('聊天窗口在会话列表刷新到新消息摘要时不清未读不补拉历史', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -2825,7 +3149,7 @@ void main() {
     expect(gateway.markReadCalls, 0);
     expect(
       container.read(conversationListProvider).conversations.single.unreadCount,
-      0,
+      1,
     );
   });
 

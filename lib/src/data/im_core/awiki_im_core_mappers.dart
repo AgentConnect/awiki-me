@@ -542,12 +542,8 @@ class AwikiImCoreMappers {
             membershipStatus: null,
           );
     if (chatMessage.isAgentControlPayload) {
-      final visibleConversation = conversation.lastMessagePreview.trim().isEmpty
-          ? null
-          : conversation;
       return RealtimeUpdate(
-        conversation: visibleConversation,
-        group: visibleConversation == null ? null : group,
+        group: null,
         agentControlPayload:
             AgentControlPayloads.decode(chatMessage.payloadJson) ??
             const <String, Object?>{},
@@ -906,10 +902,7 @@ bool _shouldIncludeConversationLastMessage({
   required String? payloadJson,
   required String preview,
 }) {
-  if (!AgentControlPayloads.isControl(payloadJson)) {
-    return true;
-  }
-  return preview.trim().isNotEmpty;
+  return !AgentControlPayloads.isControl(payloadJson);
 }
 
 MessageSendState _sendStateFromCore(
