@@ -91,7 +91,7 @@ void main() {
   );
 
   test(
-    'refresh merge keeps peer-scoped storage rows separate from legacy direct targets',
+    'refresh merge replaces legacy direct DID row with peer-scoped identity',
     () async {
       final baseTime = DateTime.utc(2026, 6, 27, 2);
       final local = <ConversationSummary>[
@@ -161,18 +161,49 @@ void main() {
           .conversations;
       expect(
         conversations.where((item) => item.targetDid == 'did:agent'),
-        hasLength(2),
+        hasLength(1),
       );
-      final refreshedAgent = conversations.singleWhere(
+      final agent = conversations.singleWhere(
         (item) => item.threadId == 'dm:peer-scope:v1:hermes',
       );
-      final localAgent = conversations.singleWhere(
-        (item) => item.threadId == 'dm:did:human:did:agent',
-      );
-      expect(refreshedAgent.lastMessagePreview, '新回复');
-      expect(localAgent.lastMessagePreview, '旧回复');
-      expect(conversations.length, local.length + 1);
+      expect(agent.lastMessagePreview, '新回复');
+      expect(conversations.length, local.length);
       expect(service.listCalls, 1);
+    },
+  );
+
+  test(
+    'public upsert does not flash conversations rejected by normalization',
+    () async {
+      final notifications = FakeNotificationFacade();
+      final rejected =
+          _conversation(
+            threadId: 'dm:daemon-control',
+            displayName: 'Daemon',
+            targetDid: 'did:agent:daemon',
+          ).copyWith(
+            lastMessagePayloadJson:
+                '{"schema":"awiki.agent.status.v1","status_scope":"daemon"}',
+          );
+      final service = _NormalizingConversationService(
+        normalize: (conversation) async =>
+            conversation.threadId == rejected.threadId ? null : conversation,
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: notifications,
+        ownerDid: 'did:human',
+      );
+      addTearDown(container.dispose);
+
+      container
+          .read(conversationListProvider.notifier)
+          .upsertConversation(rejected);
+
+      expect(container.read(conversationListProvider).conversations, isEmpty);
+      await pumpEventQueue();
+      expect(container.read(conversationListProvider).conversations, isEmpty);
+      expect(notifications.lastBadgeCount, 0);
     },
   );
 
@@ -1421,87 +1452,83 @@ void main() {
     },
   );
 
-  test(
-    'realtime peer-scoped message does not merge into legacy direct target',
-    () {
-      final notifications = FakeNotificationFacade();
-      final container = _conversationContainer(
-        service: _StaticConversationService(
-          conversations: const <ConversationSummary>[],
-        ),
-        notifications: notifications,
-        ownerDid: 'did:alice',
-      );
-      addTearDown(container.dispose);
-      final notifier = container.read(conversationListProvider.notifier);
-      final legacy = _conversation(
-        threadId: 'dm:did:alice:did:agent',
-        displayName: 'Agent legacy',
+  test('realtime peer-scoped message replaces legacy direct target', () {
+    final notifications = FakeNotificationFacade();
+    final container = _conversationContainer(
+      service: _StaticConversationService(
+        conversations: const <ConversationSummary>[],
+      ),
+      notifications: notifications,
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(conversationListProvider.notifier);
+    final legacy = _conversation(
+      threadId: 'dm:did:alice:did:agent',
+      displayName: 'Agent legacy',
+      targetDid: 'did:agent',
+      targetPeer: 'did:agent',
+    );
+    notifier.upsertConversation(legacy);
+
+    notifier.upsertRealtimeMessageBestEffort(
+      _conversation(
+        threadId: 'direct:did:agent',
+        displayName: 'Agent',
+        unreadCount: 1,
         targetDid: 'did:agent',
-        targetPeer: 'did:agent',
-      );
-      notifier.upsertConversation(legacy);
+        targetPeer: 'agent.awiki.example',
+        lastMessageAt: DateTime.utc(2026, 6, 27, 2, 2),
+      ).copyWith(lastMessagePreview: 'runtime reply'),
+      message: ChatMessage(
+        localId: 'runtime-1',
+        remoteId: 'runtime-1',
+        threadId: 'dm:peer-scope:v1:agent',
+        senderDid: 'did:agent',
+        senderName: 'Agent',
+        receiverDid: 'did:alice',
+        content: 'runtime reply',
+        createdAt: DateTime.utc(2026, 6, 27, 2, 2),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      ),
+    );
+    expect(
+      container.read(conversationListProvider).conversations.single.threadId,
+      'dm:did:alice:did:agent',
+    );
 
-      notifier.upsertRealtimeMessageBestEffort(
-        _conversation(
-          threadId: 'direct:did:agent',
-          displayName: 'Agent',
-          unreadCount: 1,
-          targetDid: 'did:agent',
-          targetPeer: 'agent.awiki.example',
-          lastMessageAt: DateTime.utc(2026, 6, 27, 2, 2),
-        ).copyWith(lastMessagePreview: 'runtime reply'),
-        message: ChatMessage(
-          localId: 'runtime-1',
-          remoteId: 'runtime-1',
-          threadId: 'dm:peer-scope:v1:agent',
-          senderDid: 'did:agent',
-          senderName: 'Agent',
-          receiverDid: 'did:alice',
-          content: 'runtime reply',
-          createdAt: DateTime.utc(2026, 6, 27, 2, 2),
-          isMine: false,
-          sendState: MessageSendState.sent,
-        ),
-      );
-      expect(
-        container.read(conversationListProvider).conversations.single.threadId,
-        'dm:did:alice:did:agent',
-      );
+    notifier.upsertRealtimeMessageBestEffort(
+      _conversation(
+        threadId: 'dm:peer-scope:v1:agent',
+        displayName: 'Agent',
+        unreadCount: 1,
+        targetDid: 'did:agent',
+        targetPeer: 'agent.awiki.example',
+        lastMessageAt: DateTime.utc(2026, 6, 27, 2, 2),
+      ).copyWith(lastMessagePreview: 'runtime reply'),
+      message: ChatMessage(
+        localId: 'runtime-1',
+        remoteId: 'runtime-1',
+        threadId: 'dm:peer-scope:v1:agent',
+        senderDid: 'did:agent',
+        senderName: 'Agent',
+        receiverDid: 'did:alice',
+        content: 'runtime reply',
+        createdAt: DateTime.utc(2026, 6, 27, 2, 2),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      ),
+    );
 
-      notifier.upsertRealtimeMessageBestEffort(
-        _conversation(
-          threadId: 'dm:peer-scope:v1:agent',
-          displayName: 'Agent',
-          unreadCount: 1,
-          targetDid: 'did:agent',
-          targetPeer: 'agent.awiki.example',
-          lastMessageAt: DateTime.utc(2026, 6, 27, 2, 2),
-        ).copyWith(lastMessagePreview: 'runtime reply'),
-        message: ChatMessage(
-          localId: 'runtime-1',
-          remoteId: 'runtime-1',
-          threadId: 'dm:peer-scope:v1:agent',
-          senderDid: 'did:agent',
-          senderName: 'Agent',
-          receiverDid: 'did:alice',
-          content: 'runtime reply',
-          createdAt: DateTime.utc(2026, 6, 27, 2, 2),
-          isMine: false,
-          sendState: MessageSendState.sent,
-        ),
-      );
-
-      final rows = container.read(conversationListProvider).conversations;
-      expect(rows.map((item) => item.threadId), <String>[
-        'dm:peer-scope:v1:agent',
-        'dm:did:alice:did:agent',
-      ]);
-      expect(rows.first.lastMessagePreview, 'runtime reply');
-      expect(rows.first.unreadCount, 1);
-      expect(notifications.lastBadgeCount, 1);
-    },
-  );
+    final rows = container.read(conversationListProvider).conversations;
+    expect(rows.map((item) => item.threadId), <String>[
+      'dm:peer-scope:v1:agent',
+    ]);
+    expect(rows.single.lastMessagePreview, 'runtime reply');
+    expect(rows.single.unreadCount, 1);
+    expect(notifications.lastBadgeCount, 1);
+  });
 
   test('conversation upserts use stable unread-first ordering', () async {
     final notifications = FakeNotificationFacade();
@@ -1921,6 +1948,22 @@ class _StaticConversationService implements ConversationService {
     required ConversationSummary conversation,
     DateTime? updatedAt,
   }) async {}
+}
+
+class _NormalizingConversationService extends _StaticConversationService {
+  _NormalizingConversationService({required this.normalize})
+    : super(conversations: const <ConversationSummary>[]);
+
+  final Future<ConversationSummary?> Function(ConversationSummary conversation)
+  normalize;
+
+  @override
+  Future<ConversationSummary?> normalizeConversationForRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+  }) {
+    return normalize(conversation);
+  }
 }
 
 class _CompleterConversationService extends _StaticConversationService {

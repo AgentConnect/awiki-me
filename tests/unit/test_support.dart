@@ -575,6 +575,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   String? lastSentAttachmentIdempotencyKey;
   String? nextSentMessageId;
   List<String> nextSentMessageIds = <String>[];
+  String? nextSentThreadId;
   int sendTextMessageCalls = 0;
   Completer<void>? sendTextMessageCompleter;
   int listLocalCredentialsCalls = 0;
@@ -1219,10 +1220,12 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     if (nextSentMessageIds.isEmpty) {
       nextSentMessageId = null;
     }
+    final sentThreadId = nextSentThreadId ?? threadId;
+    nextSentThreadId = null;
     return ChatMessage(
       localId: sentId,
       remoteId: sentId,
-      threadId: threadId,
+      threadId: sentThreadId,
       senderDid: loginResult?.did ?? 'did:test:sender',
       senderName: loginResult?.displayName ?? loginResult?.handle ?? 'tester',
       receiverDid: peerDid,
@@ -1261,10 +1264,12 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     final sentId =
         nextSentMessageId ?? 'sent-${DateTime.now().microsecondsSinceEpoch}';
     nextSentMessageId = null;
+    final sentThreadId = nextSentThreadId ?? threadId;
+    nextSentThreadId = null;
     return ChatMessage(
       localId: sentId,
       remoteId: sentId,
-      threadId: threadId,
+      threadId: sentThreadId,
       senderDid: loginResult?.did ?? 'did:test:sender',
       senderName: loginResult?.displayName ?? loginResult?.handle ?? 'tester',
       receiverDid: peerDid,

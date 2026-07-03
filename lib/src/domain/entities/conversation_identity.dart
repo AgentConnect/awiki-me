@@ -214,6 +214,36 @@ bool isPresentationOnlyDirectConversationAlias(
       threadId.startsWith('profile:');
 }
 
+bool isReplaceableLegacyDirectConversation(
+  ConversationSummary conversation, {
+  String? ownerDid,
+}) {
+  if (conversation.isGroup || isPeerScopedDirectConversation(conversation)) {
+    return false;
+  }
+  if (isPresentationOnlyDirectConversationAlias(conversation)) {
+    return true;
+  }
+  final threadId = conversation.threadId.trim();
+  final targetDid = _normalizedDid(conversation.targetDid);
+  if (targetDid == null || targetDid.isEmpty) {
+    return false;
+  }
+  if (threadId == 'dm:$targetDid') {
+    return true;
+  }
+  final owner = _normalizedDid(ownerDid);
+  if (owner == null || owner.isEmpty) {
+    return false;
+  }
+  if (threadId == 'dm:$owner:$targetDid' ||
+      threadId == 'dm:$targetDid:$owner') {
+    return true;
+  }
+  final participants = <String>[owner, targetDid]..sort();
+  return threadId == 'dm:${participants[0]}:${participants[1]}';
+}
+
 bool sameDirectPresentationTarget(
   ConversationSummary first,
   ConversationSummary second,

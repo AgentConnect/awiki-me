@@ -24,6 +24,7 @@ import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
 import '../agents/agents_provider.dart';
 import '../app_shell/providers/session_provider.dart';
+import '../app_shell/providers/selected_conversation_provider.dart';
 import '../conversation_list/conversation_provider.dart';
 
 const String _attachmentManifestContentType =
@@ -451,12 +452,14 @@ class _PendingReadAck {
   const _PendingReadAck({
     required this.conversation,
     required this.readToken,
+    this.watermark,
     this.reason = 'visible',
     this.forcePersistentAck = false,
   });
 
   final ConversationSummary conversation;
   final String readToken;
+  final AppThreadReadWatermark? watermark;
   final String reason;
   final bool forcePersistentAck;
 }
@@ -703,12 +706,6 @@ class ChatThreadsController
         conversation,
         displayThreadId: targetThreadId,
       ),
-    );
-    acknowledgeVisibleConversationRead(
-      conversation,
-      displayThreadId: targetThreadId,
-      reason: 'open',
-      requireVisible: false,
     );
   }
 
@@ -1650,25 +1647,12 @@ class ChatThreadsController
       _pendingReadAcksByThreadId[targetThreadId] = _PendingReadAck(
         conversation: conversation,
         readToken: readToken,
+        watermark: watermark,
         reason: reason,
         forcePersistentAck: forcePersistentAck,
       );
       return;
     }
-    final localClearWatch = Stopwatch()..start();
-    ref
-        .read(conversationListProvider.notifier)
-        .markConversationReadLocal(conversation);
-    localClearWatch.stop();
-    AwikiPerformanceLogger.log(
-      'chat.mark_read.local_clear',
-      elapsed: localClearWatch.elapsed,
-      fields: <String, Object?>{
-        ...AwikiPerformanceLogger.threadField(conversation.threadId),
-        'reason': reason,
-      },
-      level: AwikiPerformanceLogLevel.verbose,
-    );
     _markConversationReadBestEffort(
       conversation,
       readToken: readToken,
@@ -2007,7 +1991,7 @@ class ChatThreadsController
             _completedReadReceipts.add(readToken);
             ref
                 .read(conversationListProvider.notifier)
-                .markConversationReadLocal(conversation);
+                .markConversationReadLocal(conversation, watermark: watermark);
             _chatProviderTrace(
               'mark_read.remote_done',
               fields: <String, Object?>{
@@ -2082,7 +2066,7 @@ class ChatThreadsController
       return;
     }
     final current = thread(threadId);
-    final watermark = _readWatermarkForThread(threadId);
+    final watermark = pending.watermark ?? _readWatermarkForThread(threadId);
     final hasWatermark = watermark != null && !watermark.isEmpty;
     if (!_isExactConversationThread(pending.conversation, threadId)) {
       _chatProviderTrace(
@@ -2547,12 +2531,11 @@ class ChatThreadsController
       ..add(pending);
     _setMessages(targetThreadId, current);
     final pendingConversation = _withConversationPreview(conversation, pending);
-    ref
-        .read(conversationListProvider.notifier)
-        .restoreConversationBestEffort(pendingConversation);
-    ref
-        .read(conversationListProvider.notifier)
-        .upsertConversation(pendingConversation);
+    _upsertPendingConversationIfStable(
+      conversation: conversation,
+      pendingConversation: pendingConversation,
+      displayThreadId: targetThreadId,
+    );
     try {
       final messaging = ref.read(messagingServiceProvider);
       final sent = validMentionDrafts.isEmpty
@@ -2579,22 +2562,51 @@ class ChatThreadsController
       )) {
         throw StateError('Sent message belongs to a different conversation.');
       }
-      final sentInThread = _withThreadId(sent, targetThreadId);
+      final resolvedThreadId = _sentDisplayThreadId(
+        sent,
+        fallbackThreadId: targetThreadId,
+      );
+      final sentInThread = _withThreadId(sent, resolvedThreadId);
+      final resolvedConversation = _conversationForResolvedSentMessage(
+        conversation,
+        sentInThread,
+      );
+      ref
+          .read(conversationListProvider.notifier)
+          .upsertConversation(
+            _withConversationPreview(resolvedConversation, sentInThread),
+          );
+      _syncSelectedConversationForResolvedSend(
+        previous: conversation,
+        resolved: resolvedConversation,
+        displayThreadId: targetThreadId,
+      );
+      if (resolvedThreadId != targetThreadId) {
+        _moveThreadStateForResolvedSend(
+          fromThreadId: targetThreadId,
+          toThreadId: resolvedThreadId,
+          pendingLocalId: pending.localId,
+          sentMessage: sentInThread,
+        );
+      }
       final deliveredMessage = _replaceMessage(
-        targetThreadId,
+        resolvedThreadId,
         pending.localId,
         sentInThread,
       );
       _startAgentProcessingForDeliveredMessage(
-        conversation: conversation,
-        displayThreadId: targetThreadId,
+        conversation: resolvedConversation,
+        displayThreadId: resolvedThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
         mentions: validMentionDrafts,
         submittedLocalMessageId: pending.localId,
         deliveredMessage: deliveredMessage,
       );
       final sentConversation = _withConversationPreview(
-        conversation,
+        _conversationForResolvedSentMessage(
+          resolvedConversation,
+          deliveredMessage,
+        ),
         deliveredMessage,
       );
       ref
@@ -2680,12 +2692,11 @@ class ChatThreadsController
       ..add(pending);
     _setMessages(targetThreadId, current);
     final pendingConversation = _withConversationPreview(conversation, pending);
-    ref
-        .read(conversationListProvider.notifier)
-        .restoreConversationBestEffort(pendingConversation);
-    ref
-        .read(conversationListProvider.notifier)
-        .upsertConversation(pendingConversation);
+    _upsertPendingConversationIfStable(
+      conversation: conversation,
+      pendingConversation: pendingConversation,
+      displayThreadId: targetThreadId,
+    );
     try {
       final sent = await ref
           .read(messagingServiceProvider)
@@ -2708,25 +2719,54 @@ class ChatThreadsController
           'Sent attachment belongs to a different conversation.',
         );
       }
+      final resolvedThreadId = _sentDisplayThreadId(
+        sent,
+        fallbackThreadId: targetThreadId,
+      );
       final sentInThread = await _withCachedSentAttachment(
-        sent: _withThreadId(sent, targetThreadId),
+        sent: _withThreadId(sent, resolvedThreadId),
         originalAttachment: attachment,
       );
+      final resolvedConversation = _conversationForResolvedSentMessage(
+        conversation,
+        sentInThread,
+      );
+      ref
+          .read(conversationListProvider.notifier)
+          .upsertConversation(
+            _withConversationPreview(resolvedConversation, sentInThread),
+          );
+      _syncSelectedConversationForResolvedSend(
+        previous: conversation,
+        resolved: resolvedConversation,
+        displayThreadId: targetThreadId,
+      );
+      if (resolvedThreadId != targetThreadId) {
+        _moveThreadStateForResolvedSend(
+          fromThreadId: targetThreadId,
+          toThreadId: resolvedThreadId,
+          pendingLocalId: pending.localId,
+          sentMessage: sentInThread,
+        );
+      }
       final deliveredMessage = _replaceMessage(
-        targetThreadId,
+        resolvedThreadId,
         pending.localId,
         sentInThread,
       );
       _startAgentProcessingForDeliveredMessage(
-        conversation: conversation,
-        displayThreadId: targetThreadId,
+        conversation: resolvedConversation,
+        displayThreadId: resolvedThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
         mentions: validMentionDrafts,
         submittedLocalMessageId: pending.localId,
         deliveredMessage: deliveredMessage,
       );
       final sentConversation = _withConversationPreview(
-        conversation,
+        _conversationForResolvedSentMessage(
+          resolvedConversation,
+          deliveredMessage,
+        ),
         deliveredMessage,
       );
       ref
@@ -2806,15 +2846,45 @@ class ChatThreadsController
           'Retried message belongs to a different conversation.',
         );
       }
-      final retriedInThread = _withThreadId(retried, targetThreadId);
-      _replaceMessage(targetThreadId, message.localId, retriedInThread);
-      _startAgentProcessingForDeliveredMessage(
-        conversation: conversation,
+      final resolvedThreadId = _sentDisplayThreadId(
+        retried,
+        fallbackThreadId: targetThreadId,
+      );
+      final retriedInThread = _withThreadId(retried, resolvedThreadId);
+      final resolvedConversation = _conversationForResolvedSentMessage(
+        conversation,
+        retriedInThread,
+      );
+      ref
+          .read(conversationListProvider.notifier)
+          .upsertConversation(
+            _withConversationPreview(resolvedConversation, retriedInThread),
+          );
+      _syncSelectedConversationForResolvedSend(
+        previous: conversation,
+        resolved: resolvedConversation,
         displayThreadId: targetThreadId,
+      );
+      if (resolvedThreadId != targetThreadId) {
+        _moveThreadStateForResolvedSend(
+          fromThreadId: targetThreadId,
+          toThreadId: resolvedThreadId,
+          pendingLocalId: message.localId,
+          sentMessage: retriedInThread,
+        );
+      }
+      final deliveredMessage = _replaceMessage(
+        resolvedThreadId,
+        message.localId,
+        retriedInThread,
+      );
+      _startAgentProcessingForDeliveredMessage(
+        conversation: resolvedConversation,
+        displayThreadId: resolvedThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
         mentions: _messageMentionsToDrafts(retrying.mentions),
         submittedLocalMessageId: retrying.localId,
-        deliveredMessage: retriedInThread,
+        deliveredMessage: deliveredMessage,
       );
     } catch (_) {
       final failed = retrying.copyWith(sendState: MessageSendState.failed);
@@ -2870,8 +2940,12 @@ class ChatThreadsController
           'Retried attachment belongs to a different conversation.',
         );
       }
+      final resolvedThreadId = _sentDisplayThreadId(
+        retried,
+        fallbackThreadId: targetThreadId,
+      );
       final retriedInThread = await _withCachedSentAttachment(
-        sent: _withThreadId(retried, targetThreadId),
+        sent: _withThreadId(retried, resolvedThreadId),
         originalAttachment: AttachmentDraft(
           filename: attachment.filename,
           mimeType: attachment.mimeType,
@@ -2879,14 +2953,40 @@ class ChatThreadsController
           sizeBytes: attachment.sizeBytes,
         ),
       );
-      _replaceMessage(targetThreadId, message.localId, retriedInThread);
-      _startAgentProcessingForDeliveredMessage(
-        conversation: conversation,
+      final resolvedConversation = _conversationForResolvedSentMessage(
+        conversation,
+        retriedInThread,
+      );
+      ref
+          .read(conversationListProvider.notifier)
+          .upsertConversation(
+            _withConversationPreview(resolvedConversation, retriedInThread),
+          );
+      _syncSelectedConversationForResolvedSend(
+        previous: conversation,
+        resolved: resolvedConversation,
         displayThreadId: targetThreadId,
+      );
+      if (resolvedThreadId != targetThreadId) {
+        _moveThreadStateForResolvedSend(
+          fromThreadId: targetThreadId,
+          toThreadId: resolvedThreadId,
+          pendingLocalId: message.localId,
+          sentMessage: retriedInThread,
+        );
+      }
+      final deliveredMessage = _replaceMessage(
+        resolvedThreadId,
+        message.localId,
+        retriedInThread,
+      );
+      _startAgentProcessingForDeliveredMessage(
+        conversation: resolvedConversation,
+        displayThreadId: resolvedThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
         mentions: _messageMentionsToDrafts(retrying.mentions),
         submittedLocalMessageId: retrying.localId,
-        deliveredMessage: retriedInThread,
+        deliveredMessage: deliveredMessage,
       );
     } catch (_) {
       final failed = retrying.copyWith(sendState: MessageSendState.failed);
@@ -3941,6 +4041,216 @@ class ChatThreadsController
     ]);
     _setMessages(threadId, current);
     return resolved;
+  }
+
+  String _sentDisplayThreadId(
+    ChatMessage sent, {
+    required String fallbackThreadId,
+  }) {
+    final sentThreadId = sent.threadId.trim();
+    if (sentThreadId.isEmpty) {
+      return fallbackThreadId;
+    }
+    if (isPeerScopedDirectThreadId(sentThreadId)) {
+      return sentThreadId;
+    }
+    if (sent.groupId?.trim().isNotEmpty == true &&
+        sentThreadId.startsWith('group:')) {
+      return sentThreadId;
+    }
+    if (fallbackThreadId.trim().isEmpty) {
+      return sentThreadId;
+    }
+    return fallbackThreadId;
+  }
+
+  ConversationSummary _conversationForResolvedSentMessage(
+    ConversationSummary conversation,
+    ChatMessage message,
+  ) {
+    final threadId = message.threadId.trim();
+    if (threadId.isEmpty || threadId == conversation.threadId) {
+      return conversation;
+    }
+    if (conversation.isGroup) {
+      final groupId = message.groupId?.trim() ?? conversation.groupId?.trim();
+      if (groupId != null && groupId.isNotEmpty) {
+        return conversation.copyWith(threadId: threadId, groupId: groupId);
+      }
+      return conversation;
+    }
+    if (isPeerScopedDirectThreadId(threadId)) {
+      return conversation.copyWith(threadId: threadId);
+    }
+    return conversation;
+  }
+
+  void _upsertPendingConversationIfStable({
+    required ConversationSummary conversation,
+    required ConversationSummary pendingConversation,
+    required String displayThreadId,
+  }) {
+    if (!_canUpsertPendingConversationImmediately(
+      conversation,
+      displayThreadId: displayThreadId,
+    )) {
+      _chatProviderTrace(
+        'send.pending_recent_deferred',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(displayThreadId),
+          'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
+            conversation.threadId,
+          ),
+        },
+      );
+      return;
+    }
+    final notifier = ref.read(conversationListProvider.notifier);
+    notifier.restoreConversationBestEffort(pendingConversation);
+    notifier.upsertConversation(pendingConversation);
+  }
+
+  bool _canUpsertPendingConversationImmediately(
+    ConversationSummary conversation, {
+    required String displayThreadId,
+  }) {
+    final displayThread = displayThreadId.trim();
+    if (displayThread.isEmpty) {
+      return false;
+    }
+    if (displayThread != conversation.threadId.trim()) {
+      return false;
+    }
+    if (conversation.isGroup || isPeerScopedDirectConversation(conversation)) {
+      return true;
+    }
+    return !isPresentationOnlyDirectConversationAlias(conversation);
+  }
+
+  void _syncSelectedConversationForResolvedSend({
+    required ConversationSummary previous,
+    required ConversationSummary resolved,
+    required String displayThreadId,
+  }) {
+    final displayThread = displayThreadId.trim();
+    if (sameConversationThread(previous, resolved) &&
+        (displayThread.isEmpty || displayThread == resolved.threadId)) {
+      return;
+    }
+    final selected = ref.read(selectedConversationProvider);
+    if (selected == null) {
+      return;
+    }
+    final shouldReplace =
+        sameConversationThread(selected, previous) ||
+        (displayThread.isNotEmpty && selected.threadId == displayThread) ||
+        (!selected.isGroup &&
+            !resolved.isGroup &&
+            sameDirectPresentationTarget(selected, previous) &&
+            sameDirectPresentationTarget(previous, resolved));
+    if (!shouldReplace) {
+      return;
+    }
+    ref
+        .read(selectedConversationProvider.notifier)
+        .selectConversation(resolved);
+  }
+
+  void _moveThreadStateForResolvedSend({
+    required String fromThreadId,
+    required String toThreadId,
+    required String pendingLocalId,
+    required ChatMessage sentMessage,
+  }) {
+    if (fromThreadId == toThreadId) {
+      return;
+    }
+    final from = state[fromThreadId];
+    if (from == null) {
+      return;
+    }
+    final to = state[toThreadId] ?? ChatThreadState(threadId: toThreadId);
+    final movedMessages = <ChatMessage>[
+      ...to.messages,
+      for (final message in from.messages)
+        if (message.localId != pendingLocalId)
+          _withThreadId(message, toThreadId),
+      sentMessage,
+    ];
+    final merged = _mergeMessageList(movedMessages, trustMessageMatch: true);
+    _touchThreadCache(toThreadId, merged);
+    _recordMessageRoutes(toThreadId, merged);
+    final next = <String, ChatThreadState>{
+      ...state,
+      toThreadId: to.copyWith(
+        messages: _sortMessages(merged),
+        isLoading: from.isLoading || to.isLoading,
+        agentPendingTurns: _mergeAgentPendingTurns(
+          to.agentPendingTurns,
+          from.agentPendingTurns,
+        ),
+        isHydratingLocalHistory:
+            from.isHydratingLocalHistory || to.isHydratingLocalHistory,
+        messageAgentSyncs: _mergeMessageAgentSyncs(
+          to.messageAgentSyncs,
+          from.messageAgentSyncs,
+        ),
+        appActionRecords: <String, AppActionRecord>{
+          ...from.appActionRecords,
+          ...to.appActionRecords,
+        },
+      ),
+    }..remove(fromThreadId);
+    _removeThreadCacheMetadata(fromThreadId);
+    state = _enforceGlobalCachePolicy(next);
+  }
+
+  List<ChatMessage> _mergeMessageList(
+    List<ChatMessage> messages, {
+    bool trustMessageMatch = false,
+  }) {
+    final merged = <ChatMessage>[];
+    final indexes = _MessageMergeIndexes(merged);
+    for (final message in messages.where(
+      (message) => message.hasRenderableContent,
+    )) {
+      final index = indexes.matchingIndex(merged, message, _isMatchingPending);
+      if (index >= 0) {
+        merged[index] = _mergeMessageSemantics(
+          message,
+          merged[index],
+          trustMessageMatch: trustMessageMatch,
+        );
+        indexes.replace(index, merged[index]);
+      } else {
+        indexes.add(merged.length, message);
+        merged.add(message);
+      }
+    }
+    return merged;
+  }
+
+  List<AgentPendingTurn> _mergeAgentPendingTurns(
+    List<AgentPendingTurn> first,
+    List<AgentPendingTurn> second,
+  ) {
+    final byKey = <String, AgentPendingTurn>{};
+    for (final turn in <AgentPendingTurn>[...first, ...second]) {
+      byKey['${turn.agentDid}:${turn.localMessageId}:${turn.remoteMessageId ?? ''}:${turn.mentionId ?? ''}'] =
+          turn;
+    }
+    return byKey.values.toList(growable: false);
+  }
+
+  List<MessageAgentSyncRecord> _mergeMessageAgentSyncs(
+    List<MessageAgentSyncRecord> first,
+    List<MessageAgentSyncRecord> second,
+  ) {
+    final byKey = <String, MessageAgentSyncRecord>{};
+    for (final record in <MessageAgentSyncRecord>[...second, ...first]) {
+      byKey[record.identityKey] = record;
+    }
+    return byKey.values.toList(growable: false);
   }
 
   ChatMessage _mergeMessageSemantics(
@@ -5716,7 +6026,8 @@ class ChatThreadsController
     String messageThreadId,
     ConversationSummary conversation,
   ) {
-    if (messageThreadId == conversation.threadId) {
+    final conversationThreadId = conversation.threadId.trim();
+    if (messageThreadId == conversationThreadId) {
       return true;
     }
     if (conversation.isGroup) {

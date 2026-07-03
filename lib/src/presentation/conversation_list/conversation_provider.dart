@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
+import '../../application/agent/agent_control_projection.dart';
 import '../../application/conversation_service.dart';
+import '../../application/models/app_thread_read_watermark.dart';
 import '../../application/models/conversation_patch.dart';
 import '../../application/thread_id_utils.dart';
 import '../../core/group_display_name.dart';
@@ -492,6 +494,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         _mergeConversationRefresh(
           refreshed: patch.items,
           local: currentConversations,
+          ownerDid: patch.ownerDid,
           keepLocalOnly: false,
         ),
       ),
@@ -721,6 +724,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           _mergeConversationRefresh(
             refreshed: refreshed,
             local: currentConversations,
+            ownerDid: _currentOwnerDid,
             keepLocalOnly: keepLocalOnly,
           ),
         ),
@@ -774,17 +778,27 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     if (_isLocallyHidden(conversation)) {
       return;
     }
-    _upsertConversation(
-      conversation,
-      preferLocalTitle: true,
-      source: 'upsert_public',
+    if (_canUpsertConversationImmediately(conversation)) {
+      _upsertConversation(
+        conversation,
+        preferLocalTitle: true,
+        source: 'upsert_public',
+      );
+    }
+    unawaited(
+      _normalizeAndUpsertConversation(
+        conversation,
+        preferLocalTitle: true,
+        source: 'upsert_public_normalized',
+      ).catchError((_) {}),
     );
-    unawaited(_normalizeAndUpsertConversation(conversation).catchError((_) {}));
   }
 
   Future<void> _normalizeAndUpsertConversation(
-    ConversationSummary conversation,
-  ) async {
+    ConversationSummary conversation, {
+    bool preferLocalTitle = false,
+    String source = 'upsert_normalized',
+  }) async {
     final normalized = await _normalizeConversationForRecents(conversation);
     if (normalized == null) {
       _removeConversationLocally(conversation);
@@ -793,7 +807,11 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     if (_isLocallyHidden(normalized)) {
       return;
     }
-    _upsertConversation(normalized, source: 'upsert_normalized');
+    _upsertConversation(
+      normalized,
+      preferLocalTitle: preferLocalTitle,
+      source: source,
+    );
   }
 
   void upsertConversationBestEffort(ConversationSummary conversation) {
@@ -802,6 +820,18 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     } catch (_) {
       // Background realtime/navigation paths should not fail foreground UI.
     }
+  }
+
+  bool _canUpsertConversationImmediately(ConversationSummary conversation) {
+    final session = ref.read(sessionProvider).session;
+    return shouldShowConversationForChatList(
+      conversation,
+      ownerDid: session?.did ?? '',
+      daemonAgentDids: ref
+          .read(agentsProvider)
+          .daemonAgents
+          .map((agent) => agent.agentDid),
+    );
   }
 
   void upsertRealtimeMessageBestEffort(
@@ -844,6 +874,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final existing = _matchingConversationForUpsert(
       state.conversations,
       conversation,
+      ownerDid: _currentOwnerDid,
     );
     final titledConversation = _mergeConversationTitle(
       refreshed: conversation,
@@ -863,12 +894,14 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           local: existing,
         ),
         local: existing,
+        ownerDid: _currentOwnerDid,
       ),
     );
     final merged = _replaceConversationInPresentationList(
       current: state.conversations,
       incoming: mergedConversation,
       matchedLocal: existing,
+      ownerDid: _currentOwnerDid,
     );
     final beforeUnread = state.unreadCount;
     final beforeItems = state.conversations.length;
@@ -921,6 +954,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final existing = _matchingConversationForUpsert(
       state.conversations,
       conversation,
+      ownerDid: _currentOwnerDid,
     );
     final titledConversation = _mergeConversationTitle(
       refreshed: conversation,
@@ -940,12 +974,14 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           local: existing,
         ),
         local: existing,
+        ownerDid: _currentOwnerDid,
       ),
     );
     final merged = _replaceConversationInPresentationList(
       current: state.conversations,
       incoming: mergedConversation,
       matchedLocal: existing,
+      ownerDid: _currentOwnerDid,
     );
     final beforeUnread = state.unreadCount;
     final beforeItems = state.conversations.length;
@@ -1124,13 +1160,24 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     );
   }
 
-  void markConversationReadLocal(ConversationSummary conversation) {
+  void markConversationReadLocal(
+    ConversationSummary conversation, {
+    AppThreadReadWatermark? watermark,
+  }) {
     final currentConversations = state.conversations;
     final beforeUnread = state.unreadCount;
     var marked = false;
     final next = currentConversations.map((item) {
       if ((item.unreadCount == 0 && item.unreadMentionCount == 0) ||
           !sameConversationThread(item, conversation)) {
+        return item;
+      }
+      if (watermark != null &&
+          !_conversationCoveredByReadWatermark(
+            item,
+            watermark,
+            acknowledgedConversation: conversation,
+          )) {
         return item;
       }
       marked = true;
@@ -1168,6 +1215,66 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         source: 'mark_conversation_read_local',
       ),
     );
+  }
+
+  bool _conversationCoveredByReadWatermark(
+    ConversationSummary conversation,
+    AppThreadReadWatermark watermark, {
+    required ConversationSummary acknowledgedConversation,
+  }) {
+    if (conversation.lastMessageAt.isAfter(
+      acknowledgedConversation.lastMessageAt,
+    )) {
+      return false;
+    }
+    if (conversation.lastMessageAt.isAtSameMomentAs(
+          acknowledgedConversation.lastMessageAt,
+        ) &&
+        conversation.lastMessagePreview !=
+            acknowledgedConversation.lastMessagePreview) {
+      return false;
+    }
+    final last = conversation.lastMessageSnapshot;
+    final watermarkSeq = _parseReadWatermarkSeq(watermark.lastReadThreadSeq);
+    final lastSeq = last?.serverSequence;
+    if (watermarkSeq != null && lastSeq != null) {
+      return lastSeq <= watermarkSeq;
+    }
+    final watermarkMessageId = watermark.lastReadMessageId?.trim();
+    if (watermarkMessageId != null &&
+        watermarkMessageId.isNotEmpty &&
+        last != null &&
+        _messageMatchesWatermark(last, watermarkMessageId)) {
+      return true;
+    }
+    final readAt = watermark.readAt;
+    if (watermarkSeq == null &&
+        (watermarkMessageId == null || watermarkMessageId.isEmpty) &&
+        readAt != null) {
+      return !conversation.lastMessageAt.toUtc().isAfter(readAt.toUtc());
+    }
+    return !conversation.lastMessageAt.isAfter(
+      acknowledgedConversation.lastMessageAt,
+    );
+  }
+
+  int? _parseReadWatermarkSeq(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return int.tryParse(trimmed);
+  }
+
+  bool _messageMatchesWatermark(
+    ChatMessage message,
+    String watermarkMessageId,
+  ) {
+    if (message.localId == watermarkMessageId) {
+      return true;
+    }
+    final remoteId = message.remoteId?.trim();
+    return remoteId != null && remoteId == watermarkMessageId;
   }
 
   Future<void> clear() async {
@@ -1280,9 +1387,13 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   }
 
   void _removeConversationLocally(ConversationSummary conversation) {
-    final next = state.conversations
+    final current = state.conversations;
+    final next = current
         .where((item) => !sameConversationThread(item, conversation))
         .toList(growable: false);
+    if (next.length == current.length) {
+      return;
+    }
     final beforeUnread = state.unreadCount;
     state = state.copyWith(conversations: next);
     _trace(
@@ -1348,7 +1459,11 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           );
       return;
     }
-    if (_shouldCollapsePresentationAlias(incoming, selected)) {
+    if (_shouldCollapsePresentationAlias(
+      incoming,
+      selected,
+      ownerDid: _currentOwnerDid,
+    )) {
       ref
           .read(selectedConversationProvider.notifier)
           .selectConversation(
@@ -1356,6 +1471,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           );
     }
   }
+
+  String? get _currentOwnerDid => ref.read(sessionProvider).session?.did;
 
   Future<void> _updateBadgeCountBestEffort(
     int count, {
@@ -1590,9 +1707,10 @@ List<String> _hiddenLookupKeysFor(ConversationSummary conversation) {
 List<ConversationSummary> _mergeConversationRefresh({
   required List<ConversationSummary> refreshed,
   required List<ConversationSummary> local,
+  required String? ownerDid,
   bool keepLocalOnly = true,
 }) {
-  final localIndex = _ConversationMergeIndex(local);
+  final localIndex = _ConversationMergeIndex(local, ownerDid: ownerDid);
   final consumedLocalThreadIds = <String>{};
   final consumedLocalPresentationAliases = <String>{};
   final mergedRefreshed = refreshed.map((conversation) {
@@ -1611,6 +1729,7 @@ List<ConversationSummary> _mergeConversationRefresh({
         incoming: conversation,
         item: localConversation,
         current: local,
+        ownerDid: ownerDid,
       )) {
         consumedLocalPresentationAliases.add(localConversation.threadId);
       }
@@ -1631,6 +1750,7 @@ List<ConversationSummary> _mergeConversationRefresh({
         local: matchedLocal,
       ),
       local: matchedLocal,
+      ownerDid: ownerDid,
     );
   }).toList();
   final refreshedThreadIds = <String>{
@@ -1660,6 +1780,7 @@ List<ConversationSummary> _replaceConversationInPresentationList({
   required List<ConversationSummary> current,
   required ConversationSummary incoming,
   required ConversationSummary? matchedLocal,
+  required String? ownerDid,
 }) {
   final next = <ConversationSummary>[];
   var inserted = false;
@@ -1670,6 +1791,7 @@ List<ConversationSummary> _replaceConversationInPresentationList({
           incoming: incoming,
           item: item,
           current: current,
+          ownerDid: ownerDid,
         )) {
       if (!inserted) {
         next.add(incoming);
@@ -1686,7 +1808,10 @@ List<ConversationSummary> _replaceConversationInPresentationList({
 }
 
 class _ConversationMergeIndex {
-  _ConversationMergeIndex(List<ConversationSummary> conversations) {
+  _ConversationMergeIndex(
+    List<ConversationSummary> conversations, {
+    required this.ownerDid,
+  }) {
     for (final conversation in conversations) {
       final threadId = _nonEmptyKey(conversation.threadId);
       if (threadId != null) {
@@ -1712,6 +1837,7 @@ class _ConversationMergeIndex {
       <String, ConversationSummary>{};
   final Map<String, int> _directTargetPeerScopedCounts = <String, int>{};
   final Set<String> _ambiguousDirectTargetKeys = <String>{};
+  final String? ownerDid;
 
   ConversationSummary? match(
     ConversationSummary incoming, {
@@ -1730,6 +1856,7 @@ class _ConversationMergeIndex {
           _byVisibilityKey[_nonEmptyKey(key)],
           incoming,
           consumedThreadIds,
+          ownerDid,
         );
         if (candidate != null) {
           return candidate;
@@ -1744,6 +1871,7 @@ class _ConversationMergeIndex {
         _directTargetCandidate(key),
         incoming,
         consumedThreadIds,
+        ownerDid,
       );
       if (candidate != null) {
         return candidate;
@@ -1800,9 +1928,11 @@ class _ConversationMergeIndex {
     ConversationSummary? candidate,
     ConversationSummary incoming,
     Set<String> consumedThreadIds,
+    String? ownerDid,
   ) {
     candidate = _candidateIfAvailable(candidate, consumedThreadIds);
-    if (candidate == null || !_canAliasMatch(candidate, incoming)) {
+    if (candidate == null ||
+        !_canAliasMatch(candidate, incoming, ownerDid: ownerDid)) {
       return null;
     }
     return candidate;
@@ -1810,8 +1940,9 @@ class _ConversationMergeIndex {
 
   static bool _canAliasMatch(
     ConversationSummary candidate,
-    ConversationSummary incoming,
-  ) {
+    ConversationSummary incoming, {
+    required String? ownerDid,
+  }) {
     if (candidate.threadId.trim() == incoming.threadId.trim()) {
       return true;
     }
@@ -1821,7 +1952,11 @@ class _ConversationMergeIndex {
     }
     if (_isPeerScopedDirectThread(candidate) ||
         _isPeerScopedDirectThread(incoming)) {
-      return _shouldCollapsePresentationAlias(incoming, candidate);
+      return _shouldCollapsePresentationAlias(
+        incoming,
+        candidate,
+        ownerDid: ownerDid,
+      );
     }
     return true;
   }
@@ -1857,8 +1992,9 @@ class _ConversationMergeIndex {
 
 bool _shouldCollapsePresentationAlias(
   ConversationSummary incoming,
-  ConversationSummary candidate,
-) {
+  ConversationSummary candidate, {
+  String? ownerDid,
+}) {
   if (incoming.isGroup || candidate.isGroup) {
     return false;
   }
@@ -1870,11 +2006,17 @@ bool _shouldCollapsePresentationAlias(
     return false;
   }
   if (isPeerScopedDirectConversation(incoming)) {
-    return isPresentationOnlyDirectConversationAlias(candidate) &&
+    return isReplaceableLegacyDirectConversation(
+          candidate,
+          ownerDid: ownerDid,
+        ) &&
         sameDirectPresentationTarget(incoming, candidate);
   }
   if (isPeerScopedDirectConversation(candidate)) {
-    return isPresentationOnlyDirectConversationAlias(incoming) &&
+    return isReplaceableLegacyDirectConversation(
+          incoming,
+          ownerDid: ownerDid,
+        ) &&
         sameDirectPresentationTarget(incoming, candidate);
   }
   return false;
@@ -1884,8 +2026,9 @@ bool _shouldCollapsePresentationListItem({
   required ConversationSummary incoming,
   required ConversationSummary item,
   required List<ConversationSummary> current,
+  required String? ownerDid,
 }) {
-  if (!_shouldCollapsePresentationAlias(incoming, item)) {
+  if (!_shouldCollapsePresentationAlias(incoming, item, ownerDid: ownerDid)) {
     return false;
   }
   if (isPeerScopedDirectConversation(incoming)) {
@@ -1927,9 +2070,13 @@ ConversationSummary _mergeSelectedConversation({
 
 ConversationSummary? _matchingConversationForUpsert(
   Iterable<ConversationSummary> conversations,
-  ConversationSummary incoming,
-) {
-  return _ConversationMergeIndex(conversations.toList()).match(incoming);
+  ConversationSummary incoming, {
+  required String? ownerDid,
+}) {
+  return _ConversationMergeIndex(
+    conversations.toList(),
+    ownerDid: ownerDid,
+  ).match(incoming);
 }
 
 ConversationSummary _mergeConversationTitle({
@@ -2017,6 +2164,7 @@ ConversationSummary _mergeConversationLifecycle({
 ConversationSummary _mergeConversationPresentationIdentity({
   required ConversationSummary refreshed,
   required ConversationSummary? local,
+  required String? ownerDid,
 }) {
   if (local == null || sameConversationThread(refreshed, local)) {
     return refreshed;
@@ -2025,7 +2173,7 @@ ConversationSummary _mergeConversationPresentationIdentity({
     return refreshed;
   }
   if (isPeerScopedDirectConversation(local) &&
-      _shouldCollapsePresentationAlias(local, refreshed)) {
+      _shouldCollapsePresentationAlias(local, refreshed, ownerDid: ownerDid)) {
     return refreshed.copyWith(
       threadId: local.threadId,
       conversationKey: local.conversationKey,

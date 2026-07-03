@@ -1233,7 +1233,7 @@ void main() {
       expect(notificationFacade.lastSystemTitle, isNull);
     });
 
-    test('实时可见控制状态更新会话预览但不进入消息或通知', () async {
+    test('实时可见控制状态不进入最近会话、消息或通知', () async {
       container
           .read(appLifecycleProvider.notifier)
           .setLifecycle(AppLifecycleState.resumed);
@@ -1265,8 +1265,7 @@ void main() {
       final conversations = container
           .read(conversationListProvider)
           .conversations;
-      expect(conversations, hasLength(1));
-      expect(conversations.single.lastMessagePreview, 'Agent 已准备好。');
+      expect(conversations, isEmpty);
       expect(
         container.read(chatThreadProvider('dm:runtime')).messages,
         isEmpty,

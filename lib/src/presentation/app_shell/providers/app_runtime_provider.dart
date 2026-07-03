@@ -475,23 +475,15 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       ref
           .read(chatThreadsProvider.notifier)
           .applyMessageAgentControlPayload(controlPayload);
-      final conversation = update.conversation;
-      if (conversation != null &&
-          _shouldAcceptRealtimeConversationHint(conversation)) {
-        ref
-            .read(conversationListProvider.notifier)
-            .upsertConversationBestEffort(conversation);
-        if (update.group != null) {
-          ref.read(groupProvider.notifier).upsertGroup(update.group!);
-        }
-      }
       _runtimeTrace(
         'realtime.control_applied',
         fields: <String, Object?>{
-          'conversation': conversation != null,
-          'thread_hash': _runtimeSafeHash(conversation?.threadId),
-          'preview_hash': _runtimeSafeHash(conversation?.lastMessagePreview),
-          'unread': conversation?.unreadCount,
+          'conversation': update.conversation != null,
+          'thread_hash': _runtimeSafeHash(update.conversation?.threadId),
+          'preview_hash': _runtimeSafeHash(
+            update.conversation?.lastMessagePreview,
+          ),
+          'unread': update.conversation?.unreadCount,
         },
       );
       return;
@@ -580,6 +572,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   bool _shouldAcceptRealtimeConversationHint(ConversationSummary conversation) {
     return shouldShowConversationForChatList(
       conversation,
+      ownerDid: ref.read(sessionProvider).session?.did ?? '',
       daemonAgentDids: ref
           .read(agentsProvider)
           .daemonAgents
