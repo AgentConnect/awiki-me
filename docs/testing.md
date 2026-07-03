@@ -140,6 +140,29 @@ All E2E runtime state and reports go under `.e2e/` and must remain untracked.
 Local config files named `tests/e2e/configs/*.local.yaml` are also ignored and
 must not be committed because they may contain OTP values.
 
+### Identity vault test state
+
+E2E runs pass `AWIKI_E2E_APP_STATE_ROOT` to the Flutter shims. In that explicit
+E2E mode, AWiki Me uses `awiki_me_im_core_vault.json` as a private file test
+provider for the App-local `im-core` identity vault root key and device id. The
+file is created under the E2E App support root with strict JSON reads and
+private file permissions on Linux/macOS. It may contain a base64 test root key,
+so it is local secret state and must remain untracked with the rest of `.e2e/`.
+
+Ordinary `appStateRoot` overrides do not move the vault root key into JSON; they
+still use the platform secure-storage provider. Unit coverage for this boundary
+lives in:
+
+- `tests/unit/bootstrap_test.dart`
+- `tests/unit/data/im_core/awiki_im_core_secret_storage_test.dart`
+- `tests/unit/data/im_core/awiki_im_core_runtime_test.dart`
+- `tests/unit/application/app_session_service_test.dart`
+
+These tests cover stable namespace-scoped root keys, corrupted root-key
+fail-closed behavior, strict file stores refusing to recreate missing root keys
+in existing files, `VaultRequired` open options, and activation-time vault
+verification before identity switching.
+
 ## Direct Shim Commands
 
 Useful direct shim commands while debugging E2E internals:

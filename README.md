@@ -172,6 +172,40 @@ Keychain write failed, debug/profile builds store account credentials in
 `awiki_me_credentials.json` under the app support directory; release builds still
 use platform secure storage.
 
+## Identity Secret Storage
+
+AWiki Me opens the Flutter SDK / Rust `im-core` boundary with identity
+`VaultRequired` options. DID private keys, E2EE static key material, auth/JWT
+state, and daemon subkey package persistence are owned by `im-core`; the App
+only supplies the no-prompt vault root key and stable host context.
+
+Production and ordinary custom-state-root runs use `SecureAppKeyValueStore`
+backed by `flutter_secure_storage` for the App-local vault root key and device
+id. The App state namespace owns the vault directory:
+
+```text
+<app support>/im-core/<namespace>/identity-vault
+vaultWorkspaceId = awiki-me-<namespace>
+deviceId = app-device-<stable-random>
+```
+
+Only explicit E2E runs with `AWIKI_E2E_APP_STATE_ROOT` use the private file test
+provider `awiki_me_im_core_vault.json`; ordinary `appStateRoot` overrides do not
+move the vault root key into JSON. The test file may contain a base64 test root
+key and must remain local/untracked.
+
+When activating an identity, AWiki Me checks the identity vault before switching
+the active SDK client or writing the active session:
+
+```text
+identityVaultStatus -> migrateIdentityVault when legacy metadata is absent -> verifyIdentityVault -> switchIdentity -> ensureSession
+```
+
+If existing vault metadata is present but cannot be selected/verified, the App
+fails closed instead of re-sealing legacy plaintext under a new root key. The
+App bootstrap path can still receive a daemon subkey private key plaintext DTO;
+that transport exception is temporary and separate from local persistence.
+
 ## Project Structure
 
 - `lib/`: application, domain, data, and presentation code
