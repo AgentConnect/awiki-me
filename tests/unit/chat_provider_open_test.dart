@@ -1785,7 +1785,7 @@ void main() {
     expect(messageSyncService.threadAfterRequests, hasLength(1));
   });
 
-  test('本地和增量都没有消息时不会无 watermark 上报已读', () async {
+  test('本地和增量都没有消息时不会无 watermark 清未读或上报已读', () async {
     final unreadConversation = conversation.copyWith(
       lastMessageAt: DateTime(2026, 5, 8, 10, 5),
       unreadCount: 2,
@@ -1803,7 +1803,7 @@ void main() {
 
     expect(
       container.read(conversationListProvider).conversations.single.unreadCount,
-      0,
+      2,
     );
     expect(gateway.fetchLocalDmHistoryCalls, 1);
     expect(gateway.fetchDmHistoryCalls, 1);
@@ -1847,7 +1847,7 @@ void main() {
     expect(gateway.lastMarkThreadReadWatermark?.lastReadThreadSeq, '22');
   });
 
-  test('打开未读会话时本地清未读并异步上报，不刷新会话列表', () async {
+  test('打开未读会话加载到可见消息后异步上报并清未读，不刷新会话列表', () async {
     final unreadConversation = ConversationSummary(
       threadId: conversation.threadId,
       displayName: conversation.displayName,
@@ -1976,7 +1976,7 @@ void main() {
     expect(gateway.lastMarkThreadReadWatermark?.lastReadThreadSeq, '12');
   });
 
-  test('打开未读会话时远端 mark-read 不支持也不会抛出', () async {
+  test('打开未读会话时远端 mark-read 不支持也不会抛出或误清未读', () async {
     final throwingGateway = _ThrowingMarkReadGateway()
       ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
         'did:peer': <ChatMessage>[message],
@@ -2016,12 +2016,12 @@ void main() {
     final conversations = markReadContainer
         .read(conversationListProvider)
         .conversations;
-    expect(conversations.single.unreadCount, 0);
-    expect(notificationFacade.lastBadgeCount, 0);
+    expect(conversations.single.unreadCount, 2);
+    expect(notificationFacade.lastBadgeCount, 2);
     expect(throwingGateway.markReadCalls, 1);
   });
 
-  test('当前可见会话收到新的未读摘要时本地清未读并异步上报', () async {
+  test('当前可见会话收到新的可见消息时携带 watermark 上报并清未读', () async {
     final visibleConversation = conversation.copyWith(
       lastMessagePreview: 'new while visible',
       lastMessageAt: DateTime(2026, 5, 8, 10, 5),
@@ -2059,7 +2059,8 @@ void main() {
         .acknowledgeVisibleConversationRead(
           visibleConversation,
           displayThreadId: visibleConversation.threadId,
-          reason: 'visible_summary_update',
+          reason: 'visible_message_added',
+          forcePersistentAck: true,
         );
     await Future<void>.delayed(Duration.zero);
 

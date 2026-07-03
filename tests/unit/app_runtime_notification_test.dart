@@ -1049,6 +1049,95 @@ void main() {
       expect(notificationFacade.lastInAppBody, 'Hermes reply');
     });
 
+    test('实时 Agent hint 先归一化再分发到最近会话和聊天线程', () async {
+      container.read(agentsProvider.notifier).applyControlPayload(
+        const <String, Object?>{
+          'schema': 'awiki.agent.status.v1',
+          'status_scope': 'snapshot',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'status': 'ready',
+          },
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': 'did:agent:runtime:hermes',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'hermes',
+              'handle': 'hermes',
+              'display_name': 'Hermes',
+              'status': 'ready',
+            },
+          ],
+        },
+      );
+      final pendingAlias = ConversationSummary(
+        threadId: 'dm:pending:hermes.awiki.info',
+        displayName: 'Hermes',
+        lastMessagePreview: '在吗？',
+        lastMessageAt: DateTime(2026, 7, 3, 12, 0),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:agent:runtime:hermes',
+        targetPeer: 'hermes.awiki.info',
+      );
+      container
+          .read(conversationListProvider.notifier)
+          .upsertConversation(pendingAlias);
+      gateway.nextRealtimeUpdate = RealtimeUpdate(
+        message: ChatMessage(
+          localId: 'runtime-normalized',
+          remoteId: 'runtime-normalized',
+          threadId: 'dm:peer-scope:v1:hermes-runtime',
+          senderDid: 'did:agent:runtime:hermes',
+          senderName: 'Hermes',
+          receiverDid: 'did:test:me',
+          content: '在的',
+          createdAt: DateTime(2026, 7, 3, 12, 1),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+        conversationHint: ConversationSummary(
+          threadId: 'dm:peer-scope:v1:hermes-runtime',
+          displayName: 'hermes',
+          lastMessagePreview: '在的',
+          lastMessageAt: DateTime(2026, 7, 3, 12, 1),
+          unreadCount: 1,
+          isGroup: false,
+          targetDid: 'hermes',
+          targetPeer: 'hermes',
+        ),
+      );
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+
+      await activate();
+      await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+
+      final conversations = container
+          .read(conversationListProvider)
+          .conversations;
+      expect(conversations, hasLength(1));
+      expect(conversations.single.threadId, 'dm:peer-scope:v1:hermes-runtime');
+      expect(conversations.single.targetDid, 'did:agent:runtime:hermes');
+      expect(conversations.single.targetPeer, 'hermes.awiki.info');
+      expect(conversations.single.lastMessagePreview, '在的');
+      expect(
+        container
+            .read(chatThreadProvider('dm:peer-scope:v1:hermes-runtime'))
+            .messages
+            .map((message) => message.content),
+        <String>['在的'],
+      );
+      expect(
+        container.read(chatThreadProvider(pendingAlias.threadId)).messages,
+        isEmpty,
+      );
+      expect(notificationFacade.lastBadgeCount, 1);
+      expect(notificationFacade.lastInAppTitle, 'Hermes');
+    });
+
     test('实时消息的过期 conversation hint 不会污染最近会话', () async {
       container
           .read(appLifecycleProvider.notifier)

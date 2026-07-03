@@ -31,6 +31,7 @@ import '../shared/quick_actions.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../settings/settings_page.dart';
+import 'conversation_list_ordering.dart';
 import 'conversation_peer_classifier.dart';
 import 'conversation_provider.dart';
 
@@ -417,15 +418,31 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
 
   List<ConversationSummary> _filterConversations(BuildContext context) {
     final query = _normalizedConversationSearchText(_query);
-    if (query.isEmpty) {
-      return widget.conversations;
-    }
-    return widget.conversations
-        .where((conversation) {
-          return _conversationSearchText(context, conversation).contains(query);
-        })
-        .toList(growable: false);
+    final conversations = query.isEmpty
+        ? widget.conversations
+        : widget.conversations.where((conversation) {
+            return _conversationSearchText(
+              context,
+              conversation,
+            ).contains(query);
+          });
+    return sortConversationsForPresentation(
+      conversations,
+      draftFor: (conversation) =>
+          _draftSortStateForConversation(conversation, widget.composerDrafts),
+    );
   }
+}
+
+ConversationDraftSortState? _draftSortStateForConversation(
+  ConversationSummary conversation,
+  Map<String, ChatComposerDraft> drafts,
+) {
+  final draft = _draftForConversation(conversation, drafts);
+  if (draft.isEmpty) {
+    return null;
+  }
+  return ConversationDraftSortState(updatedAt: draft.updatedAt);
 }
 
 class _ConversationRefreshView extends ConsumerStatefulWidget {
@@ -522,14 +539,19 @@ class _ConversationRefreshViewState
 
   List<ConversationSummary> _filterConversations(BuildContext context) {
     final query = _normalizedConversationSearchText(_query);
-    if (query.isEmpty) {
-      return widget.conversations;
-    }
-    return widget.conversations
-        .where((conversation) {
-          return _conversationSearchText(context, conversation).contains(query);
-        })
-        .toList(growable: false);
+    final conversations = query.isEmpty
+        ? widget.conversations
+        : widget.conversations.where((conversation) {
+            return _conversationSearchText(
+              context,
+              conversation,
+            ).contains(query);
+          });
+    return sortConversationsForPresentation(
+      conversations,
+      draftFor: (conversation) =>
+          _draftSortStateForConversation(conversation, widget.composerDrafts),
+    );
   }
 }
 

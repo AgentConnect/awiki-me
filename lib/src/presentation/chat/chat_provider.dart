@@ -264,11 +264,13 @@ class ChatComposerDraft {
     this.text = '',
     this.pendingAttachment,
     this.mentions = const <ChatMentionDraft>[],
+    this.updatedAt,
   });
 
   final String text;
   final AttachmentDraft? pendingAttachment;
   final List<ChatMentionDraft> mentions;
+  final DateTime? updatedAt;
 
   bool get isEmpty =>
       text.isEmpty && pendingAttachment == null && mentions.isEmpty;
@@ -289,6 +291,7 @@ class ChatComposerDraft {
     String? text,
     Object? pendingAttachment = _chatComposerDraftUnset,
     List<ChatMentionDraft>? mentions,
+    Object? updatedAt = _chatComposerDraftUnset,
   }) {
     return ChatComposerDraft(
       text: text ?? this.text,
@@ -296,6 +299,9 @@ class ChatComposerDraft {
           ? this.pendingAttachment
           : pendingAttachment as AttachmentDraft?,
       mentions: mentions ?? this.mentions,
+      updatedAt: identical(updatedAt, _chatComposerDraftUnset)
+          ? this.updatedAt
+          : updatedAt as DateTime?,
     );
   }
 }
@@ -327,6 +333,7 @@ class ChatComposerDraftsController
           newText: text,
           oldMentions: current.mentions,
         ),
+        updatedAt: DateTime.now().toUtc(),
       ),
     );
   }
@@ -337,12 +344,20 @@ class ChatComposerDraftsController
   ) {
     _upsertDraft(
       conversation,
-      draftFor(conversation).copyWith(pendingAttachment: attachment),
+      draftFor(conversation).copyWith(
+        pendingAttachment: attachment,
+        updatedAt: DateTime.now().toUtc(),
+      ),
     );
   }
 
   void setDraft(ConversationSummary conversation, ChatComposerDraft draft) {
-    _upsertDraft(conversation, draft);
+    _upsertDraft(
+      conversation,
+      draft.isEmpty || draft.updatedAt != null
+          ? draft
+          : draft.copyWith(updatedAt: DateTime.now().toUtc()),
+    );
   }
 
   void clearDraft(ConversationSummary conversation) {
@@ -1600,7 +1615,7 @@ class ChatThreadsController
     if (_completedReadReceipts.contains(readToken) ||
         _activeReadReceipts.contains(readToken)) {
       _chatProviderTrace(
-        'mark_read.local_only',
+        'mark_read.skip',
         fields: <String, Object?>{
           ...AwikiPerformanceLogger.threadField(targetThreadId),
           'reason': _completedReadReceipts.contains(readToken)
@@ -1609,9 +1624,6 @@ class ChatThreadsController
           'read_token': AwikiPerformanceLogger.safeHash(readToken),
         },
       );
-      ref
-          .read(conversationListProvider.notifier)
-          .markConversationReadLocal(conversation);
       return;
     }
     if (_activeLocalHistoryLoads.contains(targetThreadId) ||
@@ -1641,9 +1653,6 @@ class ChatThreadsController
         reason: reason,
         forcePersistentAck: forcePersistentAck,
       );
-      ref
-          .read(conversationListProvider.notifier)
-          .markConversationReadLocal(conversation);
       return;
     }
     final localClearWatch = Stopwatch()..start();
@@ -1996,6 +2005,9 @@ class ChatThreadsController
             watch.stop();
             _activeReadReceipts.remove(readToken);
             _completedReadReceipts.add(readToken);
+            ref
+                .read(conversationListProvider.notifier)
+                .markConversationReadLocal(conversation);
             _chatProviderTrace(
               'mark_read.remote_done',
               fields: <String, Object?>{

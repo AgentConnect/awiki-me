@@ -390,15 +390,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
           _handleThreadChanged(previous, next, currentConversation),
     );
     ref.listen<ConversationListState>(conversationListProvider, (_, next) {
+      final migrated = _migrateDisplayThreadIfNeeded(next.conversations);
+      if (migrated) {
+        return;
+      }
       final updated = _matchingConversationByThread(next.conversations);
       if (updated == null) {
         return;
-      }
-      if (!_hasDeferredBottomNotice && !_userAwayFromBottom) {
-        _scheduleAcknowledgeVisibleConversationRead(
-          updated,
-          reason: 'visible_summary_update',
-        );
       }
       unawaited(
         _chatThreadsController.syncVisibleConversationAfterSummaryUpdate(
@@ -1297,12 +1295,58 @@ class _ChatViewState extends ConsumerState<ChatView> {
   ConversationSummary? _matchingConversationByThread(
     List<ConversationSummary> conversations,
   ) {
+    final displayThreadId = _displayThreadId.trim();
     for (final conversation in conversations) {
-      if (sameConversationThread(conversation, widget.conversation)) {
+      if (displayThreadId.isNotEmpty &&
+          conversation.threadId.trim() == displayThreadId) {
         return conversation;
       }
     }
     return null;
+  }
+
+  bool _migrateDisplayThreadIfNeeded(List<ConversationSummary> conversations) {
+    final current = _currentDisplayConversationSnapshot(conversations);
+    if (isPeerScopedDirectConversation(current)) {
+      return false;
+    }
+    if (!isPresentationOnlyDirectConversationAlias(current)) {
+      return false;
+    }
+    final candidates = conversations
+        .where(
+          (conversation) =>
+              isPeerScopedDirectConversation(conversation) &&
+              sameDirectPresentationTarget(conversation, current),
+        )
+        .toList(growable: false);
+    if (candidates.length != 1) {
+      return false;
+    }
+    final nextConversation = candidates.single;
+    final nextThreadId = nextConversation.threadId.trim();
+    if (nextThreadId.isEmpty || nextThreadId == _displayThreadId) {
+      return false;
+    }
+    final previousThreadId = _displayThreadId;
+    _visibleReadAckToken += 1;
+    _markConversationHidden(current, displayThreadId: previousThreadId);
+    setState(() {
+      _displayThreadId = nextThreadId;
+      _hasDeferredBottomNotice = false;
+      _userAwayFromBottom = false;
+      _cancelPendingScrollRequests();
+      _beginOpeningBottomAnchor();
+    });
+    _markConversationVisible(nextConversation, displayThreadId: nextThreadId);
+    _restoreComposerDraft(nextConversation, updateState: true);
+    unawaited(
+      _chatThreadsController.openConversation(
+        nextConversation,
+        displayThreadId: nextThreadId,
+      ),
+    );
+    return true;
   }
 
   ConversationSummary? _matchingConversationForDisplay(
@@ -1351,6 +1395,39 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final conversations = ref.read(conversationListProvider).conversations;
     final latest = _matchingConversationByThread(conversations);
     return latest ?? widget.conversation;
+  }
+
+  ConversationSummary _currentDisplayConversationSnapshot(
+    List<ConversationSummary> conversations,
+  ) {
+    for (final conversation in conversations) {
+      if (conversation.threadId.trim() == _displayThreadId.trim()) {
+        return conversation;
+      }
+    }
+    if (widget.conversation.threadId.trim() == _displayThreadId.trim()) {
+      return widget.conversation;
+    }
+    return ConversationSummary(
+      threadId: _displayThreadId,
+      displayName: widget.conversation.displayName,
+      lastMessagePreview: widget.conversation.lastMessagePreview,
+      lastMessageAt: widget.conversation.lastMessageAt,
+      unreadCount: widget.conversation.unreadCount,
+      unreadMentionCount: widget.conversation.unreadMentionCount,
+      firstUnreadMentionMessageId:
+          widget.conversation.firstUnreadMentionMessageId,
+      isGroup: widget.conversation.isGroup,
+      targetDid: widget.conversation.targetDid,
+      targetPeer: widget.conversation.targetPeer,
+      groupId: widget.conversation.groupId,
+      avatarUri: widget.conversation.avatarUri,
+      avatarSeed: widget.conversation.avatarSeed,
+      lastMessagePayloadJson: widget.conversation.lastMessagePayloadJson,
+      lastMessageSnapshot: widget.conversation.lastMessageSnapshot,
+      conversationKey: widget.conversation.conversationKey,
+      peerLifecycleState: widget.conversation.peerLifecycleState,
+    );
   }
 
   String? _currentGroupName(String groupId) {

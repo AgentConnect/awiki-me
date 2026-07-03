@@ -26,6 +26,7 @@ import '../../group/group_provider.dart';
 import '../../profile/profile_provider.dart';
 import '../../shared/formatters/display_formatters.dart';
 import '../../shared/formatters/localized_ui_formatters.dart';
+import '../../shared/realtime_conversation_identity_projection.dart';
 import 'app_lifecycle_provider.dart';
 import 'message_sync_coordinator_provider.dart';
 import 'selected_conversation_provider.dart';
@@ -500,12 +501,19 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (message == null || conversationHint == null) {
       return;
     }
-    final shouldShow = _shouldAcceptRealtimeConversationHint(conversationHint);
+    final normalizedConversationHint =
+        normalizeRealtimeConversationPresentationIdentity(
+          conversationHint,
+          ref.read(agentsProvider).agents,
+        );
+    final shouldShow = _shouldAcceptRealtimeConversationHint(
+      normalizedConversationHint,
+    );
     if (!shouldShow) {
       _runtimeTrace(
         'realtime.message.hidden',
         fields: <String, Object?>{
-          'thread_hash': _runtimeSafeHash(conversationHint.threadId),
+          'thread_hash': _runtimeSafeHash(normalizedConversationHint.threadId),
           'sender_hash': _runtimeSafeHash(message.senderDid),
         },
       );
@@ -514,24 +522,29 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     _runtimeTrace(
       'conversation.upsert_from_realtime_message',
       fields: <String, Object?>{
-        'thread_hash': _runtimeSafeHash(conversationHint.threadId),
+        'thread_hash': _runtimeSafeHash(normalizedConversationHint.threadId),
         'message_hash': _runtimeSafeHash(message.remoteId ?? message.localId),
         'is_mine': message.isMine,
-        'unread': conversationHint.unreadCount,
-        'preview_hash': _runtimeSafeHash(conversationHint.lastMessagePreview),
+        'unread': normalizedConversationHint.unreadCount,
+        'preview_hash': _runtimeSafeHash(
+          normalizedConversationHint.lastMessagePreview,
+        ),
       },
     );
     ref
         .read(conversationListProvider.notifier)
-        .upsertRealtimeMessageBestEffort(conversationHint, message: message);
+        .upsertRealtimeMessageBestEffort(
+          normalizedConversationHint,
+          message: message,
+        );
     ref
         .read(chatThreadsProvider.notifier)
-        .applyRealtimeUpdate(message, conversation: conversationHint);
+        .applyRealtimeUpdate(message, conversation: normalizedConversationHint);
     if (update.group != null) {
       ref.read(groupProvider.notifier).upsertGroup(update.group!);
     }
     if (!message.isMine) {
-      final title = _notificationTitle(update);
+      final title = _notificationTitle(update, normalizedConversationHint);
       final preview = localizeMessagePreview(_currentLocalizations(), message);
       final body = preview.isNotEmpty
           ? preview
@@ -574,10 +587,12 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     );
   }
 
-  String _notificationTitle(RealtimeUpdate update) {
+  String _notificationTitle(
+    RealtimeUpdate update,
+    ConversationSummary conversationHint,
+  ) {
     final message = update.message;
-    final conversationHint = update.conversationHint;
-    if (message == null || conversationHint == null) {
+    if (message == null) {
       return AppMessage.newMessageArrived().resolveForFallback();
     }
     final title = DidDisplayFormatter.compactDisplayName(
