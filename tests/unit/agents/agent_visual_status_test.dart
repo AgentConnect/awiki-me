@@ -126,13 +126,12 @@ void main() {
     );
   });
 
-  test('generic CLI runtime card lifecycle maps to visual states', () {
+  test('generic CLI runtime card operational state maps to visual states', () {
     final now = DateTime.utc(2026, 1, 1, 12);
     final expectations = <String, AgentVisualStatusKind>{
       'needs_setup': AgentVisualStatusKind.needsConfig,
       'queued': AgentVisualStatusKind.processing,
       'running': AgentVisualStatusKind.processing,
-      'dead_letter': AgentVisualStatusKind.failed,
       'failed': AgentVisualStatusKind.failed,
       'manual_review_required': AgentVisualStatusKind.failed,
       'disabled': AgentVisualStatusKind.disabled,
@@ -151,12 +150,45 @@ void main() {
     }
   });
 
+  test(
+    'generic CLI dead-letter attention does not override operational state',
+    () {
+      final now = DateTime.utc(2026, 1, 1, 12);
+      final agent = _runtimeWithCard(
+        'created',
+        lastSeenAt: now,
+        diagnosticsSummary: genericCliRuntimeCardDiagnostics(
+          lifecycleState: 'created',
+          operationalState: 'created',
+          deadLetterCount: 2,
+          attentionState: 'needs_review',
+          attentionItemCount: 2,
+          attentionNextAction: 'review_dead_letters',
+          nextAction: 'none',
+        ),
+        latestStatus: 'ready',
+      );
+
+      final status = AgentVisualStatus.fromAgent(agent, now: now);
+
+      expect(status.kind, AgentVisualStatusKind.ready);
+      expect(status.rawStatus, 'runtime_card:created');
+      expect(agent.latest.runtimeCard?.deadLetterCount, 2);
+      expect(agent.latest.runtimeCard?.attentionState, 'needs_review');
+      expect(agent.latest.runtimeCard?.attentionItemCount, 2);
+      expect(
+        agent.latest.runtimeCard?.attentionNextAction,
+        'review_dead_letters',
+      );
+    },
+  );
+
   test('generic CLI runtime card fails closed for invalid schema', () {
     final agent = _runtimeWithCard(
       'needs_setup',
       diagnosticsSummary: genericCliRuntimeCardDiagnostics(
         lifecycleState: 'needs_setup',
-        statusSchemaVersion: 99,
+        statusSchemaVersion: 1,
       ),
       latestStatus: 'ready',
     );

@@ -159,6 +159,7 @@ class AgentRuntimeCardStatus {
     required this.runtimeFamily,
     required this.driverId,
     required this.lifecycleState,
+    required this.operationalState,
     required this.setupReady,
     this.setupState,
     this.queueState,
@@ -170,6 +171,9 @@ class AgentRuntimeCardStatus {
     this.failedCount,
     this.oldestQueuedAgeMs,
     this.nextAction,
+    this.attentionState,
+    this.attentionItemCount,
+    this.attentionNextAction,
     required this.containsUserContent,
     required this.containsProviderAuthMaterial,
     this.lastMessageIdWatermarkPolicy,
@@ -180,6 +184,7 @@ class AgentRuntimeCardStatus {
   final String runtimeFamily;
   final String? driverId;
   final String lifecycleState;
+  final String operationalState;
   final bool setupReady;
   final String? setupState;
   final String? queueState;
@@ -191,6 +196,9 @@ class AgentRuntimeCardStatus {
   final int? failedCount;
   final int? oldestQueuedAgeMs;
   final String? nextAction;
+  final String? attentionState;
+  final int? attentionItemCount;
+  final String? attentionNextAction;
   final bool containsUserContent;
   final bool containsProviderAuthMaterial;
   final String? lastMessageIdWatermarkPolicy;
@@ -212,9 +220,11 @@ class AgentRuntimeCardStatus {
     );
     final runtimeFamily = _optionalString(json['runtime_family']);
     final lifecycleState = _optionalString(json['lifecycle_state']);
-    if (statusSchemaVersion != 1 ||
+    final operationalState = _optionalString(json['operational_state']);
+    if (statusSchemaVersion != 2 ||
         runtimeFamily != 'generic-cli' ||
-        lifecycleState == null) {
+        lifecycleState == null ||
+        operationalState == null) {
       return null;
     }
     final supported = _optionalBool(json['supported']) ?? false;
@@ -228,10 +238,11 @@ class AgentRuntimeCardStatus {
     }
     return AgentRuntimeCardStatus(
       supported: supported,
-      statusSchemaVersion: 1,
+      statusSchemaVersion: 2,
       runtimeFamily: 'generic-cli',
       driverId: _optionalString(json['driver_id']),
       lifecycleState: lifecycleState,
+      operationalState: operationalState,
       setupReady: setupReady,
       setupState: _optionalString(json['setup_state']),
       queueState: _optionalString(json['queue_state']),
@@ -243,6 +254,9 @@ class AgentRuntimeCardStatus {
       failedCount: _optionalNonNegativeInt(json['failed_count']),
       oldestQueuedAgeMs: _optionalNonNegativeInt(json['oldest_queued_age_ms']),
       nextAction: _optionalString(json['next_action']),
+      attentionState: _optionalString(json['attention_state']),
+      attentionItemCount: _optionalNonNegativeInt(json['attention_item_count']),
+      attentionNextAction: _optionalString(json['attention_next_action']),
       containsUserContent: containsUserContent,
       containsProviderAuthMaterial: containsProviderAuthMaterial,
       lastMessageIdWatermarkPolicy: _optionalString(

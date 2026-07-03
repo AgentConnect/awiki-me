@@ -160,9 +160,9 @@ class AgentVisualStatus {
     if (card == null) {
       return null;
     }
-    final lifecycle = card.lifecycleState.trim().toLowerCase();
-    final rawStatus = 'runtime_card:$lifecycle';
-    return switch (lifecycle) {
+    final operationalState = card.operationalState.trim().toLowerCase();
+    final rawStatus = 'runtime_card:$operationalState';
+    return switch (operationalState) {
       'needs_setup' => AgentVisualStatus(
         AgentVisualStatusKind.needsConfig,
         rawStatus: rawStatus,
@@ -197,8 +197,8 @@ bool _hasFreshRuntimeCardActiveState(AgentLatestStatus latest, DateTime now) {
   if (card == null) {
     return true;
   }
-  final lifecycle = card.lifecycleState.trim().toLowerCase();
-  if (lifecycle != 'queued' && lifecycle != 'running') {
+  final operationalState = card.operationalState.trim().toLowerCase();
+  if (operationalState != 'queued' && operationalState != 'running') {
     return true;
   }
   final lastSeenAt = latest.lastSeenAt;
