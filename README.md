@@ -201,12 +201,17 @@ without a provisioning profile. New macOS writes go through the AWiki native
 Keychain bridge, which stores the item with an ACL that trusts the current
 app executable path; this avoids repeatedly asking for authorization when the
 same local debug App path is restarted or incrementally rebuilt. Existing native
-items also schedule a one-time ACL repair after read so items written by older
-bridge builds are updated to the executable-path trust rule. Values that were
+items synchronously refresh their ACL after a successful read so items written by
+older bridge builds are updated before bootstrap continues. Values that were
 written by the older `flutter_secure_storage` path are read as a legacy fallback,
 migrated into the native bridge after the user authorizes access once, and then
-removed from the legacy Keychain service on a successful migration so future
-launches do not keep touching the old item. The plugin's Data
+removed from the legacy Keychain service before the read returns so future
+launches do not keep touching the old item. Local test/debug runners that cannot
+obtain Authorization Services permission for a custom ACL may fall back to the
+system default Keychain ACL for the new native item; this still keeps the secret
+in macOS Keychain and allows the old service item to be retired. A real user
+should see the Keychain authorization prompt only for first access or migration;
+choose **Always Allow** when macOS asks for AWiki Me access. The plugin's Data
 Protection Keychain mode still requires Keychain Sharing entitlements and a valid
 development/release signing identity; if that entitlement is missing, runtime
 writes fail with OSStatus `-34018` (`errSecMissingEntitlement`), and if the

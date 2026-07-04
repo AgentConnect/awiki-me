@@ -4,6 +4,8 @@ import Security
 import UniformTypeIdentifiers
 
 class MainFlutterWindow: NSWindow {
+  private let awikiErrAuthorizationDenied = OSStatus(-60008)
+
   private enum TrafficLightLayout {
     // Keep this aligned with the Flutter macOS rail width in app_shell.dart.
     static let railWidth: CGFloat = 72
@@ -171,6 +173,7 @@ class MainFlutterWindow: NSWindow {
     let service: String
     let account: String
     let value: String?
+    let allowAuthenticationUI: Bool
   }
 
   private func registerKeychainAccessChannel(flutterViewController: FlutterViewController) {
@@ -214,7 +217,13 @@ class MainFlutterWindow: NSWindow {
       result(FlutterError(code: "bad_args", message: "value is required", details: nil))
       return nil
     }
-    return KeychainRequest(service: service, account: account, value: value)
+    let allowAuthenticationUI = (args["allowAuthenticationUI"] as? Bool) ?? false
+    return KeychainRequest(
+      service: service,
+      account: account,
+      value: value,
+      allowAuthenticationUI: allowAuthenticationUI
+    )
   }
 
   private func readGenericPassword(arguments: Any?, result: @escaping FlutterResult) {
@@ -280,7 +289,8 @@ class MainFlutterWindow: NSWindow {
     DispatchQueue.global(qos: .utility).async {
       let updateStatus = self.repairGenericPasswordAccess(
         service: request.service,
-        account: request.account
+        account: request.account,
+        allowAuthenticationUI: request.allowAuthenticationUI
       )
       DispatchQueue.main.async {
         if updateStatus == errSecSuccess || updateStatus == errSecItemNotFound {
@@ -324,13 +334,44 @@ class MainFlutterWindow: NSWindow {
       return errSecParam
     }
     let accessResult = createCurrentBundleKeychainAccess()
-    guard accessResult.status == errSecSuccess, let access = accessResult.access else {
+    if accessResult.status == errSecSuccess, let access = accessResult.access {
+      let accessStatus = writeGenericPassword(
+        service: service,
+        account: account,
+        data: data,
+        access: access
+      )
+      if accessStatus != awikiErrAuthorizationDenied {
+        return accessStatus
+      }
+    } else if accessResult.status != awikiErrAuthorizationDenied {
       return accessResult.status
     }
 
+    // Some local debug/test runners cannot obtain Authorization Services
+    // permission for a custom SecAccess ACL (OSStatus -60008). Fall back to the
+    // system's default Keychain ACL so migration can still move values out of
+    // the legacy flutter_secure_storage service instead of touching the old item
+    // on every launch.
+    return writeGenericPassword(
+      service: service,
+      account: account,
+      data: data,
+      access: nil
+    )
+  }
+
+  private func writeGenericPassword(
+    service: String,
+    account: String,
+    data: Data,
+    access: SecAccess?
+  ) -> OSStatus {
     var add = baseGenericPasswordQuery(service: service, account: account)
     add[kSecValueData] = data
-    add[kSecAttrAccess] = access
+    if let access {
+      add[kSecAttrAccess] = access
+    }
 
     let addStatus = SecItemAdd(add as CFDictionary, nil)
     if addStatus != errSecDuplicateItem {
@@ -338,10 +379,10 @@ class MainFlutterWindow: NSWindow {
     }
 
     let query = baseGenericPasswordQuery(service: service, account: account)
-    let update: [CFString: Any] = [
-      kSecValueData: data,
-      kSecAttrAccess: access,
-    ]
+    var update: [CFString: Any] = [kSecValueData: data]
+    if let access {
+      update[kSecAttrAccess] = access
+    }
     return SecItemUpdate(query as CFDictionary, update as CFDictionary)
   }
 
@@ -350,14 +391,24 @@ class MainFlutterWindow: NSWindow {
     return SecItemDelete(query as CFDictionary)
   }
 
-  private func repairGenericPasswordAccess(service: String, account: String) -> OSStatus {
+  private func repairGenericPasswordAccess(
+    service: String,
+    account: String,
+    allowAuthenticationUI: Bool
+  ) -> OSStatus {
+    // Stale native and legacy items may need the same authorization UI that the
+    // user just granted for the read. Dart chooses when to allow UI so a
+    // post-read ACL refresh can repair the item instead of prompting again on
+    // the next launch.
     let accessResult = createCurrentBundleKeychainAccess()
     guard accessResult.status == errSecSuccess, let access = accessResult.access else {
       return accessResult.status
     }
 
     var query = baseGenericPasswordQuery(service: service, account: account)
-    query[kSecUseAuthenticationUI] = kSecUseAuthenticationUISkip
+    if !allowAuthenticationUI {
+      query[kSecUseAuthenticationUI] = kSecUseAuthenticationUISkip
+    }
 
     let update: [CFString: Any] = [
       kSecAttrAccess: access,
