@@ -191,16 +191,22 @@ Keychain write failed, debug/profile builds store account credentials in
 `awiki_me_credentials.json` under the app support directory; release builds still
 use platform secure storage.
 
-The identity vault root key and device id still use `flutter_secure_storage` on
-macOS outside explicit `AWIKI_E2E_APP_STATE_ROOT` runs. The App intentionally
-configures macOS secure storage with `MacOsOptions(useDataProtectionKeyChain:
-false)` so local/debug builds can remain ad-hoc signed while secrets are still
-stored in the encrypted macOS Keychain. The plugin's default Data Protection
-Keychain mode requires Keychain Sharing entitlements and non-ad-hoc signing; if
-that entitlement is missing, runtime writes fail with OSStatus `-34018`
-(`errSecMissingEntitlement`), and if the entitlement is present without a
-development/release signing identity, local Flutter builds fail before launch.
-After changing macOS signing, entitlements, or secure-storage options, run
+The identity vault root key and device id still use encrypted macOS Keychain
+storage outside explicit `AWIKI_E2E_APP_STATE_ROOT` runs. Local/debug builds use
+the login Keychain rather than the Data Protection Keychain so they can run
+without a provisioning profile. New macOS writes go through the AWiki native
+Keychain bridge, which stores the item with an ACL that trusts the current
+`.app` bundle path; this avoids repeatedly asking for authorization when the
+same local debug App path is restarted or incrementally rebuilt. Values that were
+written by the older `flutter_secure_storage` path are read as a legacy fallback
+and migrated into the native bridge after the user authorizes access once, while
+also scheduling a best-effort ACL repair for the old item. The plugin's Data
+Protection Keychain mode still requires Keychain Sharing entitlements and a valid
+development/release signing identity; if that entitlement is missing, runtime
+writes fail with OSStatus `-34018` (`errSecMissingEntitlement`), and if the
+entitlement is present without a usable signing profile, local Flutter builds
+fail before launch. After changing macOS signing, entitlements, or
+secure-storage options, run
 `flutter test --no-pub integration_test/secure_storage_smoke_test.dart -d macos`
 to prove the signed runner can write, read, and delete a secure-storage value.
 

@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -15,20 +17,30 @@ abstract class AppKeyValueStore {
 }
 
 class SecureAppKeyValueStore implements AppKeyValueStore {
-  SecureAppKeyValueStore({FlutterSecureStorage? secureStorage})
-    : _secureStorage = secureStorage ?? _defaultSecureStorage();
+  SecureAppKeyValueStore({
+    FlutterSecureStorage? secureStorage,
+    MacOsKeychainStorage? macOsKeychainStorage,
+    MacOsKeychainAccessRepair? macOsKeychainAccessRepair,
+  }) : _secureStorage = secureStorage ?? _defaultSecureStorage(),
+       _macOsKeychainStorage =
+           macOsKeychainStorage ?? const MacOsKeychainStorage(),
+       _macOsKeychainAccessRepair =
+           macOsKeychainAccessRepair ?? const MacOsKeychainAccessRepair();
 
   final FlutterSecureStorage _secureStorage;
+  final MacOsKeychainStorage _macOsKeychainStorage;
+  final MacOsKeychainAccessRepair _macOsKeychainAccessRepair;
 
   static const FlutterSecureStorage _defaultStorage = FlutterSecureStorage();
 
   static const FlutterSecureStorage _macOsStorage = FlutterSecureStorage(
-    // The plugin's macOS Data Protection Keychain mode requires a Keychain
-    // Sharing entitlement and non-ad-hoc signing. AWiki Me keeps local/debug
-    // Mac builds runnable while still storing secrets in the encrypted macOS
-    // Keychain by using the regular Keychain backend.
+    // Legacy fallback for values written by flutter_secure_storage before the
+    // app added its own macOS Keychain bridge. New macOS writes go through
+    // MacOsKeychainStorage so the Keychain ACL can trust the .app bundle path.
     mOptions: MacOsOptions(useDataProtectionKeyChain: false),
   );
+
+  static final Set<String> _macOsAccessRepairAttemptedKeys = <String>{};
 
   static FlutterSecureStorage _defaultSecureStorage() {
     if (Platform.isMacOS) {
@@ -38,18 +50,155 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
   }
 
   @override
-  Future<String?> read({required String key}) {
+  Future<String?> read({required String key}) async {
+    if (Platform.isMacOS) {
+      final nativeValue = await _readMacOsNativeValue(key);
+      if (nativeValue != null) {
+        return nativeValue;
+      }
+      final legacyValue = await _secureStorage.read(key: key);
+      if (legacyValue != null) {
+        await _migrateLegacyMacOsValue(key: key, value: legacyValue);
+        unawaited(_repairMacOsKeychainAccessIfNeeded(key));
+      }
+      return legacyValue;
+    }
     return _secureStorage.read(key: key);
   }
 
-  @override
-  Future<void> write({required String key, required String value}) {
-    return _secureStorage.write(key: key, value: value);
+  Future<String?> _readMacOsNativeValue(String key) async {
+    try {
+      return await _macOsKeychainStorage.read(key: key);
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  Future<void> _migrateLegacyMacOsValue({
+    required String key,
+    required String value,
+  }) async {
+    try {
+      await _macOsKeychainStorage.write(key: key, value: value);
+    } on Object {
+      // Preserve the successful legacy read path. A later signed/native App
+      // launch can retry the migration without losing the existing secret.
+    }
+  }
+
+  Future<void> _repairMacOsKeychainAccessIfNeeded(String key) async {
+    if (!Platform.isMacOS) {
+      return;
+    }
+    if (!_macOsAccessRepairAttemptedKeys.add(key)) {
+      return;
+    }
+    try {
+      await _macOsKeychainAccessRepair.repairFlutterSecureStorageKey(key);
+    } on Object {
+      // Preserve the successful read path. If repair fails, the stored secret is
+      // still available; the user may see the macOS authorization prompt again
+      // until the item can be repaired or recreated by a signed build.
+    }
   }
 
   @override
-  Future<void> delete({required String key}) {
-    return _secureStorage.delete(key: key);
+  Future<void> write({required String key, required String value}) async {
+    if (Platform.isMacOS) {
+      try {
+        await _macOsKeychainStorage.write(key: key, value: value);
+        return;
+      } on MissingPluginException {
+        await _secureStorage.write(key: key, value: value);
+        unawaited(_repairMacOsKeychainAccessIfNeeded(key));
+        return;
+      }
+    }
+    await _secureStorage.write(key: key, value: value);
+  }
+
+  @override
+  Future<void> delete({required String key}) async {
+    if (Platform.isMacOS) {
+      try {
+        await _macOsKeychainStorage.delete(key: key);
+      } on MissingPluginException {
+        await _secureStorage.delete(key: key);
+        return;
+      }
+      try {
+        await _secureStorage.delete(key: key);
+      } on Object {
+        // Best-effort legacy cleanup; the native Keychain item is already gone.
+      }
+      return;
+    }
+    await _secureStorage.delete(key: key);
+  }
+}
+
+class MacOsKeychainStorage {
+  const MacOsKeychainStorage({MethodChannel? channel})
+    : _channel = channel ?? const MethodChannel(_channelName);
+
+  static const String _channelName = 'ai.awiki.awikime/keychain_access';
+  static const String _service = 'ai.awiki.awikime.secure_storage';
+
+  final MethodChannel _channel;
+
+  Future<String?> read({required String key}) async {
+    if (!Platform.isMacOS) {
+      return null;
+    }
+    return _channel.invokeMethod<String>(
+      'readGenericPassword',
+      <String, Object?>{'service': _service, 'account': key},
+    );
+  }
+
+  Future<void> write({required String key, required String value}) async {
+    if (!Platform.isMacOS) {
+      return;
+    }
+    await _channel.invokeMethod<void>('writeGenericPassword', <String, Object?>{
+      'service': _service,
+      'account': key,
+      'value': value,
+    });
+  }
+
+  Future<void> delete({required String key}) async {
+    if (!Platform.isMacOS) {
+      return;
+    }
+    await _channel.invokeMethod<void>(
+      'deleteGenericPassword',
+      <String, Object?>{'service': _service, 'account': key},
+    );
+  }
+}
+
+class MacOsKeychainAccessRepair {
+  const MacOsKeychainAccessRepair({MethodChannel? channel})
+    : _channel = channel ?? const MethodChannel(_channelName);
+
+  static const String _channelName = 'ai.awiki.awikime/keychain_access';
+  static const String _flutterSecureStorageService =
+      'flutter_secure_storage_service';
+
+  final MethodChannel _channel;
+
+  Future<void> repairFlutterSecureStorageKey(String key) async {
+    if (!Platform.isMacOS) {
+      return;
+    }
+    await _channel.invokeMethod<void>(
+      'repairGenericPasswordAccess',
+      <String, Object?>{
+        'service': _flutterSecureStorageService,
+        'account': key,
+      },
+    );
   }
 }
 

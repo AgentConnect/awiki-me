@@ -77,32 +77,187 @@ void main() {
   );
 
   test(
-    'SecureAppKeyValueStore uses regular macOS Keychain for ad-hoc builds',
+    'SecureAppKeyValueStore writes macOS values through native Keychain service',
     () async {
       if (!Platform.isMacOS) {
         return;
       }
       TestWidgetsFlutterBinding.ensureInitialized();
-      const channel = MethodChannel(
+      const storageChannel = MethodChannel(
         'plugins.it_nomads.com/flutter_secure_storage',
       );
-      final calls = <MethodCall>[];
+      const keychainChannel = MethodChannel('ai.awiki.awikime/keychain_access');
+      final legacyCalls = <MethodCall>[];
+      final keychainCalls = <MethodCall>[];
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, (call) async {
-            calls.add(call);
+          .setMockMethodCallHandler(storageChannel, (call) async {
+            legacyCalls.add(call);
+            return null;
+          });
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(keychainChannel, (call) async {
+            keychainCalls.add(call);
             return null;
           });
       addTearDown(() {
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(channel, null);
+            .setMockMethodCallHandler(storageChannel, null);
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(keychainChannel, null);
       });
 
-      await SecureAppKeyValueStore().write(key: 'probe', value: 'ok');
+      await SecureAppKeyValueStore().write(
+        key: 'native-write-key',
+        value: 'ok',
+      );
 
-      expect(calls, hasLength(1));
-      final arguments = calls.single.arguments as Map<Object?, Object?>;
+      expect(legacyCalls, isEmpty);
+      expect(keychainCalls, hasLength(1));
+      expect(keychainCalls.single.method, 'writeGenericPassword');
+      expect(keychainCalls.single.arguments, <String, Object?>{
+        'service': 'ai.awiki.awikime.secure_storage',
+        'account': 'native-write-key',
+        'value': 'ok',
+      });
+    },
+  );
+
+  test(
+    'SecureAppKeyValueStore falls back to regular macOS Keychain bridge when native bridge is unavailable',
+    () async {
+      if (!Platform.isMacOS) {
+        return;
+      }
+      TestWidgetsFlutterBinding.ensureInitialized();
+      const storageChannel = MethodChannel(
+        'plugins.it_nomads.com/flutter_secure_storage',
+      );
+      const keychainChannel = MethodChannel('ai.awiki.awikime/keychain_access');
+      final legacyCalls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(storageChannel, (call) async {
+            legacyCalls.add(call);
+            return null;
+          });
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(keychainChannel, null);
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(storageChannel, null);
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(keychainChannel, null);
+      });
+
+      await SecureAppKeyValueStore().write(
+        key: 'legacy-write-key',
+        value: 'ok',
+      );
+
+      expect(legacyCalls, hasLength(1));
+      final arguments = legacyCalls.single.arguments as Map<Object?, Object?>;
       final options = arguments['options'] as Map<Object?, Object?>;
       expect(options['useDataProtectionKeyChain'], 'false');
+    },
+  );
+
+  test(
+    'SecureAppKeyValueStore reads native macOS Keychain values first',
+    () async {
+      if (!Platform.isMacOS) {
+        return;
+      }
+      TestWidgetsFlutterBinding.ensureInitialized();
+      const storageChannel = MethodChannel(
+        'plugins.it_nomads.com/flutter_secure_storage',
+      );
+      const keychainChannel = MethodChannel('ai.awiki.awikime/keychain_access');
+      final legacyCalls = <MethodCall>[];
+      final keychainCalls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(storageChannel, (call) async {
+            legacyCalls.add(call);
+            return null;
+          });
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(keychainChannel, (call) async {
+            keychainCalls.add(call);
+            if (call.method == 'readGenericPassword') {
+              return 'native-secret';
+            }
+            return null;
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(storageChannel, null);
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(keychainChannel, null);
+      });
+
+      final value = await SecureAppKeyValueStore().read(key: 'native-read-key');
+
+      expect(value, 'native-secret');
+      expect(legacyCalls, isEmpty);
+      expect(keychainCalls, hasLength(1));
+      expect(keychainCalls.single.method, 'readGenericPassword');
+      expect(keychainCalls.single.arguments, <String, Object?>{
+        'service': 'ai.awiki.awikime.secure_storage',
+        'account': 'native-read-key',
+      });
+    },
+  );
+
+  test(
+    'SecureAppKeyValueStore migrates legacy macOS reads to native Keychain and repairs ACL',
+    () async {
+      if (!Platform.isMacOS) {
+        return;
+      }
+      TestWidgetsFlutterBinding.ensureInitialized();
+      const storageChannel = MethodChannel(
+        'plugins.it_nomads.com/flutter_secure_storage',
+      );
+      const keychainChannel = MethodChannel('ai.awiki.awikime/keychain_access');
+      final legacyCalls = <MethodCall>[];
+      final keychainCalls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(storageChannel, (call) async {
+            legacyCalls.add(call);
+            if (call.method == 'read') {
+              return 'legacy-secret';
+            }
+            return null;
+          });
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(keychainChannel, (call) async {
+            keychainCalls.add(call);
+            return null;
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(storageChannel, null);
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(keychainChannel, null);
+      });
+
+      final value = await SecureAppKeyValueStore().read(key: 'legacy-read-key');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(value, 'legacy-secret');
+      expect(legacyCalls.map((call) => call.method), contains('read'));
+      expect(keychainCalls.map((call) => call.method), <String>[
+        'readGenericPassword',
+        'writeGenericPassword',
+        'repairGenericPasswordAccess',
+      ]);
+      expect(keychainCalls[1].arguments, <String, Object?>{
+        'service': 'ai.awiki.awikime.secure_storage',
+        'account': 'legacy-read-key',
+        'value': 'legacy-secret',
+      });
+      expect(keychainCalls[2].arguments, <String, Object?>{
+        'service': 'flutter_secure_storage_service',
+        'account': 'legacy-read-key',
+      });
     },
   );
 }
