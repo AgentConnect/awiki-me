@@ -189,6 +189,7 @@ class AppBootstrap {
       messages: messagingService,
       messageAgentBindings: messageAgentBindingPort,
       identities: identityAdapter,
+      environment: effectiveEnvironment,
     );
     final agentControlStatusStore = AwikiImCoreAgentControlStatusStore(
       messages: messageAdapter,

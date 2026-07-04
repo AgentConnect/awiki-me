@@ -6,17 +6,25 @@ import '../../domain/entities/conversation_summary.dart';
 
 ConversationSummary normalizeRealtimeConversationPresentationIdentity(
   ConversationSummary conversation,
-  Iterable<AgentSummary> agents,
-) {
+  Iterable<AgentSummary> agents, {
+  String? didDomain,
+}) {
   if (conversation.isGroup) {
     return conversation;
   }
-  final agent = resolveRealtimeRuntimeAgent(conversation, agents);
+  final agent = resolveRealtimeRuntimeAgent(
+    conversation,
+    agents,
+    didDomain: didDomain,
+  );
   if (agent == null) {
     return conversation;
   }
   final title = AgentDisplayName.title(agent);
-  final normalizedHandle = runtimeAgentPresentationHandle(agent);
+  final normalizedHandle = runtimeAgentPresentationHandleForDomain(
+    agent,
+    didDomain: didDomain,
+  );
   final targetPeer = _preferredRealtimeAgentTargetPeer(
     conversation,
     normalizedHandle,
@@ -31,12 +39,13 @@ ConversationSummary normalizeRealtimeConversationPresentationIdentity(
 
 AgentSummary? resolveRealtimeRuntimeAgent(
   ConversationSummary conversation,
-  Iterable<AgentSummary> agents,
-) {
+  Iterable<AgentSummary> agents, {
+  String? didDomain,
+}) {
   if (conversation.isGroup) {
     return null;
   }
-  final index = _RuntimeAgentIdentityIndex(agents);
+  final index = _RuntimeAgentIdentityIndex(agents, didDomain: didDomain);
   if (index.isEmpty) {
     return null;
   }
@@ -84,6 +93,13 @@ String? normalizedRuntimeAgentHandle(AgentSummary agent) {
 }
 
 String? runtimeAgentPresentationHandle(AgentSummary agent) {
+  return runtimeAgentPresentationHandleForDomain(agent);
+}
+
+String? runtimeAgentPresentationHandleForDomain(
+  AgentSummary agent, {
+  String? didDomain,
+}) {
   final handle = normalizedRuntimeAgentHandle(agent);
   if (handle == null) {
     return null;
@@ -91,7 +107,9 @@ String? runtimeAgentPresentationHandle(AgentSummary agent) {
   if (handle.contains('.')) {
     return handle;
   }
-  final domain = AwikiEnvironmentConfig.fromEnvironment().didDomain.trim();
+  final domain =
+      didDomain?.trim() ??
+      AwikiEnvironmentConfig.fromEnvironment().didDomain.trim();
   if (domain.isEmpty) {
     return handle;
   }
@@ -138,7 +156,10 @@ Iterable<String> _candidateHandles(ConversationSummary conversation) sync* {
 }
 
 class _RuntimeAgentIdentityIndex {
-  _RuntimeAgentIdentityIndex(Iterable<AgentSummary> agents) {
+  _RuntimeAgentIdentityIndex(
+    Iterable<AgentSummary> agents, {
+    String? didDomain,
+  }) {
     for (final agent in agents) {
       if (!agent.isRuntime) {
         continue;
@@ -150,7 +171,9 @@ class _RuntimeAgentIdentityIndex {
       byDid[agentDid] = agent;
       final exactHandles = <String>{
         if (normalizedRuntimeAgentHandle(agent) case final handle?) handle,
-        if (runtimeAgentPresentationHandle(agent) case final handle?) handle,
+        if (runtimeAgentPresentationHandleForDomain(agent, didDomain: didDomain)
+            case final handle?)
+          handle,
       };
       for (final handle in exactHandles) {
         _byExactHandle.putIfAbsent(handle, () => <AgentSummary>[]).add(agent);

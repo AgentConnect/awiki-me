@@ -497,6 +497,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         normalizeRealtimeConversationPresentationIdentity(
           conversationHint,
           ref.read(agentsProvider).agents,
+          didDomain: ref.read(awikiEnvironmentConfigProvider).didDomain,
         );
     final shouldShow = _shouldAcceptRealtimeConversationHint(
       normalizedConversationHint,

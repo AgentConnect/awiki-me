@@ -4,6 +4,7 @@ import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/agent/agent_control_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
@@ -17,6 +18,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
+import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -310,6 +312,77 @@ void main() {
       expect(conversations.map((item) => item.targetDid), [
         'did:agent:runtime',
       ]);
+    });
+
+    testWidgets('agent control commands use bootstrap-scoped environment', (
+      tester,
+    ) async {
+      final gateway = FakeAwikiGateway();
+      final realtimeGateway = FakeRealtimeGateway();
+      final environment = AwikiEnvironmentConfig(
+        baseUrl: 'https://awiki.ai',
+        agentImEnabled: false,
+      );
+      final inventory = FakeAgentInventoryPort();
+      final messaging = FakeMessagingService(gateway);
+      final app = AwikiMeApp(
+        bootstrap: AppBootstrap(
+          environment: environment,
+          accountGateway: gateway,
+          gateway: gateway,
+          realtimeGateway: realtimeGateway,
+          notificationFacade: FakeNotificationFacade(),
+          e2eeFacade: FakeE2eeFacade(),
+          localePreferenceService: FakeLocalePreferenceService(),
+          updateService: FakeUpdateService(),
+          appSessionService: FakeAppSessionService(gateway),
+          onboardingService: FakeOnboardingService(gateway),
+          onboardingSupportService: FakeOnboardingSupportService(gateway),
+          messagingService: messaging,
+          agentInventoryPort: inventory,
+          agentControlService: DefaultAgentControlService(
+            inventory: inventory,
+            messages: messaging,
+            environment: environment,
+          ),
+          conversationService: FakeConversationService(gateway),
+          groupApplicationService: FakeGroupApplicationService(gateway),
+          profileApplicationService: FakeProfileApplicationService(gateway),
+          relationshipApplicationService: FakeRelationshipApplicationService(
+            gateway,
+          ),
+          realtimeApplicationService: FakeRealtimeApplicationService(
+            gateway: gateway,
+            realtimeGateway: realtimeGateway,
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(app);
+      await tester.pump();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(AppShell)),
+      );
+      final command = await container
+          .read(agentControlServiceProvider)
+          .createDaemonInstallCommand(
+            controllerDid: 'did:human:me',
+            controllerHandle: 'alice.awiki.ai',
+            clientPlatform: 'linux',
+          );
+
+      expect(container.read(agentImEnabledProvider), isFalse);
+      expect(
+        command.command,
+        "curl -fsSL 'https://awiki.ai/daemon/install.sh' | "
+        "AWIKI_DAEMON_BASE_URL='https://awiki.ai' "
+        "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='https://awiki.ai/daemon' "
+        "sh -s -- --token 'daemon-token'",
+      );
+      expect(
+        command.fallbackCommand,
+        'awiki-deamon install --token daemon-token --base-url https://awiki.ai',
+      );
     });
   });
 }

@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
-import '../../application/config/awiki_environment_config.dart';
 import '../../application/models/product_local_models.dart';
 import '../../core/app_error_classifier.dart';
 import '../../core/performance_logger.dart';
@@ -213,7 +212,7 @@ class PendingDaemonUpgradeCancel {
 }
 
 final agentImEnabledProvider = Provider<bool>(
-  (ref) => AwikiEnvironmentConfig.fromEnvironment().agentImEnabled,
+  (ref) => ref.watch(awikiEnvironmentConfigProvider).agentImEnabled,
 );
 
 class AgentsState {

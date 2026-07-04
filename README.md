@@ -50,9 +50,12 @@ domain, OTP, App/CLI peer handles, and `awiki-cli` binary path.
 The app reads a single backend root from `AWIKI_BASE_URL` and derives the
 default user-service, message-service, mail-service, DID domain, ANP endpoint,
 daemon download root, package channel, update manifest, and release page from
-it. For packaging, `scripts/package_app.config` is the single domain switch:
-set `AWIKI_DOMAIN="awiki.info"` or `AWIKI_DOMAIN="awiki.ai"` and leave the
-advanced overrides empty.
+it. The same bootstrapped environment is reused by Agent inventory, runtime
+creation, daemon install command rendering, and runtime conversation handle
+projection, so the App should not mix `awiki.info` and `awiki.ai` inside one
+package. For packaging, `scripts/package_app.config` is the single domain
+switch: set `AWIKI_DOMAIN="awiki.info"` or `AWIKI_DOMAIN="awiki.ai"` and leave
+the advanced overrides empty.
 
 ```bash
 flutter run --dart-define=AWIKI_BASE_URL=https://awiki.info
@@ -107,7 +110,7 @@ The current checked-in config builds the installable online test package:
 
 ```text
 PACKAGE_CHANNEL="test"
-AWIKI_DOMAIN="awiki.ai"
+AWIKI_DOMAIN="awiki.info"
 ```
 
 For a future stable distribution track, update the same config file, for
