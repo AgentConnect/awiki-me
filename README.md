@@ -196,11 +196,14 @@ storage outside explicit `AWIKI_E2E_APP_STATE_ROOT` runs. Local/debug builds use
 the login Keychain rather than the Data Protection Keychain so they can run
 without a provisioning profile. New macOS writes go through the AWiki native
 Keychain bridge, which stores the item with an ACL that trusts the current
-`.app` bundle path; this avoids repeatedly asking for authorization when the
-same local debug App path is restarted or incrementally rebuilt. Values that were
-written by the older `flutter_secure_storage` path are read as a legacy fallback
-and migrated into the native bridge after the user authorizes access once, while
-also scheduling a best-effort ACL repair for the old item. The plugin's Data
+app executable path; this avoids repeatedly asking for authorization when the
+same local debug App path is restarted or incrementally rebuilt. Existing native
+items also schedule a one-time ACL repair after read so items written by older
+bridge builds are updated to the executable-path trust rule. Values that were
+written by the older `flutter_secure_storage` path are read as a legacy fallback,
+migrated into the native bridge after the user authorizes access once, and then
+removed from the legacy Keychain service on a successful migration so future
+launches do not keep touching the old item. The plugin's Data
 Protection Keychain mode still requires Keychain Sharing entitlements and a valid
 development/release signing identity; if that entitlement is missing, runtime
 writes fail with OSStatus `-34018` (`errSecMissingEntitlement`), and if the

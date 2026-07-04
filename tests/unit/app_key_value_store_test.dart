@@ -194,12 +194,19 @@ void main() {
       });
 
       final value = await SecureAppKeyValueStore().read(key: 'native-read-key');
+      await Future<void>.delayed(Duration.zero);
 
       expect(value, 'native-secret');
       expect(legacyCalls, isEmpty);
-      expect(keychainCalls, hasLength(1));
-      expect(keychainCalls.single.method, 'readGenericPassword');
-      expect(keychainCalls.single.arguments, <String, Object?>{
+      expect(keychainCalls.map((call) => call.method), <String>[
+        'readGenericPassword',
+        'repairGenericPasswordAccess',
+      ]);
+      expect(keychainCalls.first.arguments, <String, Object?>{
+        'service': 'ai.awiki.awikime.secure_storage',
+        'account': 'native-read-key',
+      });
+      expect(keychainCalls[1].arguments, <String, Object?>{
         'service': 'ai.awiki.awikime.secure_storage',
         'account': 'native-read-key',
       });
@@ -207,7 +214,7 @@ void main() {
   );
 
   test(
-    'SecureAppKeyValueStore migrates legacy macOS reads to native Keychain and repairs ACL',
+    'SecureAppKeyValueStore migrates legacy macOS reads to native Keychain and deletes legacy item',
     () async {
       if (!Platform.isMacOS) {
         return;
@@ -247,17 +254,13 @@ void main() {
       expect(keychainCalls.map((call) => call.method), <String>[
         'readGenericPassword',
         'writeGenericPassword',
-        'repairGenericPasswordAccess',
       ]);
       expect(keychainCalls[1].arguments, <String, Object?>{
         'service': 'ai.awiki.awikime.secure_storage',
         'account': 'legacy-read-key',
         'value': 'legacy-secret',
       });
-      expect(keychainCalls[2].arguments, <String, Object?>{
-        'service': 'flutter_secure_storage_service',
-        'account': 'legacy-read-key',
-      });
+      expect(legacyCalls.map((call) => call.method), contains('delete'));
     },
   );
 }

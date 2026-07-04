@@ -367,9 +367,13 @@ class MainFlutterWindow: NSWindow {
 
   private func createCurrentBundleKeychainAccess() -> (status: OSStatus, access: SecAccess?) {
     let accessDescription = "AWiki Me secure storage" as CFString
+    // Trust the executable path instead of the .app bundle directory. Keychain
+    // ACL checks are made against the process executable; using the bundle path
+    // can leave items readable only after a per-launch authorization prompt.
+    let trustedPath = Bundle.main.executablePath ?? Bundle.main.bundlePath
     var trustedApp: SecTrustedApplication?
-    let trustedStatus = Bundle.main.bundlePath.withCString { bundlePath in
-      SecTrustedApplicationCreateFromPath(bundlePath, &trustedApp)
+    let trustedStatus = trustedPath.withCString { path in
+      SecTrustedApplicationCreateFromPath(path, &trustedApp)
     }
     guard trustedStatus == errSecSuccess, let trustedApp else {
       return (trustedStatus, nil)
