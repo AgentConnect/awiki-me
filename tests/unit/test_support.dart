@@ -1946,7 +1946,10 @@ class FakeAgentControlService implements AgentControlService {
   InstallCommand nextInstallCommand = const InstallCommand(
     token: AgentRegistrationToken(token: 'daemon-token'),
     command:
-        'curl -fsSL https://awiki.info/daemon/install.sh | sh -s -- --token daemon-token',
+        "curl -fsSL 'https://awiki.info/daemon/install.sh' | "
+        "AWIKI_DAEMON_BASE_URL='https://awiki.info' "
+        "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='https://awiki.info/daemon' "
+        "sh -s -- --token 'daemon-token'",
     fallbackCommand:
         'awiki-deamon install --token daemon-token --base-url https://awiki.info',
     installerUrl: 'https://awiki.info/daemon/install.sh',

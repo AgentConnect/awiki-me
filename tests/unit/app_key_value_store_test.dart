@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:awiki_me/src/data/services/app_key_value_store.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -74,10 +75,43 @@ void main() {
       expect(fileMode, '600');
     },
   );
+
+  test(
+    'SecureAppKeyValueStore uses regular macOS Keychain for ad-hoc builds',
+    () async {
+      if (!Platform.isMacOS) {
+        return;
+      }
+      TestWidgetsFlutterBinding.ensureInitialized();
+      const channel = MethodChannel(
+        'plugins.it_nomads.com/flutter_secure_storage',
+      );
+      final calls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            return null;
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+
+      await SecureAppKeyValueStore().write(key: 'probe', value: 'ok');
+
+      expect(calls, hasLength(1));
+      final arguments = calls.single.arguments as Map<Object?, Object?>;
+      final options = arguments['options'] as Map<Object?, Object?>;
+      expect(options['useDataProtectionKeyChain'], 'false');
+    },
+  );
 }
 
 Future<String> _mode(String path) async {
-  final result = await Process.run('stat', <String>['-c', '%a', path]);
+  final args = Platform.isMacOS
+      ? <String>['-f', '%Lp', path]
+      : <String>['-c', '%a', path];
+  final result = await Process.run('stat', args);
   if (result.exitCode != 0) {
     throw StateError('stat failed: ${result.stderr}');
   }

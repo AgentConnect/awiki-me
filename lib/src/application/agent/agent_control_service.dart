@@ -178,7 +178,12 @@ class DefaultAgentControlService implements AgentControlService {
       cleanupUrl: cleanupUrl,
       packageUrlTemplate:
           '$downloadBaseUrl/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
-      command: 'curl -fsSL $installerUrl | sh -s -- --token ${token.token}',
+      command: _scriptInstallCommand(
+        token.token,
+        environment: _environment,
+        installerUrl: installerUrl,
+        downloadBaseUrl: downloadBaseUrl,
+      ),
       cleanupCommand: 'curl -fsSL $cleanupUrl | sh',
       fallbackCommand: _fallbackInstallCommand(
         token.token,
@@ -675,6 +680,20 @@ class DefaultAgentControlService implements AgentControlService {
   }
 }
 
+String _scriptInstallCommand(
+  String token, {
+  required AwikiEnvironmentConfig environment,
+  required String installerUrl,
+  required String downloadBaseUrl,
+}) {
+  final env = <String>[
+    'AWIKI_DAEMON_BASE_URL=${_shellQuote(environment.baseUrl)}',
+    'AWIKI_DAEMON_DOWNLOAD_BASE_URLS=${_shellQuote(downloadBaseUrl)}',
+  ].join(' ');
+  return 'curl -fsSL ${_shellQuote(installerUrl)} | '
+      '$env sh -s -- --token ${_shellQuote(token)}';
+}
+
 String _fallbackInstallCommand(
   String token, {
   required AwikiEnvironmentConfig environment,
@@ -692,6 +711,13 @@ String _fallbackInstallCommand(
     parts.addAll(<String>['--download-base-url', downloadBaseUrl]);
   }
   return parts.join(' ');
+}
+
+String _shellQuote(String value) {
+  if (value.isEmpty) {
+    return "''";
+  }
+  return "'${value.replaceAll("'", "'\"'\"'")}'";
 }
 
 String? _normalizeDownloadBaseUrl(String? value) {

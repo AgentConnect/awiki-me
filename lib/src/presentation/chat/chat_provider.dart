@@ -942,6 +942,19 @@ class ChatThreadsController
     if (_activeRemoteHistorySyncs.contains(displayThreadId)) {
       return;
     }
+    if (!_supportsRemoteHistory(conversation)) {
+      _chatProviderTrace(
+        'open.local_first.remote_history.skip',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(displayThreadId),
+          'reason': 'unsupported_thread_history',
+          'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
+            conversation.threadId,
+          ),
+        },
+      );
+      return;
+    }
     final shouldShowRemoteFailure =
         localResult.failed || !localResult.loadedAny;
     unawaited(
@@ -3103,6 +3116,18 @@ class ChatThreadsController
         'last_at': conversation.lastMessageAt,
       },
     );
+    if (!_supportsRemoteHistory(conversation)) {
+      _chatProviderTrace(
+        'history_sync.skip',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'reason': 'unsupported_thread_history',
+          'force': force,
+          'should_load': shouldLoad,
+        },
+      );
+      return Future<void>.value();
+    }
     if (current.isLoading ||
         _activeRemoteHistorySyncs.contains(targetThreadId)) {
       if (force || shouldLoad) {
@@ -5879,6 +5904,16 @@ class ChatThreadsController
     // covers the summary timestamp, repeatedly reloading history only creates
     // a conversation-list -> history-sync feedback loop.
     return conversation.lastMessageAt.isAfter(latestLocalAt);
+  }
+
+  bool _supportsRemoteHistory(ConversationSummary conversation) {
+    // im-core intentionally does not expose remote history for raw storage
+    // thread ids yet (`ThreadRef::Thread` returns unsupported_capability:
+    // thread-history). Peer-scoped direct conversations use those exact storage
+    // threads to avoid mixing controller/runtime agent messages, so App must
+    // stay local-first and avoid falling back to remote history until that
+    // native capability exists.
+    return !isPeerScopedDirectConversation(conversation);
   }
 
   bool _needsVisibleThreadStaleGuard(

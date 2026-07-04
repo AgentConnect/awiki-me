@@ -70,6 +70,50 @@ require_non_empty_config_var() {
   fi
 }
 
+trim_trailing_slash() {
+  local value="$1"
+  while [[ "${value%/}" != "$value" ]]; do
+    value="${value%/}"
+  done
+  printf '%s\n' "$value"
+}
+
+join_url() {
+  local base path
+  base="$(trim_trailing_slash "$1")"
+  path="$2"
+  while [[ "${path#/}" != "$path" ]]; do
+    path="${path#/}"
+  done
+  printf '%s/%s\n' "$base" "$path"
+}
+
+derive_base_url_from_domain() {
+  local domain="$1"
+  [[ -n "$domain" ]] || fail "AWIKI_DOMAIN must not be empty when AWIKI_BASE_URL is not set"
+  case "$domain" in
+    http://*|https://*)
+      trim_trailing_slash "$domain"
+      ;;
+    */*)
+      fail "AWIKI_DOMAIN must be a hostname, or set AWIKI_BASE_URL for full URLs"
+      ;;
+    *)
+      printf 'https://%s\n' "$domain"
+      ;;
+  esac
+}
+
+host_from_url() {
+  python3 - "$1" <<'PY'
+from urllib.parse import urlparse
+import sys
+
+host = urlparse(sys.argv[1]).hostname or ""
+print(host.lower())
+PY
+}
+
 resolve_repo_path() {
   local value="$1"
   [[ -n "$value" ]] || fail "path config value must not be empty"
@@ -102,28 +146,42 @@ json_string() {
   printf '"%s"' "$value"
 }
 
+require_cmd python3
+
 for required_name in \
   PACKAGE_CHANNEL \
-  AWIKI_BASE_URL \
-  AWIKI_UPDATE_MANIFEST_URL \
-  AWIKI_RELEASES_URL \
   PACKAGE_VERSION_BUMP; do
   require_config_var "$required_name"
 done
 
 require_non_empty_config_var PACKAGE_CHANNEL
-require_non_empty_config_var AWIKI_BASE_URL
-require_non_empty_config_var AWIKI_UPDATE_MANIFEST_URL
-require_non_empty_config_var AWIKI_RELEASES_URL
 require_non_empty_config_var PACKAGE_VERSION_BUMP
+if [[ ! "${AWIKI_DOMAIN+x}" ]]; then
+  AWIKI_DOMAIN=""
+fi
+if [[ ! "${AWIKI_BASE_URL+x}" ]]; then
+  AWIKI_BASE_URL=""
+fi
 
 for value_name in \
   PACKAGE_CHANNEL \
+  AWIKI_DOMAIN \
   AWIKI_BASE_URL \
+  AWIKI_SERVICE_BASE_URL \
+  AWIKI_USER_SERVICE_URL \
+  AWIKI_MESSAGE_SERVICE_URL \
+  AWIKI_MAIL_SERVICE_URL \
+  AWIKI_DID_DOMAIN \
+  AWIKI_STATE_NAMESPACE \
+  AWIKI_ANP_SERVICE_URL \
+  AWIKI_ANP_SERVICE_DID \
+  AWIKI_DAEMON_DOWNLOAD_BASE_URL \
   AWIKI_UPDATE_MANIFEST_URL \
   AWIKI_RELEASES_URL \
   PACKAGE_VERSION_BUMP; do
-  validate_no_newline "$value_name" "${!value_name}"
+  if [[ "${!value_name+x}" ]]; then
+    validate_no_newline "$value_name" "${!value_name}"
+  fi
 done
 
 case "$PACKAGE_CHANNEL" in
@@ -139,6 +197,55 @@ case "$PACKAGE_VERSION_BUMP" in
     fail "PACKAGE_VERSION_BUMP must be one of: build, patch, minor, major, none"
     ;;
 esac
+
+if [[ -z "$AWIKI_BASE_URL" ]]; then
+  AWIKI_BASE_URL="$(derive_base_url_from_domain "$AWIKI_DOMAIN")"
+fi
+AWIKI_BASE_URL="$(trim_trailing_slash "$AWIKI_BASE_URL")"
+case "$AWIKI_BASE_URL" in
+  http://*|https://*) ;;
+  *) fail "AWIKI_BASE_URL must start with http:// or https://" ;;
+esac
+
+if [[ -z "${AWIKI_DID_DOMAIN:-}" ]]; then
+  AWIKI_DID_DOMAIN="$(host_from_url "$AWIKI_BASE_URL")"
+fi
+[[ -n "$AWIKI_DID_DOMAIN" ]] || fail "could not derive AWIKI_DID_DOMAIN from AWIKI_BASE_URL"
+if [[ -z "${AWIKI_SERVICE_BASE_URL:-}" ]]; then
+  AWIKI_SERVICE_BASE_URL="$AWIKI_BASE_URL"
+fi
+if [[ -z "${AWIKI_USER_SERVICE_URL:-}" ]]; then
+  AWIKI_USER_SERVICE_URL="$AWIKI_BASE_URL"
+fi
+if [[ -z "${AWIKI_MESSAGE_SERVICE_URL:-}" ]]; then
+  AWIKI_MESSAGE_SERVICE_URL="$AWIKI_BASE_URL"
+fi
+if [[ -z "${AWIKI_MAIL_SERVICE_URL:-}" ]]; then
+  AWIKI_MAIL_SERVICE_URL="$AWIKI_BASE_URL"
+fi
+if [[ -z "${AWIKI_ANP_SERVICE_URL:-}" ]]; then
+  AWIKI_ANP_SERVICE_URL="$(join_url "$AWIKI_BASE_URL" "anp-im/rpc")"
+fi
+if [[ -z "${AWIKI_ANP_SERVICE_DID:-}" ]]; then
+  AWIKI_ANP_SERVICE_DID="did:wba:$AWIKI_DID_DOMAIN"
+fi
+if [[ -z "${AWIKI_DAEMON_DOWNLOAD_BASE_URL:-}" ]]; then
+  AWIKI_DAEMON_DOWNLOAD_BASE_URL="$(join_url "$AWIKI_BASE_URL" "daemon")"
+fi
+if [[ -z "${AWIKI_UPDATE_MANIFEST_URL:-}" ]]; then
+  AWIKI_UPDATE_MANIFEST_URL="$(join_url "$AWIKI_BASE_URL" "downloads/awiki-me/$PACKAGE_CHANNEL/latest.json")"
+fi
+if [[ -z "${AWIKI_RELEASES_URL:-}" ]]; then
+  AWIKI_RELEASES_URL="$(join_url "$AWIKI_BASE_URL" "#download")"
+fi
+AWIKI_ANP_SERVICE_URL="$(trim_trailing_slash "$AWIKI_ANP_SERVICE_URL")"
+AWIKI_SERVICE_BASE_URL="$(trim_trailing_slash "$AWIKI_SERVICE_BASE_URL")"
+AWIKI_USER_SERVICE_URL="$(trim_trailing_slash "$AWIKI_USER_SERVICE_URL")"
+AWIKI_MESSAGE_SERVICE_URL="$(trim_trailing_slash "$AWIKI_MESSAGE_SERVICE_URL")"
+AWIKI_MAIL_SERVICE_URL="$(trim_trailing_slash "$AWIKI_MAIL_SERVICE_URL")"
+AWIKI_DAEMON_DOWNLOAD_BASE_URL="$(trim_trailing_slash "$AWIKI_DAEMON_DOWNLOAD_BASE_URL")"
+AWIKI_UPDATE_MANIFEST_URL="$(trim_trailing_slash "$AWIKI_UPDATE_MANIFEST_URL")"
+AWIKI_RELEASES_URL="$(trim_trailing_slash "$AWIKI_RELEASES_URL")"
 
 CHANNEL_DIST_ROOT="$DIST_ROOT/$PACKAGE_CHANNEL"
 LATEST_MANIFEST="$CHANNEL_DIST_ROOT/latest.json"
@@ -159,6 +266,16 @@ add_dart_define() {
 }
 
 add_dart_define "AWIKI_BASE_URL" "$AWIKI_BASE_URL"
+add_dart_define "AWIKI_SERVICE_BASE_URL" "$AWIKI_SERVICE_BASE_URL"
+add_dart_define "AWIKI_USER_SERVICE_URL" "$AWIKI_USER_SERVICE_URL"
+add_dart_define "AWIKI_MESSAGE_SERVICE_URL" "$AWIKI_MESSAGE_SERVICE_URL"
+add_dart_define "AWIKI_MAIL_SERVICE_URL" "$AWIKI_MAIL_SERVICE_URL"
+add_dart_define "AWIKI_DID_DOMAIN" "$AWIKI_DID_DOMAIN"
+add_dart_define "AWIKI_STATE_NAMESPACE" "${AWIKI_STATE_NAMESPACE:-}"
+add_dart_define "AWIKI_ANP_SERVICE_URL" "$AWIKI_ANP_SERVICE_URL"
+add_dart_define "AWIKI_ANP_SERVICE_DID" "$AWIKI_ANP_SERVICE_DID"
+add_dart_define "AWIKI_DAEMON_DOWNLOAD_BASE_URL" "$AWIKI_DAEMON_DOWNLOAD_BASE_URL"
+add_dart_define "AWIKI_PACKAGE_CHANNEL" "$PACKAGE_CHANNEL"
 add_dart_define "AWIKI_UPDATE_MANIFEST_URL" "$AWIKI_UPDATE_MANIFEST_URL"
 add_dart_define "AWIKI_RELEASES_URL" "$AWIKI_RELEASES_URL"
 
@@ -689,7 +806,15 @@ log "config:          $CONFIG_PATH"
 log "channel:         $PACKAGE_CHANNEL"
 log "android mode:    $PACKAGE_ANDROID_BUILD_MODE"
 log "macOS mode:      $PACKAGE_MACOS_BUILD_MODE"
+log "domain:          ${AWIKI_DOMAIN:-$(host_from_url "$AWIKI_BASE_URL")}"
 log "backend base:    $AWIKI_BASE_URL"
+log "SDK base:        $AWIKI_SERVICE_BASE_URL"
+log "user service:    $AWIKI_USER_SERVICE_URL"
+log "message service: $AWIKI_MESSAGE_SERVICE_URL"
+log "mail service:    $AWIKI_MAIL_SERVICE_URL"
+log "DID domain:      $AWIKI_DID_DOMAIN"
+log "ANP service:     $AWIKI_ANP_SERVICE_URL"
+log "daemon download: $AWIKI_DAEMON_DOWNLOAD_BASE_URL"
 log "update manifest: $AWIKI_UPDATE_MANIFEST_URL"
 log "download page:   $AWIKI_RELEASES_URL"
 log "current version: $CURRENT_VERSION"

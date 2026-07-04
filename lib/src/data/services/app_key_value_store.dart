@@ -16,9 +16,26 @@ abstract class AppKeyValueStore {
 
 class SecureAppKeyValueStore implements AppKeyValueStore {
   SecureAppKeyValueStore({FlutterSecureStorage? secureStorage})
-    : _secureStorage = secureStorage ?? const FlutterSecureStorage();
+    : _secureStorage = secureStorage ?? _defaultSecureStorage();
 
   final FlutterSecureStorage _secureStorage;
+
+  static const FlutterSecureStorage _defaultStorage = FlutterSecureStorage();
+
+  static const FlutterSecureStorage _macOsStorage = FlutterSecureStorage(
+    // The plugin's macOS Data Protection Keychain mode requires a Keychain
+    // Sharing entitlement and non-ad-hoc signing. AWiki Me keeps local/debug
+    // Mac builds runnable while still storing secrets in the encrypted macOS
+    // Keychain by using the regular Keychain backend.
+    mOptions: MacOsOptions(useDataProtectionKeyChain: false),
+  );
+
+  static FlutterSecureStorage _defaultSecureStorage() {
+    if (Platform.isMacOS) {
+      return _macOsStorage;
+    }
+    return _defaultStorage;
+  }
 
   @override
   Future<String?> read({required String key}) {

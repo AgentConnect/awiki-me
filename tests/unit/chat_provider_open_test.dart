@@ -14,6 +14,7 @@ import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
+import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
@@ -1728,6 +1729,82 @@ void main() {
           .map((item) => item.content),
       ['canonical local'],
     );
+  });
+
+  test('peer-scope 本地历史为空时不回退未支持的远端 thread history', () async {
+    final canonicalConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:codex-empty',
+      displayName: 'Codex Empty',
+      lastMessagePreview: 'waiting',
+      lastMessageAt: DateTime(2026, 7, 4, 22, 55),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:codex:runtime-empty',
+      targetPeer: 'codex-empty.awiki.info',
+    );
+    gateway.localDmHistoryByPeerDid = const <String, List<ChatMessage>>{
+      'peer-scope:v1:codex-empty': <ChatMessage>[],
+    };
+    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:codex:runtime-empty': <ChatMessage>[
+        ChatMessage(
+          localId: 'remote-should-not-load',
+          remoteId: 'remote-should-not-load',
+          threadId: canonicalConversation.threadId,
+          senderDid: 'did:codex:runtime-empty',
+          receiverDid: 'did:me',
+          content: 'should not call remote thread history',
+          createdAt: canonicalConversation.lastMessageAt,
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+      ],
+    };
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(canonicalConversation);
+    await pumpEventQueue();
+
+    expect(gateway.lastFetchedLocalDmPeerDid, 'peer-scope:v1:codex-empty');
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(messageSyncService.threadAfterRequests, hasLength(1));
+    expect(
+      messageSyncService.threadAfterRequests.single.thread.stableId,
+      'dm:peer-scope:v1:codex-empty',
+    );
+    expect(
+      container
+          .read(chatThreadProvider(canonicalConversation.threadId))
+          .messages,
+      isEmpty,
+    );
+    expect(container.read(uiFeedbackProvider), isNull);
+  });
+
+  test('peer-scope 强制同步时跳过未支持的远端 thread history', () async {
+    final canonicalConversation = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:codex-force',
+      displayName: 'Codex Force',
+      lastMessagePreview: 'newer summary',
+      lastMessageAt: DateTime(2026, 7, 4, 23, 1),
+      unreadCount: 1,
+      isGroup: false,
+      targetDid: 'did:codex:runtime-force',
+      targetPeer: 'codex-force.awiki.info',
+    );
+
+    await container
+        .read(chatThreadsProvider.notifier)
+        .syncHistoryForConversation(
+          canonicalConversation,
+          force: true,
+          reportFailure: true,
+        );
+    await pumpEventQueue();
+
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(container.read(uiFeedbackProvider), isNull);
   });
 
   test('peer-scope 会话打开时保留同一 storage thread 的完整本地历史', () async {

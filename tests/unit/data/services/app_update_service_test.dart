@@ -13,6 +13,14 @@ import 'package:package_info_plus/package_info_plus.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('default update URLs follow the default AWiki environment', () {
+    expect(
+      kDefaultUpdateManifestUrl,
+      'https://awiki.info/downloads/awiki-me/test/latest.json',
+    );
+    expect(kDefaultReleasesUrl, 'https://awiki.info/#download');
+  });
+
   test('checkForUpdates fetches manifest and caches it', () async {
     final storage = _MemoryKeyValueStore();
     final httpClient = _QueueHttpClient(<_HttpFixture>[
