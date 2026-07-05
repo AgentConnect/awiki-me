@@ -9,7 +9,6 @@ import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../../app/app_router.dart';
 import '../../app/app_services.dart';
-import '../../application/config/awiki_environment_config.dart';
 import '../../domain/entities/agent/agent_command.dart';
 import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';

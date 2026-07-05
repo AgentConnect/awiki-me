@@ -8,7 +8,6 @@ import '../../app/ui_feedback.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
-import '../app_shell/providers/session_provider.dart';
 import '../chat/chat_provider.dart';
 import '../conversation_list/conversation_provider.dart';
 import '../shared/awiki_me_design.dart';
@@ -225,15 +224,7 @@ class PeerProfilePage extends ConsumerWidget {
                       AppDangerButton(
                         label: context.l10n.peerProfileDeleteThread,
                         onPressed: () async {
-                          final myDid = ref.read(sessionProvider).session?.did;
-                          if (myDid == null) {
-                            return;
-                          }
-                          final threadId = _threadIdForProfile(
-                            ref,
-                            profile,
-                            ownerDid: myDid,
-                          );
+                          final threadId = _threadIdForProfile(ref, profile);
                           try {
                             await ref
                                 .read(chatThreadsProvider.notifier)
@@ -276,11 +267,7 @@ MarkdownStyleSheet _peerMarkdownStyleSheet(BuildContext context) {
   );
 }
 
-String _threadIdForProfile(
-  WidgetRef ref,
-  UserProfile profile, {
-  required String ownerDid,
-}) {
+String _threadIdForProfile(WidgetRef ref, UserProfile profile) {
   final peerTarget = _directPeerTarget(profile.fullHandle ?? profile.handle);
   final peerDid = profile.did.trim();
   final existing = ref
@@ -296,7 +283,7 @@ String _threadIdForProfile(
   if (existing.isNotEmpty) {
     return existing.first.threadId;
   }
-  return dmThreadIdForDids(ownerDid, peerDid);
+  return 'dm:$peerDid';
 }
 
 String? _directPeerTarget(String? value) {
