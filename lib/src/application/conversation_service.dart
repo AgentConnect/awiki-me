@@ -474,14 +474,10 @@ class ImCoreConversationService
       },
       level: AwikiPerformanceLogLevel.verbose,
     );
-    final overlayKeys = _overlayKeysForConversations(
-      mergedItems,
-      agentProjection,
-      includeHandleAliasesForStrongIdentity: true,
-    ).toList(growable: false);
-    final overlays = await _loadOverlaysForKeys(
+    final overlays = await _loadOverlaysForConversations(
       ownerDid: ownerDid,
-      keys: overlayKeys,
+      conversations: mergedItems,
+      projection: agentProjection,
       label: 'conversation_service.overlays',
     );
     final visible = AwikiPerformanceLogger.sync(
@@ -605,13 +601,10 @@ class ImCoreConversationService
     )) {
       return null;
     }
-    final overlays = await _loadOverlaysForKeys(
+    final overlays = await _loadOverlaysForConversations(
       ownerDid: ownerDid,
-      keys: _conversationOverlayKeys(
-        normalized,
-        projection,
-        includeHandleAliasesForStrongIdentity: true,
-      ),
+      conversations: <ConversationSummary>[normalized],
+      projection: projection,
       label: 'conversation_service.normalize.overlays',
     );
     if (_isConversationHidden(normalized, overlays, projection)) {
@@ -696,18 +689,13 @@ class ImCoreConversationService
     final projection = await _loadAgentConversationProjection();
     final normalized = _conversationWithVisibilityKey(conversation, projection);
     final now = updatedAt ?? DateTime.now().toUtc();
-    for (final key in _conversationOverlayKeys(
-      normalized,
-      projection,
-      includeHandleAliasesForStrongIdentity: true,
-    )) {
-      await _localStore.setConversationHidden(
-        ownerDid: ownerDid,
-        conversationKey: key,
-        hidden: true,
-        updatedAt: now,
-      );
-    }
+    await _setConversationHiddenByCanonicalId(
+      ownerDid: ownerDid,
+      conversation: normalized,
+      projection: projection,
+      hidden: true,
+      updatedAt: now,
+    );
   }
 
   @override
@@ -719,18 +707,49 @@ class ImCoreConversationService
     final projection = await _loadAgentConversationProjection();
     final normalized = _conversationWithVisibilityKey(conversation, projection);
     final now = updatedAt ?? DateTime.now().toUtc();
-    for (final key in _conversationOverlayKeys(
-      normalized,
+    await _setConversationHiddenByCanonicalId(
+      ownerDid: ownerDid,
+      conversation: normalized,
+      projection: projection,
+      hidden: false,
+      updatedAt: now,
+    );
+  }
+
+  Future<void> _setConversationHiddenByCanonicalId({
+    required String ownerDid,
+    required ConversationSummary conversation,
+    required _AgentConversationProjection projection,
+    required bool hidden,
+    required DateTime updatedAt,
+  }) async {
+    final conversationId = _canonicalOverlayKey(conversation);
+    final overlays = await _loadOverlaysForConversations(
+      ownerDid: ownerDid,
+      conversations: <ConversationSummary>[conversation],
+      projection: projection,
+      label: 'conversation_service.hidden.overlays',
+    );
+    final existing = _preferredOverlayForConversation(
+      conversation,
+      overlays,
       projection,
-      includeHandleAliasesForStrongIdentity: true,
-    )) {
-      await _localStore.setConversationHidden(
-        ownerDid: ownerDid,
-        conversationKey: key,
-        hidden: false,
-        updatedAt: now,
-      );
-    }
+    );
+    await _localStore.upsertConversationOverlayByConversationId(
+      (existing ??
+              ProductConversationOverlay(
+                ownerDid: ownerDid,
+                threadId: conversationId,
+                conversationId: conversationId,
+                updatedAt: updatedAt,
+              ))
+          .copyWith(
+            threadId: conversationId,
+            conversationId: conversationId,
+            hidden: hidden,
+            updatedAt: updatedAt,
+          ),
+    );
   }
 
   Future<_AgentConversationProjection>
@@ -773,16 +792,38 @@ class ImCoreConversationService
     required Iterable<ConversationSummary> conversations,
     required _AgentConversationProjection projection,
     required String label,
-  }) {
-    return _loadOverlaysForKeys(
-      ownerDid: ownerDid,
-      keys: _overlayKeysForConversations(
-        conversations,
-        projection,
-        includeHandleAliasesForStrongIdentity: true,
+  }) async {
+    final items = conversations.toList(growable: false);
+    final canonicalKeys = items
+        .map(_canonicalOverlayKey)
+        .where((key) => key.isNotEmpty)
+        .toSet();
+    final legacyKeys = _overlayKeysForConversations(
+      items,
+      projection,
+      includeHandleAliasesForStrongIdentity: true,
+    ).toSet()..removeAll(canonicalKeys);
+    final canonical = await AwikiPerformanceLogger.async(
+      '$label.canonical',
+      () => _localStore.loadConversationOverlaysByConversationId(
+        ownerDid: ownerDid,
+        conversationIds: canonicalKeys,
       ),
-      label: label,
+      fields: <String, Object?>{'keys': canonicalKeys.length},
+      level: AwikiPerformanceLogLevel.verbose,
     );
+    if (legacyKeys.isEmpty) {
+      return canonical;
+    }
+    final legacy = await _loadOverlaysForKeys(
+      ownerDid: ownerDid,
+      keys: legacyKeys,
+      label: '$label.legacy',
+    );
+    if (legacy.isEmpty) {
+      return canonical;
+    }
+    return <String, ProductConversationOverlay>{...legacy, ...canonical};
   }
 
   Future<Map<String, ProductConversationOverlay>> _loadOverlaysForKeys({
@@ -827,11 +868,9 @@ bool _isConversationHidden(
   Map<String, ProductConversationOverlay> overlays,
   _AgentConversationProjection projection,
 ) {
-  final overlay = _latestOverlayForConversation(
-    conversation,
-    overlays,
-    projection,
-  );
+  final overlay =
+      _canonicalOverlayForConversation(conversation, overlays) ??
+      _latestLegacyOverlayForConversation(conversation, overlays, projection);
   if (overlay == null || !overlay.hidden) {
     return false;
   }
@@ -843,6 +882,10 @@ ProductConversationOverlay? _preferredOverlayForConversation(
   Map<String, ProductConversationOverlay> overlays,
   _AgentConversationProjection projection,
 ) {
+  final canonical = _canonicalOverlayForConversation(conversation, overlays);
+  if (canonical != null) {
+    return canonical;
+  }
   for (final key in _conversationOverlayKeys(conversation, projection)) {
     final overlay = overlays[key];
     if (overlay != null) {
@@ -852,7 +895,7 @@ ProductConversationOverlay? _preferredOverlayForConversation(
   return null;
 }
 
-ProductConversationOverlay? _latestOverlayForConversation(
+ProductConversationOverlay? _latestLegacyOverlayForConversation(
   ConversationSummary conversation,
   Map<String, ProductConversationOverlay> overlays,
   _AgentConversationProjection projection,
@@ -868,6 +911,25 @@ ProductConversationOverlay? _latestOverlayForConversation(
     }
   }
   return latest;
+}
+
+ProductConversationOverlay? _canonicalOverlayForConversation(
+  ConversationSummary conversation,
+  Map<String, ProductConversationOverlay> overlays,
+) {
+  return overlays[_canonicalOverlayKey(conversation)];
+}
+
+String _canonicalOverlayKey(ConversationSummary conversation) {
+  final conversationId = conversation.conversationId?.trim();
+  if (conversationId != null && conversationId.isNotEmpty) {
+    return conversationId;
+  }
+  final threadId = conversation.threadId.trim();
+  if (threadId.isNotEmpty) {
+    return threadId;
+  }
+  return conversation.visibilityKey;
 }
 
 void _sortConversationsForDisplay(
@@ -967,7 +1029,8 @@ List<ConversationSummary> _collapseLegacyDirectConversations(
   final byThread = <String, ConversationSummary>{};
   final consumedLegacy = <String>{};
   for (final item in items) {
-    if (!isReplaceableLegacyDirectConversation(item, ownerDid: ownerDid)) {
+    if (!isReplaceableLegacyDirectConversation(item, ownerDid: ownerDid) ||
+        _looksLikeAgentDirectConversation(item)) {
       byThread[item.threadId] = item;
       continue;
     }
@@ -990,6 +1053,23 @@ List<ConversationSummary> _collapseLegacyDirectConversations(
       .where((item) => !consumedLegacy.contains(item.threadId))
       .map((item) => byThread[item.threadId] ?? item)
       .toList(growable: false);
+}
+
+bool _looksLikeAgentDirectConversation(ConversationSummary item) {
+  if (item.isGroup) {
+    return false;
+  }
+  return _looksLikeAgentDid(item.targetDid) ||
+      _looksLikeAgentDid(item.targetPeer) ||
+      _looksLikeAgentDid(item.threadId);
+}
+
+bool _looksLikeAgentDid(String? value) {
+  final text = value?.trim();
+  if (text == null || text.isEmpty) {
+    return false;
+  }
+  return text.contains('did:agent:') || text.contains(':agent:');
 }
 
 ConversationVisibilityIdentity _conversationIdentity(

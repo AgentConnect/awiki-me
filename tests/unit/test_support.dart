@@ -2292,6 +2292,23 @@ class FakeProductLocalStore implements ProductLocalStore {
     required String threadId,
   }) async {
     overlays.remove(_key(ownerDid, threadId));
+    overlays.removeWhere(
+      (_, overlay) =>
+          overlay.ownerDid == ownerDid && overlay.threadId == threadId,
+    );
+  }
+
+  @override
+  Future<void> deleteConversationOverlayByConversationId({
+    required String ownerDid,
+    required String conversationId,
+  }) async {
+    overlays.remove(_key(ownerDid, conversationId));
+    overlays.removeWhere(
+      (_, overlay) =>
+          overlay.ownerDid == ownerDid &&
+          overlay.effectiveConversationId == conversationId,
+    );
   }
 
   @override
@@ -2324,7 +2341,24 @@ class FakeProductLocalStore implements ProductLocalStore {
     required String ownerDid,
     required String threadId,
   }) async {
-    return overlays[_key(ownerDid, threadId)];
+    return overlays[_key(ownerDid, threadId)] ??
+        _firstOverlayWhere(
+          (overlay) =>
+              overlay.ownerDid == ownerDid && overlay.threadId == threadId,
+        );
+  }
+
+  @override
+  Future<ProductConversationOverlay?> loadConversationOverlayByConversationId({
+    required String ownerDid,
+    required String conversationId,
+  }) async {
+    return overlays[_key(ownerDid, conversationId)] ??
+        _firstOverlayWhere(
+          (overlay) =>
+              overlay.ownerDid == ownerDid &&
+              overlay.effectiveConversationId == conversationId,
+        );
   }
 
   @override
@@ -2339,6 +2373,33 @@ class FakeProductLocalStore implements ProductLocalStore {
             (ids == null || ids.contains(overlay.threadId)))
           overlay.threadId: overlay,
     };
+  }
+
+  @override
+  Future<Map<String, ProductConversationOverlay>>
+  loadConversationOverlaysByConversationId({
+    required String ownerDid,
+    Iterable<String>? conversationIds,
+  }) async {
+    final ids = conversationIds?.toSet();
+    if (ids != null && ids.isEmpty) {
+      return const <String, ProductConversationOverlay>{};
+    }
+    final result = <String, ProductConversationOverlay>{};
+    for (final overlay in overlays.values) {
+      if (overlay.ownerDid != ownerDid) {
+        continue;
+      }
+      final conversationId = overlay.effectiveConversationId;
+      if (ids != null && !ids.contains(conversationId)) {
+        continue;
+      }
+      final existing = result[conversationId];
+      if (existing == null || _preferConversationOverlay(overlay, existing)) {
+        result[conversationId] = overlay;
+      }
+    }
+    return result;
   }
 
   @override
@@ -2407,11 +2468,72 @@ class FakeProductLocalStore implements ProductLocalStore {
   }
 
   @override
+  Future<void> setConversationHiddenByConversationId({
+    required String ownerDid,
+    required String conversationId,
+    required bool hidden,
+    required DateTime updatedAt,
+  }) async {
+    final key = _key(ownerDid, conversationId);
+    final existing = overlays[key];
+    overlays[key] =
+        (existing ??
+                ProductConversationOverlay(
+                  ownerDid: ownerDid,
+                  threadId: conversationId,
+                  conversationId: conversationId,
+                  updatedAt: updatedAt,
+                ))
+            .copyWith(
+              threadId: conversationId,
+              conversationId: conversationId,
+              hidden: hidden,
+              updatedAt: updatedAt,
+            );
+  }
+
+  @override
   Future<void> upsertConversationOverlay(
     ProductConversationOverlay overlay,
   ) async {
     overlays[_key(overlay.ownerDid, overlay.threadId)] = overlay;
   }
+
+  @override
+  Future<void> upsertConversationOverlayByConversationId(
+    ProductConversationOverlay overlay,
+  ) async {
+    final conversationId = overlay.effectiveConversationId;
+    overlays[_key(overlay.ownerDid, conversationId)] = overlay.copyWith(
+      threadId: conversationId,
+      conversationId: conversationId,
+    );
+  }
+
+  ProductConversationOverlay? _firstOverlayWhere(
+    bool Function(ProductConversationOverlay overlay) test,
+  ) {
+    for (final overlay in overlays.values) {
+      if (test(overlay)) {
+        return overlay;
+      }
+    }
+    return null;
+  }
+}
+
+bool _preferConversationOverlay(
+  ProductConversationOverlay candidate,
+  ProductConversationOverlay existing,
+) {
+  final candidateIsCanonical =
+      candidate.threadId.trim() == candidate.effectiveConversationId;
+  final existingIsCanonical =
+      existing.threadId.trim() == existing.effectiveConversationId;
+  if (candidateIsCanonical != existingIsCanonical) {
+    return candidateIsCanonical;
+  }
+  return candidate.updatedAt.isAfter(existing.updatedAt);
 }
 
 class FakeGroupApplicationService implements GroupApplicationService {

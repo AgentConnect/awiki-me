@@ -219,6 +219,16 @@ void main() {
           onCreate: (db, _) => _createVersion1Schema(db),
         ),
       );
+      await version1.insert('conversation_overlays', <String, Object?>{
+        'owner_did': 'did:alice',
+        'thread_id': 'direct:bob',
+        'pinned': 1,
+        'muted': 0,
+        'hidden': 1,
+        'custom_title': 'Bob legacy',
+        'avatar_seed': 'seed-legacy',
+        'updated_at': DateTime.utc(2026, 6, 14).toIso8601String(),
+      });
       await version1.close();
 
       final store = _store(databaseDir);
@@ -232,9 +242,121 @@ void main() {
       );
 
       final states = await store.loadAgentStates(ownerDid: 'did:alice');
+      final overlay = await store.loadConversationOverlayByConversationId(
+        ownerDid: 'did:alice',
+        conversationId: 'direct:bob',
+      );
       expect(states, hasLength(1));
       expect(states.single.agentDid, 'did:agent');
       expect(states.single.valueJson, '{"state":"ready"}');
+      expect(overlay?.customTitle, 'Bob legacy');
+      expect(overlay?.hidden, isTrue);
+      expect(overlay?.effectiveConversationId, 'direct:bob');
+    },
+  );
+
+  test(
+    'upgrades version 2 overlays and uses conversation id keyed rows',
+    () async {
+      final path = _databasePath(databaseDir);
+      final version2 = await databaseFactory.openDatabase(
+        path,
+        options: OpenDatabaseOptions(
+          version: 2,
+          onCreate: (db, _) => _createVersion2Schema(db),
+        ),
+      );
+      await version2.insert('conversation_overlays', <String, Object?>{
+        'owner_did': 'did:alice',
+        'thread_id': 'direct-did:did:bob',
+        'pinned': 1,
+        'muted': 1,
+        'hidden': 1,
+        'custom_title': 'Bob legacy',
+        'avatar_seed': 'seed-legacy',
+        'updated_at': DateTime.utc(2026, 7, 5, 8).toIso8601String(),
+      });
+      await version2.insert('conversation_overlays', <String, Object?>{
+        'owner_did': 'did:bob',
+        'thread_id': 'direct-did:did:bob',
+        'pinned': 0,
+        'muted': 0,
+        'hidden': 0,
+        'custom_title': 'Bob private',
+        'updated_at': DateTime.utc(2026, 7, 5, 8).toIso8601String(),
+      });
+      await version2.close();
+
+      final store = _store(databaseDir);
+      final legacy = await store.loadConversationOverlayByConversationId(
+        ownerDid: 'did:alice',
+        conversationId: 'direct-did:did:bob',
+      );
+      final bobOwner = await store.loadConversationOverlayByConversationId(
+        ownerDid: 'did:bob',
+        conversationId: 'direct-did:did:bob',
+      );
+
+      expect(legacy?.customTitle, 'Bob legacy');
+      expect(legacy?.pinned, isTrue);
+      expect(legacy?.muted, isTrue);
+      expect(legacy?.hidden, isTrue);
+      expect(legacy?.effectiveConversationId, 'direct-did:did:bob');
+      expect(bobOwner?.customTitle, 'Bob private');
+
+      await store.upsertConversationOverlay(
+        ProductConversationOverlay(
+          ownerDid: 'did:alice',
+          threadId: 'direct-handle:bob.awiki.test',
+          conversationId: 'dm:peer-scope:v1:bob',
+          hidden: true,
+          customTitle: 'stale alias',
+          updatedAt: DateTime.utc(2026, 7, 5, 10),
+        ),
+      );
+      await store.upsertConversationOverlayByConversationId(
+        ProductConversationOverlay(
+          ownerDid: 'did:alice',
+          threadId: 'legacy-thread',
+          conversationId: 'dm:peer-scope:v1:bob',
+          pinned: true,
+          customTitle: 'Bob canonical',
+          avatarSeed: 'seed-canonical',
+          updatedAt: DateTime.utc(2026, 7, 5, 9),
+        ),
+      );
+
+      final canonical = await store.loadConversationOverlayByConversationId(
+        ownerDid: 'did:alice',
+        conversationId: 'dm:peer-scope:v1:bob',
+      );
+      final batch = await store.loadConversationOverlaysByConversationId(
+        ownerDid: 'did:alice',
+        conversationIds: const <String>[
+          'dm:peer-scope:v1:bob',
+          'direct-did:did:bob',
+        ],
+      );
+
+      expect(canonical?.threadId, 'dm:peer-scope:v1:bob');
+      expect(canonical?.customTitle, 'Bob canonical');
+      expect(canonical?.hidden, isFalse);
+      expect(batch['dm:peer-scope:v1:bob']?.customTitle, 'Bob canonical');
+      expect(batch['direct-did:did:bob']?.customTitle, 'Bob legacy');
+
+      await store.setConversationHiddenByConversationId(
+        ownerDid: 'did:alice',
+        conversationId: 'dm:peer-scope:v1:bob',
+        hidden: true,
+        updatedAt: DateTime.utc(2026, 7, 5, 11),
+      );
+      final hidden = await store.loadConversationOverlayByConversationId(
+        ownerDid: 'did:alice',
+        conversationId: 'dm:peer-scope:v1:bob',
+      );
+      expect(hidden?.hidden, isTrue);
+      expect(hidden?.pinned, isTrue);
+      expect(hidden?.customTitle, 'Bob canonical');
     },
   );
 
@@ -253,6 +375,15 @@ void main() {
         updatedAt: DateTime.utc(2026, 6, 16),
       ),
     );
+    await legacyStore.upsertConversationOverlayByConversationId(
+      ProductConversationOverlay(
+        ownerDid: 'did:alice',
+        threadId: 'legacy-thread',
+        conversationId: 'dm:peer-scope:v1:legacy',
+        customTitle: 'Legacy conversation',
+        updatedAt: DateTime.utc(2026, 6, 16),
+      ),
+    );
 
     final store = AwikiProductLocalStoreSqlite(
       databasePath: targetPath,
@@ -267,9 +398,14 @@ void main() {
         updatedAt: DateTime.utc(2026, 6, 17),
       ),
     );
+    final overlay = await store.loadConversationOverlayByConversationId(
+      ownerDid: 'did:alice',
+      conversationId: 'dm:peer-scope:v1:legacy',
+    );
 
     expect(states, hasLength(1));
     expect(states.single.valueJson, '{"state":"legacy"}');
+    expect(overlay?.customTitle, 'Legacy conversation');
     expect(await File(targetPath).exists(), isTrue);
     final targetRows = await AwikiProductLocalStoreSqlite(
       databasePath: targetPath,
@@ -335,6 +471,19 @@ Future<void> _createVersion1Schema(DatabaseExecutor db) async {
       value_json TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       PRIMARY KEY (owner_did, key)
+    )
+  ''');
+}
+
+Future<void> _createVersion2Schema(DatabaseExecutor db) async {
+  await _createVersion1Schema(db);
+  await db.execute('''
+    CREATE TABLE local_agent_states (
+      owner_did TEXT NOT NULL,
+      agent_did TEXT NOT NULL,
+      value_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (owner_did, agent_did)
     )
   ''');
 }

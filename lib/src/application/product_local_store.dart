@@ -8,12 +8,27 @@ abstract interface class ProductLocalStore {
     required String threadId,
   });
 
+  Future<ProductConversationOverlay?> loadConversationOverlayByConversationId({
+    required String ownerDid,
+    required String conversationId,
+  });
+
   Future<Map<String, ProductConversationOverlay>> loadConversationOverlays({
     required String ownerDid,
     Iterable<String>? threadIds,
   });
 
+  Future<Map<String, ProductConversationOverlay>>
+  loadConversationOverlaysByConversationId({
+    required String ownerDid,
+    Iterable<String>? conversationIds,
+  });
+
   Future<void> upsertConversationOverlay(ProductConversationOverlay overlay);
+
+  Future<void> upsertConversationOverlayByConversationId(
+    ProductConversationOverlay overlay,
+  );
 
   Future<void> setThreadHidden({
     required String ownerDid,
@@ -29,9 +44,21 @@ abstract interface class ProductLocalStore {
     required DateTime updatedAt,
   });
 
+  Future<void> setConversationHiddenByConversationId({
+    required String ownerDid,
+    required String conversationId,
+    required bool hidden,
+    required DateTime updatedAt,
+  });
+
   Future<void> deleteConversationOverlay({
     required String ownerDid,
     required String threadId,
+  });
+
+  Future<void> deleteConversationOverlayByConversationId({
+    required String ownerDid,
+    required String conversationId,
   });
 
   Future<MessageDraft?> loadDraft({

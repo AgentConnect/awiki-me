@@ -73,4 +73,97 @@ void main() {
       );
     },
   );
+
+  test(
+    'in-memory overlays use conversation id as canonical owner key',
+    () async {
+      final store = InMemoryAwikiProductLocalStore();
+      final now = DateTime.utc(2026, 7, 5, 10);
+
+      await store.upsertConversationOverlay(
+        ProductConversationOverlay(
+          ownerDid: 'did:alice',
+          threadId: 'direct-did:did:bob',
+          conversationId: 'dm:peer-scope:v1:bob',
+          hidden: true,
+          updatedAt: now,
+        ),
+      );
+      await store.upsertConversationOverlayByConversationId(
+        ProductConversationOverlay(
+          ownerDid: 'did:alice',
+          threadId: 'legacy-thread',
+          conversationId: 'dm:peer-scope:v1:bob',
+          pinned: true,
+          customTitle: 'Bob canonical',
+          avatarSeed: 'seed-canonical',
+          updatedAt: now.add(const Duration(minutes: 1)),
+        ),
+      );
+      await store.upsertConversationOverlayByConversationId(
+        ProductConversationOverlay(
+          ownerDid: 'did:bob',
+          threadId: 'legacy-thread',
+          conversationId: 'dm:peer-scope:v1:bob',
+          customTitle: 'Bob owner',
+          updatedAt: now,
+        ),
+      );
+
+      final alice = await store.loadConversationOverlayByConversationId(
+        ownerDid: 'did:alice',
+        conversationId: 'dm:peer-scope:v1:bob',
+      );
+      final bob = await store.loadConversationOverlayByConversationId(
+        ownerDid: 'did:bob',
+        conversationId: 'dm:peer-scope:v1:bob',
+      );
+      final batch = await store.loadConversationOverlaysByConversationId(
+        ownerDid: 'did:alice',
+        conversationIds: const <String>['dm:peer-scope:v1:bob'],
+      );
+
+      expect(alice?.threadId, 'dm:peer-scope:v1:bob');
+      expect(alice?.effectiveConversationId, 'dm:peer-scope:v1:bob');
+      expect(alice?.pinned, isTrue);
+      expect(alice?.hidden, isFalse);
+      expect(alice?.customTitle, 'Bob canonical');
+      expect(alice?.avatarSeed, 'seed-canonical');
+      expect(bob?.customTitle, 'Bob owner');
+      expect(batch.keys, ['dm:peer-scope:v1:bob']);
+
+      await store.setConversationHiddenByConversationId(
+        ownerDid: 'did:alice',
+        conversationId: 'dm:peer-scope:v1:bob',
+        hidden: true,
+        updatedAt: now.add(const Duration(minutes: 2)),
+      );
+      final hidden = await store.loadConversationOverlayByConversationId(
+        ownerDid: 'did:alice',
+        conversationId: 'dm:peer-scope:v1:bob',
+      );
+      expect(hidden?.hidden, isTrue);
+      expect(hidden?.pinned, isTrue);
+      expect(hidden?.customTitle, 'Bob canonical');
+
+      await store.deleteConversationOverlayByConversationId(
+        ownerDid: 'did:alice',
+        conversationId: 'dm:peer-scope:v1:bob',
+      );
+      expect(
+        await store.loadConversationOverlayByConversationId(
+          ownerDid: 'did:alice',
+          conversationId: 'dm:peer-scope:v1:bob',
+        ),
+        isNull,
+      );
+      expect(
+        await store.loadConversationOverlayByConversationId(
+          ownerDid: 'did:bob',
+          conversationId: 'dm:peer-scope:v1:bob',
+        ),
+        isNotNull,
+      );
+    },
+  );
 }

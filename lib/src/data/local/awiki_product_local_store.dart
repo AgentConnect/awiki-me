@@ -17,7 +17,24 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
     required String ownerDid,
     required String threadId,
   }) async {
-    return _overlays[_compoundKey(ownerDid, threadId)];
+    return _overlays[_compoundKey(ownerDid, threadId)] ??
+        _firstOverlayWhere(
+          (overlay) =>
+              overlay.ownerDid == ownerDid && overlay.threadId == threadId,
+        );
+  }
+
+  @override
+  Future<ProductConversationOverlay?> loadConversationOverlayByConversationId({
+    required String ownerDid,
+    required String conversationId,
+  }) async {
+    return _overlays[_compoundKey(ownerDid, conversationId)] ??
+        _firstOverlayWhere(
+          (overlay) =>
+              overlay.ownerDid == ownerDid &&
+              overlay.effectiveConversationId == conversationId,
+        );
   }
 
   @override
@@ -37,10 +54,46 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
   }
 
   @override
+  Future<Map<String, ProductConversationOverlay>>
+  loadConversationOverlaysByConversationId({
+    required String ownerDid,
+    Iterable<String>? conversationIds,
+  }) async {
+    final allowed = conversationIds?.toSet();
+    if (allowed != null && allowed.isEmpty) {
+      return const <String, ProductConversationOverlay>{};
+    }
+    final result = <String, ProductConversationOverlay>{};
+    for (final overlay in _overlays.values) {
+      if (overlay.ownerDid != ownerDid) {
+        continue;
+      }
+      final conversationId = overlay.effectiveConversationId;
+      if (allowed != null && !allowed.contains(conversationId)) {
+        continue;
+      }
+      final existing = result[conversationId];
+      if (existing == null || _preferConversationOverlay(overlay, existing)) {
+        result[conversationId] = overlay;
+      }
+    }
+    return result;
+  }
+
+  @override
   Future<void> upsertConversationOverlay(
     ProductConversationOverlay overlay,
   ) async {
     _overlays[_compoundKey(overlay.ownerDid, overlay.threadId)] = overlay;
+  }
+
+  @override
+  Future<void> upsertConversationOverlayByConversationId(
+    ProductConversationOverlay overlay,
+  ) async {
+    final conversationId = overlay.effectiveConversationId;
+    _overlays[_compoundKey(overlay.ownerDid, conversationId)] = overlay
+        .copyWith(threadId: conversationId, conversationId: conversationId);
   }
 
   @override
@@ -78,11 +131,53 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
   }
 
   @override
+  Future<void> setConversationHiddenByConversationId({
+    required String ownerDid,
+    required String conversationId,
+    required bool hidden,
+    required DateTime updatedAt,
+  }) async {
+    final key = _compoundKey(ownerDid, conversationId);
+    final existing = _overlays[key];
+    _overlays[key] =
+        (existing ??
+                ProductConversationOverlay(
+                  ownerDid: ownerDid,
+                  threadId: conversationId,
+                  conversationId: conversationId,
+                  updatedAt: updatedAt,
+                ))
+            .copyWith(
+              threadId: conversationId,
+              conversationId: conversationId,
+              hidden: hidden,
+              updatedAt: updatedAt,
+            );
+  }
+
+  @override
   Future<void> deleteConversationOverlay({
     required String ownerDid,
     required String threadId,
   }) async {
     _overlays.remove(_compoundKey(ownerDid, threadId));
+    _overlays.removeWhere(
+      (_, overlay) =>
+          overlay.ownerDid == ownerDid && overlay.threadId == threadId,
+    );
+  }
+
+  @override
+  Future<void> deleteConversationOverlayByConversationId({
+    required String ownerDid,
+    required String conversationId,
+  }) async {
+    _overlays.remove(_compoundKey(ownerDid, conversationId));
+    _overlays.removeWhere(
+      (_, overlay) =>
+          overlay.ownerDid == ownerDid &&
+          overlay.effectiveConversationId == conversationId,
+    );
   }
 
   @override
@@ -149,6 +244,31 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
   }) async {
     _agentStates.remove(_compoundKey(ownerDid, agentDid));
   }
+
+  ProductConversationOverlay? _firstOverlayWhere(
+    bool Function(ProductConversationOverlay overlay) test,
+  ) {
+    for (final overlay in _overlays.values) {
+      if (test(overlay)) {
+        return overlay;
+      }
+    }
+    return null;
+  }
 }
 
 String _compoundKey(String ownerDid, String id) => '$ownerDid\u0000$id';
+
+bool _preferConversationOverlay(
+  ProductConversationOverlay candidate,
+  ProductConversationOverlay existing,
+) {
+  final candidateIsCanonical =
+      candidate.threadId.trim() == candidate.effectiveConversationId;
+  final existingIsCanonical =
+      existing.threadId.trim() == existing.effectiveConversationId;
+  if (candidateIsCanonical != existingIsCanonical) {
+    return candidateIsCanonical;
+  }
+  return candidate.updatedAt.isAfter(existing.updatedAt);
+}

@@ -655,13 +655,14 @@ void main() {
     );
 
     test(
-      'hides recents by stable direct DID and keeps handle as fallback',
+      'hides recents by canonical conversation id and keeps legacy aliases read-only',
       () async {
         final conversation = _conversation(
           'dm:alice:old-did',
           targetDid: 'did:old-bob',
           targetPeer: 'bob.anpclaw.com',
           minutesAgo: 1,
+          conversationId: 'dm:peer-scope:v1:bob',
         );
         final core = _FakeConversations(
           items: <ConversationSummary>[conversation],
@@ -683,21 +684,121 @@ void main() {
 
         expect(conversations, isEmpty);
         expect(
-          (await store.loadConversationOverlay(
+          (await store.loadConversationOverlayByConversationId(
             ownerDid: 'did:alice',
-            threadId: 'direct-did:did:old-bob',
+            conversationId: 'dm:peer-scope:v1:bob',
           ))?.hidden,
           isTrue,
         );
         expect(
           (await store.loadConversationOverlay(
             ownerDid: 'did:alice',
+            threadId: 'direct-did:did:old-bob',
+          )),
+          isNull,
+        );
+        expect(
+          (await store.loadConversationOverlay(
+            ownerDid: 'did:alice',
             threadId: 'direct-handle:bob.anpclaw.com',
-          ))?.hidden,
-          isTrue,
+          )),
+          isNull,
         );
       },
     );
+
+    test('applies canonical overlay before legacy alias fallback', () async {
+      final conversation = _conversation(
+        'dm:alice:old-did',
+        targetDid: 'did:old-bob',
+        targetPeer: 'bob.anpclaw.com',
+        minutesAgo: 1,
+        conversationId: 'dm:peer-scope:v1:bob',
+      );
+      final store = InMemoryAwikiProductLocalStore();
+      final now = DateTime.utc(2026, 5, 23, 9);
+      await store.upsertConversationOverlay(
+        ProductConversationOverlay(
+          ownerDid: 'did:alice',
+          threadId: 'direct-did:did:old-bob',
+          pinned: true,
+          hidden: true,
+          customTitle: 'Legacy title',
+          avatarSeed: 'seed-legacy',
+          updatedAt: now.add(const Duration(minutes: 10)),
+        ),
+      );
+      await store.upsertConversationOverlayByConversationId(
+        ProductConversationOverlay(
+          ownerDid: 'did:alice',
+          threadId: 'legacy-thread',
+          conversationId: 'dm:peer-scope:v1:bob',
+          pinned: true,
+          customTitle: 'Canonical title',
+          avatarSeed: 'seed-canonical',
+          updatedAt: now,
+        ),
+      );
+      final service = ImCoreConversationService(
+        conversations: _FakeConversations(
+          items: <ConversationSummary>[conversation],
+        ),
+        localStore: store,
+      );
+
+      final conversations = await service.listConversations(
+        ownerDid: 'did:alice',
+      );
+
+      expect(conversations, hasLength(1));
+      expect(conversations.single.displayName, 'Canonical title');
+      expect(conversations.single.avatarSeed, 'seed-canonical');
+    });
+
+    test('hide migrates legacy overlay fields into canonical row', () async {
+      final conversation = _conversation(
+        'dm:alice:old-did',
+        targetDid: 'did:old-bob',
+        targetPeer: 'bob.anpclaw.com',
+        minutesAgo: 1,
+        conversationId: 'dm:peer-scope:v1:bob',
+      );
+      final store = InMemoryAwikiProductLocalStore();
+      await store.upsertConversationOverlay(
+        ProductConversationOverlay(
+          ownerDid: 'did:alice',
+          threadId: 'direct-did:did:old-bob',
+          pinned: true,
+          muted: true,
+          customTitle: 'Legacy title',
+          avatarSeed: 'seed-legacy',
+          updatedAt: DateTime.utc(2026, 5, 23, 8),
+        ),
+      );
+      final service = ImCoreConversationService(
+        conversations: _FakeConversations(
+          items: <ConversationSummary>[conversation],
+        ),
+        localStore: store,
+      );
+
+      await service.hideConversationFromRecents(
+        ownerDid: 'did:alice',
+        conversation: conversation,
+        updatedAt: DateTime.utc(2026, 5, 23, 9),
+      );
+
+      final overlay = await store.loadConversationOverlayByConversationId(
+        ownerDid: 'did:alice',
+        conversationId: 'dm:peer-scope:v1:bob',
+      );
+      expect(overlay?.hidden, isTrue);
+      expect(overlay?.pinned, isTrue);
+      expect(overlay?.muted, isTrue);
+      expect(overlay?.customTitle, 'Legacy title');
+      expect(overlay?.avatarSeed, 'seed-legacy');
+      expect(overlay?.threadId, 'dm:peer-scope:v1:bob');
+    });
 
     test(
       'does not hide a newer message after local delete waterline',
@@ -1183,9 +1284,9 @@ void main() {
 
         expect(peerScoped.visibilityKey, 'dm:peer-scope:v1:runtime');
         expect(
-          (await store.loadConversationOverlay(
+          (await store.loadConversationOverlayByConversationId(
             ownerDid: 'did:human',
-            threadId: 'dm:peer-scope:v1:runtime',
+            conversationId: 'dm:peer-scope:v1:runtime',
           ))?.hidden,
           isTrue,
         );
@@ -1370,9 +1471,9 @@ void main() {
           conversation: peerScoped,
         );
         expect(
-          (await store.loadConversationOverlay(
+          (await store.loadConversationOverlayByConversationId(
             ownerDid: 'did:human',
-            threadId: 'dm:peer-scope:v1:runtime',
+            conversationId: 'dm:peer-scope:v1:runtime',
           ))?.hidden,
           isTrue,
         );
@@ -1385,9 +1486,9 @@ void main() {
         );
 
         expect(
-          (await store.loadConversationOverlay(
+          (await store.loadConversationOverlayByConversationId(
             ownerDid: 'did:human',
-            threadId: 'dm:peer-scope:v1:runtime',
+            conversationId: 'dm:peer-scope:v1:runtime',
           ))?.hidden,
           isFalse,
         );

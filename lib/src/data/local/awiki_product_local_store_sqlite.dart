@@ -22,7 +22,7 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
        _stateNamespace = normalizeAwikiStateNamespace(stateNamespace);
 
   static const String databaseName = 'awiki_me_product_store.db';
-  static const int databaseVersion = 2;
+  static const int databaseVersion = 3;
 
   Database? _database;
   Future<Database>? _databaseOpening;
@@ -83,6 +83,9 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
         onUpgrade: (db, oldVersion, newVersion) async {
           if (oldVersion < 2) {
             await _createAgentStatesTable(db);
+          }
+          if (oldVersion < 3) {
+            await _upgradeConversationOverlaysToConversationId(db);
           }
         },
       ),
@@ -160,6 +163,7 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
       CREATE TABLE conversation_overlays (
         owner_did TEXT NOT NULL,
         thread_id TEXT NOT NULL,
+        conversation_id TEXT,
         pinned INTEGER NOT NULL DEFAULT 0,
         muted INTEGER NOT NULL DEFAULT 0,
         hidden INTEGER NOT NULL DEFAULT 0,
@@ -169,6 +173,7 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
         PRIMARY KEY (owner_did, thread_id)
       )
     ''');
+    await _createConversationOverlayConversationIdIndex(db);
     await db.execute('''
       CREATE TABLE message_drafts (
         owner_did TEXT NOT NULL,
@@ -202,6 +207,37 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
     ''');
   }
 
+  static Future<void> _upgradeConversationOverlaysToConversationId(
+    DatabaseExecutor db,
+  ) async {
+    final columns = await db.rawQuery(
+      'PRAGMA table_info(conversation_overlays)',
+    );
+    final hasConversationId = columns.any(
+      (column) => column['name'] == 'conversation_id',
+    );
+    if (!hasConversationId) {
+      await db.execute(
+        'ALTER TABLE conversation_overlays ADD COLUMN conversation_id TEXT',
+      );
+    }
+    await db.execute('''
+      UPDATE conversation_overlays
+      SET conversation_id = thread_id
+      WHERE conversation_id IS NULL OR TRIM(conversation_id) = ''
+    ''');
+    await _createConversationOverlayConversationIdIndex(db);
+  }
+
+  static Future<void> _createConversationOverlayConversationIdIndex(
+    DatabaseExecutor db,
+  ) async {
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS conversation_overlays_owner_conversation_idx
+      ON conversation_overlays(owner_did, conversation_id)
+    ''');
+  }
+
   @override
   Future<ProductConversationOverlay?> loadConversationOverlay({
     required String ownerDid,
@@ -214,6 +250,19 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
       limit: 1,
     );
     return rows.isEmpty ? null : _overlayFromRow(rows.single);
+  }
+
+  @override
+  Future<ProductConversationOverlay?> loadConversationOverlayByConversationId({
+    required String ownerDid,
+    required String conversationId,
+  }) async {
+    final rows = await (await _db).query(
+      'conversation_overlays',
+      where: 'owner_did = ? AND conversation_id = ?',
+      whereArgs: <Object?>[ownerDid, conversationId],
+    );
+    return _overlaysByConversationId(rows)[conversationId];
   }
 
   @override
@@ -252,6 +301,40 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
   }
 
   @override
+  Future<Map<String, ProductConversationOverlay>>
+  loadConversationOverlaysByConversationId({
+    required String ownerDid,
+    Iterable<String>? conversationIds,
+  }) async {
+    final ids = conversationIds?.toList(growable: false);
+    if (ids != null && ids.isEmpty) {
+      return const <String, ProductConversationOverlay>{};
+    }
+    final db = await _db;
+    final rows = await AwikiPerformanceLogger.async(
+      'product_store.conversation_overlays.query_by_conversation_id',
+      () => ids == null
+          ? db.query(
+              'conversation_overlays',
+              where: 'owner_did = ?',
+              whereArgs: <Object?>[ownerDid],
+            )
+          : db.query(
+              'conversation_overlays',
+              where:
+                  'owner_did = ? AND conversation_id IN (${List.filled(ids.length, '?').join(',')})',
+              whereArgs: <Object?>[ownerDid, ...ids],
+            ),
+      fields: <String, Object?>{'keys': ids?.length ?? 0},
+    );
+    return AwikiPerformanceLogger.sync(
+      'product_store.conversation_overlays.decode_by_conversation_id',
+      () => _overlaysByConversationId(rows),
+      fields: <String, Object?>{'rows': rows.length},
+    );
+  }
+
+  @override
   Future<void> upsertConversationOverlay(
     ProductConversationOverlay overlay,
   ) async {
@@ -259,6 +342,19 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
       'conversation_overlays',
       _overlayToRow(overlay),
       conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  @override
+  Future<void> upsertConversationOverlayByConversationId(
+    ProductConversationOverlay overlay,
+  ) async {
+    final conversationId = overlay.effectiveConversationId;
+    await upsertConversationOverlay(
+      overlay.copyWith(
+        threadId: conversationId,
+        conversationId: conversationId,
+      ),
     );
   }
 
@@ -300,6 +396,34 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
   }
 
   @override
+  Future<void> setConversationHiddenByConversationId({
+    required String ownerDid,
+    required String conversationId,
+    required bool hidden,
+    required DateTime updatedAt,
+  }) async {
+    final existing = await loadConversationOverlayByConversationId(
+      ownerDid: ownerDid,
+      conversationId: conversationId,
+    );
+    await upsertConversationOverlayByConversationId(
+      (existing ??
+              ProductConversationOverlay(
+                ownerDid: ownerDid,
+                threadId: conversationId,
+                conversationId: conversationId,
+                updatedAt: updatedAt,
+              ))
+          .copyWith(
+            threadId: conversationId,
+            conversationId: conversationId,
+            hidden: hidden,
+            updatedAt: updatedAt,
+          ),
+    );
+  }
+
+  @override
   Future<void> deleteConversationOverlay({
     required String ownerDid,
     required String threadId,
@@ -308,6 +432,18 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
       'conversation_overlays',
       where: 'owner_did = ? AND thread_id = ?',
       whereArgs: <Object?>[ownerDid, threadId],
+    );
+  }
+
+  @override
+  Future<void> deleteConversationOverlayByConversationId({
+    required String ownerDid,
+    required String conversationId,
+  }) async {
+    await (await _db).delete(
+      'conversation_overlays',
+      where: 'owner_did = ? AND conversation_id = ?',
+      whereArgs: <Object?>[ownerDid, conversationId],
     );
   }
 
@@ -420,6 +556,7 @@ ProductConversationOverlay _overlayFromRow(Map<String, Object?> row) {
   return ProductConversationOverlay(
     ownerDid: row['owner_did']?.toString() ?? '',
     threadId: row['thread_id']?.toString() ?? '',
+    conversationId: row['conversation_id']?.toString(),
     pinned: _readBool(row['pinned']),
     muted: _readBool(row['muted']),
     hidden: _readBool(row['hidden']),
@@ -433,6 +570,7 @@ Map<String, Object?> _overlayToRow(ProductConversationOverlay overlay) {
   return <String, Object?>{
     'owner_did': overlay.ownerDid,
     'thread_id': overlay.threadId,
+    'conversation_id': overlay.effectiveConversationId,
     'pinned': overlay.pinned ? 1 : 0,
     'muted': overlay.muted ? 1 : 0,
     'hidden': overlay.hidden ? 1 : 0,
@@ -440,6 +578,35 @@ Map<String, Object?> _overlayToRow(ProductConversationOverlay overlay) {
     'avatar_seed': overlay.avatarSeed,
     'updated_at': overlay.updatedAt.toUtc().toIso8601String(),
   };
+}
+
+Map<String, ProductConversationOverlay> _overlaysByConversationId(
+  List<Map<String, Object?>> rows,
+) {
+  final overlays = <String, ProductConversationOverlay>{};
+  for (final row in rows) {
+    final overlay = _overlayFromRow(row);
+    final conversationId = overlay.effectiveConversationId;
+    final existing = overlays[conversationId];
+    if (existing == null || _preferConversationOverlay(overlay, existing)) {
+      overlays[conversationId] = overlay;
+    }
+  }
+  return overlays;
+}
+
+bool _preferConversationOverlay(
+  ProductConversationOverlay candidate,
+  ProductConversationOverlay existing,
+) {
+  final candidateIsCanonical =
+      candidate.threadId.trim() == candidate.effectiveConversationId;
+  final existingIsCanonical =
+      existing.threadId.trim() == existing.effectiveConversationId;
+  if (candidateIsCanonical != existingIsCanonical) {
+    return candidateIsCanonical;
+  }
+  return candidate.updatedAt.isAfter(existing.updatedAt);
 }
 
 MessageDraft _draftFromRow(Map<String, Object?> row) {
