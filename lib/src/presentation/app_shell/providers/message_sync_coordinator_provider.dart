@@ -68,8 +68,16 @@ class MessageSyncCoordinator
   final List<Completer<void>> _pendingCompleters = <Completer<void>>[];
   DateTime? _lastStartedAt;
   DateTime? _lastFailedAt;
+  bool _disposed = false;
 
   Future<void> requestSync(String reason, {bool immediate = false}) {
+    if (_disposed) {
+      _messageSyncTrace(
+        'request.ignored_disposed',
+        fields: <String, Object?>{'reason': reason},
+      );
+      return Future<void>.value();
+    }
     final active = _activeSync;
     _messageSyncTrace(
       'request',
@@ -128,6 +136,14 @@ class MessageSyncCoordinator
       _pendingTimer = null;
       final waiters = List<Completer<void>>.of(_pendingCompleters);
       _pendingCompleters.clear();
+      if (_disposed) {
+        for (final waiter in waiters) {
+          if (!waiter.isCompleted) {
+            waiter.complete();
+          }
+        }
+        return;
+      }
       _runSync(reason).whenComplete(() {
         for (final waiter in waiters) {
           if (!waiter.isCompleted) {
@@ -140,6 +156,13 @@ class MessageSyncCoordinator
   }
 
   Future<void> _runSync(String reason) {
+    if (_disposed) {
+      _messageSyncTrace(
+        'run.ignored_disposed',
+        fields: <String, Object?>{'reason': reason},
+      );
+      return Future<void>.value();
+    }
     final active = _activeSync;
     if (active != null) {
       state = state.copyWith(pendingReason: reason);
@@ -166,6 +189,9 @@ class MessageSyncCoordinator
         final result = await ref
             .read(messageSyncServiceProvider)
             .syncNow(reason: reason);
+        if (_disposed) {
+          return;
+        }
         _messageSyncTrace(
           'run.sync_result',
           fields: <String, Object?>{
@@ -183,9 +209,15 @@ class MessageSyncCoordinator
             fields: <String, Object?>{'reason': reason},
           );
           await ref.read(conversationListProvider.notifier).refreshFastLocal();
+          if (_disposed) {
+            return;
+          }
           final conversations = ref
               .read(conversationListProvider)
               .conversations;
+          if (_disposed) {
+            return;
+          }
           _messageSyncTrace(
             'run.prewarm.start',
             fields: <String, Object?>{
@@ -196,6 +228,9 @@ class MessageSyncCoordinator
           await ref
               .read(chatThreadsProvider.notifier)
               .prewarmLocalHistoryForConversations(conversations);
+          if (_disposed) {
+            return;
+          }
           _messageSyncTrace(
             'run.prewarm.done',
             fields: <String, Object?>{
@@ -213,19 +248,29 @@ class MessageSyncCoordinator
             'error_type': error.runtimeType,
           },
         );
+        if (_disposed) {
+          return;
+        }
         state = state.copyWith(lastError: error);
       } finally {
-        state = state.copyWith(isSyncing: false);
         if (identical(_activeSync, operation)) {
           _activeSync = null;
         }
-        final pending = state.pendingReason;
-        _messageSyncTrace(
-          'run.finish',
-          fields: <String, Object?>{'reason': reason, 'pending': pending},
-        );
-        if (pending != null) {
-          unawaited(requestSync(pending));
+        if (_disposed) {
+          _messageSyncTrace(
+            'run.finish_disposed',
+            fields: <String, Object?>{'reason': reason},
+          );
+        } else {
+          state = state.copyWith(isSyncing: false);
+          final pending = state.pendingReason;
+          _messageSyncTrace(
+            'run.finish',
+            fields: <String, Object?>{'reason': reason, 'pending': pending},
+          );
+          if (pending != null) {
+            unawaited(requestSync(pending));
+          }
         }
       }
     })();
@@ -240,7 +285,9 @@ class MessageSyncCoordinator
 
   @override
   void dispose() {
+    _disposed = true;
     _pendingTimer?.cancel();
+    _pendingTimer = null;
     for (final waiter in _pendingCompleters) {
       if (!waiter.isCompleted) {
         waiter.complete();

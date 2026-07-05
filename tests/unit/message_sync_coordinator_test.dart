@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -165,6 +167,25 @@ void main() {
 
     expect(sync.syncReasons, ['startup', 'realtime_gap']);
   });
+
+  test('sync completion after dispose is ignored', () async {
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[_conversation()];
+    final sync = _BlockingMessageSyncService();
+    final container = _container(gateway, sync);
+    final coordinator = container.read(messageSyncCoordinatorProvider.notifier);
+
+    final request = coordinator.requestSync('startup', immediate: true);
+    await pumpEventQueue();
+
+    expect(sync.syncReasons, ['startup']);
+
+    container.dispose();
+    sync.complete();
+
+    await request.timeout(const Duration(seconds: 1));
+    await pumpEventQueue();
+  });
 }
 
 ProviderContainer _container(
@@ -210,4 +231,32 @@ ConversationSummary _conversation() {
     isGroup: false,
     targetDid: 'did:test:peer',
   );
+}
+
+class _BlockingMessageSyncService extends FakeMessageSyncService {
+  final Completer<MessageSyncDeltaResult> _syncCompleter =
+      Completer<MessageSyncDeltaResult>();
+
+  @override
+  Future<MessageSyncDeltaResult> syncNow({
+    required String reason,
+    int limit = 100,
+  }) {
+    syncReasons.add(reason);
+    return _syncCompleter.future;
+  }
+
+  void complete() {
+    if (_syncCompleter.isCompleted) {
+      return;
+    }
+    _syncCompleter.complete(
+      const MessageSyncDeltaResult(
+        eventsApplied: 0,
+        pagesFetched: 0,
+        hasMore: false,
+        snapshotRequired: false,
+      ),
+    );
+  }
 }
