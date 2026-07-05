@@ -138,6 +138,52 @@ void main() {
     expect(mapped.serverSequence, 42);
   });
 
+  test('core conversation identity maps to app conversation id', () {
+    const identity = core.ConversationIdentity(
+      conversationId: 'dm:peer-scope:v1:bob',
+      canonicalThreadKind: 'thread',
+      canonicalThreadId: 'dm:peer-scope:v1:bob',
+      storageThreadRef: core.ConversationStorageThreadRef(
+        kind: 'thread',
+        id: 'dm:peer-scope:v1:bob',
+      ),
+      identityScope: core.ConversationIdentityScope.direct,
+      migrationState: core.ConversationMigrationState.canonical,
+    );
+    const message = core.Message(
+      id: 'msg-identity',
+      threadKind: 'direct',
+      threadId: 'did:bob',
+      direction: core.MessageDirection.incoming,
+      sender: 'did:bob',
+      receiver: 'did:alice',
+      body: core.MessageBodyView(text: 'hello'),
+      metadata: core.MessageMetadata(conversationIdentity: identity),
+    );
+    const conversation = core.Conversation(
+      threadKind: 'direct',
+      threadId: 'did:bob',
+      conversationIdentity: identity,
+      participants: <String>['did:alice', 'did:bob'],
+      unreadCount: 1,
+      messageCount: 1,
+      lastMessage: message,
+    );
+
+    final mappedMessage = mapper.chatMessageFromCore(
+      message,
+      ownerDid: 'did:alice',
+    );
+    final mappedConversation = mapper.conversationFromCore(
+      conversation,
+      ownerDid: 'did:alice',
+    );
+
+    expect(mappedMessage.conversationId, 'dm:peer-scope:v1:bob');
+    expect(mappedConversation.conversationId, 'dm:peer-scope:v1:bob');
+    expect(mappedConversation.effectiveConversationId, 'dm:peer-scope:v1:bob');
+  });
+
   test('scoped direct message keeps stable thread id and peer metadata', () {
     const message = core.Message(
       id: 'msg-scoped',

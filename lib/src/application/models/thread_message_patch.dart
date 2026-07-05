@@ -9,6 +9,7 @@ class ThreadMessagePatch {
     required this.version,
     required this.threadKind,
     required this.threadId,
+    this.conversationId,
     this.messages = const <ChatMessage>[],
     this.message,
     this.index,
@@ -21,6 +22,7 @@ class ThreadMessagePatch {
   final int version;
   final String threadKind;
   final String threadId;
+  final String? conversationId;
   final List<ChatMessage> messages;
   final ChatMessage? message;
   final int? index;

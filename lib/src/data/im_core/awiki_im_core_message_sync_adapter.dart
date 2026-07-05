@@ -1,11 +1,13 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
+import '../../application/models/app_conversation_read_ref.dart';
 import '../../application/models/app_thread_ref.dart';
 import '../../application/ports/message_sync_core_port.dart';
 import 'awiki_im_core_mappers.dart';
 import 'awiki_im_core_runtime.dart';
 
-class AwikiImCoreMessageSyncAdapter implements MessageSyncCorePort {
+class AwikiImCoreMessageSyncAdapter
+    implements MessageSyncCorePort, ConversationMessageSyncCorePort {
   AwikiImCoreMessageSyncAdapter({
     required AwikiImCoreRuntime runtime,
     AwikiImCoreMappers mappers = const AwikiImCoreMappers(),
@@ -48,6 +50,37 @@ class AwikiImCoreMessageSyncAdapter implements MessageSyncCorePort {
       final result = await client.messages.syncThreadAfter(
         core.SyncThreadAfterRequest(
           thread: _mappers.threadRefToCore(thread),
+          afterServerSeq: afterServerSeq,
+          limit: limit,
+        ),
+      );
+      return MessageSyncThreadAfterResult(
+        messages: result.messages
+            .map(
+              (message) =>
+                  _mappers.chatMessageFromCore(message, ownerDid: ownerDid),
+            )
+            .toList(),
+        nextAfterServerSeq: result.nextAfterServerSeq,
+        hasMore: result.hasMore,
+        warnings: result.warnings,
+      );
+    });
+  }
+
+  @override
+  Future<MessageSyncThreadAfterResult> syncConversationAfter({
+    required AppConversationReadRef conversation,
+    String? afterServerSeq,
+    int? limit,
+  }) {
+    return _runtime.withCurrentClient((client) async {
+      final ownerDid = (await client.identity.current()).did;
+      final result = await client.messages.syncConversationAfter(
+        core.SyncConversationAfterRequest(
+          conversation: core.ConversationReadRef(
+            conversationId: conversation.conversationId,
+          ),
           afterServerSeq: afterServerSeq,
           limit: limit,
         ),

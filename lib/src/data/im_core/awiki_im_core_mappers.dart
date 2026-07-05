@@ -119,6 +119,7 @@ class AwikiImCoreMappers {
     return ChatMessage(
       localId: message.id,
       remoteId: message.id,
+      conversationId: _conversationIdFromMessage(message),
       threadId: _messageThreadId(
         ownerDid: ownerDid,
         isGroup: isGroup,
@@ -181,6 +182,7 @@ class AwikiImCoreMappers {
     return ChatMessage(
       localId: message.id,
       remoteId: message.id,
+      conversationId: _conversationIdFromSnapshotMessage(message),
       threadId: _messageThreadId(
         ownerDid: ownerDid,
         isGroup: isGroup,
@@ -242,6 +244,7 @@ class AwikiImCoreMappers {
         ? null
         : chatMessageFromCore(lastMessage, ownerDid: ownerDid);
     return ConversationSummary(
+      conversationId: _conversationIdFromConversation(conversation),
       threadId: _conversationThreadId(
         ownerDid: ownerDid,
         isGroup: isGroup,
@@ -322,6 +325,7 @@ class AwikiImCoreMappers {
         ? null
         : chatMessageFromSnapshot(lastMessage, ownerDid: ownerDid);
     return ConversationSummary(
+      conversationId: _conversationIdFromSnapshot(conversation),
       threadId: _conversationThreadId(
         ownerDid: ownerDid,
         isGroup: isGroup,
@@ -598,6 +602,32 @@ String? _firstNonEmpty(Iterable<String> values) {
     }
   }
   return null;
+}
+
+String? _conversationIdFromMessage(core.Message message) {
+  return _nonEmpty(message.metadata.conversationIdentity?.conversationId);
+}
+
+String? _conversationIdFromSnapshotMessage(
+  core.ConversationSnapshotMessage message,
+) {
+  return _nonEmpty(message.conversationIdentity?.conversationId);
+}
+
+String? _conversationIdFromConversation(core.Conversation conversation) {
+  return _nonEmpty(conversation.conversationIdentity?.conversationId) ??
+      (conversation.lastMessage == null
+          ? null
+          : _conversationIdFromMessage(conversation.lastMessage!));
+}
+
+String? _conversationIdFromSnapshot(
+  core.ConversationSnapshotItem conversation,
+) {
+  return _nonEmpty(conversation.conversationIdentity?.conversationId) ??
+      (conversation.lastMessage == null
+          ? null
+          : _conversationIdFromSnapshotMessage(conversation.lastMessage!));
 }
 
 String _stripPrefix(String value, String prefix) {

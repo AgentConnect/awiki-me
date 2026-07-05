@@ -156,6 +156,62 @@ void main() {
     },
   );
 
+  test('watchConversationPatches preserves core conversation id', () async {
+    final client = _FakeClient();
+    final adapter = AwikiImCoreConversationAdapter(
+      runtime: _FakeRuntime(client),
+    );
+    final patchFuture = adapter.watchConversationPatches().first;
+    await Future<void>.delayed(Duration.zero);
+
+    client.messages.emitPatch(
+      const core.ConversationStorePatch(
+        kind: core.ConversationStorePatchKind.upsert,
+        ownerIdentityId: 'alice-id',
+        ownerDid: 'did:alice',
+        version: 5,
+        unreadTotal: 1,
+        item: core.ConversationSnapshotItem(
+          threadKind: 'thread',
+          threadId: 'dm:peer-scope:v1:bob',
+          conversationIdentity: core.ConversationIdentity(
+            conversationId: 'dm:peer-scope:v1:bob',
+            canonicalThreadKind: 'thread',
+            canonicalThreadId: 'dm:peer-scope:v1:bob',
+            storageThreadRef: core.ConversationStorageThreadRef(
+              kind: 'thread',
+              id: 'dm:peer-scope:v1:bob',
+            ),
+            identityScope: core.ConversationIdentityScope.direct,
+            migrationState: core.ConversationMigrationState.canonical,
+          ),
+          participants: <String>['bob.awiki.test'],
+          unreadCount: 1,
+          messageCount: 1,
+          lastMessageAt: '2026-06-27T00:00:00Z',
+          lastMessage: core.ConversationSnapshotMessage(
+            id: 'msg-identity',
+            threadKind: 'thread',
+            threadId: 'dm:peer-scope:v1:bob',
+            direction: 'incoming',
+            sender: 'did:bob',
+            receiver: 'did:alice',
+            body: core.ConversationSnapshotMessageBody(
+              text: 'hello',
+              kind: 'text',
+            ),
+            sentAt: '2026-06-27T00:00:00Z',
+          ),
+        ),
+      ),
+    );
+
+    final patch = await patchFuture.timeout(const Duration(seconds: 1));
+    expect(patch.conversationId, 'dm:peer-scope:v1:bob');
+    expect(patch.item?.conversationId, 'dm:peer-scope:v1:bob');
+    expect(patch.item?.effectiveConversationId, 'dm:peer-scope:v1:bob');
+  });
+
   test('visible control patch removes hidden recents row', () async {
     final client = _FakeClient();
     final adapter = AwikiImCoreConversationAdapter(

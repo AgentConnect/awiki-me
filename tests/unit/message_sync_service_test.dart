@@ -1,4 +1,5 @@
 import 'package:awiki_me/src/application/message_sync_service.dart';
+import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -41,6 +42,48 @@ void main() {
     },
   );
 
+  test('conversation-after delegates canonical conversation id', () async {
+    final message = _message(
+      'msg-conversation',
+      conversationId: 'dm:peer-scope:v1:bob',
+      serverSequence: 3,
+    );
+    final core = _FakeMessageSyncCore(
+      conversationAfterResult: MessageSyncThreadAfterResult(
+        messages: <ChatMessage>[message],
+        nextAfterServerSeq: '3',
+        hasMore: false,
+      ),
+    );
+    final service = ImCoreMessageSyncService(sync: core);
+
+    final result = await service.syncConversationAfter(
+      conversation: AppConversationReadRef.fromConversationId(
+        'dm:peer-scope:v1:bob',
+      ),
+      afterServerSeq: '2',
+      limit: 10,
+    );
+
+    expect(core.conversationAfterIds, ['dm:peer-scope:v1:bob']);
+    expect(core.conversationAfterSeqs, ['2']);
+    expect(core.conversationAfterLimits, [10]);
+    expect(result.messages.single.conversationId, 'dm:peer-scope:v1:bob');
+  });
+
+  test('conversation-after fails clearly without core capability', () {
+    final service = ImCoreMessageSyncService(
+      sync: _ThreadOnlyMessageSyncCore(),
+    );
+
+    expect(
+      () => service.syncConversationAfter(
+        conversation: AppConversationReadRef.fromConversationId('conversation'),
+      ),
+      throwsA(isA<UnsupportedError>()),
+    );
+  });
+
   test(
     'maxServerSequenceForMessages returns highest thread-local sequence',
     () {
@@ -56,20 +99,29 @@ void main() {
   );
 }
 
-class _FakeMessageSyncCore implements MessageSyncCorePort {
+class _FakeMessageSyncCore
+    implements MessageSyncCorePort, ConversationMessageSyncCorePort {
   _FakeMessageSyncCore({
     this.threadAfterResult = const MessageSyncThreadAfterResult(
+      messages: <ChatMessage>[],
+      hasMore: false,
+    ),
+    this.conversationAfterResult = const MessageSyncThreadAfterResult(
       messages: <ChatMessage>[],
       hasMore: false,
     ),
   });
 
   final MessageSyncThreadAfterResult threadAfterResult;
+  final MessageSyncThreadAfterResult conversationAfterResult;
   final List<String?> deltaReasons = <String?>[];
   final List<int?> deltaLimits = <int?>[];
   final List<AppThreadRef> threadAfterThreads = <AppThreadRef>[];
   final List<String?> threadAfterSeqs = <String?>[];
   final List<int?> threadAfterLimits = <int?>[];
+  final List<String> conversationAfterIds = <String>[];
+  final List<String?> conversationAfterSeqs = <String?>[];
+  final List<int?> conversationAfterLimits = <int?>[];
 
   @override
   Future<MessageSyncDeltaResult> syncDelta({
@@ -98,12 +150,53 @@ class _FakeMessageSyncCore implements MessageSyncCorePort {
     threadAfterLimits.add(limit);
     return threadAfterResult;
   }
+
+  @override
+  Future<MessageSyncThreadAfterResult> syncConversationAfter({
+    required AppConversationReadRef conversation,
+    String? afterServerSeq,
+    int? limit,
+  }) async {
+    conversationAfterIds.add(conversation.conversationId);
+    conversationAfterSeqs.add(afterServerSeq);
+    conversationAfterLimits.add(limit);
+    return conversationAfterResult;
+  }
 }
 
-ChatMessage _message(String id, {int? serverSequence}) {
+class _ThreadOnlyMessageSyncCore implements MessageSyncCorePort {
+  @override
+  Future<MessageSyncDeltaResult> syncDelta({
+    int? limit,
+    String? deviceId,
+    String? reason,
+  }) async {
+    return const MessageSyncDeltaResult(
+      eventsApplied: 0,
+      pagesFetched: 0,
+      hasMore: false,
+      snapshotRequired: false,
+    );
+  }
+
+  @override
+  Future<MessageSyncThreadAfterResult> syncThreadAfter({
+    required AppThreadRef thread,
+    String? afterServerSeq,
+    int? limit,
+  }) async {
+    return const MessageSyncThreadAfterResult(
+      messages: <ChatMessage>[],
+      hasMore: false,
+    );
+  }
+}
+
+ChatMessage _message(String id, {String? conversationId, int? serverSequence}) {
   return ChatMessage(
     localId: id,
     remoteId: id,
+    conversationId: conversationId,
     threadId: 'dm:did:alice:did:bob',
     senderDid: 'did:bob',
     receiverDid: 'did:alice',

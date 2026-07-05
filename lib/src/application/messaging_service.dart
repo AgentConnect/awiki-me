@@ -1,6 +1,7 @@
 import '../domain/entities/chat_message.dart';
 import '../domain/entities/chat_mention.dart';
 import 'models/attachment_models.dart';
+import 'models/app_conversation_read_ref.dart';
 import 'models/app_thread_ref.dart';
 import 'models/thread_message_patch.dart';
 import 'ports/message_core_port.dart';
@@ -40,6 +41,8 @@ abstract interface class MessagingService {
     String? localPath,
   });
 
+  /// Legacy migration adapter. New reads should use
+  /// [ConversationTimelineMessagingService.loadConversationTimeline].
   Future<List<ChatMessage>> loadHistory(
     AppThreadRef thread, {
     int limit = 100,
@@ -51,6 +54,8 @@ abstract interface class MessagingService {
 }
 
 abstract interface class LocalHistoryMessagingService {
+  /// Legacy migration adapter. New reads should use
+  /// [ConversationTimelineMessagingService.loadConversationTimeline].
   Future<List<ChatMessage>> loadLocalHistory(
     AppThreadRef thread, {
     int limit = 100,
@@ -60,6 +65,8 @@ abstract interface class LocalHistoryMessagingService {
 }
 
 abstract interface class ThreadPatchMessagingService {
+  /// Legacy migration adapter. New patch streams should use
+  /// [ConversationTimelineMessagingService.watchConversationTimelinePatches].
   Stream<ThreadMessagePatch> watchThreadPatches(
     AppThreadRef thread, {
     int limit = 100,
@@ -71,11 +78,31 @@ abstract interface class ThreadPatchMessagingService {
   });
 }
 
+abstract interface class ConversationTimelineMessagingService {
+  Future<List<ChatMessage>> loadConversationTimeline(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  });
+
+  Stream<ThreadMessagePatch> watchConversationTimelinePatches(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+  });
+
+  Future<ThreadMessagePatch> repairConversationTimelineStore(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+  });
+}
+
 class ImCoreMessagingService
     implements
         MessagingService,
         LocalHistoryMessagingService,
-        ThreadPatchMessagingService {
+        ThreadPatchMessagingService,
+        ConversationTimelineMessagingService {
   const ImCoreMessagingService({required MessageCorePort messages})
     : _messages = messages;
 
@@ -186,6 +213,28 @@ class ImCoreMessagingService
   }
 
   @override
+  Future<List<ChatMessage>> loadConversationTimeline(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  }) {
+    final messages = _messages;
+    if (messages is! ConversationTimelineMessageCorePort) {
+      throw UnsupportedError(
+        'Message core does not expose conversation timeline.',
+      );
+    }
+    return (messages as ConversationTimelineMessageCorePort)
+        .loadConversationTimeline(
+          conversation,
+          limit: limit,
+          cursor: cursor,
+          includeControlPayloads: includeControlPayloads,
+        );
+  }
+
+  @override
   Stream<ThreadMessagePatch> watchThreadPatches(
     AppThreadRef thread, {
     int limit = 100,
@@ -213,6 +262,36 @@ class ImCoreMessagingService
       thread,
       limit: limit,
     );
+  }
+
+  @override
+  Stream<ThreadMessagePatch> watchConversationTimelinePatches(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+  }) {
+    final messages = _messages;
+    if (messages is! ConversationTimelineMessageCorePort) {
+      throw UnsupportedError(
+        'Message core does not expose conversation timeline patches.',
+      );
+    }
+    return (messages as ConversationTimelineMessageCorePort)
+        .watchConversationTimelinePatches(conversation, limit: limit);
+  }
+
+  @override
+  Future<ThreadMessagePatch> repairConversationTimelineStore(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+  }) {
+    final messages = _messages;
+    if (messages is! ConversationTimelineMessageCorePort) {
+      throw UnsupportedError(
+        'Message core does not expose conversation timeline patches.',
+      );
+    }
+    return (messages as ConversationTimelineMessageCorePort)
+        .repairConversationTimelineStore(conversation, limit: limit);
   }
 
   @override

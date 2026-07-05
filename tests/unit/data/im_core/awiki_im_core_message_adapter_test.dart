@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_config.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_message_adapter.dart';
@@ -32,6 +35,67 @@ void main() {
       expect(second.single.isMine, isFalse);
     },
   );
+
+  test(
+    'loadConversationTimeline calls SDK conversation timeline API',
+    () async {
+      final client = _FakeClient(ownerDid: 'did:alice');
+      final runtime = _FakeRuntime(client);
+      final adapter = AwikiImCoreMessageAdapter(runtime: runtime);
+
+      final messages = await adapter.loadConversationTimeline(
+        AppConversationReadRef.fromConversationId('dm:peer-scope:v1:bob'),
+        limit: 20,
+        cursor: 'cursor-1',
+      );
+
+      expect(client.identity.currentCalls, 1);
+      expect(client.messages.localConversationTimelineCalls, 1);
+      expect(client.messages.lastConversationId, 'dm:peer-scope:v1:bob');
+      expect(client.messages.localConversationTimelineLimits, <int>[20]);
+      expect(client.messages.lastConversationTimelineCursor, 'cursor-1');
+      expect(messages.single.content, 'hello from did:bob');
+    },
+  );
+
+  test('conversation timeline patch APIs use conversation read ref', () async {
+    final client = _FakeClient(ownerDid: 'did:alice');
+    final runtime = _FakeRuntime(client);
+    final adapter = AwikiImCoreMessageAdapter(runtime: runtime);
+
+    final patchFuture = adapter
+        .watchConversationTimelinePatches(
+          AppConversationReadRef.fromConversationId('dm:peer-scope:v1:bob'),
+          limit: 12,
+        )
+        .first;
+    await Future<void>.delayed(Duration.zero);
+    client.messages.emitConversationTimelinePatch(
+      core.ThreadMessageStorePatch(
+        kind: core.ThreadMessageStorePatchKind.upsert,
+        ownerIdentityId: 'alice-id',
+        ownerDid: 'did:alice',
+        version: 2,
+        threadKind: 'thread',
+        threadId: 'dm:peer-scope:v1:bob',
+        conversationIdentity: _conversationIdentity(),
+        message: _messageForOwner('did:alice'),
+      ),
+    );
+    final watched = await patchFuture.timeout(const Duration(seconds: 1));
+    final repaired = await adapter.repairConversationTimelineStore(
+      AppConversationReadRef.fromConversationId('dm:peer-scope:v1:bob'),
+      limit: 13,
+    );
+
+    expect(client.messages.watchConversationTimelinePatchCalls, 1);
+    expect(client.messages.repairConversationTimelineStoreCalls, 1);
+    expect(client.messages.lastWatchConversationTimelineLimit, 12);
+    expect(client.messages.lastRepairConversationTimelineLimit, 13);
+    expect(watched.conversationId, 'dm:peer-scope:v1:bob');
+    expect(watched.message?.conversationId, 'dm:peer-scope:v1:bob');
+    expect(repaired.conversationId, 'dm:peer-scope:v1:bob');
+  });
 
   test('owner did cache is invalidated when current client changes', () async {
     final firstClient = _FakeClient(ownerDid: 'did:alice');
@@ -238,8 +302,23 @@ class _FakeMessageApi implements core.MessageApi {
   _FakeMessageApi(this._ownerDid);
 
   final String Function() _ownerDid;
+  final StreamController<core.ThreadMessageStorePatch>
+  _conversationTimelinePatches =
+      StreamController<core.ThreadMessageStorePatch>.broadcast(sync: true);
   int localHistoryCalls = 0;
+  int localConversationTimelineCalls = 0;
+  int watchConversationTimelinePatchCalls = 0;
+  int repairConversationTimelineStoreCalls = 0;
   final List<int> localHistoryLimits = <int>[];
+  final List<int> localConversationTimelineLimits = <int>[];
+  String? lastConversationId;
+  String? lastConversationTimelineCursor;
+  int? lastWatchConversationTimelineLimit;
+  int? lastRepairConversationTimelineLimit;
+
+  void emitConversationTimelinePatch(core.ThreadMessageStorePatch patch) {
+    _conversationTimelinePatches.add(patch);
+  }
 
   @override
   Future<core.MessagePage> localHistory(
@@ -252,6 +331,53 @@ class _FakeMessageApi implements core.MessageApi {
     return core.MessagePage(
       items: <core.Message>[_messageForOwner(_ownerDid())],
       hasMore: false,
+    );
+  }
+
+  @override
+  Future<core.MessagePage> localConversationTimeline(
+    core.ConversationReadRef conversation, {
+    required int limit,
+    String? cursor,
+  }) async {
+    localConversationTimelineCalls += 1;
+    localConversationTimelineLimits.add(limit);
+    lastConversationId = conversation.conversationId;
+    lastConversationTimelineCursor = cursor;
+    return core.MessagePage(
+      items: <core.Message>[_messageForOwner(_ownerDid())],
+      hasMore: false,
+    );
+  }
+
+  @override
+  Stream<core.ThreadMessageStorePatch> watchConversationTimelinePatches(
+    core.ConversationReadRef conversation, {
+    int limit = 100,
+  }) {
+    watchConversationTimelinePatchCalls += 1;
+    lastConversationId = conversation.conversationId;
+    lastWatchConversationTimelineLimit = limit;
+    return _conversationTimelinePatches.stream;
+  }
+
+  @override
+  Future<core.ThreadMessageStorePatch> repairConversationTimelineStore(
+    core.ConversationReadRef conversation, {
+    int limit = 100,
+  }) async {
+    repairConversationTimelineStoreCalls += 1;
+    lastConversationId = conversation.conversationId;
+    lastRepairConversationTimelineLimit = limit;
+    return core.ThreadMessageStorePatch(
+      kind: core.ThreadMessageStorePatchKind.reset,
+      ownerIdentityId: '${_ownerDid()}-id',
+      ownerDid: _ownerDid(),
+      version: 3,
+      threadKind: 'thread',
+      threadId: conversation.conversationId,
+      conversationIdentity: _conversationIdentity(),
+      items: <core.Message>[_messageForOwner(_ownerDid())],
     );
   }
 
@@ -269,7 +395,24 @@ core.Message _messageForOwner(String ownerDid) {
     receiver: ownerDid,
     body: const core.MessageBodyView(text: 'hello from did:bob', kind: 'text'),
     sentAt: '2026-06-28T00:00:00Z',
-    metadata: const core.MessageMetadata(serverSequence: 1),
+    metadata: core.MessageMetadata(
+      serverSequence: 1,
+      conversationIdentity: _conversationIdentity(),
+    ),
+  );
+}
+
+core.ConversationIdentity _conversationIdentity() {
+  return const core.ConversationIdentity(
+    conversationId: 'dm:peer-scope:v1:bob',
+    canonicalThreadKind: 'thread',
+    canonicalThreadId: 'dm:peer-scope:v1:bob',
+    storageThreadRef: core.ConversationStorageThreadRef(
+      kind: 'thread',
+      id: 'dm:peer-scope:v1:bob',
+    ),
+    identityScope: core.ConversationIdentityScope.direct,
+    migrationState: core.ConversationMigrationState.canonical,
   );
 }
 

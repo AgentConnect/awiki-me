@@ -8,6 +8,7 @@ import '../domain/entities/conversation_identity.dart';
 import '../domain/entities/conversation_summary.dart';
 import '../core/performance_logger.dart';
 import 'agent/agent_control_projection.dart';
+import 'models/app_conversation_read_ref.dart';
 import 'models/app_thread_ref.dart';
 import 'models/app_thread_read_watermark.dart';
 import 'models/conversation_patch.dart';
@@ -97,7 +98,15 @@ abstract interface class ConversationService {
   });
 }
 
-class ImCoreConversationService implements ConversationService {
+abstract interface class ConversationReadService {
+  Future<void> markConversationRead(
+    AppConversationReadRef conversation, {
+    AppThreadReadWatermark? watermark,
+  });
+}
+
+class ImCoreConversationService
+    implements ConversationService, ConversationReadService {
   ImCoreConversationService({
     required ConversationCorePort conversations,
     required ProductLocalStore localStore,
@@ -232,6 +241,7 @@ class ImCoreConversationService implements ConversationService {
               version: patch.version,
               unreadTotal: patch.unreadTotal,
               threadId: item.threadId,
+              conversationId: item.conversationId ?? patch.conversationId,
               conversationKey: item.conversationKey,
             );
             continue;
@@ -242,6 +252,7 @@ class ImCoreConversationService implements ConversationService {
             version: patch.version,
             unreadTotal: patch.unreadTotal,
             item: normalized,
+            conversationId: normalized.conversationId ?? patch.conversationId,
           );
         case CoreConversationPatchKind.remove:
           yield ConversationListPatch(
@@ -250,6 +261,7 @@ class ImCoreConversationService implements ConversationService {
             version: patch.version,
             unreadTotal: patch.unreadTotal,
             threadId: patch.threadId,
+            conversationId: patch.conversationId,
           );
         case CoreConversationPatchKind.reorder:
           yield ConversationListPatch(
@@ -258,6 +270,7 @@ class ImCoreConversationService implements ConversationService {
             version: patch.version,
             unreadTotal: patch.unreadTotal,
             threadId: patch.threadId,
+            conversationId: patch.conversationId,
             index: patch.index,
           );
         case CoreConversationPatchKind.repairRequired:
@@ -627,6 +640,36 @@ class ImCoreConversationService implements ConversationService {
       },
     );
     return _conversations.markThreadRead(thread, watermark: watermark);
+  }
+
+  @override
+  Future<void> markConversationRead(
+    AppConversationReadRef conversation, {
+    AppThreadReadWatermark? watermark,
+  }) {
+    final conversations = _conversations;
+    if (conversations is! ConversationReadCorePort) {
+      throw UnsupportedError(
+        'Conversation core does not expose conversation-id read state.',
+      );
+    }
+    _conversationServiceTrace(
+      'mark_conversation_read',
+      fields: <String, Object?>{
+        'conversation_hash': AwikiPerformanceLogger.safeHash(
+          conversation.conversationId,
+        ),
+        'has_watermark': watermark?.isEmpty == false,
+        'watermark_seq': watermark?.lastReadThreadSeq,
+        'watermark_message_hash': AwikiPerformanceLogger.safeHash(
+          watermark?.lastReadMessageId,
+        ),
+      },
+    );
+    return (conversations as ConversationReadCorePort).markConversationRead(
+      conversation,
+      watermark: watermark,
+    );
   }
 
   @override

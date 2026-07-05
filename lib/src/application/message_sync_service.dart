@@ -1,5 +1,6 @@
 import '../core/performance_logger.dart';
 import '../domain/entities/chat_message.dart';
+import 'models/app_conversation_read_ref.dart';
 import 'models/app_thread_ref.dart';
 import 'ports/message_sync_core_port.dart';
 
@@ -16,7 +17,16 @@ abstract interface class MessageSyncService {
   });
 }
 
-class ImCoreMessageSyncService implements MessageSyncService {
+abstract interface class ConversationMessageSyncService {
+  Future<MessageSyncThreadAfterResult> syncConversationAfter({
+    required AppConversationReadRef conversation,
+    String? afterServerSeq,
+    int limit = 100,
+  });
+}
+
+class ImCoreMessageSyncService
+    implements MessageSyncService, ConversationMessageSyncService {
   const ImCoreMessageSyncService({required MessageSyncCorePort sync})
     : _sync = sync;
 
@@ -49,6 +59,35 @@ class ImCoreMessageSyncService implements MessageSyncService {
       ),
       fields: <String, Object?>{
         'thread': thread.stableId,
+        'has_after_server_seq': afterServerSeq != null,
+        'limit': limit,
+      },
+    );
+  }
+
+  @override
+  Future<MessageSyncThreadAfterResult> syncConversationAfter({
+    required AppConversationReadRef conversation,
+    String? afterServerSeq,
+    int limit = 100,
+  }) {
+    final sync = _sync;
+    if (sync is! ConversationMessageSyncCorePort) {
+      throw UnsupportedError(
+        'Message sync core does not expose conversation-id sync.',
+      );
+    }
+    return AwikiPerformanceLogger.async(
+      'message_sync.conversation_after',
+      () => (sync as ConversationMessageSyncCorePort).syncConversationAfter(
+        conversation: conversation,
+        afterServerSeq: afterServerSeq,
+        limit: limit,
+      ),
+      fields: <String, Object?>{
+        'conversation_hash': AwikiPerformanceLogger.safeHash(
+          conversation.conversationId,
+        ),
         'has_after_server_seq': afterServerSeq != null,
         'limit': limit,
       },

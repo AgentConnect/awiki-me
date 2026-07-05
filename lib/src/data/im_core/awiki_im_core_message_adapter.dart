@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
 import '../../application/models/attachment_models.dart';
+import '../../application/models/app_conversation_read_ref.dart';
 import '../../application/models/app_thread_ref.dart';
 import '../../application/models/thread_message_patch.dart';
 import '../../application/ports/message_core_port.dart';
@@ -17,7 +18,8 @@ class AwikiImCoreMessageAdapter
     implements
         MessageCorePort,
         LocalHistoryMessageCorePort,
-        ThreadPatchMessageCorePort {
+        ThreadPatchMessageCorePort,
+        ConversationTimelineMessageCorePort {
   AwikiImCoreMessageAdapter({
     required AwikiImCoreRuntime runtime,
     AwikiImCoreMappers mappers = const AwikiImCoreMappers(),
@@ -262,6 +264,63 @@ class AwikiImCoreMessageAdapter
   }
 
   @override
+  Future<List<ChatMessage>> loadConversationTimeline(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  }) async {
+    return _runtime.withCurrentClient((client) async {
+      final totalWatch = Stopwatch()..start();
+      final ownerDid = await _currentOwnerDid(client);
+      final page = await AwikiPerformanceLogger.async(
+        'im_core_messages.conversation_timeline_native',
+        () => client.messages.localConversationTimeline(
+          core.ConversationReadRef(conversationId: conversation.conversationId),
+          limit: limit,
+          cursor: cursor,
+        ),
+        fields: <String, Object?>{
+          'limit': limit,
+          'cursor': cursor != null,
+          'conversation_hash': AwikiPerformanceLogger.safeHash(
+            conversation.conversationId,
+          ),
+        },
+      );
+      final messages = AwikiPerformanceLogger.sync(
+        'im_core_messages.conversation_timeline_map',
+        () => page.items
+            .map(
+              (message) =>
+                  _mappers.chatMessageFromCore(message, ownerDid: ownerDid),
+            )
+            .where(
+              (message) =>
+                  includeControlPayloads || message.hasRenderableContent,
+            )
+            .toList(),
+        fields: <String, Object?>{
+          'items': page.items.length,
+          'include_control_payloads': includeControlPayloads,
+        },
+      );
+      totalWatch.stop();
+      AwikiPerformanceLogger.log(
+        'im_core_messages.conversation_timeline',
+        elapsed: totalWatch.elapsed,
+        fields: <String, Object?>{
+          'items': page.items.length,
+          'returned': messages.length,
+          'has_more': page.hasMore,
+          'include_control_payloads': includeControlPayloads,
+        },
+      );
+      return messages;
+    });
+  }
+
+  @override
   Stream<ThreadMessagePatch> watchThreadPatches(
     AppThreadRef thread, {
     int limit = 100,
@@ -282,6 +341,36 @@ class AwikiImCoreMessageAdapter
       final ownerDid = await _currentOwnerDid(client);
       final patch = await client.messages.repairThreadStore(
         _mappers.threadRefToCore(thread),
+        limit: limit,
+      );
+      return _threadPatchFromCore(patch, ownerDid: ownerDid);
+    });
+  }
+
+  @override
+  Stream<ThreadMessagePatch> watchConversationTimelinePatches(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+  }) async* {
+    final client = await _runtime.currentClient();
+    final ownerDid = await _currentOwnerDid(client);
+    yield* client.messages
+        .watchConversationTimelinePatches(
+          core.ConversationReadRef(conversationId: conversation.conversationId),
+          limit: limit,
+        )
+        .map((patch) => _threadPatchFromCore(patch, ownerDid: ownerDid));
+  }
+
+  @override
+  Future<ThreadMessagePatch> repairConversationTimelineStore(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+  }) async {
+    return _runtime.withCurrentClient((client) async {
+      final ownerDid = await _currentOwnerDid(client);
+      final patch = await client.messages.repairConversationTimelineStore(
+        core.ConversationReadRef(conversationId: conversation.conversationId),
         limit: limit,
       );
       return _threadPatchFromCore(patch, ownerDid: ownerDid);
@@ -353,6 +442,10 @@ class AwikiImCoreMessageAdapter
       version: patch.version,
       threadKind: patch.threadKind,
       threadId: patch.threadId,
+      conversationId:
+          patch.conversationIdentity?.conversationId ??
+          message?.conversationId ??
+          _firstConversationId(messages),
       messages: messages,
       message: message == null || message.hasRenderableContent ? message : null,
       index: patch.index,
@@ -360,6 +453,16 @@ class AwikiImCoreMessageAdapter
       reason: patch.reason,
     );
   }
+}
+
+String? _firstConversationId(Iterable<ChatMessage> messages) {
+  for (final message in messages) {
+    final conversationId = message.conversationId?.trim();
+    if (conversationId != null && conversationId.isNotEmpty) {
+      return conversationId;
+    }
+  }
+  return null;
 }
 
 core.AttachmentInput _attachmentInputToCore(AttachmentDraft attachment) {

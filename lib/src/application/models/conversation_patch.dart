@@ -18,6 +18,7 @@ class ConversationListPatch {
     this.item,
     this.index,
     this.threadId,
+    this.conversationId,
     this.conversationKey,
     this.reason,
   });
@@ -30,6 +31,7 @@ class ConversationListPatch {
   final ConversationSummary? item;
   final int? index;
   final String? threadId;
+  final String? conversationId;
   final String? conversationKey;
   final String? reason;
 }
@@ -86,6 +88,7 @@ class CoreConversationPatch {
     this.item,
     this.index,
     this.threadId,
+    this.conversationId,
     this.reason,
   });
 
@@ -97,5 +100,6 @@ class CoreConversationPatch {
   final ConversationSummary? item;
   final int? index;
   final String? threadId;
+  final String? conversationId;
   final String? reason;
 }

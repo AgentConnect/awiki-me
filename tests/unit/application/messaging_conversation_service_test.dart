@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
+import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
@@ -87,6 +88,39 @@ void main() {
 
       expect(core.markReadCount, 1);
       expect(core.lastMarkReadWatermark, same(watermark));
+    });
+
+    test(
+      'markConversationRead delegates only to conversation-id capability',
+      () async {
+        final core = _FakeReadableConversations();
+        final service = ImCoreConversationService(
+          conversations: core,
+          localStore: InMemoryAwikiProductLocalStore(),
+        );
+
+        await service.markConversationRead(
+          AppConversationReadRef.fromConversationId('dm:peer-scope:v1:bob'),
+        );
+
+        expect(core.markConversationReadCount, 1);
+        expect(core.lastConversationId, 'dm:peer-scope:v1:bob');
+        expect(core.markReadCount, 0);
+      },
+    );
+
+    test('markConversationRead fails clearly without core capability', () {
+      final service = ImCoreConversationService(
+        conversations: _FakeConversations(),
+        localStore: InMemoryAwikiProductLocalStore(),
+      );
+
+      expect(
+        () => service.markConversationRead(
+          AppConversationReadRef.fromConversationId('dm:peer-scope:v1:bob'),
+        ),
+        throwsA(isA<UnsupportedError>()),
+      );
     });
 
     test(
@@ -305,6 +339,37 @@ void main() {
         expect(core.repairCount, 1);
       },
     );
+
+    test('watchConversationPatches preserves core conversation id', () async {
+      final core = _FakeConversations();
+      final service = ImCoreConversationService(
+        conversations: core,
+        localStore: InMemoryAwikiProductLocalStore(),
+      );
+      final firstPatch = service
+          .watchConversationPatches(ownerDid: 'did:alice')
+          .first;
+      await Future<void>.delayed(Duration.zero);
+
+      core.emitPatch(
+        CoreConversationPatch(
+          kind: CoreConversationPatchKind.upsert,
+          ownerDid: 'did:alice',
+          version: 10,
+          unreadTotal: 1,
+          conversationId: 'dm:peer-scope:v1:bob',
+          item: _conversation(
+            'dm:peer-scope:v1:bob',
+            minutesAgo: 1,
+            conversationId: 'dm:peer-scope:v1:bob',
+          ),
+        ),
+      );
+
+      final patch = await firstPatch.timeout(const Duration(seconds: 1));
+      expect(patch.conversationId, 'dm:peer-scope:v1:bob');
+      expect(patch.item?.conversationId, 'dm:peer-scope:v1:bob');
+    });
 
     test(
       'snapshot load keeps peer-scoped runtime rows on exact storage threads',
@@ -1377,6 +1442,7 @@ ConversationSummary _conversation(
   String lastMessagePreview = 'preview',
   ChatMessage? lastMessageSnapshot,
   int unreadCount = 0,
+  String? conversationId,
 }) {
   final lastMessageAt = DateTime.utc(
     2026,
@@ -1385,6 +1451,7 @@ ConversationSummary _conversation(
     9,
   ).subtract(Duration(minutes: minutesAgo));
   return ConversationSummary(
+    conversationId: conversationId,
     threadId: threadId,
     displayName: displayName ?? threadId,
     lastMessagePreview: lastMessagePreview,
@@ -1495,6 +1562,23 @@ class _FakeConversations implements ConversationCorePort {
   }) async {
     markReadCount += 1;
     lastMarkReadWatermark = watermark;
+  }
+}
+
+class _FakeReadableConversations extends _FakeConversations
+    implements ConversationReadCorePort {
+  int markConversationReadCount = 0;
+  String? lastConversationId;
+  AppThreadReadWatermark? lastConversationReadWatermark;
+
+  @override
+  Future<void> markConversationRead(
+    AppConversationReadRef conversation, {
+    AppThreadReadWatermark? watermark,
+  }) async {
+    markConversationReadCount += 1;
+    lastConversationId = conversation.conversationId;
+    lastConversationReadWatermark = watermark;
   }
 }
 

@@ -1,4 +1,5 @@
 import '../../domain/entities/chat_message.dart';
+import '../models/app_conversation_read_ref.dart';
 import '../models/app_thread_ref.dart';
 
 abstract interface class MessageSyncCorePort {
@@ -10,6 +11,15 @@ abstract interface class MessageSyncCorePort {
 
   Future<MessageSyncThreadAfterResult> syncThreadAfter({
     required AppThreadRef thread,
+    String? afterServerSeq,
+    int? limit,
+  });
+
+}
+
+abstract interface class ConversationMessageSyncCorePort {
+  Future<MessageSyncThreadAfterResult> syncConversationAfter({
+    required AppConversationReadRef conversation,
     String? afterServerSeq,
     int? limit,
   });

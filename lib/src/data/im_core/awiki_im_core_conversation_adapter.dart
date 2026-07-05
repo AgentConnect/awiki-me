@@ -1,6 +1,7 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:flutter/foundation.dart';
 
+import '../../application/models/app_conversation_read_ref.dart';
 import '../../application/models/app_thread_ref.dart';
 import '../../application/models/app_thread_read_watermark.dart';
 import '../../application/models/conversation_patch.dart';
@@ -15,7 +16,8 @@ const bool _imCoreConversationTraceEnabled = bool.fromEnvironment(
   defaultValue: false,
 );
 
-class AwikiImCoreConversationAdapter implements ConversationCorePort {
+class AwikiImCoreConversationAdapter
+    implements ConversationCorePort, ConversationReadCorePort {
   AwikiImCoreConversationAdapter({
     required AwikiImCoreRuntime runtime,
     AwikiImCoreMappers mappers = const AwikiImCoreMappers(),
@@ -207,6 +209,9 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
             version: patch.version,
             unreadTotal: patch.unreadTotal,
             threadId: item?.threadId ?? patch.threadId,
+            conversationId:
+                item?.conversationIdentity?.conversationId ??
+                patch.conversationIdentity?.conversationId,
           );
         }
         return CoreConversationPatch(
@@ -215,6 +220,9 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
           version: patch.version,
           unreadTotal: patch.unreadTotal,
           item: _mappers.conversationFromSnapshot(item, ownerDid: ownerDid),
+          conversationId:
+              item.conversationIdentity?.conversationId ??
+              patch.conversationIdentity?.conversationId,
         );
       case core.ConversationStorePatchKind.remove:
         return CoreConversationPatch(
@@ -223,6 +231,7 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
           version: patch.version,
           unreadTotal: patch.unreadTotal,
           threadId: patch.threadId,
+          conversationId: patch.conversationIdentity?.conversationId,
         );
       case core.ConversationStorePatchKind.reorder:
         return CoreConversationPatch(
@@ -231,6 +240,7 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
           version: patch.version,
           unreadTotal: patch.unreadTotal,
           threadId: patch.threadId,
+          conversationId: patch.conversationIdentity?.conversationId,
           index: patch.index,
         );
       case core.ConversationStorePatchKind.repairRequired:
@@ -325,6 +335,18 @@ class AwikiImCoreConversationAdapter implements ConversationCorePort {
         rethrow;
       }
     });
+  }
+
+  @override
+  Future<void> markConversationRead(
+    AppConversationReadRef conversation, {
+    AppThreadReadWatermark? watermark,
+  }) {
+    throw UnsupportedError(
+      'IM Core does not expose conversation-id mark-read yet. '
+      'Step 09 must add a canonical markConversationRead SDK API before '
+      'providers migrate read correctness to conversationId.',
+    );
   }
 }
 

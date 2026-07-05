@@ -19,10 +19,17 @@ class ConversationSummary {
     this.avatarSeed,
     this.lastMessagePayloadJson,
     this.lastMessageSnapshot,
+    this.conversationId,
     this.conversationKey,
     this.peerLifecycleState = ConversationPeerLifecycleState.active,
   });
 
+  /// Canonical message-chain key owned by im-core.
+  ///
+  /// During migration, legacy UI code may still use [threadId] or
+  /// [conversationKey]. New message display paths must use
+  /// [effectiveConversationId] instead.
+  final String? conversationId;
   final String threadId;
   final String displayName;
   final String lastMessagePreview;
@@ -45,6 +52,14 @@ class ConversationSummary {
       peerLifecycleState == ConversationPeerLifecycleState.deletedAgent;
 
   bool get hasUnreadMention => unreadMentionCount > 0;
+
+  String get effectiveConversationId {
+    final explicit = conversationId?.trim();
+    if (explicit != null && explicit.isNotEmpty) {
+      return explicit;
+    }
+    return threadId.trim();
+  }
 
   String get visibilityKey {
     if (!isGroup && _isPeerScopedDirectThreadId(threadId)) {
@@ -124,10 +139,15 @@ class ConversationSummary {
     Object? avatarSeed = _conversationSummaryUnset,
     Object? lastMessagePayloadJson = _conversationSummaryUnset,
     Object? lastMessageSnapshot = _conversationSummaryUnset,
+    Object? conversationId = _conversationSummaryUnset,
     Object? conversationKey = _conversationSummaryUnset,
     ConversationPeerLifecycleState? peerLifecycleState,
   }) {
     return ConversationSummary(
+      conversationId: _resolveNullableString(
+        conversationId,
+        this.conversationId,
+      ),
       threadId: threadId ?? this.threadId,
       displayName: displayName ?? this.displayName,
       lastMessagePreview: lastMessagePreview ?? this.lastMessagePreview,

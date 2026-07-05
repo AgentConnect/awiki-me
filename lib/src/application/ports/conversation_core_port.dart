@@ -1,4 +1,5 @@
 import '../../domain/entities/conversation_summary.dart';
+import '../models/app_conversation_read_ref.dart';
 import '../models/app_thread_ref.dart';
 import '../models/app_thread_read_watermark.dart';
 import '../models/conversation_patch.dart';
@@ -23,9 +24,18 @@ abstract interface class ConversationCorePort {
     bool unreadOnly = false,
   });
 
-  /// Marks known unread messages in a thread as read through IM Core.
+  /// Legacy migration adapter. New read paths should prefer
+  /// [ConversationReadCorePort.markConversationRead] so im-core owns the
+  /// canonical conversation identity and read watermark.
   Future<void> markThreadRead(
     AppThreadRef thread, {
+    AppThreadReadWatermark? watermark,
+  });
+}
+
+abstract interface class ConversationReadCorePort {
+  Future<void> markConversationRead(
+    AppConversationReadRef conversation, {
     AppThreadReadWatermark? watermark,
   });
 }

@@ -1,3 +1,9 @@
+// Deprecated migration adapter for pre-conversationId paths.
+//
+// TODO(message-arch Step 14): remove this as a correctness mechanism after
+// list/timeline/read/send/sync providers consume im-core ConversationIdentity
+// and AppConversationReadRef. Until then, callers must treat these helpers as
+// compatibility fallbacks only.
 String canonicalDirectThreadId(String ownerDid, String peerDid) {
   final owner = ownerDid.trim();
   final peer = peerDid.trim();
