@@ -148,7 +148,9 @@ void main() {
   test(
     'runtime final updates recovery state and clears pending turn',
     () async {
-      container.read(chatThreadsProvider.notifier).applyRealtimeUpdate(message);
+      container
+          .read(chatThreadsProvider.notifier)
+          .debugSeedMessageForTesting(message);
       container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
         const <String, Object?>{
           'schema': 'awiki.agent.status.v1',
@@ -197,7 +199,9 @@ void main() {
   test(
     'runtime final with peer-scope route attaches to loaded source message thread',
     () async {
-      container.read(chatThreadsProvider.notifier).applyRealtimeUpdate(message);
+      container
+          .read(chatThreadsProvider.notifier)
+          .debugSeedMessageForTesting(message);
       container
           .read(chatThreadsProvider.notifier)
           .debugDropMessagesForTesting(conversation.threadId);
@@ -249,8 +253,8 @@ void main() {
 
   test('cache stats isolate peer-scoped conversations and route entries', () {
     final controller = container.read(chatThreadsProvider.notifier);
-    controller.applyRealtimeUpdate(message);
-    controller.applyRealtimeUpdate(
+    controller.debugSeedMessageForTesting(message);
+    controller.debugSeedMessageForTesting(
       ChatMessage(
         localId: 'local_msg_2',
         remoteId: 'msg_2',
@@ -262,7 +266,6 @@ void main() {
         isMine: false,
         sendState: MessageSendState.sent,
       ),
-      conversation: conversation.copyWith(threadId: 'dm:peer-scope:v1:bob'),
     );
 
     final stats = controller.debugCacheStats();
@@ -278,14 +281,14 @@ void main() {
 
   test('peer-scoped source message route corrects stale direct route', () {
     final controller = container.read(chatThreadsProvider.notifier);
-    controller.applyRealtimeUpdate(message);
+    controller.debugSeedMessageForTesting(message);
     expect(
       controller.debugThreadIdForSourceMessage('msg_1'),
       conversation.threadId,
     );
 
     const peerScopedThreadId = 'dm:peer-scope:v1:stable-bob';
-    controller.applyRealtimeUpdate(
+    controller.debugSeedMessageForTesting(
       ChatMessage(
         localId: message.localId,
         remoteId: message.remoteId,
@@ -297,7 +300,6 @@ void main() {
         isMine: message.isMine,
         sendState: message.sendState,
       ),
-      conversation: conversation.copyWith(threadId: peerScopedThreadId),
     );
 
     expect(
@@ -308,7 +310,9 @@ void main() {
 
   test('delete and clear remove cache metadata and routes', () async {
     final controller = container.read(chatThreadsProvider.notifier);
-    container.read(chatThreadsProvider.notifier).applyRealtimeUpdate(message);
+    container
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(message);
 
     expect(controller.debugCacheStats().messageRouteEntryCount, 2);
     expect(
@@ -323,7 +327,7 @@ void main() {
     expect(controller.debugCacheStats().messageRouteEntryCount, 0);
     expect(controller.debugThreadIdForSourceMessage('msg_1'), isNull);
 
-    controller.applyRealtimeUpdate(message);
+    controller.debugSeedMessageForTesting(message);
     expect(controller.debugCacheStats().messageRouteEntryCount, 2);
     controller.clear();
     expect(controller.debugCacheStats().rawThreadStateCount, 0);
@@ -347,7 +351,7 @@ void main() {
     final controller = trimContainer.read(chatThreadsProvider.notifier);
     controller.markConversationVisible(conversation);
     for (var i = 0; i < 6; i += 1) {
-      controller.applyRealtimeUpdate(
+      controller.debugSeedMessageForTesting(
         _chatMessage(
           conversation: conversation,
           localId: 'trim_local_$i',
@@ -387,7 +391,7 @@ void main() {
     );
     addTearDown(trimContainer.dispose);
     final controller = trimContainer.read(chatThreadsProvider.notifier);
-    controller.applyRealtimeUpdate(
+    controller.debugSeedMessageForTesting(
       _chatMessage(
         conversation: conversation,
         localId: 'failed_local',
@@ -397,7 +401,7 @@ void main() {
         createdAt: DateTime(2026, 6, 19, 10),
       ),
     );
-    controller.applyRealtimeUpdate(
+    controller.debugSeedMessageForTesting(
       _chatMessage(
         conversation: conversation,
         localId: 'source_local',
@@ -418,7 +422,7 @@ void main() {
       'args': <String, Object?>{'draft_text': 'keep source'},
     });
     for (var i = 0; i < 4; i += 1) {
-      controller.applyRealtimeUpdate(
+      controller.debugSeedMessageForTesting(
         _chatMessage(
           conversation: conversation,
           localId: 'tail_local_$i',
@@ -457,7 +461,7 @@ void main() {
       threadId: 'dm:peer-scope:v1:bob',
     );
     for (var i = 0; i < 3; i += 1) {
-      controller.applyRealtimeUpdate(
+      controller.debugSeedMessageForTesting(
         _chatMessage(
           conversation: aliasConversation,
           localId: 'alias_local_$i',
@@ -465,7 +469,6 @@ void main() {
           content: 'alias $i',
           createdAt: DateTime(2026, 6, 19, 10, i),
         ),
-        conversation: aliasConversation,
       );
     }
 
@@ -482,7 +485,7 @@ void main() {
       isGroup: false,
       targetDid: 'did:human:carol',
     );
-    controller.applyRealtimeUpdate(
+    controller.debugSeedMessageForTesting(
       _chatMessage(
         conversation: otherConversation,
         localId: 'other_local_1',
@@ -490,7 +493,6 @@ void main() {
         content: 'other',
         createdAt: DateTime(2026, 6, 19, 10, 10),
       ),
-      conversation: otherConversation,
     );
 
     stats = controller.debugCacheStats();
@@ -502,7 +504,9 @@ void main() {
   test(
     'confirm create draft writes composer and sends result to daemon',
     () async {
-      container.read(chatThreadsProvider.notifier).applyRealtimeUpdate(message);
+      container
+          .read(chatThreadsProvider.notifier)
+          .debugSeedMessageForTesting(message);
       container
           .read(chatThreadsProvider.notifier)
           .applyMessageAgentControlPayload(const <String, Object?>{
@@ -551,7 +555,9 @@ void main() {
   test(
     'reject action sends rejected result and keeps composer untouched',
     () async {
-      container.read(chatThreadsProvider.notifier).applyRealtimeUpdate(message);
+      container
+          .read(chatThreadsProvider.notifier)
+          .debugSeedMessageForTesting(message);
       container
           .read(chatThreadsProvider.notifier)
           .applyMessageAgentControlPayload(const <String, Object?>{
@@ -588,7 +594,9 @@ void main() {
   );
 
   test('confirm fails closed when result target cannot be resolved', () async {
-    container.read(chatThreadsProvider.notifier).applyRealtimeUpdate(message);
+    container
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(message);
     container
         .read(chatThreadsProvider.notifier)
         .applyMessageAgentControlPayload(const <String, Object?>{

@@ -141,7 +141,7 @@ void main() {
 
       container
           .read(chatThreadsProvider.notifier)
-          .applyRealtimeUpdate(
+          .debugSeedMessageForTesting(
             ChatMessage(
               localId: 'msg_agent_reply_1',
               remoteId: 'msg_agent_reply_1',
@@ -156,7 +156,6 @@ void main() {
               isMine: false,
               sendState: MessageSendState.sent,
             ),
-            conversation: conversation,
           );
 
       thread = container.read(chatThreadProvider(conversation.threadId));

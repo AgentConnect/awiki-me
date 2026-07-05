@@ -291,10 +291,10 @@ void main() {
       final controller = cacheContainer.read(chatThreadsProvider.notifier);
       controller.markConversationVisible(visibleConversation);
       for (var i = 0; i < 4; i += 1) {
-        controller.applyRealtimeUpdate(
+        controller.debugSeedMessageForTesting(
           _runtimeTestMessage(visibleConversation, i),
         );
-        controller.applyRealtimeUpdate(
+        controller.debugSeedMessageForTesting(
           _runtimeTestMessage(hiddenConversation, i),
         );
       }
@@ -368,10 +368,10 @@ void main() {
       final controller = cacheContainer.read(chatThreadsProvider.notifier);
       controller.markConversationVisible(visibleConversation);
       for (var i = 0; i < 4; i += 1) {
-        controller.applyRealtimeUpdate(
+        controller.debugSeedMessageForTesting(
           _runtimeTestMessage(visibleConversation, i),
         );
-        controller.applyRealtimeUpdate(
+        controller.debugSeedMessageForTesting(
           _runtimeTestMessage(hiddenConversation, i),
         );
       }
@@ -1267,7 +1267,7 @@ void main() {
           .upsertConversation(conversation);
       container
           .read(chatThreadsProvider.notifier)
-          .applyRealtimeUpdate(
+          .debugSeedMessageForTesting(
             ChatMessage(
               localId: 'msg_1',
               remoteId: 'msg_1',

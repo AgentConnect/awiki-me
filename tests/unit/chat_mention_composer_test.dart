@@ -433,7 +433,7 @@ void main() {
     );
     container
         .read(chatThreadsProvider.notifier)
-        .applyRealtimeUpdate(message, conversation: conversation);
+        .debugSeedMessageForTesting(message);
     await tester.pumpAndSettle();
 
     expect(

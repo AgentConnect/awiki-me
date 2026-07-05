@@ -1862,7 +1862,7 @@ void main() {
     );
     container
         .read(chatThreadsProvider.notifier)
-        .applyRealtimeUpdate(
+        .debugSeedMessageForTesting(
           ChatMessage(
             localId: 'incoming-while-reading',
             remoteId: 'incoming-while-reading',
@@ -1942,7 +1942,7 @@ void main() {
     );
     container
         .read(chatThreadsProvider.notifier)
-        .applyRealtimeUpdate(
+        .debugSeedMessageForTesting(
           ChatMessage(
             localId: 'incoming-while-visible',
             remoteId: 'incoming-while-visible',
@@ -1959,13 +1959,24 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(gateway.markReadCalls, initialMarkReadCalls + 1);
-    expect(gateway.lastMarkReadThreadId, 'dm:did:test:alice');
+    expect(gateway.markReadCalls, initialMarkReadCalls);
+
+    container
+        .read(chatThreadsProvider.notifier)
+        .acknowledgeVisibleConversationRead(
+          conversation,
+          displayThreadId: conversation.threadId,
+          forcePersistentAck: true,
+        );
+    await tester.pump();
+    await tester.pump();
+
+    expect(gateway.markReadCalls, initialMarkReadCalls);
+    expect(gateway.markConversationReadCalls, greaterThanOrEqualTo(1));
     expect(
-      gateway.lastMarkThreadReadWatermark?.lastReadMessageId,
-      'incoming-while-visible',
+      gateway.lastMarkConversationReadConversationId,
+      conversation.effectiveConversationId,
     );
-    expect(gateway.lastMarkThreadReadWatermark?.lastReadThreadSeq, '42');
   });
 
   testWidgets('最近会话列表显示未发送草稿预览并在草稿清空后恢复原预览', (tester) async {
@@ -2396,7 +2407,7 @@ void main() {
     );
     container
         .read(chatThreadsProvider.notifier)
-        .applyRealtimeUpdate(
+        .debugSeedMessageForTesting(
           ChatMessage(
             localId: 'remote-agent-reply',
             remoteId: 'remote-agent-reply',
@@ -2853,7 +2864,7 @@ void main() {
     );
     container
         .read(chatThreadsProvider.notifier)
-        .applyRealtimeUpdate(
+        .debugSeedMessageForTesting(
           ChatMessage(
             localId: 'agent-processing-reply',
             remoteId: 'agent-processing-reply',
@@ -2931,7 +2942,7 @@ void main() {
     );
     container
         .read(chatThreadsProvider.notifier)
-        .applyRealtimeUpdate(
+        .debugSeedMessageForTesting(
           ChatMessage(
             localId: 'group-agent-processing-reply',
             remoteId: 'group-agent-processing-reply',
@@ -2946,7 +2957,6 @@ void main() {
             isMine: false,
             sendState: MessageSendState.sent,
           ),
-          conversation: conversation,
         );
     await tester.pump(const Duration(milliseconds: 50));
 
@@ -3023,7 +3033,7 @@ void main() {
     );
     container
         .read(chatThreadsProvider.notifier)
-        .applyRealtimeUpdate(
+        .debugSeedMessageForTesting(
           ChatMessage(
             localId: 'agent-processing-reply-a',
             remoteId: 'agent-processing-reply-a',
@@ -3043,7 +3053,7 @@ void main() {
 
     container
         .read(chatThreadsProvider.notifier)
-        .applyRealtimeUpdate(
+        .debugSeedMessageForTesting(
           ChatMessage(
             localId: 'agent-processing-reply-a',
             remoteId: 'agent-processing-reply-a',
@@ -3062,7 +3072,7 @@ void main() {
 
     container
         .read(chatThreadsProvider.notifier)
-        .applyRealtimeUpdate(
+        .debugSeedMessageForTesting(
           ChatMessage(
             localId: 'agent-processing-reply-b',
             remoteId: 'agent-processing-reply-b',

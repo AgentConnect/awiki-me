@@ -823,11 +823,6 @@ class ChatThreadsController
       conversation,
       displayThreadId: displayThreadId,
     );
-    final snapshotWarmCount = _warmDisplayThreadFromConversationSnapshot(
-      conversation,
-      displayThreadId: displayThreadId,
-      source: 'open_local_first',
-    );
     final currentBeforeLocal = thread(displayThreadId);
     final shouldLoadLocalHistory = _shouldLoadLocalHistoryForOpen(
       displayThreadId,
@@ -865,15 +860,7 @@ class ChatThreadsController
       );
       return;
     }
-    final hasOnlyFreshSnapshot =
-        snapshotWarmCount > 0 &&
-        _threadContainsOnlyConversationSnapshot(
-          currentBeforeLocal,
-          conversation,
-        );
-    if (!shouldLoadLocalHistory &&
-        _hasRenderableMessages(currentBeforeLocal) &&
-        !hasOnlyFreshSnapshot) {
+    if (!shouldLoadLocalHistory && _hasRenderableMessages(currentBeforeLocal)) {
       _chatProviderTrace(
         'open.local_first.memory_tail',
         fields: <String, Object?>{
@@ -886,11 +873,7 @@ class ChatThreadsController
       );
       _logOpenFirstPaintSource(
         displayThreadId,
-        source: snapshotWarmCount > 0
-            ? 'last_message_snapshot'
-            : aliasWarmCount > 0
-            ? 'alias_prewarm'
-            : 'memory_tail',
+        source: aliasWarmCount > 0 ? 'alias_prewarm' : 'memory_tail',
         items: currentBeforeLocal.messages.length,
       );
       unawaited(
@@ -1060,98 +1043,13 @@ class ChatThreadsController
     if (renderableMessages.isEmpty) {
       return false;
     }
-    return renderableMessages.every(
-      (message) => _messageBelongsToConversationThread(message, conversation),
-    );
-  }
-
-  int _warmDisplayThreadFromConversationSnapshot(
-    ConversationSummary conversation, {
-    required String displayThreadId,
-    required String source,
-  }) {
-    final snapshot = conversation.lastMessageSnapshot;
-    if (snapshot == null || !snapshot.hasRenderableContent) {
-      return 0;
-    }
-    if (!_messageBelongsToConversationThread(snapshot, conversation)) {
-      _chatProviderTrace(
-        'open.snapshot_prewarm.skip',
-        fields: <String, Object?>{
-          ...AwikiPerformanceLogger.threadField(displayThreadId),
-          'source': source,
-          'reason': 'thread_mismatch',
-          'snapshot_thread_hash': AwikiPerformanceLogger.safeHash(
-            snapshot.threadId,
-          ),
-          'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
-            conversation.threadId,
-          ),
-        },
-      );
-      return 0;
-    }
-    final message = _withThreadId(snapshot, displayThreadId);
-    _mergeMessages(
-      displayThreadId,
-      <ChatMessage>[message],
-      isLoading: false,
-      trustIncomingAgentReply: true,
-    );
-    AwikiPerformanceLogger.log(
-      'chat.open.snapshot_prewarm',
-      fields: <String, Object?>{
-        ...AwikiPerformanceLogger.threadField(displayThreadId),
-        'source': source,
-      },
-      level: AwikiPerformanceLogLevel.verbose,
-    );
-    return 1;
-  }
-
-  bool _threadContainsOnlyConversationSnapshot(
-    ChatThreadState current,
-    ConversationSummary conversation,
-  ) {
-    final snapshot = conversation.lastMessageSnapshot;
-    if (snapshot == null) {
-      return false;
-    }
-    final renderableMessages = current.messages
-        .where((message) => message.hasRenderableContent)
-        .toList();
-    return renderableMessages.length == 1 &&
-        _stableMessageId(renderableMessages.single) ==
-            _stableMessageId(snapshot);
-  }
-
-  bool _messageBelongsToConversationThread(
-    ChatMessage message,
-    ConversationSummary conversation,
-  ) {
     final expectedConversationId = _conversationTimelineKeyFor(conversation);
-    final messageConversationId = message.conversationId?.trim();
-    if (messageConversationId != null && messageConversationId.isNotEmpty) {
-      return messageConversationId == expectedConversationId;
-    }
-    final messageThreadId = message.threadId.trim();
-    if (messageThreadId.isEmpty) {
-      return false;
-    }
-    if (_messageMatchesConversation(message, conversation)) {
-      return true;
-    }
-    if (isPeerScopedDirectConversation(conversation)) {
-      return false;
-    }
-    final messageId = _stableMessageId(message);
-    final snapshot = conversation.lastMessageSnapshot;
-    if (snapshot != null &&
-        messageId.isNotEmpty &&
-        messageId == _stableMessageId(snapshot)) {
-      return true;
-    }
-    return false;
+    return renderableMessages.every((message) {
+      final messageConversationId = message.conversationId?.trim();
+      return messageConversationId != null &&
+          messageConversationId.isNotEmpty &&
+          messageConversationId == expectedConversationId;
+    });
   }
 
   List<ChatMessage> _messagesForConversationThread(
@@ -1164,8 +1062,9 @@ class ChatThreadsController
     final expectedConversationId = _conversationTimelineKeyFor(conversation);
     var rawCount = 0;
     var nonRenderableCount = 0;
-    var droppedCount = 0;
+    var droppedConversationMismatchCount = 0;
     var conversationMismatchCount = 0;
+    var legacyNoConversationIdCount = 0;
     for (final message in messages) {
       rawCount += 1;
       if (!message.hasRenderableContent) {
@@ -1176,25 +1075,27 @@ class ChatThreadsController
       if (messageConversationId != null &&
           messageConversationId.isNotEmpty &&
           messageConversationId != expectedConversationId) {
-        droppedCount += 1;
+        droppedConversationMismatchCount += 1;
         conversationMismatchCount += 1;
         continue;
       }
-      if (!_messageBelongsToConversationThread(message, conversation)) {
-        droppedCount += 1;
-        continue;
+      if (messageConversationId == null || messageConversationId.isEmpty) {
+        legacyNoConversationIdCount += 1;
       }
       filtered.add(_withThreadId(message, displayThreadId));
     }
-    if (droppedCount > 0) {
+    if (droppedConversationMismatchCount > 0 ||
+        legacyNoConversationIdCount > 0 ||
+        nonRenderableCount > 0) {
       _chatProviderTrace(
-        'messages.filter_dropped',
+        'messages.conversation_projection_filter',
         fields: <String, Object?>{
           ...AwikiPerformanceLogger.threadField(displayThreadId),
           'source': source,
           'raw': rawCount,
-          'dropped': droppedCount,
+          'dropped': droppedConversationMismatchCount,
           'conversation_mismatch': conversationMismatchCount,
+          'legacy_without_conversation_id': legacyNoConversationIdCount,
           'non_renderable': nonRenderableCount,
           'conversation_hash': AwikiPerformanceLogger.safeHash(
             expectedConversationId,
@@ -1205,13 +1106,14 @@ class ChatThreadsController
         },
       );
       AwikiPerformanceLogger.log(
-        'chat.messages.filter_dropped',
+        'chat.messages.conversation_projection_filter',
         fields: <String, Object?>{
           ...AwikiPerformanceLogger.threadField(displayThreadId),
           'source': source,
           'raw': rawCount,
-          'dropped': droppedCount,
+          'dropped': droppedConversationMismatchCount,
           'conversation_mismatch': conversationMismatchCount,
+          'legacy_without_conversation_id': legacyNoConversationIdCount,
           'non_renderable': nonRenderableCount,
           'conversation_hash': AwikiPerformanceLogger.safeHash(
             expectedConversationId,
@@ -1233,7 +1135,7 @@ class ChatThreadsController
     required String source,
   }) {
     final belongs =
-        _messageBelongsToConversationThread(message, conversation) ||
+        _messageHasMatchingConversationId(message, conversation) ||
         _isSameSentConfirmation(pending, message, conversation);
     if (!belongs) {
       _chatProviderTrace(
@@ -1268,6 +1170,17 @@ class ChatThreadsController
       );
     }
     return belongs;
+  }
+
+  bool _messageHasMatchingConversationId(
+    ChatMessage message,
+    ConversationSummary conversation,
+  ) {
+    final messageConversationId = message.conversationId?.trim();
+    if (messageConversationId == null || messageConversationId.isEmpty) {
+      return false;
+    }
+    return messageConversationId == _conversationTimelineKeyFor(conversation);
   }
 
   List<String> _conversationCacheAliases(
@@ -1455,21 +1368,15 @@ class ChatThreadsController
     required String displayThreadId,
   }) {
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
-    final beforeSnapshotAfterServerSeq = maxServerSequenceForMessages(
+    final beforeSyncAfterServerSeq = maxServerSequenceForMessages(
       thread(targetThreadId).messages,
-    );
-    final snapshotWarmCount = _warmDisplayThreadFromConversationSnapshot(
-      conversation,
-      displayThreadId: targetThreadId,
-      source: 'visible_summary',
     );
     final metadata = _cacheMetadataByThreadId[targetThreadId];
     final needsGuard = _needsVisibleThreadStaleGuard(
       thread(targetThreadId),
       conversation,
     );
-    final forceThreadAfter = snapshotWarmCount > 0;
-    if (metadata?.isVisible != true || (!needsGuard && !forceThreadAfter)) {
+    if (metadata?.isVisible != true || !needsGuard) {
       return Future<void>.value();
     }
     final pending = _pendingVisibleThreadStaleGuards[targetThreadId];
@@ -1479,10 +1386,8 @@ class ChatThreadsController
     _pendingVisibleThreadStaleGuards[targetThreadId] =
         _PendingVisibleThreadStaleGuard(
           conversation: pendingConversation,
-          afterServerSeq:
-              pending?.afterServerSeq ?? beforeSnapshotAfterServerSeq,
-          forceThreadAfter:
-              forceThreadAfter || (pending?.forceThreadAfter ?? false),
+          afterServerSeq: pending?.afterServerSeq ?? beforeSyncAfterServerSeq,
+          forceThreadAfter: pending?.forceThreadAfter ?? false,
         );
     return _ensureVisibleThreadStaleGuardDrain(targetThreadId);
   }
@@ -1551,11 +1456,6 @@ class ChatThreadsController
     _ensureThreadPatchSubscription(
       conversation,
       displayThreadId: displayThreadId,
-    );
-    _warmDisplayThreadFromConversationSnapshot(
-      conversation,
-      displayThreadId: displayThreadId,
-      source: 'stale_guard',
     );
     if (!_needsVisibleThreadStaleGuard(thread(displayThreadId), conversation)) {
       if (forceThreadAfter) {
@@ -2529,7 +2429,7 @@ class ChatThreadsController
         );
         return;
       }
-      final loadedHistory = await AwikiPerformanceLogger.async(
+      await AwikiPerformanceLogger.async(
         'chat.remote_history.service',
         () => messaging.loadHistory(_historyThreadRefFor(conversation)),
         fields: <String, Object?>{
@@ -2539,26 +2439,31 @@ class ChatThreadsController
         },
         level: AwikiPerformanceLogLevel.verbose,
       );
-      final history = AwikiPerformanceLogger.sync(
-        'chat.remote_history.prepare',
-        () => _messagesForConversationThread(
-          loadedHistory,
-          conversation: conversation,
-          displayThreadId: targetThreadId,
-          source: 'remote_history',
-        ),
-        fields: <String, Object?>{
-          ...AwikiPerformanceLogger.threadField(targetThreadId),
-          'items': loadedHistory.length,
-        },
-        level: AwikiPerformanceLogLevel.verbose,
+      if (!mounted) {
+        return;
+      }
+      final repairedVersion = await _repairThreadFromLocalProjection(
+        conversation,
+        displayThreadId: targetThreadId,
+        conversationRef: conversationRef,
+        fallbackToLocalHistory: false,
       );
+      final localResult = repairedVersion == null
+          ? await _loadLocalHistory(
+              conversation,
+              intoThreadId: targetThreadId,
+              limit: _initialLocalHistoryLimit,
+              showHydratingState: false,
+              markLoadedWhenEmpty: false,
+            )
+          : const _HistoryLoadResult(loadedCount: 0, failed: false);
       AwikiPerformanceLogger.log(
         'chat.history.service',
         fields: <String, Object?>{
           ...AwikiPerformanceLogger.threadField(targetThreadId),
           'compat': true,
-          'items': loadedHistory.length,
+          'repaired_version': repairedVersion,
+          'loaded_local': localResult.loadedCount,
           'conversation_ref': _conversationReadRefDebug(conversationRef),
         },
         level: AwikiPerformanceLogLevel.verbose,
@@ -2566,13 +2471,6 @@ class ChatThreadsController
       if (!mounted) {
         return;
       }
-      _mergeMessages(
-        targetThreadId,
-        history,
-        isLoading: false,
-        resolveStaleSending: true,
-      );
-      _updateConversationPreviewFromMessages(conversation, history);
       _flushPendingReadAck(targetThreadId);
       totalWatch.stop();
       AwikiPerformanceLogger.log(
@@ -2580,7 +2478,8 @@ class ChatThreadsController
         elapsed: totalWatch.elapsed,
         fields: <String, Object?>{
           ...AwikiPerformanceLogger.threadField(targetThreadId),
-          'items': history.length,
+          'repaired_version': repairedVersion,
+          'loaded_local': localResult.loadedCount,
         },
       );
     } catch (error) {
@@ -3048,35 +2947,6 @@ class ChatThreadsController
     await ref.read(conversationListProvider.notifier).refresh();
   }
 
-  void applyRealtimeUpdate(
-    ChatMessage message, {
-    ConversationSummary? conversation,
-  }) {
-    final targetThreadIds = _threadIdsForRealtimeMessage(message, conversation);
-    for (final targetThreadId in targetThreadIds) {
-      final filterConversation = conversation == null
-          ? null
-          : targetThreadId == message.threadId.trim()
-          ? _conversationForRealtimeMessageThread(message, targetThreadId)
-          : conversation;
-      final messages = conversation == null
-          ? <ChatMessage>[
-              if (message.hasRenderableContent)
-                _withThreadId(message, targetThreadId),
-            ]
-          : _messagesForConversationThread(
-              <ChatMessage>[message],
-              conversation: filterConversation!,
-              displayThreadId: targetThreadId,
-              source: 'realtime',
-            );
-      if (messages.isEmpty) {
-        continue;
-      }
-      _mergeMessages(targetThreadId, messages, trustIncomingAgentReply: true);
-    }
-  }
-
   void _updateConversationPreviewFromMessages(
     ConversationSummary conversation,
     List<ChatMessage> messages, {
@@ -3265,6 +3135,41 @@ class ChatThreadsController
     };
   }
 
+  void debugSeedMessagesForTesting(
+    String threadId,
+    Iterable<ChatMessage> messages, {
+    bool trustIncomingAgentReply = true,
+  }) {
+    final targetThreadId = threadId.trim();
+    if (targetThreadId.isEmpty) {
+      return;
+    }
+    final seeded = <ChatMessage>[
+      for (final message in messages)
+        if (message.hasRenderableContent)
+          _withThreadId(message, targetThreadId),
+    ];
+    if (seeded.isEmpty) {
+      return;
+    }
+    _mergeMessages(
+      targetThreadId,
+      seeded,
+      trustIncomingAgentReply: trustIncomingAgentReply,
+    );
+  }
+
+  void debugSeedMessageForTesting(
+    ChatMessage message, {
+    String? threadId,
+    bool trustIncomingAgentReply = true,
+  }) {
+    final targetThreadId = threadId ?? message.threadId;
+    debugSeedMessagesForTesting(targetThreadId, <ChatMessage>[
+      message,
+    ], trustIncomingAgentReply: trustIncomingAgentReply);
+  }
+
   ChatThreadCacheStats _cacheStats() {
     final canonicalKeys = <String>{
       for (final threadId in state.keys) _canonicalKeyForThreadId(threadId),
@@ -3365,22 +3270,14 @@ class ChatThreadsController
   }
 
   String? _canonicalKeyForConversation(ConversationSummary conversation) {
-    if (isPeerScopedDirectConversation(conversation)) {
-      return conversation.threadId.trim();
+    final conversationId = conversation.effectiveConversationId.trim();
+    if (conversationId.isNotEmpty) {
+      return conversationId;
     }
     if (conversation.isGroup) {
       final group = conversation.groupId?.trim();
       if (group != null && group.isNotEmpty) {
         return canonicalGroupThreadId(group);
-      }
-    } else {
-      final peerDid = conversation.targetDid?.trim();
-      if (peerDid != null && peerDid.isNotEmpty) {
-        return canonicalDirectThreadId(_ownerDidForCache(), peerDid);
-      }
-      final peer = normalizedDirectPeer(conversation.targetPeer);
-      if (peer != null && peer.startsWith('did:')) {
-        return canonicalDirectThreadId(_ownerDidForCache(), peer);
       }
     }
     return conversationVisibilityIdentity(
@@ -3394,6 +3291,12 @@ class ChatThreadsController
     List<ChatMessage> messages,
   ) {
     final normalizedThread = threadId.trim();
+    for (final message in messages.reversed) {
+      final conversationId = message.conversationId?.trim();
+      if (conversationId != null && conversationId.isNotEmpty) {
+        return conversationId;
+      }
+    }
     if (isPeerScopedDirectThreadId(normalizedThread)) {
       return normalizedThread;
     }
@@ -3403,15 +3306,7 @@ class ChatThreadsController
         return canonicalGroupThreadId(group);
       }
     }
-    final peerDid = directPeerDidFromMessages(messages)?.trim();
-    if (peerDid != null && peerDid.isNotEmpty) {
-      return canonicalDirectThreadId(_ownerDidForCache(), peerDid);
-    }
     return normalizedThread.isEmpty ? null : normalizedThread;
-  }
-
-  String _ownerDidForCache() {
-    return ref.read(sessionProvider).session?.did.trim() ?? '';
   }
 
   String? _normalizedCacheKey(String? value) {
@@ -5996,152 +5891,6 @@ class ChatThreadsController
     }
     return !(isPeerScopedDirectConversation(candidate) &&
         isPeerScopedDirectConversation(fallback));
-  }
-
-  List<String> _threadIdsForRealtimeMessage(
-    ChatMessage message,
-    ConversationSummary? conversation,
-  ) {
-    final threadIds = <String>[];
-    void add(String? value) {
-      final key = value?.trim();
-      if (key != null && key.isNotEmpty && !threadIds.contains(key)) {
-        threadIds.add(key);
-      }
-    }
-
-    if (conversation == null) {
-      add(message.threadId);
-      return threadIds;
-    }
-
-    final messageThreadId = message.threadId.trim();
-    if (messageThreadId.isNotEmpty) {
-      add(messageThreadId);
-    }
-    if (_messageMatchesConversation(message, conversation)) {
-      add(conversation.threadId);
-    }
-    if (threadIds.isEmpty) {
-      add(message.threadId);
-    }
-    return threadIds;
-  }
-
-  ConversationSummary _conversationForRealtimeMessageThread(
-    ChatMessage message,
-    String threadId,
-  ) {
-    final groupId = message.groupId?.trim();
-    final isGroup =
-        (groupId != null && groupId.isNotEmpty) ||
-        threadId.startsWith('group:');
-    final targetDid = isGroup
-        ? null
-        : (message.isMine ? message.receiverDid?.trim() : message.senderDid);
-    return ConversationSummary(
-      threadId: threadId,
-      displayName: groupId ?? targetDid ?? threadId,
-      lastMessagePreview: message.previewText,
-      lastMessageAt: message.createdAt,
-      unreadCount: message.isMine ? 0 : 1,
-      isGroup: isGroup,
-      targetDid: targetDid,
-      targetPeer: targetDid,
-      groupId: isGroup
-          ? groupId ?? _stripThreadPrefix(threadId, 'group:')
-          : null,
-      lastMessageSnapshot: message.hasRenderableContent ? message : null,
-    );
-  }
-
-  String _stripThreadPrefix(String value, String prefix) {
-    return value.startsWith(prefix) ? value.substring(prefix.length) : value;
-  }
-
-  bool _messageMatchesConversation(
-    ChatMessage message,
-    ConversationSummary conversation,
-  ) {
-    final messageThreadId = message.threadId.trim();
-    if (_messageThreadMatchesConversation(messageThreadId, conversation)) {
-      return true;
-    }
-    if (!conversation.isGroup) {
-      return false;
-    }
-    final messageGroupId = message.groupId?.trim();
-    final conversationGroupId = conversation.groupId?.trim();
-    return messageGroupId != null &&
-        messageGroupId.isNotEmpty &&
-        conversationGroupId != null &&
-        conversationGroupId.isNotEmpty &&
-        messageGroupId == conversationGroupId;
-  }
-
-  bool _messageThreadMatchesConversation(
-    String messageThreadId,
-    ConversationSummary conversation,
-  ) {
-    final conversationThreadId = conversation.threadId.trim();
-    if (messageThreadId == conversationThreadId) {
-      return true;
-    }
-    if (conversation.isGroup) {
-      final groupId = conversation.groupId?.trim();
-      return groupId != null &&
-          groupId.isNotEmpty &&
-          canonicalGroupThreadId(groupId) == messageThreadId;
-    }
-    if (isPeerScopedDirectConversation(conversation)) {
-      return false;
-    }
-    final sessionDid = ref.read(sessionProvider).session?.did.trim();
-    final directThreadIds = _directThreadAliasesForConversation(
-      conversation,
-      ownerDid: sessionDid,
-    );
-    if (directThreadIds.contains(messageThreadId)) {
-      return true;
-    }
-    final threadKey = 'thread:$messageThreadId';
-    return conversation.visibilityKeys.contains(messageThreadId) ||
-        conversation.visibilityKeys.contains(threadKey) ||
-        conversationVisibilityIdentity(
-          conversation,
-          includeHandleAliasesForStrongIdentity: false,
-        ).keys.contains(threadKey);
-  }
-
-  Set<String> _directThreadAliasesForConversation(
-    ConversationSummary conversation, {
-    required String? ownerDid,
-  }) {
-    if (conversation.isGroup || isPeerScopedDirectConversation(conversation)) {
-      return const <String>{};
-    }
-    final aliases = <String>{};
-    void add(String? value) {
-      final key = value?.trim();
-      if (key != null && key.isNotEmpty) {
-        aliases.add(key);
-      }
-    }
-
-    add(conversation.threadId);
-    final did = conversation.targetDid?.trim();
-    final peer = conversation.targetPeer?.trim();
-    for (final value in <String?>[did, peer]) {
-      final key = value?.trim();
-      if (key == null || key.isEmpty) {
-        continue;
-      }
-      add('dm:$key');
-      if (ownerDid != null && ownerDid.isNotEmpty && key.startsWith('did:')) {
-        add(canonicalDirectThreadId(ownerDid, key));
-      }
-    }
-    return aliases;
   }
 
   ConversationSummary _conversationIdentityForThread(

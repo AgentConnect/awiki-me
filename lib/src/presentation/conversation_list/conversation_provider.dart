@@ -1057,49 +1057,6 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     );
   }
 
-  void markThreadReadLocal(String threadId) {
-    final currentConversations = state.conversations;
-    final beforeUnread = state.unreadCount;
-    final next = currentConversations.map((item) {
-      if (!_threadOrIdentityMatches(item, threadId) ||
-          (item.unreadCount == 0 && item.unreadMentionCount == 0)) {
-        return item;
-      }
-      return item.copyWith(
-        unreadCount: 0,
-        unreadMentionCount: 0,
-        firstUnreadMentionMessageId: null,
-      );
-    }).toList();
-    if (_sameConversationSummaryList(currentConversations, next)) {
-      _trace(
-        'state.mark_thread_read.noop',
-        fields: <String, Object?>{
-          'unread': beforeUnread,
-          'thread_hash': _safeHash(threadId),
-        },
-      );
-      return;
-    }
-    state = state.copyWith(
-      conversations: sortConversationsForPresentation(next),
-    );
-    _trace(
-      'state.mark_thread_read',
-      fields: <String, Object?>{
-        'before_unread': beforeUnread,
-        'after_unread': state.unreadCount,
-        'thread_hash': _safeHash(threadId),
-      },
-    );
-    unawaited(
-      _updateBadgeCountBestEffort(
-        state.unreadCount,
-        source: 'mark_thread_read_local',
-      ),
-    );
-  }
-
   void markConversationReadLocal(
     ConversationSummary conversation, {
     AppThreadReadWatermark? watermark,
@@ -1404,15 +1361,6 @@ bool _sameConversationIdentity(
         firstConversationId == secondConversationId;
   }
   return sameConversationThread(first, second);
-}
-
-bool _threadOrIdentityMatches(ConversationSummary conversation, String value) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) {
-    return false;
-  }
-  return _conversationIdentityKey(conversation) == normalized ||
-      conversation.threadId.trim() == normalized;
 }
 
 String _formatTraceValue(Object value) {
