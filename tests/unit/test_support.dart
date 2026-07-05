@@ -1637,6 +1637,17 @@ class FakeMessagingService
   final Map<String, List<ChatMessage>> conversationTimelineById =
       <String, List<ChatMessage>>{};
 
+  Future<void> persistConversationMessages(
+    String conversationId,
+    List<ChatMessage> messages,
+  ) async {
+    final current =
+        conversationTimelineById[conversationId] ??
+        await _loadLocalConversationTimeline(conversationId);
+    conversationTimelineById[conversationId] =
+        _mergeConversationProjectionMessages(current, messages);
+  }
+
   @override
   Future<AttachmentDownloadResult> downloadAttachment({
     required AppThreadRef thread,
@@ -1736,6 +1747,9 @@ class FakeMessagingService
     AppConversationReadRef conversation, {
     int limit = 100,
   }) async {
+    final messages =
+        conversationTimelineById[conversation.conversationId] ??
+        await _loadLocalConversationTimeline(conversation.conversationId);
     return ThreadMessagePatch(
       kind: ThreadMessagePatchKind.reset,
       ownerDid: 'did:me',
@@ -1743,9 +1757,7 @@ class FakeMessagingService
       threadKind: 'conversation',
       threadId: conversation.conversationId,
       conversationId: conversation.conversationId,
-      messages: await _loadLocalConversationTimeline(
-        conversation.conversationId,
-      ),
+      messages: messages,
     );
   }
 
@@ -2047,6 +2059,62 @@ class FakeMessagingService
     }
     return Future<List<ChatMessage>>.value(const <ChatMessage>[]);
   }
+}
+
+List<ChatMessage> _mergeConversationProjectionMessages(
+  List<ChatMessage> current,
+  List<ChatMessage> incoming,
+) {
+  final merged = <ChatMessage>[...current];
+  for (final message in incoming) {
+    final index = merged.indexWhere((candidate) {
+      final candidateId = _fakeStableMessageId(candidate);
+      final messageId = _fakeStableMessageId(message);
+      if (candidateId.isNotEmpty && candidateId == messageId) {
+        return true;
+      }
+      if (candidate.content.trim().isNotEmpty &&
+          candidate.content == message.content &&
+          candidate.senderDid == message.senderDid &&
+          candidate.receiverDid == message.receiverDid &&
+          candidate.createdAt.isAtSameMomentAs(message.createdAt)) {
+        return true;
+      }
+      return false;
+    });
+    if (index >= 0) {
+      merged[index] = message;
+    } else {
+      merged.add(message);
+    }
+  }
+  merged.sort(_compareFakeMessagesForTimeline);
+  return merged;
+}
+
+String _fakeStableMessageId(ChatMessage message) {
+  final remoteId = message.remoteId?.trim();
+  if (remoteId != null && remoteId.isNotEmpty) {
+    return remoteId;
+  }
+  return message.localId.trim();
+}
+
+int _compareFakeMessagesForTimeline(ChatMessage a, ChatMessage b) {
+  final timeCompare = a.createdAt.compareTo(b.createdAt);
+  if (timeCompare != 0) {
+    return timeCompare;
+  }
+  final aSeq = a.serverSequence;
+  final bSeq = b.serverSequence;
+  if (aSeq != null && bSeq != null && aSeq != bSeq) {
+    return aSeq.compareTo(bSeq);
+  }
+  final idCompare = _fakeStableMessageId(a).compareTo(_fakeStableMessageId(b));
+  if (idCompare != 0) {
+    return idCompare;
+  }
+  return a.localId.compareTo(b.localId);
 }
 
 class FakeAgentInventoryPort implements AgentInventoryPort {
@@ -3105,9 +3173,12 @@ class FakeMessageSyncService
       hasMore: false,
       snapshotRequired: false,
     ),
+    this.onConversationAfterPersisted,
   });
 
   MessageSyncDeltaResult deltaResult;
+  FutureOr<void> Function(String conversationId, List<ChatMessage> messages)?
+  onConversationAfterPersisted;
   Object? nextDeltaError;
   Object? nextThreadAfterError;
   Object? nextConversationAfterError;
@@ -3188,6 +3259,10 @@ class FakeMessageSyncService
           conversation.conversationId,
         )];
     final messages = configuredMessages ?? const <ChatMessage>[];
+    final persist = onConversationAfterPersisted;
+    if (persist != null) {
+      await persist(conversation.conversationId, messages);
+    }
     return MessageSyncThreadAfterResult(
       messages: messages,
       nextAfterServerSeq: maxServerSequenceForMessages(messages),

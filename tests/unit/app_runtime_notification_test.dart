@@ -393,7 +393,7 @@ void main() {
       expect(controller.debugCacheStats().evictedThreadCount, 1);
     });
 
-    test('realtime gap hint 只调度 delta 不改变低延迟投影', () async {
+    test('realtime gap hint 只调度 delta，不直接改消息投影', () async {
       await activate();
       messageSyncService.syncReasons.clear();
       gateway.nextRealtimeUpdate = RealtimeUpdate(
@@ -409,10 +409,7 @@ void main() {
       await pumpEventQueue();
 
       expect(messageSyncService.syncReasons, contains('realtime_gap'));
-      expect(
-        container.read(chatThreadProvider('dm:1')).messages.single.content,
-        'hello',
-      );
+      expect(container.read(chatThreadProvider('dm:1')).messages, isEmpty);
     });
 
     test('后台收到消息时触发系统通知', () async {
@@ -593,24 +590,23 @@ void main() {
       expect(notificationFacade.lastSystemBody, '附件：report.pdf');
     });
 
-    test('实时 direct 与 group 消息会立即更新消息流、最近会话和 badge', () async {
+    test('实时 direct 与 group 消息只调度 core sync，不直接写 list/timeline', () async {
       container
           .read(appLifecycleProvider.notifier)
           .setLifecycle(AppLifecycleState.resumed);
       await activate();
       await Future<void>.delayed(Duration.zero);
+      messageSyncService.syncReasons.clear();
 
       gateway.nextRealtimeUpdate = buildUpdate();
       await realtimeGateway.emit(const <String, Object?>{'type': 'direct'});
+      await pumpEventQueue();
 
-      var directThread = container.read(chatThreadProvider('dm:1'));
-      expect(directThread.messages.single.content, 'hello');
-      expect(
-        container.read(conversationListProvider).conversations.single.threadId,
-        'dm:1',
-      );
-      expect(container.read(conversationListProvider).unreadCount, 1);
-      expect(notificationFacade.lastBadgeCount, 1);
+      expect(messageSyncService.syncReasons, contains('realtime_message'));
+      expect(container.read(chatThreadProvider('dm:1')).messages, isEmpty);
+      expect(container.read(conversationListProvider).conversations, isEmpty);
+      expect(notificationFacade.lastInAppTitle, 'Peer');
+      expect(notificationFacade.lastInAppBody, 'hello');
 
       gateway.nextRealtimeUpdate = RealtimeUpdate(
         message: ChatMessage(
@@ -644,21 +640,17 @@ void main() {
         ),
       );
       await realtimeGateway.emit(const <String, Object?>{'type': 'group'});
+      await pumpEventQueue();
 
-      final groupThread = container.read(chatThreadProvider('group:group-1'));
-      expect(groupThread.messages.single.content, 'hello group');
-      final conversations = container
-          .read(conversationListProvider)
-          .conversations;
+      expect(messageSyncService.syncReasons, contains('realtime_message'));
       expect(
-        conversations.map((conversation) => conversation.threadId),
-        <String>['group:group-1', 'dm:1'],
+        container.read(chatThreadProvider('group:group-1')).messages,
+        isEmpty,
       );
-      expect(container.read(conversationListProvider).unreadCount, 2);
-      expect(notificationFacade.lastBadgeCount, 2);
+      expect(container.read(conversationListProvider).conversations, isEmpty);
       expect(container.read(groupProvider).groups.single.groupId, 'group-1');
-      directThread = container.read(chatThreadProvider('dm:1'));
-      expect(directThread.messages.single.content, 'hello');
+      expect(notificationFacade.lastInAppTitle, 'Peer');
+      expect(notificationFacade.lastInAppBody, 'hello group');
     });
 
     test('实时消息更新最近会话但不会覆盖未读 @ 我状态', () async {
@@ -744,22 +736,18 @@ void main() {
       await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
       await pumpEventQueue();
 
+      expect(messageSyncService.syncReasons, contains('realtime_message'));
       final afterRealtime = container
           .read(conversationListProvider)
           .conversations
           .single;
-      expect(afterRealtime.lastMessagePreview, '普通消息');
-      expect(afterRealtime.unreadCount, 2);
+      expect(afterRealtime.lastMessagePreview, '@me 请看');
+      expect(afterRealtime.unreadCount, 1);
       expect(afterRealtime.unreadMentionCount, 1);
       expect(afterRealtime.firstUnreadMentionMessageId, 'msg-mention-1');
-      expect(notificationFacade.lastBadgeCount, 2);
       expect(
-        container
-            .read(chatThreadProvider('group:group-mention'))
-            .messages
-            .single
-            .content,
-        '普通消息',
+        container.read(chatThreadProvider('group:group-mention')).messages,
+        isEmpty,
       );
 
       conversationService.emitPatch(
@@ -789,8 +777,9 @@ void main() {
       expect(afterPatch.firstUnreadMentionMessageId, 'msg-mention-1');
     });
 
-    test('实时 direct peer-scoped 消息只预热真实 message thread', () async {
+    test('实时 direct peer-scoped 消息只调度 core sync，不预热 alias', () async {
       await activate();
+      messageSyncService.syncReasons.clear();
       final conversation = ConversationSummary(
         threadId: 'direct-handle:alice.awiki.info',
         displayName: 'Alice',
@@ -818,20 +807,11 @@ void main() {
       );
 
       await realtimeGateway.emit(const <String, Object?>{'type': 'direct'});
+      await pumpEventQueue();
 
-      final peerScopedThread = container.read(
-        chatThreadProvider('dm:peer-scope:v1:alice'),
-      );
-      expect(
-        peerScopedThread.messages.map((message) => message.content),
-        contains('hello alias'),
-        reason: 'missing realtime prewarm for dm:peer-scope:v1:alice',
-      );
-      expect(
-        peerScopedThread.messages.single.threadId,
-        'dm:peer-scope:v1:alice',
-      );
+      expect(messageSyncService.syncReasons, contains('realtime_message'));
       for (final key in <String>[
+        'dm:peer-scope:v1:alice',
         'direct-handle:alice.awiki.info',
         'did:test:alice',
         'direct:did:test:alice',
@@ -844,7 +824,7 @@ void main() {
         expect(
           container.read(chatThreadProvider(key)).messages,
           isEmpty,
-          reason: 'unexpected realtime alias prewarm for $key',
+          reason: 'realtime payload must not prewarm $key directly',
         );
       }
 
@@ -864,10 +844,11 @@ void main() {
         conversationHint: conversation,
       );
       await realtimeGateway.emit(const <String, Object?>{'type': 'direct'});
+      await pumpEventQueue();
 
       expect(
         container.read(chatThreadProvider('dm:peer-scope:v1:alice')).messages,
-        hasLength(1),
+        isEmpty,
       );
       expect(
         container
@@ -877,8 +858,9 @@ void main() {
       );
     });
 
-    test('实时 group 消息会预热 canonical group key 和真实 message thread', () async {
+    test('实时 group 消息只调度 core sync，不预热 canonical 或 alias thread', () async {
       await activate();
+      messageSyncService.syncReasons.clear();
       gateway.nextRealtimeUpdate = RealtimeUpdate(
         message: ChatMessage(
           localId: 'alias-group-1',
@@ -904,19 +886,19 @@ void main() {
       );
 
       await realtimeGateway.emit(const <String, Object?>{'type': 'group'});
+      await pumpEventQueue();
 
       for (final key in <String>[
         'group:did:test:group:alpha',
         'sdk-group-thread-alpha',
       ]) {
-        final thread = container.read(chatThreadProvider(key));
         expect(
-          thread.messages.map((message) => message.content),
-          contains('hello group alias'),
-          reason: 'missing realtime prewarm for $key',
+          container.read(chatThreadProvider(key)).messages,
+          isEmpty,
+          reason: 'realtime payload must not prewarm $key directly',
         );
-        expect(thread.messages.single.threadId, key);
       }
+      expect(messageSyncService.syncReasons, contains('realtime_message'));
       expect(
         container.read(chatThreadProvider('did:test:group:alpha')).messages,
         isEmpty,
@@ -981,7 +963,7 @@ void main() {
       expect(notificationFacade.lastSystemTitle, isNull);
     });
 
-    test('Runtime Agent 普通实时消息进入聊天、通知、最近会话和 badge', () async {
+    test('Runtime Agent 普通实时消息只触发通知和 core sync', () async {
       container.read(agentsProvider.notifier).applyControlPayload(
         const <String, Object?>{
           'schema': 'awiki.agent.status.v1',
@@ -1029,28 +1011,25 @@ void main() {
           .setLifecycle(AppLifecycleState.resumed);
 
       await activate();
+      messageSyncService.syncReasons.clear();
       await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+      await pumpEventQueue();
 
       expect(
-        container
-            .read(chatThreadProvider('dm:runtime'))
-            .messages
-            .single
-            .content,
-        'Hermes reply',
+        container.read(chatThreadProvider('dm:runtime')).messages,
+        isEmpty,
       );
       final conversations = container
           .read(conversationListProvider)
           .conversations;
-      expect(conversations.single.threadId, 'dm:runtime');
-      expect(conversations.single.lastMessagePreview, 'Hermes reply');
-      expect(container.read(conversationListProvider).unreadCount, 1);
-      expect(notificationFacade.lastBadgeCount, 1);
+      expect(conversations, isEmpty);
+      expect(container.read(conversationListProvider).unreadCount, 0);
+      expect(messageSyncService.syncReasons, contains('realtime_message'));
       expect(notificationFacade.lastInAppTitle, 'Hermes');
       expect(notificationFacade.lastInAppBody, 'Hermes reply');
     });
 
-    test('实时 Agent hint 先归一化再分发到最近会话和聊天线程', () async {
+    test('实时 Agent hint 不覆盖现有会话，只调度 core sync', () async {
       container.read(agentsProvider.notifier).applyControlPayload(
         const <String, Object?>{
           'schema': 'awiki.agent.status.v1',
@@ -1114,28 +1093,29 @@ void main() {
           .setLifecycle(AppLifecycleState.resumed);
 
       await activate();
+      messageSyncService.syncReasons.clear();
       await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+      await pumpEventQueue();
 
       final conversations = container
           .read(conversationListProvider)
           .conversations;
       expect(conversations, hasLength(1));
-      expect(conversations.single.threadId, 'dm:peer-scope:v1:hermes-runtime');
+      expect(conversations.single.threadId, pendingAlias.threadId);
       expect(conversations.single.targetDid, 'did:agent:runtime:hermes');
       expect(conversations.single.targetPeer, 'hermes.awiki.info');
-      expect(conversations.single.lastMessagePreview, '在的');
+      expect(conversations.single.lastMessagePreview, '在吗？');
       expect(
         container
             .read(chatThreadProvider('dm:peer-scope:v1:hermes-runtime'))
-            .messages
-            .map((message) => message.content),
-        <String>['在的'],
+            .messages,
+        isEmpty,
       );
       expect(
         container.read(chatThreadProvider(pendingAlias.threadId)).messages,
         isEmpty,
       );
-      expect(notificationFacade.lastBadgeCount, 1);
+      expect(messageSyncService.syncReasons, contains('realtime_message'));
       expect(notificationFacade.lastInAppTitle, 'Hermes');
     });
 
@@ -1169,19 +1149,16 @@ void main() {
       );
 
       await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+      await pumpEventQueue();
 
       expect(
-        container
-            .read(chatThreadProvider('dm:peer-scope:v1:runtime'))
-            .messages
-            .single
-            .content,
-        'runtime reply',
+        container.read(chatThreadProvider('dm:peer-scope:v1:runtime')).messages,
+        isEmpty,
       );
       expect(container.read(chatThreadProvider('dm:human')).messages, isEmpty);
       expect(container.read(conversationListProvider).conversations, isEmpty);
       expect(container.read(conversationListProvider).unreadCount, 0);
-      expect(notificationFacade.lastBadgeCount, 0);
+      expect(messageSyncService.syncReasons, contains('realtime_message'));
       expect(notificationFacade.lastInAppTitle, 'Hermes');
     });
 

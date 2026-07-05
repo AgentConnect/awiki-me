@@ -1371,37 +1371,51 @@ class ChatThreadsController
     );
     try {
       final syncService = ref.read(messageSyncServiceProvider);
-      final result = syncService is ConversationMessageSyncService
-          ? await (syncService as ConversationMessageSyncService)
-                .syncConversationAfter(
-                  conversation: conversationRef,
-                  afterServerSeq: effectiveAfterServerSeq,
-                )
-          : await syncService.syncThreadAfter(
-              thread: _localHistoryThreadRefFor(conversation),
+      if (syncService is ConversationMessageSyncService) {
+        await (syncService as ConversationMessageSyncService)
+            .syncConversationAfter(
+              conversation: conversationRef,
               afterServerSeq: effectiveAfterServerSeq,
             );
-      final messages = _messagesForConversationThread(
-        result.messages,
-        conversation: conversation,
+      } else {
+        await syncService.syncThreadAfter(
+          thread: _localHistoryThreadRefFor(conversation),
+          afterServerSeq: effectiveAfterServerSeq,
+        );
+      }
+      if (!mounted) {
+        return;
+      }
+      final repairedVersion = await _repairThreadFromLocalProjection(
+        conversation,
         displayThreadId: displayThreadId,
-        source: 'conversation_after',
+        conversationRef: conversationRef,
+        fallbackToLocalHistory: false,
       );
-      if (!mounted || messages.isEmpty) {
+      final localResult = repairedVersion == null
+          ? await _loadLocalHistory(
+              conversation,
+              intoThreadId: displayThreadId,
+              limit: _initialLocalHistoryLimit,
+              showHydratingState: false,
+              markLoadedWhenEmpty: false,
+            )
+          : const _HistoryLoadResult(loadedCount: 0, failed: false);
+      if (!mounted) {
+        return;
+      }
+      if (repairedVersion == null && !localResult.loadedAny) {
         _chatProviderTrace(
           'conversation_after.noop',
           fields: <String, Object?>{
             ...AwikiPerformanceLogger.threadField(displayThreadId),
             'conversation_ref': _conversationReadRefDebug(conversationRef),
             'mounted': mounted,
-            'returned': result.messages.length,
-            'renderable': messages.length,
+            'loaded_local': localResult.loadedCount,
           },
         );
         return;
       }
-      _mergeMessages(displayThreadId, messages, isLoading: false);
-      _updateConversationPreviewFromMessages(conversation, messages);
       await ref.read(conversationListProvider.notifier).refreshFastLocal();
       _flushPendingReadAck(displayThreadId);
       _chatProviderTrace(
@@ -1409,8 +1423,8 @@ class ChatThreadsController
         fields: <String, Object?>{
           ...AwikiPerformanceLogger.threadField(displayThreadId),
           'conversation_ref': _conversationReadRefDebug(conversationRef),
-          'returned': result.messages.length,
-          'merged': messages.length,
+          'repaired_version': repairedVersion,
+          'loaded_local': localResult.loadedCount,
           'messages_after': thread(displayThreadId).messages.length,
         },
       );
@@ -1684,6 +1698,7 @@ class ChatThreadsController
     ConversationSummary conversation, {
     required String displayThreadId,
     AppConversationReadRef? conversationRef,
+    bool fallbackToLocalHistory = true,
   }) async {
     final messaging = ref.read(messagingServiceProvider);
     final effectiveConversationRef =
@@ -1724,11 +1739,13 @@ class ChatThreadsController
         // escalate to remote full history from an upper-layer summary update.
       }
     }
-    await _loadLocalHistory(
-      conversation,
-      intoThreadId: displayThreadId,
-      limit: _initialLocalHistoryLimit,
-    );
+    if (fallbackToLocalHistory) {
+      await _loadLocalHistory(
+        conversation,
+        intoThreadId: displayThreadId,
+        limit: _initialLocalHistoryLimit,
+      );
+    }
     return null;
   }
 
@@ -2457,16 +2474,64 @@ class ChatThreadsController
       final afterServerSeq = maxServerSequenceForMessages(
         thread(targetThreadId).messages,
       );
+      final syncUsedReadModel = syncService is ConversationMessageSyncService;
+      if (syncUsedReadModel) {
+        await AwikiPerformanceLogger.async(
+          'chat.remote_history.service',
+          () => (syncService as ConversationMessageSyncService)
+              .syncConversationAfter(
+                conversation: conversationRef,
+                afterServerSeq: afterServerSeq,
+              ),
+          fields: <String, Object?>{
+            ...AwikiPerformanceLogger.threadField(targetThreadId),
+            'conversation_ref': _conversationReadRefDebug(conversationRef),
+            'after_seq': afterServerSeq,
+          },
+          level: AwikiPerformanceLogLevel.verbose,
+        );
+        if (!mounted) {
+          return;
+        }
+        final repairedVersion = await _repairThreadFromLocalProjection(
+          conversation,
+          displayThreadId: targetThreadId,
+          conversationRef: conversationRef,
+          fallbackToLocalHistory: false,
+        );
+        final localResult = repairedVersion == null
+            ? await _loadLocalHistory(
+                conversation,
+                intoThreadId: targetThreadId,
+                limit: _initialLocalHistoryLimit,
+                showHydratingState: false,
+                markLoadedWhenEmpty: false,
+              )
+            : const _HistoryLoadResult(loadedCount: 0, failed: false);
+        if (!mounted) {
+          return;
+        }
+        if (showLoading) {
+          _setThreadLoading(targetThreadId, false);
+        }
+        await ref.read(conversationListProvider.notifier).refreshFastLocal();
+        _flushPendingReadAck(targetThreadId);
+        totalWatch.stop();
+        AwikiPerformanceLogger.log(
+          'chat.remote_history.load',
+          elapsed: totalWatch.elapsed,
+          fields: <String, Object?>{
+            ...AwikiPerformanceLogger.threadField(targetThreadId),
+            'conversation_ref': _conversationReadRefDebug(conversationRef),
+            'repaired_version': repairedVersion,
+            'loaded_local': localResult.loadedCount,
+          },
+        );
+        return;
+      }
       final loadedHistory = await AwikiPerformanceLogger.async(
         'chat.remote_history.service',
-        () => syncService is ConversationMessageSyncService
-            ? (syncService as ConversationMessageSyncService)
-                  .syncConversationAfter(
-                    conversation: conversationRef,
-                    afterServerSeq: afterServerSeq,
-                  )
-                  .then((result) => result.messages)
-            : messaging.loadHistory(_historyThreadRefFor(conversation)),
+        () => messaging.loadHistory(_historyThreadRefFor(conversation)),
         fields: <String, Object?>{
           ...AwikiPerformanceLogger.threadField(targetThreadId),
           'conversation_ref': _conversationReadRefDebug(conversationRef),

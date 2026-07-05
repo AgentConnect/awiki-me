@@ -453,17 +453,16 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         'unread': traceConversation?.unreadCount,
       },
     );
-    if (update.needsReliableSync) {
+    final reliableSyncReason = _reliableSyncReasonFor(update);
+    if (reliableSyncReason != null) {
       _runtimeTrace(
         'reliable_sync.schedule',
         fields: <String, Object?>{
-          'reason': update.gapDetected ? 'realtime_gap' : 'realtime_dirty',
+          'reason': reliableSyncReason,
           'event_seq': update.syncEventSeq,
         },
       );
-      _scheduleReliableSync(
-        update.gapDetected ? 'realtime_gap' : 'realtime_dirty',
-      );
+      _scheduleReliableSync(reliableSyncReason);
     }
     final controlPayload = update.agentControlPayload;
     if (controlPayload != null) {
@@ -513,7 +512,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       return;
     }
     _runtimeTrace(
-      'conversation.upsert_from_realtime_message',
+      'realtime.message_sync_hint',
       fields: <String, Object?>{
         'thread_hash': _runtimeSafeHash(normalizedConversationHint.threadId),
         'message_hash': _runtimeSafeHash(message.remoteId ?? message.localId),
@@ -524,15 +523,6 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         ),
       },
     );
-    ref
-        .read(conversationListProvider.notifier)
-        .upsertRealtimeMessageBestEffort(
-          normalizedConversationHint,
-          message: message,
-        );
-    ref
-        .read(chatThreadsProvider.notifier)
-        .applyRealtimeUpdate(message, conversation: normalizedConversationHint);
     if (update.group != null) {
       ref.read(groupProvider.notifier).upsertGroup(update.group!);
     }
@@ -568,6 +558,19 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
           .requestSync(reason, immediate: immediate)
           .catchError((_) {}),
     );
+  }
+
+  String? _reliableSyncReasonFor(RealtimeUpdate update) {
+    if (update.gapDetected) {
+      return 'realtime_gap';
+    }
+    if (update.syncDirty) {
+      return 'realtime_dirty';
+    }
+    if (update.message != null) {
+      return 'realtime_message';
+    }
+    return null;
   }
 
   bool _shouldAcceptRealtimeConversationHint(ConversationSummary conversation) {
