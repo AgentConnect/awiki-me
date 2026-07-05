@@ -162,7 +162,7 @@ void main() {
   );
 
   test(
-    'SecureAppKeyValueStore reads native macOS Keychain values first',
+    'SecureAppKeyValueStore reads native macOS Keychain values first without ACL repair',
     () async {
       if (!Platform.isMacOS) {
         return;
@@ -201,75 +201,16 @@ void main() {
       expect(legacyCalls, isEmpty);
       expect(keychainCalls.map((call) => call.method), <String>[
         'readGenericPassword',
-        'repairGenericPasswordAccess',
       ]);
       expect(keychainCalls.first.arguments, <String, Object?>{
         'service': 'ai.awiki.awikime.secure_storage',
         'account': 'native-read-key',
       });
-      expect(keychainCalls[1].arguments, <String, Object?>{
-        'service': 'ai.awiki.awikime.secure_storage',
-        'account': 'native-read-key',
-        'allowAuthenticationUI': true,
-      });
     },
   );
 
   test(
-    'SecureAppKeyValueStore awaits native macOS Keychain ACL repair before returning',
-    () async {
-      if (!Platform.isMacOS) {
-        return;
-      }
-      TestWidgetsFlutterBinding.ensureInitialized();
-      const storageChannel = MethodChannel(
-        'plugins.it_nomads.com/flutter_secure_storage',
-      );
-      const keychainChannel = MethodChannel('ai.awiki.awikime/keychain_access');
-      final repairStarted = Completer<void>();
-      final releaseRepair = Completer<void>();
-      var readCompleted = false;
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(storageChannel, (call) async {
-            fail('legacy storage should not be touched for native values');
-          });
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(keychainChannel, (call) async {
-            if (call.method == 'readGenericPassword') {
-              return 'native-secret';
-            }
-            if (call.method == 'repairGenericPasswordAccess') {
-              repairStarted.complete();
-              await releaseRepair.future;
-              return null;
-            }
-            return null;
-          });
-      addTearDown(() {
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(storageChannel, null);
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(keychainChannel, null);
-      });
-
-      final readFuture = SecureAppKeyValueStore()
-          .read(key: 'native-read-awaits-repair-key')
-          .then((value) {
-            readCompleted = true;
-            return value;
-          });
-
-      await repairStarted.future.timeout(const Duration(seconds: 1));
-      expect(readCompleted, isFalse);
-
-      releaseRepair.complete();
-      expect(await readFuture, 'native-secret');
-      expect(readCompleted, isTrue);
-    },
-  );
-
-  test(
-    'SecureAppKeyValueStore repairs legacy macOS ACL when native migration fails',
+    'SecureAppKeyValueStore does not repair legacy macOS ACL when native migration fails',
     () async {
       if (!Platform.isMacOS) {
         return;
@@ -281,8 +222,6 @@ void main() {
       const keychainChannel = MethodChannel('ai.awiki.awikime/keychain_access');
       final legacyCalls = <MethodCall>[];
       final keychainCalls = <MethodCall>[];
-      final repairStarted = Completer<void>();
-      final releaseRepair = Completer<void>();
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(storageChannel, (call) async {
             legacyCalls.add(call);
@@ -297,10 +236,6 @@ void main() {
             if (call.method == 'writeGenericPassword') {
               throw PlatformException(code: 'write_failed');
             }
-            if (call.method == 'repairGenericPasswordAccess') {
-              repairStarted.complete();
-              await releaseRepair.future;
-            }
             return null;
           });
       addTearDown(() {
@@ -310,31 +245,16 @@ void main() {
             .setMockMethodCallHandler(keychainChannel, null);
       });
 
-      var readCompleted = false;
-      final readFuture = SecureAppKeyValueStore()
-          .read(key: 'legacy-repair-key')
-          .then((value) {
-            readCompleted = true;
-            return value;
-          });
-      await repairStarted.future.timeout(const Duration(seconds: 1));
-      expect(readCompleted, isFalse);
-
-      releaseRepair.complete();
-      expect(await readFuture, 'legacy-secret');
-      expect(readCompleted, isTrue);
+      expect(
+        await SecureAppKeyValueStore().read(key: 'legacy-repair-key'),
+        'legacy-secret',
+      );
       expect(legacyCalls.map((call) => call.method), contains('read'));
       expect(legacyCalls.map((call) => call.method), isNot(contains('delete')));
       expect(keychainCalls.map((call) => call.method), <String>[
         'readGenericPassword',
         'writeGenericPassword',
-        'repairGenericPasswordAccess',
       ]);
-      expect(keychainCalls.last.arguments, <String, Object?>{
-        'service': 'flutter_secure_storage_service',
-        'account': 'legacy-repair-key',
-        'allowAuthenticationUI': true,
-      });
     },
   );
 

@@ -173,7 +173,6 @@ class MainFlutterWindow: NSWindow {
     let service: String
     let account: String
     let value: String?
-    let allowAuthenticationUI: Bool
   }
 
   private func registerKeychainAccessChannel(flutterViewController: FlutterViewController) {
@@ -189,8 +188,6 @@ class MainFlutterWindow: NSWindow {
         self.writeGenericPassword(arguments: call.arguments, result: result)
       case "deleteGenericPassword":
         self.deleteGenericPassword(arguments: call.arguments, result: result)
-      case "repairGenericPasswordAccess":
-        self.repairGenericPasswordAccess(arguments: call.arguments, result: result)
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -217,12 +214,10 @@ class MainFlutterWindow: NSWindow {
       result(FlutterError(code: "bad_args", message: "value is required", details: nil))
       return nil
     }
-    let allowAuthenticationUI = (args["allowAuthenticationUI"] as? Bool) ?? false
     return KeychainRequest(
       service: service,
       account: account,
-      value: value,
-      allowAuthenticationUI: allowAuthenticationUI
+      value: value
     )
   }
 
@@ -277,27 +272,6 @@ class MainFlutterWindow: NSWindow {
           return
         }
         result(self.keychainFlutterError(code: "delete_failed", status: status))
-      }
-    }
-  }
-
-  private func repairGenericPasswordAccess(arguments: Any?, result: @escaping FlutterResult) {
-    guard let request = parseKeychainRequest(arguments: arguments, requireValue: false, result: result) else {
-      return
-    }
-
-    DispatchQueue.global(qos: .utility).async {
-      let updateStatus = self.repairGenericPasswordAccess(
-        service: request.service,
-        account: request.account,
-        allowAuthenticationUI: request.allowAuthenticationUI
-      )
-      DispatchQueue.main.async {
-        if updateStatus == errSecSuccess || updateStatus == errSecItemNotFound {
-          result(nil)
-          return
-        }
-        result(self.keychainFlutterError(code: "access_update_failed", status: updateStatus))
       }
     }
   }
@@ -379,41 +353,18 @@ class MainFlutterWindow: NSWindow {
     }
 
     let query = baseGenericPasswordQuery(service: service, account: account)
-    var update: [CFString: Any] = [kSecValueData: data]
-    if let access {
-      update[kSecAttrAccess] = access
-    }
+    let update: [CFString: Any] = [kSecValueData: data]
+    // Do not refresh kSecAttrAccess for existing items during ordinary writes.
+    // Updating an item's ACL/owner is what makes macOS show
+    // "AWiki Me wants to change access permissions" Keychain prompts. New items
+    // still receive the current executable ACL on SecItemAdd; existing items keep
+    // their established ACL and only the secret value is replaced.
     return SecItemUpdate(query as CFDictionary, update as CFDictionary)
   }
 
   private func deleteGenericPassword(service: String, account: String) -> OSStatus {
     let query = baseGenericPasswordQuery(service: service, account: account)
     return SecItemDelete(query as CFDictionary)
-  }
-
-  private func repairGenericPasswordAccess(
-    service: String,
-    account: String,
-    allowAuthenticationUI: Bool
-  ) -> OSStatus {
-    // Stale native and legacy items may need the same authorization UI that the
-    // user just granted for the read. Dart chooses when to allow UI so a
-    // post-read ACL refresh can repair the item instead of prompting again on
-    // the next launch.
-    let accessResult = createCurrentBundleKeychainAccess()
-    guard accessResult.status == errSecSuccess, let access = accessResult.access else {
-      return accessResult.status
-    }
-
-    var query = baseGenericPasswordQuery(service: service, account: account)
-    if !allowAuthenticationUI {
-      query[kSecUseAuthenticationUI] = kSecUseAuthenticationUISkip
-    }
-
-    let update: [CFString: Any] = [
-      kSecAttrAccess: access,
-    ]
-    return SecItemUpdate(query as CFDictionary, update as CFDictionary)
   }
 
   private func createCurrentBundleKeychainAccess() -> (status: OSStatus, access: SecAccess?) {

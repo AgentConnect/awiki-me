@@ -198,21 +198,22 @@ The identity vault root key and device id still use encrypted macOS Keychain
 storage outside explicit `AWIKI_E2E_APP_STATE_ROOT` runs. Local/debug builds use
 the login Keychain rather than the Data Protection Keychain so they can run
 without a provisioning profile. New macOS writes go through the AWiki native
-Keychain bridge, which stores the item with an ACL that trusts the current
-app executable path; this avoids repeatedly asking for authorization when the
-same local debug App path is restarted or incrementally rebuilt. Existing native
-items synchronously refresh their ACL after a successful read so items written by
-older bridge builds are updated before bootstrap continues. Values that were
-written by the older `flutter_secure_storage` path are read as a legacy fallback,
-migrated into the native bridge after the user authorizes access once, and then
-removed from the legacy Keychain service before the read returns so future
-launches do not keep touching the old item. Local test/debug runners that cannot
-obtain Authorization Services permission for a custom ACL may fall back to the
-system default Keychain ACL for the new native item; this still keeps the secret
-in macOS Keychain and allows the old service item to be retired. A real user
-should see the Keychain authorization prompt only for first access or migration;
-choose **Always Allow** when macOS asks for AWiki Me access. The plugin's Data
-Protection Keychain mode still requires Keychain Sharing entitlements and a valid
+Keychain bridge, which stores the item with an ACL that trusts the current app
+executable path. Existing native items keep their established ACL on normal reads
+and updates; the App does not rewrite Keychain item access permissions on every
+bootstrap because that triggers macOS "change access permissions/owner"
+authorization dialogs. Values that were written by the older
+`flutter_secure_storage` path are read as a legacy fallback, migrated into the
+native bridge when the native write succeeds, and then removed from the legacy
+Keychain service before the read returns so future launches do not keep touching
+the old item. Local test/debug runners that cannot obtain Authorization Services
+permission for a custom ACL may fall back to the system default Keychain ACL for
+the new native item; this still keeps the secret in macOS Keychain and allows the
+old service item to be retired. A real user should see the Keychain authorization
+prompt only for first access, migration, or when a locally rebuilt Xcode binary
+no longer matches the trusted executable recorded on an existing item; stable
+release builds should not ask on every launch. The plugin's Data Protection
+Keychain mode still requires Keychain Sharing entitlements and a valid
 development/release signing identity; if that entitlement is missing, runtime
 writes fail with OSStatus `-34018` (`errSecMissingEntitlement`), and if the
 entitlement is present without a usable signing profile, local Flutter builds

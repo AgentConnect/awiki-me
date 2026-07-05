@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -20,16 +19,12 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
   SecureAppKeyValueStore({
     FlutterSecureStorage? secureStorage,
     MacOsKeychainStorage? macOsKeychainStorage,
-    MacOsKeychainAccessRepair? macOsKeychainAccessRepair,
   }) : _secureStorage = secureStorage ?? _defaultSecureStorage(),
        _macOsKeychainStorage =
-           macOsKeychainStorage ?? const MacOsKeychainStorage(),
-       _macOsKeychainAccessRepair =
-           macOsKeychainAccessRepair ?? const MacOsKeychainAccessRepair();
+           macOsKeychainStorage ?? const MacOsKeychainStorage();
 
   final FlutterSecureStorage _secureStorage;
   final MacOsKeychainStorage _macOsKeychainStorage;
-  final MacOsKeychainAccessRepair _macOsKeychainAccessRepair;
 
   static const FlutterSecureStorage _defaultStorage = FlutterSecureStorage();
 
@@ -39,8 +34,6 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
     // MacOsKeychainStorage so the Keychain ACL can trust the current executable.
     mOptions: MacOsOptions(useDataProtectionKeyChain: false),
   );
-
-  static final Set<String> _macOsAccessRepairAttemptedKeys = <String>{};
 
   static FlutterSecureStorage _defaultSecureStorage() {
     if (Platform.isMacOS) {
@@ -54,7 +47,6 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
     if (Platform.isMacOS) {
       final nativeValue = await _readMacOsNativeValue(key);
       if (nativeValue != null) {
-        await _repairMacOsNativeKeychainAccessIfNeeded(key);
         return nativeValue;
       }
       final legacyValue = await _secureStorage.read(key: key);
@@ -65,8 +57,6 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
         );
         if (migrated) {
           await _deleteLegacyMacOsValue(key);
-        } else {
-          await _repairLegacyMacOsKeychainAccessIfNeeded(key);
         }
       }
       return legacyValue;
@@ -105,46 +95,6 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
     }
   }
 
-  Future<void> _repairMacOsNativeKeychainAccessIfNeeded(String key) {
-    return _repairMacOsKeychainAccessIfNeeded(
-      _macOsKeychainAccessRepair.repairNativeSecureStorageKey,
-      repairScope: 'native',
-      key: key,
-    );
-  }
-
-  Future<void> _repairLegacyMacOsKeychainAccessIfNeeded(String key) {
-    return _repairMacOsKeychainAccessIfNeeded(
-      _macOsKeychainAccessRepair.repairFlutterSecureStorageKey,
-      repairScope: 'legacy',
-      key: key,
-    );
-  }
-
-  Future<void> _repairMacOsKeychainAccessIfNeeded(
-    Future<void> Function(String key) repair, {
-    required String repairScope,
-    required String key,
-  }) async {
-    if (!Platform.isMacOS) {
-      return;
-    }
-    if (!_macOsAccessRepairAttemptedKeys.add('$repairScope:$key')) {
-      return;
-    }
-    try {
-      await repair(key);
-    } on Object {
-      // Preserve the successful read path. If repair fails, the stored secret is
-      // still available; the user may see the macOS authorization prompt again
-      // until the item can be repaired or recreated by a signed build.
-      // The caller awaits the first successful native read repair so the ACL is
-      // updated before bootstrap continues, instead of racing app shutdown.
-      // Legacy reads also await migration/repair so the old service does not
-      // keep being touched on the next App launch.
-    }
-  }
-
   @override
   Future<void> write({required String key, required String value}) async {
     if (Platform.isMacOS) {
@@ -153,7 +103,6 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
         return;
       } on MissingPluginException {
         await _secureStorage.write(key: key, value: value);
-        unawaited(_repairLegacyMacOsKeychainAccessIfNeeded(key));
         return;
       }
     }
@@ -218,49 +167,6 @@ class MacOsKeychainStorage {
       'deleteGenericPassword',
       <String, Object?>{'service': _service, 'account': key},
     );
-  }
-}
-
-class MacOsKeychainAccessRepair {
-  const MacOsKeychainAccessRepair({MethodChannel? channel})
-    : _channel = channel ?? const MethodChannel(_channelName);
-
-  static const String _channelName = 'ai.awiki.awikime/keychain_access';
-  static const String _flutterSecureStorageService =
-      'flutter_secure_storage_service';
-
-  final MethodChannel _channel;
-
-  Future<void> repairNativeSecureStorageKey(String key) async {
-    await _repair(
-      service: MacOsKeychainStorage._service,
-      key: key,
-      allowAuthenticationUI: true,
-    );
-  }
-
-  Future<void> repairFlutterSecureStorageKey(String key) async {
-    await _repair(
-      service: _flutterSecureStorageService,
-      key: key,
-      allowAuthenticationUI: true,
-    );
-  }
-
-  Future<void> _repair({
-    required String service,
-    required String key,
-    required bool allowAuthenticationUI,
-  }) async {
-    if (!Platform.isMacOS) {
-      return;
-    }
-    await _channel
-        .invokeMethod<void>('repairGenericPasswordAccess', <String, Object?>{
-          'service': service,
-          'account': key,
-          'allowAuthenticationUI': allowAuthenticationUI,
-        });
   }
 }
 

@@ -34,6 +34,13 @@ bootstrap 脚本即可。
 写入失败而表现为“注册失败”，debug/profile 构建会把账号凭证写入应用支持目录下的
 `awiki_me_credentials.json`；release 构建仍使用平台安全存储。
 
+im-core 身份 vault root key 和 device id 在普通运行中仍写入 macOS 登录钥匙串。
+AWiki 原生 Keychain 桥只在创建新项目时设置当前 App 可执行文件的访问控制；普通读取
+和更新不会反复改写 Keychain 项目的访问许可，避免 Xcode 本地调试时频繁出现“更改访问
+许可/所有者”的系统授权弹窗。真实用户通常只应在首次访问、旧存储迁移，或本地重新编译
+后的可执行文件身份与旧钥匙串项目不匹配时看到授权提示；稳定签名的 release 版本不应每
+次启动都弹。
+
 ## 打包
 
 客户端安装包的统一入口是：
