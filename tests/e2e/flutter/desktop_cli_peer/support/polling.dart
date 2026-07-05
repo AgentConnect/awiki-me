@@ -98,11 +98,12 @@ Future<void> _expectAppHistoryContainsExactlyOnce({
   }
 }
 
-Future<void> _waitForAppConversationRefresh({
+Future<ConversationSummary> _waitForAppConversationRefresh({
   required ConversationService conversations,
   required String ownerDid,
   required String expectedText,
 }) async {
+  ConversationSummary? matched;
   await _poll(
     description: 'App conversation refresh contains "$expectedText"',
     action: () async {
@@ -110,9 +111,60 @@ Future<void> _waitForAppConversationRefresh({
         ownerDid: ownerDid,
         limit: 20,
       );
-      return items.any(
-        (conversation) =>
-            conversation.lastMessagePreview.contains(expectedText),
+      for (final conversation in items) {
+        if (conversation.lastMessagePreview.contains(expectedText)) {
+          matched = conversation;
+          return true;
+        }
+      }
+      return false;
+    },
+  );
+  return matched!;
+}
+
+Future<void> _waitForAppConversationLatestInTimeline({
+  required MessagingService messaging,
+  required ConversationSummary conversation,
+  required String expectedText,
+  String? expectedMessageId,
+}) async {
+  expect(
+    messaging,
+    isA<ConversationTimelineMessagingService>(),
+    reason:
+        'Desktop CLI peer E2E must verify list/detail consistency through '
+        'the canonical conversation timeline.',
+  );
+  final timelineMessaging = messaging as ConversationTimelineMessagingService;
+  final conversationId = conversation.effectiveConversationId;
+  final latestSnapshot = conversation.lastMessageSnapshot;
+  final latestSnapshotId = latestSnapshot == null
+      ? null
+      : latestSnapshot.remoteId ?? latestSnapshot.localId;
+
+  await _poll(
+    description:
+        'App conversation "$conversationId" latest message exists in canonical timeline',
+    action: () async {
+      final messages = await timelineMessaging.loadConversationTimeline(
+        AppConversationReadRef.fromConversationId(conversationId),
+        limit: 50,
+      );
+      final textMatches = messages.where(
+        (message) => message._matchesText(
+          expectedText,
+          expectedMessageId: expectedMessageId,
+        ),
+      );
+      if (textMatches.length != 1) {
+        return false;
+      }
+      if (latestSnapshotId == null || latestSnapshotId.isEmpty) {
+        return true;
+      }
+      return messages.any(
+        (message) => (message.remoteId ?? message.localId) == latestSnapshotId,
       );
     },
   );

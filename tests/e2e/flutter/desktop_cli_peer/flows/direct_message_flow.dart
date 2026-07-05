@@ -67,9 +67,15 @@ Future<void> _verifyDirectTextRegression({
     thread: thread,
     expectedTexts: <String>[appToCliText, cliToAppText],
   );
-  await _waitForAppConversationRefresh(
+  final refreshedConversation = await _waitForAppConversationRefresh(
     conversations: conversations,
     ownerDid: ownerDid,
     expectedText: cliToAppText,
+  );
+  await _waitForAppConversationLatestInTimeline(
+    messaging: messaging,
+    conversation: refreshedConversation,
+    expectedText: cliToAppText,
+    expectedMessageId: cliSentMessageId,
   );
 }
