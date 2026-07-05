@@ -1,5 +1,6 @@
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
+import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/shared/identity_flow.dart';
@@ -65,7 +66,20 @@ void main() {
 
     expect(find.byType(ChatView), findsOneWidget);
     expect(find.text('CGW Agent'), findsWidgets);
-    expect(gateway.fetchDmHistoryCalls, 1);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ConversationWorkspacePage)),
+    );
+    final conversation = tester
+        .widget<ChatView>(find.byType(ChatView))
+        .conversation;
+    expect(conversation.conversationId, 'dm:did:test:peer');
+    expect(conversation.threadId, 'dm:did:test:peer');
+    expect(conversation.threadId.startsWith('dm:pending:'), isFalse);
+    final messaging = container.read(messagingServiceProvider);
+    expect(messaging, isA<FakeMessagingService>());
+    final fakeMessaging = messaging as FakeMessagingService;
+    expect(fakeMessaging.conversationTimelineCalls, greaterThan(0));
+    expect(fakeMessaging.lastConversationTimelineId, 'dm:did:test:peer');
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

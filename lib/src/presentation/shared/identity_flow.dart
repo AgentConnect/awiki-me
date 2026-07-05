@@ -7,7 +7,6 @@ import '../../app/app_router.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../application/ports/directory_core_port.dart';
-import '../../application/thread_id_utils.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/relationship_summary.dart';
 import '../../domain/entities/user_profile.dart';
@@ -176,10 +175,6 @@ UserProfile identityProfileFromResolution(DirectoryPeerResolution resolution) {
   );
 }
 
-String dmThreadIdForDids(String myDid, String peerDid) {
-  return canonicalDirectThreadId(myDid, peerDid);
-}
-
 Future<void> openDirectConversationForProfile(
   BuildContext context,
   WidgetRef ref,
@@ -224,29 +219,34 @@ Future<void> openDirectConversationForDid(
   }
 
   final peerTarget = _directPeerTarget(peerDid: peer, peerHandle: peerHandle);
-  final threadId = peerTarget.startsWith('did:')
-      ? dmThreadIdForDids(session.did, peerTarget)
-      : 'dm:pending:$peerTarget';
+  final conversationId = _directConversationIdForDid(peer);
   final existing = ref
       .read(conversationListProvider)
       .conversations
       .where(
         (item) =>
-            item.threadId == threadId ||
+            item.conversationId?.trim() == conversationId ||
+            item.threadId == conversationId ||
             item.targetPeer?.trim() == peerTarget ||
             item.targetDid?.trim() == peer,
-      );
+      )
+      .toList(growable: false);
+  final existingConversation = existing.isEmpty
+      ? null
+      : _preferAuthoritativeDirectConversation(existing);
   final conversation = existing.isNotEmpty
       ? _directConversationForPeer(
-          existing.first,
+          existingConversation!,
           peerDid: peer,
           peerTarget: peerTarget,
           peerName: peerName,
           avatarUri: avatarUri,
           avatarSeed: avatarSeed,
+          fallbackConversationId: conversationId,
         )
       : ConversationSummary(
-          threadId: threadId,
+          conversationId: conversationId,
+          threadId: conversationId,
           displayName: _directConversationName(peerName, peer),
           lastMessagePreview: '',
           lastMessageAt: DateTime.now(),
@@ -284,7 +284,13 @@ ConversationSummary _directConversationForPeer(
   required String peerName,
   String? avatarUri,
   String? avatarSeed,
+  required String fallbackConversationId,
 }) {
+  final existingConversationId = existing.conversationId?.trim();
+  final conversationId =
+      existingConversationId != null && existingConversationId.isNotEmpty
+      ? existingConversationId
+      : fallbackConversationId;
   final existingTarget = existing.targetDid?.trim() ?? '';
   final existingPeer = existing.targetPeer?.trim() ?? '';
   final keepExistingName =
@@ -292,7 +298,8 @@ ConversationSummary _directConversationForPeer(
       (existingTarget == peerDid || existingPeer == peerTarget) &&
       existing.displayName.trim().isNotEmpty;
   return ConversationSummary(
-    threadId: existing.threadId,
+    conversationId: conversationId,
+    threadId: conversationId,
     displayName: keepExistingName
         ? existing.displayName
         : _directConversationName(peerName, peerDid),
@@ -307,7 +314,23 @@ ConversationSummary _directConversationForPeer(
     avatarSeed: avatarSeed ?? existing.avatarSeed ?? peerDid,
     lastMessagePayloadJson: existing.lastMessagePayloadJson,
     lastMessageSnapshot: existing.lastMessageSnapshot,
+    conversationKey: existing.conversationKey,
+    peerLifecycleState: existing.peerLifecycleState,
   );
+}
+
+String _directConversationIdForDid(String peerDid) {
+  return 'dm:${peerDid.trim()}';
+}
+
+ConversationSummary _preferAuthoritativeDirectConversation(
+  List<ConversationSummary> conversations,
+) {
+  assert(conversations.isNotEmpty);
+  return conversations.firstWhere((conversation) {
+    final conversationId = conversation.conversationId?.trim();
+    return conversationId != null && conversationId.isNotEmpty;
+  }, orElse: () => conversations.first);
 }
 
 String _directPeerTarget({required String peerDid, String? peerHandle}) {

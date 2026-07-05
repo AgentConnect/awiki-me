@@ -337,6 +337,57 @@ void main() {
   );
 
   test(
+    'peer-scoped refresh replaces explicit legacy direct conversation id',
+    () async {
+      final notifications = FakeNotificationFacade();
+      const agentDid = 'did:agent:runtime';
+      final legacy =
+          _conversation(
+            conversationId: 'dm:$agentDid',
+            threadId: 'dm:did:human:$agentDid',
+            displayName: 'Hermes legacy',
+            unreadCount: 0,
+            targetDid: agentDid,
+            targetPeer: agentDid,
+          ).copyWith(
+            lastMessagePreview: '旧回复',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 12),
+          );
+      final runtime =
+          _conversation(
+            threadId: 'dm:peer-scope:v1:hermes-runtime',
+            displayName: 'Hermes',
+            unreadCount: 1,
+            targetDid: agentDid,
+            targetPeer: 'hermes.awiki.example',
+          ).copyWith(
+            lastMessagePreview: '新回复',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 12, 1),
+          );
+      final container = _conversationContainer(
+        service: _StaticConversationService(
+          conversations: <ConversationSummary>[runtime],
+        ),
+        notifications: notifications,
+        ownerDid: 'did:human',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(legacy);
+
+      await notifier.refresh();
+
+      final conversations = container
+          .read(conversationListProvider)
+          .conversations;
+      expect(conversations, hasLength(1));
+      expect(conversations.single.threadId, runtime.threadId);
+      expect(conversations.single.unreadCount, 1);
+    },
+  );
+
+  test(
     'peer-scoped realtime reply refreshes recents from core projection',
     () async {
       final notifications = FakeNotificationFacade();

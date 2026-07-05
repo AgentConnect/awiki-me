@@ -1920,6 +1920,7 @@ class FakeMessagingService
   }) async {
     final sent = await gateway.sendTextMessage(
       threadId: conversation.conversationId,
+      peerDid: _directPeerDidForConversationId(conversation.conversationId),
       content: content,
     );
     return _recordConversationSendResult(
@@ -1941,6 +1942,7 @@ class FakeMessagingService
     final mentionPayload = ChatMentionPayload.tryParsePayloadJson(payloadJson);
     final sent = await gateway.sendTextMessage(
       threadId: conversation.conversationId,
+      peerDid: _directPeerDidForConversationId(conversation.conversationId),
       content: mentionPayload?.text ?? '',
       payloadJson: payloadJson,
       mentions: mentionPayload?.mentions ?? const <ChatMessageMention>[],
@@ -3141,6 +3143,21 @@ String _directThreadId(String peerDidOrHandle) => 'dm:$peerDidOrHandle';
 
 String _groupThreadId(String groupDid) {
   return groupDid.startsWith('group:') ? groupDid : 'group:$groupDid';
+}
+
+String? _directPeerDidForConversationId(String conversationId) {
+  if (!conversationId.startsWith('dm:')) {
+    return null;
+  }
+  final body = conversationId.substring('dm:'.length);
+  if (body.startsWith('peer-scope:')) {
+    return null;
+  }
+  final peerDidSeparator = body.lastIndexOf(':did:');
+  if (peerDidSeparator > 0) {
+    return body.substring(peerDidSeparator + 1);
+  }
+  return body.startsWith('did:') ? body : null;
 }
 
 class FakeLocalePreferenceService extends LocalePreferenceService {

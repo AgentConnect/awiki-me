@@ -1712,7 +1712,8 @@ class _ConversationMergeIndex {
     if (candidate != null) {
       return candidate;
     }
-    if (_hasExplicitConversationId(incoming)) {
+    if (_hasExplicitConversationId(incoming) &&
+        !isPeerScopedDirectConversation(incoming)) {
       return null;
     }
     candidate = _candidateIfAvailable(
@@ -1819,10 +1820,6 @@ class _ConversationMergeIndex {
     if (candidate.threadId.trim() == incoming.threadId.trim()) {
       return true;
     }
-    if (_hasExplicitConversationId(candidate) ||
-        _hasExplicitConversationId(incoming)) {
-      return _sameConversationIdentity(candidate, incoming);
-    }
     if (_isPeerScopedDirectThread(candidate) &&
         _isPeerScopedDirectThread(incoming)) {
       return false;
@@ -1834,6 +1831,10 @@ class _ConversationMergeIndex {
         candidate,
         ownerDid: ownerDid,
       );
+    }
+    if (_hasExplicitConversationId(candidate) ||
+        _hasExplicitConversationId(incoming)) {
+      return _sameConversationIdentity(candidate, incoming);
     }
     return true;
   }
@@ -1878,6 +1879,30 @@ bool _shouldCollapsePresentationAlias(
   final incomingConversationId = _explicitConversationId(incoming);
   final candidateConversationId = _explicitConversationId(candidate);
   if (incomingConversationId != null || candidateConversationId != null) {
+    if (isPeerScopedDirectConversation(incoming) &&
+        _isLegacyDirectConversationIdForTarget(
+          candidateConversationId,
+          candidate,
+          ownerDid: ownerDid,
+        )) {
+      return isReplaceableLegacyDirectConversation(
+            candidate,
+            ownerDid: ownerDid,
+          ) &&
+          sameDirectPresentationTarget(incoming, candidate);
+    }
+    if (isPeerScopedDirectConversation(candidate) &&
+        _isLegacyDirectConversationIdForTarget(
+          incomingConversationId,
+          incoming,
+          ownerDid: ownerDid,
+        )) {
+      return isReplaceableLegacyDirectConversation(
+            incoming,
+            ownerDid: ownerDid,
+          ) &&
+          sameDirectPresentationTarget(incoming, candidate);
+    }
     return incomingConversationId != null &&
         candidateConversationId != null &&
         incomingConversationId == candidateConversationId;
@@ -1904,6 +1929,33 @@ bool _shouldCollapsePresentationAlias(
         sameDirectPresentationTarget(incoming, candidate);
   }
   return false;
+}
+
+bool _isLegacyDirectConversationIdForTarget(
+  String? conversationId,
+  ConversationSummary conversation, {
+  required String? ownerDid,
+}) {
+  final id = conversationId?.trim();
+  if (id == null || id.isEmpty) {
+    return false;
+  }
+  final targetDid = conversation.targetDid?.trim();
+  if (targetDid == null || targetDid.isEmpty) {
+    return false;
+  }
+  if (id == 'dm:$targetDid') {
+    return true;
+  }
+  final owner = ownerDid?.trim();
+  if (owner == null || owner.isEmpty) {
+    return false;
+  }
+  if (id == 'dm:$owner:$targetDid' || id == 'dm:$targetDid:$owner') {
+    return true;
+  }
+  final participants = <String>[owner, targetDid]..sort();
+  return id == 'dm:${participants[0]}:${participants[1]}';
 }
 
 bool _shouldCollapsePresentationListItem({

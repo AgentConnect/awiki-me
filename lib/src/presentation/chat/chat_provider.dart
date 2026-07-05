@@ -1267,6 +1267,20 @@ class ChatThreadsController
       return;
     }
     final conversationRef = _conversationReadRefFor(conversation);
+    if (conversationRef == null) {
+      _chatProviderTrace(
+        'conversation_after.skip_presentation_alias',
+        fields: AwikiPerformanceLogger.threadField(displayThreadId),
+      );
+      await _loadLocalHistory(
+        conversation,
+        intoThreadId: displayThreadId,
+        limit: _initialLocalHistoryLimit,
+        showHydratingState: false,
+        markLoadedWhenEmpty: false,
+      );
+      return;
+    }
     final effectiveAfterServerSeq = useExplicitAfterServerSeq
         ? afterServerSeq
         : afterServerSeq ??
@@ -1605,6 +1619,16 @@ class ChatThreadsController
         conversationRef ??
         _threadPatchSubscriptions[displayThreadId]?.conversationRef ??
         _conversationReadRefFor(conversation);
+    if (effectiveConversationRef == null) {
+      if (fallbackToLocalHistory) {
+        await _loadLocalHistory(
+          conversation,
+          intoThreadId: displayThreadId,
+          limit: _initialLocalHistoryLimit,
+        );
+      }
+      return null;
+    }
     if (messaging is ConversationTimelineMessagingService) {
       final timelineMessaging =
           messaging as ConversationTimelineMessagingService;
@@ -1681,6 +1705,13 @@ class ChatThreadsController
       return;
     }
     final conversationRef = _conversationReadRefFor(conversation);
+    if (conversationRef == null) {
+      _chatProviderTrace(
+        'thread_patch.skip_presentation_alias',
+        fields: AwikiPerformanceLogger.threadField(displayThreadId),
+      );
+      return;
+    }
     final threadRef = _localHistoryThreadRefFor(conversation);
     final expectedPatchKey = _threadPatchKeyFor(threadRef);
     final existing = _threadPatchSubscriptions[displayThreadId];
@@ -1985,6 +2016,13 @@ class ChatThreadsController
   }) {
     try {
       final conversationRef = _conversationReadRefFor(conversation);
+      if (conversationRef == null) {
+        _chatProviderTrace(
+          'mark_read.skip_presentation_alias',
+          fields: AwikiPerformanceLogger.threadField(displayThreadId),
+        );
+        return;
+      }
       final currentThread = thread(displayThreadId);
       _chatProviderTrace(
         'mark_read.remote_start',
@@ -2189,11 +2227,18 @@ class ChatThreadsController
         );
         return const _HistoryLoadResult(loadedCount: 0, failed: true);
       }
+      final timelineConversationRef = conversationRef;
+      final useConversationTimeline =
+          timelineConversationRef != null &&
+          messaging is ConversationTimelineMessagingService;
       final loadedHistory = await AwikiPerformanceLogger.async(
         'chat.local_history.service',
-        () => messaging is ConversationTimelineMessagingService
+        () => useConversationTimeline
             ? (messaging as ConversationTimelineMessagingService)
-                  .loadConversationTimeline(conversationRef, limit: limit)
+                  .loadConversationTimeline(
+                    timelineConversationRef,
+                    limit: limit,
+                  )
             : (messaging as LocalHistoryMessagingService).loadLocalHistory(
                 _localHistoryThreadRefFor(conversation),
                 limit: limit,
@@ -2374,13 +2419,16 @@ class ChatThreadsController
       final afterServerSeq = maxServerSequenceForMessages(
         thread(targetThreadId).messages,
       );
-      final syncUsedReadModel = syncService is ConversationMessageSyncService;
+      final syncConversationRef = conversationRef;
+      final syncUsedReadModel =
+          syncConversationRef != null &&
+          syncService is ConversationMessageSyncService;
       if (syncUsedReadModel) {
         await AwikiPerformanceLogger.async(
           'chat.remote_history.service',
           () => (syncService as ConversationMessageSyncService)
               .syncConversationAfter(
-                conversation: conversationRef,
+                conversation: syncConversationRef,
                 afterServerSeq: afterServerSeq,
               ),
           fields: <String, Object?>{
@@ -2396,7 +2444,7 @@ class ChatThreadsController
         final repairedVersion = await _repairThreadFromLocalProjection(
           conversation,
           displayThreadId: targetThreadId,
-          conversationRef: conversationRef,
+          conversationRef: syncConversationRef,
           fallbackToLocalHistory: false,
         );
         final localResult = repairedVersion == null
@@ -2526,6 +2574,13 @@ class ChatThreadsController
               .toList()
         : const <ChatMentionDraft>[];
     final conversationRef = _conversationReadRefFor(conversation);
+    if (conversationRef == null) {
+      _chatProviderTrace(
+        'send.skip_presentation_alias',
+        fields: AwikiPerformanceLogger.threadField(targetThreadId),
+      );
+      return;
+    }
     final clientMessageId = _newClientMessageId();
     final idempotencyKey = 'op-$clientMessageId';
     try {
@@ -2766,6 +2821,13 @@ class ChatThreadsController
     }
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
     final conversationRef = _conversationReadRefFor(conversation);
+    if (conversationRef == null) {
+      _chatProviderTrace(
+        'send.retry_skip_presentation_alias',
+        fields: AwikiPerformanceLogger.threadField(targetThreadId),
+      );
+      return;
+    }
     final clientMessageId = _stableMessageId(message);
     if (clientMessageId.trim().isEmpty) {
       _chatProviderTrace(
@@ -2975,7 +3037,7 @@ class ChatThreadsController
     await ref.read(conversationListProvider.notifier).refresh();
     await syncHistoryForConversation(
       _refreshedConversationFor(conversation),
-      displayThreadId: displayThreadId ?? conversation.threadId,
+      displayThreadId: displayThreadId,
       force: true,
       reportFailure: true,
     );
@@ -6123,7 +6185,10 @@ String _appThreadRefDebug(AppThreadRef ref) {
   return '$kind:${AwikiPerformanceLogger.safeHash(ref.stableId)}';
 }
 
-String _conversationReadRefDebug(AppConversationReadRef ref) {
+String? _conversationReadRefDebug(AppConversationReadRef? ref) {
+  if (ref == null) {
+    return null;
+  }
   return 'conversation:${AwikiPerformanceLogger.safeHash(ref.conversationId)}';
 }
 
@@ -6135,12 +6200,14 @@ String _newClientMessageId() {
   return 'msg-awiki-me-${DateTime.now().microsecondsSinceEpoch}';
 }
 
-AppConversationReadRef _conversationReadRefFor(
+AppConversationReadRef? _conversationReadRefFor(
   ConversationSummary conversation,
 ) {
-  return AppConversationReadRef.fromConversationId(
-    _conversationTimelineKeyFor(conversation),
-  );
+  final conversationId = conversation.conversationId?.trim();
+  if (conversationId == null || conversationId.isEmpty) {
+    return null;
+  }
+  return AppConversationReadRef.fromConversationId(conversationId);
 }
 
 ConversationSummary _withConversationPreview(
