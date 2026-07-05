@@ -16,8 +16,10 @@ import 'package:awiki_me/src/application/group_application_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/message_sync_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
+import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
+import 'package:awiki_me/src/application/models/thread_message_patch.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/application/peer_identity_service.dart';
@@ -1598,11 +1600,19 @@ class FakeConversationService implements ConversationService {
 }
 
 class FakeMessagingService
-    implements MessagingService, LocalHistoryMessagingService {
+    implements
+        MessagingService,
+        LocalHistoryMessagingService,
+        ConversationTimelineMessagingService {
   FakeMessagingService(this.gateway);
 
   final FakeAwikiGateway gateway;
   int? lastLocalHistoryLimit;
+  int? lastConversationTimelineLimit;
+  String? lastConversationTimelineId;
+  int conversationTimelineCalls = 0;
+  final Map<String, List<ChatMessage>> conversationTimelineById =
+      <String, List<ChatMessage>>{};
 
   @override
   Future<AttachmentDownloadResult> downloadAttachment({
@@ -1666,6 +1676,53 @@ class FakeMessagingService
             (message) => includeControlPayloads || message.hasRenderableContent,
           )
           .toList(growable: false),
+    );
+  }
+
+  @override
+  Future<List<ChatMessage>> loadConversationTimeline(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  }) async {
+    conversationTimelineCalls += 1;
+    lastConversationTimelineLimit = limit;
+    lastConversationTimelineId = conversation.conversationId;
+    final configured = conversationTimelineById[conversation.conversationId];
+    final messages =
+        configured ??
+        await _loadLocalConversationTimeline(conversation.conversationId);
+    return messages
+        .where(
+          (message) => includeControlPayloads || message.hasRenderableContent,
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Stream<ThreadMessagePatch> watchConversationTimelinePatches(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+  }) {
+    return const Stream<ThreadMessagePatch>.empty();
+  }
+
+  @override
+  Future<ThreadMessagePatch> repairConversationTimelineStore(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+  }) async {
+    return ThreadMessagePatch(
+      kind: ThreadMessagePatchKind.reset,
+      ownerDid: 'did:me',
+      version: 1,
+      threadKind: 'conversation',
+      threadId: conversation.conversationId,
+      conversationId: conversation.conversationId,
+      messages: await _loadLocalConversationTimeline(
+        conversation.conversationId,
+      ),
     );
   }
 
@@ -1843,6 +1900,27 @@ class FakeMessagingService
     }
     if (threadId.startsWith('dm:')) {
       return gateway.fetchLocalDmHistory(threadId.substring('dm:'.length));
+    }
+    return Future<List<ChatMessage>>.value(const <ChatMessage>[]);
+  }
+
+  Future<List<ChatMessage>> _loadLocalConversationTimeline(
+    String conversationId,
+  ) {
+    if (conversationId.startsWith('group:')) {
+      return gateway.fetchLocalGroupHistory(
+        conversationId.substring('group:'.length),
+      );
+    }
+    if (conversationId.startsWith('dm:')) {
+      final suffix = conversationId.substring('dm:'.length);
+      final peerDidSeparator = suffix.lastIndexOf(':did:');
+      if (peerDidSeparator > 0) {
+        return gateway.fetchLocalDmHistory(
+          suffix.substring(peerDidSeparator + 1),
+        );
+      }
+      return gateway.fetchLocalDmHistory(suffix);
     }
     return Future<List<ChatMessage>>.value(const <ChatMessage>[]);
   }
@@ -2895,7 +2973,8 @@ class FakeLocalePreferenceService extends LocalePreferenceService {
   }
 }
 
-class FakeMessageSyncService implements MessageSyncService {
+class FakeMessageSyncService
+    implements MessageSyncService, ConversationMessageSyncService {
   FakeMessageSyncService({
     this.deltaResult = const MessageSyncDeltaResult(
       eventsApplied: 0,
@@ -2908,10 +2987,15 @@ class FakeMessageSyncService implements MessageSyncService {
   MessageSyncDeltaResult deltaResult;
   Object? nextDeltaError;
   Object? nextThreadAfterError;
+  Object? nextConversationAfterError;
   final List<String> syncReasons = <String>[];
   final List<FakeThreadAfterRequest> threadAfterRequests =
       <FakeThreadAfterRequest>[];
+  final List<FakeConversationAfterRequest> conversationAfterRequests =
+      <FakeConversationAfterRequest>[];
   final Map<String, List<ChatMessage>> threadAfterMessagesByStableId =
+      <String, List<ChatMessage>>{};
+  final Map<String, List<ChatMessage>> conversationAfterMessagesById =
       <String, List<ChatMessage>>{};
 
   @override
@@ -2954,6 +3038,39 @@ class FakeMessageSyncService implements MessageSyncService {
       hasMore: false,
     );
   }
+
+  @override
+  Future<MessageSyncThreadAfterResult> syncConversationAfter({
+    required AppConversationReadRef conversation,
+    String? afterServerSeq,
+    int limit = 100,
+  }) async {
+    conversationAfterRequests.add(
+      FakeConversationAfterRequest(
+        conversation: conversation,
+        afterServerSeq: afterServerSeq,
+        limit: limit,
+      ),
+    );
+    final error = nextConversationAfterError ?? nextThreadAfterError;
+    if (error != null) {
+      nextConversationAfterError = null;
+      nextThreadAfterError = null;
+      throw error;
+    }
+    final configuredMessages =
+        conversationAfterMessagesById[conversation.conversationId] ??
+        threadAfterMessagesByStableId[conversation.conversationId] ??
+        threadAfterMessagesByStableId[_legacyDirectStableIdForConversationId(
+          conversation.conversationId,
+        )];
+    final messages = configuredMessages ?? const <ChatMessage>[];
+    return MessageSyncThreadAfterResult(
+      messages: messages,
+      nextAfterServerSeq: maxServerSequenceForMessages(messages),
+      hasMore: false,
+    );
+  }
 }
 
 class FakeThreadAfterRequest {
@@ -2964,6 +3081,30 @@ class FakeThreadAfterRequest {
   });
 
   final AppThreadRef thread;
+  final String? afterServerSeq;
+  final int limit;
+}
+
+String _legacyDirectStableIdForConversationId(String conversationId) {
+  if (!conversationId.startsWith('dm:')) {
+    return conversationId;
+  }
+  final body = conversationId.substring('dm:'.length);
+  final peerDidSeparator = body.lastIndexOf(':did:');
+  if (peerDidSeparator <= 0) {
+    return conversationId;
+  }
+  return 'dm:${body.substring(peerDidSeparator + 1)}';
+}
+
+class FakeConversationAfterRequest {
+  const FakeConversationAfterRequest({
+    required this.conversation,
+    required this.afterServerSeq,
+    required this.limit,
+  });
+
+  final AppConversationReadRef conversation;
   final String? afterServerSeq;
   final int limit;
 }

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
+import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/thread_message_patch.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
@@ -88,12 +89,16 @@ void main() {
     expect(gateway.listConversationsCalls, 0);
     final messaging = container.read(messagingServiceProvider);
     expect(messaging, isA<FakeMessagingService>());
-    expect((messaging as FakeMessagingService).lastLocalHistoryLimit, 50);
-    expect(messageSyncService.threadAfterRequests, hasLength(1));
     expect(
-      messageSyncService.threadAfterRequests.single.afterServerSeq,
+      (messaging as FakeMessagingService).lastConversationTimelineLimit,
+      50,
+    );
+    expect(messageSyncService.conversationAfterRequests, isNotEmpty);
+    expect(
+      messageSyncService.conversationAfterRequests.single.afterServerSeq,
       isNull,
     );
+    expect(messageSyncService.threadAfterRequests, isEmpty);
 
     final thread = container.read(chatThreadProvider(conversation.threadId));
     expect(thread.messages, hasLength(1));
@@ -125,8 +130,10 @@ void main() {
     expect(gateway.fetchLocalDmHistoryCalls, 1);
   });
 
-  test('本地历史为空时仍回退远端 history', () async {
+  test('本地历史为空时走 conversation-after 回补', () async {
     gateway.localDmHistoryByPeerDid = const <String, List<ChatMessage>>{};
+    messageSyncService.threadAfterMessagesByStableId['dm:did:peer'] =
+        <ChatMessage>[message];
 
     await container
         .read(chatThreadsProvider.notifier)
@@ -134,7 +141,9 @@ void main() {
     await pumpEventQueue();
 
     expect(gateway.fetchLocalDmHistoryCalls, 1);
-    expect(gateway.fetchDmHistoryCalls, 1);
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(messageSyncService.conversationAfterRequests, isNotEmpty);
+    expect(messageSyncService.threadAfterRequests, isEmpty);
     final thread = container.read(chatThreadProvider(conversation.threadId));
     expect(thread.messages.map((item) => item.content), contains('hello'));
     expect(thread.isLoading, isFalse);
@@ -607,7 +616,11 @@ void main() {
         .openConversation(conversation);
     await pumpEventQueue();
 
-    expect(messageSyncService.threadAfterRequests.single.afterServerSeq, '10');
+    expect(
+      messageSyncService.conversationAfterRequests.single.afterServerSeq,
+      '10',
+    );
+    expect(messageSyncService.threadAfterRequests, isEmpty);
     final messages = container
         .read(chatThreadProvider(conversation.threadId))
         .messages;
@@ -781,8 +794,10 @@ void main() {
       'old visible',
       'agent reply',
     ]);
-    expect(patchMessaging.repairCalls, 1);
-    expect(messageSyncService.threadAfterRequests, hasLength(1));
+    expect(patchMessaging.repairConversationCalls, 1);
+    expect(patchMessaging.repairCalls, 0);
+    expect(messageSyncService.conversationAfterRequests, hasLength(1));
+    expect(messageSyncService.threadAfterRequests, isEmpty);
   });
 
   test('可见会话摘要未领先当前消息时不触发补齐', () async {
@@ -1068,10 +1083,12 @@ void main() {
       'msg-visible-middle',
       'msg-visible-snapshot',
     ]);
+    expect(patchMessaging.repairConversationCalls, 0);
     expect(patchMessaging.repairCalls, 0);
-    expect(messageSyncService.threadAfterRequests, hasLength(1));
+    expect(messageSyncService.conversationAfterRequests, hasLength(1));
+    expect(messageSyncService.threadAfterRequests, isEmpty);
     expect(
-      messageSyncService.threadAfterRequests.single.afterServerSeq,
+      messageSyncService.conversationAfterRequests.single.afterServerSeq,
       isNull,
     );
   });
@@ -1181,7 +1198,11 @@ void main() {
       'msg-middle-visible',
       'msg-latest-visible',
     ]);
-    expect(messageSyncService.threadAfterRequests.last.afterServerSeq, '10');
+    expect(
+      messageSyncService.conversationAfterRequests.last.afterServerSeq,
+      '10',
+    );
+    expect(messageSyncService.threadAfterRequests, isEmpty);
   });
 
   test(
@@ -1423,8 +1444,9 @@ void main() {
     );
     await pumpEventQueue();
 
-    expect(patchMessaging.repairCalls, 1);
-    expect(patchMessaging.lastRepairLimit, 100);
+    expect(patchMessaging.repairConversationCalls, 1);
+    expect(patchMessaging.lastRepairConversationLimit, 100);
+    expect(patchMessaging.repairCalls, 0);
     final messages = patchContainer
         .read(chatThreadProvider(conversation.threadId))
         .messages;
@@ -1490,7 +1512,8 @@ void main() {
           .read(chatThreadsProvider.notifier)
           .markConversationVisible(conversation);
       await pumpEventQueue();
-      expect(patchMessaging.watchCalls, 1);
+      expect(patchMessaging.watchConversationCalls, 1);
+      expect(patchMessaging.watchCalls, 0);
 
       await patchMessaging.closePatches();
       await pumpEventQueue();
@@ -1498,8 +1521,10 @@ void main() {
       final messages = patchContainer
           .read(chatThreadProvider(conversation.threadId))
           .messages;
-      expect(patchMessaging.repairCalls, 1);
-      expect(patchMessaging.watchCalls, 2);
+      expect(patchMessaging.repairConversationCalls, 1);
+      expect(patchMessaging.repairCalls, 0);
+      expect(patchMessaging.watchConversationCalls, 2);
+      expect(patchMessaging.watchCalls, 0);
       expect(gateway.fetchDmHistoryCalls, 0);
       expect(messageSyncService.threadAfterRequests, isEmpty);
       expect(
@@ -1582,7 +1607,8 @@ void main() {
       final controller = patchContainer.read(chatThreadsProvider.notifier);
       controller.markConversationVisible(conversation);
       await pumpEventQueue();
-      expect(patchMessaging.watchCalls, 1);
+      expect(patchMessaging.watchConversationCalls, 1);
+      expect(patchMessaging.watchCalls, 0);
 
       controller.markConversationHidden(conversation);
       await Future<void>.delayed(const Duration(milliseconds: 40));
@@ -1590,7 +1616,8 @@ void main() {
 
       controller.markConversationVisible(conversation);
       await pumpEventQueue();
-      expect(patchMessaging.watchCalls, 2);
+      expect(patchMessaging.watchConversationCalls, 2);
+      expect(patchMessaging.watchCalls, 0);
       expect(
         patchContainer
             .read(chatThreadProvider(conversation.threadId))
@@ -1719,9 +1746,14 @@ void main() {
     expect(gateway.lastFetchedLocalDmPeerDid, 'peer-scope:v1:codex1');
     expect(gateway.fetchDmHistoryCalls, 0);
     expect(
-      messageSyncService.threadAfterRequests.single.thread.stableId,
+      messageSyncService
+          .conversationAfterRequests
+          .single
+          .conversation
+          .conversationId,
       'dm:peer-scope:v1:codex1',
     );
+    expect(messageSyncService.threadAfterRequests, isEmpty);
     expect(
       container
           .read(chatThreadProvider(canonicalConversation.threadId))
@@ -1768,11 +1800,16 @@ void main() {
 
     expect(gateway.lastFetchedLocalDmPeerDid, 'peer-scope:v1:codex-empty');
     expect(gateway.fetchDmHistoryCalls, 0);
-    expect(messageSyncService.threadAfterRequests, hasLength(1));
+    expect(messageSyncService.conversationAfterRequests, hasLength(1));
     expect(
-      messageSyncService.threadAfterRequests.single.thread.stableId,
+      messageSyncService
+          .conversationAfterRequests
+          .single
+          .conversation
+          .conversationId,
       'dm:peer-scope:v1:codex-empty',
     );
+    expect(messageSyncService.threadAfterRequests, isEmpty);
     expect(
       container
           .read(chatThreadProvider(canonicalConversation.threadId))
@@ -1904,8 +1941,12 @@ void main() {
         .openConversation(conversation);
 
     expect(gateway.fetchLocalDmHistoryCalls, 1);
-    expect(gateway.fetchDmHistoryCalls, 1);
-    expect(messageSyncService.threadAfterRequests, hasLength(2));
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(
+      messageSyncService.conversationAfterRequests.length,
+      greaterThanOrEqualTo(2),
+    );
+    expect(messageSyncService.threadAfterRequests, isEmpty);
     expect(gateway.listConversationsCalls, 0);
   });
 
@@ -1943,9 +1984,10 @@ void main() {
       messages.map((item) => item.content),
       isNot(contains('realtime alias hello')),
     );
-    expect(gateway.fetchLocalDmHistoryCalls, 1);
-    expect(gateway.fetchDmHistoryCalls, 1);
-    expect(messageSyncService.threadAfterRequests, hasLength(1));
+    expect(gateway.fetchLocalDmHistoryCalls, 0);
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(messageSyncService.conversationAfterRequests, isNotEmpty);
+    expect(messageSyncService.threadAfterRequests, isEmpty);
   });
 
   test('本地和增量都没有消息时不会无 watermark 清未读或上报已读', () async {
@@ -1975,8 +2017,9 @@ void main() {
       2,
     );
     expect(gateway.fetchLocalDmHistoryCalls, 1);
-    expect(gateway.fetchDmHistoryCalls, 1);
-    expect(messageSyncService.threadAfterRequests, hasLength(1));
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(messageSyncService.conversationAfterRequests, isNotEmpty);
+    expect(messageSyncService.threadAfterRequests, isEmpty);
     expect(gateway.markReadCalls, 0);
     expect(gateway.lastMarkThreadReadWatermark, isNull);
   });
@@ -3193,7 +3236,7 @@ void main() {
       isGroup: true,
       groupId: groupId,
     );
-    gateway.groupHistoryByGroupId = <String, List<ChatMessage>>{
+    gateway.localGroupHistoryByGroupId = <String, List<ChatMessage>>{
       groupId: <ChatMessage>[
         ChatMessage(
           localId: 'group-create-event',
@@ -3232,7 +3275,7 @@ void main() {
       isGroup: true,
       groupId: groupId,
     );
-    gateway.groupHistoryByGroupId = <String, List<ChatMessage>>{
+    gateway.localGroupHistoryByGroupId = <String, List<ChatMessage>>{
       groupId: <ChatMessage>[
         ChatMessage(
           localId: 'group-attachment',
@@ -4232,8 +4275,12 @@ void main() {
     expect(messages.map((item) => item.content), contains('你好。欢迎'));
     expect(gateway.fetchLocalDmHistoryCalls, 1);
     expect(gateway.fetchDmHistoryCalls, 0);
-    expect(messageSyncService.threadAfterRequests, hasLength(1));
-    expect(messageSyncService.threadAfterRequests.single.afterServerSeq, '5');
+    expect(messageSyncService.conversationAfterRequests, hasLength(1));
+    expect(
+      messageSyncService.conversationAfterRequests.single.afterServerSeq,
+      '5',
+    );
+    expect(messageSyncService.threadAfterRequests, isEmpty);
   });
 
   test('历史加载中收到新的会话概览时会排队再补拉一次', () async {
@@ -4261,25 +4308,16 @@ void main() {
       isMine: false,
       sendState: MessageSendState.sent,
     );
-    gateway
-      ..fetchDmHistoryCompleter = Completer<void>()
-      ..dmHistoryBatchesByPeerDid = <String, List<List<ChatMessage>>>{
-        'did:peer': <List<ChatMessage>>[
-          <ChatMessage>[firstReply],
-          <ChatMessage>[firstReply, latestReply],
-        ],
-      };
+    messageSyncService.threadAfterMessagesByStableId['dm:did:peer'] =
+        <ChatMessage>[firstReply];
 
     final firstLoad = container
         .read(chatThreadsProvider.notifier)
         .syncHistoryForConversation(conversation);
     await Future<void>.delayed(Duration.zero);
 
-    expect(
-      container.read(chatThreadProvider(conversation.threadId)).isLoading,
-      true,
-    );
-
+    messageSyncService.threadAfterMessagesByStableId['dm:did:peer'] =
+        <ChatMessage>[firstReply, latestReply];
     await container
         .read(chatThreadsProvider.notifier)
         .syncHistoryForConversation(
@@ -4288,8 +4326,6 @@ void main() {
             lastMessageAt: latestReply.createdAt,
           ),
         );
-
-    gateway.fetchDmHistoryCompleter!.complete();
     await firstLoad;
     await Future<void>.delayed(Duration.zero);
     await Future<void>.delayed(Duration.zero);
@@ -4298,7 +4334,9 @@ void main() {
         .read(chatThreadProvider(conversation.threadId))
         .messages;
     expect(messages.map((item) => item.content), contains('最新回复'));
-    expect(gateway.fetchDmHistoryCalls, 2);
+    expect(messageSyncService.conversationAfterRequests, hasLength(2));
+    expect(messageSyncService.threadAfterRequests, isEmpty);
+    expect(gateway.fetchDmHistoryCalls, 0);
   });
 
   test('群列表刷新后会把已知群名称同步到会话列表', () async {
@@ -4764,7 +4802,8 @@ class _PatchMessagingService
     implements
         MessagingService,
         LocalHistoryMessagingService,
-        ThreadPatchMessagingService {
+        ThreadPatchMessagingService,
+        ConversationTimelineMessagingService {
   _PatchMessagingService({
     required this.localHistory,
     ThreadMessagePatch? repairPatch,
@@ -4783,9 +4822,13 @@ class _PatchMessagingService
   final StreamController<ThreadMessagePatch> _patches =
       StreamController<ThreadMessagePatch>.broadcast();
   int repairCalls = 0;
+  int repairConversationCalls = 0;
   int? lastRepairLimit;
+  int? lastRepairConversationLimit;
   int watchCalls = 0;
+  int watchConversationCalls = 0;
   int cancelledWatches = 0;
+  String? lastConversationTimelineId;
 
   void emitPatch(ThreadMessagePatch patch) {
     _patches.add(patch);
@@ -4827,6 +4870,37 @@ class _PatchMessagingService
   }
 
   @override
+  Stream<ThreadMessagePatch> watchConversationTimelinePatches(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+  }) {
+    watchConversationCalls += 1;
+    lastConversationTimelineId = conversation.conversationId;
+    return Stream<ThreadMessagePatch>.multi((controller) {
+      controller.add(
+        ThreadMessagePatch(
+          kind: ThreadMessagePatchKind.reset,
+          ownerDid: 'did:me',
+          version: 1,
+          threadKind: 'conversation',
+          threadId: conversation.conversationId,
+          conversationId: conversation.conversationId,
+          messages: localHistory,
+        ),
+      );
+      final subscription = _patches.stream.listen(
+        controller.add,
+        onError: controller.addError,
+        onDone: controller.close,
+      );
+      controller.onCancel = () {
+        cancelledWatches += 1;
+        return subscription.cancel();
+      };
+    });
+  }
+
+  @override
   Future<ThreadMessagePatch> repairThreadStore(
     AppThreadRef thread, {
     int limit = 100,
@@ -4834,6 +4908,17 @@ class _PatchMessagingService
     repairCalls += 1;
     lastRepairLimit = limit;
     return repairPatch;
+  }
+
+  @override
+  Future<ThreadMessagePatch> repairConversationTimelineStore(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+  }) async {
+    repairConversationCalls += 1;
+    lastRepairConversationLimit = limit;
+    lastConversationTimelineId = conversation.conversationId;
+    return _patchWithConversationId(repairPatch, conversation.conversationId);
   }
 
   @override
@@ -4863,6 +4948,17 @@ class _PatchMessagingService
     String? cursor,
     bool includeControlPayloads = false,
   }) async {
+    return localHistory;
+  }
+
+  @override
+  Future<List<ChatMessage>> loadConversationTimeline(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  }) async {
+    lastConversationTimelineId = conversation.conversationId;
     return localHistory;
   }
 
@@ -4935,6 +5031,25 @@ ChatMessage _sentMessage({
     createdAt: DateTime.now(),
     isMine: true,
     sendState: MessageSendState.sent,
+  );
+}
+
+ThreadMessagePatch _patchWithConversationId(
+  ThreadMessagePatch patch,
+  String conversationId,
+) {
+  return ThreadMessagePatch(
+    kind: patch.kind,
+    ownerDid: patch.ownerDid,
+    version: patch.version,
+    threadKind: patch.threadKind,
+    threadId: patch.threadId,
+    conversationId: patch.conversationId ?? conversationId,
+    messages: patch.messages,
+    message: patch.message,
+    index: patch.index,
+    messageId: patch.messageId,
+    reason: patch.reason,
   );
 }
 

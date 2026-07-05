@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_services.dart';
 import '../../application/message_sync_service.dart';
 import '../../application/models/attachment_models.dart';
+import '../../application/models/app_conversation_read_ref.dart';
 import '../../application/models/app_thread_ref.dart';
 import '../../application/models/app_thread_read_watermark.dart';
 import '../../application/models/thread_message_patch.dart';
@@ -468,7 +469,7 @@ class _ThreadPatchSubscription {
   const _ThreadPatchSubscription({
     required this.token,
     required this.ownerDid,
-    required this.threadRef,
+    required this.conversationRef,
     required this.threadKind,
     required this.threadId,
     required this.subscription,
@@ -477,13 +478,13 @@ class _ThreadPatchSubscription {
 
   final int token;
   final String ownerDid;
-  final AppThreadRef threadRef;
+  final AppConversationReadRef conversationRef;
   final String threadKind;
   final String threadId;
   final StreamSubscription<ThreadMessagePatch> subscription;
   final int lastVersion;
 
-  String get threadRefKey => threadRef.stableId;
+  String get conversationRefKey => conversationRef.conversationId;
 
   _ThreadPatchSubscription copyWith({
     StreamSubscription<ThreadMessagePatch>? subscription,
@@ -492,7 +493,7 @@ class _ThreadPatchSubscription {
     return _ThreadPatchSubscription(
       token: token,
       ownerDid: ownerDid,
-      threadRef: threadRef,
+      conversationRef: conversationRef,
       threadKind: threadKind,
       threadId: threadId,
       subscription: subscription ?? this.subscription,
@@ -731,13 +732,13 @@ class ChatThreadsController
       return;
     }
     final messaging = ref.read(messagingServiceProvider);
-    if (messaging is! LocalHistoryMessagingService) {
+    if (messaging is! ConversationTimelineMessagingService) {
       _chatProviderTrace(
         'local_history.prewarm.skip',
         fields: <String, Object?>{
           'conversations': conversations.length,
           'messaging_type': messaging.runtimeType,
-          'reason': 'unsupported_messaging',
+          'reason': 'unsupported_conversation_timeline',
         },
       );
       return;
@@ -1130,6 +1131,11 @@ class ChatThreadsController
     ChatMessage message,
     ConversationSummary conversation,
   ) {
+    final expectedConversationId = _conversationTimelineKeyFor(conversation);
+    final messageConversationId = message.conversationId?.trim();
+    if (messageConversationId != null && messageConversationId.isNotEmpty) {
+      return messageConversationId == expectedConversationId;
+    }
     final messageThreadId = message.threadId.trim();
     if (messageThreadId.isEmpty) {
       return false;
@@ -1157,13 +1163,23 @@ class ChatThreadsController
     required String source,
   }) {
     final filtered = <ChatMessage>[];
+    final expectedConversationId = _conversationTimelineKeyFor(conversation);
     var rawCount = 0;
     var nonRenderableCount = 0;
     var droppedCount = 0;
+    var conversationMismatchCount = 0;
     for (final message in messages) {
       rawCount += 1;
       if (!message.hasRenderableContent) {
         nonRenderableCount += 1;
+        continue;
+      }
+      final messageConversationId = message.conversationId?.trim();
+      if (messageConversationId != null &&
+          messageConversationId.isNotEmpty &&
+          messageConversationId != expectedConversationId) {
+        droppedCount += 1;
+        conversationMismatchCount += 1;
         continue;
       }
       if (!_messageBelongsToConversationThread(message, conversation)) {
@@ -1180,7 +1196,11 @@ class ChatThreadsController
           'source': source,
           'raw': rawCount,
           'dropped': droppedCount,
+          'conversation_mismatch': conversationMismatchCount,
           'non_renderable': nonRenderableCount,
+          'conversation_hash': AwikiPerformanceLogger.safeHash(
+            expectedConversationId,
+          ),
           'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
             conversation.threadId,
           ),
@@ -1193,7 +1213,11 @@ class ChatThreadsController
           'source': source,
           'raw': rawCount,
           'dropped': droppedCount,
+          'conversation_mismatch': conversationMismatchCount,
           'non_renderable': nonRenderableCount,
+          'conversation_hash': AwikiPerformanceLogger.safeHash(
+            expectedConversationId,
+          ),
           'conversation_thread': AwikiPerformanceLogger.safeHash(
             conversation.threadId,
           ),
@@ -1331,14 +1355,16 @@ class ChatThreadsController
     if (!mounted) {
       return;
     }
+    final conversationRef = _conversationReadRefFor(conversation);
     final effectiveAfterServerSeq = useExplicitAfterServerSeq
         ? afterServerSeq
         : afterServerSeq ??
               maxServerSequenceForMessages(thread(displayThreadId).messages);
     _chatProviderTrace(
-      'thread_after.start',
+      'conversation_after.start',
       fields: <String, Object?>{
         ...AwikiPerformanceLogger.threadField(displayThreadId),
+        'conversation_ref': _conversationReadRefDebug(conversationRef),
         'after_seq': effectiveAfterServerSeq,
         'explicit_after_seq': useExplicitAfterServerSeq,
         'messages': thread(displayThreadId).messages.length,
@@ -1346,23 +1372,29 @@ class ChatThreadsController
       },
     );
     try {
-      final result = await ref
-          .read(messageSyncServiceProvider)
-          .syncThreadAfter(
-            thread: _localHistoryThreadRefFor(conversation),
-            afterServerSeq: effectiveAfterServerSeq,
-          );
+      final syncService = ref.read(messageSyncServiceProvider);
+      final result = syncService is ConversationMessageSyncService
+          ? await (syncService as ConversationMessageSyncService)
+                .syncConversationAfter(
+                  conversation: conversationRef,
+                  afterServerSeq: effectiveAfterServerSeq,
+                )
+          : await syncService.syncThreadAfter(
+              thread: _localHistoryThreadRefFor(conversation),
+              afterServerSeq: effectiveAfterServerSeq,
+            );
       final messages = _messagesForConversationThread(
         result.messages,
         conversation: conversation,
         displayThreadId: displayThreadId,
-        source: 'thread_after',
+        source: 'conversation_after',
       );
       if (!mounted || messages.isEmpty) {
         _chatProviderTrace(
-          'thread_after.noop',
+          'conversation_after.noop',
           fields: <String, Object?>{
             ...AwikiPerformanceLogger.threadField(displayThreadId),
+            'conversation_ref': _conversationReadRefDebug(conversationRef),
             'mounted': mounted,
             'returned': result.messages.length,
             'renderable': messages.length,
@@ -1375,9 +1407,10 @@ class ChatThreadsController
       await ref.read(conversationListProvider.notifier).refreshFastLocal();
       _flushPendingReadAck(displayThreadId);
       _chatProviderTrace(
-        'thread_after.done',
+        'conversation_after.done',
         fields: <String, Object?>{
           ...AwikiPerformanceLogger.threadField(displayThreadId),
+          'conversation_ref': _conversationReadRefDebug(conversationRef),
           'returned': result.messages.length,
           'merged': messages.length,
           'messages_after': thread(displayThreadId).messages.length,
@@ -1385,12 +1418,18 @@ class ChatThreadsController
       );
     } catch (_) {
       _chatProviderTrace(
-        'thread_after.failed',
-        fields: AwikiPerformanceLogger.threadField(displayThreadId),
+        'conversation_after.failed',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(displayThreadId),
+          'conversation_ref': _conversationReadRefDebug(conversationRef),
+        },
       );
       AwikiPerformanceLogger.log(
-        'chat.thread_after.failed',
-        fields: AwikiPerformanceLogger.threadField(displayThreadId),
+        'chat.conversation_after.failed',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(displayThreadId),
+          'conversation_ref': _conversationReadRefDebug(conversationRef),
+        },
       );
     } finally {
       if (mounted) {
@@ -1677,18 +1716,19 @@ class ChatThreadsController
   Future<int?> _repairThreadFromLocalProjection(
     ConversationSummary conversation, {
     required String displayThreadId,
-    AppThreadRef? threadRef,
+    AppConversationReadRef? conversationRef,
   }) async {
     final messaging = ref.read(messagingServiceProvider);
-    final effectiveThreadRef =
-        threadRef ??
-        _threadPatchSubscriptions[displayThreadId]?.threadRef ??
-        _localHistoryThreadRefFor(conversation);
-    if (messaging is ThreadPatchMessagingService) {
-      final threadPatchMessaging = messaging as ThreadPatchMessagingService;
+    final effectiveConversationRef =
+        conversationRef ??
+        _threadPatchSubscriptions[displayThreadId]?.conversationRef ??
+        _conversationReadRefFor(conversation);
+    if (messaging is ConversationTimelineMessagingService) {
+      final timelineMessaging =
+          messaging as ConversationTimelineMessagingService;
       try {
-        final patch = await threadPatchMessaging.repairThreadStore(
-          effectiveThreadRef,
+        final patch = await timelineMessaging.repairConversationTimelineStore(
+          effectiveConversationRef,
         );
         if (!mounted) {
           return null;
@@ -1698,10 +1738,19 @@ class ChatThreadsController
         if ((ownerDid == null ||
                 ownerDid.isEmpty ||
                 patchOwnerDid == ownerDid) &&
-            _threadPatchMatchesThreadRef(patch, effectiveThreadRef)) {
-          _recordThreadPatchRepairVersion(displayThreadId, patch);
-          await _applyThreadPatchBody(displayThreadId, patch, conversation);
-          return patch.version;
+            !_threadPatchHasConversationMismatch(
+              patch,
+              effectiveConversationRef,
+            )) {
+          final applied = await _applyThreadPatchBody(
+            displayThreadId,
+            patch,
+            conversation,
+          );
+          if (applied) {
+            _recordThreadPatchRepairVersion(displayThreadId, patch);
+            return patch.version;
+          }
         }
       } catch (_) {
         // Fall through to local history. Patch stream repair must never
@@ -1738,21 +1787,22 @@ class ChatThreadsController
   }) {
     _cancelThreadPatchSubscriptionTtl(displayThreadId);
     final messaging = ref.read(messagingServiceProvider);
-    if (messaging is! ThreadPatchMessagingService) {
+    if (messaging is! ConversationTimelineMessagingService) {
       return;
     }
-    final threadPatchMessaging = messaging as ThreadPatchMessagingService;
+    final timelineMessaging = messaging as ConversationTimelineMessagingService;
     final session = ref.read(sessionProvider).session;
     final ownerDid = session?.did.trim();
     if (ownerDid == null || ownerDid.isEmpty) {
       return;
     }
+    final conversationRef = _conversationReadRefFor(conversation);
     final threadRef = _localHistoryThreadRefFor(conversation);
     final expectedPatchKey = _threadPatchKeyFor(threadRef);
     final existing = _threadPatchSubscriptions[displayThreadId];
     if (existing != null &&
         existing.ownerDid == ownerDid &&
-        existing.threadRefKey == threadRef.stableId &&
+        existing.conversationRefKey == conversationRef.conversationId &&
         existing.threadKind == expectedPatchKey.kind &&
         existing.threadId == expectedPatchKey.id) {
       return;
@@ -1760,8 +1810,8 @@ class ChatThreadsController
     unawaited(existing?.subscription.cancel());
     final token = ++_threadPatchToken;
     late final StreamSubscription<ThreadMessagePatch> subscription;
-    subscription = threadPatchMessaging
-        .watchThreadPatches(threadRef)
+    subscription = timelineMessaging
+        .watchConversationTimelinePatches(conversationRef)
         .listen(
           (patch) => _applyThreadPatch(
             displayThreadId,
@@ -1792,7 +1842,7 @@ class ChatThreadsController
     _threadPatchSubscriptions[displayThreadId] = _ThreadPatchSubscription(
       token: token,
       ownerDid: ownerDid,
-      threadRef: threadRef,
+      conversationRef: conversationRef,
       threadKind: expectedPatchKey.kind,
       threadId: expectedPatchKey.id,
       subscription: subscription,
@@ -1824,7 +1874,7 @@ class ChatThreadsController
     final repairedVersion = await _repairThreadFromLocalProjection(
       conversation,
       displayThreadId: displayThreadId,
-      threadRef: subscription.threadRef,
+      conversationRef: subscription.conversationRef,
     );
     if (!mounted ||
         _cacheMetadataByThreadId[displayThreadId]?.isVisible != true) {
@@ -1857,6 +1907,25 @@ class ChatThreadsController
       return;
     }
     if (!_threadPatchMatchesSubscription(patch, currentSubscription)) {
+      _chatProviderTrace(
+        'thread_patch.mismatch_repair',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(displayThreadId),
+          'conversation_ref': _conversationReadRefDebug(
+            currentSubscription.conversationRef,
+          ),
+          'patch_conversation_hash': AwikiPerformanceLogger.safeHash(
+            _threadPatchConversationId(patch),
+          ),
+          'patch_kind': patch.threadKind,
+          'patch_thread_hash': AwikiPerformanceLogger.safeHash(patch.threadId),
+        },
+      );
+      await _repairThreadPatchSubscription(
+        displayThreadId,
+        conversation: conversation,
+        token: token,
+      );
       return;
     }
     if (patch.version <= currentSubscription.lastVersion) {
@@ -1871,19 +1940,47 @@ class ChatThreadsController
       );
       return;
     }
+    final applied = await _applyThreadPatchBody(
+      displayThreadId,
+      patch,
+      conversation,
+    );
+    if (!mounted ||
+        _threadPatchSubscriptions[displayThreadId]?.token != token) {
+      return;
+    }
+    if (!applied) {
+      await _repairThreadPatchSubscription(
+        displayThreadId,
+        conversation: conversation,
+        token: token,
+      );
+      return;
+    }
     _threadPatchSubscriptions[displayThreadId] = currentSubscription.copyWith(
       lastVersion: patch.version,
     );
-    await _applyThreadPatchBody(displayThreadId, patch, conversation);
   }
 
-  Future<void> _applyThreadPatchBody(
+  Future<bool> _applyThreadPatchBody(
     String displayThreadId,
     ThreadMessagePatch patch,
     ConversationSummary conversation,
   ) async {
     switch (patch.kind) {
       case ThreadMessagePatchKind.reset:
+        if (_threadPatchMessagesHaveConversationMismatch(patch, conversation)) {
+          _chatProviderTrace(
+            'thread_patch.reset_filtered_repair',
+            fields: <String, Object?>{
+              ...AwikiPerformanceLogger.threadField(displayThreadId),
+              'conversation_hash': AwikiPerformanceLogger.safeHash(
+                _conversationTimelineKeyFor(conversation),
+              ),
+            },
+          );
+          return false;
+        }
         final messages = _messagesForConversationThread(
           patch.messages,
           conversation: conversation,
@@ -1892,10 +1989,14 @@ class ChatThreadsController
         );
         _mergeMessages(displayThreadId, messages, isLoading: false);
         _updateConversationPreviewFromMessages(conversation, messages);
+        return true;
       case ThreadMessagePatchKind.upsert:
         final message = patch.message;
         if (message == null) {
-          return;
+          return true;
+        }
+        if (!message.hasRenderableContent) {
+          return true;
         }
         final messages = _messagesForConversationThread(
           <ChatMessage>[message],
@@ -1904,26 +2005,44 @@ class ChatThreadsController
           source: 'thread_patch_upsert',
         );
         if (messages.isEmpty) {
-          return;
+          _chatProviderTrace(
+            'thread_patch.upsert_filtered_repair',
+            fields: <String, Object?>{
+              ...AwikiPerformanceLogger.threadField(displayThreadId),
+              'conversation_hash': AwikiPerformanceLogger.safeHash(
+                _conversationTimelineKeyFor(conversation),
+              ),
+              'message_conversation_hash': AwikiPerformanceLogger.safeHash(
+                message.conversationId,
+              ),
+              'message_thread_hash': AwikiPerformanceLogger.safeHash(
+                message.threadId,
+              ),
+            },
+          );
+          return false;
         }
         _mergeMessages(displayThreadId, messages, isLoading: false);
         _updateConversationPreviewFromMessages(conversation, messages);
+        return true;
       case ThreadMessagePatchKind.remove:
         final messageId = patch.messageId?.trim();
         if (messageId == null || messageId.isEmpty) {
-          return;
+          return true;
         }
         _removeMessageById(displayThreadId, messageId);
+        return true;
       case ThreadMessagePatchKind.repairRequired:
         final token = _threadPatchSubscriptions[displayThreadId]?.token;
         if (token == null) {
-          return;
+          return true;
         }
         await _repairThreadPatchSubscription(
           displayThreadId,
           conversation: conversation,
           token: token,
         );
+        return true;
     }
   }
 
@@ -1939,13 +2058,13 @@ class ChatThreadsController
     final currentSubscription = _threadPatchSubscriptions[displayThreadId];
     if (currentSubscription == null ||
         currentSubscription.token != token ||
-        messaging is! ThreadPatchMessagingService) {
+        messaging is! ConversationTimelineMessagingService) {
       return;
     }
-    final threadPatchMessaging = messaging as ThreadPatchMessagingService;
+    final timelineMessaging = messaging as ConversationTimelineMessagingService;
     try {
-      final patch = await threadPatchMessaging.repairThreadStore(
-        currentSubscription.threadRef,
+      final patch = await timelineMessaging.repairConversationTimelineStore(
+        currentSubscription.conversationRef,
       );
       if (!mounted ||
           _threadPatchSubscriptions[displayThreadId]?.token != token) {
@@ -1956,10 +2075,19 @@ class ChatThreadsController
         await _loadLocalHistory(conversation, intoThreadId: displayThreadId);
         return;
       }
-      _threadPatchSubscriptions[displayThreadId] = currentSubscription.copyWith(
-        lastVersion: patch.version,
+      final applied = await _applyThreadPatchBody(
+        displayThreadId,
+        patch,
+        conversation,
       );
-      await _applyThreadPatchBody(displayThreadId, patch, conversation);
+      if (applied &&
+          mounted &&
+          _threadPatchSubscriptions[displayThreadId]?.token == token) {
+        _threadPatchSubscriptions[displayThreadId] = currentSubscription
+            .copyWith(lastVersion: patch.version);
+      } else if (!applied && mounted) {
+        await _loadLocalHistory(conversation, intoThreadId: displayThreadId);
+      }
     } catch (_) {
       await _loadLocalHistory(conversation, intoThreadId: displayThreadId);
     }
@@ -2205,6 +2333,7 @@ class ChatThreadsController
       _setThreadLoading(targetThreadId, true);
     }
     final messaging = ref.read(messagingServiceProvider);
+    final conversationRef = _conversationReadRefFor(conversation);
     _chatProviderTrace(
       'local_history.load_start',
       fields: <String, Object?>{
@@ -2215,6 +2344,7 @@ class ChatThreadsController
         'thread_ref': _appThreadRefDebug(
           _localHistoryThreadRefFor(conversation),
         ),
+        'conversation_ref': _conversationReadRefDebug(conversationRef),
         'limit': limit,
         'show_hydrating': showHydratingState,
         'mark_empty_loaded': markLoadedWhenEmpty,
@@ -2224,7 +2354,8 @@ class ChatThreadsController
       },
     );
     try {
-      if (messaging is! LocalHistoryMessagingService) {
+      if (messaging is! ConversationTimelineMessagingService &&
+          messaging is! LocalHistoryMessagingService) {
         if (shouldShowLoading && mounted) {
           _setThreadLoading(targetThreadId, false);
           if (showHydratingState) {
@@ -2244,15 +2375,18 @@ class ChatThreadsController
         );
         return const _HistoryLoadResult(loadedCount: 0, failed: true);
       }
-      final localMessaging = messaging as LocalHistoryMessagingService;
       final loadedHistory = await AwikiPerformanceLogger.async(
         'chat.local_history.service',
-        () => localMessaging.loadLocalHistory(
-          _localHistoryThreadRefFor(conversation),
-          limit: limit,
-        ),
+        () => messaging is ConversationTimelineMessagingService
+            ? (messaging as ConversationTimelineMessagingService)
+                  .loadConversationTimeline(conversationRef, limit: limit)
+            : (messaging as LocalHistoryMessagingService).loadLocalHistory(
+                _localHistoryThreadRefFor(conversation),
+                limit: limit,
+              ),
         fields: <String, Object?>{
           ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'conversation_ref': _conversationReadRefDebug(conversationRef),
           'limit': limit,
         },
         level: AwikiPerformanceLogLevel.verbose,
@@ -2400,12 +2534,14 @@ class ChatThreadsController
       return;
     }
     final targetThreadId = _displayThreadIdFor(conversation, intoThreadId);
+    final conversationRef = _conversationReadRefFor(conversation);
     final totalWatch = Stopwatch()..start();
     _activeRemoteHistorySyncs.add(targetThreadId);
     _chatProviderTrace(
       'remote_history.load_start',
       fields: <String, Object?>{
         ...AwikiPerformanceLogger.threadField(targetThreadId),
+        'conversation_ref': _conversationReadRefDebug(conversationRef),
         'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
           conversation.threadId,
         ),
@@ -2419,12 +2555,26 @@ class ChatThreadsController
       _setThreadLoading(targetThreadId, true);
     }
     try {
+      final messaging = ref.read(messagingServiceProvider);
+      final syncService = ref.read(messageSyncServiceProvider);
+      final afterServerSeq = maxServerSequenceForMessages(
+        thread(targetThreadId).messages,
+      );
       final loadedHistory = await AwikiPerformanceLogger.async(
         'chat.remote_history.service',
-        () => ref
-            .read(messagingServiceProvider)
-            .loadHistory(_historyThreadRefFor(conversation)),
-        fields: AwikiPerformanceLogger.threadField(targetThreadId),
+        () => syncService is ConversationMessageSyncService
+            ? (syncService as ConversationMessageSyncService)
+                  .syncConversationAfter(
+                    conversation: conversationRef,
+                    afterServerSeq: afterServerSeq,
+                  )
+                  .then((result) => result.messages)
+            : messaging.loadHistory(_historyThreadRefFor(conversation)),
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'conversation_ref': _conversationReadRefDebug(conversationRef),
+          'after_seq': afterServerSeq,
+        },
         level: AwikiPerformanceLogLevel.verbose,
       );
       final history = AwikiPerformanceLogger.sync(
@@ -2447,6 +2597,7 @@ class ChatThreadsController
           ...AwikiPerformanceLogger.threadField(targetThreadId),
           'compat': true,
           'items': loadedHistory.length,
+          'conversation_ref': _conversationReadRefDebug(conversationRef),
         },
         level: AwikiPerformanceLogLevel.verbose,
       );
@@ -5788,7 +5939,7 @@ class ChatThreadsController
   String _displayThreadIdFor(ConversationSummary conversation, String? value) {
     final displayThreadId = value?.trim();
     if (displayThreadId == null || displayThreadId.isEmpty) {
-      return conversation.threadId;
+      return _conversationTimelineKeyFor(conversation);
     }
     return displayThreadId;
   }
@@ -6352,6 +6503,22 @@ String _appThreadRefDebug(AppThreadRef ref) {
   return '$kind:${AwikiPerformanceLogger.safeHash(ref.stableId)}';
 }
 
+String _conversationReadRefDebug(AppConversationReadRef ref) {
+  return 'conversation:${AwikiPerformanceLogger.safeHash(ref.conversationId)}';
+}
+
+String _conversationTimelineKeyFor(ConversationSummary conversation) {
+  return conversation.effectiveConversationId.trim();
+}
+
+AppConversationReadRef _conversationReadRefFor(
+  ConversationSummary conversation,
+) {
+  return AppConversationReadRef.fromConversationId(
+    _conversationTimelineKeyFor(conversation),
+  );
+}
+
 ConversationSummary _withConversationPreview(
   ConversationSummary conversation,
   ChatMessage message, {
@@ -6423,13 +6590,65 @@ bool _threadPatchMatchesSubscription(
   ThreadMessagePatch patch,
   _ThreadPatchSubscription subscription,
 ) {
+  if (_threadPatchHasConversationMismatch(
+    patch,
+    subscription.conversationRef,
+  )) {
+    return false;
+  }
+  final patchConversationId = _threadPatchConversationId(patch);
+  if (patchConversationId != null && patchConversationId.isNotEmpty) {
+    return true;
+  }
   return patch.threadKind.trim() == subscription.threadKind &&
       patch.threadId.trim() == subscription.threadId;
 }
 
-bool _threadPatchMatchesThreadRef(ThreadMessagePatch patch, AppThreadRef ref) {
-  final key = _threadPatchKeyFor(ref);
-  return patch.threadKind.trim() == key.kind && patch.threadId.trim() == key.id;
+String? _threadPatchConversationId(ThreadMessagePatch patch) {
+  final explicit = patch.conversationId?.trim();
+  if (explicit != null && explicit.isNotEmpty) {
+    return explicit;
+  }
+  final messageConversationId = patch.message?.conversationId?.trim();
+  if (messageConversationId != null && messageConversationId.isNotEmpty) {
+    return messageConversationId;
+  }
+  for (final message in patch.messages) {
+    final conversationId = message.conversationId?.trim();
+    if (conversationId != null && conversationId.isNotEmpty) {
+      return conversationId;
+    }
+  }
+  return null;
+}
+
+bool _threadPatchHasConversationMismatch(
+  ThreadMessagePatch patch,
+  AppConversationReadRef ref,
+) {
+  final patchConversationId = _threadPatchConversationId(patch);
+  return patchConversationId != null &&
+      patchConversationId.isNotEmpty &&
+      patchConversationId != ref.conversationId;
+}
+
+bool _threadPatchMessagesHaveConversationMismatch(
+  ThreadMessagePatch patch,
+  ConversationSummary conversation,
+) {
+  final expectedConversationId = _conversationTimelineKeyFor(conversation);
+  bool mismatches(ChatMessage message) {
+    final conversationId = message.conversationId?.trim();
+    return conversationId != null &&
+        conversationId.isNotEmpty &&
+        conversationId != expectedConversationId;
+  }
+
+  final message = patch.message;
+  if (message != null && mismatches(message)) {
+    return true;
+  }
+  return patch.messages.any(mismatches);
 }
 
 AppThreadRef _readThreadRefFor(ConversationSummary conversation) {
@@ -6474,6 +6693,7 @@ ChatMessage _withThreadId(ChatMessage message, String threadId) {
   return ChatMessage(
     localId: message.localId,
     remoteId: message.remoteId,
+    conversationId: message.conversationId,
     threadId: threadId,
     senderDid: message.senderDid,
     senderName: message.senderName,

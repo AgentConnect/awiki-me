@@ -81,6 +81,14 @@ class ChatPage extends StatelessWidget {
   }
 }
 
+String _timelineDisplayThreadId(ConversationSummary conversation) {
+  final conversationId = conversation.effectiveConversationId.trim();
+  if (conversationId.isNotEmpty) {
+    return conversationId;
+  }
+  return conversation.threadId.trim();
+}
+
 class ChatView extends ConsumerStatefulWidget {
   const ChatView({
     super.key,
@@ -192,7 +200,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   @override
   void initState() {
     super.initState();
-    _displayThreadId = widget.conversation.threadId;
+    _displayThreadId = _timelineDisplayThreadId(widget.conversation);
     scrollController = _BottomInitialScrollController();
     _chatThreadsController = ref.read(chatThreadsProvider.notifier);
     _beginOpeningBottomAnchor();
@@ -229,7 +237,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
         oldWidget.conversation,
         displayThreadId: _displayThreadId,
       );
-      _displayThreadId = widget.conversation.threadId;
+      _displayThreadId = _timelineDisplayThreadId(widget.conversation);
       _markConversationVisible(
         widget.conversation,
         displayThreadId: _displayThreadId,
@@ -248,7 +256,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }) {
     _chatThreadsController.markConversationVisible(
       conversation,
-      displayThreadId: displayThreadId ?? conversation.threadId,
+      displayThreadId:
+          displayThreadId ?? _timelineDisplayThreadId(conversation),
     );
     _scheduleAcknowledgeVisibleConversationRead(
       conversation,
@@ -262,7 +271,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }) {
     _chatThreadsController.markConversationHidden(
       conversation,
-      displayThreadId: displayThreadId ?? conversation.threadId,
+      displayThreadId:
+          displayThreadId ?? _timelineDisplayThreadId(conversation),
     );
   }
 
@@ -1298,7 +1308,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final displayThreadId = _displayThreadId.trim();
     for (final conversation in conversations) {
       if (displayThreadId.isNotEmpty &&
-          conversation.threadId.trim() == displayThreadId) {
+          _timelineDisplayThreadId(conversation) == displayThreadId) {
         return conversation;
       }
     }
@@ -1324,7 +1334,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return false;
     }
     final nextConversation = candidates.single;
-    final nextThreadId = nextConversation.threadId.trim();
+    final nextThreadId = _timelineDisplayThreadId(nextConversation);
     if (nextThreadId.isEmpty || nextThreadId == _displayThreadId) {
       return false;
     }
@@ -1401,11 +1411,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
     List<ConversationSummary> conversations,
   ) {
     for (final conversation in conversations) {
-      if (conversation.threadId.trim() == _displayThreadId.trim()) {
+      if (_timelineDisplayThreadId(conversation) == _displayThreadId.trim()) {
         return conversation;
       }
     }
-    if (widget.conversation.threadId.trim() == _displayThreadId.trim()) {
+    if (_timelineDisplayThreadId(widget.conversation) ==
+        _displayThreadId.trim()) {
       return widget.conversation;
     }
     return ConversationSummary(
