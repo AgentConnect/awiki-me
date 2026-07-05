@@ -1334,6 +1334,87 @@ void main() {
     );
   });
 
+  test(
+    'conversation patch gap does not advance version before repair lands',
+    () async {
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(conversationListProvider.notifier)
+          .refreshFastLocal();
+
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+          item: _conversation(
+            threadId: 'thread-one',
+            displayName: 'One',
+            targetDid: 'did:one',
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerDid: 'did:alice',
+          version: 3,
+          unreadTotal: 0,
+          item: _conversation(
+            threadId: 'thread-three',
+            displayName: 'Three',
+            targetDid: 'did:three',
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerDid: 'did:alice',
+          version: 2,
+          unreadTotal: 1,
+          item: _conversation(
+            threadId: 'thread-two',
+            displayName: 'Two',
+            targetDid: 'did:two',
+            unreadCount: 1,
+          ),
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(service.repairCalls, 1);
+      expect(
+        container
+            .read(conversationListProvider)
+            .conversations
+            .map((item) => item.threadId),
+        contains('thread-two'),
+      );
+      expect(
+        container
+            .read(conversationListProvider)
+            .conversations
+            .map((item) => item.threadId),
+        isNot(contains('thread-three')),
+      );
+    },
+  );
+
   test('conversation patch stream does not repopulate after clear', () async {
     final service = _PatchConversationService(
       conversations: const <ConversationSummary>[],

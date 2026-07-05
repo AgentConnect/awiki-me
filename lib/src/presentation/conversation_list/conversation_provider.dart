@@ -428,6 +428,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           'reason': 'version_gap',
           'version': patch.version,
           'last_version': _lastPatchVersion,
+          'expected_version': _lastPatchVersion + 1,
+          'pending_version_advance': false,
         },
       );
       _schedulePatchRepair(
@@ -436,7 +438,6 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         token: token,
         reason: 'version_gap',
       );
-      _lastPatchVersion = patch.version;
       return;
     }
     _lastPatchVersion = patch.version;
@@ -622,6 +623,14 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     required String reason,
   }) {
     if (_patchRepairOperation != null) {
+      _trace(
+        'patch_repair.skip',
+        fields: <String, Object?>{
+          'reason': 'already_running',
+          'requested_reason': reason,
+          'last_version': _lastPatchVersion,
+        },
+      );
       return;
     }
     _patchRepairOperation =
@@ -647,6 +656,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         'reason': reason,
         'generation': generation,
         'current_generation': _refreshGeneration,
+        'last_version': _lastPatchVersion,
       },
     );
     if (token != _patchSubscriptionToken ||
@@ -684,6 +694,15 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     if (repair.version > _lastPatchVersion) {
       _lastPatchVersion = repair.version;
     }
+    _trace(
+      'patch_repair.success',
+      fields: <String, Object?>{
+        'reason': reason,
+        'repair_version': repair.version,
+        'last_version': _lastPatchVersion,
+        'items': repair.conversations.length,
+      },
+    );
     await _applyConversationRefresh(
       repair.conversations,
       generation: generation,
