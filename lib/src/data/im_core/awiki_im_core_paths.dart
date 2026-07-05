@@ -193,7 +193,7 @@ String? _e2eAppStateRoot() {
     return null;
   }
   final root = _awikiE2eAppStateRoot.trim();
-  return root.isEmpty ? null : root;
+  return root.isEmpty ? null : normalizeAwikiE2eAppStateRootForLaunch(root);
 }
 
 String? _firstNonEmpty(String? first, String? second) {
@@ -222,6 +222,40 @@ String normalizeAwikiStateNamespace(String? value) {
   return safe.isEmpty ? 'default' : safe;
 }
 
+String normalizeAwikiE2eAppStateRootForLaunch(
+  String root, {
+  String? currentDirectory,
+  String? homeDirectory,
+  bool? isMacOS,
+  String? temporaryDirectory,
+}) {
+  final trimmed = root.trim();
+  if (trimmed.isEmpty || _isAbsolutePath(trimmed)) {
+    return trimmed;
+  }
+
+  final expandedHome = _expandHomeRelativePath(trimmed, homeDirectory);
+  if (expandedHome != null) {
+    return expandedHome;
+  }
+
+  final cwd = (currentDirectory ?? Directory.current.path).trim();
+  if (_canAnchorRelativeE2eRootToCurrentDirectory(cwd)) {
+    return _joinAll(<String>[cwd, trimmed]);
+  }
+
+  final appSupportFallback = _appSupportFallbackRoot(
+    homeDirectory ?? Platform.environment['HOME'],
+    isMacOS: isMacOS ?? Platform.isMacOS,
+  );
+  if (appSupportFallback != null) {
+    return _joinAll(<String>[appSupportFallback, trimmed]);
+  }
+
+  final temp = (temporaryDirectory ?? Directory.systemTemp.path).trim();
+  return _joinAll(<String>[temp, 'ai.awiki.awikiMe', trimmed]);
+}
+
 class ArchivedLocalState {
   const ArchivedLocalState({
     required this.schemaVersion,
@@ -248,6 +282,55 @@ String _joinAll(List<String> parts) {
       .skip(1)
       .map((part) => part.replaceAll(RegExp(r'^/+'), ''));
   return <String>[first, ...rest].join('/');
+}
+
+bool _isAbsolutePath(String path) {
+  return path.startsWith('/') ||
+      path.startsWith(r'\\') ||
+      RegExp(r'^[A-Za-z]:[\\/]').hasMatch(path);
+}
+
+String? _expandHomeRelativePath(String path, String? homeDirectory) {
+  if (path != '~' && !path.startsWith('~/')) {
+    return null;
+  }
+  final home = homeDirectory?.trim() ?? Platform.environment['HOME']?.trim();
+  if (home == null || home.isEmpty) {
+    return null;
+  }
+  if (path == '~') {
+    return home;
+  }
+  return _joinAll(<String>[home, path.substring(2)]);
+}
+
+bool _canAnchorRelativeE2eRootToCurrentDirectory(String currentDirectory) {
+  if (currentDirectory.isEmpty ||
+      currentDirectory == '/' ||
+      currentDirectory == r'\') {
+    return false;
+  }
+  final lower = currentDirectory.toLowerCase();
+  return !lower.contains('.app/contents');
+}
+
+String? _appSupportFallbackRoot(
+  String? homeDirectory, {
+  required bool isMacOS,
+}) {
+  final home = homeDirectory?.trim();
+  if (home == null || home.isEmpty) {
+    return null;
+  }
+  if (isMacOS) {
+    return _joinAll(<String>[
+      home,
+      'Library',
+      'Application Support',
+      'ai.awiki.awikiMe',
+    ]);
+  }
+  return _joinAll(<String>[home, '.awiki-me']);
 }
 
 String _dirname(String path) {

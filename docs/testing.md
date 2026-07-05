@@ -148,6 +148,11 @@ provider for the App-local `im-core` identity vault root key and device id. The
 file is created under the E2E App support root with strict JSON reads and
 private file permissions on Linux/macOS. It may contain a base64 test root key,
 so it is local secret state and must remain untracked with the rest of `.e2e/`.
+When the E2E state root is relative, normal test runners resolve it against the
+repository working directory. If an E2E-built macOS app is accidentally launched
+as a GUI app with `/` as its working directory, AWiki Me resolves that relative
+root under the user's Application Support directory instead of trying to create
+`/.e2e` on the read-only system volume.
 
 Ordinary `appStateRoot` overrides do not move the vault root key into JSON; they
 still use the platform secure-storage provider. Unit coverage for this boundary
