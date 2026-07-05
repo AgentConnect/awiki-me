@@ -1516,6 +1516,14 @@ void main() {
         const thread = AppThreadRef.direct('did:bob');
 
         await service.sendText(thread: thread, content: 'hello');
+        await service.sendConversationText(
+          conversation: AppConversationReadRef.fromConversationId(
+            'dm:peer-scope:v1:bob',
+          ),
+          content: 'conversation hello',
+          clientMessageId: 'client-1',
+          idempotencyKey: 'op-client-1',
+        );
         await service.loadHistory(thread, limit: 20, cursor: 'cursor-1');
         await service.loadLocalHistory(
           thread,
@@ -1525,6 +1533,13 @@ void main() {
         await service.retryByResendOriginalContent(_message('failed'));
 
         expect(messages.sentContents, ['hello']);
+        expect(messages.sentConversationContents, ['conversation hello']);
+        expect(
+          messages.lastSentConversation?.conversationId,
+          'dm:peer-scope:v1:bob',
+        );
+        expect(messages.lastClientMessageId, 'client-1');
+        expect(messages.lastIdempotencyKey, 'op-client-1');
         expect(messages.historyRequests.single.limit, 20);
         expect(messages.localHistoryRequests.single.limit, 10);
         expect(messages.localHistoryRequests.single.cursor, 'cursor-local');
@@ -1685,9 +1700,13 @@ class _FakeReadableConversations extends _FakeConversations
 
 class _FakeMessages implements MessageCorePort, LocalHistoryMessageCorePort {
   final List<String> sentContents = <String>[];
+  final List<String> sentConversationContents = <String>[];
   final List<_HistoryRequest> historyRequests = <_HistoryRequest>[];
   final List<_HistoryRequest> localHistoryRequests = <_HistoryRequest>[];
   final List<String> retriedIds = <String>[];
+  AppConversationReadRef? lastSentConversation;
+  String? lastClientMessageId;
+  String? lastIdempotencyKey;
 
   @override
   Future<AttachmentDownloadResult> downloadAttachment({
@@ -1724,6 +1743,33 @@ class _FakeMessages implements MessageCorePort, LocalHistoryMessageCorePort {
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed) async {
     retriedIds.add(failed.localId);
     return failed.copyWith(sendState: MessageSendState.sending);
+  }
+
+  @override
+  Future<ChatMessage> sendConversationPayload({
+    required AppConversationReadRef conversation,
+    required Map<String, Object?> payload,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) async {
+    lastSentConversation = conversation;
+    lastClientMessageId = clientMessageId;
+    lastIdempotencyKey = idempotencyKey;
+    return _message(clientMessageId ?? 'conversation-payload');
+  }
+
+  @override
+  Future<ChatMessage> sendConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) async {
+    sentConversationContents.add(content);
+    lastSentConversation = conversation;
+    lastClientMessageId = clientMessageId;
+    lastIdempotencyKey = idempotencyKey;
+    return _message(clientMessageId ?? 'conversation-text');
   }
 
   @override

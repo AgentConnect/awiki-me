@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/ports/message_core_port.dart';
@@ -208,6 +209,26 @@ class _FakeMessages implements MessageCorePort {
 
   @override
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ChatMessage> sendConversationPayload({
+    required AppConversationReadRef conversation,
+    required Map<String, Object?> payload,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ChatMessage> sendConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
     throw UnimplementedError();
   }
 

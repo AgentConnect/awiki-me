@@ -34,6 +34,21 @@ abstract interface class MessagingService {
     String? idempotencyKey,
   });
 
+  Future<ChatMessage> sendConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  });
+
+  Future<ChatMessage> sendConversationMentionText({
+    required AppConversationReadRef conversation,
+    required String text,
+    required List<ChatMentionDraft> mentions,
+    String? clientMessageId,
+    String? idempotencyKey,
+  });
+
   Future<AttachmentDownloadResult> downloadAttachment({
     required AppThreadRef thread,
     required String messageId,
@@ -159,6 +174,37 @@ class ImCoreMessagingService
       thread: thread,
       payload: ChatMentionPayload.toP9Json(text: text, draftMentions: mentions),
       secure: false,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  @override
+  Future<ChatMessage> sendConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
+    return _messages.sendConversationText(
+      conversation: conversation,
+      content: content,
+      clientMessageId: clientMessageId,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  @override
+  Future<ChatMessage> sendConversationMentionText({
+    required AppConversationReadRef conversation,
+    required String text,
+    required List<ChatMentionDraft> mentions,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
+    return _messages.sendConversationPayload(
+      conversation: conversation,
+      payload: ChatMentionPayload.toP9Json(text: text, draftMentions: mentions),
+      clientMessageId: clientMessageId,
       idempotencyKey: idempotencyKey,
     );
   }

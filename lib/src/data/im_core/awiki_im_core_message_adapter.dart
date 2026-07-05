@@ -108,6 +108,52 @@ class AwikiImCoreMessageAdapter
   }
 
   @override
+  Future<ChatMessage> sendConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) async {
+    return _runtime.withCurrentClient((client) async {
+      final ownerDid = await _currentOwnerDid(client);
+      final result = await client.messages.sendConversationText(
+        core.SendConversationTextRequest(
+          conversation: core.ConversationReadRef(
+            conversationId: conversation.conversationId,
+          ),
+          text: content,
+          clientMessageId: clientMessageId,
+          idempotencyKey: idempotencyKey,
+        ),
+      );
+      return _mappers.chatMessageFromCore(result.message, ownerDid: ownerDid);
+    });
+  }
+
+  @override
+  Future<ChatMessage> sendConversationPayload({
+    required AppConversationReadRef conversation,
+    required Map<String, Object?> payload,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) async {
+    return _runtime.withCurrentClient((client) async {
+      final ownerDid = await _currentOwnerDid(client);
+      final result = await client.messages.sendConversationPayload(
+        core.SendConversationPayloadRequest(
+          conversation: core.ConversationReadRef(
+            conversationId: conversation.conversationId,
+          ),
+          payloadJson: jsonEncode(payload),
+          clientMessageId: clientMessageId,
+          idempotencyKey: idempotencyKey,
+        ),
+      );
+      return _mappers.chatMessageFromCore(result.message, ownerDid: ownerDid);
+    });
+  }
+
+  @override
   Future<AttachmentDownloadResult> downloadAttachment({
     required AppThreadRef thread,
     required String messageId,

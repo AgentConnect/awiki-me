@@ -26,6 +26,20 @@ abstract interface class MessageCorePort {
     String? idempotencyKey,
   });
 
+  Future<ChatMessage> sendConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  });
+
+  Future<ChatMessage> sendConversationPayload({
+    required AppConversationReadRef conversation,
+    required Map<String, Object?> payload,
+    String? clientMessageId,
+    String? idempotencyKey,
+  });
+
   Future<AttachmentDownloadResult> downloadAttachment({
     required AppThreadRef thread,
     required String messageId,

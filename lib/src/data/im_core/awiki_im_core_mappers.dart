@@ -944,7 +944,10 @@ MessageSendState _sendStateFromCore(
   if (raw.contains('fail') || raw.contains('reject')) {
     return MessageSendState.failed;
   }
-  if (raw.contains('send') && !raw.contains('sent')) {
+  if (raw.contains('pending') ||
+      raw.contains('stored_locally') ||
+      raw.contains('accepted') ||
+      (raw.contains('send') && !raw.contains('sent'))) {
     return MessageSendState.sending;
   }
   return isMine ? MessageSendState.sent : MessageSendState.sent;

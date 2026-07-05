@@ -1884,6 +1884,66 @@ class FakeMessagingService
   }
 
   @override
+  Future<ChatMessage> sendConversationMentionText({
+    required AppConversationReadRef conversation,
+    required String text,
+    required List<ChatMentionDraft> mentions,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
+    return sendConversationPayload(
+      conversation: conversation,
+      payload: ChatMentionPayload.toP9Json(text: text, draftMentions: mentions),
+      clientMessageId: clientMessageId,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  @override
+  Future<ChatMessage> sendConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) async {
+    final sent = await gateway.sendTextMessage(
+      threadId: conversation.conversationId,
+      content: content,
+    );
+    return _recordConversationSendResult(
+      conversation: conversation,
+      message: sent,
+      clientMessageId: clientMessageId,
+    );
+  }
+
+  Future<ChatMessage> sendConversationPayload({
+    required AppConversationReadRef conversation,
+    required Map<String, Object?> payload,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) async {
+    gateway.lastSentPayload = payload;
+    gateway.lastSentPayloadIdempotencyKey = idempotencyKey;
+    final payloadJson = jsonEncode(payload);
+    final mentionPayload = ChatMentionPayload.tryParsePayloadJson(payloadJson);
+    final sent = await gateway.sendTextMessage(
+      threadId: conversation.conversationId,
+      content: mentionPayload?.text ?? '',
+      payloadJson: payloadJson,
+      mentions: mentionPayload?.mentions ?? const <ChatMessageMention>[],
+      originalType: 'application/json',
+    );
+    return _recordConversationSendResult(
+      conversation: conversation,
+      message: sent,
+      clientMessageId: clientMessageId,
+      payloadJson: payloadJson,
+      mentions: mentionPayload?.mentions ?? const <ChatMessageMention>[],
+    );
+  }
+
+  @override
   Future<ChatMessage> sendText({
     required AppThreadRef thread,
     required String content,
@@ -1903,6 +1963,46 @@ class FakeMessagingService
         'Cannot send through test IM Core without peerDid or groupId: $threadId',
       ),
     };
+  }
+
+  ChatMessage _recordConversationSendResult({
+    required AppConversationReadRef conversation,
+    required ChatMessage message,
+    String? clientMessageId,
+    String? payloadJson,
+    List<ChatMessageMention>? mentions,
+  }) {
+    final messageId = clientMessageId?.trim().isNotEmpty == true
+        ? clientMessageId!.trim()
+        : message.localId;
+    final resolved = ChatMessage(
+      localId: messageId,
+      remoteId: message.remoteId ?? messageId,
+      conversationId: conversation.conversationId,
+      threadId: conversation.conversationId,
+      senderDid: message.senderDid,
+      senderName: message.senderName,
+      receiverDid: message.receiverDid,
+      groupId: message.groupId,
+      content: message.content,
+      originalType: message.originalType,
+      createdAt: message.createdAt,
+      isMine: message.isMine,
+      sendState: message.sendState,
+      serverSequence: message.serverSequence,
+      isEncrypted: message.isEncrypted,
+      payloadJson: payloadJson ?? message.payloadJson,
+      mentions: mentions ?? message.mentions,
+      attachment: message.attachment,
+    );
+    final current =
+        conversationTimelineById[conversation.conversationId] ??
+        const <ChatMessage>[];
+    conversationTimelineById[conversation.conversationId] = <ChatMessage>[
+      ...current,
+      resolved,
+    ];
+    return resolved;
   }
 
   Future<List<ChatMessage>> _loadThreadHistory(String threadId) {

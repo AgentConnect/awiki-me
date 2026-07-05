@@ -461,6 +461,42 @@ class _FakeMessages implements MessagingService {
   }
 
   @override
+  Future<ChatMessage> sendConversationMentionText({
+    required AppConversationReadRef conversation,
+    required String text,
+    required List<ChatMentionDraft> mentions,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
+    return sendConversationText(
+      conversation: conversation,
+      content: text,
+      clientMessageId: clientMessageId,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  @override
+  Future<ChatMessage> sendConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) async {
+    return ChatMessage(
+      localId: clientMessageId ?? 'sent-conversation',
+      remoteId: clientMessageId ?? 'sent-conversation',
+      conversationId: conversation.conversationId,
+      threadId: conversation.conversationId,
+      senderDid: 'did:me',
+      content: content,
+      createdAt: DateTime.now(),
+      isMine: true,
+      sendState: MessageSendState.sent,
+    );
+  }
+
+  @override
   Future<ChatMessage> sendText({
     required AppThreadRef thread,
     required String content,

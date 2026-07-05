@@ -97,6 +97,58 @@ void main() {
     expect(repaired.conversationId, 'dm:peer-scope:v1:bob');
   });
 
+  test(
+    'sendConversationText forwards conversation id and durable ids',
+    () async {
+      final client = _FakeClient(ownerDid: 'did:alice');
+      final runtime = _FakeRuntime(client);
+      final adapter = AwikiImCoreMessageAdapter(runtime: runtime);
+
+      final sent = await adapter.sendConversationText(
+        conversation: AppConversationReadRef.fromConversationId(
+          'dm:peer-scope:v1:bob',
+        ),
+        content: 'durable hello',
+        clientMessageId: 'client-1',
+        idempotencyKey: 'op-client-1',
+      );
+
+      expect(client.messages.sendConversationTextCalls, 1);
+      expect(client.messages.lastConversationId, 'dm:peer-scope:v1:bob');
+      expect(client.messages.lastSentText, 'durable hello');
+      expect(client.messages.lastClientMessageId, 'client-1');
+      expect(client.messages.lastIdempotencyKey, 'op-client-1');
+      expect(sent.localId, 'client-1');
+      expect(sent.conversationId, 'dm:peer-scope:v1:bob');
+    },
+  );
+
+  test(
+    'sendConversationPayload forwards payload json and durable ids',
+    () async {
+      final client = _FakeClient(ownerDid: 'did:alice');
+      final runtime = _FakeRuntime(client);
+      final adapter = AwikiImCoreMessageAdapter(runtime: runtime);
+
+      final sent = await adapter.sendConversationPayload(
+        conversation: AppConversationReadRef.fromConversationId(
+          'dm:peer-scope:v1:bob',
+        ),
+        payload: <String, Object?>{'text': 'payload hello'},
+        clientMessageId: 'client-payload',
+        idempotencyKey: 'op-client-payload',
+      );
+
+      expect(client.messages.sendConversationPayloadCalls, 1);
+      expect(client.messages.lastConversationId, 'dm:peer-scope:v1:bob');
+      expect(client.messages.lastPayloadJson, contains('payload hello'));
+      expect(client.messages.lastClientMessageId, 'client-payload');
+      expect(client.messages.lastIdempotencyKey, 'op-client-payload');
+      expect(sent.localId, 'client-payload');
+      expect(sent.payloadJson, contains('payload hello'));
+    },
+  );
+
   test('owner did cache is invalidated when current client changes', () async {
     final firstClient = _FakeClient(ownerDid: 'did:alice');
     final secondClient = _FakeClient(ownerDid: 'did:carol');
@@ -309,12 +361,18 @@ class _FakeMessageApi implements core.MessageApi {
   int localConversationTimelineCalls = 0;
   int watchConversationTimelinePatchCalls = 0;
   int repairConversationTimelineStoreCalls = 0;
+  int sendConversationTextCalls = 0;
+  int sendConversationPayloadCalls = 0;
   final List<int> localHistoryLimits = <int>[];
   final List<int> localConversationTimelineLimits = <int>[];
   String? lastConversationId;
   String? lastConversationTimelineCursor;
   int? lastWatchConversationTimelineLimit;
   int? lastRepairConversationTimelineLimit;
+  String? lastSentText;
+  String? lastPayloadJson;
+  String? lastClientMessageId;
+  String? lastIdempotencyKey;
 
   void emitConversationTimelinePatch(core.ThreadMessageStorePatch patch) {
     _conversationTimelinePatches.add(patch);
@@ -382,34 +440,89 @@ class _FakeMessageApi implements core.MessageApi {
   }
 
   @override
+  Future<core.SendMessageResult> sendConversationText(
+    core.SendConversationTextRequest request,
+  ) async {
+    sendConversationTextCalls += 1;
+    lastConversationId = request.conversation.conversationId;
+    lastSentText = request.text;
+    lastClientMessageId = request.clientMessageId;
+    lastIdempotencyKey = request.idempotencyKey;
+    return core.SendMessageResult(
+      deliveryState: 'sent',
+      message: _messageForOwner(
+        _ownerDid(),
+        id: request.clientMessageId ?? 'sent-conversation-text',
+        conversationId: request.conversation.conversationId,
+        text: request.text,
+      ),
+    );
+  }
+
+  @override
+  Future<core.SendMessageResult> sendConversationPayload(
+    core.SendConversationPayloadRequest request,
+  ) async {
+    sendConversationPayloadCalls += 1;
+    lastConversationId = request.conversation.conversationId;
+    lastPayloadJson = request.payloadJson;
+    lastClientMessageId = request.clientMessageId;
+    lastIdempotencyKey = request.idempotencyKey;
+    return core.SendMessageResult(
+      deliveryState: 'sent',
+      message: _messageForOwner(
+        _ownerDid(),
+        id: request.clientMessageId ?? 'sent-conversation-payload',
+        conversationId: request.conversation.conversationId,
+        text: 'payload hello',
+        kind: 'application/json',
+        payloadJson: request.payloadJson,
+      ),
+    );
+  }
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-core.Message _messageForOwner(String ownerDid) {
+core.Message _messageForOwner(
+  String ownerDid, {
+  String id = 'msg-1',
+  String conversationId = 'dm:peer-scope:v1:bob',
+  String text = 'hello from did:bob',
+  String kind = 'text',
+  String? payloadJson,
+}) {
   return core.Message(
-    id: 'msg-1',
+    id: id,
     threadKind: 'direct',
-    threadId: 'did:bob',
+    threadId: conversationId,
     direction: core.MessageDirection.incoming,
     sender: 'did:bob',
     receiver: ownerDid,
-    body: const core.MessageBodyView(text: 'hello from did:bob', kind: 'text'),
+    body: core.MessageBodyView(
+      text: text,
+      kind: kind,
+      payloadJson: payloadJson,
+    ),
     sentAt: '2026-06-28T00:00:00Z',
     metadata: core.MessageMetadata(
       serverSequence: 1,
-      conversationIdentity: _conversationIdentity(),
+      conversationIdentity: _conversationIdentity(conversationId),
     ),
   );
 }
 
-core.ConversationIdentity _conversationIdentity() {
-  return const core.ConversationIdentity(
-    conversationId: 'dm:peer-scope:v1:bob',
+core.ConversationIdentity _conversationIdentity([
+  String conversationId = 'dm:peer-scope:v1:bob',
+]) {
+  return core.ConversationIdentity(
+    conversationId: conversationId,
     canonicalThreadKind: 'thread',
-    canonicalThreadId: 'dm:peer-scope:v1:bob',
+    canonicalThreadId: conversationId,
     storageThreadRef: core.ConversationStorageThreadRef(
       kind: 'thread',
-      id: 'dm:peer-scope:v1:bob',
+      id: conversationId,
     ),
     identityScope: core.ConversationIdentityScope.direct,
     migrationState: core.ConversationMigrationState.canonical,

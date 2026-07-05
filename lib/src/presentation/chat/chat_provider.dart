@@ -2561,129 +2561,49 @@ class ChatThreadsController
               )
               .toList()
         : const <ChatMentionDraft>[];
-    final mentionPayload = validMentionDrafts.isEmpty
-        ? null
-        : ChatMentionPayload.toP9Json(
-            text: content,
-            draftMentions: validMentionDrafts,
-          );
-    final pending = ChatMessage(
-      localId: 'pending-${DateTime.now().microsecondsSinceEpoch}',
-      threadId: targetThreadId,
-      senderDid: session.did,
-      senderName: session.handle ?? session.displayName,
-      receiverDid: conversation.targetDid,
-      groupId: conversation.groupId,
-      content: validMentionDrafts.isEmpty ? content.trim() : content,
-      originalType: validMentionDrafts.isEmpty ? 'text' : 'application/json',
-      createdAt: DateTime.now(),
-      isMine: true,
-      sendState: MessageSendState.sending,
-      payloadJson: mentionPayload == null ? null : jsonEncode(mentionPayload),
-      mentions: <ChatMessageMention>[
-        for (final mention in validMentionDrafts)
-          ChatMessageMention.fromDraft(mention),
-      ],
-    );
-    final current = List<ChatMessage>.from(thread(targetThreadId).messages)
-      ..add(pending);
-    _setMessages(targetThreadId, current);
-    final pendingConversation = _withConversationPreview(conversation, pending);
-    _upsertPendingConversationIfStable(
-      conversation: conversation,
-      pendingConversation: pendingConversation,
-      displayThreadId: targetThreadId,
-    );
+    final conversationRef = _conversationReadRefFor(conversation);
+    final clientMessageId = _newClientMessageId();
+    final idempotencyKey = 'op-$clientMessageId';
     try {
       final messaging = ref.read(messagingServiceProvider);
       final sent = validMentionDrafts.isEmpty
           ? await messaging
-                .sendText(
-                  thread: _sendThreadRefFor(conversation),
+                .sendConversationText(
+                  conversation: conversationRef,
                   content: content.trim(),
+                  clientMessageId: clientMessageId,
+                  idempotencyKey: idempotencyKey,
                 )
                 .timeout(_sendTimeout)
           : await messaging
-                .sendMentionText(
-                  thread: _sendThreadRefFor(conversation),
+                .sendConversationMentionText(
+                  conversation: conversationRef,
                   text: content,
                   mentions: validMentionDrafts,
-                  idempotencyKey: pending.localId,
+                  clientMessageId: clientMessageId,
+                  idempotencyKey: idempotencyKey,
                 )
                 .timeout(_sendTimeout);
-      if (!_sentMessageBelongsToConversation(
-        sent,
-        conversation: conversation,
-        pending: pending,
-        displayThreadId: targetThreadId,
-        source: 'send_text',
-      )) {
-        throw StateError('Sent message belongs to a different conversation.');
-      }
-      final resolvedThreadId = _sentDisplayThreadId(
-        sent,
-        fallbackThreadId: targetThreadId,
-      );
-      final sentInThread = _withThreadId(sent, resolvedThreadId);
-      final resolvedConversation = _conversationForResolvedSentMessage(
-        conversation,
-        sentInThread,
-      );
-      ref
-          .read(conversationListProvider.notifier)
-          .upsertConversation(
-            _withConversationPreview(resolvedConversation, sentInThread),
-          );
-      _syncSelectedConversationForResolvedSend(
-        previous: conversation,
-        resolved: resolvedConversation,
-        displayThreadId: targetThreadId,
-      );
-      if (resolvedThreadId != targetThreadId) {
-        _moveThreadStateForResolvedSend(
-          fromThreadId: targetThreadId,
-          toThreadId: resolvedThreadId,
-          pendingLocalId: pending.localId,
-          sentMessage: sentInThread,
-        );
-      }
-      final deliveredMessage = _replaceMessage(
-        resolvedThreadId,
-        pending.localId,
-        sentInThread,
-      );
       _startAgentProcessingForDeliveredMessage(
-        conversation: resolvedConversation,
-        displayThreadId: resolvedThreadId,
+        conversation: conversation,
+        displayThreadId: targetThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
         mentions: validMentionDrafts,
-        submittedLocalMessageId: pending.localId,
-        deliveredMessage: deliveredMessage,
+        submittedLocalMessageId: clientMessageId,
+        deliveredMessage: _withThreadId(sent, targetThreadId),
       );
-      final sentConversation = _withConversationPreview(
-        _conversationForResolvedSentMessage(
-          resolvedConversation,
-          deliveredMessage,
-        ),
-        deliveredMessage,
+    } catch (error) {
+      _chatProviderTrace(
+        'send.conversation_failed',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'conversation_ref': _conversationReadRefDebug(conversationRef),
+          'client_message_id_hash': AwikiPerformanceLogger.safeHash(
+            clientMessageId,
+          ),
+          'error': error.toString(),
+        },
       );
-      ref
-          .read(conversationListProvider.notifier)
-          .upsertConversation(sentConversation);
-    } catch (_) {
-      final failed = pending.copyWith(sendState: MessageSendState.failed);
-      final failedInThread = _replaceMessage(
-        targetThreadId,
-        pending.localId,
-        failed,
-      );
-      final failedConversation = _withConversationPreview(
-        conversation,
-        failedInThread,
-      );
-      ref
-          .read(conversationListProvider.notifier)
-          .upsertConversation(failedConversation);
     }
   }
 
@@ -2881,72 +2801,64 @@ class ChatThreadsController
       return;
     }
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
-    final retrying = message.copyWith(sendState: MessageSendState.sending);
-    _setMessages(
-      targetThreadId,
-      thread(targetThreadId).messages
-          .map((item) => item.localId == message.localId ? retrying : item)
-          .toList(),
+    final conversationRef = _conversationReadRefFor(conversation);
+    final clientMessageId = _stableMessageId(message);
+    if (clientMessageId.trim().isEmpty) {
+      _chatProviderTrace(
+        'send.retry_missing_message_id',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'conversation_ref': _conversationReadRefDebug(conversationRef),
+        },
+      );
+      return;
+    }
+    final mentionPayload = ChatMentionPayload.tryParsePayloadJson(
+      message.payloadJson,
     );
     try {
-      final retried = await ref
-          .read(messagingServiceProvider)
-          .retryByResendOriginalContent(retrying)
-          .timeout(_sendTimeout);
-      if (!_sentMessageBelongsToConversation(
-        retried,
-        conversation: conversation,
-        pending: retrying,
-        displayThreadId: targetThreadId,
-        source: 'retry_text',
-      )) {
-        throw StateError(
-          'Retried message belongs to a different conversation.',
-        );
-      }
-      final resolvedThreadId = _sentDisplayThreadId(
-        retried,
-        fallbackThreadId: targetThreadId,
-      );
-      final retriedInThread = _withThreadId(retried, resolvedThreadId);
-      final resolvedConversation = _conversationForResolvedSentMessage(
-        conversation,
-        retriedInThread,
-      );
-      ref
-          .read(conversationListProvider.notifier)
-          .upsertConversation(
-            _withConversationPreview(resolvedConversation, retriedInThread),
-          );
-      _syncSelectedConversationForResolvedSend(
-        previous: conversation,
-        resolved: resolvedConversation,
-        displayThreadId: targetThreadId,
-      );
-      if (resolvedThreadId != targetThreadId) {
-        _moveThreadStateForResolvedSend(
-          fromThreadId: targetThreadId,
-          toThreadId: resolvedThreadId,
-          pendingLocalId: message.localId,
-          sentMessage: retriedInThread,
-        );
-      }
-      final deliveredMessage = _replaceMessage(
-        resolvedThreadId,
-        message.localId,
-        retriedInThread,
-      );
+      final messaging = ref.read(messagingServiceProvider);
+      final retried =
+          mentionPayload != null &&
+              mentionPayload.hasValidMentions &&
+              message.mentions.isNotEmpty
+          ? await messaging
+                .sendConversationMentionText(
+                  conversation: conversationRef,
+                  text: mentionPayload.text,
+                  mentions: _messageMentionsToDrafts(message.mentions),
+                  clientMessageId: clientMessageId,
+                  idempotencyKey: 'retry-$clientMessageId',
+                )
+                .timeout(_sendTimeout)
+          : await messaging
+                .sendConversationText(
+                  conversation: conversationRef,
+                  content: message.content,
+                  clientMessageId: clientMessageId,
+                  idempotencyKey: 'retry-$clientMessageId',
+                )
+                .timeout(_sendTimeout);
       _startAgentProcessingForDeliveredMessage(
-        conversation: resolvedConversation,
-        displayThreadId: resolvedThreadId,
+        conversation: conversation,
+        displayThreadId: targetThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
-        mentions: _messageMentionsToDrafts(retrying.mentions),
-        submittedLocalMessageId: retrying.localId,
-        deliveredMessage: deliveredMessage,
+        mentions: _messageMentionsToDrafts(message.mentions),
+        submittedLocalMessageId: clientMessageId,
+        deliveredMessage: _withThreadId(retried, targetThreadId),
       );
-    } catch (_) {
-      final failed = retrying.copyWith(sendState: MessageSendState.failed);
-      _replaceMessage(targetThreadId, message.localId, failed);
+    } catch (error) {
+      _chatProviderTrace(
+        'send.retry_conversation_failed',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'conversation_ref': _conversationReadRefDebug(conversationRef),
+          'client_message_id_hash': AwikiPerformanceLogger.safeHash(
+            clientMessageId,
+          ),
+          'error': error.toString(),
+        },
+      );
     }
   }
 
@@ -6403,6 +6315,10 @@ String _conversationReadRefDebug(AppConversationReadRef ref) {
 
 String _conversationTimelineKeyFor(ConversationSummary conversation) {
   return conversation.effectiveConversationId.trim();
+}
+
+String _newClientMessageId() {
+  return 'msg-awiki-me-${DateTime.now().microsecondsSinceEpoch}';
 }
 
 AppConversationReadRef _conversationReadRefFor(

@@ -7,6 +7,7 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/agent/agent_control_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
+import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
@@ -1718,6 +1719,57 @@ class _UiMessagingService implements MessagingService {
       isMine: true,
       sendState: MessageSendState.sent,
     );
+  }
+
+  Future<ChatMessage> _recordConversationPayload({
+    required AppConversationReadRef conversation,
+    required Map<String, Object?> payload,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) async {
+    payloads.add(payload);
+    recordedPayloads.add(
+      _RecordedPayload(payload: payload, idempotencyKey: idempotencyKey),
+    );
+    lastPayload = payload;
+    lastIdempotencyKey = idempotencyKey;
+    return ChatMessage(
+      localId: clientMessageId ?? 'payload_1',
+      remoteId: clientMessageId ?? 'payload_1',
+      conversationId: conversation.conversationId,
+      threadId: conversation.conversationId,
+      senderDid: 'did:test:me',
+      content: payload['text']?.toString() ?? '',
+      createdAt: DateTime(2026, 6, 20),
+      isMine: true,
+      sendState: MessageSendState.sent,
+    );
+  }
+
+  @override
+  Future<ChatMessage> sendConversationMentionText({
+    required AppConversationReadRef conversation,
+    required String text,
+    required List<ChatMentionDraft> mentions,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
+    return _recordConversationPayload(
+      conversation: conversation,
+      payload: ChatMentionPayload.toP9Json(text: text, draftMentions: mentions),
+      clientMessageId: clientMessageId,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  @override
+  Future<ChatMessage> sendConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
+    throw UnimplementedError();
   }
 
   @override

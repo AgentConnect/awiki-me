@@ -1,6 +1,7 @@
 import 'package:awiki_me/src/application/agent/agent_control_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
+import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/daemon_subkey_authorization_revoke_result.dart';
@@ -973,6 +974,57 @@ class _MessagesStub implements MessagingService {
       secure: false,
       idempotencyKey: idempotencyKey,
     );
+  }
+
+  @override
+  Future<ChatMessage> sendConversationMentionText({
+    required AppConversationReadRef conversation,
+    required String text,
+    required List<ChatMentionDraft> mentions,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
+    return sendConversationPayload(
+      conversation: conversation,
+      payload: ChatMentionPayload.toP9Json(text: text, draftMentions: mentions),
+      clientMessageId: clientMessageId,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  Future<ChatMessage> sendConversationPayload({
+    required AppConversationReadRef conversation,
+    required Map<String, Object?> payload,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
+    lastPayload = payload;
+    payloads.add(payload);
+    lastIdempotencyKey = idempotencyKey;
+    return Future<ChatMessage>.value(
+      ChatMessage(
+        localId: clientMessageId ?? 'msg',
+        remoteId: clientMessageId ?? 'msg',
+        conversationId: conversation.conversationId,
+        threadId: conversation.conversationId,
+        senderDid: 'did:human:me',
+        content: payload['text']?.toString() ?? '',
+        createdAt: DateTime.now(),
+        isMine: true,
+        sendState: MessageSendState.sent,
+        payloadJson: '{}',
+      ),
+    );
+  }
+
+  @override
+  Future<ChatMessage> sendConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
+    throw UnimplementedError();
   }
 
   @override
