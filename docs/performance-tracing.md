@@ -55,12 +55,14 @@ flutter run -d macos \
 | `im_core_conversations.*` | Dart -> im-core native 会话查询边界 | 判断是否卡在 native/SQLite/SDK 查询 |
 | `agents.load*` | Agent 清单与 daemon status 本地投影 | 判断 Agent 投影是否拖慢会话列表 |
 | `chat.open_conversation` | 点击进入会话 | 进入会话起点 |
-| `chat.local_history.*` / `im_core_messages.local_history*` | 进入会话时本地 projection 历史读取、Dart 映射、merge/sort | 判断本地已有消息是否能先于远端 history 快速渲染 |
+| `chat.conversation_timeline.*` / `im_core_messages.conversation_timeline*` | 进入会话时按 canonical `conversationId` 读取本地 projection、Dart 映射、merge/sort | 判断本地已有消息是否能先于远端 history 快速渲染 |
+| `chat.local_history.*` / `im_core_messages.local_history*` | legacy local history 日志名或低层兼容入口 | 新链路优先看 canonical conversation timeline；旧名只用于兼容对比 |
 | `chat.remote_history.*` / `im_core_messages.remote_history*` | 后台远端 history reconcile、Dart 映射、merge/sort | 判断远端补齐、E2EE projection 和 native persist/merge 是否仍拖慢进入会话 |
-| `chat.history.*` / `im_core_messages.history*` | 兼容旧日志名的消息历史边界 | 新链路优先看 `local_history` / `remote_history`；旧名只用于兼容对比 |
+| `chat.history.*` / `im_core_messages.history*` | 兼容旧日志名的消息历史边界 | 新链路优先看 `conversation_timeline` / `remote_history`；旧名只用于兼容对比 |
 | `message_sync.coordinator.request` | App 侧可靠同步调度请求 | 判断 startup、resume、reconnect、realtime dirty/gap 是否合并为一次 SDK `syncDelta`；该事件是 verbose 级别 |
 | `message_sync.delta` | App 调用 SDK 全局 reliable sync 入口 | 判断 Rust `im-core` 是否完成账号级 delta apply；App 只提供 `reason`/`limit`，不读写 checkpoint |
-| `message_sync.thread_after` | 打开会话后的 thread-local 补新 | 判断本地 history 首屏后，是否按当前 thread 的最大 `server_seq` 补齐新消息；不推进全局 checkpoint |
+| `message_sync.conversation_after` | 打开会话后的 conversation-local 补新 | 判断本地 conversation timeline 首屏后，是否按当前 canonical conversation 的最大 `server_seq` 补齐新消息；不推进全局 checkpoint |
+| `message_sync.thread_after` | legacy thread-local 补新日志名 | 仅用于兼容/低层诊断；AWiki Me display path 应优先看 `message_sync.conversation_after` |
 | `chat.messages.merge_loop` / `chat.messages.merge` | 消息列表 merge、pending 匹配和排序前准备 | `indexed=true` 表示当前 merge 已用 remoteId/localId/pending 索引，避免每条 incoming 反复 `indexWhere` 扫描 current |
 | `chat.mark_read*` | 打开未读会话后的本地清未读与已读同步 | 判断本地清 unread 和 SDK thread mark-read ack 是否慢 |
 | `chat_page.build.*` / `conversation_list_page.*build.*` | Flutter build 准备阶段 | 判断是否是 UI 构建/重算慢 |
@@ -81,13 +83,14 @@ performance gate 的 hard evidence。
 |---|---|---|
 | `message.cli_send_to_app_open_first_paint_ms` | 从 CLI 向 App 发送消息开始，到 App 通过当前 provider open path 打开会话并在首屏 state 中看到该消息。 | required metric；默认 hard budget 90000ms，soft budget 5000ms。 |
 | `thread.realtime_open_first_paint_ms` | conversation preview 已到达后，调用 App 打开会话路径到 `chatThreadProvider` 首屏出现该消息的耗时。 | required metric；默认 hard budget 5000ms，soft budget 1500ms。 |
-| `message.cli_send_app_thread_after_ms` | 打开首屏之后显式 `syncThreadAfter` 的后台补新耗时。 | 只能作为后台补同步证据，不能替代 first-paint 指标。 |
+| `message.cli_send_app_thread_after_ms` | 打开首屏之后显式 conversation-after / legacy thread-after 的后台补新耗时。 | 只能作为后台补同步证据，不能替代 first-paint 指标。 |
 | `message.cli_send_to_app_history_visible_ms` | App history 查询最终可见该消息的耗时。 | 用于确认本地 projection/history 最终一致，不能替代 first-paint 指标。 |
 
-新增的 first-paint gate 必须先等待 fast local conversation preview，然后走
-`ChatThreadsController.openConversation` / `selectedConversationProvider` 这条 App
-打开路径，再轮询 `chatThreadProvider`。它不能只通过 `loadHistory` 或手动
-`syncThreadAfter` 来证明“可见”。
+first-paint gate 必须先等待 fast local conversation preview，然后使用
+`ConversationSummary.effectiveConversationId` 打开会话，通过 `AppConversationReadRef`
+读取 canonical conversation timeline 或等待 conversation timeline patch，最后轮询当前
+`chatThreadProvider` UI window。它不能只通过 legacy `loadHistory(ThreadRef)`、手动
+`syncThreadAfter(ThreadRef)`、alias prewarm 或远端 history response 证明“可见”。
 
 消息内存缓存指标写入顶层 `metrics`：
 
@@ -137,9 +140,12 @@ App 侧允许做的事情：
 - 在启动、恢复前台、realtime 重连、realtime dirty / gap hint 后请求 `syncDelta`。
 - 传入诊断用 `reason`，例如 `startup`、`app_resumed`、`realtime_reconnected`、
   `realtime_dirty`、`realtime_gap`。
-- 在打开会话后，用当前 thread 本地消息里的最大 `server_seq` 调用 `syncThreadAfter`，
-  做 thread-local 补新。
+- 在打开会话后，用当前 `AppConversationReadRef` 和本地 canonical timeline 的最大
+  `server_seq` 调用 `syncConversationAfter`，做 conversation-local 补新；legacy
+  `syncThreadAfter(ThreadRef)` 只作为 adapter/debug path。
 - 在 SDK sync 成功后刷新本地 projection，例如重新读取 fast local conversation list。
+- 对 sync/realtime/backfill 返回的消息页，等待或 repair core committed projection/read model；
+  App 不直接把这些返回值 merge 为 UI authoritative truth。
 
 App 侧禁止做的事情：
 
@@ -153,8 +159,8 @@ App 侧禁止做的事情：
 ## 如何解读
 
 1. 如果 `im_core_conversations.native_list` 很慢，优先怀疑 im-core native、SQLite/WAL、本地库版本。
-2. 如果 `chat.local_history.load` 很快但 `chat.remote_history.load` / `im_core_messages.remote_history_native` 很慢，说明进入会话首屏已 local-first，剩余慢点在远端 history reconcile、E2EE projection persist 或 native local merge。
-3. 如果 `chat.local_history.load` 本身慢，优先检查本地 projection 查询、SQLite/WAL、消息数量和 `chat.messages.merge` / `chat.messages.sort`。
+2. 如果 `chat.conversation_timeline.*` / `im_core_messages.conversation_timeline*` 很快但 `chat.remote_history.load` / `im_core_messages.remote_history_native` 很慢，说明进入会话首屏已 local-first，剩余慢点在远端 history reconcile、E2EE projection persist 或 native local merge。
+3. 如果 `chat.conversation_timeline.*` 本身慢，优先检查本地 projection 查询、SQLite/WAL、消息数量和 `chat.messages.merge` / `chat.messages.sort`。旧 `chat.local_history.*` 出现在主链路时，应确认它只是 legacy adapter 或日志名兼容。
 4. 如果 `conversation_service.fast_local` 很快但 `conversation_service.enrich`、`conversation_service.agent_projection` 或 `agents.load.*` 很慢，说明首屏已经脱离远端 Agent inventory，慢点在后台补齐链路。
 5. 如果 `product_store.legacy_migration` 或 `product_store.open_database` 很慢，优先看首次 DB open、旧库迁移和 WAL/SHM 拷贝；这些应通过 `app_refresh.product_store_warm_up` 后台预热，不能阻塞 `conversation_fast_local`。
 6. 如果 `conversation_service.filter_sort`、`conversation_list.refresh_fast_local.merge`、`conversation_list.refresh_enrich.merge` 或 `chat.messages.sort` 很慢，优先看 Dart 侧列表规模、索引命中和排序。`conversation_list.*.merge` 与 `chat.messages.merge_loop` 应带 `indexed=true`，否则说明回归到线性扫描路径。
@@ -163,9 +169,9 @@ App 侧禁止做的事情：
    projection 变慢。`message_sync.delta` 的返回诊断可用于判断 `eventsApplied`、
    `pagesFetched`、`hasMore`、`snapshotRequired` 和 `warnings`，但不能把
    `lastAppliedEventSeq` 当作 App 可写 checkpoint。
-8. 如果 `message_sync.thread_after` 很慢，优先看该 thread 的远端补新、E2EE projection
-   persist 和消息 merge。它只按 `afterServerSeq` 做 thread-local freshness，不代表全局
-   reliable sync 落后。
+8. 如果 `message_sync.conversation_after` 很慢，优先看该 conversation 的远端补新、E2EE projection
+   persist 和 projection repair/load。它只按 `afterServerSeq` 做 conversation-local freshness，
+   不代表全局 reliable sync 落后。`message_sync.thread_after` 只应作为 legacy adapter/debug 线索。
 9. 如果 `chat.mark_read` 很慢，优先看 `im_core_conversations.mark_read.native` 的
    `local_candidates`、`remote_ack`、`partial` 和 `warnings`；旧的
    `im_core_conversations.mark_read.history_page` 不应再出现，出现则说明回归到了
@@ -177,7 +183,7 @@ App 侧禁止做的事情：
 - 启动或恢复时，应先看到 `app_refresh.conversation_fast_local` 与 `conversation_list.refresh_fast_local`，再看到 `conversation_list.refresh_enrich`、`app_refresh.agents`、`app_refresh.friends` 和 `app_refresh.groups`。
 - `conversation_service.fast_local` 不应等待 `conversation_service.agent_projection.list_agents`；如果二者耗时同步增长，说明会话首屏又被 Agent RPC 绑定。
 - `product_store.open_database` / `product_store.legacy_migration` 可在后台 warm-up 中出现，但不应成为 `conversation_list.refresh_fast_local` 的直接子链路。
-- 进入已有本地 projection 的会话时，应先看到 `chat.local_history.load`，消息立即出现；`chat.remote_history.load` 只作为后台 reconcile，失败不应清空已显示的本地消息。
+- 进入已有本地 projection 的会话时，应先看到 `chat.conversation_timeline.*` / `im_core_messages.conversation_timeline*`，消息立即出现；`chat.remote_history.load` 只作为后台 reconcile，失败不应清空已显示的本地消息。
 - 收到 CLI 远端新消息后，performance E2E 必须记录
   `message.cli_send_to_app_open_first_paint_ms` 和
   `thread.realtime_open_first_paint_ms`；这两项证明点击路径本身 memory/local-first，
@@ -186,9 +192,9 @@ App 侧禁止做的事情：
   `cache.*` 数量指标，并把缓存上限类指标作为 gate；这些字段只记录数量，不记录正文、
   payload、thread id、token 或本地路径。
 - 启动、恢复前台、realtime 重连、realtime dirty / gap 后，App 侧应只调度 SDK `message_sync.delta`；不能出现 App 自己读写 checkpoint、传 `since_event_seq` 或手写 `sync.*` wire payload 的代码路径。
-- 打开已有本地 projection 的会话时，`chat.local_history.load` 应先完成；如需要补新，可随后看到 `message_sync.thread_after`，该链路不得推进账号级 reliable checkpoint。
+- 打开已有本地 projection 的会话时，canonical conversation timeline 应先完成；如需要补新，可随后看到 `message_sync.conversation_after`，该链路不得推进账号级 reliable checkpoint。
 - 打开未读会话时只允许看到一次远端 `chat.remote_history.*` reconcile；`chat.mark_read*` 不应再触发 history 分页。
-- 发送/重试/附件成功后允许本地立刻 upsert 会话 row；全量 `conversation_list.refresh` 和强制 remote history reconcile 必须经过 debounce 合并，连续发送不应逐条触发全量刷新。
+- 文本和 payload 发送/重试成功后，pending/failed/sent 由 core durable message row 与 `MessageMetadata.send_state` 表达；conversation list/detail 通过 core patch/read model 更新。App 不得本地 upsert conversation row 或 memory pending 来决定 send correctness。附件发送目前可保留明确标注的 presentation fallback，后续应单独收敛。
 
 ## 隐私说明
 
