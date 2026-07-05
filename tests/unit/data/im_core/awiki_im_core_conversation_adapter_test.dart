@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
@@ -101,6 +102,35 @@ void main() {
     );
 
     final watermark = client.messages.lastMarkThreadReadWatermark;
+    expect(watermark, isNotNull);
+    expect(watermark!.lastReadMessageId, 'remote-42');
+    expect(watermark.lastReadThreadSeq, '42');
+    expect(watermark.readAt, readAt);
+  });
+
+  test('markConversationRead delegates to SDK conversation API', () async {
+    final client = _FakeClient();
+    final adapter = AwikiImCoreConversationAdapter(
+      runtime: _FakeRuntime(client),
+    );
+    final readAt = DateTime.utc(2026, 6, 29, 7, 40);
+
+    await adapter.markConversationRead(
+      AppConversationReadRef.fromConversationId('dm:peer-scope:v1:bob'),
+      watermark: AppThreadReadWatermark(
+        lastReadMessageId: 'remote-42',
+        lastReadThreadSeq: '42',
+        readAt: readAt,
+      ),
+    );
+
+    expect(client.messages.markConversationReadCalls, 1);
+    expect(client.messages.markThreadReadCalls, 0);
+    expect(
+      client.messages.lastMarkConversationReadConversation?.conversationId,
+      'dm:peer-scope:v1:bob',
+    );
+    final watermark = client.messages.lastMarkConversationReadWatermark;
     expect(watermark, isNotNull);
     expect(watermark!.lastReadMessageId, 'remote-42');
     expect(watermark.lastReadThreadSeq, '42');
@@ -406,10 +436,13 @@ class _FakeMessageApi implements core.MessageApi {
   final StreamController<core.ConversationStorePatch> _patches =
       StreamController<core.ConversationStorePatch>.broadcast(sync: true);
   int markThreadReadCalls = 0;
+  int markConversationReadCalls = 0;
   int historyCalls = 0;
   int markReadCalls = 0;
   core.ThreadRef? lastMarkThreadReadThread;
   core.ReadWatermark? lastMarkThreadReadWatermark;
+  core.ConversationReadRef? lastMarkConversationReadConversation;
+  core.ReadWatermark? lastMarkConversationReadWatermark;
 
   void emitPatch(core.ConversationStorePatch patch) {
     _patches.add(patch);
@@ -441,6 +474,26 @@ class _FakeMessageApi implements core.MessageApi {
     markThreadReadCalls += 1;
     lastMarkThreadReadThread = thread;
     lastMarkThreadReadWatermark = watermark;
+    return const core.MarkThreadReadResult(
+      updatedCount: 1,
+      remoteAcknowledged: true,
+      partial: false,
+      fallbackUsed: false,
+      pendingRemoteAck: false,
+      effectiveWatermark: core.ReadWatermark(lastReadThreadSeq: '42'),
+      legacyMessageIds: <String>['msg-1'],
+    );
+  }
+
+  @override
+  Future<core.MarkThreadReadResult> markConversationRead(
+    core.ConversationReadRef conversation, {
+    core.ReadWatermark? watermark,
+    int? fallbackMaxMessageIds,
+  }) async {
+    markConversationReadCalls += 1;
+    lastMarkConversationReadConversation = conversation;
+    lastMarkConversationReadWatermark = watermark;
     return const core.MarkThreadReadResult(
       updatedCount: 1,
       remoteAcknowledged: true,

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
+import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
@@ -1066,6 +1067,42 @@ void main() {
     );
     expect(byThread[runtimeConversation.threadId]?.unreadCount, 0);
     expect(notifications.lastBadgeCount, controllerConversation.unreadCount);
+  });
+
+  test('mark read local does not override later core unread refresh', () async {
+    final refreshedUnread = _conversation(
+      threadId: 'dm:alice:bob',
+      displayName: 'Bob',
+      unreadCount: 2,
+    );
+    final service = _MutableConversationService(
+      conversations: <ConversationSummary>[refreshedUnread],
+    );
+    final notifications = FakeNotificationFacade();
+    final container = _conversationContainer(
+      service: service,
+      notifications: notifications,
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(conversationListProvider.notifier);
+    notifier.upsertConversation(refreshedUnread);
+    await Future<void>.delayed(Duration.zero);
+
+    notifier.markConversationReadLocal(refreshedUnread);
+    expect(
+      container.read(conversationListProvider).conversations.single.unreadCount,
+      0,
+    );
+
+    await notifier.refresh();
+
+    expect(
+      container.read(conversationListProvider).conversations.single.unreadCount,
+      2,
+    );
+    expect(notifications.lastBadgeCount, 2);
   });
 
   test(
@@ -2252,6 +2289,12 @@ class _SlowEnrichConversationService implements ConversationService {
   }) async {}
 
   @override
+  Future<void> markConversationRead(
+    AppConversationReadRef conversation, {
+    AppThreadReadWatermark? watermark,
+  }) async {}
+
+  @override
   Future<ConversationSummary?> normalizeConversationForRecents({
     required String ownerDid,
     required ConversationSummary conversation,
@@ -2386,6 +2429,12 @@ class _StaticConversationService implements ConversationService {
   @override
   Future<void> markThreadRead(
     AppThreadRef thread, {
+    AppThreadReadWatermark? watermark,
+  }) async {}
+
+  @override
+  Future<void> markConversationRead(
+    AppConversationReadRef conversation, {
     AppThreadReadWatermark? watermark,
   }) async {}
 

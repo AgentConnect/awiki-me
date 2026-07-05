@@ -6,6 +6,7 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/thread_message_patch.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
@@ -1990,7 +1991,7 @@ void main() {
     expect(messageSyncService.threadAfterRequests, isEmpty);
   });
 
-  test('本地和增量都没有消息时不会无 watermark 清未读或上报已读', () async {
+  test('本地和增量都没有消息时不会在 timeline 仍需补拉前上报已读', () async {
     final unreadConversation = conversation.copyWith(
       lastMessageAt: DateTime(2026, 5, 8, 10, 5),
       unreadCount: 2,
@@ -2021,10 +2022,11 @@ void main() {
     expect(messageSyncService.conversationAfterRequests, isNotEmpty);
     expect(messageSyncService.threadAfterRequests, isEmpty);
     expect(gateway.markReadCalls, 0);
-    expect(gateway.lastMarkThreadReadWatermark, isNull);
+    expect(gateway.markConversationReadCalls, 0);
+    expect(gateway.lastMarkConversationReadWatermark, isNull);
   });
 
-  test('thread-after 回补出消息后才携带 watermark 上报已读', () async {
+  test('conversation-after 回补出消息后按 conversationId 上报已读', () async {
     final unreadConversation = conversation.copyWith(
       lastMessageAt: DateTime(2026, 5, 8, 10, 5),
       unreadCount: 2,
@@ -2060,9 +2062,13 @@ void main() {
         .acknowledgeVisibleConversationRead(unreadConversation);
     await pumpEventQueue();
 
-    expect(gateway.markReadCalls, 1);
-    expect(gateway.lastMarkThreadReadWatermark?.lastReadMessageId, 'remote-22');
-    expect(gateway.lastMarkThreadReadWatermark?.lastReadThreadSeq, '22');
+    expect(gateway.markReadCalls, 0);
+    expect(gateway.markConversationReadCalls, 1);
+    expect(
+      gateway.lastMarkConversationReadConversationId,
+      unreadConversation.effectiveConversationId,
+    );
+    expect(gateway.lastMarkConversationReadWatermark, isNull);
   });
 
   test('延迟的已读 ack 不会把 ack 后进入的 agent 回复清为已读', () async {
@@ -2139,9 +2145,13 @@ void main() {
         .read(conversationListProvider)
         .conversations
         .single;
-    expect(gateway.markReadCalls, 1);
-    expect(gateway.lastMarkThreadReadWatermark?.lastReadMessageId, 'remote-10');
-    expect(gateway.lastMarkThreadReadWatermark?.lastReadThreadSeq, '10');
+    expect(gateway.markReadCalls, 0);
+    expect(gateway.markConversationReadCalls, 1);
+    expect(
+      gateway.lastMarkConversationReadConversationId,
+      unreadConversation.effectiveConversationId,
+    );
+    expect(gateway.lastMarkConversationReadWatermark, isNull);
     expect(latest.lastMessagePreview, laterAgentReply.content);
     expect(latest.unreadCount, 1);
   });
@@ -2179,11 +2189,17 @@ void main() {
         .conversations;
     expect(conversations.single.unreadCount, 0);
     expect(notificationFacade.lastBadgeCount, 0);
-    expect(gateway.markReadCalls, 1);
+    expect(gateway.markReadCalls, 0);
+    expect(gateway.markConversationReadCalls, 1);
+    expect(
+      gateway.lastMarkConversationReadConversationId,
+      unreadConversation.effectiveConversationId,
+    );
+    expect(gateway.lastMarkConversationReadWatermark, isNull);
     expect(gateway.listConversationsCalls, 0);
   });
 
-  test('打开未读会话在本地历史水合后携带最新消息 watermark 上报已读', () async {
+  test('打开未读会话在本地历史水合后按 conversationId 上报已读', () async {
     final older = ChatMessage(
       localId: 'local-10',
       remoteId: 'local-10',
@@ -2235,12 +2251,16 @@ void main() {
       container.read(conversationListProvider).conversations.single.unreadCount,
       0,
     );
-    expect(gateway.markReadCalls, 1);
-    expect(gateway.lastMarkThreadReadWatermark?.lastReadMessageId, 'remote-11');
-    expect(gateway.lastMarkThreadReadWatermark?.lastReadThreadSeq, '11');
+    expect(gateway.markReadCalls, 0);
+    expect(gateway.markConversationReadCalls, 1);
+    expect(
+      gateway.lastMarkConversationReadConversationId,
+      unreadConversation.effectiveConversationId,
+    );
+    expect(gateway.lastMarkConversationReadWatermark, isNull);
   });
 
-  test('peer-scope 会话历史和已读使用精确 storage thread', () async {
+  test('peer-scope 会话历史使用精确 storage thread，已读使用 conversationId', () async {
     const agentDid = 'did:agent:runtime:codex1';
     const agentHandle = 'codex1.awiki.info';
     final unreadPeerScopedConversation = ConversationSummary(
@@ -2284,13 +2304,13 @@ void main() {
     await pumpEventQueue();
 
     expect(gateway.lastFetchedLocalDmPeerDid, 'peer-scope:v1:codex1');
-    expect(gateway.markReadCalls, 1);
-    expect(gateway.lastMarkReadThreadId, 'dm:peer-scope:v1:codex1');
+    expect(gateway.markReadCalls, 0);
+    expect(gateway.markConversationReadCalls, 1);
     expect(
-      gateway.lastMarkThreadReadWatermark?.lastReadMessageId,
-      'peer-scoped-local-12',
+      gateway.lastMarkConversationReadConversationId,
+      unreadPeerScopedConversation.effectiveConversationId,
     );
-    expect(gateway.lastMarkThreadReadWatermark?.lastReadThreadSeq, '12');
+    expect(gateway.lastMarkConversationReadWatermark, isNull);
   });
 
   test('打开未读会话时远端 mark-read 不支持也不会抛出或误清未读', () async {
@@ -2341,10 +2361,11 @@ void main() {
         .conversations;
     expect(conversations.single.unreadCount, 2);
     expect(notificationFacade.lastBadgeCount, 2);
-    expect(throwingGateway.markReadCalls, 1);
+    expect(throwingGateway.markReadCalls, 0);
+    expect(throwingGateway.markConversationReadCalls, 1);
   });
 
-  test('当前可见会话收到新的可见消息时携带 watermark 上报并清未读', () async {
+  test('当前可见会话收到新的可见消息时按 conversationId 上报并清未读', () async {
     final visibleConversation = conversation.copyWith(
       lastMessagePreview: 'new while visible',
       lastMessageAt: DateTime(2026, 5, 8, 10, 5),
@@ -2395,9 +2416,13 @@ void main() {
     expect(updated.unreadMentionCount, 0);
     expect(updated.firstUnreadMentionMessageId, isNull);
     expect(notificationFacade.lastBadgeCount, 0);
-    expect(gateway.markReadCalls, 1);
-    expect(gateway.lastMarkReadThreadId, 'dm:did:peer');
-    expect(gateway.lastMarkThreadReadWatermark?.lastReadThreadSeq, '11');
+    expect(gateway.markReadCalls, 0);
+    expect(gateway.markConversationReadCalls, 1);
+    expect(
+      gateway.lastMarkConversationReadConversationId,
+      visibleConversation.effectiveConversationId,
+    );
+    expect(gateway.lastMarkConversationReadWatermark, isNull);
   });
 
   test('发送后不触发 full refresh 或 force history 补拉', () async {
@@ -4688,7 +4713,13 @@ void main() {
       container.read(conversationListProvider).conversations.single.unreadCount,
       0,
     );
-    expect(gateway.lastMarkReadThreadId, 'dm:$agentDid');
+    expect(gateway.markReadCalls, 0);
+    expect(gateway.markConversationReadCalls, 1);
+    expect(
+      gateway.lastMarkConversationReadConversationId,
+      readConversation.effectiveConversationId,
+    );
+    expect(gateway.lastMarkConversationReadWatermark, isNull);
 
     gateway.conversations = <ConversationSummary>[
       ConversationSummary(
@@ -4792,9 +4823,14 @@ void main() {
 
 class _ThrowingMarkReadGateway extends FakeAwikiGateway {
   @override
-  Future<void> markRead(String threadId) {
-    markReadCalls += 1;
-    throw UnsupportedError('IM Core markThreadRead is not available yet');
+  Future<void> markConversationRead(
+    String conversationId, {
+    AppThreadReadWatermark? watermark,
+  }) {
+    markConversationReadCalls += 1;
+    lastMarkConversationReadConversationId = conversationId;
+    lastMarkConversationReadWatermark = watermark;
+    throw UnsupportedError('IM Core markConversationRead is not available yet');
   }
 }
 

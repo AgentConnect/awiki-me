@@ -73,8 +73,6 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   Future<void>? _patchRepairOperation;
   final Map<String, DateTime> _locallyHiddenConversationKeys =
       <String, DateTime>{};
-  final Map<String, _LocalConversationReadMarker> _locallyReadConversationKeys =
-      <String, _LocalConversationReadMarker>{};
 
   NotificationFacade get _notification => ref.read(notificationFacadeProvider);
 
@@ -496,14 +494,12 @@ class ConversationListController extends StateNotifier<ConversationListState> {
 
   void _applyPatchReset(ConversationListPatch patch) {
     final currentConversations = state.conversations;
-    final nextConversations = _applyLocalReadMarkers(
-      _filterLocallyHiddenConversations(
-        _mergeConversationRefresh(
-          refreshed: patch.items,
-          local: currentConversations,
-          ownerDid: patch.ownerDid,
-          keepLocalOnly: false,
-        ),
+    final nextConversations = _filterLocallyHiddenConversations(
+      _mergeConversationRefresh(
+        refreshed: patch.items,
+        local: currentConversations,
+        ownerDid: patch.ownerDid,
+        keepLocalOnly: false,
       ),
     );
     final beforeUnread = state.unreadCount;
@@ -758,14 +754,12 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final currentConversations = state.conversations;
     final nextConversations = AwikiPerformanceLogger.sync(
       '$label.merge',
-      () => _applyLocalReadMarkers(
-        _filterLocallyHiddenConversations(
-          _mergeConversationRefresh(
-            refreshed: refreshed,
-            local: currentConversations,
-            ownerDid: _currentOwnerDid,
-            keepLocalOnly: keepLocalOnly,
-          ),
+      () => _filterLocallyHiddenConversations(
+        _mergeConversationRefresh(
+          refreshed: refreshed,
+          local: currentConversations,
+          ownerDid: _currentOwnerDid,
+          keepLocalOnly: keepLocalOnly,
         ),
       ),
       fields: <String, Object?>{
@@ -910,21 +904,19 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       local: existing,
       preferLocalTitle: preferLocalTitle,
     );
-    final mergedConversation = _applyLocalReadMarker(
-      _mergeConversationPresentationIdentity(
-        refreshed: _mergeConversationLifecycle(
-          refreshed: _mergeConversationReadState(
-            refreshed: _mergeConversationLastMessage(
-              refreshed: titledConversation,
-              local: existing,
-            ),
+    final mergedConversation = _mergeConversationPresentationIdentity(
+      refreshed: _mergeConversationLifecycle(
+        refreshed: _mergeConversationReadState(
+          refreshed: _mergeConversationLastMessage(
+            refreshed: titledConversation,
             local: existing,
           ),
           local: existing,
         ),
         local: existing,
-        ownerDid: _currentOwnerDid,
       ),
+      local: existing,
+      ownerDid: _currentOwnerDid,
     );
     final merged = _replaceConversationInPresentationList(
       current: state.conversations,
@@ -1073,7 +1065,6 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           (item.unreadCount == 0 && item.unreadMentionCount == 0)) {
         return item;
       }
-      _addLocalReadMarkerFor(item);
       return item.copyWith(
         unreadCount: 0,
         unreadMentionCount: 0,
@@ -1121,16 +1112,13 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           !_sameConversationIdentity(item, conversation)) {
         return item;
       }
-      if (watermark != null &&
-          !_conversationCoveredByReadWatermark(
-            item,
-            watermark,
-            acknowledgedConversation: conversation,
-          )) {
+      if (!_conversationCoveredByReadIntent(
+        item,
+        acknowledgedConversation: conversation,
+      )) {
         return item;
       }
       marked = true;
-      _addLocalReadMarkerFor(item);
       return item.copyWith(
         unreadCount: 0,
         unreadMentionCount: 0,
@@ -1166,9 +1154,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     );
   }
 
-  bool _conversationCoveredByReadWatermark(
-    ConversationSummary conversation,
-    AppThreadReadWatermark watermark, {
+  bool _conversationCoveredByReadIntent(
+    ConversationSummary conversation, {
     required ConversationSummary acknowledgedConversation,
   }) {
     if (conversation.lastMessageAt.isAfter(
@@ -1183,47 +1170,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
             acknowledgedConversation.lastMessagePreview) {
       return false;
     }
-    final last = conversation.lastMessageSnapshot;
-    final watermarkSeq = _parseReadWatermarkSeq(watermark.lastReadThreadSeq);
-    final lastSeq = last?.serverSequence;
-    if (watermarkSeq != null && lastSeq != null) {
-      return lastSeq <= watermarkSeq;
-    }
-    final watermarkMessageId = watermark.lastReadMessageId?.trim();
-    if (watermarkMessageId != null &&
-        watermarkMessageId.isNotEmpty &&
-        last != null &&
-        _messageMatchesWatermark(last, watermarkMessageId)) {
-      return true;
-    }
-    final readAt = watermark.readAt;
-    if (watermarkSeq == null &&
-        (watermarkMessageId == null || watermarkMessageId.isEmpty) &&
-        readAt != null) {
-      return !conversation.lastMessageAt.toUtc().isAfter(readAt.toUtc());
-    }
-    return !conversation.lastMessageAt.isAfter(
-      acknowledgedConversation.lastMessageAt,
-    );
-  }
-
-  int? _parseReadWatermarkSeq(String? value) {
-    final trimmed = value?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
-      return null;
-    }
-    return int.tryParse(trimmed);
-  }
-
-  bool _messageMatchesWatermark(
-    ChatMessage message,
-    String watermarkMessageId,
-  ) {
-    if (message.localId == watermarkMessageId) {
-      return true;
-    }
-    final remoteId = message.remoteId?.trim();
-    return remoteId != null && remoteId == watermarkMessageId;
+    return true;
   }
 
   Future<void> clear() async {
@@ -1234,7 +1181,6 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     _snapshotBootstrapAllowedGeneration = null;
     await _cancelPatchSubscription();
     _locallyHiddenConversationKeys.clear();
-    _locallyReadConversationKeys.clear();
     state = const ConversationListState();
     await _updateBadgeCountBestEffort(0, source: 'clear');
   }
@@ -1284,55 +1230,6 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   bool _isLocallyHidden(ConversationSummary conversation) {
     final hiddenAt = _latestLocalHiddenAt(conversation);
     return hiddenAt != null && !conversation.lastMessageAt.isAfter(hiddenAt);
-  }
-
-  void _addLocalReadMarkerFor(ConversationSummary conversation) {
-    final marker = _LocalConversationReadMarker(
-      lastMessageAt: conversation.lastMessageAt,
-      preview: conversation.lastMessagePreview,
-      messageId: conversation.lastMessageSnapshot == null
-          ? null
-          : _stableMessageId(conversation.lastMessageSnapshot!),
-    );
-    for (final key in _visibilityKeysFor(
-      conversation,
-      includeHandleAliasesForStrongIdentity: true,
-    )) {
-      _locallyReadConversationKeys[key] = marker;
-    }
-  }
-
-  ConversationSummary _applyLocalReadMarker(ConversationSummary conversation) {
-    if (conversation.unreadCount == 0 && conversation.unreadMentionCount == 0) {
-      return conversation;
-    }
-    for (final key in _visibilityKeysFor(
-      conversation,
-      includeHandleAliasesForStrongIdentity: true,
-    )) {
-      final marker = _locallyReadConversationKeys[key];
-      if (marker == null) {
-        continue;
-      }
-      if (marker.covers(conversation)) {
-        return conversation.copyWith(
-          unreadCount: 0,
-          unreadMentionCount: 0,
-          firstUnreadMentionMessageId: null,
-        );
-      }
-      _locallyReadConversationKeys.remove(key);
-    }
-    return conversation;
-  }
-
-  List<ConversationSummary> _applyLocalReadMarkers(
-    List<ConversationSummary> conversations,
-  ) {
-    if (_locallyReadConversationKeys.isEmpty) {
-      return conversations;
-    }
-    return conversations.map(_applyLocalReadMarker).toList(growable: false);
   }
 
   void _removeConversationLocally(ConversationSummary conversation) {
@@ -2263,43 +2160,6 @@ bool _isBetterDirectConversationTitle(String localName, String refreshedName) {
   }
   return AgentDisplayName.isUserVisibleName(localName) &&
       !AgentDisplayName.isUserVisibleName(refreshedName);
-}
-
-class _LocalConversationReadMarker {
-  const _LocalConversationReadMarker({
-    required this.lastMessageAt,
-    required this.preview,
-    required this.messageId,
-  });
-
-  final DateTime lastMessageAt;
-  final String preview;
-  final String? messageId;
-
-  bool covers(ConversationSummary conversation) {
-    if (conversation.lastMessageAt.isAfter(lastMessageAt)) {
-      return false;
-    }
-    final localMessageId = messageId?.trim();
-    final summaryMessage = conversation.lastMessageSnapshot;
-    if (localMessageId != null &&
-        localMessageId.isNotEmpty &&
-        summaryMessage != null) {
-      return _stableMessageId(summaryMessage) == localMessageId;
-    }
-    if (conversation.lastMessageAt == lastMessageAt) {
-      return conversation.lastMessagePreview.trim() == preview.trim();
-    }
-    return true;
-  }
-}
-
-String _stableMessageId(ChatMessage message) {
-  final remoteId = message.remoteId?.trim();
-  if (remoteId != null && remoteId.isNotEmpty) {
-    return remoteId;
-  }
-  return message.localId.trim();
 }
 
 final conversationListProvider =

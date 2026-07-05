@@ -453,14 +453,12 @@ class _PendingReadAck {
   const _PendingReadAck({
     required this.conversation,
     required this.readToken,
-    this.watermark,
     this.reason = 'visible',
     this.forcePersistentAck = false,
   });
 
   final ConversationSummary conversation;
   final String readToken;
-  final AppThreadReadWatermark? watermark;
   final String reason;
   final bool forcePersistentAck;
 }
@@ -1603,22 +1601,7 @@ class ChatThreadsController
     bool forcePersistentAck = false,
   }) {
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
-    if (!_isExactConversationThread(conversation, targetThreadId)) {
-      _chatProviderTrace(
-        'mark_read.skip',
-        fields: <String, Object?>{
-          ...AwikiPerformanceLogger.threadField(targetThreadId),
-          'reason': 'thread_mismatch',
-          'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
-            conversation.threadId,
-          ),
-        },
-      );
-      return;
-    }
     final currentThread = thread(targetThreadId);
-    final watermark = _readWatermarkForThread(targetThreadId);
-    final hasWatermark = watermark != null && !watermark.isEmpty;
     if (!forcePersistentAck &&
         conversation.unreadCount <= 0 &&
         conversation.unreadMentionCount <= 0) {
@@ -1630,19 +1613,6 @@ class ChatThreadsController
           'unread': conversation.unreadCount,
           'mention_unread': conversation.unreadMentionCount,
           'force_persistent_ack': forcePersistentAck,
-        },
-      );
-      return;
-    }
-    if (forcePersistentAck && !hasWatermark) {
-      _chatProviderTrace(
-        'mark_read.skip',
-        fields: <String, Object?>{
-          ...AwikiPerformanceLogger.threadField(targetThreadId),
-          'reason': 'no_watermark',
-          'force_persistent_ack': true,
-          'messages': currentThread.messages.length,
-          'renderable': _renderableMessageCount(currentThread),
         },
       );
       return;
@@ -1660,7 +1630,7 @@ class ChatThreadsController
       );
       return;
     }
-    final readToken = _readReceiptToken(conversation, watermark: watermark);
+    final readToken = _readReceiptToken(conversation);
     if (_completedReadReceipts.contains(readToken) ||
         _activeReadReceipts.contains(readToken)) {
       _chatProviderTrace(
@@ -1678,7 +1648,7 @@ class ChatThreadsController
     if (_activeLocalHistoryLoads.contains(targetThreadId) ||
         currentThread.isHydratingLocalHistory ||
         _activeRemoteHistorySyncs.contains(targetThreadId) ||
-        (_shouldLoadHistory(currentThread, conversation) && !hasWatermark)) {
+        _shouldLoadHistory(currentThread, conversation)) {
       _chatProviderTrace(
         'mark_read.defer',
         fields: <String, Object?>{
@@ -1691,7 +1661,6 @@ class ChatThreadsController
             currentThread,
             conversation,
           ),
-          'has_watermark': hasWatermark,
           'messages': currentThread.messages.length,
           'renderable': _renderableMessageCount(currentThread),
         },
@@ -1699,7 +1668,6 @@ class ChatThreadsController
       _pendingReadAcksByThreadId[targetThreadId] = _PendingReadAck(
         conversation: conversation,
         readToken: readToken,
-        watermark: watermark,
         reason: reason,
         forcePersistentAck: forcePersistentAck,
       );
@@ -1709,7 +1677,6 @@ class ChatThreadsController
       conversation,
       readToken: readToken,
       displayThreadId: targetThreadId,
-      watermark: watermark,
     );
   }
 
@@ -2100,8 +2067,7 @@ class ChatThreadsController
     AppThreadReadWatermark? watermark,
   }) {
     try {
-      final threadRef = _readThreadRefFor(conversation);
-      watermark ??= _readWatermarkForThread(displayThreadId);
+      final conversationRef = _conversationReadRefFor(conversation);
       final currentThread = thread(displayThreadId);
       _chatProviderTrace(
         'mark_read.remote_start',
@@ -2110,7 +2076,7 @@ class ChatThreadsController
           'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
             conversation.threadId,
           ),
-          'thread_ref': _appThreadRefDebug(threadRef),
+          'conversation_ref': _conversationReadRefDebug(conversationRef),
           'read_token': AwikiPerformanceLogger.safeHash(readToken),
           'watermark_empty': watermark?.isEmpty ?? true,
           'watermark_seq': watermark?.lastReadThreadSeq,
@@ -2125,7 +2091,7 @@ class ChatThreadsController
       _activeReadReceipts.add(readToken);
       final operation = ref
           .read(conversationServiceProvider)
-          .markThreadRead(threadRef, watermark: watermark)
+          .markConversationRead(conversationRef, watermark: watermark)
           .then<void>((_) {
             watch.stop();
             _activeReadReceipts.remove(readToken);
@@ -2178,10 +2144,7 @@ class ChatThreadsController
     }
   }
 
-  void _flushPendingReadAck(
-    String threadId, {
-    bool allowFallbackWithoutWatermark = false,
-  }) {
+  void _flushPendingReadAck(String threadId) {
     final pending = _pendingReadAcksByThreadId.remove(threadId);
     if (pending == null) {
       _chatProviderTrace(
@@ -2207,26 +2170,9 @@ class ChatThreadsController
       return;
     }
     final current = thread(threadId);
-    final watermark = pending.watermark ?? _readWatermarkForThread(threadId);
-    final hasWatermark = watermark != null && !watermark.isEmpty;
-    if (!_isExactConversationThread(pending.conversation, threadId)) {
-      _chatProviderTrace(
-        'mark_read.flush_skip',
-        fields: <String, Object?>{
-          ...AwikiPerformanceLogger.threadField(threadId),
-          'reason': 'thread_mismatch',
-          'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
-            pending.conversation.threadId,
-          ),
-        },
-      );
-      return;
-    }
-    const canFallbackWithoutWatermark = false;
     if (current.isHydratingLocalHistory ||
         _activeLocalHistoryLoads.contains(threadId) ||
         _activeRemoteHistorySyncs.contains(threadId) ||
-        !hasWatermark ||
         _shouldLoadHistory(current, pending.conversation)) {
       final shouldLoadHistoryNow = _shouldLoadHistory(
         current,
@@ -2239,9 +2185,6 @@ class ChatThreadsController
           'hydrating': current.isHydratingLocalHistory,
           'active_local': _activeLocalHistoryLoads.contains(threadId),
           'active_remote': _activeRemoteHistorySyncs.contains(threadId),
-          'has_watermark': hasWatermark,
-          'allow_fallback': allowFallbackWithoutWatermark,
-          'can_fallback': canFallbackWithoutWatermark,
           'should_load_history': shouldLoadHistoryNow,
           'messages': current.messages.length,
           'renderable': _renderableMessageCount(current),
@@ -2262,53 +2205,7 @@ class ChatThreadsController
       pending.conversation,
       readToken: pending.readToken,
       displayThreadId: threadId,
-      watermark: watermark,
     );
-  }
-
-  AppThreadReadWatermark? _readWatermarkForThread(String threadId) {
-    final messages = thread(threadId).messages
-        .where((message) => message.hasRenderableContent)
-        .toList(growable: false);
-    if (messages.isEmpty) {
-      return null;
-    }
-    ChatMessage? latestBySeq;
-    ChatMessage? latestByTime;
-    for (final message in messages) {
-      if (latestByTime == null ||
-          message.createdAt.isAfter(latestByTime.createdAt)) {
-        latestByTime = message;
-      }
-      if (message.serverSequence == null) {
-        continue;
-      }
-      if (latestBySeq == null ||
-          (message.serverSequence ?? -1) > (latestBySeq.serverSequence ?? -1)) {
-        latestBySeq = message;
-      }
-    }
-    final selected = latestBySeq ?? latestByTime;
-    if (selected == null) {
-      return null;
-    }
-    final messageId = _stableMessageId(selected);
-    return AppThreadReadWatermark(
-      lastReadMessageId: messageId.isEmpty ? null : messageId,
-      lastReadThreadSeq: selected.serverSequence?.toString(),
-      readAt: DateTime.now().toUtc(),
-    );
-  }
-
-  bool _isExactConversationThread(
-    ConversationSummary conversation,
-    String threadId,
-  ) {
-    final conversationThreadId = conversation.threadId.trim();
-    final displayThreadId = threadId.trim();
-    return conversationThreadId.isNotEmpty &&
-        displayThreadId.isNotEmpty &&
-        conversationThreadId == displayThreadId;
   }
 
   Future<_HistoryLoadResult> _loadLocalHistory(
@@ -2636,10 +2533,7 @@ class ChatThreadsController
     } finally {
       _activeRemoteHistorySyncs.remove(targetThreadId);
       if (mounted) {
-        _flushPendingReadAck(
-          targetThreadId,
-          allowFallbackWithoutWatermark: true,
-        );
+        _flushPendingReadAck(targetThreadId);
         _runPendingHistorySyncIfNeeded(targetThreadId);
         _runPendingVisibleThreadStaleGuardIfNeeded(targetThreadId);
       }
@@ -6331,9 +6225,9 @@ String _readReceiptToken(
   ConversationSummary conversation, {
   AppThreadReadWatermark? watermark,
 }) {
-  final thread = _readThreadRefFor(conversation).stableId;
+  final conversationId = _conversationTimelineKeyFor(conversation);
   return [
-    thread,
+    conversationId,
     conversation.lastMessageAt.toUtc().microsecondsSinceEpoch,
     conversation.unreadCount,
     conversation.unreadMentionCount,
@@ -6649,25 +6543,6 @@ bool _threadPatchMessagesHaveConversationMismatch(
     return true;
   }
   return patch.messages.any(mismatches);
-}
-
-AppThreadRef _readThreadRefFor(ConversationSummary conversation) {
-  if (isPeerScopedDirectConversation(conversation)) {
-    return AppThreadRef.thread(conversation.threadId);
-  }
-  final groupId = conversation.groupId?.trim();
-  if (conversation.isGroup && groupId != null && groupId.isNotEmpty) {
-    return AppThreadRef.group(groupId);
-  }
-  final peerDid = conversation.targetDid?.trim();
-  if (!conversation.isGroup && peerDid != null && peerDid.isNotEmpty) {
-    return AppThreadRef.direct(peerDid);
-  }
-  final peer = conversation.targetPeer?.trim();
-  if (!conversation.isGroup && peer != null && peer.isNotEmpty) {
-    return AppThreadRef.direct(peer);
-  }
-  return AppThreadRef.thread(conversation.threadId);
 }
 
 AppThreadRef _sendThreadRefFor(ConversationSummary conversation) {

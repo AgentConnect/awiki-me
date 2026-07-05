@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
+import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
@@ -1490,6 +1491,12 @@ class _RecordingConversationService implements ConversationService {
   @override
   Future<void> markThreadRead(
     AppThreadRef thread, {
+    AppThreadReadWatermark? watermark,
+  }) async {}
+
+  @override
+  Future<void> markConversationRead(
+    AppConversationReadRef conversation, {
     AppThreadReadWatermark? watermark,
   }) async {}
 

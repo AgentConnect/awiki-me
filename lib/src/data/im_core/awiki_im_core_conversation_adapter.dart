@@ -341,12 +341,70 @@ class AwikiImCoreConversationAdapter
   Future<void> markConversationRead(
     AppConversationReadRef conversation, {
     AppThreadReadWatermark? watermark,
-  }) {
-    throw UnsupportedError(
-      'IM Core does not expose conversation-id mark-read yet. '
-      'Step 09 must add a canonical markConversationRead SDK API before '
-      'providers migrate read correctness to conversationId.',
-    );
+  }) async {
+    await _runtime.withCurrentClient((client) async {
+      final totalWatch = Stopwatch()..start();
+      _imCoreConversationTrace(
+        'mark_conversation_read.start',
+        fields: <String, Object?>{
+          'conversation_hash': AwikiPerformanceLogger.safeHash(
+            conversation.conversationId,
+          ),
+          'has_watermark': watermark?.isEmpty == false,
+          'watermark_seq': watermark?.lastReadThreadSeq,
+          'watermark_message_hash': AwikiPerformanceLogger.safeHash(
+            watermark?.lastReadMessageId,
+          ),
+        },
+      );
+      try {
+        final result = await AwikiPerformanceLogger.async(
+          'im_core_conversations.mark_conversation_read.native',
+          () => client.messages.markConversationRead(
+            core.ConversationReadRef(
+              conversationId: conversation.conversationId,
+            ),
+            watermark: _coreReadWatermark(watermark),
+          ),
+          fields: <String, Object?>{
+            'conversation_hash': AwikiPerformanceLogger.safeHash(
+              conversation.conversationId,
+            ),
+            'has_watermark': watermark?.isEmpty == false,
+            'watermark_seq': watermark?.lastReadThreadSeq,
+            'watermark_message': watermark?.lastReadMessageId != null,
+          },
+        );
+        totalWatch.stop();
+        _imCoreConversationTrace(
+          'mark_conversation_read.done',
+          fields: <String, Object?>{
+            'updated': result.updatedCount,
+            'legacy_message_ids': result.legacyMessageIds.length,
+            'remote_ack': result.remoteAcknowledged,
+            'partial': result.partial,
+            'fallback_used': result.fallbackUsed,
+            'pending_remote_ack': result.pendingRemoteAck,
+            'watermark_seq': result.effectiveWatermark?.lastReadThreadSeq,
+            'warnings': result.warnings.length,
+            'elapsed_ms': totalWatch.elapsedMilliseconds,
+          },
+        );
+      } catch (error) {
+        totalWatch.stop();
+        _imCoreConversationTrace(
+          'mark_conversation_read.failed',
+          fields: <String, Object?>{
+            'conversation_hash': AwikiPerformanceLogger.safeHash(
+              conversation.conversationId,
+            ),
+            'error_type': error.runtimeType,
+            'elapsed_ms': totalWatch.elapsedMilliseconds,
+          },
+        );
+        rethrow;
+      }
+    });
   }
 }
 

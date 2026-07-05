@@ -6,6 +6,7 @@ import 'package:awiki_me/src/application/group_application_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
+import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
@@ -358,6 +359,12 @@ class _FakeConversations implements ConversationService {
   @override
   Future<void> markThreadRead(
     AppThreadRef thread, {
+    AppThreadReadWatermark? watermark,
+  }) async {}
+
+  @override
+  Future<void> markConversationRead(
+    AppConversationReadRef conversation, {
     AppThreadReadWatermark? watermark,
   }) async {}
 

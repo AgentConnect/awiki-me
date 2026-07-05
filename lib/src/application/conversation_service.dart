@@ -78,6 +78,11 @@ abstract interface class ConversationService {
     AppThreadReadWatermark? watermark,
   });
 
+  Future<void> markConversationRead(
+    AppConversationReadRef conversation, {
+    AppThreadReadWatermark? watermark,
+  });
+
   Future<void> setThreadHidden({
     required String ownerDid,
     required String threadId,

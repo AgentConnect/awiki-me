@@ -594,6 +594,9 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int markReadCalls = 0;
   String? lastMarkReadThreadId;
   AppThreadReadWatermark? lastMarkThreadReadWatermark;
+  int markConversationReadCalls = 0;
+  String? lastMarkConversationReadConversationId;
+  AppThreadReadWatermark? lastMarkConversationReadWatermark;
   int listConversationsCalls = 0;
   int sendOtpCalls = 0;
   int sendEmailVerificationCalls = 0;
@@ -1046,6 +1049,15 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   Future<void> markRead(String threadId) async {
     markReadCalls += 1;
     lastMarkReadThreadId = threadId;
+  }
+
+  Future<void> markConversationRead(
+    String conversationId, {
+    AppThreadReadWatermark? watermark,
+  }) async {
+    markConversationReadCalls += 1;
+    lastMarkConversationReadConversationId = conversationId;
+    lastMarkConversationReadWatermark = watermark;
   }
 
   @override
@@ -1566,6 +1578,17 @@ class FakeConversationService implements ConversationService {
   }) {
     gateway.lastMarkThreadReadWatermark = watermark;
     return gateway.markRead(_threadIdForFakeGateway(thread));
+  }
+
+  @override
+  Future<void> markConversationRead(
+    AppConversationReadRef conversation, {
+    AppThreadReadWatermark? watermark,
+  }) {
+    return gateway.markConversationRead(
+      conversation.conversationId,
+      watermark: watermark,
+    );
   }
 
   @override
