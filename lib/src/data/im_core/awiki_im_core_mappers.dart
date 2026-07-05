@@ -642,16 +642,13 @@ String _messageThreadId({
   String? fallbackThreadId,
 }) {
   final fallback = fallbackThreadId?.trim() ?? '';
-  if (!isGroup && _isDirectConversationThreadId(fallback)) {
-    return fallback;
+  if (!isGroup) {
+    return fallback.isNotEmpty ? fallback : peerDid?.trim() ?? '';
   }
-  return canonicalThreadId(
-    ownerDid: ownerDid,
-    isGroup: isGroup,
-    peerDid: peerDid,
-    groupId: groupId,
-    fallbackThreadId: fallbackThreadId,
+  final groupThreadId = canonicalGroupThreadId(
+    _firstNonEmpty([groupId ?? '', _stripPrefix(fallback, 'group:')]) ?? '',
   );
+  return groupThreadId.isNotEmpty ? groupThreadId : fallback;
 }
 
 String _conversationThreadId({
@@ -662,20 +659,13 @@ String _conversationThreadId({
   String? fallbackThreadId,
 }) {
   final fallback = fallbackThreadId?.trim() ?? '';
-  if (!isGroup &&
-      fallback.isNotEmpty &&
-      _isDirectConversationThreadId(fallback)) {
-    return fallback;
+  if (!isGroup) {
+    return fallback.isNotEmpty ? fallback : peerDid?.trim() ?? '';
   }
-  if (isGroup) {
-    return canonicalGroupThreadId(groupId ?? _stripPrefix(fallback, 'group:'));
-  }
-  return canonicalThreadId(
-    ownerDid: ownerDid,
-    isGroup: false,
-    peerDid: peerDid,
-    fallbackThreadId: fallback,
+  final groupThreadId = canonicalGroupThreadId(
+    groupId ?? _stripPrefix(fallback, 'group:'),
   );
+  return groupThreadId.isNotEmpty ? groupThreadId : fallback;
 }
 
 String? _directPeerForMessage(String ownerDid, core.Message message) {
@@ -816,10 +806,6 @@ String? _directPeerFromThreadId(String ownerDid, String threadId) {
 
 bool _isInternalDirectThreadId(String threadId) {
   return threadId.trim().startsWith('dm:peer-scope:');
-}
-
-bool _isDirectConversationThreadId(String threadId) {
-  return threadId.trim().startsWith('dm:');
 }
 
 String _compactDid(String did) {

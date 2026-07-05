@@ -131,7 +131,7 @@ void main() {
     final mapped = mapper.chatMessageFromCore(message, ownerDid: 'did:alice');
 
     expect(mapped.localId, 'msg-1');
-    expect(mapped.threadId, 'dm:did:alice:did:bob');
+    expect(mapped.threadId, 'did:bob');
     expect(mapped.content, 'hello');
     expect(mapped.isMine, isTrue);
     expect(mapped.sendState, MessageSendState.sent);
@@ -417,12 +417,12 @@ void main() {
       );
 
       expect(mapped.displayName, 'Pinned Bob');
-      expect(mapped.threadId, 'dm:did:alice:did:bob');
+      expect(mapped.threadId, 'did:bob');
       expect(mapped.lastMessagePreview, 'hi');
       expect(mapped.lastMessageSnapshot, isNotNull);
       expect(mapped.lastMessageSnapshot!.remoteId, 'msg-2');
       expect(mapped.lastMessageSnapshot!.content, 'hi');
-      expect(mapped.lastMessageSnapshot!.threadId, 'dm:did:alice:did:bob');
+      expect(mapped.lastMessageSnapshot!.threadId, 'did:bob');
       expect(mapped.avatarSeed, 'seed-1');
       expect(mapped.unreadCount, 2);
     },
@@ -610,7 +610,7 @@ void main() {
   });
 
   test(
-    'realtime direct message uses canonical chat and conversation thread',
+    'realtime direct message preserves core chat and conversation thread',
     () {
       const event = core.RealtimeEvent(
         kind: 'message_received',
@@ -630,8 +630,8 @@ void main() {
       final update = mapper.realtimeUpdateFromCore(event, ownerDid: 'did:me');
 
       expect(update, isNotNull);
-      expect(update!.message!.threadId, 'dm:did:cgw:did:me');
-      expect(update.conversationHint!.threadId, 'dm:did:cgw:did:me');
+      expect(update!.message!.threadId, 'did:cgw');
+      expect(update.conversationHint!.threadId, 'did:cgw');
       expect(update.conversationHint!.targetDid, 'did:cgw');
     },
   );
