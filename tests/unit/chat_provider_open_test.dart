@@ -922,6 +922,69 @@ void main() {
     expect(messageSyncService.threadAfterRequests, isEmpty);
   });
 
+  test('visible stale guard ignores repair completion after dispose', () async {
+    final oldMessage = message.copyWith(
+      content: 'old visible',
+      createdAt: DateTime(2026, 5, 8, 10, 0),
+      serverSequence: 10,
+      conversationId: conversation.effectiveConversationId,
+    );
+    final repairCompleter = Completer<void>();
+    final messagingService = FakeMessagingService(gateway)
+      ..repairConversationTimelineCompleter = repairCompleter;
+    _seedConversationProjection(messagingService, conversation, <ChatMessage>[
+      oldMessage,
+    ]);
+    final staleGuardContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(
+          gateway,
+          messageSyncService: messageSyncService,
+          messagingService: messagingService,
+        ),
+        messagingServiceProvider.overrideWithValue(messagingService),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(staleGuardContainer.dispose);
+
+    final controller = staleGuardContainer.read(chatThreadsProvider.notifier);
+    await controller.openConversation(conversation);
+    controller.markConversationVisible(
+      conversation,
+      displayThreadId: _timelineThreadId(conversation),
+    );
+    await pumpEventQueue();
+
+    final updatedConversation = conversation.copyWith(
+      lastMessagePreview: 'new visible after dispose',
+      lastMessageAt: DateTime(2026, 5, 8, 10, 5),
+      unreadCount: 1,
+    );
+    final staleGuard = controller.syncVisibleConversationAfterSummaryUpdate(
+      updatedConversation,
+      displayThreadId: _timelineThreadId(conversation),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    staleGuardContainer.dispose();
+    repairCompleter.complete();
+
+    await expectLater(staleGuard, completes);
+  });
+
   test('可见会话摘要未领先当前消息时不触发补齐', () async {
     final currentMessage = ChatMessage(
       localId: 'msg-current',

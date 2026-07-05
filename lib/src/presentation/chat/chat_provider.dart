@@ -1466,6 +1466,9 @@ class ChatThreadsController
     String? afterServerSeq,
     bool forceThreadAfter = false,
   }) async {
+    if (!mounted) {
+      return;
+    }
     _touchConversationCache(conversation, displayThreadId, visible: true);
     _ensureThreadPatchSubscription(
       conversation,
@@ -1486,6 +1489,9 @@ class ChatThreadsController
       conversation,
       displayThreadId: displayThreadId,
     );
+    if (!mounted) {
+      return;
+    }
     if (!_needsVisibleThreadStaleGuard(thread(displayThreadId), conversation)) {
       if (forceThreadAfter) {
         await _syncThreadAfterLocalMax(
@@ -1495,6 +1501,9 @@ class ChatThreadsController
           useExplicitAfterServerSeq: true,
         );
       }
+      return;
+    }
+    if (!mounted) {
       return;
     }
     await _syncThreadAfterLocalMax(
@@ -5793,8 +5802,13 @@ class ChatThreadsController
     _cancelThreadPatchSubscriptions();
     _cancelThreadPatchSubscriptionTtls();
     _cancelHiddenThreadCacheTrimTimers();
+    _pendingHistorySyncs.clear();
+    _pendingVisibleThreadStaleGuards.clear();
+    _activeVisibleThreadStaleGuards.clear();
     _lastThreadPatchStreamEndAt.clear();
     _pendingReadAcksByThreadId.clear();
+    _activeLocalHistoryLoads.clear();
+    _activeRemoteHistorySyncs.clear();
     _clearMemoryCacheMetadata();
     super.dispose();
   }

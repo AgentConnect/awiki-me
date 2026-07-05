@@ -1637,6 +1637,7 @@ class FakeMessagingService
   int? lastConversationTimelineLimit;
   String? lastConversationTimelineId;
   int conversationTimelineCalls = 0;
+  Completer<void>? repairConversationTimelineCompleter;
   final Map<String, List<ChatMessage>> conversationTimelineById =
       <String, List<ChatMessage>>{};
 
@@ -1750,6 +1751,11 @@ class FakeMessagingService
     AppConversationReadRef conversation, {
     int limit = 100,
   }) async {
+    final completer = repairConversationTimelineCompleter;
+    if (completer != null) {
+      await completer.future;
+      repairConversationTimelineCompleter = null;
+    }
     final messages =
         conversationTimelineById[conversation.conversationId] ??
         await _loadLocalConversationTimeline(conversation.conversationId);
