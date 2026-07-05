@@ -77,7 +77,8 @@ void main() {
           mentions: <ChatMentionDraft>[mention],
         );
 
-    expect(gateway.lastSentGroupId, isNull);
+    expect(gateway.lastSentThreadId, conversation.effectiveConversationId);
+    expect(gateway.lastSentGroupId, conversation.groupId);
     expect(gateway.lastSentPayload, isNotNull);
     expect(gateway.lastSentPayload?['text'], text);
     final mentions = gateway.lastSentPayload?['mentions'] as List<Object?>;

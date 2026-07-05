@@ -13,6 +13,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
+import 'package:awiki_me/src/presentation/agents/agent_ui_messages.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -225,7 +226,7 @@ void main() {
     await container.read(agentsProvider.notifier).load();
     final state = container.read(agentsProvider);
 
-    expect(state.error, '登录状态已失效，请重新登录后再查看智能体。');
+    expect(state.error, AgentUiMessageCodes.sessionExpired);
     expect(state.error, isNot(contains('Authorization header')));
     expect(state.error, isNot(contains('jsonrpc')));
   });
@@ -239,7 +240,10 @@ void main() {
 
     await container.read(agentsProvider.notifier).load();
 
-    expect(container.read(agentsProvider).error, '网络连接暂时不可用，已保留当前数据。');
+    expect(
+      container.read(agentsProvider).error,
+      AgentUiMessageCodes.networkPreserved,
+    );
   });
 
   test(
@@ -259,7 +263,7 @@ void main() {
 
       expect(
         container.read(agentsProvider).error,
-        '当前客户端身份和登录 handle 不一致，请切换到正确账号后重新复制安装命令。',
+        AgentUiMessageCodes.controllerHandleMismatch,
       );
     },
   );
@@ -282,7 +286,7 @@ void main() {
 
       expect(
         container.read(agentsProvider).error,
-        '当前账号没有可用 handle，暂时不能生成 Daemon 安装命令。',
+        AgentUiMessageCodes.handleUnavailable,
       );
     },
   );
@@ -334,7 +338,7 @@ void main() {
 
       expect(control.lastInstallCommand, isNull);
       expect(state.installCommand, isNull);
-      expect(state.error, '当前账号没有可用 handle，暂时不能生成 Daemon 安装命令。');
+      expect(state.error, AgentUiMessageCodes.handleUnavailable);
     },
   );
 
@@ -453,7 +457,7 @@ void main() {
       final runtime = state.agents.last;
       expect(runtime.isRuntime, isTrue);
       expect(runtime.daemonAgentDid, 'did:agent:daemon');
-      expect(runtime.displayName, '未命名智能体');
+      expect(runtime.displayName, 'Unnamed agent');
       expect(runtime.latest.status, 'needs_config');
       expect(runtime.latest.needsConfig, isTrue);
       await Future<void>.delayed(agentStatusRefreshMinimumIndicatorDuration);
@@ -545,7 +549,10 @@ void main() {
     final state = container.read(agentsProvider);
     expect(state.error, isNull);
     expect(state.pendingStatusQueryAtByDaemon, isEmpty);
-    expect(state.statusQueryErrors['did:agent:daemon'], '状态刷新请求发送失败，请稍后再试。');
+    expect(
+      state.statusQueryErrors['did:agent:daemon'],
+      AgentUiMessageCodes.statusRefreshFailed,
+    );
     expect(control.lastRefreshedDaemonDid, 'did:agent:daemon');
   });
 
@@ -1289,7 +1296,7 @@ void main() {
     );
     expect(
       state.daemonUpgradeErrors['did:agent:daemon'],
-      '取消请求已发送，但代理暂未响应。请刷新状态确认升级结果。',
+      AgentUiMessageCodes.upgradeCancelNoResponse,
     );
   });
 
@@ -1465,7 +1472,7 @@ void main() {
     expect(state.pendingDaemonUpgrades, isEmpty);
     expect(
       state.daemonUpgradeErrors['did:agent:daemon'],
-      contains('安装包下载失败，请检查网络后重试。'),
+      startsWith(AgentUiMessageCodes.upgradeDownloadFailedPrefix),
     );
     expect(
       state.daemonUpgradeErrors['did:agent:daemon'],
@@ -1566,7 +1573,10 @@ void main() {
 
       final state = container.read(agentsProvider);
       expect(state.pendingStatusQueryAtByDaemon, isEmpty);
-      expect(state.statusQueryErrors['did:agent:daemon'], '状态同步仍在等待，请稍后刷新查看。');
+      expect(
+        state.statusQueryErrors['did:agent:daemon'],
+        AgentUiMessageCodes.statusSyncWaiting,
+      );
     },
   );
 
@@ -1592,7 +1602,10 @@ void main() {
     final state = container.read(agentsProvider);
     expect(control.lastRefreshedDaemonDid, 'did:agent:daemon');
     expect(state.pendingStatusQueryAtByDaemon, isEmpty);
-    expect(state.statusQueryErrors['did:agent:daemon'], '刷新状态超时，当前数据已保留。');
+    expect(
+      state.statusQueryErrors['did:agent:daemon'],
+      AgentUiMessageCodes.statusTimeout,
+    );
   });
 
   test('deleteSelected sends runtime delete through owning daemon', () async {
@@ -1747,7 +1760,10 @@ void main() {
 
       expect(control.lastUnboundAgentDid, isNull);
       expect(control.lastDeletedDaemonDid, isNull);
-      expect(container.read(agentsProvider).error, '代理当前不可达，暂时不能删除。');
+      expect(
+        container.read(agentsProvider).error,
+        AgentUiMessageCodes.daemonUnreachableDelete,
+      );
     },
   );
 
@@ -1831,7 +1847,10 @@ void main() {
           .pauseMessageAgentForDaemon('did:agent:daemon');
 
       expect(control.lastPausedMessageAgentDid, isNull);
-      expect(container.read(agentsProvider).error, '当前 Daemon 尚未创建消息处理 Agent。');
+      expect(
+        container.read(agentsProvider).error,
+        AgentUiMessageCodes.messageAgentMissing,
+      );
     },
   );
 
@@ -2158,7 +2177,7 @@ void main() {
           );
 
       final state = container.read(agentsProvider);
-      expect(state.error, '智能体信息暂时无法加载，请稍后重试。');
+      expect(state.error, AgentUiMessageCodes.loadFailed);
       expect(state.error, isNot(contains('invalid_handle')));
       expect(state.debugLastError, contains('invalid_handle'));
     },
@@ -2209,7 +2228,10 @@ void main() {
 
       expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
       expect(control.lastBootstrapDaemonDid, isNull);
-      expect(container.read(agentsProvider).error, '消息处理 Agent 功能未开启。');
+      expect(
+        container.read(agentsProvider).error,
+        AgentUiMessageCodes.messageAgentDisabled,
+      );
     },
   );
 
@@ -2364,7 +2386,7 @@ void main() {
       expect(control.lastBootstrapDaemonDid, isNull);
       expect(
         container.read(agentsProvider).error,
-        '运行 Daemon 尚未上报安全 bootstrap 公钥，请先刷新状态。',
+        AgentUiMessageCodes.daemonBootstrapMissing,
       );
     },
   );

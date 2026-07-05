@@ -772,6 +772,7 @@ void main() {
   testWidgets('群聊输入框发送 group 文本消息', (tester) async {
     final gateway = FakeAwikiGateway()..loginResult = session;
     final conversation = ConversationSummary(
+      conversationId: 'group:group-1',
       threadId: 'group:group-1',
       displayName: '融资协作群',
       lastMessagePreview: '',

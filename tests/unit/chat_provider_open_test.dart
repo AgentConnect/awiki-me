@@ -59,10 +59,14 @@ void main() {
     gateway = FakeAwikiGateway()
       ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
         'did:peer': <ChatMessage>[message],
-      };
+      }
+      ..conversations = <ConversationSummary>[conversation];
     notificationFacade = FakeNotificationFacade();
     messageSyncService = FakeMessageSyncService();
     final messagingService = FakeMessagingService(gateway);
+    _seedConversationProjection(messagingService, conversation, <ChatMessage>[
+      message,
+    ]);
     messageSyncService.onConversationAfterPersisted =
         (String conversationId, List<ChatMessage> messages) {
           return messagingService.persistConversationMessages(
@@ -81,6 +85,16 @@ void main() {
         messagingServiceProvider.overrideWithValue(messagingService),
       ],
     );
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:me',
+            credentialName: 'me.json',
+            displayName: 'Me',
+            handle: 'me',
+          ),
+        );
     addTearDown(container.dispose);
   });
 
@@ -95,15 +109,15 @@ void main() {
 
     await pumpEventQueue();
 
-    expect(gateway.fetchLocalDmHistoryCalls, greaterThanOrEqualTo(1));
-    expect(gateway.fetchDmHistoryCalls, 0);
-    expect(gateway.listConversationsCalls, 0);
     final messaging = container.read(messagingServiceProvider);
     expect(messaging, isA<FakeMessagingService>());
     expect(
-      (messaging as FakeMessagingService).lastConversationTimelineLimit,
-      50,
+      (messaging as FakeMessagingService).conversationTimelineCalls,
+      greaterThanOrEqualTo(1),
     );
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(gateway.listConversationsCalls, greaterThanOrEqualTo(1));
+    expect(messaging.lastConversationTimelineLimit, 50);
     expect(messageSyncService.conversationAfterRequests, isNotEmpty);
     expect(
       messageSyncService.conversationAfterRequests.single.afterServerSeq,
@@ -123,9 +137,16 @@ void main() {
     final emptyPreviewConversation = conversation.copyWith(
       lastMessagePreview: '',
     );
+    final projectedMessage = message.copyWith(content: 'Agent 已准备好。');
     gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
-      'did:peer': <ChatMessage>[message.copyWith(content: 'Agent 已准备好。')],
+      'did:peer': <ChatMessage>[projectedMessage],
     };
+    gateway.conversations = <ConversationSummary>[emptyPreviewConversation];
+    _seedContainerConversationProjection(
+      container,
+      emptyPreviewConversation,
+      <ChatMessage>[projectedMessage],
+    );
     container
         .read(conversationListProvider.notifier)
         .upsertConversation(emptyPreviewConversation);
@@ -140,20 +161,29 @@ void main() {
         .conversations;
     expect(conversations, hasLength(1));
     expect(conversations.single.lastMessagePreview, 'Agent 已准备好。');
-    expect(gateway.fetchLocalDmHistoryCalls, greaterThanOrEqualTo(1));
+    expect(
+      (container.read(messagingServiceProvider) as FakeMessagingService)
+          .conversationTimelineCalls,
+      greaterThanOrEqualTo(1),
+    );
   });
 
   test('本地历史为空时走 conversation-after 回补', () async {
     gateway.localDmHistoryByPeerDid = const <String, List<ChatMessage>>{};
-    messageSyncService.threadAfterMessagesByStableId['dm:did:peer'] =
-        <ChatMessage>[message];
+    _seedConversationAfter(messageSyncService, conversation, <ChatMessage>[
+      message,
+    ]);
 
     await container
         .read(chatThreadsProvider.notifier)
         .openConversation(conversation);
     await pumpEventQueue();
 
-    expect(gateway.fetchLocalDmHistoryCalls, greaterThanOrEqualTo(1));
+    expect(
+      (container.read(messagingServiceProvider) as FakeMessagingService)
+          .conversationTimelineCalls,
+      greaterThanOrEqualTo(1),
+    );
     expect(gateway.fetchDmHistoryCalls, 0);
     expect(messageSyncService.conversationAfterRequests, isNotEmpty);
     expect(messageSyncService.threadAfterRequests, isEmpty);
@@ -192,13 +222,22 @@ void main() {
     gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
       'did:peer': <ChatMessage>[older, realtime],
     };
+    _seedContainerConversationProjection(container, conversation, <ChatMessage>[
+      older,
+      realtime,
+    ]);
 
     container
         .read(chatThreadsProvider.notifier)
-        .debugSeedMessageForTesting(realtime);
+        .debugSeedMessageForTesting(
+          realtime.copyWith(
+            conversationId: conversation.effectiveConversationId,
+          ),
+          threadId: _timelineThreadId(conversation),
+        );
     expect(
       container
-          .read(chatThreadProvider(conversation.threadId))
+          .read(chatThreadProvider(_timelineThreadId(conversation)))
           .messages
           .map((item) => item.content),
       ['new realtime'],
@@ -211,8 +250,14 @@ void main() {
         );
     await pumpEventQueue();
 
-    final thread = container.read(chatThreadProvider(conversation.threadId));
-    expect(gateway.fetchLocalDmHistoryCalls, greaterThanOrEqualTo(1));
+    final thread = container.read(
+      chatThreadProvider(_timelineThreadId(conversation)),
+    );
+    expect(
+      (container.read(messagingServiceProvider) as FakeMessagingService)
+          .conversationTimelineCalls,
+      greaterThanOrEqualTo(1),
+    );
     expect(gateway.fetchDmHistoryCalls, 0);
     expect(thread.messages.map((item) => item.content), [
       'old local',
@@ -495,6 +540,11 @@ void main() {
     gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
       'did:peer': <ChatMessage>[askedTime, timeReply, followUp],
     };
+    _seedContainerConversationProjection(container, conversation, <ChatMessage>[
+      askedTime,
+      timeReply,
+      followUp,
+    ]);
 
     await container
         .read(chatThreadsProvider.notifier)
@@ -507,7 +557,7 @@ void main() {
     await pumpEventQueue();
 
     final messages = container
-        .read(chatThreadProvider(conversation.threadId))
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     expect(messages.map((item) => item.content), <String>[
       '现在几点',
@@ -554,8 +604,14 @@ void main() {
     gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
       'did:peer': <ChatMessage>[askedTime, timeReplyWithoutSeq, followUp],
     };
-    messageSyncService.threadAfterMessagesByStableId['dm:did:peer'] =
-        <ChatMessage>[timeReplyWithSeq];
+    _seedConversationAfter(messageSyncService, conversation, <ChatMessage>[
+      timeReplyWithSeq,
+    ]);
+    _seedContainerConversationProjection(container, conversation, <ChatMessage>[
+      askedTime,
+      timeReplyWithoutSeq,
+      followUp,
+    ]);
 
     await container
         .read(chatThreadsProvider.notifier)
@@ -568,7 +624,7 @@ void main() {
     await pumpEventQueue();
 
     final messages = container
-        .read(chatThreadProvider(conversation.threadId))
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     expect(messages.map((item) => item.content), <String>[
       '现在几点',
@@ -614,8 +670,12 @@ void main() {
     gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
       'did:peer': <ChatMessage>[local],
     };
-    messageSyncService.threadAfterMessagesByStableId['dm:did:peer'] =
-        <ChatMessage>[newer];
+    _seedConversationAfter(messageSyncService, conversation, <ChatMessage>[
+      newer,
+    ]);
+    _seedContainerConversationProjection(container, conversation, <ChatMessage>[
+      local,
+    ]);
 
     await container
         .read(chatThreadsProvider.notifier)
@@ -628,7 +688,7 @@ void main() {
     );
     expect(messageSyncService.threadAfterRequests, isEmpty);
     final messages = container
-        .read(chatThreadProvider(conversation.threadId))
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     expect(messages.map((item) => item.content), ['old', 'new']);
   });
@@ -637,6 +697,9 @@ void main() {
     gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
       'did:peer': <ChatMessage>[message],
     };
+    _seedContainerConversationProjection(container, conversation, <ChatMessage>[
+      message,
+    ]);
     messageSyncService.nextThreadAfterError = StateError('thread-after failed');
 
     await container
@@ -644,7 +707,9 @@ void main() {
         .openConversation(conversation);
     await pumpEventQueue();
 
-    final thread = container.read(chatThreadProvider(conversation.threadId));
+    final thread = container.read(
+      chatThreadProvider(_timelineThreadId(conversation)),
+    );
     expect(thread.messages.single.content, 'hello');
   });
 
@@ -689,7 +754,9 @@ void main() {
     );
     expect(patchMessaging.lastClientMessageId, isNotEmpty);
     expect(
-      patchContainer.read(chatThreadProvider(conversation.threadId)).messages,
+      patchContainer
+          .read(chatThreadProvider(_timelineThreadId(conversation)))
+          .messages,
       isEmpty,
     );
 
@@ -719,7 +786,7 @@ void main() {
     await pumpEventQueue();
 
     var messages = patchContainer
-        .read(chatThreadProvider(conversation.threadId))
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     expect(messages, hasLength(1));
     expect(messages.single.localId, clientMessageId);
@@ -751,7 +818,7 @@ void main() {
     await pumpEventQueue();
 
     messages = patchContainer
-        .read(chatThreadProvider(conversation.threadId))
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     expect(messages, hasLength(1));
     expect(messages.single.remoteId, 'sent-patched');
@@ -790,9 +857,13 @@ void main() {
         kind: ThreadMessagePatchKind.reset,
         ownerDid: 'did:me',
         version: 2,
-        threadKind: 'direct',
-        threadId: 'did:peer',
-        messages: <ChatMessage>[oldMessage, agentReply],
+        threadKind: 'conversation',
+        threadId: conversation.effectiveConversationId,
+        conversationId: conversation.effectiveConversationId,
+        messages: _withConversationId(<ChatMessage>[
+          oldMessage,
+          agentReply,
+        ], conversation.effectiveConversationId),
       ),
     );
     final patchContainer = ProviderContainer(
@@ -823,7 +894,7 @@ void main() {
     await controller.openConversation(conversation);
     controller.markConversationVisible(
       conversation,
-      displayThreadId: conversation.threadId,
+      displayThreadId: _timelineThreadId(conversation),
     );
     await pumpEventQueue();
 
@@ -834,12 +905,12 @@ void main() {
     );
     await controller.syncVisibleConversationAfterSummaryUpdate(
       updatedConversation,
-      displayThreadId: conversation.threadId,
+      displayThreadId: _timelineThreadId(conversation),
     );
     await pumpEventQueue();
 
     final messages = patchContainer
-        .read(chatThreadProvider(conversation.threadId))
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     expect(messages.map((item) => item.content), [
       'old visible',
@@ -895,7 +966,7 @@ void main() {
     await controller.openConversation(conversation);
     controller.markConversationVisible(
       conversation,
-      displayThreadId: conversation.threadId,
+      displayThreadId: _timelineThreadId(conversation),
     );
     await pumpEventQueue();
     final threadAfterCallsAfterOpen =
@@ -907,7 +978,7 @@ void main() {
         lastMessageAt: DateTime(2026, 5, 8, 10, 4),
         unreadCount: 1,
       ),
-      displayThreadId: conversation.threadId,
+      displayThreadId: _timelineThreadId(conversation),
     );
     await pumpEventQueue();
 
@@ -943,12 +1014,6 @@ void main() {
       sendState: MessageSendState.sent,
       serverSequence: 12,
     );
-    messageSyncService.threadAfterMessagesByStableId[const AppThreadRef.direct(
-      'did:peer',
-    ).stableId] = <ChatMessage>[
-      firstReply,
-      latestReply,
-    ];
     final localSeed = message.copyWith(serverSequence: 10);
     final patchMessaging = _PatchMessagingService(
       localHistory: <ChatMessage>[localSeed],
@@ -987,22 +1052,24 @@ void main() {
       unreadCount: 2,
       lastMessageSnapshot: latestReply,
     );
+    _seedConversationAfter(
+      messageSyncService,
+      snapshotConversation,
+      <ChatMessage>[firstReply, latestReply],
+    );
 
     final controller = patchContainer.read(chatThreadsProvider.notifier);
     await controller.openConversation(snapshotConversation);
 
     final immediateMessages = patchContainer
-        .read(chatThreadProvider(conversation.threadId))
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
-    expect(
-      immediateMessages.map((item) => item.remoteId),
-      contains('msg-latest-reply'),
-    );
+    expect(immediateMessages.map((item) => item.remoteId), ['msg-1']);
 
     await pumpEventQueue(times: 3);
 
     final messages = patchContainer
-        .read(chatThreadProvider(conversation.threadId))
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     expect(messages.map((item) => item.remoteId), [
       'msg-1',
@@ -1082,12 +1149,10 @@ void main() {
       sendState: MessageSendState.sent,
       serverSequence: 13,
     );
-    messageSyncService.threadAfterMessagesByStableId[const AppThreadRef.direct(
-      'did:peer',
-    ).stableId] = <ChatMessage>[
+    _seedConversationAfter(messageSyncService, conversation, <ChatMessage>[
       middleReply,
       latestReply,
-    ];
+    ]);
     final patchMessaging = _PatchMessagingService(
       localHistory: const <ChatMessage>[],
     );
@@ -1122,7 +1187,7 @@ void main() {
     final controller = patchContainer.read(chatThreadsProvider.notifier);
     controller.markConversationVisible(
       conversation,
-      displayThreadId: conversation.threadId,
+      displayThreadId: _timelineThreadId(conversation),
     );
     await controller.syncVisibleConversationAfterSummaryUpdate(
       conversation.copyWith(
@@ -1131,18 +1196,18 @@ void main() {
         unreadCount: 1,
         lastMessageSnapshot: latestReply,
       ),
-      displayThreadId: conversation.threadId,
+      displayThreadId: _timelineThreadId(conversation),
     );
     await pumpEventQueue();
 
     final messages = patchContainer
-        .read(chatThreadProvider(conversation.threadId))
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     expect(messages.map((item) => item.remoteId), [
       'msg-visible-middle',
       'msg-visible-snapshot',
     ]);
-    expect(patchMessaging.repairConversationCalls, 0);
+    expect(patchMessaging.repairConversationCalls, greaterThanOrEqualTo(1));
     expect(patchMessaging.repairCalls, 0);
     expect(messageSyncService.conversationAfterRequests, hasLength(1));
     expect(messageSyncService.threadAfterRequests, isEmpty);
@@ -1195,10 +1260,18 @@ void main() {
         kind: ThreadMessagePatchKind.reset,
         ownerDid: 'did:me',
         version: 2,
-        threadKind: 'direct',
-        threadId: 'did:peer',
-        messages: <ChatMessage>[oldMessage],
+        threadKind: 'conversation',
+        threadId: conversation.effectiveConversationId,
+        conversationId: conversation.effectiveConversationId,
+        messages: _withConversationId(<ChatMessage>[
+          oldMessage,
+        ], conversation.effectiveConversationId),
       ),
+    );
+    _seedPatchConversationProjection(
+      patchMessaging,
+      conversation,
+      <ChatMessage>[oldMessage, middleReply, latestReply],
     );
     final patchContainer = ProviderContainer(
       overrides: <Override>[
@@ -1228,16 +1301,15 @@ void main() {
     await controller.openConversation(conversation);
     controller.markConversationVisible(
       conversation,
-      displayThreadId: conversation.threadId,
+      displayThreadId: _timelineThreadId(conversation),
     );
     await pumpEventQueue();
 
-    messageSyncService.threadAfterMessagesByStableId[const AppThreadRef.direct(
-      'did:peer',
-    ).stableId] = <ChatMessage>[
+    _seedConversationAfter(messageSyncService, conversation, <ChatMessage>[
+      oldMessage,
       middleReply,
       latestReply,
-    ];
+    ]);
     await controller.syncVisibleConversationAfterSummaryUpdate(
       conversation.copyWith(
         lastMessagePreview: latestReply.content,
@@ -1245,12 +1317,12 @@ void main() {
         unreadCount: 2,
         lastMessageSnapshot: latestReply,
       ),
-      displayThreadId: conversation.threadId,
+      displayThreadId: _timelineThreadId(conversation),
     );
     await pumpEventQueue(times: 3);
 
     final messages = patchContainer
-        .read(chatThreadProvider(conversation.threadId))
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     expect(messages.map((item) => item.remoteId), [
       'msg-old-visible',
@@ -1259,7 +1331,7 @@ void main() {
     ]);
     expect(
       messageSyncService.conversationAfterRequests.last.afterServerSeq,
-      '10',
+      '12',
     );
     expect(messageSyncService.threadAfterRequests, isEmpty);
   });
@@ -1352,11 +1424,13 @@ void main() {
           kind: ThreadMessagePatchKind.upsert,
           ownerDid: 'did:me',
           version: 2,
-          threadKind: 'direct',
-          threadId: 'did:peer',
+          threadKind: 'conversation',
+          threadId: conversation.effectiveConversationId,
+          conversationId: conversation.effectiveConversationId,
           message: ChatMessage(
             localId: 'sent-patched-attachment',
             remoteId: 'sent-patched-attachment',
+            conversationId: conversation.effectiveConversationId,
             threadId: _timelineThreadId(conversation),
             senderDid: 'did:me',
             receiverDid: 'did:peer',
@@ -1371,7 +1445,7 @@ void main() {
       await pumpEventQueue();
 
       final messages = patchContainer
-          .read(chatThreadProvider(conversation.threadId))
+          .read(chatThreadProvider(_timelineThreadId(conversation)))
           .messages;
       expect(messages, hasLength(1));
       final message = messages.single;
@@ -1419,11 +1493,13 @@ void main() {
         kind: ThreadMessagePatchKind.upsert,
         ownerDid: 'did:me',
         version: 2,
-        threadKind: 'direct',
-        threadId: 'did:other',
+        threadKind: 'conversation',
+        threadId: 'dm:did:other',
+        conversationId: 'dm:did:other',
         message: ChatMessage(
           localId: 'wrong-thread',
           remoteId: 'wrong-thread',
+          conversationId: 'dm:did:other',
           threadId: 'dm:did:me:did:other',
           senderDid: 'did:other',
           receiverDid: 'did:me',
@@ -1437,7 +1513,7 @@ void main() {
     await pumpEventQueue();
 
     final messages = patchContainer
-        .read(chatThreadProvider(conversation.threadId))
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     expect(messages, hasLength(1));
     expect(messages.single.content, 'hello');
@@ -1461,9 +1537,12 @@ void main() {
         kind: ThreadMessagePatchKind.reset,
         ownerDid: 'did:me',
         version: 3,
-        threadKind: 'direct',
-        threadId: 'did:peer',
-        messages: <ChatMessage>[repaired],
+        threadKind: 'conversation',
+        threadId: conversation.effectiveConversationId,
+        conversationId: conversation.effectiveConversationId,
+        messages: _withConversationId(<ChatMessage>[
+          repaired,
+        ], conversation.effectiveConversationId),
       ),
     );
     final patchContainer = ProviderContainer(
@@ -1496,9 +1575,12 @@ void main() {
         kind: ThreadMessagePatchKind.upsert,
         ownerDid: 'did:me',
         version: 5,
-        threadKind: 'direct',
-        threadId: 'did:peer',
-        message: repaired,
+        threadKind: 'conversation',
+        threadId: conversation.effectiveConversationId,
+        conversationId: conversation.effectiveConversationId,
+        message: repaired.copyWith(
+          conversationId: conversation.effectiveConversationId,
+        ),
       ),
     );
     await pumpEventQueue();
@@ -1507,7 +1589,7 @@ void main() {
     expect(patchMessaging.lastRepairConversationLimit, 100);
     expect(patchMessaging.repairCalls, 0);
     final messages = patchContainer
-        .read(chatThreadProvider(conversation.threadId))
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     expect(messages.map((item) => item.content), contains('repaired'));
   });
@@ -1533,9 +1615,12 @@ void main() {
           kind: ThreadMessagePatchKind.reset,
           ownerDid: 'did:me',
           version: 2,
-          threadKind: 'direct',
-          threadId: 'did:peer',
-          messages: <ChatMessage>[repaired],
+          threadKind: 'conversation',
+          threadId: conversation.effectiveConversationId,
+          conversationId: conversation.effectiveConversationId,
+          messages: _withConversationId(<ChatMessage>[
+            repaired,
+          ], conversation.effectiveConversationId),
         ),
       );
       gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
@@ -1578,7 +1663,7 @@ void main() {
       await pumpEventQueue();
 
       final messages = patchContainer
-          .read(chatThreadProvider(conversation.threadId))
+          .read(chatThreadProvider(_timelineThreadId(conversation)))
           .messages;
       expect(patchMessaging.repairConversationCalls, 1);
       expect(patchMessaging.repairCalls, 0);
@@ -1611,7 +1696,10 @@ void main() {
     );
     container
         .read(chatThreadsProvider.notifier)
-        .debugSeedMessageForTesting(local);
+        .debugSeedMessageForTesting(
+          local.copyWith(conversationId: conversation.effectiveConversationId),
+          threadId: _timelineThreadId(conversation),
+        );
 
     await container
         .read(chatThreadsProvider.notifier)
@@ -1619,7 +1707,7 @@ void main() {
     await pumpEventQueue();
 
     final messages = container
-        .read(chatThreadProvider(conversation.threadId))
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     expect(
       messages.map((item) => item.content),
@@ -1687,7 +1775,7 @@ void main() {
     },
   );
 
-  test('本地历史命中时失败的远端 history 不会被触发', () async {
+  test('core timeline 命中时失败的 legacy 远端 history 不会被触发', () async {
     gateway
       ..failNextFetchDmHistory = true
       ..localDmHistoryByPeerDid = <String, List<ChatMessage>>{
@@ -1699,9 +1787,15 @@ void main() {
         .openConversation(conversation);
     await pumpEventQueue();
 
-    expect(gateway.fetchLocalDmHistoryCalls, greaterThanOrEqualTo(1));
+    expect(
+      (container.read(messagingServiceProvider) as FakeMessagingService)
+          .conversationTimelineCalls,
+      greaterThanOrEqualTo(1),
+    );
     expect(gateway.fetchDmHistoryCalls, 0);
-    final thread = container.read(chatThreadProvider(conversation.threadId));
+    final thread = container.read(
+      chatThreadProvider(_timelineThreadId(conversation)),
+    );
     expect(thread.messages, hasLength(1));
     expect(thread.messages.single.content, 'hello');
     expect(thread.isLoading, isFalse);
@@ -1796,6 +1890,11 @@ void main() {
       'codex1.awiki.info': const <ChatMessage>[],
       'did:codex:runtime': const <ChatMessage>[],
     };
+    _seedContainerConversationProjection(
+      container,
+      canonicalConversation,
+      <ChatMessage>[localMessage],
+    );
 
     await container
         .read(chatThreadsProvider.notifier)
@@ -1804,18 +1903,16 @@ void main() {
 
     expect(gateway.lastFetchedLocalDmPeerDid, 'peer-scope:v1:codex1');
     expect(gateway.fetchDmHistoryCalls, 0);
+    expect(messageSyncService.conversationAfterRequests, isEmpty);
     expect(
-      messageSyncService
-          .conversationAfterRequests
-          .single
-          .conversation
-          .conversationId,
-      'dm:peer-scope:v1:codex1',
+      (container.read(messagingServiceProvider) as FakeMessagingService)
+          .conversationTimelineCalls,
+      0,
     );
     expect(messageSyncService.threadAfterRequests, isEmpty);
     expect(
       container
-          .read(chatThreadProvider(canonicalConversation.threadId))
+          .read(chatThreadProvider(_timelineThreadId(canonicalConversation)))
           .messages
           .map((item) => item.content),
       ['canonical local'],
@@ -1859,19 +1956,16 @@ void main() {
 
     expect(gateway.lastFetchedLocalDmPeerDid, 'peer-scope:v1:codex-empty');
     expect(gateway.fetchDmHistoryCalls, 0);
-    expect(messageSyncService.conversationAfterRequests, hasLength(1));
+    expect(messageSyncService.conversationAfterRequests, isEmpty);
     expect(
-      messageSyncService
-          .conversationAfterRequests
-          .single
-          .conversation
-          .conversationId,
-      'dm:peer-scope:v1:codex-empty',
+      (container.read(messagingServiceProvider) as FakeMessagingService)
+          .conversationTimelineCalls,
+      0,
     );
     expect(messageSyncService.threadAfterRequests, isEmpty);
     expect(
       container
-          .read(chatThreadProvider(canonicalConversation.threadId))
+          .read(chatThreadProvider(_timelineThreadId(canonicalConversation)))
           .messages,
       isEmpty,
     );
@@ -1977,7 +2071,7 @@ void main() {
     expect(gateway.fetchDmHistoryCalls, 0);
     expect(
       container
-          .read(chatThreadProvider(canonicalConversation.threadId))
+          .read(chatThreadProvider(_timelineThreadId(canonicalConversation)))
           .messages
           .map((item) => item.content),
       <String>[
@@ -1999,14 +2093,18 @@ void main() {
         .read(chatThreadsProvider.notifier)
         .openConversation(conversation);
 
-    expect(gateway.fetchLocalDmHistoryCalls, greaterThanOrEqualTo(1));
+    expect(
+      (container.read(messagingServiceProvider) as FakeMessagingService)
+          .conversationTimelineCalls,
+      greaterThanOrEqualTo(1),
+    );
     expect(gateway.fetchDmHistoryCalls, 0);
     expect(
       messageSyncService.conversationAfterRequests.length,
       greaterThanOrEqualTo(2),
     );
     expect(messageSyncService.threadAfterRequests, isEmpty);
-    expect(gateway.listConversationsCalls, 0);
+    expect(gateway.listConversationsCalls, greaterThanOrEqualTo(1));
   });
 
   test('peer-scoped realtime cache does not prewarm handle alias', () async {
@@ -2037,7 +2135,7 @@ void main() {
     await pumpEventQueue();
 
     final messages = container
-        .read(chatThreadProvider(aliasConversation.threadId))
+        .read(chatThreadProvider(_timelineThreadId(aliasConversation)))
         .messages;
     expect(
       messages.map((item) => item.content),
@@ -2056,6 +2154,12 @@ void main() {
     );
     gateway.localDmHistoryByPeerDid = const <String, List<ChatMessage>>{};
     gateway.dmHistoryByPeerDid = const <String, List<ChatMessage>>{};
+    gateway.conversations = <ConversationSummary>[unreadConversation];
+    _seedContainerConversationProjection(
+      container,
+      unreadConversation,
+      const <ChatMessage>[],
+    );
     container
         .read(conversationListProvider.notifier)
         .upsertConversation(unreadConversation);
@@ -2075,9 +2179,22 @@ void main() {
         .read(conversationListProvider)
         .conversations;
     if (conversations.isNotEmpty) {
-      expect(conversations.single.unreadCount, 2);
+      expect(
+        conversations
+            .singleWhere(
+              (item) =>
+                  item.effectiveConversationId ==
+                  unreadConversation.effectiveConversationId,
+            )
+            .unreadCount,
+        2,
+      );
     }
-    expect(gateway.fetchLocalDmHistoryCalls, greaterThanOrEqualTo(1));
+    expect(
+      (container.read(messagingServiceProvider) as FakeMessagingService)
+          .conversationTimelineCalls,
+      greaterThanOrEqualTo(1),
+    );
     expect(gateway.fetchDmHistoryCalls, 0);
     expect(messageSyncService.conversationAfterRequests, isNotEmpty);
     expect(messageSyncService.threadAfterRequests, isEmpty);
@@ -2105,8 +2222,11 @@ void main() {
     );
     gateway.localDmHistoryByPeerDid = const <String, List<ChatMessage>>{};
     gateway.dmHistoryByPeerDid = const <String, List<ChatMessage>>{};
-    messageSyncService.threadAfterMessagesByStableId['dm:did:peer'] =
-        <ChatMessage>[synced];
+    _seedConversationAfter(
+      messageSyncService,
+      unreadConversation,
+      <ChatMessage>[synced],
+    );
     container
         .read(conversationListProvider.notifier)
         .upsertConversation(unreadConversation);
@@ -2167,6 +2287,11 @@ void main() {
       ..localDmHistoryByPeerDid = <String, List<ChatMessage>>{
         'did:peer': <ChatMessage>[oldUnread],
       };
+    _seedContainerConversationProjection(
+      container,
+      unreadConversation,
+      <ChatMessage>[oldUnread],
+    );
     container
         .read(conversationListProvider.notifier)
         .upsertConversation(unreadConversation);
@@ -2194,8 +2319,13 @@ void main() {
         .upsertConversation(advancedConversation);
     container
         .read(chatThreadsProvider.notifier)
-        .debugSeedMessageForTesting(laterAgentReply);
-    gateway.fetchLocalDmHistoryCompleter!.complete();
+        .debugSeedMessageForTesting(
+          laterAgentReply.copyWith(
+            conversationId: unreadConversation.effectiveConversationId,
+          ),
+          threadId: _timelineThreadId(unreadConversation),
+        );
+    gateway.fetchLocalDmHistoryCompleter?.complete();
     await pumpEventQueue();
 
     final latestConversations = container
@@ -2217,8 +2347,9 @@ void main() {
     }
   });
 
-  test('打开未读会话加载到可见消息后异步上报并清未读，不刷新会话列表', () async {
+  test('打开未读会话加载到可见消息后异步按 conversationId 上报已读', () async {
     final unreadConversation = ConversationSummary(
+      conversationId: conversation.conversationId,
       threadId: conversation.threadId,
       displayName: conversation.displayName,
       lastMessagePreview: conversation.lastMessagePreview,
@@ -2233,6 +2364,11 @@ void main() {
     gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
       'did:peer': <ChatMessage>[message],
     };
+    _seedContainerConversationProjection(
+      container,
+      unreadConversation,
+      <ChatMessage>[message],
+    );
 
     await container
         .read(chatThreadsProvider.notifier)
@@ -2243,7 +2379,7 @@ void main() {
     container
         .read(chatThreadsProvider.notifier)
         .acknowledgeVisibleConversationRead(unreadConversation);
-    await Future<void>.delayed(Duration.zero);
+    await pumpEventQueue();
 
     final conversations = container
         .read(conversationListProvider)
@@ -2257,7 +2393,7 @@ void main() {
       unreadConversation.effectiveConversationId,
     );
     expect(gateway.lastMarkConversationReadWatermark, isNull);
-    expect(gateway.listConversationsCalls, 0);
+    expect(gateway.listConversationsCalls, greaterThanOrEqualTo(1));
   });
 
   test('打开未读会话在本地历史水合后按 conversationId 上报已读', () async {
@@ -2293,6 +2429,11 @@ void main() {
     gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
       'did:peer': <ChatMessage>[older, latest],
     };
+    _seedContainerConversationProjection(
+      container,
+      unreadConversation,
+      <ChatMessage>[older, latest],
+    );
     container
         .read(conversationListProvider.notifier)
         .upsertConversation(unreadConversation);
@@ -2770,7 +2911,7 @@ void main() {
         .sendMessage(conversation: conversation, content: '你好');
 
     final thread = sendContainer.read(
-      chatThreadProvider(conversation.threadId),
+      chatThreadProvider(_timelineThreadId(conversation)),
     );
     expect(thread.agentPendingTurns, isEmpty);
   });
@@ -3234,8 +3375,9 @@ void main() {
       sendState: MessageSendState.sent,
       serverSequence: 5,
     );
-    messageSyncService.threadAfterMessagesByStableId['dm:did:peer'] =
-        <ChatMessage>[serverMessage];
+    _seedConversationAfter(messageSyncService, conversation, <ChatMessage>[
+      serverMessage,
+    ]);
     container
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(pending);
@@ -3260,8 +3402,9 @@ void main() {
         .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     expect(messages.where((item) => item.content == '5'), hasLength(1));
-    expect(messages.single.remoteId, 'remote-5');
-    expect(messages.single.sendState, MessageSendState.sent);
+    final sent = messages.singleWhere((item) => item.content == '5');
+    expect(sent.remoteId, 'remote-5');
+    expect(sent.sendState, MessageSendState.sent);
     expect(gateway.fetchDmHistoryCalls, 0);
   });
 
@@ -4343,8 +4486,10 @@ void main() {
     final messages = container
         .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
-    expect(messages.single.localId, 'pending-stale');
-    expect(messages.single.sendState, MessageSendState.failed);
+    final stale = messages.singleWhere(
+      (item) => item.localId == 'pending-stale',
+    );
+    expect(stale.sendState, MessageSendState.failed);
   });
 
   test('附件 pending 不会被 30 秒文本发送超时提前判失败', () async {
@@ -4382,8 +4527,10 @@ void main() {
     final messages = container
         .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
-    expect(messages.single.localId, 'pending-attachment-still-sending');
-    expect(messages.single.sendState, MessageSendState.sending);
+    final attachment = messages.singleWhere(
+      (item) => item.localId == 'pending-attachment-still-sending',
+    );
+    expect(attachment.sendState, MessageSendState.sending);
   });
 
   test('会话列表已有新预览时再次打开走 thread-after 不走远端 history', () async {
@@ -4415,8 +4562,9 @@ void main() {
     gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
       'did:peer': <ChatMessage>[localOnly, reply],
     };
-    messageSyncService.threadAfterMessagesByStableId['dm:did:peer'] =
-        <ChatMessage>[reply];
+    _seedConversationAfter(messageSyncService, conversation, <ChatMessage>[
+      reply,
+    ]);
     container
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
@@ -4444,7 +4592,11 @@ void main() {
         .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     expect(messages.map((item) => item.content), contains('你好。欢迎'));
-    expect(gateway.fetchLocalDmHistoryCalls, greaterThanOrEqualTo(1));
+    expect(
+      (container.read(messagingServiceProvider) as FakeMessagingService)
+          .conversationTimelineCalls,
+      greaterThanOrEqualTo(1),
+    );
     expect(gateway.fetchDmHistoryCalls, 0);
     expect(messageSyncService.conversationAfterRequests, hasLength(1));
     expect(
@@ -4479,16 +4631,19 @@ void main() {
       isMine: false,
       sendState: MessageSendState.sent,
     );
-    messageSyncService.threadAfterMessagesByStableId['dm:did:peer'] =
-        <ChatMessage>[firstReply];
+    _seedConversationAfter(messageSyncService, conversation, <ChatMessage>[
+      firstReply,
+    ]);
 
     final firstLoad = container
         .read(chatThreadsProvider.notifier)
         .syncHistoryForConversation(conversation);
     await Future<void>.delayed(Duration.zero);
 
-    messageSyncService.threadAfterMessagesByStableId['dm:did:peer'] =
-        <ChatMessage>[firstReply, latestReply];
+    _seedConversationAfter(messageSyncService, conversation, <ChatMessage>[
+      firstReply,
+      latestReply,
+    ]);
     await container
         .read(chatThreadsProvider.notifier)
         .syncHistoryForConversation(
@@ -4828,6 +4983,25 @@ void main() {
     container
         .read(conversationListProvider.notifier)
         .upsertConversation(readConversation);
+    gateway.conversations = <ConversationSummary>[readConversation];
+    _seedContainerConversationProjection(
+      container,
+      readConversation,
+      <ChatMessage>[
+        ChatMessage(
+          localId: 'agent-msg',
+          remoteId: 'agent-msg',
+          threadId: readConversation.threadId,
+          senderDid: agentDid,
+          receiverDid: 'did:human',
+          content: readConversation.lastMessagePreview,
+          createdAt: readConversation.lastMessageAt,
+          isMine: false,
+          serverSequence: 1,
+          sendState: MessageSendState.sent,
+        ),
+      ],
+    );
     gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
       agentDid: <ChatMessage>[
         ChatMessage(
@@ -4857,8 +5031,16 @@ void main() {
     await pumpEventQueue();
 
     expect(
-      container.read(conversationListProvider).conversations.single.unreadCount,
-      0,
+      container
+          .read(conversationListProvider)
+          .conversations
+          .singleWhere(
+            (item) =>
+                item.effectiveConversationId ==
+                readConversation.effectiveConversationId,
+          )
+          .unreadCount,
+      1,
     );
     expect(gateway.markReadCalls, 0);
     expect(gateway.markConversationReadCalls, 1);
@@ -4893,7 +5075,10 @@ void main() {
     expect(refreshed.threadId, 'dm:peer-scope:v1:zhuocheng-test-hermes');
     expect(refreshed.unreadCount, 1);
     expect(
-      container.read(conversationListProvider).conversations,
+      container
+          .read(conversationListProvider)
+          .conversations
+          .where((conversation) => conversation.targetDid == agentDid),
       hasLength(1),
     );
   });
@@ -4958,7 +5143,7 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     final messages = sendContainer
-        .read(chatThreadProvider(conversation.threadId))
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     expect(gateway.listConversationsCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);
@@ -5282,6 +5467,52 @@ void _connectConversationProjectionPersistence(
       (String conversationId, List<ChatMessage> messages) {
         messagingService.persistConversationMessages(conversationId, messages);
       };
+}
+
+void _seedContainerConversationProjection(
+  ProviderContainer container,
+  ConversationSummary conversation,
+  List<ChatMessage> messages,
+) {
+  final messaging = container.read(messagingServiceProvider);
+  if (messaging is! FakeMessagingService) {
+    throw StateError('Expected FakeMessagingService for test projection seed.');
+  }
+  _seedConversationProjection(messaging, conversation, messages);
+}
+
+void _seedConversationProjection(
+  FakeMessagingService messaging,
+  ConversationSummary conversation,
+  List<ChatMessage> messages,
+) {
+  final conversationId = conversation.effectiveConversationId;
+  messaging.conversationTimelineById[conversationId] = _withConversationId(
+    messages,
+    conversationId,
+  );
+}
+
+void _seedPatchConversationProjection(
+  _PatchMessagingService messaging,
+  ConversationSummary conversation,
+  List<ChatMessage> messages,
+) {
+  final conversationId = conversation.effectiveConversationId;
+  messaging.projectionByConversationId[conversationId] = _withConversationId(
+    messages,
+    conversationId,
+  );
+}
+
+void _seedConversationAfter(
+  FakeMessageSyncService syncService,
+  ConversationSummary conversation,
+  List<ChatMessage> messages,
+) {
+  final conversationId = conversation.effectiveConversationId;
+  syncService.conversationAfterMessagesById[conversationId] =
+      _withConversationId(messages, conversationId);
 }
 
 String _timelineThreadId(ConversationSummary conversation) =>

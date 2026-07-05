@@ -301,6 +301,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
       threadId: 'dm:mac',
       displayName: 'Mac Agent',
       lastMessagePreview: '',
@@ -1103,6 +1104,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
       threadId: 'dm:1',
       displayName: 'Tester',
       lastMessagePreview: '',
@@ -1111,6 +1113,7 @@ void main() {
       isGroup: false,
       targetDid: 'did:test:peer',
     );
+    final messagingService = FakeMessagingService(gateway);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -1119,11 +1122,23 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
       ),
     );
 
     await tester.enterText(find.byType(CupertinoTextField), 'hello');
     await tester.testTextInput.receiveAction(TextInputAction.send);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    container
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(
+          _latestProjectedConversationMessage(messagingService, conversation),
+          threadId: conversation.effectiveConversationId,
+        );
     await tester.pumpAndSettle();
 
     expect(gateway.lastSentThreadId, 'dm:did:test:peer');
@@ -1196,6 +1211,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:alice',
       threadId: 'dm:scroll-send',
       displayName: 'Alice',
       lastMessagePreview: '',
@@ -1205,11 +1221,12 @@ void main() {
       targetDid: 'did:test:alice',
     );
     final messages = _scrollMessages(
-      threadId: conversation.threadId,
+      threadId: conversation.effectiveConversationId,
       peerDid: 'did:test:alice',
       startedAt: DateTime(2026, 4, 5, 10),
       count: 28,
     );
+    final messagingService = FakeMessagingService(gateway);
 
     await tester.binding.setSurfaceSize(const Size(390, 640));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -1226,11 +1243,12 @@ void main() {
         session: session,
         providerOverrides: <Override>[
           chatThreadsProvider.overrideWith(
-            (ref) => _StaticChatThreadsController(
-              ref,
-              <String, List<ChatMessage>>{conversation.threadId: messages},
-            ),
+            (ref) =>
+                _StaticChatThreadsController(ref, <String, List<ChatMessage>>{
+                  conversation.effectiveConversationId: messages,
+                }),
           ),
+          messagingServiceProvider.overrideWithValue(messagingService),
         ],
       ),
     );
@@ -1241,6 +1259,15 @@ void main() {
 
     await tester.enterText(find.byType(CupertinoTextField), 'my new message');
     await tester.testTextInput.receiveAction(TextInputAction.send);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    container
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(
+          _latestProjectedConversationMessage(messagingService, conversation),
+          threadId: conversation.effectiveConversationId,
+        );
     await tester.pumpAndSettle();
 
     expect(gateway.lastSentContent, 'my new message');
@@ -1509,6 +1536,7 @@ void main() {
       credentialName: 'default',
     );
     final conversationA = ConversationSummary(
+      conversationId: 'dm:did:test:alice',
       threadId: 'dm:draft-a',
       displayName: 'Alice',
       lastMessagePreview: 'alice old preview',
@@ -1518,6 +1546,7 @@ void main() {
       targetDid: 'did:test:alice',
     );
     final conversationB = ConversationSummary(
+      conversationId: 'dm:did:test:bob',
       threadId: 'dm:draft-b',
       displayName: 'Bob',
       lastMessagePreview: 'bob old preview',
@@ -1896,6 +1925,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:alice',
       threadId: 'dm:visible-new-message',
       displayName: 'Alice',
       lastMessagePreview: '',
@@ -1905,7 +1935,7 @@ void main() {
       targetDid: 'did:test:alice',
     );
     final messages = _scrollMessages(
-      threadId: conversation.threadId,
+      threadId: conversation.effectiveConversationId,
       peerDid: 'did:test:alice',
       startedAt: DateTime(2026, 4, 5, 10),
       count: 6,
@@ -1926,10 +1956,10 @@ void main() {
         session: session,
         providerOverrides: <Override>[
           chatThreadsProvider.overrideWith(
-            (ref) => _StaticChatThreadsController(
-              ref,
-              <String, List<ChatMessage>>{conversation.threadId: messages},
-            ),
+            (ref) =>
+                _StaticChatThreadsController(ref, <String, List<ChatMessage>>{
+                  conversation.effectiveConversationId: messages,
+                }),
           ),
         ],
       ),
@@ -1946,7 +1976,8 @@ void main() {
           ChatMessage(
             localId: 'incoming-while-visible',
             remoteId: 'incoming-while-visible',
-            threadId: conversation.threadId,
+            conversationId: conversation.effectiveConversationId,
+            threadId: conversation.effectiveConversationId,
             senderDid: 'did:test:alice',
             receiverDid: session.did,
             content: 'new message while visible',
@@ -1965,7 +1996,7 @@ void main() {
         .read(chatThreadsProvider.notifier)
         .acknowledgeVisibleConversationRead(
           conversation,
-          displayThreadId: conversation.threadId,
+          displayThreadId: conversation.effectiveConversationId,
           forcePersistentAck: true,
         );
     await tester.pump();
@@ -2260,6 +2291,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
       threadId: 'dm:sending-inline-status',
       displayName: 'Tester',
       lastMessagePreview: '',
@@ -2268,6 +2300,7 @@ void main() {
       isGroup: false,
       targetDid: 'did:test:peer',
     );
+    final messagingService = FakeMessagingService(gateway);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -2276,6 +2309,9 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
       ),
     );
 
@@ -2283,7 +2319,7 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text('pending hello'), findsOneWidget);
+    expect(find.text('pending hello'), findsNothing);
     expect(find.text('发送中...'), findsNothing);
     expect(gateway.sendTextMessageCalls, 1);
     final sendButton = find.byKey(const Key('chat-send-button'));
@@ -2299,7 +2335,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(gateway.sendTextMessageCalls, 1);
-    expect(find.byType(CupertinoActivityIndicator), findsWidgets);
+    expect(find.byType(CupertinoActivityIndicator), findsNothing);
 
     sendCompleter.complete();
     await tester.pumpAndSettle();
@@ -2315,6 +2351,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:agent:runtime',
       threadId: 'dm:agent-send-before-processing',
       displayName: '我的智能体',
       lastMessagePreview: '',
@@ -2323,6 +2360,7 @@ void main() {
       isGroup: false,
       targetDid: 'did:agent:runtime',
     );
+    final messagingService = FakeMessagingService(gateway);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -2332,6 +2370,7 @@ void main() {
         gateway: gateway,
         session: session,
         providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
           agentsProvider.overrideWith((ref) {
             final controller = AgentsController(ref);
             controller.state = const AgentsState(
@@ -2357,12 +2396,22 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pump(const Duration(milliseconds: 20));
 
-    expect(find.text('请总结'), findsOneWidget);
+    expect(find.text('请总结'), findsNothing);
     expect(find.text('发送中...'), findsNothing);
-    expect(find.byType(CupertinoActivityIndicator), findsWidgets);
+    expect(find.byType(CupertinoActivityIndicator), findsNothing);
     expect(find.text('智能体正在处理...'), findsNothing);
 
     await tester.pump(const Duration(milliseconds: 100));
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    container
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(
+          _latestProjectedConversationMessage(messagingService, conversation),
+          threadId: conversation.effectiveConversationId,
+        );
+    await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('智能体正在处理...'), findsOneWidget);
   });
@@ -2376,6 +2425,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:wba:awiki.info:agent:runtime:hermes:e1_agent',
       threadId: 'dm:remote-agent-processing',
       displayName: '远端智能体',
       lastMessagePreview: '',
@@ -2384,6 +2434,7 @@ void main() {
       isGroup: false,
       targetDid: 'did:wba:awiki.info:agent:runtime:hermes:e1_agent',
     );
+    final messagingService = FakeMessagingService(gateway);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -2392,26 +2443,36 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
       ),
     );
 
     await tester.enterText(find.byType(CupertinoTextField), '请处理');
     await tester.testTextInput.receiveAction(TextInputAction.send);
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(find.text('请处理'), findsOneWidget);
-    expect(find.text('智能体正在处理...'), findsOneWidget);
-
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ChatView)),
     );
     container
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
+          _latestProjectedConversationMessage(messagingService, conversation),
+          threadId: conversation.effectiveConversationId,
+        );
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('请处理'), findsOneWidget);
+    expect(find.text('智能体正在处理...'), findsOneWidget);
+
+    container
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(
           ChatMessage(
             localId: 'remote-agent-reply',
             remoteId: 'remote-agent-reply',
-            threadId: conversation.threadId,
+            conversationId: conversation.effectiveConversationId,
+            threadId: conversation.effectiveConversationId,
             senderDid: conversation.targetDid!,
             receiverDid: session.did,
             content: '处理完成',
@@ -2435,6 +2496,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:wba:awiki.info:user:bob',
       threadId: 'dm:human-no-agent-processing',
       displayName: '普通用户',
       lastMessagePreview: '',
@@ -2443,6 +2505,7 @@ void main() {
       isGroup: false,
       targetDid: 'did:wba:awiki.info:user:bob',
     );
+    final messagingService = FakeMessagingService(gateway);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -2451,11 +2514,23 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
       ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
     );
 
     await tester.enterText(find.byType(CupertinoTextField), '你好');
     await tester.testTextInput.receiveAction(TextInputAction.send);
+    container
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(
+          _latestProjectedConversationMessage(messagingService, conversation),
+          threadId: conversation.effectiveConversationId,
+        );
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('你好'), findsOneWidget);
@@ -2471,6 +2546,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
       threadId: 'dm:selectable-text-message',
       displayName: 'Tester',
       lastMessagePreview: '',
@@ -2479,12 +2555,14 @@ void main() {
       isGroup: false,
       targetDid: 'did:test:peer',
     );
-    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
-      conversation.targetDid!: <ChatMessage>[
+    final messagingService = _messagingServiceWithConversationMessages(
+      gateway,
+      conversation,
+      <ChatMessage>[
         ChatMessage(
           localId: 'selectable-text-message',
           remoteId: 'selectable-text-message',
-          threadId: conversation.threadId,
+          threadId: conversation.effectiveConversationId,
           senderDid: conversation.targetDid!,
           receiverDid: session.did,
           content: '这是一条可以复制的消息',
@@ -2493,7 +2571,7 @@ void main() {
           sendState: MessageSendState.sent,
         ),
       ],
-    };
+    );
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -2502,6 +2580,9 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
       ),
     );
     final container = ProviderScope.containerOf(
@@ -2525,6 +2606,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
       threadId: 'dm:incoming-markdown',
       displayName: 'Tester',
       lastMessagePreview: '',
@@ -2534,12 +2616,14 @@ void main() {
       targetDid: 'did:test:peer',
     );
     const markdown = '**重点**\n\n- 第一项';
-    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
-      conversation.targetDid!: <ChatMessage>[
+    final messagingService = _messagingServiceWithConversationMessages(
+      gateway,
+      conversation,
+      <ChatMessage>[
         ChatMessage(
           localId: 'incoming-markdown',
           remoteId: 'incoming-markdown',
-          threadId: conversation.threadId,
+          threadId: conversation.effectiveConversationId,
           senderDid: conversation.targetDid!,
           receiverDid: session.did,
           content: markdown,
@@ -2548,7 +2632,7 @@ void main() {
           sendState: MessageSendState.sent,
         ),
       ],
-    };
+    );
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -2557,6 +2641,9 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
       ),
     );
     final container = ProviderScope.containerOf(
@@ -2581,6 +2668,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
       threadId: 'dm:outgoing-plain-markdown',
       displayName: 'Tester',
       lastMessagePreview: '',
@@ -2590,12 +2678,14 @@ void main() {
       targetDid: 'did:test:peer',
     );
     const text = '**原样显示**';
-    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
-      conversation.targetDid!: <ChatMessage>[
+    final messagingService = _messagingServiceWithConversationMessages(
+      gateway,
+      conversation,
+      <ChatMessage>[
         ChatMessage(
           localId: 'outgoing-plain-markdown',
           remoteId: 'outgoing-plain-markdown',
-          threadId: conversation.threadId,
+          threadId: conversation.effectiveConversationId,
           senderDid: session.did,
           receiverDid: conversation.targetDid!,
           content: text,
@@ -2604,7 +2694,7 @@ void main() {
           sendState: MessageSendState.sent,
         ),
       ],
-    };
+    );
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -2613,6 +2703,9 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
       ),
     );
     final container = ProviderScope.containerOf(
@@ -2636,6 +2729,7 @@ void main() {
       credentialName: 'default',
     );
     final groupConversation = ConversationSummary(
+      conversationId: 'group:did:test:group:incoming-markdown',
       threadId: 'group:incoming-markdown',
       displayName: 'Markdown 群',
       lastMessagePreview: '',
@@ -2645,6 +2739,7 @@ void main() {
       groupId: 'did:test:group:incoming-markdown',
     );
     final agentConversation = ConversationSummary(
+      conversationId: 'dm:did:test:agent',
       threadId: 'dm:agent-markdown',
       displayName: '我的智能体',
       lastMessagePreview: '',
@@ -2655,37 +2750,41 @@ void main() {
     );
     const groupMarkdown = '## 群聊标题\n\n- 群聊事项';
     const agentMarkdown = '```text\nagent result\n```';
-    gateway
-      ..groupHistoryByGroupId = <String, List<ChatMessage>>{
-        groupConversation.groupId!: <ChatMessage>[
-          ChatMessage(
-            localId: 'group-incoming-markdown',
-            remoteId: 'group-incoming-markdown',
-            threadId: groupConversation.threadId,
-            senderDid: 'did:test:peer',
-            groupId: groupConversation.groupId,
-            content: groupMarkdown,
-            createdAt: DateTime(2026, 4, 5, 12, 1),
-            isMine: false,
-            sendState: MessageSendState.sent,
-          ),
-        ],
-      }
-      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
-        agentConversation.targetDid!: <ChatMessage>[
-          ChatMessage(
-            localId: 'agent-markdown',
-            remoteId: 'agent-markdown',
-            threadId: agentConversation.threadId,
-            senderDid: agentConversation.targetDid!,
-            receiverDid: session.did,
-            content: agentMarkdown,
-            createdAt: DateTime(2026, 4, 5, 12, 2),
-            isMine: false,
-            sendState: MessageSendState.sent,
-          ),
-        ],
-      };
+    final messagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[groupConversation.effectiveConversationId] =
+          <ChatMessage>[
+            _messageWithConversation(
+              ChatMessage(
+                localId: 'group-incoming-markdown',
+                remoteId: 'group-incoming-markdown',
+                threadId: groupConversation.effectiveConversationId,
+                senderDid: 'did:test:peer',
+                groupId: groupConversation.groupId,
+                content: groupMarkdown,
+                createdAt: DateTime(2026, 4, 5, 12, 1),
+                isMine: false,
+                sendState: MessageSendState.sent,
+              ),
+              groupConversation,
+            ),
+          ]
+      ..conversationTimelineById[agentConversation.effectiveConversationId] =
+          <ChatMessage>[
+            _messageWithConversation(
+              ChatMessage(
+                localId: 'agent-markdown',
+                remoteId: 'agent-markdown',
+                threadId: agentConversation.effectiveConversationId,
+                senderDid: agentConversation.targetDid!,
+                receiverDid: session.did,
+                content: agentMarkdown,
+                createdAt: DateTime(2026, 4, 5, 12, 2),
+                isMine: false,
+                sendState: MessageSendState.sent,
+              ),
+              agentConversation,
+            ),
+          ];
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -2694,6 +2793,9 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
       ),
     );
     final container = ProviderScope.containerOf(
@@ -2715,9 +2817,15 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
       ),
     );
-    await container
+    final agentContainer = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await agentContainer
         .read(chatThreadsProvider.notifier)
         .openConversation(agentConversation);
     await tester.pumpAndSettle();
@@ -2736,6 +2844,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'group:did:test:group:mention-markdown',
       threadId: 'group:mention-markdown',
       displayName: 'Markdown 群',
       lastMessagePreview: '',
@@ -2745,12 +2854,14 @@ void main() {
       groupId: 'did:test:group:mention-markdown',
     );
     const text = '@Alice **重点**\n\n- 第一项';
-    gateway.groupHistoryByGroupId = <String, List<ChatMessage>>{
-      conversation.groupId!: <ChatMessage>[
+    final messagingService = _messagingServiceWithConversationMessages(
+      gateway,
+      conversation,
+      <ChatMessage>[
         ChatMessage(
           localId: 'group-mention-markdown',
           remoteId: 'group-mention-markdown',
-          threadId: conversation.threadId,
+          threadId: conversation.effectiveConversationId,
           senderDid: 'did:test:peer',
           senderName: 'Bob',
           groupId: conversation.groupId,
@@ -2774,7 +2885,7 @@ void main() {
           ],
         ),
       ],
-    };
+    );
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -2783,6 +2894,9 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
       ),
     );
     final container = ProviderScope.containerOf(
@@ -2814,6 +2928,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:agent:runtime',
       threadId: 'dm:agent-processing',
       displayName: '我的智能体',
       lastMessagePreview: '',
@@ -2822,6 +2937,7 @@ void main() {
       isGroup: false,
       targetDid: 'did:agent:runtime',
     );
+    final messagingService = FakeMessagingService(gateway);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -2831,6 +2947,7 @@ void main() {
         gateway: gateway,
         session: session,
         providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
           agentsProvider.overrideWith((ref) {
             final controller = AgentsController(ref);
             controller.state = const AgentsState(
@@ -2854,21 +2971,28 @@ void main() {
 
     await tester.enterText(find.byType(CupertinoTextField), '请总结');
     await tester.testTextInput.receiveAction(TextInputAction.send);
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(find.text('请总结'), findsOneWidget);
-    expect(find.text('智能体正在处理...'), findsOneWidget);
-
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ChatView)),
     );
     container
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
+          _latestProjectedConversationMessage(messagingService, conversation),
+          threadId: conversation.effectiveConversationId,
+        );
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('请总结'), findsOneWidget);
+    expect(find.text('智能体正在处理...'), findsOneWidget);
+
+    container
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(
           ChatMessage(
             localId: 'agent-processing-reply',
             remoteId: 'agent-processing-reply',
-            threadId: conversation.threadId,
+            conversationId: conversation.effectiveConversationId,
+            threadId: conversation.effectiveConversationId,
             senderDid: 'did:agent:runtime',
             receiverDid: session.did,
             content: '总结完成',
@@ -2904,6 +3028,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'group:did:test:group:agent-processing',
       threadId: 'group:did:test:group:agent-processing',
       displayName: 'Agent 群',
       lastMessagePreview: '',
@@ -2913,6 +3038,7 @@ void main() {
       groupId: 'did:test:group:agent-processing',
     );
     gateway.nextSentMessageId = 'msg_group_agent_processing_1';
+    final messagingService = FakeMessagingService(gateway);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -2921,6 +3047,9 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
       ),
     );
 
@@ -2932,21 +3061,28 @@ void main() {
 
     await tester.enterText(find.byType(CupertinoTextField), '@hermes 请总结');
     await tester.testTextInput.receiveAction(TextInputAction.send);
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(find.text('@hermes 请总结'), findsOneWidget);
-    expect(find.text('@hermes 正在处理...'), findsOneWidget);
-
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ChatView)),
     );
     container
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
+          _latestProjectedConversationMessage(messagingService, conversation),
+          threadId: conversation.effectiveConversationId,
+        );
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('@hermes 请总结'), findsOneWidget);
+    expect(find.text('@hermes 正在处理...'), findsOneWidget);
+
+    container
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(
           ChatMessage(
             localId: 'group-agent-processing-reply',
             remoteId: 'group-agent-processing-reply',
-            threadId: conversation.threadId,
+            conversationId: conversation.effectiveConversationId,
+            threadId: conversation.effectiveConversationId,
             senderDid: 'did:wba:awiki.info:agent:runtime:hermes:e1_agent',
             groupId: conversation.groupId,
             content: '@me **总结完成**',
@@ -2979,6 +3115,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:agent:runtime',
       threadId: 'dm:agent-processing-multiple',
       displayName: '我的智能体',
       lastMessagePreview: '',
@@ -2987,6 +3124,7 @@ void main() {
       isGroup: false,
       targetDid: 'did:agent:runtime',
     );
+    final messagingService = FakeMessagingService(gateway);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -2996,6 +3134,7 @@ void main() {
         gateway: gateway,
         session: session,
         providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
           agentsProvider.overrideWith((ref) {
             final controller = AgentsController(ref);
             controller.state = const AgentsState(
@@ -3019,25 +3158,38 @@ void main() {
 
     await tester.enterText(find.byType(CupertinoTextField), '第一个问题');
     await tester.testTextInput.receiveAction(TextInputAction.send);
-    await tester.pump(const Duration(milliseconds: 50));
-    await tester.enterText(find.byType(CupertinoTextField), '第二个问题');
-    await tester.testTextInput.receiveAction(TextInputAction.send);
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(find.text('第一个问题'), findsOneWidget);
-    expect(find.text('第二个问题'), findsOneWidget);
-    expect(find.text('智能体正在处理...'), findsNWidgets(2));
-
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ChatView)),
     );
     container
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
+          _latestProjectedConversationMessage(messagingService, conversation),
+          threadId: conversation.effectiveConversationId,
+        );
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.enterText(find.byType(CupertinoTextField), '第二个问题');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    container
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(
+          _latestProjectedConversationMessage(messagingService, conversation),
+          threadId: conversation.effectiveConversationId,
+        );
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('第一个问题'), findsOneWidget);
+    expect(find.text('第二个问题'), findsOneWidget);
+    expect(find.text('智能体正在处理...'), findsNWidgets(2));
+
+    container
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(
           ChatMessage(
             localId: 'agent-processing-reply-a',
             remoteId: 'agent-processing-reply-a',
-            threadId: conversation.threadId,
+            conversationId: conversation.effectiveConversationId,
+            threadId: conversation.effectiveConversationId,
             senderDid: 'did:agent:runtime',
             receiverDid: session.did,
             content: '第一个回答',
@@ -3057,7 +3209,8 @@ void main() {
           ChatMessage(
             localId: 'agent-processing-reply-a',
             remoteId: 'agent-processing-reply-a',
-            threadId: conversation.threadId,
+            conversationId: conversation.effectiveConversationId,
+            threadId: conversation.effectiveConversationId,
             senderDid: 'did:agent:runtime',
             receiverDid: session.did,
             content: '第一个回答',
@@ -3076,7 +3229,8 @@ void main() {
           ChatMessage(
             localId: 'agent-processing-reply-b',
             remoteId: 'agent-processing-reply-b',
-            threadId: conversation.threadId,
+            conversationId: conversation.effectiveConversationId,
+            threadId: conversation.effectiveConversationId,
             senderDid: 'did:agent:runtime',
             receiverDid: session.did,
             content: '第二个回答',
@@ -4774,6 +4928,33 @@ ChatMessage _messageWithConversation(
     payloadJson: message.payloadJson,
     mentions: message.mentions,
   );
+}
+
+FakeMessagingService _messagingServiceWithConversationMessages(
+  FakeAwikiGateway gateway,
+  ConversationSummary conversation,
+  List<ChatMessage> messages,
+) {
+  return FakeMessagingService(gateway)
+    ..conversationTimelineById[conversation.effectiveConversationId] = messages
+        .map((message) => _messageWithConversation(message, conversation))
+        .toList(growable: false);
+}
+
+ChatMessage _latestProjectedConversationMessage(
+  FakeMessagingService messagingService,
+  ConversationSummary conversation,
+) {
+  final messages =
+      messagingService.conversationTimelineById[conversation
+          .effectiveConversationId] ??
+      const <ChatMessage>[];
+  if (messages.isEmpty) {
+    throw StateError(
+      'No projected messages for ${conversation.effectiveConversationId}',
+    );
+  }
+  return messages.last;
 }
 
 bool _textSpanHasStyledMention(InlineSpan span, String mentionText) {

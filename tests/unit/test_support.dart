@@ -1930,6 +1930,7 @@ class FakeMessagingService
     final sent = await gateway.sendTextMessage(
       threadId: conversation.conversationId,
       peerDid: _directPeerDidForConversationId(conversation.conversationId),
+      groupId: _groupDidForConversationId(conversation.conversationId),
       content: content,
     );
     return _recordConversationSendResult(
@@ -1952,6 +1953,7 @@ class FakeMessagingService
     final sent = await gateway.sendTextMessage(
       threadId: conversation.conversationId,
       peerDid: _directPeerDidForConversationId(conversation.conversationId),
+      groupId: _groupDidForConversationId(conversation.conversationId),
       content: mentionPayload?.text ?? '',
       payloadJson: payloadJson,
       mentions: mentionPayload?.mentions ?? const <ChatMessageMention>[],
@@ -3167,6 +3169,14 @@ String? _directPeerDidForConversationId(String conversationId) {
     return body.substring(peerDidSeparator + 1);
   }
   return body.startsWith('did:') ? body : null;
+}
+
+String? _groupDidForConversationId(String conversationId) {
+  if (!conversationId.startsWith('group:')) {
+    return null;
+  }
+  final body = conversationId.substring('group:'.length).trim();
+  return body.isEmpty ? null : body;
 }
 
 class FakeLocalePreferenceService extends LocalePreferenceService {
