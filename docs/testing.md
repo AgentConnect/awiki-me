@@ -168,6 +168,11 @@ fail-closed behavior, strict file stores refusing to recreate missing root keys
 in existing files, `VaultRequired` open options, and activation-time vault
 verification before identity switching.
 
+The App-side vault contract, E2E file-provider boundary, and activation-time
+verification gate are documented in `docs/identity-secret-storage.md`. The shared
+SDK/CLI/daemon design is in
+`awiki-cli-rs2/docs/architecture/identity-secret-storage.md`.
+
 ## Direct Shim Commands
 
 Useful direct shim commands while debugging E2E internals:

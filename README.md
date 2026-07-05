@@ -223,6 +223,11 @@ to prove the signed runner can write, read, and delete a secure-storage value.
 
 ## Identity Secret Storage
 
+App-side root-key handling, activation-time verification, and E2E test state are
+documented in [docs/identity-secret-storage.md](docs/identity-secret-storage.md).
+The shared SDK/CLI/daemon design lives in
+`awiki-cli-rs2/docs/architecture/identity-secret-storage.md`.
+
 AWiki Me opens the Flutter SDK / Rust `im-core` boundary with identity
 `VaultRequired` options. DID private keys, E2EE static key material, auth/JWT
 state, and daemon subkey package persistence are owned by `im-core`; the App
@@ -247,7 +252,11 @@ When activating an identity, AWiki Me checks the identity vault before switching
 the active SDK client or writing the active session:
 
 ```text
-identityVaultStatus -> migrateIdentityVault when legacy metadata is absent -> verifyIdentityVault -> switchIdentity -> ensureSession
+identityVaultStatus
+  -> migrateIdentityVault when legacy metadata is absent
+  -> verifyIdentityVault
+  -> switchIdentity
+  -> ensureSession
 ```
 
 If existing vault metadata is present but cannot be selected/verified, the App
