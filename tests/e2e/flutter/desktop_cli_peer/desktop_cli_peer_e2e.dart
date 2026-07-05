@@ -27,6 +27,7 @@ import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:crypto/crypto.dart';
@@ -163,6 +164,14 @@ void runDesktopCliPeerE2e({
           : await _prepareAppIdentity(bootstrap.onboardingService!, config);
       expect(session.authenticated, isTrue);
 
+      if (selectedCase.runsPerformance) {
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(AppShell)),
+        );
+        await container
+            .read(appRuntimeProvider.notifier)
+            .activateSession(session.toLegacySessionIdentity());
+      }
       await tester.pumpAndSettle();
 
       final messaging = bootstrap.messagingService!;
