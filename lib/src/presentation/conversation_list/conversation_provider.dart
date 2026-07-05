@@ -8,7 +8,6 @@ import '../../application/agent/agent_control_projection.dart';
 import '../../application/conversation_service.dart';
 import '../../application/models/app_thread_read_watermark.dart';
 import '../../application/models/conversation_patch.dart';
-import '../../application/thread_id_utils.dart';
 import '../../core/group_display_name.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_display_name.dart';
@@ -22,7 +21,6 @@ import '../../domain/services/notification_facade.dart';
 import '../agents/agents_provider.dart';
 import '../app_shell/providers/selected_conversation_provider.dart';
 import '../app_shell/providers/session_provider.dart';
-import '../shared/realtime_conversation_identity_projection.dart';
 import 'conversation_list_ordering.dart';
 
 const bool _conversationTraceEnabled = bool.fromEnvironment(
@@ -440,10 +438,11 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       );
       return;
     }
-    _lastPatchVersion = patch.version;
+    var applied = false;
     switch (patch.kind) {
       case ConversationListPatchKind.reset:
         _applyPatchReset(patch);
+        applied = true;
       case ConversationListPatchKind.upsert:
         final item = patch.item;
         if (item == null) {
@@ -456,10 +455,13 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           return;
         }
         _applyPatchUpsert(item);
+        applied = true;
       case ConversationListPatchKind.remove:
         _applyPatchRemove(patch);
+        applied = true;
       case ConversationListPatchKind.reorder:
-        if (!_applyPatchReorder(patch)) {
+        applied = _applyPatchReorder(patch);
+        if (!applied) {
           _schedulePatchRepair(
             ownerDid: ownerDid,
             generation: _refreshGeneration,
@@ -474,6 +476,10 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           token: token,
           reason: patch.reason ?? 'repair_required',
         );
+        return;
+    }
+    if (applied) {
+      _lastPatchVersion = patch.version;
     }
   }
 
@@ -546,11 +552,19 @@ class ConversationListController extends StateNotifier<ConversationListState> {
 
   void _applyPatchRemove(ConversationListPatch patch) {
     final threadId = patch.threadId?.trim();
+    final conversationId = patch.conversationId?.trim();
+    final hasConversationId =
+        conversationId != null && conversationId.isNotEmpty;
     final conversationKey = patch.conversationKey?.trim();
     final next = state.conversations
         .where((item) {
+          if (hasConversationId &&
+              _conversationIdentityKey(item) == conversationId) {
+            return false;
+          }
           if (threadId != null &&
               threadId.isNotEmpty &&
+              !hasConversationId &&
               item.threadId == threadId) {
             return false;
           }
@@ -574,6 +588,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         'before_unread': beforeUnread,
         'after_unread': state.unreadCount,
         'thread_hash': _safeHash(threadId),
+        'conversation_hash': _safeHash(conversationId),
         'conversation_key_hash': _safeHash(conversationKey),
       },
     );
@@ -584,12 +599,16 @@ class ConversationListController extends StateNotifier<ConversationListState> {
 
   bool _applyPatchReorder(ConversationListPatch patch) {
     final threadId = patch.threadId?.trim();
-    if (threadId == null || threadId.isEmpty) {
+    final conversationId = patch.conversationId?.trim();
+    final identity = conversationId != null && conversationId.isNotEmpty
+        ? conversationId
+        : threadId;
+    if (identity == null || identity.isEmpty) {
       return false;
     }
     final current = state.conversations.toList(growable: true);
     final currentIndex = current.indexWhere(
-      (item) => item.threadId == threadId,
+      (item) => _conversationIdentityKey(item) == identity,
     );
     if (currentIndex < 0) {
       return false;
@@ -606,6 +625,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       fields: <String, Object?>{
         'unread': state.unreadCount,
         'thread_hash': _safeHash(threadId),
+        'conversation_hash': _safeHash(conversationId),
         'from': currentIndex,
         'to': targetIndex,
       },
@@ -691,9 +711,6 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       );
       return;
     }
-    if (repair.version > _lastPatchVersion) {
-      _lastPatchVersion = repair.version;
-    }
     _trace(
       'patch_repair.success',
       fields: <String, Object?>{
@@ -703,13 +720,16 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         'items': repair.conversations.length,
       },
     );
-    await _applyConversationRefresh(
+    final applied = await _applyConversationRefresh(
       repair.conversations,
       generation: generation,
       label: 'conversation_list.patch_repair',
       keepLocalOnly: false,
       badgeSource: 'patch_repair',
     );
+    if (applied && repair.version > _lastPatchVersion) {
+      _lastPatchVersion = repair.version;
+    }
   }
 
   bool _canApplySnapshotBootstrap({
@@ -724,7 +744,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         ref.read(sessionProvider).session?.did == ownerDid;
   }
 
-  Future<void> _applyConversationRefresh(
+  Future<bool> _applyConversationRefresh(
     List<ConversationSummary> refreshed, {
     required int generation,
     required String label,
@@ -732,7 +752,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     String? badgeSource,
   }) async {
     if (generation != _refreshGeneration) {
-      return;
+      return false;
     }
     _snapshotBootstrapAllowedGeneration = null;
     final currentConversations = state.conversations;
@@ -769,7 +789,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           'generation': generation,
         },
       );
-      return;
+      return true;
     }
     state = state.copyWith(
       conversations: sortConversationsForPresentation(nextConversations),
@@ -791,6 +811,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       state.unreadCount,
       source: badgeSource ?? label,
     );
+    return true;
   }
 
   void upsertConversation(ConversationSummary conversation) {
@@ -858,26 +879,14 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     required ChatMessage message,
   }) {
     try {
-      final realtimeConversation = _realtimeConversationForMessage(
-        conversation,
-        message,
+      _trace(
+        'realtime_message.refresh_hint',
+        fields: <String, Object?>{
+          'thread_hash': _safeHash(conversation.threadId),
+          'message_thread_hash': _safeHash(message.threadId),
+        },
       );
-      final normalizedConversation = realtimeConversation == null
-          ? null
-          : normalizeRealtimeConversationPresentationIdentity(
-              realtimeConversation,
-              ref.read(agentsProvider).agents,
-              didDomain: ref.read(awikiEnvironmentConfigProvider).didDomain,
-            );
-      if (normalizedConversation == null ||
-          _isLocallyHidden(normalizedConversation)) {
-        return;
-      }
-      _upsertRealtimeConversation(
-        normalizedConversation,
-        message: message,
-        source: 'realtime_message',
-      );
+      unawaited(refreshFastLocal().catchError((_) {}));
     } catch (_) {
       // Background realtime paths must not fail message delivery or notification.
     }
@@ -966,86 +975,6 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     unawaited(_updateBadgeCountBestEffort(state.unreadCount, source: source));
   }
 
-  void _upsertRealtimeConversation(
-    ConversationSummary conversation, {
-    required ChatMessage message,
-    required String source,
-  }) {
-    final existing = _matchingConversationForUpsert(
-      state.conversations,
-      conversation,
-      ownerDid: _currentOwnerDid,
-    );
-    final titledConversation = _mergeConversationTitle(
-      refreshed: conversation,
-      local: existing,
-    );
-    final mergedConversation = _applyLocalReadMarker(
-      _mergeConversationPresentationIdentity(
-        refreshed: _mergeConversationLifecycle(
-          refreshed: _mergeRealtimeConversationReadState(
-            refreshed: _mergeConversationLastMessage(
-              refreshed: titledConversation,
-              local: existing,
-            ),
-            local: existing,
-            message: message,
-          ),
-          local: existing,
-        ),
-        local: existing,
-        ownerDid: _currentOwnerDid,
-      ),
-    );
-    final merged = _replaceConversationInPresentationList(
-      current: state.conversations,
-      incoming: mergedConversation,
-      matchedLocal: existing,
-      ownerDid: _currentOwnerDid,
-    );
-    final beforeUnread = state.unreadCount;
-    final beforeItems = state.conversations.length;
-    if (_sameConversationSummaryList(state.conversations, merged)) {
-      _trace(
-        'state.realtime_upsert_noop',
-        fields: <String, Object?>{
-          'source': source,
-          'matched': existing != null,
-          'items': beforeItems,
-          'unread': beforeUnread,
-          'incoming_unread': conversation.unreadCount,
-          'merged_unread': mergedConversation.unreadCount,
-          'thread_hash': _safeHash(mergedConversation.threadId),
-          'preview_hash': _safeHash(mergedConversation.lastMessagePreview),
-          'last_at': mergedConversation.lastMessageAt,
-        },
-      );
-      return;
-    }
-    state = state.copyWith(conversations: merged);
-    _syncSelectedConversationAfterUpsert(
-      incoming: mergedConversation,
-      matchedLocal: existing,
-    );
-    _trace(
-      'state.realtime_upsert',
-      fields: <String, Object?>{
-        'source': source,
-        'matched': existing != null,
-        'before_items': beforeItems,
-        'after_items': state.conversations.length,
-        'before_unread': beforeUnread,
-        'after_unread': state.unreadCount,
-        'incoming_unread': conversation.unreadCount,
-        'merged_unread': mergedConversation.unreadCount,
-        'thread_hash': _safeHash(mergedConversation.threadId),
-        'preview_hash': _safeHash(mergedConversation.lastMessagePreview),
-        'last_at': mergedConversation.lastMessageAt,
-      },
-    );
-    unawaited(_updateBadgeCountBestEffort(state.unreadCount, source: source));
-  }
-
   Future<void> restoreConversation(ConversationSummary conversation) async {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
@@ -1091,7 +1020,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       rethrow;
     }
     final selected = ref.read(selectedConversationProvider);
-    if (selected != null && sameConversationThread(selected, conversation)) {
+    if (selected != null && _sameConversationIdentity(selected, conversation)) {
       ref.read(selectedConversationProvider.notifier).clearSelection();
     }
     await _updateBadgeCountBestEffort(
@@ -1140,7 +1069,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final currentConversations = state.conversations;
     final beforeUnread = state.unreadCount;
     final next = currentConversations.map((item) {
-      if (item.threadId != threadId ||
+      if (!_threadOrIdentityMatches(item, threadId) ||
           (item.unreadCount == 0 && item.unreadMentionCount == 0)) {
         return item;
       }
@@ -1189,7 +1118,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     var marked = false;
     final next = currentConversations.map((item) {
       if ((item.unreadCount == 0 && item.unreadMentionCount == 0) ||
-          !sameConversationThread(item, conversation)) {
+          !_sameConversationIdentity(item, conversation)) {
         return item;
       }
       if (watermark != null &&
@@ -1409,7 +1338,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   void _removeConversationLocally(ConversationSummary conversation) {
     final current = state.conversations;
     final next = current
-        .where((item) => !sameConversationThread(item, conversation))
+        .where((item) => !_sameConversationIdentity(item, conversation))
         .toList(growable: false);
     if (next.length == current.length) {
       return;
@@ -1462,7 +1391,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     if (selected == null) {
       return;
     }
-    if (sameConversationThread(selected, incoming)) {
+    if (_sameConversationIdentity(selected, incoming)) {
       ref
           .read(selectedConversationProvider.notifier)
           .selectConversation(
@@ -1471,7 +1400,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       return;
     }
     if (matchedLocal != null &&
-        sameConversationThread(selected, matchedLocal)) {
+        _sameConversationIdentity(selected, matchedLocal)) {
       ref
           .read(selectedConversationProvider.notifier)
           .selectConversation(
@@ -1542,6 +1471,53 @@ String? _safeHash(String? value) {
   return AwikiPerformanceLogger.safeHash(normalized);
 }
 
+String _conversationIdentityKey(ConversationSummary conversation) {
+  final conversationId = _explicitConversationId(conversation);
+  if (conversationId != null) {
+    return conversationId;
+  }
+  final threadId = conversation.threadId.trim();
+  if (threadId.isNotEmpty) {
+    return threadId;
+  }
+  return conversation.visibilityKey;
+}
+
+String? _explicitConversationId(ConversationSummary conversation) {
+  final conversationId = conversation.conversationId?.trim();
+  if (conversationId != null && conversationId.isNotEmpty) {
+    return conversationId;
+  }
+  return null;
+}
+
+bool _hasExplicitConversationId(ConversationSummary conversation) {
+  return _explicitConversationId(conversation) != null;
+}
+
+bool _sameConversationIdentity(
+  ConversationSummary first,
+  ConversationSummary second,
+) {
+  final firstConversationId = _explicitConversationId(first);
+  final secondConversationId = _explicitConversationId(second);
+  if (firstConversationId != null || secondConversationId != null) {
+    return firstConversationId != null &&
+        secondConversationId != null &&
+        firstConversationId == secondConversationId;
+  }
+  return sameConversationThread(first, second);
+}
+
+bool _threadOrIdentityMatches(ConversationSummary conversation, String value) {
+  final normalized = value.trim();
+  if (normalized.isEmpty) {
+    return false;
+  }
+  return _conversationIdentityKey(conversation) == normalized ||
+      conversation.threadId.trim() == normalized;
+}
+
 String _formatTraceValue(Object value) {
   if (value is DateTime) {
     return value.toUtc().toIso8601String();
@@ -1589,7 +1565,8 @@ bool _sameConversationSummaryValue(
   ConversationSummary first,
   ConversationSummary second,
 ) {
-  return first.threadId == second.threadId &&
+  return first.conversationId == second.conversationId &&
+      first.threadId == second.threadId &&
       first.displayName == second.displayName &&
       first.lastMessagePreview == second.lastMessagePreview &&
       first.lastMessageAt.isAtSameMomentAs(second.lastMessageAt) &&
@@ -1689,6 +1666,10 @@ List<String> _visibilityKeysFor(
   ConversationSummary conversation, {
   bool includeHandleAliasesForStrongIdentity = false,
 }) {
+  final conversationId = _explicitConversationId(conversation);
+  if (conversationId != null) {
+    return <String>[conversationId];
+  }
   if (isPeerScopedDirectConversation(conversation)) {
     final threadId = conversation.threadId.trim();
     return threadId.isEmpty ? const <String>[] : <String>[threadId];
@@ -1731,15 +1712,15 @@ List<ConversationSummary> _mergeConversationRefresh({
   bool keepLocalOnly = true,
 }) {
   final localIndex = _ConversationMergeIndex(local, ownerDid: ownerDid);
-  final consumedLocalThreadIds = <String>{};
+  final consumedLocalIdentityKeys = <String>{};
   final consumedLocalPresentationAliases = <String>{};
   final mergedRefreshed = refreshed.map((conversation) {
     final matchedLocal = localIndex.match(
       conversation,
-      consumedThreadIds: consumedLocalThreadIds,
+      consumedIdentityKeys: consumedLocalIdentityKeys,
     );
     if (matchedLocal != null) {
-      consumedLocalThreadIds.add(matchedLocal.threadId);
+      consumedLocalIdentityKeys.add(_conversationIdentityKey(matchedLocal));
     }
     for (final localConversation in local) {
       if (identical(localConversation, matchedLocal)) {
@@ -1776,13 +1757,22 @@ List<ConversationSummary> _mergeConversationRefresh({
   final refreshedThreadIds = <String>{
     for (final conversation in refreshed) conversation.threadId,
   };
+  final refreshedIdentityKeys = <String>{
+    for (final conversation in refreshed)
+      _conversationIdentityKey(conversation),
+  };
   final localOnly = keepLocalOnly
       ? local
             .where(
               (conversation) =>
-                  !consumedLocalThreadIds.contains(conversation.threadId) &&
+                  !consumedLocalIdentityKeys.contains(
+                    _conversationIdentityKey(conversation),
+                  ) &&
                   !consumedLocalPresentationAliases.contains(
                     conversation.threadId,
+                  ) &&
+                  !refreshedIdentityKeys.contains(
+                    _conversationIdentityKey(conversation),
                   ) &&
                   !refreshedThreadIds.contains(conversation.threadId) &&
                   conversation.lastMessagePreview.trim().isNotEmpty,
@@ -1805,8 +1795,9 @@ List<ConversationSummary> _replaceConversationInPresentationList({
   final next = <ConversationSummary>[];
   var inserted = false;
   for (final item in current) {
-    if (sameConversationThread(item, incoming) ||
-        (matchedLocal != null && sameConversationThread(item, matchedLocal)) ||
+    if (_sameConversationIdentity(item, incoming) ||
+        (matchedLocal != null &&
+            _sameConversationIdentity(item, matchedLocal)) ||
         _shouldCollapsePresentationListItem(
           incoming: incoming,
           item: item,
@@ -1833,6 +1824,10 @@ class _ConversationMergeIndex {
     required this.ownerDid,
   }) {
     for (final conversation in conversations) {
+      final identity = _nonEmptyKey(_conversationIdentityKey(conversation));
+      if (identity != null) {
+        _byConversationId.putIfAbsent(identity, () => conversation);
+      }
       final threadId = _nonEmptyKey(conversation.threadId);
       if (threadId != null) {
         _byThreadId.putIfAbsent(threadId, () => conversation);
@@ -1849,6 +1844,8 @@ class _ConversationMergeIndex {
     }
   }
 
+  final Map<String, ConversationSummary> _byConversationId =
+      <String, ConversationSummary>{};
   final Map<String, ConversationSummary> _byThreadId =
       <String, ConversationSummary>{};
   final Map<String, ConversationSummary> _byVisibilityKey =
@@ -1861,11 +1858,21 @@ class _ConversationMergeIndex {
 
   ConversationSummary? match(
     ConversationSummary incoming, {
-    Set<String> consumedThreadIds = const <String>{},
+    Set<String> consumedIdentityKeys = const <String>{},
   }) {
     ConversationSummary? candidate = _candidateIfAvailable(
+      _byConversationId[_nonEmptyKey(_conversationIdentityKey(incoming))],
+      consumedIdentityKeys,
+    );
+    if (candidate != null) {
+      return candidate;
+    }
+    if (_hasExplicitConversationId(incoming)) {
+      return null;
+    }
+    candidate = _candidateIfAvailable(
       _byThreadId[_nonEmptyKey(incoming.threadId)],
-      consumedThreadIds,
+      consumedIdentityKeys,
     );
     if (candidate != null) {
       return candidate;
@@ -1875,7 +1882,7 @@ class _ConversationMergeIndex {
         candidate = _aliasCandidateIfAvailable(
           _byVisibilityKey[_nonEmptyKey(key)],
           incoming,
-          consumedThreadIds,
+          consumedIdentityKeys,
           ownerDid,
         );
         if (candidate != null) {
@@ -1890,7 +1897,7 @@ class _ConversationMergeIndex {
       candidate = _aliasCandidateIfAvailable(
         _directTargetCandidate(key),
         incoming,
-        consumedThreadIds,
+        consumedIdentityKeys,
         ownerDid,
       );
       if (candidate != null) {
@@ -1936,9 +1943,10 @@ class _ConversationMergeIndex {
 
   static ConversationSummary? _candidateIfAvailable(
     ConversationSummary? candidate,
-    Set<String> consumedThreadIds,
+    Set<String> consumedIdentityKeys,
   ) {
-    if (candidate == null || consumedThreadIds.contains(candidate.threadId)) {
+    if (candidate == null ||
+        consumedIdentityKeys.contains(_conversationIdentityKey(candidate))) {
       return null;
     }
     return candidate;
@@ -1947,10 +1955,10 @@ class _ConversationMergeIndex {
   static ConversationSummary? _aliasCandidateIfAvailable(
     ConversationSummary? candidate,
     ConversationSummary incoming,
-    Set<String> consumedThreadIds,
+    Set<String> consumedIdentityKeys,
     String? ownerDid,
   ) {
-    candidate = _candidateIfAvailable(candidate, consumedThreadIds);
+    candidate = _candidateIfAvailable(candidate, consumedIdentityKeys);
     if (candidate == null ||
         !_canAliasMatch(candidate, incoming, ownerDid: ownerDid)) {
       return null;
@@ -1965,6 +1973,10 @@ class _ConversationMergeIndex {
   }) {
     if (candidate.threadId.trim() == incoming.threadId.trim()) {
       return true;
+    }
+    if (_hasExplicitConversationId(candidate) ||
+        _hasExplicitConversationId(incoming)) {
+      return _sameConversationIdentity(candidate, incoming);
     }
     if (_isPeerScopedDirectThread(candidate) &&
         _isPeerScopedDirectThread(incoming)) {
@@ -2017,6 +2029,13 @@ bool _shouldCollapsePresentationAlias(
 }) {
   if (incoming.isGroup || candidate.isGroup) {
     return false;
+  }
+  final incomingConversationId = _explicitConversationId(incoming);
+  final candidateConversationId = _explicitConversationId(candidate);
+  if (incomingConversationId != null || candidateConversationId != null) {
+    return incomingConversationId != null &&
+        candidateConversationId != null &&
+        incomingConversationId == candidateConversationId;
   }
   if (sameConversationThread(incoming, candidate)) {
     return true;
@@ -2141,33 +2160,6 @@ ConversationSummary _mergeConversationReadState({
   return refreshed;
 }
 
-ConversationSummary _mergeRealtimeConversationReadState({
-  required ConversationSummary refreshed,
-  required ConversationSummary? local,
-  required ChatMessage message,
-}) {
-  if (message.isMine) {
-    return refreshed.copyWith(
-      unreadCount: 0,
-      unreadMentionCount: 0,
-      firstUnreadMentionMessageId: null,
-    );
-  }
-  if (local == null) {
-    return refreshed;
-  }
-  final localUnread = local.unreadCount;
-  final incomingUnread = refreshed.unreadCount;
-  final nextUnread = incomingUnread > localUnread
-      ? incomingUnread
-      : localUnread + 1;
-  return refreshed.copyWith(
-    unreadCount: nextUnread,
-    unreadMentionCount: local.unreadMentionCount,
-    firstUnreadMentionMessageId: local.firstUnreadMentionMessageId,
-  );
-}
-
 ConversationSummary _mergeConversationLifecycle({
   required ConversationSummary refreshed,
   required ConversationSummary? local,
@@ -2271,165 +2263,6 @@ bool _isBetterDirectConversationTitle(String localName, String refreshedName) {
   }
   return AgentDisplayName.isUserVisibleName(localName) &&
       !AgentDisplayName.isUserVisibleName(refreshedName);
-}
-
-ConversationSummary? _realtimeConversationForMessage(
-  ConversationSummary conversation,
-  ChatMessage message,
-) {
-  final messageThreadId = message.threadId.trim();
-  if (messageThreadId.isEmpty || !message.hasRenderableContent) {
-    return null;
-  }
-  if (conversation.isGroup) {
-    if (!_realtimeGroupMessageMatchesConversation(message, conversation)) {
-      return null;
-    }
-    final groupId = message.groupId?.trim();
-    final threadId =
-        _firstNonEmptyString(<String?>[
-          conversation.threadId,
-          groupId == null ? null : canonicalGroupThreadId(groupId),
-          messageThreadId,
-        ]) ??
-        messageThreadId;
-    return conversation.copyWith(
-      threadId: threadId,
-      lastMessagePreview: message.previewText,
-      lastMessageAt: message.createdAt,
-      unreadCount: message.isMine ? 0 : conversation.unreadCount,
-      lastMessagePayloadJson: message.payloadJson,
-      lastMessageSnapshot: message,
-    );
-  }
-  if (!_realtimeDirectMessageMatchesConversation(message, conversation)) {
-    return null;
-  }
-  final threadId = isPeerScopedDirectThreadId(messageThreadId)
-      ? messageThreadId
-      : conversation.threadId;
-  return conversation.copyWith(
-    threadId: threadId,
-    lastMessagePreview: message.previewText,
-    lastMessageAt: message.createdAt,
-    unreadCount: message.isMine ? 0 : conversation.unreadCount,
-    unreadMentionCount: message.isMine ? 0 : conversation.unreadMentionCount,
-    firstUnreadMentionMessageId: message.isMine
-        ? null
-        : conversation.firstUnreadMentionMessageId,
-    targetDid: _firstNonEmptyString(<String?>[
-      conversation.targetDid,
-      _directMessagePeerDid(message),
-    ]),
-    targetPeer: _firstNonEmptyString(<String?>[
-      conversation.targetPeer,
-      _directMessagePeerDid(message),
-    ]),
-    lastMessagePayloadJson: message.payloadJson,
-    lastMessageSnapshot: message,
-  );
-}
-
-bool _realtimeGroupMessageMatchesConversation(
-  ChatMessage message,
-  ConversationSummary conversation,
-) {
-  final messageThreadId = message.threadId.trim();
-  if (messageThreadId == conversation.threadId.trim()) {
-    return true;
-  }
-  final messageGroupId = message.groupId?.trim();
-  final conversationGroupId = conversation.groupId?.trim();
-  if (messageGroupId != null &&
-      messageGroupId.isNotEmpty &&
-      conversationGroupId != null &&
-      conversationGroupId.isNotEmpty &&
-      messageGroupId == conversationGroupId) {
-    return true;
-  }
-  return messageGroupId != null &&
-      messageGroupId.isNotEmpty &&
-      canonicalGroupThreadId(messageGroupId) == conversation.threadId.trim();
-}
-
-bool _realtimeDirectMessageMatchesConversation(
-  ChatMessage message,
-  ConversationSummary conversation,
-) {
-  final messageThreadId = message.threadId.trim();
-  final conversationThreadId = conversation.threadId.trim();
-  if (messageThreadId == conversationThreadId) {
-    return true;
-  }
-  if (isPeerScopedDirectThreadId(messageThreadId) ||
-      isPeerScopedDirectConversation(conversation)) {
-    return false;
-  }
-  final targetDid = conversation.targetDid?.trim();
-  if (targetDid != null &&
-      targetDid.isNotEmpty &&
-      _directMessagePeerDids(message).contains(targetDid)) {
-    return true;
-  }
-  final targetPeer = normalizedDirectPeer(conversation.targetPeer);
-  if (targetPeer != null &&
-      _directMessagePeerDids(message).contains(targetPeer)) {
-    return true;
-  }
-  if (targetDid != null && targetDid.isNotEmpty) {
-    final canonical = canonicalDirectThreadId(
-      _directMessageOwnerDid(message, targetDid),
-      targetDid,
-    );
-    if (messageThreadId == canonical || messageThreadId == 'dm:$targetDid') {
-      return true;
-    }
-  }
-  return conversation.visibilityKeys.contains(messageThreadId) ||
-      conversation.visibilityKeys.contains('thread:$messageThreadId');
-}
-
-String _directMessageOwnerDid(ChatMessage message, String fallbackPeerDid) {
-  if (message.isMine) {
-    return message.senderDid;
-  }
-  final receiver = message.receiverDid?.trim();
-  if (receiver != null && receiver.isNotEmpty) {
-    return receiver;
-  }
-  return fallbackPeerDid;
-}
-
-String? _directMessagePeerDid(ChatMessage message) {
-  if (message.isMine) {
-    final receiver = message.receiverDid?.trim();
-    return receiver != null && receiver.isNotEmpty ? receiver : null;
-  }
-  final sender = message.senderDid.trim();
-  return sender.isNotEmpty ? sender : null;
-}
-
-Set<String> _directMessagePeerDids(ChatMessage message) {
-  final peers = <String>{};
-  void add(String? value) {
-    final normalized = normalizedDirectPeer(value);
-    if (normalized != null) {
-      peers.add(normalized);
-    }
-  }
-
-  add(_directMessagePeerDid(message));
-  return peers;
-}
-
-String? _firstNonEmptyString(Iterable<String?> values) {
-  for (final value in values) {
-    final trimmed = value?.trim();
-    if (trimmed != null && trimmed.isNotEmpty) {
-      return trimmed;
-    }
-  }
-  return null;
 }
 
 class _LocalConversationReadMarker {

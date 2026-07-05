@@ -287,14 +287,66 @@ void main() {
   );
 
   test(
-    'peer-scoped realtime reply collapses pending direct alias in recents',
+    'explicit conversation ids keep rows distinct across direct aliases',
     () {
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: _StaticConversationService(conversations: const []),
+        notifications: notifications,
+        ownerDid: 'did:human',
+      );
+      addTearDown(container.dispose);
+
+      final first =
+          _conversation(
+            conversationId: 'conv:controller',
+            threadId: 'dm:peer-scope:v1:controller',
+            displayName: 'Controller',
+            targetDid: 'did:agent',
+            targetPeer: 'agent.awiki.example',
+          ).copyWith(
+            lastMessagePreview: 'controller preview',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 7, 9),
+          );
+      final second =
+          _conversation(
+            conversationId: 'conv:runtime',
+            threadId: 'direct:did:agent',
+            displayName: 'Runtime',
+            targetDid: 'did:agent',
+            targetPeer: 'agent.awiki.example',
+          ).copyWith(
+            lastMessagePreview: 'runtime preview',
+            lastMessageAt: DateTime.utc(2026, 7, 3, 7, 10),
+          );
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(first);
+      notifier.upsertConversation(second);
+
+      final conversations = container
+          .read(conversationListProvider)
+          .conversations;
+      expect(conversations, hasLength(2));
+      expect(
+        conversations.map((item) => item.conversationId),
+        containsAll(<String>['conv:controller', 'conv:runtime']),
+      );
+    },
+  );
+
+  test(
+    'peer-scoped realtime reply refreshes recents from core projection',
+    () async {
       final notifications = FakeNotificationFacade();
       const agentDid = 'did:agent:runtime:hermes';
       const agentHandle = 'hermes';
       const agentFullHandle = 'hermes.awiki.info';
+      final service = _MutableConversationService(
+        conversations: const <ConversationSummary>[],
+      );
       final container = _conversationContainer(
-        service: _StaticConversationService(conversations: const []),
+        service: service,
         notifications: notifications,
         ownerDid: 'did:human',
         agents: const <AgentSummary>[
@@ -322,17 +374,22 @@ void main() {
             lastMessagePreview: '在吗？',
             lastMessageAt: DateTime.utc(2026, 7, 3, 12),
           );
-      final runtimeHint =
+      final coreProjection =
           _conversation(
+            conversationId: 'conv:hermes-runtime',
             threadId: 'dm:peer-scope:v1:hermes-runtime',
-            displayName: agentHandle,
-            targetDid: agentHandle,
-            targetPeer: agentHandle,
+            displayName: 'Hermes',
+            targetDid: agentDid,
+            targetPeer: agentFullHandle,
             unreadCount: 1,
           ).copyWith(
             lastMessagePreview: '在的',
             lastMessageAt: DateTime.utc(2026, 7, 3, 12, 1),
           );
+      final runtimeHint = coreProjection.copyWith(
+        targetDid: agentHandle,
+        targetPeer: agentHandle,
+      );
       final runtimeReply = ChatMessage(
         localId: 'runtime-reply-1',
         remoteId: 'runtime-reply-1',
@@ -348,34 +405,48 @@ void main() {
 
       final notifier = container.read(conversationListProvider.notifier);
       notifier.upsertConversation(pendingAlias);
+      expect(
+        container.read(conversationListProvider).conversations.single.threadId,
+        pendingAlias.threadId,
+      );
+
+      service.currentConversations = <ConversationSummary>[coreProjection];
       notifier.upsertRealtimeMessageBestEffort(
         runtimeHint,
         message: runtimeReply,
       );
+      await pumpEventQueue();
 
       final conversations = container
           .read(conversationListProvider)
           .conversations;
-      expect(conversations, hasLength(1));
-      expect(conversations.single.threadId, runtimeHint.threadId);
-      expect(conversations.single.targetDid, agentDid);
-      expect(conversations.single.targetPeer, agentFullHandle);
-      expect(conversations.single.lastMessagePreview, '在的');
-      expect(conversations.single.unreadCount, 1);
+      expect(conversations, hasLength(2));
+      expect(service.fastCalls, 1);
+      final refreshed = conversations.singleWhere(
+        (item) => item.conversationId == 'conv:hermes-runtime',
+      );
+      expect(refreshed.threadId, coreProjection.threadId);
+      expect(refreshed.targetDid, agentDid);
+      expect(refreshed.targetPeer, agentFullHandle);
+      expect(refreshed.lastMessagePreview, '在的');
+      expect(refreshed.unreadCount, 1);
       expect(notifications.lastBadgeCount, 1);
     },
   );
 
   test(
-    'ambiguous local handle realtime hint does not collapse direct aliases',
-    () {
+    'ambiguous local handle realtime hint waits for core projection',
+    () async {
       final notifications = FakeNotificationFacade();
       const firstDid = 'did:agent:runtime:hermes-a';
       const secondDid = 'did:agent:runtime:hermes-b';
       const localHandle = 'hermes';
       const firstFullHandle = 'hermes.awiki.info';
+      final service = _MutableConversationService(
+        conversations: const <ConversationSummary>[],
+      );
       final container = _conversationContainer(
-        service: _StaticConversationService(conversations: const []),
+        service: service,
         notifications: notifications,
         ownerDid: 'did:human',
         agents: const <AgentSummary>[
@@ -443,86 +514,95 @@ void main() {
         runtimeHint,
         message: runtimeReply,
       );
+      await pumpEventQueue();
 
       final conversations = container
           .read(conversationListProvider)
           .conversations;
-      expect(conversations, hasLength(2));
-      expect(
-        conversations.map((item) => item.threadId),
-        containsAll(<String>[pendingAlias.threadId, runtimeHint.threadId]),
-      );
+      expect(service.fastCalls, 1);
+      expect(conversations, hasLength(1));
+      expect(conversations.single.threadId, pendingAlias.threadId);
+      expect(conversations.single.lastMessagePreview, '在吗？');
     },
   );
 
-  test('runtime realtime hint expands local handle with provider domain', () {
-    final notifications = FakeNotificationFacade();
-    const agentDid = 'did:agent:runtime:codex';
-    const agentHandle = 'codex-local';
-    final container = _conversationContainer(
-      service: _StaticConversationService(conversations: const []),
-      notifications: notifications,
-      ownerDid: 'did:human',
-      environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
-      agents: const <AgentSummary>[
-        AgentSummary(
-          agentDid: agentDid,
-          kind: AgentKind.runtime,
-          daemonAgentDid: 'did:agent:daemon',
-          runtime: 'codex',
-          handle: agentHandle,
-          displayName: 'Codex',
-          activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready'),
-        ),
-      ],
-    );
-    addTearDown(container.dispose);
+  test(
+    'runtime realtime hint does not expand local handle in list layer',
+    () async {
+      final notifications = FakeNotificationFacade();
+      const agentDid = 'did:agent:runtime:codex';
+      const agentHandle = 'codex-local';
+      final service = _MutableConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: notifications,
+        ownerDid: 'did:human',
+        environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
+        agents: const <AgentSummary>[
+          AgentSummary(
+            agentDid: agentDid,
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'codex',
+            handle: agentHandle,
+            displayName: 'Codex',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    final runtimeHint =
-        _conversation(
-          threadId: 'dm:peer-scope:v1:codex-local',
-          displayName: agentHandle,
-          targetDid: agentHandle,
-          targetPeer: agentHandle,
-          unreadCount: 1,
-        ).copyWith(
-          lastMessagePreview: 'ready',
-          lastMessageAt: DateTime.utc(2026, 7, 5, 1),
-        );
-    final runtimeReply = ChatMessage(
-      localId: 'runtime-reply-domain',
-      remoteId: 'runtime-reply-domain',
-      threadId: runtimeHint.threadId,
-      senderDid: agentDid,
-      senderName: 'Codex',
-      receiverDid: 'did:human',
-      content: 'ready',
-      createdAt: runtimeHint.lastMessageAt,
-      isMine: false,
-      sendState: MessageSendState.sent,
-    );
+      final runtimeHint =
+          _conversation(
+            threadId: 'dm:peer-scope:v1:codex-local',
+            displayName: agentHandle,
+            targetDid: agentHandle,
+            targetPeer: agentHandle,
+            unreadCount: 1,
+          ).copyWith(
+            lastMessagePreview: 'ready',
+            lastMessageAt: DateTime.utc(2026, 7, 5, 1),
+          );
+      final runtimeReply = ChatMessage(
+        localId: 'runtime-reply-domain',
+        remoteId: 'runtime-reply-domain',
+        threadId: runtimeHint.threadId,
+        senderDid: agentDid,
+        senderName: 'Codex',
+        receiverDid: 'did:human',
+        content: 'ready',
+        createdAt: runtimeHint.lastMessageAt,
+        isMine: false,
+        sendState: MessageSendState.sent,
+      );
 
-    container
-        .read(conversationListProvider.notifier)
-        .upsertRealtimeMessageBestEffort(runtimeHint, message: runtimeReply);
+      container
+          .read(conversationListProvider.notifier)
+          .upsertRealtimeMessageBestEffort(runtimeHint, message: runtimeReply);
+      await pumpEventQueue();
 
-    final conversations = container
-        .read(conversationListProvider)
-        .conversations;
-    expect(conversations, hasLength(1));
-    expect(conversations.single.targetDid, agentDid);
-    expect(conversations.single.targetPeer, 'codex-local.awiki.ai');
-  });
+      final conversations = container
+          .read(conversationListProvider)
+          .conversations;
+      expect(service.fastCalls, 1);
+      expect(conversations, isEmpty);
+    },
+  );
 
   test(
-    'explicit non-runtime did is not corrected to runtime agent by handle',
-    () {
+    'explicit non-runtime did realtime hint is not corrected in list layer',
+    () async {
       final notifications = FakeNotificationFacade();
       const agentDid = 'did:agent:runtime:hermes';
       const agentFullHandle = 'hermes.awiki.info';
+      final service = _MutableConversationService(
+        conversations: const <ConversationSummary>[],
+      );
       final container = _conversationContainer(
-        service: _StaticConversationService(conversations: const []),
+        service: service,
         notifications: notifications,
         ownerDid: 'did:human',
         agents: const <AgentSummary>[
@@ -577,17 +657,15 @@ void main() {
       final notifier = container.read(conversationListProvider.notifier);
       notifier.upsertConversation(pendingAlias);
       notifier.upsertRealtimeMessageBestEffort(humanHint, message: humanReply);
+      await pumpEventQueue();
 
       final conversations = container
           .read(conversationListProvider)
           .conversations;
-      expect(conversations, hasLength(2));
-      expect(
-        conversations
-            .singleWhere((item) => item.threadId == humanHint.threadId)
-            .targetDid,
-        'did:human:hermes',
-      );
+      expect(service.fastCalls, 1);
+      expect(conversations, hasLength(1));
+      expect(conversations.single.threadId, pendingAlias.threadId);
+      expect(conversations.single.targetDid, agentDid);
     },
   );
 
@@ -1230,6 +1308,127 @@ void main() {
     },
   );
 
+  test('conversation patch remove targets canonical conversation id', () async {
+    final service = _PatchConversationService(
+      conversations: const <ConversationSummary>[],
+    );
+    final container = _conversationContainer(
+      service: service,
+      notifications: FakeNotificationFacade(),
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+
+    await container.read(conversationListProvider.notifier).refreshFastLocal();
+    for (final conversation in <ConversationSummary>[
+      _conversation(
+        conversationId: 'conv:a',
+        threadId: 'legacy-thread-a',
+        displayName: 'A',
+        targetDid: 'did:same',
+        targetPeer: 'same.awiki.example',
+      ),
+      _conversation(
+        conversationId: 'conv:b',
+        threadId: 'legacy-thread-b',
+        displayName: 'B',
+        targetDid: 'did:same',
+        targetPeer: 'same.awiki.example',
+      ),
+    ]) {
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerDid: 'did:alice',
+          version: conversation.conversationId == 'conv:a' ? 1 : 2,
+          unreadTotal: 0,
+          item: conversation,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    service.emitPatch(
+      const ConversationListPatch(
+        kind: ConversationListPatchKind.remove,
+        ownerDid: 'did:alice',
+        version: 3,
+        unreadTotal: 0,
+        conversationId: 'conv:a',
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    final rows = container.read(conversationListProvider).conversations;
+    expect(rows.map((item) => item.conversationId), <String>['conv:b']);
+  });
+
+  test(
+    'conversation patch reorder resolves canonical conversation id',
+    () async {
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      await notifier.refreshFastLocal();
+      for (final conversation in <ConversationSummary>[
+        _conversation(
+          conversationId: 'conv:a',
+          threadId: 'legacy-thread-a',
+          displayName: 'A',
+          targetDid: 'did:a',
+          lastMessageAt: DateTime.utc(2026, 6, 27, 2),
+        ),
+        _conversation(
+          conversationId: 'conv:b',
+          threadId: 'legacy-thread-b',
+          displayName: 'B',
+          targetDid: 'did:b',
+          lastMessageAt: DateTime.utc(2026, 6, 27, 2),
+        ),
+      ]) {
+        service.emitPatch(
+          ConversationListPatch(
+            kind: ConversationListPatchKind.upsert,
+            ownerDid: 'did:alice',
+            version: conversation.conversationId == 'conv:a' ? 1 : 2,
+            unreadTotal: 0,
+            item: conversation,
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.reorder,
+          ownerDid: 'did:alice',
+          version: 3,
+          unreadTotal: 0,
+          conversationId: 'conv:b',
+          index: 0,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(service.repairCalls, 0);
+      expect(
+        container
+            .read(conversationListProvider)
+            .conversations
+            .map((item) => item.conversationId),
+        <String>['conv:a', 'conv:b'],
+      );
+    },
+  );
+
   test(
     'conversation patch repairRequired falls back to repaired list',
     () async {
@@ -1333,6 +1532,116 @@ void main() {
       containsAll(<String>['thread-repaired', 'thread-after-repair']),
     );
   });
+
+  test(
+    'conversation patch repair does not commit version when apply is stale',
+    () async {
+      final repairGate = Completer<ConversationStoreRepairResult>();
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+        repairResult: repairGate.future,
+      );
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: service,
+        notifications: notifications,
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      await notifier.refreshFastLocal();
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+          item: _conversation(
+            threadId: 'thread-one',
+            displayName: 'One',
+            targetDid: 'did:one',
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.repairRequired,
+          ownerDid: 'did:alice',
+          version: 2,
+          unreadTotal: 0,
+          reason: 'stale_test',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:bob',
+              credentialName: 'bob',
+              displayName: 'Bob',
+            ),
+          );
+      repairGate.complete(
+        ConversationStoreRepairResult(
+          conversations: <ConversationSummary>[
+            _conversation(
+              threadId: 'thread-repair-stale',
+              displayName: 'Stale repair',
+              targetDid: 'did:stale',
+            ),
+          ],
+          version: 2,
+        ),
+      );
+      await pumpEventQueue();
+
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:alice',
+              credentialName: 'alice',
+              displayName: 'Alice',
+            ),
+          );
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerDid: 'did:alice',
+          version: 2,
+          unreadTotal: 1,
+          item: _conversation(
+            threadId: 'thread-two',
+            displayName: 'Two',
+            targetDid: 'did:two',
+            unreadCount: 1,
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(service.repairCalls, 1);
+      expect(
+        container
+            .read(conversationListProvider)
+            .conversations
+            .map((item) => item.threadId),
+        containsAll(<String>['thread-one', 'thread-two']),
+      );
+      expect(
+        container
+            .read(conversationListProvider)
+            .conversations
+            .map((item) => item.threadId),
+        isNot(contains('thread-repair-stale')),
+      );
+      expect(notifications.lastBadgeCount, 1);
+    },
+  );
 
   test(
     'conversation patch gap does not advance version before repair lands',
@@ -1533,144 +1842,158 @@ void main() {
     expect(notifications.lastBadgeCount, 0);
   });
 
-  test(
-    'realtime message increments unread without clobbering local mention state',
-    () {
-      final notifications = FakeNotificationFacade();
-      final container = _conversationContainer(
-        service: _StaticConversationService(
-          conversations: const <ConversationSummary>[],
-        ),
-        notifications: notifications,
-        ownerDid: 'did:alice',
-      );
-      addTearDown(container.dispose);
-      final notifier = container.read(conversationListProvider.notifier);
-      final local =
-          _conversation(
-            threadId: 'group:team',
-            displayName: 'Team',
-            unreadCount: 3,
-            isGroup: true,
-            groupId: 'team',
-          ).copyWith(
-            unreadMentionCount: 1,
-            firstUnreadMentionMessageId: 'mention-1',
-          );
-      notifier.upsertConversation(local);
-
-      notifier.upsertRealtimeMessageBestEffort(
-        local.copyWith(
-          lastMessagePreview: 'new realtime',
-          lastMessageAt: DateTime.utc(2026, 6, 27, 2, 1),
-          unreadCount: 1,
-          unreadMentionCount: 0,
-          firstUnreadMentionMessageId: null,
-        ),
-        message: ChatMessage(
-          localId: 'realtime-1',
-          remoteId: 'realtime-1',
-          threadId: 'group:team',
-          senderDid: 'did:bob',
-          senderName: 'Bob',
-          receiverDid: 'did:alice',
-          groupId: 'team',
-          content: 'new realtime',
-          createdAt: DateTime.utc(2026, 6, 27, 2, 1),
-          isMine: false,
-          sendState: MessageSendState.sent,
-        ),
-      );
-
-      final updated = container
-          .read(conversationListProvider)
-          .conversations
-          .single;
-      expect(updated.lastMessagePreview, 'new realtime');
-      expect(updated.unreadCount, 4);
-      expect(updated.unreadMentionCount, 1);
-      expect(updated.firstUnreadMentionMessageId, 'mention-1');
-      expect(notifications.lastBadgeCount, 4);
-    },
-  );
-
-  test('realtime peer-scoped message replaces legacy direct target', () {
+  test('realtime message refreshes unread from core projection', () async {
     final notifications = FakeNotificationFacade();
+    final service = _MutableConversationService(
+      conversations: const <ConversationSummary>[],
+    );
     final container = _conversationContainer(
-      service: _StaticConversationService(
-        conversations: const <ConversationSummary>[],
-      ),
+      service: service,
       notifications: notifications,
       ownerDid: 'did:alice',
     );
     addTearDown(container.dispose);
     final notifier = container.read(conversationListProvider.notifier);
-    final legacy = _conversation(
-      threadId: 'dm:did:alice:did:agent',
-      displayName: 'Agent legacy',
-      targetDid: 'did:agent',
-      targetPeer: 'did:agent',
-    );
-    notifier.upsertConversation(legacy);
+    final local = _conversation(
+      threadId: 'group:team',
+      displayName: 'Team',
+      unreadCount: 3,
+      isGroup: true,
+      groupId: 'team',
+    ).copyWith(unreadMentionCount: 1, firstUnreadMentionMessageId: 'mention-1');
+    notifier.upsertConversation(local);
 
-    notifier.upsertRealtimeMessageBestEffort(
-      _conversation(
-        threadId: 'direct:did:agent',
-        displayName: 'Agent',
+    service.currentConversations = <ConversationSummary>[
+      local.copyWith(
+        lastMessagePreview: 'new realtime',
+        lastMessageAt: DateTime.utc(2026, 6, 27, 2, 1),
         unreadCount: 1,
-        targetDid: 'did:agent',
-        targetPeer: 'agent.awiki.example',
-        lastMessageAt: DateTime.utc(2026, 6, 27, 2, 2),
-      ).copyWith(lastMessagePreview: 'runtime reply'),
+        unreadMentionCount: 0,
+        firstUnreadMentionMessageId: null,
+      ),
+    ];
+    notifier.upsertRealtimeMessageBestEffort(
+      service.currentConversations.single,
       message: ChatMessage(
-        localId: 'runtime-1',
-        remoteId: 'runtime-1',
-        threadId: 'dm:peer-scope:v1:agent',
-        senderDid: 'did:agent',
-        senderName: 'Agent',
+        localId: 'realtime-1',
+        remoteId: 'realtime-1',
+        threadId: 'group:team',
+        senderDid: 'did:bob',
+        senderName: 'Bob',
         receiverDid: 'did:alice',
-        content: 'runtime reply',
-        createdAt: DateTime.utc(2026, 6, 27, 2, 2),
+        groupId: 'team',
+        content: 'new realtime',
+        createdAt: DateTime.utc(2026, 6, 27, 2, 1),
         isMine: false,
         sendState: MessageSendState.sent,
       ),
     );
-    expect(
-      container.read(conversationListProvider).conversations.single.threadId,
-      'dm:did:alice:did:agent',
-    );
+    await pumpEventQueue();
 
-    notifier.upsertRealtimeMessageBestEffort(
-      _conversation(
-        threadId: 'dm:peer-scope:v1:agent',
-        displayName: 'Agent',
-        unreadCount: 1,
-        targetDid: 'did:agent',
-        targetPeer: 'agent.awiki.example',
-        lastMessageAt: DateTime.utc(2026, 6, 27, 2, 2),
-      ).copyWith(lastMessagePreview: 'runtime reply'),
-      message: ChatMessage(
-        localId: 'runtime-1',
-        remoteId: 'runtime-1',
-        threadId: 'dm:peer-scope:v1:agent',
-        senderDid: 'did:agent',
-        senderName: 'Agent',
-        receiverDid: 'did:alice',
-        content: 'runtime reply',
-        createdAt: DateTime.utc(2026, 6, 27, 2, 2),
-        isMine: false,
-        sendState: MessageSendState.sent,
-      ),
-    );
-
-    final rows = container.read(conversationListProvider).conversations;
-    expect(rows.map((item) => item.threadId), <String>[
-      'dm:peer-scope:v1:agent',
-    ]);
-    expect(rows.single.lastMessagePreview, 'runtime reply');
-    expect(rows.single.unreadCount, 1);
+    final updated = container
+        .read(conversationListProvider)
+        .conversations
+        .single;
+    expect(service.fastCalls, 1);
+    expect(updated.lastMessagePreview, 'new realtime');
+    expect(updated.unreadCount, 1);
+    expect(updated.unreadMentionCount, 0);
+    expect(updated.firstUnreadMentionMessageId, isNull);
     expect(notifications.lastBadgeCount, 1);
   });
+
+  test(
+    'realtime peer-scoped message replaces legacy target only after core refresh',
+    () async {
+      final notifications = FakeNotificationFacade();
+      final service = _MutableConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: notifications,
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(conversationListProvider.notifier);
+      final legacy = _conversation(
+        threadId: 'dm:did:alice:did:agent',
+        displayName: 'Agent legacy',
+        targetDid: 'did:agent',
+        targetPeer: 'did:agent',
+      );
+      notifier.upsertConversation(legacy);
+
+      notifier.upsertRealtimeMessageBestEffort(
+        _conversation(
+          threadId: 'direct:did:agent',
+          displayName: 'Agent',
+          unreadCount: 1,
+          targetDid: 'did:agent',
+          targetPeer: 'agent.awiki.example',
+          lastMessageAt: DateTime.utc(2026, 6, 27, 2, 2),
+        ).copyWith(lastMessagePreview: 'runtime reply'),
+        message: ChatMessage(
+          localId: 'runtime-1',
+          remoteId: 'runtime-1',
+          threadId: 'dm:peer-scope:v1:agent',
+          senderDid: 'did:agent',
+          senderName: 'Agent',
+          receiverDid: 'did:alice',
+          content: 'runtime reply',
+          createdAt: DateTime.utc(2026, 6, 27, 2, 2),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+      );
+      await pumpEventQueue();
+      expect(
+        container.read(conversationListProvider).conversations.single.threadId,
+        'dm:did:alice:did:agent',
+      );
+
+      service.currentConversations = <ConversationSummary>[
+        _conversation(
+          conversationId: 'conv:agent',
+          threadId: 'dm:peer-scope:v1:agent',
+          displayName: 'Agent',
+          unreadCount: 1,
+          targetDid: 'did:agent',
+          targetPeer: 'agent.awiki.example',
+          lastMessageAt: DateTime.utc(2026, 6, 27, 2, 2),
+        ).copyWith(lastMessagePreview: 'runtime reply'),
+      ];
+      notifier.upsertRealtimeMessageBestEffort(
+        service.currentConversations.single,
+        message: ChatMessage(
+          localId: 'runtime-1',
+          remoteId: 'runtime-1',
+          threadId: 'dm:peer-scope:v1:agent',
+          senderDid: 'did:agent',
+          senderName: 'Agent',
+          receiverDid: 'did:alice',
+          content: 'runtime reply',
+          createdAt: DateTime.utc(2026, 6, 27, 2, 2),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+      );
+      await pumpEventQueue();
+
+      final rows = container.read(conversationListProvider).conversations;
+      expect(service.fastCalls, 2);
+      expect(
+        rows.map((item) => item.threadId),
+        contains('dm:peer-scope:v1:agent'),
+      );
+      final refreshed = rows.singleWhere(
+        (item) => item.conversationId == 'conv:agent',
+      );
+      expect(refreshed.lastMessagePreview, 'runtime reply');
+      expect(refreshed.unreadCount, 1);
+      expect(notifications.lastBadgeCount, 1);
+    },
+  );
 
   test('conversation upserts use stable unread-first ordering', () async {
     final notifications = FakeNotificationFacade();
@@ -1758,6 +2081,7 @@ void main() {
 }
 
 ConversationSummary _conversation({
+  String? conversationId,
   required String threadId,
   required String displayName,
   int unreadCount = 0,
@@ -1768,6 +2092,7 @@ ConversationSummary _conversation({
   DateTime? lastMessageAt,
 }) {
   return ConversationSummary(
+    conversationId: conversationId,
     threadId: threadId,
     displayName: displayName,
     lastMessagePreview: 'hello',
@@ -2095,6 +2420,53 @@ class _StaticConversationService implements ConversationService {
   }) async {}
 }
 
+class _MutableConversationService extends _StaticConversationService {
+  _MutableConversationService({required super.conversations})
+    : currentConversations = conversations;
+
+  List<ConversationSummary> currentConversations;
+
+  @override
+  Future<ConversationStoreRepairResult> repairConversationStore({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) async {
+    return ConversationStoreRepairResult(
+      conversations: currentConversations,
+      version: 1,
+    );
+  }
+
+  @override
+  Future<List<ConversationSummary>> listConversations({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) async {
+    listCalls += 1;
+    return currentConversations;
+  }
+
+  @override
+  Future<List<ConversationSummary>> listConversationSummariesFast({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) async {
+    fastCalls += 1;
+    return currentConversations;
+  }
+
+  @override
+  Future<List<ConversationSummary>> enrichConversationSummaries({
+    required String ownerDid,
+    required List<ConversationSummary> conversations,
+  }) async {
+    return conversations;
+  }
+}
+
 class _NormalizingConversationService extends _StaticConversationService {
   _NormalizingConversationService({required this.normalize})
     : super(conversations: const <ConversationSummary>[]);
@@ -2149,10 +2521,12 @@ class _PatchConversationService extends _StaticConversationService {
     required super.conversations,
     this.repaired = const <ConversationSummary>[],
     this.repairVersion = 1,
+    this.repairResult,
   });
 
   final List<ConversationSummary> repaired;
   final int repairVersion;
+  final Future<ConversationStoreRepairResult>? repairResult;
   final StreamController<ConversationListPatch> _patches =
       StreamController<ConversationListPatch>.broadcast(sync: true);
   int watchCalls = 0;
@@ -2194,6 +2568,10 @@ class _PatchConversationService extends _StaticConversationService {
     bool unreadOnly = false,
   }) async {
     repairCalls += 1;
+    final result = repairResult;
+    if (result != null) {
+      return result;
+    }
     return ConversationStoreRepairResult(
       conversations: repaired,
       version: repairVersion,
