@@ -1902,7 +1902,12 @@ class ChatThreadsController
           displayThreadId: displayThreadId,
           source: 'thread_patch_reset',
         );
-        _mergeMessages(displayThreadId, messages, isLoading: false);
+        _mergeMessages(
+          displayThreadId,
+          messages,
+          isLoading: false,
+          resolveStaleSending: true,
+        );
         _updateConversationPreviewFromMessages(conversation, messages);
         return true;
       case ThreadMessagePatchKind.upsert:
@@ -1937,7 +1942,12 @@ class ChatThreadsController
           );
           return false;
         }
-        _mergeMessages(displayThreadId, messages, isLoading: false);
+        _mergeMessages(
+          displayThreadId,
+          messages,
+          isLoading: false,
+          resolveStaleSending: true,
+        );
         _updateConversationPreviewFromMessages(conversation, messages);
         return true;
       case ThreadMessagePatchKind.remove:
@@ -2295,7 +2305,12 @@ class ChatThreadsController
           maxServerSequence: maxServerSequenceForMessages(history),
         );
       }
-      _mergeMessages(targetThreadId, history, isLoading: false);
+      _mergeMessages(
+        targetThreadId,
+        history,
+        isLoading: false,
+        resolveStaleSending: true,
+      );
       if (history.isNotEmpty || markLoadedWhenEmpty) {
         _markThreadLocalHistoryLoaded(targetThreadId);
       }
@@ -4864,7 +4879,7 @@ class ChatThreadsController
     required ConversationSummary conversation,
     required String actionId,
   }) async {
-    final threadId = conversation.threadId;
+    final threadId = _conversationTimelineKeyFor(conversation);
     final record = thread(threadId).appActionRecords[actionId];
     final request = record?.request;
     if (record == null || request == null || record.isTerminal) {
@@ -4926,7 +4941,7 @@ class ChatThreadsController
     required ConversationSummary conversation,
     required String actionId,
   }) async {
-    final threadId = conversation.threadId;
+    final threadId = _conversationTimelineKeyFor(conversation);
     final record = thread(threadId).appActionRecords[actionId];
     final request = record?.request;
     if (record == null || request == null || record.isTerminal) {
@@ -5848,6 +5863,11 @@ class ChatThreadsController
     final pendingReceiver = normalizedDirectPeer(pending.receiverDid);
     final targetDid = normalizedDirectPeer(conversation.targetDid);
     final targetPeer = normalizedDirectPeer(conversation.targetPeer);
+    if (sentReceiver != null &&
+        pendingReceiver != null &&
+        sentReceiver == pendingReceiver) {
+      return true;
+    }
     return _directPeerMatchesTarget(sentReceiver, targetDid, targetPeer) ||
         _directPeerMatchesTarget(pendingReceiver, targetDid, targetPeer);
   }

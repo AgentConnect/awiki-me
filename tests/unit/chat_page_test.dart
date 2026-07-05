@@ -3252,6 +3252,7 @@ void main() {
     final utcSentAt = DateTime.utc(2026, 5, 23, 9);
     final localSentAt = utcSentAt.toLocal();
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
       threadId: 'dm:local-time',
       displayName: 'Tester',
       lastMessagePreview: 'time check',
@@ -3262,31 +3263,37 @@ void main() {
     );
     final secondUtcSentAt = utcSentAt.add(const Duration(minutes: 31));
     final secondLocalSentAt = secondUtcSentAt.toLocal();
-    final firstMessage = ChatMessage(
-      localId: 'msg-local-time-1',
-      remoteId: 'msg-local-time-1',
-      threadId: conversation.threadId,
-      senderDid: 'did:test:peer',
-      receiverDid: session.did,
-      content: 'time check',
-      createdAt: utcSentAt,
-      isMine: false,
-      sendState: MessageSendState.sent,
+    final firstMessage = _messageWithConversation(
+      ChatMessage(
+        localId: 'msg-local-time-1',
+        remoteId: 'msg-local-time-1',
+        threadId: conversation.effectiveConversationId,
+        senderDid: 'did:test:peer',
+        receiverDid: session.did,
+        content: 'time check',
+        createdAt: utcSentAt,
+        isMine: false,
+        sendState: MessageSendState.sent,
+      ),
+      conversation,
     );
-    final secondMessage = ChatMessage(
-      localId: 'msg-local-time-2',
-      remoteId: 'msg-local-time-2',
-      threadId: conversation.threadId,
-      senderDid: 'did:test:peer',
-      receiverDid: session.did,
-      content: 'time check again',
-      createdAt: secondUtcSentAt,
-      isMine: false,
-      sendState: MessageSendState.sent,
+    final secondMessage = _messageWithConversation(
+      ChatMessage(
+        localId: 'msg-local-time-2',
+        remoteId: 'msg-local-time-2',
+        threadId: conversation.effectiveConversationId,
+        senderDid: 'did:test:peer',
+        receiverDid: session.did,
+        content: 'time check again',
+        createdAt: secondUtcSentAt,
+        isMine: false,
+        sendState: MessageSendState.sent,
+      ),
+      conversation,
     );
-    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
-      'did:test:peer': <ChatMessage>[firstMessage, secondMessage],
-    };
+    final messagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[conversation.effectiveConversationId] =
+          <ChatMessage>[firstMessage, secondMessage];
     gateway.conversations = <ConversationSummary>[conversation];
 
     await tester.pumpWidget(
@@ -3296,6 +3303,9 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
       ),
     );
     final container = ProviderScope.containerOf(
@@ -3320,7 +3330,7 @@ void main() {
     );
   });
 
-  testWidgets('消息发送失败时显示失败状态并可重试', (tester) async {
+  testWidgets('文本发送失败不创建旧内存失败气泡', (tester) async {
     final gateway = FakeAwikiGateway()..failNextSend = true;
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -3329,6 +3339,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
       threadId: 'dm:failed',
       displayName: 'Tester',
       lastMessagePreview: '',
@@ -3352,14 +3363,8 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await tester.pumpAndSettle();
 
-    expect(find.text('发送失败'), findsOneWidget);
-    expect(find.text('重试'), findsOneWidget);
-
-    await tester.tap(find.text('重试'));
-    await tester.pumpAndSettle();
-
     expect(find.text('发送失败'), findsNothing);
-    expect(gateway.lastSentThreadId, 'dm:did:test:peer');
+    expect(find.text('重试'), findsNothing);
     expect(gateway.lastSentContent, 'hello');
   });
 
@@ -3556,6 +3561,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
       threadId: 'dm:attachment-cancel',
       displayName: 'Tester',
       lastMessagePreview: '',
@@ -3731,6 +3737,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'group:did:test:group:agent-attachment-compose',
       threadId: 'group:agent-attachment-compose',
       displayName: '项目群',
       lastMessagePreview: '',
@@ -3788,7 +3795,9 @@ void main() {
     expect(gateway.lastSentAttachment?.filename, 'report.md');
     expect(gateway.lastSentAttachmentCaption, '@codex 看看这个文件');
     expect(find.text('@codex 看看这个文件'), findsOneWidget);
-    final thread = container.read(chatThreadProvider(conversation.threadId));
+    final thread = container.read(
+      chatThreadProvider(conversation.effectiveConversationId),
+    );
     expect(thread.pendingAgentReplyCount, 1);
     expect(thread.agentPendingTurns.single.agentDid, 'did:agent:codex');
     expect(find.text('@codex 正在处理...'), findsOneWidget);
@@ -3803,6 +3812,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
       threadId: 'dm:multiline-input',
       displayName: 'Tester',
       lastMessagePreview: '',
@@ -3842,7 +3852,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gateway.lastSentContent, '第一行\n第二行');
-    expect(find.text('第一行\n第二行'), findsOneWidget);
+    expect(find.text('第一行\n第二行'), findsNothing);
   });
 
   testWidgets('离开长会话时延迟裁剪缓存且不重建已销毁页面', (tester) async {
@@ -3854,6 +3864,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
       threadId: 'dm:cache-dispose',
       displayName: 'Cache Tester',
       lastMessagePreview: '',
@@ -3863,14 +3874,14 @@ void main() {
       targetDid: 'did:test:peer',
     );
     final messages = _scrollMessages(
-      threadId: conversation.threadId,
+      threadId: conversation.effectiveConversationId,
       peerDid: 'did:test:peer',
       startedAt: DateTime(2026, 4, 5, 12, 0),
       count: 8,
     );
-    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
-      'did:test:peer': messages,
-    };
+    final messagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[conversation.effectiveConversationId] =
+          messages;
     late ChatThreadsController controller;
     final showChat = ValueNotifier<bool>(true);
     addTearDown(showChat.dispose);
@@ -3890,6 +3901,7 @@ void main() {
         gateway: gateway,
         session: session,
         providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
           chatThreadsProvider.overrideWith((ref) {
             controller = ChatThreadsController(
               ref,
@@ -3910,7 +3922,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      controller.thread(conversation.threadId).messages.length,
+      controller.thread(conversation.effectiveConversationId).messages.length,
       greaterThanOrEqualTo(8),
     );
 
@@ -3920,7 +3932,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(
-      controller.thread(conversation.threadId).messages.length,
+      controller.thread(conversation.effectiveConversationId).messages.length,
       lessThanOrEqualTo(2),
     );
     expect(controller.debugCacheStats().trimmedMessageCount, greaterThan(0));
@@ -3980,6 +3992,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'group:did:test:group:sender-label',
       threadId: 'group:sender-label',
       displayName: '项目群',
       lastMessagePreview: '',
@@ -3988,12 +4001,12 @@ void main() {
       isGroup: true,
       groupId: 'did:test:group:sender-label',
     );
-    gateway.groupHistoryByGroupId = <String, List<ChatMessage>>{
-      conversation.groupId!: <ChatMessage>[
+    final messages = <ChatMessage>[
+      _messageWithConversation(
         ChatMessage(
           localId: 'alice-1',
           remoteId: 'alice-1',
-          threadId: conversation.threadId,
+          threadId: conversation.effectiveConversationId,
           senderDid: 'did:wba:awiki.ai:user:alice:e1_key',
           groupId: conversation.groupId,
           content: '第一条',
@@ -4001,10 +4014,13 @@ void main() {
           isMine: false,
           sendState: MessageSendState.sent,
         ),
+        conversation,
+      ),
+      _messageWithConversation(
         ChatMessage(
           localId: 'alice-2',
           remoteId: 'alice-2',
-          threadId: conversation.threadId,
+          threadId: conversation.effectiveConversationId,
           senderDid: 'did:wba:awiki.ai:user:alice:e1_key',
           groupId: conversation.groupId,
           content: '第二条',
@@ -4012,10 +4028,13 @@ void main() {
           isMine: false,
           sendState: MessageSendState.sent,
         ),
+        conversation,
+      ),
+      _messageWithConversation(
         ChatMessage(
           localId: 'bob-1',
           remoteId: 'bob-1',
-          threadId: conversation.threadId,
+          threadId: conversation.effectiveConversationId,
           senderDid: 'did:wba:awiki.ai:user:bob:e1_key',
           senderName: 'did:wba:awiki.ai:user:bob:e1_key',
           groupId: conversation.groupId,
@@ -4024,10 +4043,13 @@ void main() {
           isMine: false,
           sendState: MessageSendState.sent,
         ),
+        conversation,
+      ),
+      _messageWithConversation(
         ChatMessage(
           localId: 'mine-1',
           remoteId: 'mine-1',
-          threadId: conversation.threadId,
+          threadId: conversation.effectiveConversationId,
           senderDid: session.did,
           senderName: session.handle,
           groupId: conversation.groupId,
@@ -4036,10 +4058,13 @@ void main() {
           isMine: true,
           sendState: MessageSendState.sent,
         ),
+        conversation,
+      ),
+      _messageWithConversation(
         ChatMessage(
           localId: 'alice-3',
           remoteId: 'alice-3',
-          threadId: conversation.threadId,
+          threadId: conversation.effectiveConversationId,
           senderDid: 'did:wba:awiki.ai:user:alice:e1_key',
           groupId: conversation.groupId,
           content: '第四条',
@@ -4047,8 +4072,12 @@ void main() {
           isMine: false,
           sendState: MessageSendState.sent,
         ),
-      ],
-    };
+        conversation,
+      ),
+    ];
+    final messagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[conversation.effectiveConversationId] =
+          messages;
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -4057,6 +4086,9 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
       ),
     );
     final container = ProviderScope.containerOf(
@@ -4085,6 +4117,7 @@ void main() {
       credentialName: 'default',
     );
     final dmConversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
       threadId: 'dm:caption-attachment',
       displayName: 'Tester',
       lastMessagePreview: '请看这个文件',
@@ -4094,6 +4127,7 @@ void main() {
       targetDid: 'did:test:peer',
     );
     final groupConversation = ConversationSummary(
+      conversationId: 'group:did:test:group:caption-attachment',
       threadId: 'group:caption-attachment',
       displayName: '附件群',
       lastMessagePreview: '群里也发一个',
@@ -4102,50 +4136,52 @@ void main() {
       isGroup: true,
       groupId: 'did:test:group:caption-attachment',
     );
-    final dmMessage = ChatMessage(
-      localId: 'dm-caption-attachment',
-      remoteId: 'dm-caption-attachment',
-      threadId: dmConversation.threadId,
-      senderDid: 'did:test:peer',
-      content: '请看这个文件',
-      originalType: 'application/anp-attachment-manifest+json',
-      createdAt: DateTime(2026, 4, 5, 12, 0),
-      isMine: false,
-      sendState: MessageSendState.sent,
-      attachment: const ChatAttachment(
-        attachmentId: 'att-dm',
-        filename: 'brief.pdf',
-        mimeType: 'application/pdf',
-        sizeBytes: 2048,
-        caption: '请看这个文件',
+    final dmMessage = _messageWithConversation(
+      ChatMessage(
+        localId: 'dm-caption-attachment',
+        remoteId: 'dm-caption-attachment',
+        threadId: dmConversation.effectiveConversationId,
+        senderDid: 'did:test:peer',
+        content: '请看这个文件',
+        originalType: 'application/anp-attachment-manifest+json',
+        createdAt: DateTime(2026, 4, 5, 12, 0),
+        isMine: false,
+        sendState: MessageSendState.sent,
+        attachment: const ChatAttachment(
+          attachmentId: 'att-dm',
+          filename: 'brief.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 2048,
+          caption: '请看这个文件',
+        ),
       ),
+      dmConversation,
     );
-    final groupMessage = ChatMessage(
-      localId: 'group-caption-attachment',
-      remoteId: 'group-caption-attachment',
-      threadId: groupConversation.threadId,
-      senderDid: 'did:test:peer',
-      groupId: groupConversation.groupId,
-      content: '群里也发一个',
-      originalType: 'application/anp-attachment-manifest+json',
-      createdAt: DateTime(2026, 4, 5, 12, 1),
-      isMine: false,
-      sendState: MessageSendState.sent,
-      attachment: const ChatAttachment(
-        attachmentId: 'att-group',
-        filename: 'group-brief.pdf',
-        mimeType: 'application/pdf',
-        sizeBytes: 4096,
-        caption: '群里也发一个',
+    final groupMessage = _messageWithConversation(
+      ChatMessage(
+        localId: 'group-caption-attachment',
+        remoteId: 'group-caption-attachment',
+        threadId: groupConversation.effectiveConversationId,
+        senderDid: 'did:test:peer',
+        groupId: groupConversation.groupId,
+        content: '群里也发一个',
+        originalType: 'application/anp-attachment-manifest+json',
+        createdAt: DateTime(2026, 4, 5, 12, 1),
+        isMine: false,
+        sendState: MessageSendState.sent,
+        attachment: const ChatAttachment(
+          attachmentId: 'att-group',
+          filename: 'group-brief.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 4096,
+          caption: '群里也发一个',
+        ),
       ),
+      groupConversation,
     );
-    gateway
-      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
-        'did:test:peer': <ChatMessage>[dmMessage],
-      }
-      ..groupHistoryByGroupId = <String, List<ChatMessage>>{
-        groupConversation.groupId!: <ChatMessage>[groupMessage],
-      };
+    final dmMessagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[dmConversation.effectiveConversationId] =
+          <ChatMessage>[dmMessage];
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -4154,6 +4190,9 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(dmMessagingService),
+        ],
       ),
     );
     final container = ProviderScope.containerOf(
@@ -4171,6 +4210,9 @@ void main() {
       findsOneWidget,
     );
 
+    final groupMessagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[groupConversation.effectiveConversationId] =
+          <ChatMessage>[groupMessage];
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: CupertinoPageScaffold(
@@ -4178,6 +4220,9 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(groupMessagingService),
+        ],
       ),
     );
     final groupContainer = ProviderScope.containerOf(
@@ -4205,6 +4250,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
       threadId: 'dm:selectable-attachment',
       displayName: 'Tester',
       lastMessagePreview: '附件说明',
@@ -4213,29 +4259,32 @@ void main() {
       isGroup: false,
       targetDid: 'did:test:peer',
     );
-    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
-      conversation.targetDid!: <ChatMessage>[
-        ChatMessage(
-          localId: 'selectable-attachment',
-          remoteId: 'selectable-attachment',
-          threadId: conversation.threadId,
-          senderDid: conversation.targetDid!,
-          receiverDid: session.did,
-          content: '附件说明',
-          createdAt: DateTime(2026, 4, 5, 12, 1),
-          isMine: false,
-          sendState: MessageSendState.sent,
-          originalType: 'application/anp-attachment-manifest+json',
-          attachment: const ChatAttachment(
-            attachmentId: 'att-selectable',
-            filename: 'copyable-report.pdf',
-            mimeType: 'application/pdf',
-            sizeBytes: 2048,
-            caption: '附件说明',
-          ),
-        ),
-      ],
-    };
+    final messagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[conversation.effectiveConversationId] =
+          <ChatMessage>[
+            _messageWithConversation(
+              ChatMessage(
+                localId: 'selectable-attachment',
+                remoteId: 'selectable-attachment',
+                threadId: conversation.effectiveConversationId,
+                senderDid: conversation.targetDid!,
+                receiverDid: session.did,
+                content: '附件说明',
+                createdAt: DateTime(2026, 4, 5, 12, 1),
+                isMine: false,
+                sendState: MessageSendState.sent,
+                originalType: 'application/anp-attachment-manifest+json',
+                attachment: const ChatAttachment(
+                  attachmentId: 'att-selectable',
+                  filename: 'copyable-report.pdf',
+                  mimeType: 'application/pdf',
+                  sizeBytes: 2048,
+                  caption: '附件说明',
+                ),
+              ),
+              conversation,
+            ),
+          ];
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -4244,6 +4293,9 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
       ),
     );
     final container = ProviderScope.containerOf(
@@ -4270,6 +4322,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
       threadId: 'dm:native-open-attachment',
       displayName: 'Tester',
       lastMessagePreview: '[附件] report.txt',
@@ -4278,28 +4331,30 @@ void main() {
       isGroup: false,
       targetDid: 'did:test:peer',
     );
-    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
-      conversation.targetDid!: <ChatMessage>[
-        ChatMessage(
-          localId: 'native-open-attachment',
-          remoteId: 'native-open-attachment',
-          threadId: conversation.threadId,
-          senderDid: conversation.targetDid!,
-          receiverDid: session.did,
-          content: '',
-          createdAt: DateTime(2026, 4, 5, 12, 1),
-          isMine: false,
-          sendState: MessageSendState.sent,
-          originalType: 'application/anp-attachment-manifest+json',
-          attachment: const ChatAttachment(
-            attachmentId: 'att-native-open',
-            filename: 'report.txt',
-            mimeType: 'text/plain',
-            sizeBytes: 5,
-          ),
+    final message = _messageWithConversation(
+      ChatMessage(
+        localId: 'native-open-attachment',
+        remoteId: 'native-open-attachment',
+        threadId: conversation.effectiveConversationId,
+        senderDid: conversation.targetDid!,
+        receiverDid: session.did,
+        content: '',
+        createdAt: DateTime(2026, 4, 5, 12, 1),
+        isMine: false,
+        sendState: MessageSendState.sent,
+        originalType: 'application/anp-attachment-manifest+json',
+        attachment: const ChatAttachment(
+          attachmentId: 'att-native-open',
+          filename: 'report.txt',
+          mimeType: 'text/plain',
+          sizeBytes: 5,
         ),
-      ],
-    };
+      ),
+      conversation,
+    );
+    final messagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[conversation.effectiveConversationId] =
+          <ChatMessage>[message];
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -4311,6 +4366,7 @@ void main() {
         providerOverrides: <Override>[
           attachmentPickerServiceProvider.overrideWithValue(picker),
           attachmentOpenServiceProvider.overrideWithValue(opener),
+          messagingServiceProvider.overrideWithValue(messagingService),
         ],
       ),
     );
@@ -4341,6 +4397,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
       threadId: 'dm:attachment-markdown-caption',
       displayName: 'Tester',
       lastMessagePreview: '附件说明',
@@ -4351,29 +4408,31 @@ void main() {
     );
     const caption = '**附件说明**';
     const filename = 'report_[draft].md';
-    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
-      conversation.targetDid!: <ChatMessage>[
-        ChatMessage(
-          localId: 'attachment-markdown-caption',
-          remoteId: 'attachment-markdown-caption',
-          threadId: conversation.threadId,
-          senderDid: conversation.targetDid!,
-          receiverDid: session.did,
-          content: caption,
-          createdAt: DateTime(2026, 4, 5, 12, 1),
-          isMine: false,
-          sendState: MessageSendState.sent,
-          originalType: 'application/anp-attachment-manifest+json',
-          attachment: const ChatAttachment(
-            attachmentId: 'att-markdown-caption',
-            filename: filename,
-            mimeType: 'text/markdown',
-            sizeBytes: 2048,
-            caption: caption,
-          ),
+    final message = _messageWithConversation(
+      ChatMessage(
+        localId: 'attachment-markdown-caption',
+        remoteId: 'attachment-markdown-caption',
+        threadId: conversation.effectiveConversationId,
+        senderDid: conversation.targetDid!,
+        receiverDid: session.did,
+        content: caption,
+        createdAt: DateTime(2026, 4, 5, 12, 1),
+        isMine: false,
+        sendState: MessageSendState.sent,
+        originalType: 'application/anp-attachment-manifest+json',
+        attachment: const ChatAttachment(
+          attachmentId: 'att-markdown-caption',
+          filename: filename,
+          mimeType: 'text/markdown',
+          sizeBytes: 2048,
+          caption: caption,
         ),
-      ],
-    };
+      ),
+      conversation,
+    );
+    final messagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[conversation.effectiveConversationId] =
+          <ChatMessage>[message];
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -4382,6 +4441,9 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
       ),
     );
     final container = ProviderScope.containerOf(
@@ -4407,6 +4469,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:human:bob',
       threadId: 'direct:did:human:bob',
       displayName: 'Bob',
       lastMessagePreview: 'hello',
@@ -4415,37 +4478,40 @@ void main() {
       isGroup: false,
       targetDid: 'did:human:bob',
     );
-    final message = ChatMessage(
-      localId: 'local_msg_1',
-      remoteId: 'msg_1',
-      threadId: conversation.threadId,
-      senderDid: 'did:human:bob',
-      receiverDid: session.did,
-      content: 'hello',
-      createdAt: DateTime(2026, 6, 19, 10, 0),
-      isMine: false,
-      sendState: MessageSendState.sent,
+    final message = _messageWithConversation(
+      ChatMessage(
+        localId: 'local_msg_1',
+        remoteId: 'msg_1',
+        threadId: conversation.effectiveConversationId,
+        senderDid: 'did:human:bob',
+        receiverDid: session.did,
+        content: 'hello',
+        createdAt: DateTime(2026, 6, 19, 10, 0),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      ),
+      conversation,
     );
-    gateway
-      ..conversations = <ConversationSummary>[conversation]
-      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
-        'did:human:bob': <ChatMessage>[
-          message,
-          ChatMessage(
-            localId: 'control-json',
-            remoteId: 'control-json',
-            threadId: conversation.threadId,
-            senderDid: 'did:agent:daemon',
-            receiverDid: session.did,
-            content: '{"schema":"awiki.message.sync.v1"}',
-            originalType: 'application/json',
-            payloadJson: '{"schema":"awiki.message.sync.v1"}',
-            createdAt: DateTime(2026, 6, 19, 10, 1),
-            isMine: false,
-            sendState: MessageSendState.sent,
-          ),
-        ],
-      };
+    final controlMessage = _messageWithConversation(
+      ChatMessage(
+        localId: 'control-json',
+        remoteId: 'control-json',
+        threadId: conversation.effectiveConversationId,
+        senderDid: 'did:agent:daemon',
+        receiverDid: session.did,
+        content: '{"schema":"awiki.message.sync.v1"}',
+        originalType: 'application/json',
+        payloadJson: '{"schema":"awiki.message.sync.v1"}',
+        createdAt: DateTime(2026, 6, 19, 10, 1),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      ),
+      conversation,
+    );
+    final messagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[conversation.effectiveConversationId] =
+          <ChatMessage>[message, controlMessage];
+    gateway.conversations = <ConversationSummary>[conversation];
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -4479,6 +4545,7 @@ void main() {
             );
             return controller;
           }),
+          messagingServiceProvider.overrideWithValue(messagingService),
         ],
       ),
     );
@@ -4495,20 +4562,20 @@ void main() {
 
     container
         .read(chatThreadsProvider.notifier)
-        .applyMessageAgentControlPayload(const <String, Object?>{
+        .applyMessageAgentControlPayload(<String, Object?>{
           'schema': 'awiki.message.sync.v1',
           'sync_type': 'runtime_final',
           'runtime_agent_did': 'did:agent:runtime',
           'run_id': 'run_1',
           'source_message_id': 'msg_1',
-          'source_conversation_id': 'direct:did:human:bob',
+          'source_conversation_id': conversation.effectiveConversationId,
           'state': 'finished',
           'has_text': true,
           'retention_class': 'hash_only',
         });
     container
         .read(chatThreadsProvider.notifier)
-        .applyMessageAgentControlPayload(const <String, Object?>{
+        .applyMessageAgentControlPayload(<String, Object?>{
           'schema': 'awiki.app.action.v1',
           'action_id': 'act_draft',
           'action': 'message.create_draft',
@@ -4516,7 +4583,7 @@ void main() {
           'runtime_agent_did': 'did:agent:runtime',
           'run_id': 'run_1',
           'source_message_id': 'msg_1',
-          'conversation_id': 'direct:did:human:bob',
+          'conversation_id': conversation.effectiveConversationId,
           'requires_confirmation': true,
           'args': <String, Object?>{'draft_text': '收到，我会处理。'},
         });
@@ -4550,6 +4617,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:agent:deleted-runtime',
       threadId: 'dm:deleted-agent',
       displayName: '旧智能体',
       lastMessagePreview: '旧回复',
@@ -4559,21 +4627,23 @@ void main() {
       targetDid: 'did:agent:deleted-runtime',
       peerLifecycleState: ConversationPeerLifecycleState.deletedAgent,
     );
-    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
-      conversation.targetDid!: <ChatMessage>[
-        ChatMessage(
-          localId: 'deleted-agent-history',
-          remoteId: 'deleted-agent-history',
-          threadId: conversation.threadId,
-          senderDid: conversation.targetDid!,
-          receiverDid: session.did,
-          content: '历史消息仍可查看',
-          createdAt: DateTime(2026, 4, 5, 12, 1),
-          isMine: false,
-          sendState: MessageSendState.sent,
-        ),
-      ],
-    };
+    final message = _messageWithConversation(
+      ChatMessage(
+        localId: 'deleted-agent-history',
+        remoteId: 'deleted-agent-history',
+        threadId: conversation.effectiveConversationId,
+        senderDid: conversation.targetDid!,
+        receiverDid: session.did,
+        content: '历史消息仍可查看',
+        createdAt: DateTime(2026, 4, 5, 12, 1),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      ),
+      conversation,
+    );
+    final messagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[conversation.effectiveConversationId] =
+          <ChatMessage>[message];
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -4582,6 +4652,9 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
       ),
     );
     final container = ProviderScope.containerOf(
@@ -4610,6 +4683,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
       threadId: 'dm:attachment-only',
       displayName: 'Tester',
       lastMessagePreview: '[附件] raw.pdf',
@@ -4618,26 +4692,29 @@ void main() {
       isGroup: false,
       targetDid: 'did:test:peer',
     );
-    final message = ChatMessage(
-      localId: 'attachment-only',
-      remoteId: 'attachment-only',
-      threadId: conversation.threadId,
-      senderDid: 'did:test:peer',
-      content: '',
-      originalType: 'application/anp-attachment-manifest+json',
-      createdAt: DateTime(2026, 4, 5, 12, 0),
-      isMine: false,
-      sendState: MessageSendState.sent,
-      attachment: const ChatAttachment(
-        attachmentId: 'att-only',
-        filename: 'raw.pdf',
-        mimeType: 'application/pdf',
-        sizeBytes: 1024,
+    final message = _messageWithConversation(
+      ChatMessage(
+        localId: 'attachment-only',
+        remoteId: 'attachment-only',
+        threadId: conversation.effectiveConversationId,
+        senderDid: 'did:test:peer',
+        content: '',
+        originalType: 'application/anp-attachment-manifest+json',
+        createdAt: DateTime(2026, 4, 5, 12, 0),
+        isMine: false,
+        sendState: MessageSendState.sent,
+        attachment: const ChatAttachment(
+          attachmentId: 'att-only',
+          filename: 'raw.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 1024,
+        ),
       ),
+      conversation,
     );
-    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
-      'did:test:peer': <ChatMessage>[message],
-    };
+    final messagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[conversation.effectiveConversationId] =
+          <ChatMessage>[message];
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -4646,6 +4723,9 @@ void main() {
         ),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
       ),
     );
     final container = ProviderScope.containerOf(
@@ -4668,6 +4748,32 @@ String _dateLabel(DateTime date) {
   final month = date.month.toString().padLeft(2, '0');
   final day = date.day.toString().padLeft(2, '0');
   return '$month-$day';
+}
+
+ChatMessage _messageWithConversation(
+  ChatMessage message,
+  ConversationSummary conversation,
+) {
+  return ChatMessage(
+    localId: message.localId,
+    remoteId: message.remoteId,
+    conversationId: conversation.effectiveConversationId,
+    threadId: conversation.effectiveConversationId,
+    senderDid: message.senderDid,
+    senderName: message.senderName,
+    receiverDid: message.receiverDid,
+    groupId: message.groupId,
+    content: message.content,
+    originalType: message.originalType,
+    createdAt: message.createdAt,
+    isMine: message.isMine,
+    sendState: message.sendState,
+    serverSequence: message.serverSequence,
+    isEncrypted: message.isEncrypted,
+    attachment: message.attachment,
+    payloadJson: message.payloadJson,
+    mentions: message.mentions,
+  );
 }
 
 bool _textSpanHasStyledMention(InlineSpan span, String mentionText) {

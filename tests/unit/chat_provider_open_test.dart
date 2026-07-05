@@ -2602,6 +2602,7 @@ void main() {
     const agentDid = 'did:agent:runtime';
     const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
     final openedConversation = ConversationSummary(
+      conversationId: 'dm:did:me:$agentDid',
       threadId: 'dm:did:me:$agentDid',
       displayName: 'Hermes',
       lastMessagePreview: '',
@@ -2887,6 +2888,7 @@ void main() {
     const agentDid = 'did:agent:runtime';
     const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
     final openedConversation = ConversationSummary(
+      conversationId: 'dm:did:me:$agentDid',
       threadId: 'dm:did:me:$agentDid',
       displayName: 'Hermes',
       lastMessagePreview: '',
@@ -2896,7 +2898,9 @@ void main() {
       targetDid: agentDid,
       targetPeer: agentDid,
     );
+    final openedThreadId = _timelineThreadId(openedConversation);
     final realtimeConversation = ConversationSummary(
+      conversationId: 'dm:peer-scope:v1:zhuocheng-test-hermes',
       threadId: 'dm:peer-scope:v1:zhuocheng-test-hermes',
       displayName: 'Hermes',
       lastMessagePreview: '我在。',
@@ -2935,9 +2939,7 @@ void main() {
           expectedAgentReplyDid: agentDid,
         );
 
-    var openedThread = sendContainer.read(
-      chatThreadProvider(openedConversation.threadId),
-    );
+    var openedThread = sendContainer.read(chatThreadProvider(openedThreadId));
     expect(openedThread.isAgentProcessing, isTrue);
 
     sendContainer
@@ -2956,9 +2958,7 @@ void main() {
           ),
         );
 
-    openedThread = sendContainer.read(
-      chatThreadProvider(openedConversation.threadId),
-    );
+    openedThread = sendContainer.read(chatThreadProvider(openedThreadId));
     expect(openedThread.isAgentProcessing, isTrue);
     expect(
       openedThread.messages.map((message) => message.content),
@@ -3093,7 +3093,7 @@ void main() {
           ChatMessage(
             localId: 'agent-reply-a',
             remoteId: 'agent-reply-a',
-            threadId: conversation.threadId,
+            threadId: _timelineThreadId(conversation),
             senderDid: 'did:peer',
             receiverDid: 'did:me',
             content: '第一个回答',
@@ -3966,7 +3966,7 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     final thread = sendContainer.read(
-      chatThreadProvider(conversation.threadId),
+      chatThreadProvider(_timelineThreadId(conversation)),
     );
     final sentAttachment = thread.messages.singleWhere(
       (message) => message.attachment?.filename == 'report.pdf',
@@ -4141,7 +4141,7 @@ void main() {
   test('没有本地路径的失败附件不会触发无效重试', () async {
     final failedAttachment = ChatMessage(
       localId: 'failed-mobile-attachment',
-      threadId: conversation.threadId,
+      threadId: _timelineThreadId(conversation),
       senderDid: 'did:me',
       receiverDid: conversation.targetDid,
       content: '',
@@ -4157,7 +4157,10 @@ void main() {
     );
     container
         .read(chatThreadsProvider.notifier)
-        .debugSeedMessageForTesting(failedAttachment);
+        .debugSeedMessageForTesting(
+          failedAttachment,
+          threadId: _timelineThreadId(conversation),
+        );
 
     await container
         .read(chatThreadsProvider.notifier)

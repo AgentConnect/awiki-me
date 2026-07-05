@@ -1034,8 +1034,7 @@ List<ConversationSummary> _collapseLegacyDirectConversations(
   final byThread = <String, ConversationSummary>{};
   final consumedLegacy = <String>{};
   for (final item in items) {
-    if (!isReplaceableLegacyDirectConversation(item, ownerDid: ownerDid) ||
-        _looksLikeAgentDirectConversation(item)) {
+    if (!isReplaceableLegacyDirectConversation(item, ownerDid: ownerDid)) {
       byThread[item.threadId] = item;
       continue;
     }
@@ -1058,23 +1057,6 @@ List<ConversationSummary> _collapseLegacyDirectConversations(
       .where((item) => !consumedLegacy.contains(item.threadId))
       .map((item) => byThread[item.threadId] ?? item)
       .toList(growable: false);
-}
-
-bool _looksLikeAgentDirectConversation(ConversationSummary item) {
-  if (item.isGroup) {
-    return false;
-  }
-  return _looksLikeAgentDid(item.targetDid) ||
-      _looksLikeAgentDid(item.targetPeer) ||
-      _looksLikeAgentDid(item.threadId);
-}
-
-bool _looksLikeAgentDid(String? value) {
-  final text = value?.trim();
-  if (text == null || text.isEmpty) {
-    return false;
-  }
-  return text.contains('did:agent:') || text.contains(':agent:');
 }
 
 ConversationVisibilityIdentity _conversationIdentity(

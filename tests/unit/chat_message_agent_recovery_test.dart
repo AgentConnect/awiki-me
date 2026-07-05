@@ -56,9 +56,11 @@ const _runtime = AgentSummary(
 
 void main() {
   late FakeAwikiGateway gateway;
+  late FakeMessagingService messagingService;
   late ProviderContainer container;
 
   final conversation = ConversationSummary(
+    conversationId: 'dm:did:human:bob',
     threadId: 'direct:did:human:bob',
     displayName: 'Bob',
     lastMessagePreview: 'hello',
@@ -67,27 +69,33 @@ void main() {
     isGroup: false,
     targetDid: 'did:human:bob',
   );
-  final message = ChatMessage(
-    localId: 'local_msg_1',
-    remoteId: 'msg_1',
-    threadId: conversation.threadId,
-    senderDid: 'did:human:bob',
-    receiverDid: 'did:human:alice',
-    content: 'hello',
-    createdAt: DateTime(2026, 6, 19, 10, 0),
-    isMine: false,
-    sendState: MessageSendState.sent,
+  final message = _messageOnConversation(
+    conversation,
+    ChatMessage(
+      localId: 'local_msg_1',
+      remoteId: 'msg_1',
+      threadId: 'direct:did:human:bob',
+      senderDid: 'did:human:bob',
+      receiverDid: 'did:human:alice',
+      content: 'hello',
+      createdAt: DateTime(2026, 6, 19, 10, 0),
+      isMine: false,
+      sendState: MessageSendState.sent,
+    ),
   );
   setUp(() {
     gateway = FakeAwikiGateway()
-      ..conversations = <ConversationSummary>[conversation]
-      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
-        'did:human:bob': <ChatMessage>[message],
-      };
+      ..conversations = <ConversationSummary>[conversation];
+    messagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[_timelineThreadId(conversation)] =
+          <ChatMessage>[message];
     container = ProviderContainer(
       overrides: <Override>[
         awikiGatewayProvider.overrideWithValue(gateway),
-        ...fakeApplicationServiceOverrides(gateway),
+        ...fakeApplicationServiceOverrides(
+          gateway,
+          messagingService: messagingService,
+        ),
         conversationListProvider.overrideWith(
           (ref) => _StaticConversationListController(ref, <ConversationSummary>[
             conversation,
@@ -128,7 +136,7 @@ void main() {
           .applyMessageAgentControlPayload(const <String, Object?>{
             'schema': 'awiki.message.sync.v1',
             'message_id': 'msg_1',
-            'conversation_id': 'direct:did:human:bob',
+            'conversation_id': 'dm:did:human:bob',
             'sender_did': 'did:human:bob',
             'owner_did': 'did:human:alice',
             'processing_status': 'dispatched',
@@ -136,7 +144,9 @@ void main() {
             'retention_class': 'short_excerpt',
           });
 
-      final thread = container.read(chatThreadProvider(conversation.threadId));
+      final thread = container.read(
+        chatThreadProvider(_timelineThreadId(conversation)),
+      );
       expect(thread.messages, hasLength(1));
       expect(thread.messages.single.content, 'hello');
       expect(thread.messageAgentSyncs, hasLength(1));
@@ -159,7 +169,7 @@ void main() {
             <String, Object?>{
               'run_id': 'run_1',
               'runtime_agent_did': 'did:agent:runtime',
-              'conversation_id': 'direct:did:human:bob',
+              'conversation_id': 'dm:did:human:bob',
               'source_message_id': 'msg_1',
               'status': 'running',
             },
@@ -168,7 +178,7 @@ void main() {
       );
       expect(
         container
-            .read(chatThreadProvider(conversation.threadId))
+            .read(chatThreadProvider(_timelineThreadId(conversation)))
             .agentPendingTurns,
         isNotEmpty,
       );
@@ -183,13 +193,15 @@ void main() {
             'runtime_profile_id': 'profile_1',
             'run_id': 'run_1',
             'source_message_id': 'msg_1',
-            'source_conversation_id': 'direct:did:human:bob',
+            'source_conversation_id': 'dm:did:human:bob',
             'state': 'finished',
             'has_text': true,
             'retention_class': 'hash_only',
           });
 
-      final thread = container.read(chatThreadProvider(conversation.threadId));
+      final thread = container.read(
+        chatThreadProvider(_timelineThreadId(conversation)),
+      );
       expect(thread.agentPendingTurns, isEmpty);
       expect(thread.messageAgentSyncs.single.type, 'runtime_final');
       expect(thread.messageAgentSyncs.single.hasText, isTrue);
@@ -204,17 +216,19 @@ void main() {
           .debugSeedMessageForTesting(message);
       container
           .read(chatThreadsProvider.notifier)
-          .debugDropMessagesForTesting(conversation.threadId);
+          .debugDropMessagesForTesting(_timelineThreadId(conversation));
 
       expect(
-        container.read(chatThreadProvider(conversation.threadId)).messages,
+        container
+            .read(chatThreadProvider(_timelineThreadId(conversation)))
+            .messages,
         isEmpty,
       );
       expect(
         container
             .read(chatThreadsProvider.notifier)
             .debugThreadIdForSourceMessage('msg_1'),
-        conversation.threadId,
+        _timelineThreadId(conversation),
       );
 
       container
@@ -234,7 +248,7 @@ void main() {
           });
 
       final sourceThread = container.read(
-        chatThreadProvider(conversation.threadId),
+        chatThreadProvider(_timelineThreadId(conversation)),
       );
       expect(sourceThread.messages, isEmpty);
       expect(sourceThread.messageAgentSyncs.single.type, 'runtime_final');
@@ -284,7 +298,7 @@ void main() {
     controller.debugSeedMessageForTesting(message);
     expect(
       controller.debugThreadIdForSourceMessage('msg_1'),
-      conversation.threadId,
+      _timelineThreadId(conversation),
     );
 
     const peerScopedThreadId = 'dm:peer-scope:v1:stable-bob';
@@ -317,10 +331,10 @@ void main() {
     expect(controller.debugCacheStats().messageRouteEntryCount, 2);
     expect(
       controller.debugThreadIdForSourceMessage('msg_1'),
-      conversation.threadId,
+      _timelineThreadId(conversation),
     );
 
-    await controller.deleteThread(conversation.threadId);
+    await controller.deleteThread(_timelineThreadId(conversation));
 
     expect(controller.debugCacheStats().rawThreadStateCount, 0);
     expect(controller.debugCacheStats().canonicalThreadCount, 0);
@@ -363,7 +377,7 @@ void main() {
     }
 
     final thread = trimContainer.read(
-      chatThreadProvider(conversation.threadId),
+      chatThreadProvider(_timelineThreadId(conversation)),
     );
     expect(thread.messages.map((item) => item.content), <String>[
       'trim 3',
@@ -373,7 +387,7 @@ void main() {
     expect(controller.debugCacheStats().trimmedMessageCount, greaterThan(0));
     expect(
       controller.debugThreadIdForSourceMessage('trim_remote_0'),
-      conversation.threadId,
+      _timelineThreadId(conversation),
     );
   });
 
@@ -417,7 +431,7 @@ void main() {
       'state': 'requires_confirmation',
       'runtime_agent_did': 'did:agent:runtime',
       'source_message_id': 'source_remote',
-      'conversation_id': 'direct:did:human:bob',
+      'conversation_id': 'dm:did:human:bob',
       'requires_confirmation': true,
       'args': <String, Object?>{'draft_text': 'keep source'},
     });
@@ -434,7 +448,7 @@ void main() {
     }
 
     final contents = trimContainer
-        .read(chatThreadProvider(conversation.threadId))
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages
         .map((item) => item.content);
     expect(contents, contains('failed'));
@@ -521,7 +535,7 @@ void main() {
             'runtime_profile_id': 'profile_1',
             'run_id': 'run_1',
             'source_message_id': 'msg_1',
-            'conversation_id': 'direct:did:human:bob',
+            'conversation_id': 'dm:did:human:bob',
             'requires_confirmation': true,
             'args': <String, Object?>{'draft_text': '收到，我稍后处理。'},
           });
@@ -546,7 +560,7 @@ void main() {
         'did:agent:runtime',
       );
       final action = container
-          .read(chatThreadProvider(conversation.threadId))
+          .read(chatThreadProvider(_timelineThreadId(conversation)))
           .appActionRecords['act_draft'];
       expect(action?.state, appActionStateSucceeded);
     },
@@ -568,7 +582,7 @@ void main() {
             'runtime_agent_did': 'did:agent:runtime',
             'run_id': 'run_1',
             'source_message_id': 'msg_1',
-            'conversation_id': 'direct:did:human:bob',
+            'conversation_id': 'dm:did:human:bob',
             'requires_confirmation': true,
             'args': <String, Object?>{
               'contact_did': 'did:human:bob',
@@ -605,7 +619,7 @@ void main() {
           'action': 'message.create_draft',
           'state': 'requires_confirmation',
           'source_message_id': 'msg_1',
-          'conversation_id': 'direct:did:human:bob',
+          'conversation_id': 'dm:did:human:bob',
           'requires_confirmation': true,
           'args': <String, Object?>{'draft_text': '收到。'},
         });
@@ -618,7 +632,7 @@ void main() {
         );
 
     final action = container
-        .read(chatThreadProvider(conversation.threadId))
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
         .appActionRecords['act_missing_target'];
     expect(action?.state, appActionStateFailed);
     expect(action?.result?.errorCode, 'app_action_result_target_missing');
@@ -682,12 +696,42 @@ ChatMessage _chatMessage({
   return ChatMessage(
     localId: localId,
     remoteId: remoteId,
-    threadId: conversation.threadId,
+    conversationId: conversation.effectiveConversationId,
+    threadId: conversation.effectiveConversationId,
     senderDid: conversation.targetDid ?? 'did:human:bob',
     receiverDid: 'did:human:alice',
     content: content,
     createdAt: createdAt ?? DateTime(2026, 6, 19, 10),
     isMine: false,
     sendState: sendState,
+  );
+}
+
+String _timelineThreadId(ConversationSummary conversation) =>
+    conversation.effectiveConversationId;
+
+ChatMessage _messageOnConversation(
+  ConversationSummary conversation,
+  ChatMessage message,
+) {
+  return ChatMessage(
+    localId: message.localId,
+    remoteId: message.remoteId,
+    conversationId: conversation.effectiveConversationId,
+    threadId: conversation.effectiveConversationId,
+    senderDid: message.senderDid,
+    senderName: message.senderName,
+    receiverDid: message.receiverDid,
+    groupId: message.groupId,
+    content: message.content,
+    originalType: message.originalType,
+    createdAt: message.createdAt,
+    isMine: message.isMine,
+    sendState: message.sendState,
+    serverSequence: message.serverSequence,
+    isEncrypted: message.isEncrypted,
+    attachment: message.attachment,
+    payloadJson: message.payloadJson,
+    mentions: message.mentions,
   );
 }

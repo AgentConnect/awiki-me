@@ -1,6 +1,5 @@
 import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
-import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
@@ -486,18 +485,11 @@ void main() {
       'awiki-agent-hermes.awiki.info',
     );
     expect(
-      container
-          .read(conversationListProvider)
-          .conversations
-          .any((item) => item.targetDid == 'did:agent:runtime'),
-      isTrue,
+      container.read(selectedConversationProvider)?.effectiveConversationId,
+      'dm:did:agent:runtime',
     );
     expect(
-      container
-          .read(conversationListProvider)
-          .conversations
-          .singleWhere((item) => item.targetDid == 'did:agent:runtime')
-          .targetPeer,
+      container.read(selectedConversationProvider)?.targetPeer,
       'awiki-agent-hermes.awiki.info',
     );
 

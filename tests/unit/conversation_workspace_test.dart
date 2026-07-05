@@ -403,6 +403,7 @@ void main() {
       handle: 'me',
     );
     final agentConversation = ConversationSummary(
+      conversationId: 'dm:did:agent:runtime',
       threadId: 'dm:did:agent:runtime',
       displayName: 'Hermes',
       lastMessagePreview: '',
@@ -497,6 +498,7 @@ void main() {
       handle: 'me',
     );
     final agentConversation = ConversationSummary(
+      conversationId: 'dm:did:agent:runtime',
       threadId: 'dm:did:agent:runtime',
       displayName: 'Hermes',
       lastMessagePreview: '',
@@ -579,6 +581,7 @@ void main() {
       handle: 'me',
     );
     final agentConversation = ConversationSummary(
+      conversationId: 'dm:did:agent:runtime',
       threadId: 'dm:did:agent:runtime',
       displayName: 'Hermes',
       lastMessagePreview: '',
@@ -588,6 +591,7 @@ void main() {
       targetDid: 'did:agent:runtime',
     );
     final groupConversation = ConversationSummary(
+      conversationId: 'group:did:group:agent-room',
       threadId: 'group:did:group:agent-room',
       displayName: 'Agent 群',
       lastMessagePreview: '',

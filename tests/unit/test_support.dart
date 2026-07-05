@@ -259,6 +259,7 @@ List<Override> fakeApplicationServiceOverrides(
   FakeAwikiGateway gateway, {
   FakeRealtimeGateway? realtimeGateway,
   FakeMessageSyncService? messageSyncService,
+  FakeMessagingService? messagingService,
   AttachmentCacheService? attachmentCacheService,
 }) {
   final resolvedRealtime = realtimeGateway ?? FakeRealtimeGateway();
@@ -276,7 +277,9 @@ List<Override> fakeApplicationServiceOverrides(
     conversationServiceProvider.overrideWithValue(
       FakeConversationService(gateway),
     ),
-    messagingServiceProvider.overrideWithValue(FakeMessagingService(gateway)),
+    messagingServiceProvider.overrideWithValue(
+      messagingService ?? FakeMessagingService(gateway),
+    ),
     messageSyncServiceProvider.overrideWithValue(resolvedMessageSync),
     messageSyncCoordinatorProvider.overrideWith(
       (ref) => MessageSyncCoordinator(
@@ -1809,6 +1812,12 @@ class FakeMessagingService
     String? idempotencyKey,
   }) {
     gateway.lastSentAttachmentIdempotencyKey = idempotencyKey;
+    final stableSentId = idempotencyKey?.trim();
+    if (stableSentId != null &&
+        stableSentId.isNotEmpty &&
+        gateway.nextSentMessageId == null) {
+      gateway.nextSentMessageId = stableSentId;
+    }
     final mentionPayload = mentions.isEmpty || caption == null
         ? null
         : ChatMentionPayload.toP9Json(text: caption, draftMentions: mentions);

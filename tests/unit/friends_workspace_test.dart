@@ -4,7 +4,6 @@ import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
-import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/friends/friends_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/friends/friends_workspace_page.dart';
@@ -196,14 +195,7 @@ void main() {
     final selected = container.read(selectedConversationProvider);
     expect(selected?.targetDid, 'did:test:alice');
     expect(selected?.displayName, 'Alice');
-    expect(
-      container
-          .read(conversationListProvider)
-          .conversations
-          .firstWhere((item) => item.threadId == selected?.threadId)
-          .targetDid,
-      'did:test:alice',
-    );
+    expect(selected?.effectiveConversationId, 'dm:did:test:alice');
   });
 
   testWidgets('macOS 点击我关注的在右侧展示完整联系人列表并可取消关注', (tester) async {

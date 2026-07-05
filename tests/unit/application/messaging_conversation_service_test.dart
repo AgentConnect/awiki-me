@@ -372,7 +372,7 @@ void main() {
     });
 
     test(
-      'snapshot load keeps peer-scoped runtime rows on exact storage threads',
+      'snapshot load collapses unambiguous legacy runtime direct rows into canonical peer-scoped rows',
       () async {
         final didMessage = ChatMessage(
           localId: 'legacy-did-msg',
@@ -456,21 +456,11 @@ void main() {
         );
 
         expect(core.snapshotCount, 1);
-        expect(conversations, hasLength(2));
+        expect(conversations, hasLength(1));
         final byThread = {
           for (final conversation in conversations)
             conversation.threadId: conversation,
         };
-        expect(
-          byThread['dm:did:human:did:agent:runtime']?.conversationKey,
-          'runtime:did:agent:runtime',
-        );
-        expect(
-          byThread['dm:did:human:did:agent:runtime']
-              ?.lastMessageSnapshot
-              ?.threadId,
-          'dm:did:human:did:agent:runtime',
-        );
         expect(
           byThread['dm:peer-scope:v1:runtime']?.conversationKey,
           'dm:peer-scope:v1:runtime',
@@ -487,6 +477,7 @@ void main() {
           byThread['dm:peer-scope:v1:runtime']?.lastMessagePreview,
           runtimeReply.content,
         );
+        expect(byThread['dm:peer-scope:v1:runtime']?.unreadCount, 1);
         expect(
           byThread.values.map((conversation) => conversation.displayName),
           everyElement('改名后的智能体'),
@@ -1018,7 +1009,7 @@ void main() {
     );
 
     test(
-      'does not merge runtime DID and peer-scoped storage conversations',
+      'collapses unambiguous runtime DID direct rows into peer-scoped storage conversations',
       () async {
         final legacyMessage = ChatMessage(
           localId: 'legacy-runtime-reply',
@@ -1089,25 +1080,11 @@ void main() {
           ownerDid: 'did:human',
         );
 
-        expect(conversations, hasLength(2));
+        expect(conversations, hasLength(1));
         final byThread = {
           for (final conversation in conversations)
             conversation.threadId: conversation,
         };
-        expect(
-          byThread['dm:did:human:did:agent:runtime']?.conversationKey,
-          'runtime:did:agent:runtime',
-        );
-        expect(
-          byThread['dm:did:human:did:agent:runtime']?.lastMessagePreview,
-          legacyMessage.content,
-        );
-        expect(
-          byThread['dm:did:human:did:agent:runtime']
-              ?.lastMessageSnapshot
-              ?.threadId,
-          'dm:did:human:did:agent:runtime',
-        );
         expect(
           byThread['dm:peer-scope:v1:runtime']?.conversationKey,
           'dm:peer-scope:v1:runtime',
@@ -1124,6 +1101,7 @@ void main() {
           byThread['dm:peer-scope:v1:runtime']?.lastMessageSnapshot?.threadId,
           'dm:peer-scope:v1:runtime',
         );
+        expect(byThread['dm:peer-scope:v1:runtime']?.unreadCount, 1);
       },
     );
 
@@ -1229,7 +1207,7 @@ void main() {
     );
 
     test(
-      'hides peer-scoped runtime conversation by exact storage thread only',
+      'hides canonical peer-scoped runtime conversation after legacy direct collapse',
       () async {
         final didRow = _conversation(
           'dm:did:human:did:agent:runtime',
@@ -1305,9 +1283,7 @@ void main() {
             reason: key,
           );
         }
-        expect(conversations.map((conversation) => conversation.threadId), [
-          'dm:did:human:did:agent:runtime',
-        ]);
+        expect(conversations, isEmpty);
       },
     );
 
@@ -1421,7 +1397,7 @@ void main() {
     );
 
     test(
-      'restores hidden peer-scoped runtime conversation by exact storage thread',
+      'restores canonical peer-scoped runtime conversation after legacy direct collapse',
       () async {
         final didRow = _conversation(
           'dm:did:human:did:agent:runtime',
@@ -1501,7 +1477,6 @@ void main() {
         );
         expect(conversations.map((conversation) => conversation.threadId), [
           'dm:peer-scope:v1:runtime',
-          'dm:did:human:did:agent:runtime',
         ]);
       },
     );

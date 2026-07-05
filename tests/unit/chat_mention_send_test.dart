@@ -13,12 +13,15 @@ import 'test_support.dart';
 
 void main() {
   late FakeAwikiGateway gateway;
+  late FakeMessagingService messagingService;
   late ProviderContainer container;
   late ConversationSummary conversation;
 
   setUp(() {
     gateway = FakeAwikiGateway();
+    messagingService = FakeMessagingService(gateway);
     conversation = ConversationSummary(
+      conversationId: 'group:did:wba:awiki.info:group:mention',
       threadId: 'group:did:wba:awiki.info:group:mention',
       displayName: 'Mention Group',
       lastMessagePreview: '',
@@ -31,7 +34,10 @@ void main() {
       overrides: <Override>[
         awikiGatewayProvider.overrideWithValue(gateway),
         notificationFacadeProvider.overrideWithValue(FakeNotificationFacade()),
-        ...fakeApplicationServiceOverrides(gateway),
+        ...fakeApplicationServiceOverrides(
+          gateway,
+          messagingService: messagingService,
+        ),
         sessionProvider.overrideWith((ref) {
           final controller = SessionController();
           controller.setSession(
@@ -71,7 +77,7 @@ void main() {
           mentions: <ChatMentionDraft>[mention],
         );
 
-    expect(gateway.lastSentGroupId, 'did:wba:awiki.info:group:mention');
+    expect(gateway.lastSentGroupId, isNull);
     expect(gateway.lastSentPayload, isNotNull);
     expect(gateway.lastSentPayload?['text'], text);
     final mentions = gateway.lastSentPayload?['mentions'] as List<Object?>;
@@ -85,17 +91,15 @@ void main() {
     expect(json.containsKey('sender'), isFalse);
     expect(json.containsKey('proof'), isFalse);
 
-    final messages = container
-        .read(chatThreadProvider(conversation.threadId))
-        .messages;
-    expect(messages.last.content, text);
-    expect(messages.last.payloadJson, isNotNull);
-    expect(messages.last.mentions.single.surface, '@alice');
-
-    final conversations = container
-        .read(conversationListProvider)
-        .conversations;
-    expect(conversations.single.lastMessagePreview, text);
+    final projected = _conversationProjection(messagingService, conversation);
+    expect(projected, hasLength(1));
+    expect(projected.single.content, text);
+    expect(projected.single.payloadJson, isNotNull);
+    expect(projected.single.mentions.single.surface, '@alice');
+    expect(
+      container.read(chatThreadProvider(_timelineId(conversation))).messages,
+      isEmpty,
+    );
   });
 
   test(
@@ -123,8 +127,16 @@ void main() {
             content: text,
             mentions: <ChatMentionDraft>[mention],
           );
+      final sentMessage = _seedProjectedMessage(
+        container,
+        messagingService,
+        conversation,
+        remoteId: 'msg_group_mention_1',
+      );
 
-      var thread = container.read(chatThreadProvider(conversation.threadId));
+      var thread = container.read(
+        chatThreadProvider(_timelineId(conversation)),
+      );
       expect(thread.pendingAgentReplyCount, 1);
       expect(thread.agentPendingTurns.single.agentDid, agentDid);
       expect(thread.agentPendingTurns.single.agentHandle, 'hermes');
@@ -133,10 +145,7 @@ void main() {
         thread.agentPendingTurns.single.remoteMessageId,
         'msg_group_mention_1',
       );
-      expect(
-        thread.pendingAgentTurnForMessage(thread.messages.single),
-        isNotNull,
-      );
+      expect(thread.pendingAgentTurnForMessage(sentMessage), isNotNull);
       expect(container.read(pendingAgentDidsProvider), contains(agentDid));
 
       container
@@ -145,7 +154,7 @@ void main() {
             ChatMessage(
               localId: 'msg_agent_reply_1',
               remoteId: 'msg_agent_reply_1',
-              threadId: conversation.threadId,
+              threadId: _timelineId(conversation),
               senderDid: agentDid,
               groupId: conversation.groupId,
               content: '@me 总结好了',
@@ -158,7 +167,7 @@ void main() {
             ),
           );
 
-      thread = container.read(chatThreadProvider(conversation.threadId));
+      thread = container.read(chatThreadProvider(_timelineId(conversation)));
       expect(thread.agentPendingTurns, isEmpty);
       expect(
         container.read(pendingAgentDidsProvider),
@@ -174,7 +183,7 @@ void main() {
       <String, Object?>{
         'schema': 'awiki.agent.status.v1',
         'status_scope': 'run',
-        'conversation_id': conversation.threadId,
+        'conversation_id': _timelineId(conversation),
         'task_id': 'task_group_status',
         'runs': <Object?>[
           <String, Object?>{
@@ -183,7 +192,7 @@ void main() {
             'source_message_id': 'msg_group_status',
             'mention_id': 'men_agent',
             'runtime_agent_did': agentDid,
-            'conversation_id': conversation.threadId,
+            'conversation_id': _timelineId(conversation),
             'status': 'running',
             'started_at': DateTime(2026, 6, 14, 21).toIso8601String(),
           },
@@ -191,7 +200,7 @@ void main() {
       },
     );
 
-    var thread = container.read(chatThreadProvider(conversation.threadId));
+    var thread = container.read(chatThreadProvider(_timelineId(conversation)));
     expect(thread.pendingAgentReplyCount, 1);
     expect(thread.agentPendingTurns.single.agentDid, agentDid);
     expect(thread.agentPendingTurns.single.remoteMessageId, 'msg_group_status');
@@ -201,7 +210,7 @@ void main() {
       <String, Object?>{
         'schema': 'awiki.agent.status.v1',
         'status_scope': 'run',
-        'conversation_id': conversation.threadId,
+        'conversation_id': _timelineId(conversation),
         'task_id': 'task_group_status',
         'runs': <Object?>[
           <String, Object?>{
@@ -210,14 +219,14 @@ void main() {
             'source_message_id': 'msg_group_status',
             'mention_id': 'men_agent',
             'runtime_agent_did': agentDid,
-            'conversation_id': conversation.threadId,
+            'conversation_id': _timelineId(conversation),
             'status': 'finished',
           },
         ],
       },
     );
 
-    thread = container.read(chatThreadProvider(conversation.threadId));
+    thread = container.read(chatThreadProvider(_timelineId(conversation)));
     expect(thread.pendingAgentReplyCount, 0);
     expect(container.read(pendingAgentDidsProvider), isNot(contains(agentDid)));
   });
@@ -241,7 +250,9 @@ void main() {
       },
     );
 
-    final thread = container.read(chatThreadProvider(conversation.threadId));
+    final thread = container.read(
+      chatThreadProvider(_timelineId(conversation)),
+    );
     expect(thread.pendingAgentReplyCount, 0);
     expect(container.read(pendingAgentDidsProvider), isNot(contains(agentDid)));
   });
@@ -321,6 +332,12 @@ void main() {
             content: '@hermes 第一个问题',
             mentions: const <ChatMentionDraft>[mention],
           );
+      final firstMessage = _seedProjectedMessage(
+        container,
+        messagingService,
+        conversation,
+        remoteId: 'msg_group_mention_1',
+      );
       await container
           .read(chatThreadsProvider.notifier)
           .sendMessage(
@@ -328,15 +345,17 @@ void main() {
             content: '@hermes 第二个问题',
             mentions: const <ChatMentionDraft>[mention],
           );
+      final secondMessage = _seedProjectedMessage(
+        container,
+        messagingService,
+        conversation,
+        remoteId: 'msg_group_mention_2',
+      );
 
-      var thread = container.read(chatThreadProvider(conversation.threadId));
+      var thread = container.read(
+        chatThreadProvider(_timelineId(conversation)),
+      );
       expect(thread.pendingAgentReplyCount, 2);
-      final firstMessage = thread.messages.firstWhere(
-        (message) => message.remoteId == 'msg_group_mention_1',
-      );
-      final secondMessage = thread.messages.firstWhere(
-        (message) => message.remoteId == 'msg_group_mention_2',
-      );
       expect(thread.pendingAgentTurnForMessage(firstMessage), isNotNull);
       expect(thread.pendingAgentTurnForMessage(secondMessage), isNotNull);
 
@@ -344,7 +363,7 @@ void main() {
         <String, Object?>{
           'schema': 'awiki.agent.status.v1',
           'status_scope': 'run',
-          'conversation_id': conversation.threadId,
+          'conversation_id': _timelineId(conversation),
           'task_id': 'task_group_mention_1',
           'runs': <Object?>[
             <String, Object?>{
@@ -353,14 +372,14 @@ void main() {
               'source_message_id': 'msg_group_mention_1',
               'mention_id': 'men_agent',
               'runtime_agent_did': agentDid,
-              'conversation_id': conversation.threadId,
+              'conversation_id': _timelineId(conversation),
               'status': 'finished',
             },
           ],
         },
       );
 
-      thread = container.read(chatThreadProvider(conversation.threadId));
+      thread = container.read(chatThreadProvider(_timelineId(conversation)));
       expect(thread.pendingAgentReplyCount, 1);
       expect(thread.pendingAgentTurnForMessage(firstMessage), isNull);
       expect(thread.pendingAgentTurnForMessage(secondMessage), isNotNull);
@@ -392,6 +411,12 @@ void main() {
               ),
             ],
           );
+      final sentMessage = _seedProjectedMessage(
+        container,
+        messagingService,
+        conversation,
+        remoteId: 'msg_group_mention_1',
+      );
 
       container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
         const <String, Object?>{
@@ -410,12 +435,11 @@ void main() {
         },
       );
 
-      final thread = container.read(chatThreadProvider(conversation.threadId));
-      expect(thread.pendingAgentReplyCount, 1);
-      expect(
-        thread.pendingAgentTurnForMessage(thread.messages.single),
-        isNotNull,
+      final thread = container.read(
+        chatThreadProvider(_timelineId(conversation)),
       );
+      expect(thread.pendingAgentReplyCount, 1);
+      expect(thread.pendingAgentTurnForMessage(sentMessage), isNotNull);
     },
   );
 
@@ -427,4 +451,31 @@ void main() {
     expect(gateway.lastSentContent, '普通群消息');
     expect(gateway.lastSentPayload, isNull);
   });
+}
+
+String _timelineId(ConversationSummary conversation) =>
+    conversation.effectiveConversationId;
+
+List<ChatMessage> _conversationProjection(
+  FakeMessagingService messagingService,
+  ConversationSummary conversation,
+) {
+  return messagingService.conversationTimelineById[_timelineId(conversation)] ??
+      const <ChatMessage>[];
+}
+
+ChatMessage _seedProjectedMessage(
+  ProviderContainer container,
+  FakeMessagingService messagingService,
+  ConversationSummary conversation, {
+  required String remoteId,
+}) {
+  final projected = _conversationProjection(messagingService, conversation);
+  final message = projected.firstWhere(
+    (item) => item.remoteId == remoteId || item.localId == remoteId,
+  );
+  container
+      .read(chatThreadsProvider.notifier)
+      .debugSeedMessageForTesting(message, threadId: _timelineId(conversation));
+  return message;
 }

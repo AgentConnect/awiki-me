@@ -256,7 +256,7 @@ void main() {
     expect(thread.messages.first.senderHandle, 'bob.anpclaw.com');
     expect(thread.messages.first.attachments.first.filename, 'report.pdf');
     expect(thread.messages.first.attachments.first.sizeBytes, 1024);
-    expect(thread.messages.last.attachments.first.filename, '未命名附件');
+    expect(thread.messages.last.attachments.first.filename, isEmpty);
   });
 
   test('opening inbox thread clears local unread count immediately', () async {
