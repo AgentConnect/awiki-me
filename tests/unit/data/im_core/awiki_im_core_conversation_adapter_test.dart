@@ -180,7 +180,7 @@ void main() {
       final patch = await patchFuture.timeout(const Duration(seconds: 1));
       expect(patch.kind.name, 'upsert');
       expect(patch.ownerDid, 'did:alice');
-      expect(patch.item?.threadId, 'dm:did:alice:did:bob');
+      expect(patch.item?.threadId, 'did:bob');
       expect(patch.item?.lastMessagePreview, 'hello');
       expect(patch.item?.unreadCount, 2);
     },
