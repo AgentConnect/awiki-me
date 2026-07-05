@@ -107,6 +107,7 @@ class ImCoreAppSessionService implements AppSessionService {
       await _runtime.open();
     }
     _assertIdentityDomain(identity);
+    await _runtime.ensureIdentityVault(identity.identityId);
     await _runtime.switchIdentity(identity.identityId);
     try {
       final auth = await _auth.ensureSession();

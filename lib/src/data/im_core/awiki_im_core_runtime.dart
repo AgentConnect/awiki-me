@@ -3,22 +3,27 @@ import 'dart:async';
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
 import '../../application/ports/im_core_runtime_port.dart';
+import '../services/app_key_value_store.dart';
 import 'awiki_im_core_config.dart';
 import 'awiki_im_core_paths.dart';
+import 'awiki_im_core_secret_storage.dart';
 
 typedef AwikiImCoreOpen =
     Future<core.AwikiImCore> Function({
       required core.AwikiImCoreConfig config,
       required core.AwikiImCorePaths paths,
+      core.AwikiImCoreOpenOptions? openOptions,
     });
 
 class AwikiImCoreRuntime implements ImCoreRuntimePort {
   AwikiImCoreRuntime({
     required AwikiImCoreEnvironmentConfig config,
     required AwikiImCorePathLayout paths,
+    required AwikiImCoreVaultSecretProvider vaultSecretProvider,
     AwikiImCoreOpen? openCore,
   }) : _config = config,
        _paths = paths,
+       _vaultSecretProvider = vaultSecretProvider,
        _openCore = openCore ?? core.AwikiImCore.open;
 
   static Future<AwikiImCoreRuntime> fromEnvironment() async {
@@ -28,14 +33,19 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
       paths: await AwikiImCorePathLayout.fromPlatform(
         stateNamespace: config.stateNamespace,
       ),
+      vaultSecretProvider: StoredAwikiImCoreVaultSecretProvider(
+        storage: SecureAppKeyValueStore(),
+      ),
     );
   }
 
   final AwikiImCoreEnvironmentConfig _config;
   final AwikiImCorePathLayout _paths;
+  final AwikiImCoreVaultSecretProvider _vaultSecretProvider;
   final AwikiImCoreOpen _openCore;
 
   core.AwikiImCore? _core;
+  Future<void>? _openInFlight;
   core.AwikiImClient? _currentClient;
   int _activeClientOperations = 0;
   Completer<void>? _clientOperationsIdle;
@@ -53,11 +63,36 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     if (_core != null) {
       return;
     }
+    final inFlight = _openInFlight;
+    if (inFlight != null) {
+      return inFlight;
+    }
+    final opening = _open();
+    _openInFlight = opening;
+    return opening.whenComplete(() {
+      if (identical(_openInFlight, opening)) {
+        _openInFlight = null;
+      }
+    });
+  }
+
+  Future<void> _open() async {
     await _paths.ensureDirectories();
     await _paths.archiveIncompatibleLocalStateIfNeeded();
+    final vaultSecrets = await _vaultSecretProvider.getOrCreateSecrets(
+      stateNamespace: _paths.stateNamespace,
+    );
     _core = await _openCore(
       config: _config.toCoreConfig(),
       paths: _paths.toCorePaths(),
+      openOptions: core.AwikiImCoreOpenOptions.vaultRequired(
+        identitySecretVault: core.ImCoreSecretVaultOptions(
+          rootKey: vaultSecrets.rootKey,
+          vaultDir: _paths.vaultDir,
+          workspaceId: _paths.vaultWorkspaceId,
+          deviceId: vaultSecrets.deviceId,
+        ),
+      ),
     );
   }
 
@@ -82,6 +117,23 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
 
   Future<core.AwikiImClient> clientFor(core.IdentitySelector selector) async {
     return (await coreInstance()).client(selector);
+  }
+
+  @override
+  Future<void> ensureIdentityVault(String identityIdOrAlias) async {
+    final coreInstance = await this.coreInstance();
+    final selector = _selectorFromString(identityIdOrAlias);
+    final status = await coreInstance.identityVaultStatus(selector);
+    if (shouldMigrateLegacyIdentityVault(status)) {
+      final report = await coreInstance.migrateIdentityVault(selector);
+      if (!report.verified) {
+        throw StateError(
+          'identity_vault_migration_unverified: identity '
+          '${report.identity.id} did not verify after migration.',
+        );
+      }
+    }
+    await coreInstance.verifyIdentityVault(selector);
   }
 
   Future<core.AwikiImClient> currentClient() async {
@@ -186,6 +238,19 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     final idle = _clientOperationsIdle ??= Completer<void>();
     await idle.future;
   }
+}
+
+bool shouldMigrateLegacyIdentityVault(core.IdentityVaultStatus status) {
+  if (status.selectedBackend == core.IdentitySecretStorageBackend.vault) {
+    return false;
+  }
+  if (!status.vaultMetadataPresent) {
+    return true;
+  }
+  throw StateError(
+    'identity_vault_unverified: existing vault metadata is not usable; '
+    'refusing to re-migrate identity ${status.identity.id}.',
+  );
 }
 
 core.IdentitySelector _selectorFromString(String value) {

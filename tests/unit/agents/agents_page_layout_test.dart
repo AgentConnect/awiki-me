@@ -75,6 +75,50 @@ void main() {
     expect(control.listAgentsCalls, 1);
   });
 
+  testWidgets('agents workspace defers auto sync stop during dispose', (
+    tester,
+  ) async {
+    late _NoopSeededAgentsController controller;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const _AgentsWorkspaceToggleHost(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentsProvider.overrideWith((ref) {
+            controller = _NoopSeededAgentsController(
+              ref,
+              const AgentsState(isAutoSyncingInventory: true),
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(_AgentsWorkspaceToggleHost)),
+    );
+    expect(
+      identical(container.read(agentsProvider.notifier), controller),
+      true,
+    );
+    expect(container.read(agentsProvider).isAutoSyncingInventory, isTrue);
+
+    await tester.tap(find.byKey(const Key('hide-agents-workspace')));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(AgentsWorkspacePage), findsNothing);
+    expect(container.read(agentsProvider).isAutoSyncingInventory, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('agents workspace shows empty state and load error banner', (
     tester,
   ) async {
@@ -1680,7 +1724,10 @@ void main() {
           expiresAt: expiresAt,
         ),
         command:
-            'curl -fsSL https://awiki.info/daemon/install.sh | sh -s -- --token fresh-token --base-url https://awiki.info',
+            "curl -fsSL 'https://awiki.info/daemon/install.sh' | "
+            "AWIKI_DAEMON_BASE_URL='https://awiki.info' "
+            "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='https://awiki.info/daemon' "
+            "sh -s -- --token 'fresh-token'",
         fallbackCommand:
             'awiki-deamon install --token fresh-token --base-url https://awiki.info',
         installerUrl: 'https://awiki.info/daemon/install.sh',
@@ -2143,6 +2190,13 @@ class _SeededAgentsController extends AgentsController {
   _SeededAgentsController(super.ref, AgentsState initialState) {
     state = initialState;
   }
+}
+
+class _NoopSeededAgentsController extends _SeededAgentsController {
+  _NoopSeededAgentsController(super.ref, super.initialState);
+
+  @override
+  Future<void> ensureLoaded() => Future<void>.value();
 }
 
 class _AgentsWorkspaceToggleHost extends StatefulWidget {

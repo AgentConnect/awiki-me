@@ -7,6 +7,8 @@ abstract interface class ImCoreRuntimePort {
 
   Future<List<String>> validate();
 
+  Future<void> ensureIdentityVault(String identityIdOrAlias);
+
   Future<void> switchIdentity(String identityIdOrAlias);
 
   Future<void> dispose();

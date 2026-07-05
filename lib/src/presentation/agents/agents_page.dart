@@ -53,6 +53,7 @@ class AgentsWorkspacePage extends ConsumerStatefulWidget {
 
 class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
   late final AgentsController _agentsController;
+  bool _disposed = false;
 
   @override
   void initState() {
@@ -68,13 +69,17 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
 
   @override
   void dispose() {
-    _agentsController.stopInventoryAutoSync();
+    _disposed = true;
+    _deferAgentsMutation(
+      (controller) => controller.stopInventoryAutoSync(),
+      requireMounted: false,
+    );
     super.dispose();
   }
 
   Future<void> _ensureLoadedAndWatchForHostInstall() async {
-    await ref.read(agentsProvider.notifier).ensureLoaded();
-    if (!mounted) {
+    await _agentsController.ensureLoaded();
+    if (_disposed || !mounted) {
       return;
     }
     final state = ref.read(agentsProvider);
@@ -82,8 +87,20 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
         !state.isLoading &&
         state.agents.isEmpty &&
         !state.isAutoSyncingInventory) {
-      ref.read(agentsProvider.notifier).startInventoryAutoSync();
+      _deferAgentsMutation((controller) => controller.startInventoryAutoSync());
     }
+  }
+
+  void _deferAgentsMutation(
+    void Function(AgentsController controller) mutate, {
+    bool requireMounted = true,
+  }) {
+    scheduleMicrotask(() {
+      if (requireMounted && (_disposed || !mounted)) {
+        return;
+      }
+      mutate(_agentsController);
+    });
   }
 
   @override
@@ -96,14 +113,18 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
     });
     ref.listen<AgentsState>(agentsProvider, (previous, next) {
       if (next.agents.any((agent) => agent.isDaemon)) {
-        ref.read(agentsProvider.notifier).stopInventoryAutoSync();
+        _deferAgentsMutation(
+          (controller) => controller.stopInventoryAutoSync(),
+        );
         return;
       }
       if (next.error == null &&
           !next.isLoading &&
           next.agents.isEmpty &&
           previous?.isLoading == true) {
-        ref.read(agentsProvider.notifier).startInventoryAutoSync();
+        _deferAgentsMutation(
+          (controller) => controller.startInventoryAutoSync(),
+        );
       }
     });
 

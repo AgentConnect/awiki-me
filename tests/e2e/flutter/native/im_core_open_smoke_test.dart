@@ -20,11 +20,13 @@ void main() {
         }
       });
       final identityRoot = Directory('${root.path}/identities');
+      final vaultDir = Directory('${root.path}/identity-vault');
       final stateDir = Directory('${root.path}/state');
       final cacheDir = Directory('${root.path}/cache');
       final tempDir = Directory('${root.path}/tmp');
       await Future.wait(<Future<Directory>>[
         identityRoot.create(recursive: true),
+        vaultDir.create(recursive: true),
         stateDir.create(recursive: true),
         cacheDir.create(recursive: true),
         tempDir.create(recursive: true),
@@ -40,6 +42,16 @@ void main() {
           sqlitePath: '${stateDir.path}/im_core.sqlite',
           cacheDir: cacheDir.path,
           tempDir: tempDir.path,
+        ),
+        openOptions: core.AwikiImCoreOpenOptions.vaultRequired(
+          identitySecretVault: core.ImCoreSecretVaultOptions(
+            rootKey: core.DeviceVaultRootKey.fromList(
+              List<int>.generate(32, (index) => index + 1),
+            ),
+            vaultDir: vaultDir.path,
+            workspaceId: 'awiki-me-native-smoke',
+            deviceId: 'app-device-native-smoke',
+          ),
         ),
       );
       addTearDown(imCore.dispose);

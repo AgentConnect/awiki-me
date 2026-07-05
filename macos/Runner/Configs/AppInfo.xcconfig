@@ -30,6 +30,9 @@ PODS_PODFILE_DIR_PATH = ${SRCROOT}
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 ai.awiki. All rights reserved.
 
-// Sparkle configuration for auto-updates. Public key can be injected by CI.
-SPARKLE_FEED_URL = https://agentconnect.github.io/awiki-me/updates/appcast.xml
-SPARKLE_PUBLIC_ED_KEY =
+// Sparkle feed configuration for auto-updates. The URL uses `$()` to prevent
+// xcconfig from treating `//` as a comment while still expanding to `https://`.
+// Do not inject an empty SUPublicEDKey into Info.plist; unsigned development
+// builds should omit that key until CI provides a real EdDSA public key for
+// signed update artifacts.
+SPARKLE_FEED_URL = https:/$()/agentconnect.github.io/awiki-me/updates/appcast.xml

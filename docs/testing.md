@@ -140,6 +140,39 @@ All E2E runtime state and reports go under `.e2e/` and must remain untracked.
 Local config files named `tests/e2e/configs/*.local.yaml` are also ignored and
 must not be committed because they may contain OTP values.
 
+### Identity vault test state
+
+E2E runs pass `AWIKI_E2E_APP_STATE_ROOT` to the Flutter shims. In that explicit
+E2E mode, AWiki Me uses `awiki_me_im_core_vault.json` as a private file test
+provider for the App-local `im-core` identity vault root key and device id. The
+file is created under the E2E App support root with strict JSON reads and
+private file permissions on Linux/macOS. It may contain a base64 test root key,
+so it is local secret state and must remain untracked with the rest of `.e2e/`.
+When the E2E state root is relative, normal test runners resolve it against the
+repository working directory. If an E2E-built macOS app is accidentally launched
+as a GUI app with `/` as its working directory, AWiki Me resolves that relative
+root under the user's Application Support directory instead of trying to create
+`/.e2e` on the read-only system volume.
+
+Ordinary `appStateRoot` overrides do not move the vault root key into JSON; they
+still use the platform secure-storage provider. Unit coverage for this boundary
+lives in:
+
+- `tests/unit/bootstrap_test.dart`
+- `tests/unit/data/im_core/awiki_im_core_secret_storage_test.dart`
+- `tests/unit/data/im_core/awiki_im_core_runtime_test.dart`
+- `tests/unit/application/app_session_service_test.dart`
+
+These tests cover stable namespace-scoped root keys, corrupted root-key
+fail-closed behavior, strict file stores refusing to recreate missing root keys
+in existing files, `VaultRequired` open options, and activation-time vault
+verification before identity switching.
+
+The App-side vault contract, E2E file-provider boundary, and activation-time
+verification gate are documented in `docs/identity-secret-storage.md`. The shared
+SDK/CLI/daemon design is in
+`awiki-cli-rs2/docs/architecture/identity-secret-storage.md`.
+
 ## Direct Shim Commands
 
 Useful direct shim commands while debugging E2E internals:

@@ -12,7 +12,8 @@ Current groups:
   Agent, and Claude Code Agent user-visible reply acceptance.
 - `desktop_cli_peer/`: real desktop App + `awiki-cli-rs2` peer integration
   implementations for direct, group, attachment, and follow/contact flows.
-- `native/`: native SDK/plugin smoke such as `AwikiImCore.open`.
+- `native/`: native SDK/plugin smoke such as `AwikiImCore.open` and macOS
+  secure storage Keychain access.
 - `support/`: integration-only helpers.
 
 Run E2E through the repository-level runner:
@@ -25,6 +26,16 @@ dart run tests/e2e/runner.dart --case message-agent
 dart run tests/e2e/runner.dart --case codex-agent
 dart run tests/e2e/runner.dart --case claude-code-agent
 ```
+
+When changing macOS signing, entitlements, or platform secure storage, also run
+the direct native smoke:
+
+```bash
+flutter test --no-pub integration_test/secure_storage_smoke_test.dart -d macos
+```
+
+This test exercises `flutter_secure_storage` through the signed macOS runner and
+guards against Keychain authorization failures such as OSStatus `-34018`.
 
 `--case performance` is the startup/conversation performance acceptance gate for
 the real desktop App + CLI peer + backend flow. It writes product-level metrics

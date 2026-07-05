@@ -1,4 +1,5 @@
 import 'package:awiki_me/src/application/agent/agent_control_service.dart';
+import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
@@ -737,38 +738,77 @@ void main() {
     expect(args['limit'], 20);
   });
 
-  test('createDaemonInstallCommand returns token-only main command', () async {
-    final inventory = _InventoryStub();
-    final service = DefaultAgentControlService(
-      inventory: inventory,
-      messages: _MessagesStub(),
-    );
+  test(
+    'createDaemonInstallCommand returns env-bound command without controller DID',
+    () async {
+      final inventory = _InventoryStub();
+      final service = DefaultAgentControlService(
+        inventory: inventory,
+        messages: _MessagesStub(),
+      );
 
-    final command = await service.createDaemonInstallCommand(
-      controllerDid: 'did:human:me',
-      controllerHandle: 'alice.anpclaw.com',
-      clientPlatform: 'macos',
-    );
+      final command = await service.createDaemonInstallCommand(
+        controllerDid: 'did:human:me',
+        controllerHandle: 'alice.anpclaw.com',
+        clientPlatform: 'macos',
+      );
 
-    expect(inventory.lastDaemonTokenControllerHandle, 'alice.anpclaw.com');
-    expect(command.command, contains('--token daemon-token'));
-    expect(command.command, isNot(contains('did:human:me')));
-    expect(command.command, isNot(contains('--base-url')));
-    expect(
-      command.fallbackCommand,
-      'awiki-deamon install --token daemon-token --base-url https://awiki.info',
-    );
-    expect(command.installerUrl, 'https://awiki.info/daemon/install.sh');
-    expect(command.cleanupUrl, 'https://awiki.info/daemon/cleanup.sh');
-    expect(
-      command.cleanupCommand,
-      'curl -fsSL https://awiki.info/daemon/cleanup.sh | sh',
-    );
-    expect(
-      command.packageUrlTemplate,
-      'https://awiki.info/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
-    );
-  });
+      expect(inventory.lastDaemonTokenControllerHandle, 'alice.anpclaw.com');
+      expect(command.command, contains("--token 'daemon-token'"));
+      expect(command.command, isNot(contains('did:human:me')));
+      expect(
+        command.command,
+        "curl -fsSL 'https://awiki.info/daemon/install.sh' | "
+        "AWIKI_DAEMON_BASE_URL='https://awiki.info' "
+        "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='https://awiki.info/daemon' "
+        "sh -s -- --token 'daemon-token'",
+      );
+      expect(
+        command.fallbackCommand,
+        'awiki-deamon install --token daemon-token --base-url https://awiki.info',
+      );
+      expect(command.installerUrl, 'https://awiki.info/daemon/install.sh');
+      expect(command.cleanupUrl, 'https://awiki.info/daemon/cleanup.sh');
+      expect(
+        command.cleanupCommand,
+        'curl -fsSL https://awiki.info/daemon/cleanup.sh | sh',
+      );
+      expect(
+        command.packageUrlTemplate,
+        'https://awiki.info/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
+      );
+    },
+  );
+
+  test(
+    'createDaemonInstallCommand binds installer env to configured domain',
+    () async {
+      final inventory = _InventoryStub();
+      final service = DefaultAgentControlService(
+        inventory: inventory,
+        messages: _MessagesStub(),
+        environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
+      );
+
+      final command = await service.createDaemonInstallCommand(
+        controllerDid: 'did:human:me',
+        controllerHandle: 'alice.awiki.ai',
+        clientPlatform: 'macos',
+      );
+
+      expect(
+        command.command,
+        "curl -fsSL 'https://awiki.ai/daemon/install.sh' | "
+        "AWIKI_DAEMON_BASE_URL='https://awiki.ai' "
+        "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='https://awiki.ai/daemon' "
+        "sh -s -- --token 'daemon-token'",
+      );
+      expect(
+        command.fallbackCommand,
+        'awiki-deamon install --token daemon-token --base-url https://awiki.ai',
+      );
+    },
+  );
 
   test('invocation policy calls stay on inventory boundary', () async {
     final inventory = _InventoryStub();

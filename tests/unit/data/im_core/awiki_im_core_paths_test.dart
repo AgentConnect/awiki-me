@@ -20,6 +20,11 @@ void main() {
       '/app/support/awiki-me/environments/tenant-alpha-us/im-core/identities',
     );
     expect(
+      layout.vaultDir,
+      '/app/support/awiki-me/environments/tenant-alpha-us/im-core/identity-vault',
+    );
+    expect(layout.vaultWorkspaceId, 'awiki-me-tenant-alpha-us');
+    expect(
       layout.registryPath,
       '/app/support/awiki-me/environments/tenant-alpha-us/im-core/identities/registry.json',
     );
@@ -67,6 +72,7 @@ void main() {
       await layout.ensureDirectories();
 
       expect(await Directory(layout.identityRootDir).exists(), isTrue);
+      expect(await Directory(layout.vaultDir).exists(), isTrue);
       expect(
         await Directory(
           '${root.path}/support/awiki-me/environments/default/im-core/state',
@@ -142,6 +148,69 @@ void main() {
       'tenant.example-8443-a-b-c',
     );
     expect(normalizeAwikiStateNamespace(''), 'default');
+  });
+
+  test('normalizes relative E2E state root against the runner cwd', () {
+    expect(
+      normalizeAwikiE2eAppStateRootForLaunch(
+        '.e2e/smoke/current/app',
+        currentDirectory: '/workspace/awiki-me',
+        homeDirectory: '/Users/alice',
+        isMacOS: true,
+        temporaryDirectory: '/tmp',
+      ),
+      '/workspace/awiki-me/.e2e/smoke/current/app',
+    );
+  });
+
+  test(
+    'keeps GUI-launched relative E2E state root on writable macOS support',
+    () {
+      expect(
+        normalizeAwikiE2eAppStateRootForLaunch(
+          '.e2e/manual/app',
+          currentDirectory: '/',
+          homeDirectory: '/Users/alice',
+          isMacOS: true,
+          temporaryDirectory: '/tmp',
+        ),
+        '/Users/alice/Library/Application Support/ai.awiki.awikiMe/.e2e/manual/app',
+      );
+    },
+  );
+
+  test(
+    'falls back to temp for GUI-launched relative E2E state without HOME',
+    () {
+      expect(
+        normalizeAwikiE2eAppStateRootForLaunch(
+          '.e2e/manual/app',
+          currentDirectory: '/',
+          homeDirectory: '',
+          isMacOS: true,
+          temporaryDirectory: '/tmp',
+        ),
+        '/tmp/ai.awiki.awikiMe/.e2e/manual/app',
+      );
+    },
+  );
+
+  test('preserves absolute and home-relative E2E state roots', () {
+    expect(
+      normalizeAwikiE2eAppStateRootForLaunch(
+        '/var/tmp/awiki-e2e/app',
+        currentDirectory: '/',
+      ),
+      '/var/tmp/awiki-e2e/app',
+    );
+    expect(
+      normalizeAwikiE2eAppStateRootForLaunch(
+        '~/awiki-e2e/app',
+        currentDirectory: '/',
+        homeDirectory: '/Users/alice',
+      ),
+      '/Users/alice/awiki-e2e/app',
+    );
   });
 }
 

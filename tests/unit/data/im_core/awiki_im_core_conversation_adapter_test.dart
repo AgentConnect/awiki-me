@@ -8,6 +8,7 @@ import 'package:awiki_me/src/data/im_core/awiki_im_core_config.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_conversation_adapter.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_paths.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_runtime.dart';
+import 'package:awiki_me/src/data/im_core/awiki_im_core_secret_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -286,6 +287,7 @@ class _FakeRuntime extends AwikiImCoreRuntime {
           cacheRoot: '/tmp/awiki-me-test/cache',
           tempRoot: '/tmp/awiki-me-test/tmp',
         ),
+        vaultSecretProvider: _FakeVaultSecretProvider(),
       );
 
   final _FakeClient client;
@@ -300,6 +302,18 @@ class _FakeRuntime extends AwikiImCoreRuntime {
   @override
   Future<core.AwikiImClient> currentClient() async {
     return client;
+  }
+}
+
+class _FakeVaultSecretProvider implements AwikiImCoreVaultSecretProvider {
+  @override
+  Future<AwikiImCoreVaultSecrets> getOrCreateSecrets({
+    required String stateNamespace,
+  }) async {
+    return AwikiImCoreVaultSecrets(
+      rootKey: core.DeviceVaultRootKey.fromList(List<int>.filled(32, 1)),
+      deviceId: 'device-test',
+    );
   }
 }
 

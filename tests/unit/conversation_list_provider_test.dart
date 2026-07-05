@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
@@ -453,6 +454,66 @@ void main() {
       );
     },
   );
+
+  test('runtime realtime hint expands local handle with provider domain', () {
+    final notifications = FakeNotificationFacade();
+    const agentDid = 'did:agent:runtime:codex';
+    const agentHandle = 'codex-local';
+    final container = _conversationContainer(
+      service: _StaticConversationService(conversations: const []),
+      notifications: notifications,
+      ownerDid: 'did:human',
+      environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
+      agents: const <AgentSummary>[
+        AgentSummary(
+          agentDid: agentDid,
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon',
+          runtime: 'codex',
+          handle: agentHandle,
+          displayName: 'Codex',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final runtimeHint =
+        _conversation(
+          threadId: 'dm:peer-scope:v1:codex-local',
+          displayName: agentHandle,
+          targetDid: agentHandle,
+          targetPeer: agentHandle,
+          unreadCount: 1,
+        ).copyWith(
+          lastMessagePreview: 'ready',
+          lastMessageAt: DateTime.utc(2026, 7, 5, 1),
+        );
+    final runtimeReply = ChatMessage(
+      localId: 'runtime-reply-domain',
+      remoteId: 'runtime-reply-domain',
+      threadId: runtimeHint.threadId,
+      senderDid: agentDid,
+      senderName: 'Codex',
+      receiverDid: 'did:human',
+      content: 'ready',
+      createdAt: runtimeHint.lastMessageAt,
+      isMine: false,
+      sendState: MessageSendState.sent,
+    );
+
+    container
+        .read(conversationListProvider.notifier)
+        .upsertRealtimeMessageBestEffort(runtimeHint, message: runtimeReply);
+
+    final conversations = container
+        .read(conversationListProvider)
+        .conversations;
+    expect(conversations, hasLength(1));
+    expect(conversations.single.targetDid, agentDid);
+    expect(conversations.single.targetPeer, 'codex-local.awiki.ai');
+  });
 
   test(
     'explicit non-runtime did is not corrected to runtime agent by handle',
@@ -1643,9 +1704,12 @@ ProviderContainer _conversationContainer({
   required FakeNotificationFacade notifications,
   required String ownerDid,
   List<AgentSummary> agents = const <AgentSummary>[],
+  AwikiEnvironmentConfig? environment,
 }) {
   return ProviderContainer(
     overrides: <Override>[
+      if (environment != null)
+        awikiEnvironmentConfigProvider.overrideWithValue(environment),
       conversationServiceProvider.overrideWithValue(service),
       notificationFacadeProvider.overrideWithValue(notifications),
       agentsProvider.overrideWith(

@@ -63,6 +63,7 @@ void main() {
         expect(restored?.expiresAt, DateTime.utc(2026, 5, 23, 9));
         expect(restored?.jwtToken, 'jwt-restored');
         expect(runtime.openCount, 1);
+        expect(runtime.vaultChecks, ['id-default']);
         expect(runtime.switchedIdentities, ['id-default']);
         expect(auth.ensureCount, 1);
       },
@@ -90,21 +91,51 @@ void main() {
         expect(restored?.identityId, 'id-offline');
         expect(restored?.authenticated, isFalse);
         expect(restored?.jwtToken, isNull);
+        expect(runtime.vaultChecks, ['id-offline']);
         expect(runtime.switchedIdentities, ['id-offline']);
         expect(auth.ensureCount, 1);
       },
     );
 
     test('restoreSession still fails on non-transient auth errors', () async {
+      final runtime = _FakeRuntime();
       final service = ImCoreAppSessionService(
-        runtime: _FakeRuntime(),
+        runtime: runtime,
         identities: _FakeIdentities(defaultIdentity: _session('id-auth')),
         auth: _FakeAuth(ensureError: StateError('private key missing')),
         activeSessionStore: _FakeActiveSessionStore('id-auth'),
       );
 
       await expectLater(service.restoreSession(), throwsStateError);
+      expect(runtime.vaultChecks, ['id-auth']);
     });
+
+    test(
+      'activateIdentity fails closed when identity vault verify fails',
+      () async {
+        final runtime = _FakeRuntime(
+          vaultError: StateError('vault verify failed'),
+        );
+        final active = _FakeActiveSessionStore();
+        final auth = _FakeAuth();
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: _FakeIdentities(defaultIdentity: _session('id-vault')),
+          auth: auth,
+          activeSessionStore: active,
+        );
+
+        await expectLater(
+          service.loginWithIdentity('alice-local'),
+          throwsStateError,
+        );
+        expect(runtime.vaultChecks, ['id-vault']);
+        expect(runtime.switchedIdentities, isEmpty);
+        expect(auth.ensureCount, 0);
+        expect(await active.readActiveIdentityId(), isNull);
+        expect(await service.currentSession(), isNull);
+      },
+    );
 
     test(
       'explicit local identity login activates a matching local identity',
@@ -123,6 +154,7 @@ void main() {
         expect(session.identityId, 'id-other');
         expect(session.authenticated, isTrue);
         expect(runtime.openCount, 1);
+        expect(runtime.vaultChecks, ['id-other']);
         expect(runtime.switchedIdentities, ['id-other']);
       },
     );
@@ -329,9 +361,13 @@ AppSession _session(String id) {
 }
 
 class _FakeRuntime implements ImCoreRuntimePort {
+  _FakeRuntime({this.vaultError});
+
+  final Object? vaultError;
   int openCount = 0;
   int disposeCount = 0;
   final List<String> switchedIdentities = <String>[];
+  final List<String> vaultChecks = <String>[];
 
   @override
   bool get isOpen => openCount > 0 && disposeCount == 0;
@@ -343,6 +379,15 @@ class _FakeRuntime implements ImCoreRuntimePort {
 
   @override
   Future<List<String>> validate() async => const <String>[];
+
+  @override
+  Future<void> ensureIdentityVault(String identityIdOrAlias) async {
+    vaultChecks.add(identityIdOrAlias);
+    final error = vaultError;
+    if (error != null) {
+      throw error;
+    }
+  }
 
   @override
   Future<void> switchIdentity(String identityIdOrAlias) async {

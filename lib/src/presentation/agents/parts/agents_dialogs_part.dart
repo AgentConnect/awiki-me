@@ -10,13 +10,13 @@ Future<void> _openRuntimeChat(
     context,
     ref,
     peerDid: agent.agentDid,
-    peerHandle: _agentFullHandle(agent),
+    peerHandle: _agentFullHandle(ref, agent),
     peerName: title,
     avatarSeed: agent.handle ?? agent.agentDid,
   );
 }
 
-String? _agentFullHandle(AgentSummary agent) {
+String? _agentFullHandle(WidgetRef ref, AgentSummary agent) {
   final handle = _trimLeadingAt(agent.handle);
   if (handle == null || handle.isEmpty) {
     return null;
@@ -24,7 +24,7 @@ String? _agentFullHandle(AgentSummary agent) {
   if (handle.contains('.')) {
     return handle.toLowerCase();
   }
-  final domain = AwikiEnvironmentConfig.fromEnvironment().didDomain.trim();
+  final domain = ref.read(awikiEnvironmentConfigProvider).didDomain.trim();
   if (domain.isEmpty) {
     return handle.toLowerCase();
   }
@@ -69,7 +69,7 @@ Future<void> _showCreateRuntimeDialog(
         existingRuntimes,
         RuntimeAgentKind.hermes,
       ),
-      handleDomain: AwikiEnvironmentConfig.fromEnvironment().didDomain,
+      handleDomain: ref.read(awikiEnvironmentConfigProvider).didDomain,
       existingRuntimes: existingRuntimes,
       runtimeCapability: _RuntimeCreateCapability.fromDaemon(daemon),
       validateHandle: (handle, domain) {

@@ -103,6 +103,9 @@ String? _optionalFromEnvironment(String name, {String? defaultValue}) {
       'AWIKI_MAIL_SERVICE_URL',
     ),
     'AWIKI_DID_DOMAIN' => const String.fromEnvironment('AWIKI_DID_DOMAIN'),
+    'AWIKI_STATE_NAMESPACE' => const String.fromEnvironment(
+      'AWIKI_STATE_NAMESPACE',
+    ),
     'AWIKI_ANP_SERVICE_URL' => const String.fromEnvironment(
       'AWIKI_ANP_SERVICE_URL',
     ),

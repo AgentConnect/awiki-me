@@ -9,20 +9,19 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../application/config/awiki_environment_config.dart';
 import '../../domain/entities/app_update_manifest.dart';
 import '../../domain/services/update_service.dart';
 import 'app_key_value_store.dart';
 import 'platform_update_bridge.dart';
 
-const String kDefaultUpdateManifestUrl = String.fromEnvironment(
-  'AWIKI_UPDATE_MANIFEST_URL',
-  defaultValue: 'https://awiki.ai/downloads/awiki-me/test/latest.json',
-);
+final AwikiEnvironmentConfig _defaultUpdateEnvironment =
+    AwikiEnvironmentConfig.fromEnvironment();
 
-const String kDefaultReleasesUrl = String.fromEnvironment(
-  'AWIKI_RELEASES_URL',
-  defaultValue: 'https://awiki.ai/#download',
-);
+final String kDefaultUpdateManifestUrl =
+    _defaultUpdateEnvironment.updateManifestUrl;
+
+final String kDefaultReleasesUrl = _defaultUpdateEnvironment.releasesUrl;
 
 class AppUpdateService implements UpdateService {
   AppUpdateService({
@@ -31,15 +30,15 @@ class AppUpdateService implements UpdateService {
     PlatformUpdateBridge? platformBridge,
     Future<PackageInfo> Function()? packageInfoLoader,
     Future<bool> Function(Uri uri)? urlLauncher,
-    String manifestUrl = kDefaultUpdateManifestUrl,
-    String releasesUrl = kDefaultReleasesUrl,
+    String? manifestUrl,
+    String? releasesUrl,
   }) : _storage = storage,
        _httpClient = httpClient ?? http.Client(),
        _platformBridge = platformBridge ?? MethodChannelPlatformUpdateBridge(),
        _packageInfoLoader = packageInfoLoader ?? PackageInfo.fromPlatform,
        _urlLauncher = urlLauncher ?? launchUrl,
-       _manifestUrl = manifestUrl,
-       _releasesUrl = releasesUrl;
+       _manifestUrl = manifestUrl ?? kDefaultUpdateManifestUrl,
+       _releasesUrl = releasesUrl ?? kDefaultReleasesUrl;
 
   static const String _lastCheckAtKey = 'awiki_me_update_last_checked_at';
   static const String _lastManifestKey = 'awiki_me_update_last_manifest';

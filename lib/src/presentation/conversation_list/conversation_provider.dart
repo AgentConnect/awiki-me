@@ -848,6 +848,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           : normalizeRealtimeConversationPresentationIdentity(
               realtimeConversation,
               ref.read(agentsProvider).agents,
+              didDomain: ref.read(awikiEnvironmentConfigProvider).didDomain,
             );
       if (normalizedConversation == null ||
           _isLocallyHidden(normalizedConversation)) {

@@ -1,8 +1,11 @@
 import Cocoa
 import FlutterMacOS
+import Security
 import UniformTypeIdentifiers
 
 class MainFlutterWindow: NSWindow {
+  private let awikiErrAuthorizationDenied = OSStatus(-60008)
+
   private enum TrafficLightLayout {
     // Keep this aligned with the Flutter macOS rail width in app_shell.dart.
     static let railWidth: CGFloat = 72
@@ -26,6 +29,7 @@ class MainFlutterWindow: NSWindow {
     registerWindowChromeChannel(flutterViewController: flutterViewController)
     registerMenuBarStatusChannel(flutterViewController: flutterViewController)
     registerAttachmentChannel(flutterViewController: flutterViewController)
+    registerKeychainAccessChannel(flutterViewController: flutterViewController)
     MenuBarStatusController.shared.configure(mainWindow: self)
 
     super.awakeFromNib()
@@ -163,6 +167,239 @@ class MainFlutterWindow: NSWindow {
     }
     MenuBarStatusController.shared.setUnreadCount(count.intValue)
     result(nil)
+  }
+
+  private struct KeychainRequest {
+    let service: String
+    let account: String
+    let value: String?
+  }
+
+  private func registerKeychainAccessChannel(flutterViewController: FlutterViewController) {
+    let channel = FlutterMethodChannel(
+      name: "ai.awiki.awikime/keychain_access",
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "readGenericPassword":
+        self.readGenericPassword(arguments: call.arguments, result: result)
+      case "writeGenericPassword":
+        self.writeGenericPassword(arguments: call.arguments, result: result)
+      case "deleteGenericPassword":
+        self.deleteGenericPassword(arguments: call.arguments, result: result)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private func parseKeychainRequest(
+    arguments: Any?,
+    requireValue: Bool,
+    result: FlutterResult
+  ) -> KeychainRequest? {
+    guard
+      let args = arguments as? [String: Any],
+      let service = args["service"] as? String,
+      !service.isEmpty,
+      let account = args["account"] as? String,
+      !account.isEmpty
+    else {
+      result(FlutterError(code: "bad_args", message: "service and account are required", details: nil))
+      return nil
+    }
+    let value = args["value"] as? String
+    if requireValue && value == nil {
+      result(FlutterError(code: "bad_args", message: "value is required", details: nil))
+      return nil
+    }
+    return KeychainRequest(
+      service: service,
+      account: account,
+      value: value
+    )
+  }
+
+  private func readGenericPassword(arguments: Any?, result: @escaping FlutterResult) {
+    guard let request = parseKeychainRequest(arguments: arguments, requireValue: false, result: result) else {
+      return
+    }
+    DispatchQueue.global(qos: .utility).async {
+      let response = self.readGenericPassword(service: request.service, account: request.account)
+      DispatchQueue.main.async {
+        switch response.status {
+        case errSecSuccess:
+          result(response.value)
+        case errSecItemNotFound:
+          result(nil)
+        default:
+          result(self.keychainFlutterError(code: "read_failed", status: response.status))
+        }
+      }
+    }
+  }
+
+  private func writeGenericPassword(arguments: Any?, result: @escaping FlutterResult) {
+    guard let request = parseKeychainRequest(arguments: arguments, requireValue: true, result: result) else {
+      return
+    }
+    DispatchQueue.global(qos: .utility).async {
+      let status = self.writeGenericPassword(
+        service: request.service,
+        account: request.account,
+        value: request.value ?? ""
+      )
+      DispatchQueue.main.async {
+        if status == errSecSuccess {
+          result(nil)
+          return
+        }
+        result(self.keychainFlutterError(code: "write_failed", status: status))
+      }
+    }
+  }
+
+  private func deleteGenericPassword(arguments: Any?, result: @escaping FlutterResult) {
+    guard let request = parseKeychainRequest(arguments: arguments, requireValue: false, result: result) else {
+      return
+    }
+    DispatchQueue.global(qos: .utility).async {
+      let status = self.deleteGenericPassword(service: request.service, account: request.account)
+      DispatchQueue.main.async {
+        if status == errSecSuccess || status == errSecItemNotFound {
+          result(nil)
+          return
+        }
+        result(self.keychainFlutterError(code: "delete_failed", status: status))
+      }
+    }
+  }
+
+  private func baseGenericPasswordQuery(service: String, account: String) -> [CFString: Any] {
+    return [
+      kSecClass: kSecClassGenericPassword,
+      kSecAttrService: service,
+      kSecAttrAccount: account,
+    ]
+  }
+
+  private func readGenericPassword(service: String, account: String) -> (status: OSStatus, value: String?) {
+    var query = baseGenericPasswordQuery(service: service, account: account)
+    query[kSecReturnData] = true
+    query[kSecMatchLimit] = kSecMatchLimitOne
+
+    var ref: AnyObject?
+    let status = SecItemCopyMatching(query as CFDictionary, &ref)
+    guard status == errSecSuccess else {
+      return (status, nil)
+    }
+    guard
+      let data = ref as? Data,
+      let value = String(data: data, encoding: .utf8)
+    else {
+      return (errSecDecode, nil)
+    }
+    return (status, value)
+  }
+
+  private func writeGenericPassword(service: String, account: String, value: String) -> OSStatus {
+    guard let data = value.data(using: .utf8) else {
+      return errSecParam
+    }
+    let accessResult = createCurrentBundleKeychainAccess()
+    if accessResult.status == errSecSuccess, let access = accessResult.access {
+      let accessStatus = writeGenericPassword(
+        service: service,
+        account: account,
+        data: data,
+        access: access
+      )
+      if accessStatus != awikiErrAuthorizationDenied {
+        return accessStatus
+      }
+    } else if accessResult.status != awikiErrAuthorizationDenied {
+      return accessResult.status
+    }
+
+    // Some local debug/test runners cannot obtain Authorization Services
+    // permission for a custom SecAccess ACL (OSStatus -60008). Fall back to the
+    // system's default Keychain ACL so migration can still move values out of
+    // the legacy flutter_secure_storage service instead of touching the old item
+    // on every launch.
+    return writeGenericPassword(
+      service: service,
+      account: account,
+      data: data,
+      access: nil
+    )
+  }
+
+  private func writeGenericPassword(
+    service: String,
+    account: String,
+    data: Data,
+    access: SecAccess?
+  ) -> OSStatus {
+    var add = baseGenericPasswordQuery(service: service, account: account)
+    add[kSecValueData] = data
+    if let access {
+      add[kSecAttrAccess] = access
+    }
+
+    let addStatus = SecItemAdd(add as CFDictionary, nil)
+    if addStatus != errSecDuplicateItem {
+      return addStatus
+    }
+
+    let query = baseGenericPasswordQuery(service: service, account: account)
+    let update: [CFString: Any] = [kSecValueData: data]
+    // Do not refresh kSecAttrAccess for existing items during ordinary writes.
+    // Updating an item's ACL/owner is what makes macOS show
+    // "AWiki Me wants to change access permissions" Keychain prompts. New items
+    // still receive the current executable ACL on SecItemAdd; existing items keep
+    // their established ACL and only the secret value is replaced.
+    return SecItemUpdate(query as CFDictionary, update as CFDictionary)
+  }
+
+  private func deleteGenericPassword(service: String, account: String) -> OSStatus {
+    let query = baseGenericPasswordQuery(service: service, account: account)
+    return SecItemDelete(query as CFDictionary)
+  }
+
+  private func createCurrentBundleKeychainAccess() -> (status: OSStatus, access: SecAccess?) {
+    let accessDescription = "AWiki Me secure storage" as CFString
+    // Trust the executable path instead of the .app bundle directory. Keychain
+    // ACL checks are made against the process executable; using the bundle path
+    // can leave items readable only after a per-launch authorization prompt.
+    let trustedPath = Bundle.main.executablePath ?? Bundle.main.bundlePath
+    var trustedApp: SecTrustedApplication?
+    let trustedStatus = trustedPath.withCString { path in
+      SecTrustedApplicationCreateFromPath(path, &trustedApp)
+    }
+    guard trustedStatus == errSecSuccess, let trustedApp else {
+      return (trustedStatus, nil)
+    }
+
+    var access: SecAccess?
+    let accessStatus = SecAccessCreate(
+      accessDescription,
+      [trustedApp] as CFArray,
+      &access
+    )
+    guard accessStatus == errSecSuccess, let access else {
+      return (accessStatus, nil)
+    }
+    return (errSecSuccess, access)
+  }
+
+  private func keychainFlutterError(code: String, status: OSStatus) -> FlutterError {
+    let errorMessage = SecCopyErrorMessageString(status, nil) as String? ?? "Unknown security result code"
+    return FlutterError(
+      code: code,
+      message: "SecKeychain operation failed: \(status), \(errorMessage)",
+      details: status
+    )
   }
 
   private func registerAttachmentChannel(flutterViewController: FlutterViewController) {

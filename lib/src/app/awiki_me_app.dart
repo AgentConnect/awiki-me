@@ -146,6 +146,7 @@ class AwikiMeApp extends StatelessWidget {
                 identities: bootstrap.identityCorePort == null
                     ? null
                     : ref.watch(identityCorePortProvider),
+                environment: bootstrap.environment,
                 downloadBaseUrl: control.downloadBaseUrl,
                 agentImEnabled: ref.watch(agentImEnabledProvider),
                 preferredLanguageProvider: () {

@@ -49,7 +49,13 @@ domain, OTP, App/CLI peer handles, and `awiki-cli` binary path.
 
 The app reads a single backend root from `AWIKI_BASE_URL` and derives the
 default user-service, message-service, mail-service, DID domain, ANP endpoint,
-and daemon download root from it.
+daemon download root, package channel, update manifest, and release page from
+it. The same bootstrapped environment is reused by Agent inventory, runtime
+creation, daemon install command rendering, and runtime conversation handle
+projection, so the App should not mix `awiki.info` and `awiki.ai` inside one
+package. For packaging, `scripts/package_app.config` is the single domain
+switch: set `AWIKI_DOMAIN="awiki.info"` or `AWIKI_DOMAIN="awiki.ai"` and leave
+the advanced overrides empty.
 
 ```bash
 flutter run --dart-define=AWIKI_BASE_URL=https://awiki.info
@@ -70,9 +76,13 @@ AWIKI_USER_SERVICE_URL
 AWIKI_MESSAGE_SERVICE_URL
 AWIKI_MAIL_SERVICE_URL
 AWIKI_DID_DOMAIN
+AWIKI_STATE_NAMESPACE
 AWIKI_ANP_SERVICE_URL
 AWIKI_ANP_SERVICE_DID
 AWIKI_DAEMON_DOWNLOAD_BASE_URL
+AWIKI_PACKAGE_CHANNEL
+AWIKI_UPDATE_MANIFEST_URL
+AWIKI_RELEASES_URL
 ```
 
 ## Packaging
@@ -85,10 +95,13 @@ scripts/package_app.sh
 
 Package settings live in `scripts/package_app.config`. The script accepts no
 arguments and does not read package settings from environment variables. For
-normal packaging, edit `AWIKI_BASE_URL`; keep `PACKAGE_CHANNEL="test"` for
-installable non-store packages. The channel only separates output directories,
-file names, and `latest.json`; it does not control store release status or code
-signing.
+normal packaging, edit only `AWIKI_DOMAIN`; keep `PACKAGE_CHANNEL="test"` for
+installable non-store packages. The script derives `AWIKI_BASE_URL`,
+`AWIKI_DID_DOMAIN`, `AWIKI_ANP_SERVICE_URL`,
+`AWIKI_DAEMON_DOWNLOAD_BASE_URL`, `AWIKI_UPDATE_MANIFEST_URL`, and
+`AWIKI_RELEASES_URL` from that domain unless an advanced override is set. The
+channel only separates output directories, file names, and `latest.json`; it
+does not control store release status or code signing.
 
 The script always builds release artifacts for Android arm64, macOS arm64, and
 macOS x64. It also rebuilds the native SDK artifacts before packaging.
@@ -97,7 +110,7 @@ The current checked-in config builds the installable online test package:
 
 ```text
 PACKAGE_CHANNEL="test"
-AWIKI_BASE_URL="https://anpclaw.com"
+AWIKI_DOMAIN="awiki.info"
 ```
 
 For a future stable distribution track, update the same config file, for
@@ -105,7 +118,7 @@ example:
 
 ```text
 PACKAGE_CHANNEL="stable"
-AWIKI_BASE_URL="https://awiki.info"
+AWIKI_DOMAIN="awiki.info"
 ```
 
 The script writes artifacts and `latest.json` under:
@@ -150,7 +163,9 @@ request on every tab re-entry. Explicit retry, session activation, foreground
 resume, and realtime reconnect still use the authenticated background refresh
 path when fresh inventory is required. Daemon status remains separate: the
 manual refresh button sends a status query to the selected daemon, while
-realtime agent-control payloads update the page automatically.
+realtime agent-control payloads update the page automatically. Lifecycle-triggered
+auto-sync start/stop is scheduled outside widget build/dispose so Riverpod state
+changes do not occur while Flutter is finalizing the widget tree.
 
 ## Building on macOS with Xcode
 
@@ -166,11 +181,89 @@ Use `Runner.xcworkspace`, not `Runner.xcodeproj`. If Xcode reports
 the generated `macos/Pods` support files are missing or CocoaPods is not on
 `PATH`; rerun the bootstrap script.
 
+The macOS Info.plist intentionally omits `SUPublicEDKey` until release CI owns a
+real Sparkle EdDSA public key and matching signed appcast artifacts. Do not ship
+an empty `SUPublicEDKey`; Sparkle treats the empty value as an invalid key and
+logs `The provided EdDSA key could not be decoded.` The Sparkle feed URL in
+`macos/Runner/Configs/AppInfo.xcconfig` uses `$()` between the two slashes so
+Xcode does not parse the URL as an xcconfig comment.
+
 Local macOS debug/profile builds are usually ad-hoc signed. To avoid a
 successful backend registration surfacing as a registration failure because a
 Keychain write failed, debug/profile builds store account credentials in
 `awiki_me_credentials.json` under the app support directory; release builds still
 use platform secure storage.
+
+The identity vault root key and device id still use encrypted macOS Keychain
+storage outside explicit `AWIKI_E2E_APP_STATE_ROOT` runs. Local/debug builds use
+the login Keychain rather than the Data Protection Keychain so they can run
+without a provisioning profile. New macOS writes go through the AWiki native
+Keychain bridge, which stores the item with an ACL that trusts the current app
+executable path. Existing native items keep their established ACL on normal reads
+and updates; the App does not rewrite Keychain item access permissions on every
+bootstrap because that triggers macOS "change access permissions/owner"
+authorization dialogs. Values that were written by the older
+`flutter_secure_storage` path are read as a legacy fallback, migrated into the
+native bridge when the native write succeeds, and then removed from the legacy
+Keychain service before the read returns so future launches do not keep touching
+the old item. Local test/debug runners that cannot obtain Authorization Services
+permission for a custom ACL may fall back to the system default Keychain ACL for
+the new native item; this still keeps the secret in macOS Keychain and allows the
+old service item to be retired. A real user should see the Keychain authorization
+prompt only for first access, migration, or when a locally rebuilt Xcode binary
+no longer matches the trusted executable recorded on an existing item; stable
+release builds should not ask on every launch. The plugin's Data Protection
+Keychain mode still requires Keychain Sharing entitlements and a valid
+development/release signing identity; if that entitlement is missing, runtime
+writes fail with OSStatus `-34018` (`errSecMissingEntitlement`), and if the
+entitlement is present without a usable signing profile, local Flutter builds
+fail before launch. After changing macOS signing, entitlements, or
+secure-storage options, run
+`flutter test --no-pub integration_test/secure_storage_smoke_test.dart -d macos`
+to prove the signed runner can write, read, and delete a secure-storage value.
+
+## Identity Secret Storage
+
+App-side root-key handling, activation-time verification, and E2E test state are
+documented in [docs/identity-secret-storage.md](docs/identity-secret-storage.md).
+The shared SDK/CLI/daemon design lives in
+`awiki-cli-rs2/docs/architecture/identity-secret-storage.md`.
+
+AWiki Me opens the Flutter SDK / Rust `im-core` boundary with identity
+`VaultRequired` options. DID private keys, E2EE static key material, auth/JWT
+state, and daemon subkey package persistence are owned by `im-core`; the App
+only supplies the no-prompt vault root key and stable host context.
+
+Production and ordinary custom-state-root runs use `SecureAppKeyValueStore`
+backed by `flutter_secure_storage` for the App-local vault root key and device
+id. The App state namespace owns the vault directory:
+
+```text
+<app support>/im-core/<namespace>/identity-vault
+vaultWorkspaceId = awiki-me-<namespace>
+deviceId = app-device-<stable-random>
+```
+
+Only explicit E2E runs with `AWIKI_E2E_APP_STATE_ROOT` use the private file test
+provider `awiki_me_im_core_vault.json`; ordinary `appStateRoot` overrides do not
+move the vault root key into JSON. The test file may contain a base64 test root
+key and must remain local/untracked.
+
+When activating an identity, AWiki Me checks the identity vault before switching
+the active SDK client or writing the active session:
+
+```text
+identityVaultStatus
+  -> migrateIdentityVault when legacy metadata is absent
+  -> verifyIdentityVault
+  -> switchIdentity
+  -> ensureSession
+```
+
+If existing vault metadata is present but cannot be selected/verified, the App
+fails closed instead of re-sealing legacy plaintext under a new root key. The
+App bootstrap path can still receive a daemon subkey private key plaintext DTO;
+that transport exception is temporary and separate from local persistence.
 
 ## Project Structure
 
