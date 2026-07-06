@@ -2252,6 +2252,12 @@ abstract class AppLocalizations {
   /// **'删除智能体'**
   String get agentDeleteRuntime;
 
+  /// No description provided for @agentRemoveFromAccount.
+  ///
+  /// In zh, this message translates to:
+  /// **'从账号移除'**
+  String get agentRemoveFromAccount;
+
   /// No description provided for @agentDeleting.
   ///
   /// In zh, this message translates to:
@@ -2497,6 +2503,18 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'删除后该智能体会从列表中移除。本地数据会归档保留，不会继续使用。'**
   String get agentDeleteRuntimeMessage;
+
+  /// No description provided for @agentRemoveDaemonFromAccountMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前 Daemon 不可连接。此操作只会从当前账号移除这个 Daemon 以及它创建的智能体，不会访问或清理宿主机上的本地文件。'**
+  String get agentRemoveDaemonFromAccountMessage;
+
+  /// No description provided for @agentRemoveRuntimeFromAccountMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前无法通过所属 Daemon 删除这个智能体。此操作只会把它从当前账号移除，不会访问或清理宿主机上的本地文件。'**
+  String get agentRemoveRuntimeFromAccountMessage;
 
   /// No description provided for @agentInstallTitle.
   ///

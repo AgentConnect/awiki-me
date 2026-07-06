@@ -1492,6 +1492,13 @@ class _UiAgentInventoryPort implements AgentInventoryPort {
   Future<void> unbindAgent({required String agentDid}) async {}
 
   @override
+  Future<List<AgentSummary>> removeAgentFromAccount({
+    required String agentDid,
+  }) async {
+    return const <AgentSummary>[];
+  }
+
+  @override
   Future<AgentSummary> updateDisplayName({
     required String agentDid,
     required String displayName,

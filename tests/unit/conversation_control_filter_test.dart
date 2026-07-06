@@ -373,6 +373,13 @@ class _FakeAgentInventory implements AgentInventoryPort {
   }
 
   @override
+  Future<List<AgentSummary>> removeAgentFromAccount({
+    required String agentDid,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<AgentSummary> updateDisplayName({
     required String agentDid,
     required String displayName,

@@ -1806,7 +1806,7 @@ void main() {
   );
 
   test(
-    'deleteSelected does not unbind registering daemon after a heartbeat',
+    'deleteSelected removes unreachable registering daemon from account',
     () async {
       final control = FakeAgentControlService()
         ..agents = <AgentSummary>[
@@ -1820,6 +1820,15 @@ void main() {
               lastSeenAt: DateTime.utc(2026, 6, 21, 10),
             ),
           ),
+          const AgentSummary(
+            agentDid: 'did:agent:runtime',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:registering-seen',
+            runtime: 'hermes',
+            displayName: 'Hermes',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
         ];
       final container = _container(control);
       addTearDown(container.dispose);
@@ -1829,7 +1838,7 @@ void main() {
         container
             .read(agentsProvider)
             .canDeleteAgent(container.read(agentsProvider).selectedAgent!),
-        isFalse,
+        isTrue,
       );
 
       await container.read(agentsProvider.notifier).deleteSelected();
@@ -1837,9 +1846,127 @@ void main() {
       expect(control.lastUnboundAgentDid, isNull);
       expect(control.lastDeletedDaemonDid, isNull);
       expect(
-        container.read(agentsProvider).error,
-        AgentUiMessageCodes.daemonUnreachableDelete,
+        control.lastRemovedFromAccountAgentDid,
+        'did:agent:registering-seen',
       );
+      expect(container.read(agentsProvider).agents, isEmpty);
+      expect(container.read(agentsProvider).error, isNull);
+    },
+  );
+
+  test('deleteSelected removes offline daemon family from account', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:offline-daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'offline'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:offline-runtime',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:offline-daemon',
+          runtime: 'hermes',
+          displayName: 'Hermes',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+
+    await container.read(agentsProvider.notifier).deleteSelected();
+
+    expect(control.lastRemovedFromAccountAgentDid, 'did:agent:offline-daemon');
+    expect(control.lastDeletedDaemonDid, isNull);
+    expect(control.lastDeletedRuntimeDid, isNull);
+    expect(container.read(agentsProvider).agents, isEmpty);
+    expect(container.read(agentsProvider).pendingDeletionAgentDids, isEmpty);
+    expect(container.read(agentsProvider).error, isNull);
+  });
+
+  test(
+    'deleteSelected clears local daemon tracking when removing offline daemon from account',
+    () async {
+      final control =
+          _FailingRefreshAgentControlService(StateError('daemon unreachable'))
+            ..agents = const <AgentSummary>[
+              AgentSummary(
+                agentDid: 'did:agent:offline-daemon',
+                kind: AgentKind.daemon,
+                displayName: '代理 1',
+                activeState: 'active',
+                latest: AgentLatestStatus(status: 'offline'),
+              ),
+              AgentSummary(
+                agentDid: 'did:agent:offline-runtime',
+                kind: AgentKind.runtime,
+                daemonAgentDid: 'did:agent:offline-daemon',
+                runtime: 'hermes',
+                displayName: 'Hermes',
+                activeState: 'active',
+                latest: AgentLatestStatus(status: 'ready'),
+              ),
+            ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+      await container
+          .read(agentsProvider.notifier)
+          .refreshDaemonStatus('did:agent:offline-daemon');
+      expect(
+        container.read(agentsProvider).statusQueryErrors,
+        contains('did:agent:offline-daemon'),
+      );
+
+      await container.read(agentsProvider.notifier).deleteSelected();
+
+      final state = container.read(agentsProvider);
+      expect(
+        control.lastRemovedFromAccountAgentDid,
+        'did:agent:offline-daemon',
+      );
+      expect(state.agents, isEmpty);
+      expect(state.statusQueryErrors, isEmpty);
+      expect(state.pendingStatusQueryAtByDaemon, isEmpty);
+      expect(state.pendingDaemonUpgrades, isEmpty);
+      expect(state.daemonUpgradeErrors, isEmpty);
+      expect(state.daemonUpgradeProgress, isEmpty);
+      expect(state.pendingDeletionAgentDids, isEmpty);
+    },
+  );
+
+  test(
+    'deleteSelected removes runtime from account when owning daemon is missing',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:orphan-runtime',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:missing-daemon',
+            runtime: 'hermes',
+            displayName: 'Hermes',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      await container.read(agentsProvider.notifier).deleteSelected();
+
+      expect(
+        control.lastRemovedFromAccountAgentDid,
+        'did:agent:orphan-runtime',
+      );
+      expect(control.lastDeletedRuntimeDid, isNull);
+      expect(container.read(agentsProvider).agents, isEmpty);
+      expect(container.read(agentsProvider).error, isNull);
     },
   );
 

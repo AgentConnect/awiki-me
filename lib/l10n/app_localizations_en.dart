@@ -1184,6 +1184,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentDeleteRuntime => 'Delete agent';
 
   @override
+  String get agentRemoveFromAccount => 'Remove from account';
+
+  @override
   String get agentDeleting => 'Deleting';
 
   @override
@@ -1330,6 +1333,14 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get agentDeleteRuntimeMessage =>
       'Deleting this agent removes it from the list. Local data is archived and will no longer be used.';
+
+  @override
+  String get agentRemoveDaemonFromAccountMessage =>
+      'This daemon is not reachable. This will remove the daemon and its agents from this account only. It will not access or clean up files on the host.';
+
+  @override
+  String get agentRemoveRuntimeFromAccountMessage =>
+      'This agent cannot be deleted through its daemon right now. This will remove it from this account only. It will not access or clean up files on the host.';
 
   @override
   String get agentInstallTitle => 'Install daemon on host';

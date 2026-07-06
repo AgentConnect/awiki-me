@@ -12,6 +12,8 @@ abstract interface class AgentInventoryPort {
 
   Future<void> unbindAgent({required String agentDid});
 
+  Future<List<AgentSummary>> removeAgentFromAccount({required String agentDid});
+
   Future<AgentInvocationPolicy> getInvocationPolicy({required String agentDid});
 
   Future<AgentInvocationPolicy> updateInvocationPolicy({

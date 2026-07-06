@@ -58,9 +58,12 @@ class _AgentDetailPane extends StatelessWidget {
     final isRenaming = state.isActionPending(
       AgentActionKeys.rename(agent.agentDid),
     );
-    final isDeleteSending = state.isActionPending(
-      AgentActionKeys.delete(agent.agentDid),
-    );
+    final isDeleteSending =
+        state.isActionPending(AgentActionKeys.delete(agent.agentDid)) ||
+        state.isActionPending(
+          AgentActionKeys.removeFromAccount(agent.agentDid),
+        );
+    final deleteAction = state.deleteActionForAgent(agent);
     final isUpgradeSending =
         agent.isDaemon &&
         state.isActionPending(AgentActionKeys.upgradeDaemon(agent.agentDid));
@@ -194,14 +197,12 @@ class _AgentDetailPane extends StatelessWidget {
                     icon: CupertinoIcons.trash,
                     label: isDeleting
                         ? context.l10n.agentDeleting
-                        : agent.isDaemon
-                        ? context.l10n.agentDeleteDaemon
-                        : context.l10n.agentDeleteRuntime,
+                        : _agentDeleteButtonLabel(context, agent, deleteAction),
                     danger: true,
                     onPressed:
                         isDeleteSending ||
                             isDeleting ||
-                            !state.canDeleteAgent(agent)
+                            deleteAction == AgentDeleteAction.unavailable
                         ? null
                         : () => onDelete(agent),
                   ),
@@ -298,6 +299,19 @@ bool _shouldShowMessageAgentSettingsPanel() {
   // Keep the Message Agent management implementation available for future
   // rollout, but hide the daemon detail entry from the current product UI.
   return false;
+}
+
+String _agentDeleteButtonLabel(
+  BuildContext context,
+  AgentSummary agent,
+  AgentDeleteAction action,
+) {
+  if (action == AgentDeleteAction.removeFromAccount) {
+    return context.l10n.agentRemoveFromAccount;
+  }
+  return agent.isDaemon
+      ? context.l10n.agentDeleteDaemon
+      : context.l10n.agentDeleteRuntime;
 }
 
 class _AgentDeletingNotice extends StatelessWidget {

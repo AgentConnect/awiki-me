@@ -65,6 +65,9 @@ final class AgentActionKeys {
 
   static String delete(String agentDid) => 'delete:$agentDid';
 
+  static String removeFromAccount(String agentDid) =>
+      'remove-from-account:$agentDid';
+
   static String upgradeDaemon(String daemonDid) => 'daemon-upgrade:$daemonDid';
 
   static String unbind(String agentDid) => 'unbind:$agentDid';
@@ -318,13 +321,24 @@ class AgentsState {
   }
 
   bool canDeleteAgent(AgentSummary agent) {
+    return deleteActionForAgent(agent) != AgentDeleteAction.unavailable;
+  }
+
+  AgentDeleteAction deleteActionForAgent(AgentSummary agent) {
     if (_canUnbindUnfinishedDaemonInstall(agent)) {
-      return true;
+      return AgentDeleteAction.unregister;
     }
     final daemon = agent.isDaemon ? agent : daemonForRuntime(agent);
-    return daemon != null &&
-        !statusQueryErrors.containsKey(daemon.agentDid) &&
-        _daemonAcceptsControlCommands(daemon);
+    if (daemon == null) {
+      return AgentDeleteAction.removeFromAccount;
+    }
+    if (statusQueryErrors.containsKey(daemon.agentDid)) {
+      return AgentDeleteAction.removeFromAccount;
+    }
+    if (_daemonAcceptsControlCommands(daemon)) {
+      return AgentDeleteAction.controlledDelete;
+    }
+    return AgentDeleteAction.removeFromAccount;
   }
 
   bool isStatusQueryPending(String daemonDid) {
@@ -409,6 +423,13 @@ class AgentsState {
           isAutoSyncingInventory ?? this.isAutoSyncingInventory,
     );
   }
+}
+
+enum AgentDeleteAction {
+  controlledDelete,
+  removeFromAccount,
+  unregister,
+  unavailable,
 }
 
 class AgentsController extends StateNotifier<AgentsState> {
@@ -1041,13 +1062,24 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (state.isDeletingAgent(selected.agentDid)) {
       return;
     }
-    if (selected.isDaemon && _canUnbindUnfinishedDaemonInstall(selected)) {
+    final deleteAction = state.deleteActionForAgent(selected);
+    if (deleteAction == AgentDeleteAction.unavailable) {
+      state = state.copyWith(
+        error: AgentUiMessageCodes.daemonUnreachableDelete,
+      );
+      return;
+    }
+    if (deleteAction == AgentDeleteAction.unregister) {
       await _runAction(AgentActionKeys.unbind(selected.agentDid), () async {
         await ref
             .read(agentControlServiceProvider)
             .unbindAgent(selected.agentDid);
         await load();
       });
+      return;
+    }
+    if (deleteAction == AgentDeleteAction.removeFromAccount) {
+      await _removeSelectedFromAccount(selected);
       return;
     }
     final actionKey = AgentActionKeys.delete(selected.agentDid);
@@ -1057,9 +1089,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     final daemon = selected.isDaemon
         ? selected
         : state.daemonForRuntime(selected);
-    if (daemon == null ||
-        state.statusQueryErrors.containsKey(daemon.agentDid) ||
-        !_daemonAcceptsControlCommands(daemon)) {
+    if (daemon == null) {
       state = state.copyWith(
         error: AgentUiMessageCodes.daemonUnreachableDelete,
       );
@@ -1127,6 +1157,134 @@ class AgentsController extends StateNotifier<AgentsState> {
         );
       }
     }
+  }
+
+  Future<void> _removeSelectedFromAccount(AgentSummary selected) async {
+    final actionKey = AgentActionKeys.removeFromAccount(selected.agentDid);
+    if (state.isActionPending(actionKey)) {
+      return;
+    }
+    final removingDids = selected.isDaemon
+        ? {
+            selected.agentDid,
+            ...state
+                .runtimesFor(selected.agentDid)
+                .map((agent) => agent.agentDid),
+          }
+        : {selected.agentDid};
+    state = state.copyWith(
+      pendingActionKeys: _withSetValue(state.pendingActionKeys, actionKey),
+      pendingDeletionAgentDids: <String>{
+        ...state.pendingDeletionAgentDids,
+        ...removingDids,
+      },
+      clearError: true,
+    );
+    try {
+      final removed = await ref
+          .read(agentControlServiceProvider)
+          .removeAgentFromAccount(selected.agentDid)
+          .timeout(agentActionTimeout);
+      final removedDids = {
+        ...removingDids,
+        ...removed.map((agent) => agent.agentDid),
+      };
+      if (!mounted) {
+        return;
+      }
+      _removeAgentsLocally(removedDids);
+      state = state.copyWith(
+        pendingActionKeys: _withoutSetValue(state.pendingActionKeys, actionKey),
+        pendingDeletionAgentDids: _withoutStringKeys(
+          state.pendingDeletionAgentDids,
+          removedDids,
+        ),
+        clearError: true,
+      );
+      unawaited(load(showLoading: false, surfaceError: false));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      state = state.copyWith(
+        pendingActionKeys: _withoutSetValue(state.pendingActionKeys, actionKey),
+        pendingDeletionAgentDids: _withoutStringKeys(
+          state.pendingDeletionAgentDids,
+          removingDids,
+        ),
+        error: _agentErrorMessage(error),
+        debugLastError: error.toString(),
+      );
+    } finally {
+      if (mounted && state.isActionPending(actionKey)) {
+        state = state.copyWith(
+          pendingActionKeys: _withoutSetValue(
+            state.pendingActionKeys,
+            actionKey,
+          ),
+        );
+      }
+    }
+  }
+
+  void _removeAgentsLocally(Set<String> removedDids) {
+    if (removedDids.isEmpty) {
+      return;
+    }
+    final daemonDids = <String>{
+      for (final agent in state.agents)
+        if (agent.isDaemon && removedDids.contains(agent.agentDid))
+          agent.agentDid,
+    };
+    final trackingDids = <String>{...removedDids, ...daemonDids};
+    for (final did in trackingDids) {
+      _deletionRefreshTimers.remove(did)?.cancel();
+      _cancelStatusQueryTracking(did);
+      _cancelDaemonUpgradeTimers(did);
+    }
+    final nextAgents = state.agents
+        .where(
+          (agent) =>
+              !removedDids.contains(agent.agentDid) &&
+              (agent.daemonAgentDid == null ||
+                  !removedDids.contains(agent.daemonAgentDid)),
+        )
+        .toList(growable: false);
+    state = state.copyWith(
+      agents: _stableAgentOrder(nextAgents),
+      selectedAgentDid: _nextSelection(nextAgents),
+      pendingRuntimeCreations: state.pendingRuntimeCreations
+          .where((pending) => !removedDids.contains(pending.daemonAgentDid))
+          .toList(growable: false),
+      pendingStatusQueryAtByDaemon: _withoutMapKeys(
+        state.pendingStatusQueryAtByDaemon,
+        trackingDids,
+      ),
+      pendingDaemonUpgrades: _withoutMapKeys(
+        state.pendingDaemonUpgrades,
+        trackingDids,
+      ),
+      cancellingDaemonUpgrades: _withoutMapKeys(
+        state.cancellingDaemonUpgrades,
+        trackingDids,
+      ),
+      daemonUpgradeErrors: _withoutStringKeysFromMap(
+        state.daemonUpgradeErrors,
+        trackingDids,
+      ),
+      daemonUpgradeProgress: _withoutMapKeys(
+        state.daemonUpgradeProgress,
+        trackingDids,
+      ),
+      statusQueryErrors: _withoutStringKeysFromMap(
+        state.statusQueryErrors,
+        trackingDids,
+      ),
+      pendingDeletionAgentDids: _withoutStringKeys(
+        state.pendingDeletionAgentDids,
+        removedDids,
+      ),
+    );
   }
 
   Future<void> pauseMessageAgentForDaemon(String daemonDid) async {
@@ -3120,6 +3278,16 @@ Map<K, V> _withoutMapKey<K, V>(Map<K, V> input, K key) {
   };
 }
 
+Map<K, V> _withoutMapKeys<K, V>(Map<K, V> input, Set<K> keys) {
+  if (keys.isEmpty || !keys.any(input.containsKey)) {
+    return input;
+  }
+  return <K, V>{
+    for (final entry in input.entries)
+      if (!keys.contains(entry.key)) entry.key: entry.value,
+  };
+}
+
 Map<String, String> _withoutStringKey(Map<String, String> input, String key) {
   if (!input.containsKey(key)) {
     return input;
@@ -3140,6 +3308,19 @@ Map<String, DaemonUpgradeProgress> _withoutDaemonUpgradeProgressKey(
   return <String, DaemonUpgradeProgress>{
     for (final entry in input.entries)
       if (entry.key != key) entry.key: entry.value,
+  };
+}
+
+Map<String, String> _withoutStringKeysFromMap(
+  Map<String, String> input,
+  Set<String> keys,
+) {
+  if (keys.isEmpty || !keys.any(input.containsKey)) {
+    return input;
+  }
+  return <String, String>{
+    for (final entry in input.entries)
+      if (!keys.contains(entry.key)) entry.key: entry.value,
   };
 }
 

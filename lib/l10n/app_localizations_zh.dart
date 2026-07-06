@@ -1137,6 +1137,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentDeleteRuntime => '删除智能体';
 
   @override
+  String get agentRemoveFromAccount => '从账号移除';
+
+  @override
   String get agentDeleting => '删除中';
 
   @override
@@ -1276,6 +1279,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get agentDeleteRuntimeMessage => '删除后该智能体会从列表中移除。本地数据会归档保留，不会继续使用。';
+
+  @override
+  String get agentRemoveDaemonFromAccountMessage =>
+      '当前 Daemon 不可连接。此操作只会从当前账号移除这个 Daemon 以及它创建的智能体，不会访问或清理宿主机上的本地文件。';
+
+  @override
+  String get agentRemoveRuntimeFromAccountMessage =>
+      '当前无法通过所属 Daemon 删除这个智能体。此操作只会把它从当前账号移除，不会访问或清理宿主机上的本地文件。';
 
   @override
   String get agentInstallTitle => '到宿主机安装代理';

@@ -137,6 +137,31 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
   }
 
   @override
+  Future<List<AgentSummary>> removeAgentFromAccount({
+    required String agentDid,
+  }) async {
+    final result = await _rpcCall(
+      path: inventoryEndpoint,
+      method: 'remove_agent_from_account',
+      params: <String, Object?>{'agent_did': agentDid},
+    );
+    final removed = result['removed'];
+    if (removed is! List) {
+      return const <AgentSummary>[];
+    }
+    return removed
+        .whereType<Map>()
+        .map(
+          (item) => AgentSummary.fromJson(
+            item.map<String, Object?>(
+              (key, value) => MapEntry(key.toString(), value),
+            ),
+          ),
+        )
+        .toList();
+  }
+
+  @override
   Future<AgentInvocationPolicy> getInvocationPolicy({
     required String agentDid,
   }) async {

@@ -93,6 +93,7 @@ abstract interface class AgentControlService {
     required String displayName,
   });
   Future<void> unbindAgent(String agentDid);
+  Future<List<AgentSummary>> removeAgentFromAccount(String agentDid);
   Future<AgentInvocationPolicy> getInvocationPolicy(String agentDid);
   Future<AgentInvocationPolicy> updateInvocationPolicy({
     required String agentDid,
@@ -573,6 +574,11 @@ class DefaultAgentControlService implements AgentControlService {
   @override
   Future<void> unbindAgent(String agentDid) {
     return _inventory.unbindAgent(agentDid: agentDid);
+  }
+
+  @override
+  Future<List<AgentSummary>> removeAgentFromAccount(String agentDid) {
+    return _inventory.removeAgentFromAccount(agentDid: agentDid);
   }
 
   @override

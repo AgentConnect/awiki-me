@@ -2253,6 +2253,25 @@ class FakeAgentInventoryPort implements AgentInventoryPort {
   }
 
   @override
+  Future<List<AgentSummary>> removeAgentFromAccount({
+    required String agentDid,
+  }) async {
+    final removed = agents
+        .where(
+          (agent) =>
+              agent.agentDid == agentDid || agent.daemonAgentDid == agentDid,
+        )
+        .toList(growable: false);
+    agents = agents
+        .where(
+          (agent) =>
+              agent.agentDid != agentDid && agent.daemonAgentDid != agentDid,
+        )
+        .toList(growable: false);
+    return removed;
+  }
+
+  @override
   Future<AgentSummary> updateDisplayName({
     required String agentDid,
     required String displayName,
@@ -2331,6 +2350,7 @@ class FakeAgentControlService implements AgentControlService {
   String? lastInboxThreadCursor;
   String nextInboxThreadRequestId = 'cmd_runtime_inbox_thread_test';
   String? lastUnboundAgentDid;
+  String? lastRemovedFromAccountAgentDid;
   String? lastDeletedDaemonDid;
   String? lastDeletedRuntimeDaemonDid;
   String? lastDeletedRuntimeDid;
@@ -2493,6 +2513,24 @@ class FakeAgentControlService implements AgentControlService {
   Future<void> unbindAgent(String agentDid) async {
     lastUnboundAgentDid = agentDid;
     agents = agents.where((agent) => agent.agentDid != agentDid).toList();
+  }
+
+  @override
+  Future<List<AgentSummary>> removeAgentFromAccount(String agentDid) async {
+    lastRemovedFromAccountAgentDid = agentDid;
+    final removed = agents
+        .where(
+          (agent) =>
+              agent.agentDid == agentDid || agent.daemonAgentDid == agentDid,
+        )
+        .toList(growable: false);
+    agents = agents
+        .where(
+          (agent) =>
+              agent.agentDid != agentDid && agent.daemonAgentDid != agentDid,
+        )
+        .toList(growable: false);
+    return removed;
   }
 
   @override

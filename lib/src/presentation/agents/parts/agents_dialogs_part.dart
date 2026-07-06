@@ -1313,15 +1313,25 @@ Future<void> _confirmDeleteAgent(
   AgentSummary agent,
 ) async {
   final isDaemon = agent.isDaemon;
+  final deleteAction = ref.read(agentsProvider).deleteActionForAgent(agent);
+  final isAccountRemoval = deleteAction == AgentDeleteAction.removeFromAccount;
   final confirmed = await _confirm(
     context,
-    title: isDaemon
+    title: isAccountRemoval
+        ? context.l10n.agentRemoveFromAccount
+        : isDaemon
         ? context.l10n.agentDeleteDaemon
         : context.l10n.agentDeleteRuntime,
-    message: isDaemon
+    message: isAccountRemoval
+        ? (isDaemon
+              ? context.l10n.agentRemoveDaemonFromAccountMessage
+              : context.l10n.agentRemoveRuntimeFromAccountMessage)
+        : isDaemon
         ? context.l10n.agentDeleteDaemonMessage
         : context.l10n.agentDeleteRuntimeMessage,
-    actionLabel: context.l10n.commonDelete,
+    actionLabel: isAccountRemoval
+        ? context.l10n.commonRemove
+        : context.l10n.commonDelete,
     destructive: true,
   );
   if (confirmed) {

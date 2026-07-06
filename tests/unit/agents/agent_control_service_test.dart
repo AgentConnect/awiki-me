@@ -168,6 +168,18 @@ void main() {
     expect(args['daemon_agent_did'], 'did:agent:daemon');
   });
 
+  test('removeAgentFromAccount delegates to inventory', () async {
+    final inventory = _InventoryStub();
+    final service = DefaultAgentControlService(
+      inventory: inventory,
+      messages: _MessagesStub(),
+    );
+
+    await service.removeAgentFromAccount('did:agent:daemon');
+
+    expect(inventory.lastRemovedFromAccountAgentDid, 'did:agent:daemon');
+  });
+
   test(
     'deleteRuntimeAgent sends runtime.agent.delete through daemon',
     () async {
@@ -851,6 +863,7 @@ class _InventoryStub implements AgentInventoryPort {
   String? runtimeTokenDefaultSandbox;
   String? runtimeTokenDefaultModel;
   Map<String, Object?>? runtimeTokenDriverConfig;
+  String? lastRemovedFromAccountAgentDid;
   final Map<String, AgentInvocationPolicy> invocationPolicies =
       <String, AgentInvocationPolicy>{};
   String? lastInvocationPolicyAgentDid;
@@ -920,6 +933,14 @@ class _InventoryStub implements AgentInventoryPort {
 
   @override
   Future<void> unbindAgent({required String agentDid}) async {}
+
+  @override
+  Future<List<AgentSummary>> removeAgentFromAccount({
+    required String agentDid,
+  }) async {
+    lastRemovedFromAccountAgentDid = agentDid;
+    return const <AgentSummary>[];
+  }
 
   @override
   Future<AgentSummary> updateDisplayName({
