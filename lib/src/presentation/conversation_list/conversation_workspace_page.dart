@@ -54,7 +54,7 @@ class ConversationWorkspacePage extends ConsumerWidget {
       footer: listFooter,
       sidebar: ConversationListPage(
         embedded: true,
-        selectedThreadId: selectedConversation?.threadId,
+        selectedConversationId: selectedConversation?.effectiveConversationId,
         bottomInset: listFooter == null ? 24 : 16,
         onConversationSelected: (conversation) async {
           ref
@@ -65,7 +65,9 @@ class ConversationWorkspacePage extends ConsumerWidget {
       detailPane: selectedConversation == null
           ? const AwikiWorkspaceEmptyDetail()
           : ChatView(
-              key: ValueKey('chat-view:${selectedConversation.threadId}'),
+              key: ValueKey(
+                'chat-view:${selectedConversation.effectiveConversationId}',
+              ),
               conversation: selectedConversation,
               embedded: true,
               onBack: () {
@@ -85,12 +87,25 @@ ConversationSummary? _effectiveSelectedConversation(
   if (selected == null) {
     return null;
   }
-  final selectedThreadId = selected.threadId.trim();
-  if (selectedThreadId.isEmpty) {
+  final selectedConversationId = selected.effectiveConversationId.trim();
+  if (selectedConversationId.isEmpty) {
     return selected;
   }
   for (final conversation in conversations) {
-    if (conversation.threadId.trim() == selectedThreadId) {
+    if (conversation.effectiveConversationId.trim() == selectedConversationId) {
+      return conversation;
+    }
+  }
+  final selectedThreadId = selected.threadId.trim();
+  if (selectedThreadId.isNotEmpty) {
+    for (final conversation in conversations) {
+      if (conversation.threadId.trim() == selectedThreadId) {
+        return conversation;
+      }
+    }
+  }
+  for (final conversation in conversations) {
+    if (conversation.threadId.trim() == selectedConversationId) {
       return conversation;
     }
   }

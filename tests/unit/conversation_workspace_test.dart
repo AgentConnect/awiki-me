@@ -16,6 +16,7 @@ import 'package:awiki_me/src/domain/entities/peer_agent_identity.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/agents/agent_status_indicator.dart';
 import 'package:awiki_me/src/presentation/agents/agent_visual_status.dart';
 import 'package:awiki_me/src/presentation/agents/agents_page.dart';
@@ -48,7 +49,34 @@ class _StaticConversationListController extends ConversationListController {
 
   void replaceConversations(List<ConversationSummary> conversations) {
     state = ConversationListState(conversations: conversations);
+    final selected = ref.read(selectedConversationProvider);
+    if (selected == null) {
+      return;
+    }
+    final selectedConversationId = selected.effectiveConversationId.trim();
+    final selectedThreadId = selected.threadId.trim();
+    for (final conversation in conversations) {
+      if ((selectedConversationId.isNotEmpty &&
+              conversation.effectiveConversationId.trim() ==
+                  selectedConversationId) ||
+          (selectedThreadId.isNotEmpty &&
+              conversation.threadId.trim() == selectedThreadId)) {
+        ref
+            .read(selectedConversationProvider.notifier)
+            .selectConversation(conversation);
+        return;
+      }
+    }
   }
+
+  @override
+  Future<void> refresh() async {}
+
+  @override
+  Future<void> refreshFastLocal() async {}
+
+  @override
+  Future<void> restoreConversation(ConversationSummary conversation) async {}
 }
 
 class _BlockingRestoreConversationListController
@@ -318,6 +346,7 @@ void main() {
 
   testWidgets('macOS 最近会话只给真实智能体显示 AI 标记且无会话信息入口', (tester) async {
     final humanConversation = ConversationSummary(
+      conversationId: 'dm:did:test:human',
       threadId: 'dm:human',
       displayName: '普通用户',
       lastMessagePreview: 'hello',
@@ -327,6 +356,7 @@ void main() {
       targetDid: 'did:test:human',
     );
     final agentConversation = ConversationSummary(
+      conversationId: 'dm:did:test:agent',
       threadId: 'dm:agent',
       displayName: '远端智能体',
       lastMessagePreview: 'ready',
@@ -2630,6 +2660,7 @@ void main() {
     const agentDid = 'did:wba:awiki.ai:agent:runtime:test';
     const agentHandle = 'test-agent.awiki.ai';
     final controllerConversation = ConversationSummary(
+      conversationId: 'dm:peer-scope:v1:controller',
       threadId: 'dm:peer-scope:v1:controller',
       displayName: 'Controller',
       lastMessagePreview: 'controller preview',
@@ -2640,6 +2671,7 @@ void main() {
       targetPeer: agentHandle,
     );
     final runtimeConversation = ConversationSummary(
+      conversationId: 'dm:peer-scope:v1:runtime',
       threadId: 'dm:peer-scope:v1:runtime',
       displayName: 'Runtime Agent',
       lastMessagePreview: 'runtime preview',

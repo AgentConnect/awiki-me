@@ -1062,6 +1062,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:empty-peer',
       threadId: 'dm:empty-history',
       displayName: 'Empty Peer',
       lastMessagePreview: '',
@@ -1088,7 +1089,7 @@ void main() {
         .openConversation(conversation);
     await tester.pumpAndSettle();
 
-    expect(gateway.fetchDmHistoryCalls, 1);
+    expect(gateway.fetchDmHistoryCalls, 0);
     expect(find.text('Empty Peer'), findsOneWidget);
     expect(find.byType(CupertinoTextField), findsOneWidget);
     expect(find.byKey(const Key('chat-send-button')), findsOneWidget);
@@ -1776,6 +1777,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:alice',
       threadId: 'dm:scroll-async-open',
       displayName: 'Alice',
       lastMessagePreview: '',
@@ -3538,6 +3540,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
       threadId: 'dm:attachment',
       displayName: 'Tester',
       lastMessagePreview: '',
@@ -3575,6 +3578,16 @@ void main() {
     await tester.tap(find.byKey(const Key('chat-send-button')));
     await tester.pumpAndSettle();
 
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    final messaging =
+        container.read(messagingServiceProvider) as FakeMessagingService;
+    expect(messaging.sendConversationAttachmentCalls, 1);
+    expect(
+      messaging.lastAttachmentConversation?.conversationId,
+      conversation.effectiveConversationId,
+    );
     expect(gateway.lastSentThreadId, 'dm:did:test:peer');
     expect(gateway.lastSentAttachment?.filename, 'report.pdf');
     expect(find.text('report.pdf'), findsOneWidget);
@@ -3776,6 +3789,7 @@ void main() {
       credentialName: 'default',
     );
     final conversation = ConversationSummary(
+      conversationId: 'group:did:test:group:attachment-compose',
       threadId: 'group:attachment-compose',
       displayName: '项目群',
       lastMessagePreview: '',
@@ -3804,6 +3818,16 @@ void main() {
     await tester.tap(find.byKey(const Key('chat-send-button')));
     await tester.pumpAndSettle();
 
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    final messaging =
+        container.read(messagingServiceProvider) as FakeMessagingService;
+    expect(messaging.sendConversationAttachmentCalls, 1);
+    expect(
+      messaging.lastAttachmentConversation?.conversationId,
+      conversation.effectiveConversationId,
+    );
     expect(gateway.lastSentGroupId, conversation.groupId);
     expect(gateway.lastSentAttachment?.filename, 'diagram.png');
     expect(gateway.lastSentAttachmentCaption, '看这个图');

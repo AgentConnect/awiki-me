@@ -37,7 +37,8 @@ class _MacConversationWorkspace extends StatelessWidget {
               child: ConversationListPage(
                 embedded: true,
                 macStyle: true,
-                selectedThreadId: selectedConversation?.threadId,
+                selectedConversationId:
+                    selectedConversation?.effectiveConversationId,
                 bottomInset: 18,
                 onConversationSelected: onConversationSelected,
               ),
@@ -96,15 +97,16 @@ class _MacConversationDetailAreaState
 
   bool _isSidePanelOpen = false;
   bool _isInlineSidePanelOpen = false;
-  String? _activeThreadId;
+  String? _activeConversationId;
   double? _conversationInfoWidth;
 
   @override
   void didUpdateWidget(_MacConversationDetailArea oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final selectedThreadId = widget.selectedConversation?.threadId;
-    if (selectedThreadId != _activeThreadId) {
-      _activeThreadId = selectedThreadId;
+    final selectedConversationId =
+        widget.selectedConversation?.effectiveConversationId;
+    if (selectedConversationId != _activeConversationId) {
+      _activeConversationId = selectedConversationId;
       _isSidePanelOpen = false;
       _isInlineSidePanelOpen = false;
     }
@@ -136,7 +138,9 @@ class _MacConversationDetailAreaState
           children: <Widget>[
             Expanded(
               child: ChatView(
-                key: ValueKey('chat-view:${selectedConversation.threadId}'),
+                key: ValueKey(
+                  'chat-view:${selectedConversation.effectiveConversationId}',
+                ),
                 conversation: selectedConversation,
                 embedded: true,
                 macStyle: true,

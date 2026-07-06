@@ -1970,13 +1970,24 @@ void main() {
         .openConversation(canonicalConversation);
     await pumpEventQueue();
 
-    expect(gateway.lastFetchedLocalDmPeerDid, 'peer-scope:v1:codex1');
-    expect(gateway.fetchDmHistoryCalls, 0);
-    expect(messageSyncService.conversationAfterRequests, isEmpty);
+    final messaging = container.read(messagingServiceProvider)
+        as FakeMessagingService;
+    expect(messaging.conversationTimelineCalls, greaterThanOrEqualTo(1));
     expect(
-      (container.read(messagingServiceProvider) as FakeMessagingService)
-          .conversationTimelineCalls,
-      0,
+      messaging.lastConversationTimelineId,
+      canonicalConversation.effectiveConversationId,
+    );
+    expect(gateway.fetchLocalDmHistoryCalls, 0);
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(messageSyncService.conversationAfterRequests, hasLength(1));
+    expect(
+      messageSyncService.conversationAfterRequests.single.conversation
+          .conversationId,
+      canonicalConversation.effectiveConversationId,
+    );
+    expect(
+      messageSyncService.conversationAfterRequests.single.afterServerSeq,
+      '16828',
     );
     expect(messageSyncService.threadAfterRequests, isEmpty);
     expect(
@@ -1988,7 +1999,7 @@ void main() {
     );
   });
 
-  test('peer-scope 本地历史为空时不回退未支持的远端 thread history', () async {
+  test('peer-scope projection 为空时走 conversation-after 而不回退远端 thread history', () async {
     final canonicalConversation = ConversationSummary(
       threadId: 'dm:peer-scope:v1:codex-empty',
       displayName: 'Codex Empty',
@@ -1999,9 +2010,6 @@ void main() {
       targetDid: 'did:codex:runtime-empty',
       targetPeer: 'codex-empty.awiki.info',
     );
-    gateway.localDmHistoryByPeerDid = const <String, List<ChatMessage>>{
-      'peer-scope:v1:codex-empty': <ChatMessage>[],
-    };
     gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
       'did:codex:runtime-empty': <ChatMessage>[
         ChatMessage(
@@ -2017,19 +2025,31 @@ void main() {
         ),
       ],
     };
+    _seedContainerConversationProjection(
+      container,
+      canonicalConversation,
+      const <ChatMessage>[],
+    );
 
     await container
         .read(chatThreadsProvider.notifier)
         .openConversation(canonicalConversation);
     await pumpEventQueue();
 
-    expect(gateway.lastFetchedLocalDmPeerDid, 'peer-scope:v1:codex-empty');
-    expect(gateway.fetchDmHistoryCalls, 0);
-    expect(messageSyncService.conversationAfterRequests, isEmpty);
+    final messaging = container.read(messagingServiceProvider)
+        as FakeMessagingService;
+    expect(messaging.conversationTimelineCalls, greaterThanOrEqualTo(1));
     expect(
-      (container.read(messagingServiceProvider) as FakeMessagingService)
-          .conversationTimelineCalls,
-      0,
+      messaging.lastConversationTimelineId,
+      canonicalConversation.effectiveConversationId,
+    );
+    expect(gateway.fetchLocalDmHistoryCalls, 0);
+    expect(gateway.fetchDmHistoryCalls, 0);
+    expect(messageSyncService.conversationAfterRequests, hasLength(1));
+    expect(
+      messageSyncService.conversationAfterRequests.single.conversation
+          .conversationId,
+      canonicalConversation.effectiveConversationId,
     );
     expect(messageSyncService.threadAfterRequests, isEmpty);
     expect(
@@ -2098,45 +2118,53 @@ void main() {
       );
     }
 
-    gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
-      'peer-scope:v1:codex1': <ChatMessage>[
-        message(
-          id: 'q-1',
-          content: 'first question',
-          at: DateTime(2026, 7, 3, 18, 53),
-          isMine: true,
-          seq: 3109,
-        ),
-        message(
-          id: 'a-1',
-          content: 'first answer',
-          at: DateTime(2026, 7, 3, 18, 53, 16),
-          isMine: false,
-          seq: 3111,
-        ),
-        message(
-          id: 'q-2',
-          content: 'latest question',
-          at: DateTime(2026, 7, 3, 19, 26, 11),
-          isMine: true,
-          seq: 3130,
-        ),
-        message(
-          id: 'a-2',
-          content: 'latest reply',
-          at: DateTime(2026, 7, 3, 19, 26, 18),
-          isMine: false,
-          seq: 3132,
-        ),
-      ],
-    };
+    final projectedMessages = <ChatMessage>[
+      message(
+        id: 'q-1',
+        content: 'first question',
+        at: DateTime(2026, 7, 3, 18, 53),
+        isMine: true,
+        seq: 3109,
+      ),
+      message(
+        id: 'a-1',
+        content: 'first answer',
+        at: DateTime(2026, 7, 3, 18, 53, 16),
+        isMine: false,
+        seq: 3111,
+      ),
+      message(
+        id: 'q-2',
+        content: 'latest question',
+        at: DateTime(2026, 7, 3, 19, 26, 11),
+        isMine: true,
+        seq: 3130,
+      ),
+      message(
+        id: 'a-2',
+        content: 'latest reply',
+        at: DateTime(2026, 7, 3, 19, 26, 18),
+        isMine: false,
+        seq: 3132,
+      ),
+    ];
+    _seedContainerConversationProjection(
+      container,
+      canonicalConversation,
+      projectedMessages,
+    );
 
     await container
         .read(chatThreadsProvider.notifier)
         .openConversation(canonicalConversation);
     await pumpEventQueue();
 
-    expect(gateway.lastFetchedLocalDmPeerDid, 'peer-scope:v1:codex1');
+    expect(
+      (container.read(messagingServiceProvider) as FakeMessagingService)
+          .lastConversationTimelineId,
+      canonicalConversation.effectiveConversationId,
+    );
+    expect(gateway.fetchLocalDmHistoryCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);
     expect(
       container
@@ -2678,6 +2706,11 @@ void main() {
     gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
       'peer-scope:v1:codex1': <ChatMessage>[latest],
     };
+    _seedContainerConversationProjection(
+      container,
+      unreadPeerScopedConversation,
+      <ChatMessage>[latest],
+    );
     container
         .read(conversationListProvider.notifier)
         .upsertConversation(unreadPeerScopedConversation);
@@ -2693,7 +2726,12 @@ void main() {
         .acknowledgeVisibleConversationRead(unreadPeerScopedConversation);
     await pumpEventQueue();
 
-    expect(gateway.lastFetchedLocalDmPeerDid, 'peer-scope:v1:codex1');
+    expect(
+      (container.read(messagingServiceProvider) as FakeMessagingService)
+          .lastConversationTimelineId,
+      unreadPeerScopedConversation.effectiveConversationId,
+    );
+    expect(gateway.fetchLocalDmHistoryCalls, 0);
     expect(gateway.markReadCalls, 0);
     expect(gateway.markConversationReadCalls, 1);
     expect(

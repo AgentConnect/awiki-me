@@ -194,7 +194,7 @@ App 侧禁止做的事情：
 - 启动、恢复前台、realtime 重连、realtime dirty / gap 后，App 侧应只调度 SDK `message_sync.delta`；不能出现 App 自己读写 checkpoint、传 `since_event_seq` 或手写 `sync.*` wire payload 的代码路径。
 - 打开已有本地 projection 的会话时，canonical conversation timeline 应先完成；如需要补新，可随后看到 `message_sync.conversation_after`，该链路不得推进账号级 reliable checkpoint。
 - 打开未读会话时只允许看到一次远端 `chat.remote_history.*` reconcile；`chat.mark_read*` 不应再触发 history 分页。
-- 文本和 payload 发送/重试成功后，pending/failed/sent 由 core durable message row 与 `MessageMetadata.send_state` 表达；conversation list/detail 通过 core patch/read model 更新。App 不得本地 upsert conversation row 或 memory pending 来决定 send correctness。附件发送目前可保留明确标注的 presentation fallback，后续应单独收敛。
+- 文本、payload 和附件发送/重试成功后，pending/failed/sent 由 core durable message row 与 `MessageMetadata.send_state` 表达；conversation list/detail 通过 core patch/read model 更新。App 不得本地 upsert conversation row、memory pending 或 thread move 来决定 send correctness。附件本地文件 preview 只能作为上传中的短生命周期 UI 状态，不能作为 durable truth，也不能阻塞 conversation list/detail 首屏等待上传完成。
 
 ## 隐私说明
 
