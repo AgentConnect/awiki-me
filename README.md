@@ -149,6 +149,18 @@ opening a conversation, thread patch version-gap repair, and thread patch stream
 repair/re-subscription. The macOS chat header no longer exposes a manual
 conversation refresh button.
 
+Unread presentation is causal and monotonic. `ConversationListProvider` publishes
+all recent-conversation state through one presentation waterline model: the latest
+message watermark can only move forward, and the local read watermark can only
+move forward. Refresh, enrichment, patch, repair, group-name, and read-ack
+updates are projected through that same model before they reach the UI or badge.
+A summary-only update cannot clear unread unless a real rendered message
+watermark has advanced the read waterline; stale unread for a message already
+covered by the read waterline cannot reappear. `ChatThreadsProvider` supplies
+those read watermarks from messages actually present in the visible thread window
+and sends `markConversationRead(AppConversationReadRef, watermark)` with the
+same message watermark.
+
 The App must not read or write the global reliable checkpoint, pass
 `since_event_seq`, manually advance `next_event_seq`, build raw `/im/rpc`
 `sync.*` payloads, or treat realtime `sync` hints as checkpoint commits. Those

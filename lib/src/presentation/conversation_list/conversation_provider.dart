@@ -73,6 +73,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   Future<void>? _patchRepairOperation;
   final Map<String, DateTime> _locallyHiddenConversationKeys =
       <String, DateTime>{};
+  final _ConversationReadPresentationStore _readPresentation =
+      _ConversationReadPresentationStore();
 
   NotificationFacade get _notification => ref.read(notificationFacadeProvider);
 
@@ -96,7 +98,11 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       level: AwikiPerformanceLogLevel.verbose,
     );
     if (!state.isLoading) {
-      state = state.copyWith(isLoading: true);
+      _publishConversationListState(
+        state.copyWith(isLoading: true),
+        source: 'refresh.loading_request',
+        updateBadge: false,
+      );
     }
     _ensurePatchSubscriptionForCurrentSession();
     return _waitForRefresh(activeRefresh);
@@ -126,7 +132,11 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       level: AwikiPerformanceLogLevel.verbose,
     );
     if (!state.isLoading) {
-      state = state.copyWith(isLoading: true);
+      _publishConversationListState(
+        state.copyWith(isLoading: true),
+        source: 'refresh_fast_local.loading_request',
+        updateBadge: false,
+      );
     }
     _ensurePatchSubscriptionForCurrentSession();
     return _waitForRefresh(activeRefresh);
@@ -139,7 +149,11 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       if (identical(_refreshOperation, operation)) {
         _refreshOperation = null;
         _refreshOperationFastLocal = false;
-        state = state.copyWith(isLoading: false);
+        _publishConversationListState(
+          state.copyWith(isLoading: false),
+          source: 'refresh.timeout',
+          updateBadge: false,
+        );
       }
       rethrow;
     }
@@ -161,7 +175,11 @@ class ConversationListController extends StateNotifier<ConversationListState> {
 
   Future<void> _refresh(int generation, {required bool fastLocal}) async {
     final totalWatch = Stopwatch()..start();
-    state = state.copyWith(isLoading: true);
+    _publishConversationListState(
+      state.copyWith(isLoading: true),
+      source: 'refresh.loading',
+      updateBadge: false,
+    );
     try {
       final session = ref.read(sessionProvider).session;
       if (session == null) {
@@ -169,11 +187,13 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         if (generation != _refreshGeneration) {
           return;
         }
-        state = state.copyWith(
-          conversations: const <ConversationSummary>[],
-          isLoading: false,
+        _publishConversationListState(
+          state.copyWith(
+            conversations: const <ConversationSummary>[],
+            isLoading: false,
+          ),
+          source: 'refresh.no_session',
         );
-        await _updateBadgeCountBestEffort(0, source: 'refresh.no_session');
         return;
       }
       _ensurePatchSubscription(ownerDid: session.did, generation: generation);
@@ -240,7 +260,11 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       );
     } catch (_) {
       if (generation == _refreshGeneration) {
-        state = state.copyWith(isLoading: false);
+        _publishConversationListState(
+          state.copyWith(isLoading: false),
+          source: 'refresh.error',
+          updateBadge: false,
+        );
       }
       rethrow;
     }
@@ -307,14 +331,16 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         state.conversations.isNotEmpty) {
       return;
     }
-    state = state.copyWith(
-      conversations: sortConversationsForPresentation(
-        _filterLocallyHiddenConversations(conversations),
+    _publishConversationListState(
+      state.copyWith(
+        conversations: sortConversationsForPresentation(
+          _filterLocallyHiddenConversations(conversations),
+        ),
+        isLoading: true,
       ),
-      isLoading: true,
+      source: 'snapshot',
     );
     _snapshotBootstrapActive = true;
-    await _updateBadgeCountBestEffort(state.unreadCount, source: 'snapshot');
     AwikiPerformanceLogger.log(
       'conversation_list.snapshot',
       fields: <String, Object?>{
@@ -495,11 +521,14 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   void _applyPatchReset(ConversationListPatch patch) {
     final currentConversations = state.conversations;
     final nextConversations = _filterLocallyHiddenConversations(
-      _mergeConversationRefresh(
-        refreshed: patch.items,
-        local: currentConversations,
+      _applyReadPresentationAll(
+        _mergeConversationRefresh(
+          refreshed: patch.items,
+          local: currentConversations,
+          ownerDid: patch.ownerDid,
+          keepLocalOnly: false,
+        ),
         ownerDid: patch.ownerDid,
-        keepLocalOnly: false,
       ),
     );
     final beforeUnread = state.unreadCount;
@@ -518,9 +547,12 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       );
       return;
     }
-    state = state.copyWith(
-      conversations: sortConversationsForPresentation(nextConversations),
-      isLoading: false,
+    _publishConversationListState(
+      state.copyWith(
+        conversations: sortConversationsForPresentation(nextConversations),
+        isLoading: false,
+      ),
+      source: 'patch_reset',
     );
     _snapshotBootstrapActive = false;
     _trace(
@@ -532,9 +564,6 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         'after_unread': state.unreadCount,
         'version': patch.version,
       },
-    );
-    unawaited(
-      _updateBadgeCountBestEffort(state.unreadCount, source: 'patch_reset'),
     );
   }
 
@@ -576,7 +605,10 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       return;
     }
     final beforeUnread = state.unreadCount;
-    state = state.copyWith(conversations: next);
+    _publishConversationListState(
+      state.copyWith(conversations: next),
+      source: 'patch_remove',
+    );
     _snapshotBootstrapActive = false;
     _trace(
       'state.patch_remove',
@@ -587,9 +619,6 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         'conversation_hash': _safeHash(conversationId),
         'conversation_key_hash': _safeHash(conversationKey),
       },
-    );
-    unawaited(
-      _updateBadgeCountBestEffort(state.unreadCount, source: 'patch_remove'),
     );
   }
 
@@ -612,8 +641,9 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final item = current.removeAt(currentIndex);
     final targetIndex = (patch.index ?? 0).clamp(0, current.length);
     current.insert(targetIndex, item);
-    state = state.copyWith(
-      conversations: sortConversationsForPresentation(current),
+    _publishConversationListState(
+      state.copyWith(conversations: sortConversationsForPresentation(current)),
+      source: 'patch_reorder',
     );
     _snapshotBootstrapActive = false;
     _trace(
@@ -625,9 +655,6 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         'from': currentIndex,
         'to': targetIndex,
       },
-    );
-    unawaited(
-      _updateBadgeCountBestEffort(state.unreadCount, source: 'patch_reorder'),
     );
     return true;
   }
@@ -755,11 +782,14 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final nextConversations = AwikiPerformanceLogger.sync(
       '$label.merge',
       () => _filterLocallyHiddenConversations(
-        _mergeConversationRefresh(
-          refreshed: refreshed,
-          local: currentConversations,
+        _applyReadPresentationAll(
+          _mergeConversationRefresh(
+            refreshed: refreshed,
+            local: currentConversations,
+            ownerDid: _currentOwnerDid,
+            keepLocalOnly: keepLocalOnly,
+          ),
           ownerDid: _currentOwnerDid,
-          keepLocalOnly: keepLocalOnly,
         ),
       ),
       fields: <String, Object?>{
@@ -785,9 +815,12 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       );
       return true;
     }
-    state = state.copyWith(
-      conversations: sortConversationsForPresentation(nextConversations),
-      isLoading: false,
+    _publishConversationListState(
+      state.copyWith(
+        conversations: sortConversationsForPresentation(nextConversations),
+        isLoading: false,
+      ),
+      source: badgeSource ?? label,
     );
     _snapshotBootstrapActive = false;
     _trace(
@@ -800,10 +833,6 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         'after_unread': state.unreadCount,
         'generation': generation,
       },
-    );
-    await _updateBadgeCountBestEffort(
-      state.unreadCount,
-      source: badgeSource ?? label,
     );
     return true;
   }
@@ -904,18 +933,21 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       local: existing,
       preferLocalTitle: preferLocalTitle,
     );
-    final mergedConversation = _mergeConversationPresentationIdentity(
-      refreshed: _mergeConversationLifecycle(
-        refreshed: _mergeConversationReadState(
-          refreshed: _mergeConversationLastMessage(
-            refreshed: titledConversation,
+    final mergedConversation = _applyReadPresentation(
+      _mergeConversationPresentationIdentity(
+        refreshed: _mergeConversationLifecycle(
+          refreshed: _mergeConversationReadState(
+            refreshed: _mergeConversationLastMessage(
+              refreshed: titledConversation,
+              local: existing,
+            ),
             local: existing,
           ),
           local: existing,
         ),
         local: existing,
+        ownerDid: _currentOwnerDid,
       ),
-      local: existing,
       ownerDid: _currentOwnerDid,
     );
     final merged = _replaceConversationInPresentationList(
@@ -943,7 +975,10 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       );
       return;
     }
-    state = state.copyWith(conversations: merged);
+    _publishConversationListState(
+      state.copyWith(conversations: merged),
+      source: source,
+    );
     _syncSelectedConversationAfterUpsert(
       incoming: mergedConversation,
       matchedLocal: existing,
@@ -964,7 +999,6 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         'last_at': mergedConversation.lastMessageAt,
       },
     );
-    unawaited(_updateBadgeCountBestEffort(state.unreadCount, source: source));
   }
 
   Future<void> restoreConversation(ConversationSummary conversation) async {
@@ -1052,8 +1086,10 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     if (!changed) {
       return;
     }
-    state = state.copyWith(
-      conversations: sortConversationsForPresentation(next),
+    _publishConversationListState(
+      state.copyWith(conversations: sortConversationsForPresentation(next)),
+      source: 'apply_group_names',
+      updateBadge: false,
     );
   }
 
@@ -1061,28 +1097,18 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     ConversationSummary conversation, {
     AppThreadReadWatermark? watermark,
   }) {
+    _readPresentation.markRead(
+      conversation,
+      ownerDid: _currentOwnerDid,
+      watermark: watermark,
+    );
     final currentConversations = state.conversations;
     final beforeUnread = state.unreadCount;
-    var marked = false;
-    final next = currentConversations.map((item) {
-      if ((item.unreadCount == 0 && item.unreadMentionCount == 0) ||
-          !_sameConversationIdentity(item, conversation)) {
-        return item;
-      }
-      if (!_conversationCoveredByReadIntent(
-        item,
-        acknowledgedConversation: conversation,
-      )) {
-        return item;
-      }
-      marked = true;
-      return item.copyWith(
-        unreadCount: 0,
-        unreadMentionCount: 0,
-        firstUnreadMentionMessageId: null,
-      );
-    }).toList();
-    if (!marked && _sameConversationSummaryList(currentConversations, next)) {
+    final next = _applyReadPresentationAll(
+      currentConversations,
+      ownerDid: _currentOwnerDid,
+    );
+    if (_sameConversationSummaryList(currentConversations, next)) {
       _trace(
         'state.mark_conversation_read.noop',
         fields: <String, Object?>{
@@ -1092,8 +1118,9 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       );
       return;
     }
-    state = state.copyWith(
-      conversations: sortConversationsForPresentation(next),
+    _publishConversationListState(
+      state.copyWith(conversations: sortConversationsForPresentation(next)),
+      source: 'mark_conversation_read_local',
     );
     _trace(
       'state.mark_conversation_read',
@@ -1103,31 +1130,33 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         'thread_hash': _safeHash(conversation.threadId),
       },
     );
-    unawaited(
-      _updateBadgeCountBestEffort(
-        state.unreadCount,
-        source: 'mark_conversation_read_local',
-      ),
+  }
+
+  void markConversationVisibleLocal(
+    ConversationSummary conversation, {
+    AppThreadReadWatermark? watermark,
+  }) {
+    _readPresentation.markVisible(
+      conversation,
+      ownerDid: _currentOwnerDid,
+      watermark: watermark,
+    );
+    final currentConversations = state.conversations;
+    final next = _applyReadPresentationAll(
+      currentConversations,
+      ownerDid: _currentOwnerDid,
+    );
+    if (_sameConversationSummaryList(currentConversations, next)) {
+      return;
+    }
+    _publishConversationListState(
+      state.copyWith(conversations: sortConversationsForPresentation(next)),
+      source: 'mark_conversation_visible_local',
     );
   }
 
-  bool _conversationCoveredByReadIntent(
-    ConversationSummary conversation, {
-    required ConversationSummary acknowledgedConversation,
-  }) {
-    if (conversation.lastMessageAt.isAfter(
-      acknowledgedConversation.lastMessageAt,
-    )) {
-      return false;
-    }
-    if (conversation.lastMessageAt.isAtSameMomentAs(
-          acknowledgedConversation.lastMessageAt,
-        ) &&
-        conversation.lastMessagePreview !=
-            acknowledgedConversation.lastMessagePreview) {
-      return false;
-    }
-    return true;
+  void markConversationHiddenLocal(ConversationSummary conversation) {
+    _readPresentation.markHidden(conversation, ownerDid: _currentOwnerDid);
   }
 
   Future<void> clear() async {
@@ -1138,6 +1167,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     _snapshotBootstrapAllowedGeneration = null;
     await _cancelPatchSubscription();
     _locallyHiddenConversationKeys.clear();
+    _readPresentation.clear();
     state = const ConversationListState();
     await _updateBadgeCountBestEffort(0, source: 'clear');
   }
@@ -1198,7 +1228,10 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       return;
     }
     final beforeUnread = state.unreadCount;
-    state = state.copyWith(conversations: next);
+    _publishConversationListState(
+      state.copyWith(conversations: next),
+      source: 'remove_local',
+    );
     _trace(
       'state.remove_local',
       fields: <String, Object?>{
@@ -1206,9 +1239,6 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         'after_unread': state.unreadCount,
         'thread_hash': _safeHash(conversation.threadId),
       },
-    );
-    unawaited(
-      _updateBadgeCountBestEffort(state.unreadCount, source: 'remove_local'),
     );
   }
 
@@ -1276,6 +1306,55 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   }
 
   String? get _currentOwnerDid => ref.read(sessionProvider).session?.did;
+
+  ConversationSummary _applyReadPresentation(
+    ConversationSummary conversation, {
+    required String? ownerDid,
+    Iterable<ConversationSummary>? presentationRows,
+  }) {
+    return _readPresentation.project(
+      conversation,
+      ownerDid: ownerDid,
+      presentationRows: presentationRows,
+    );
+  }
+
+  List<ConversationSummary> _applyReadPresentationAll(
+    List<ConversationSummary> conversations, {
+    required String? ownerDid,
+  }) {
+    var changed = false;
+    final next = conversations
+        .map((conversation) {
+          final applied = _applyReadPresentation(
+            conversation,
+            ownerDid: ownerDid,
+            presentationRows: conversations,
+          );
+          changed = changed || !identical(applied, conversation);
+          return applied;
+        })
+        .toList(growable: false);
+    return changed ? next : conversations;
+  }
+
+  void _publishConversationListState(
+    ConversationListState nextState, {
+    required String source,
+    bool updateBadge = true,
+  }) {
+    final nextConversations = _applyReadPresentationAll(
+      nextState.conversations,
+      ownerDid: _currentOwnerDid,
+    );
+    final appliedState = nextConversations == nextState.conversations
+        ? nextState
+        : nextState.copyWith(conversations: nextConversations);
+    state = appliedState;
+    if (updateBadge) {
+      unawaited(_updateBadgeCountBestEffort(state.unreadCount, source: source));
+    }
+  }
 
   Future<void> _updateBadgeCountBestEffort(
     int count, {
@@ -1505,6 +1584,667 @@ bool _sameMentionTarget(
       first.did == second.did &&
       first.handle == second.handle &&
       first.displayName == second.displayName;
+}
+
+class _ConversationReadPresentationStore {
+  static const int _maxStates = 512;
+
+  final List<_ConversationReadPresentationState> _states =
+      <_ConversationReadPresentationState>[];
+
+  void markVisible(
+    ConversationSummary conversation, {
+    required String? ownerDid,
+    AppThreadReadWatermark? watermark,
+  }) {
+    if (_isDidBackedLegacyDirectConversation(
+      conversation,
+      ownerDid: ownerDid,
+    )) {
+      return;
+    }
+    final state = _stateFor(conversation, ownerDid: ownerDid);
+    state.isVisible = true;
+    final readWatermark = _ReadWatermark.fromWatermark(
+      conversation,
+      ownerDid: ownerDid,
+      watermark: watermark,
+      allowConversationFallback: false,
+    );
+    if (readWatermark != null) {
+      state.advanceRead(readWatermark);
+    }
+    state.recomputeUnread(conversation);
+    _trim();
+  }
+
+  void markHidden(
+    ConversationSummary conversation, {
+    required String? ownerDid,
+  }) {
+    if (_isDidBackedLegacyDirectConversation(
+      conversation,
+      ownerDid: ownerDid,
+    )) {
+      return;
+    }
+    final state = _findStateFor(
+      conversation,
+      ownerDid: ownerDid,
+      matchVisibilityBridge: false,
+    );
+    if (state == null) {
+      return;
+    }
+    state.isVisible = false;
+    _trim();
+  }
+
+  void markRead(
+    ConversationSummary conversation, {
+    required String? ownerDid,
+    AppThreadReadWatermark? watermark,
+  }) {
+    final readWatermark = _ReadWatermark.fromWatermark(
+      conversation,
+      ownerDid: ownerDid,
+      watermark: watermark,
+      allowConversationFallback: false,
+    );
+    if (readWatermark == null) {
+      return;
+    }
+    final state = _stateFor(conversation, ownerDid: ownerDid);
+    state.advanceRead(readWatermark);
+    state.recomputeUnread(conversation);
+    _trim();
+  }
+
+  ConversationSummary project(
+    ConversationSummary conversation, {
+    required String? ownerDid,
+    Iterable<ConversationSummary>? presentationRows,
+  }) {
+    final state = _stateFor(
+      conversation,
+      ownerDid: ownerDid,
+      presentationRows: presentationRows,
+    );
+    final incoming = _UnreadWatermark.fromConversation(conversation);
+    final hadLatest = state.latest != null;
+    if (incoming.isAfter(state.latest)) {
+      state.latest = incoming;
+      state.displayUnreadMentionCount = _nonNegativeInt(
+        conversation.unreadMentionCount,
+      );
+      state.displayUnreadCount = _displayUnreadCountForLatestAdvance(
+        conversation,
+        ownerDid: ownerDid,
+        hadPreviousLatest: hadLatest,
+        mentionUnreadCount: state.displayUnreadMentionCount,
+      );
+      state.displayFirstUnreadMentionMessageId =
+          state.displayUnreadMentionCount > 0
+          ? conversation.firstUnreadMentionMessageId
+          : null;
+    } else if (state.latest == null || incoming.sameMessageAs(state.latest)) {
+      state.mergeSameLatestEvidence(conversation);
+    } else {
+      state.advanceVisibleRead(incoming, conversation: conversation);
+      state.recomputeUnread(conversation);
+      _trim();
+      return state.projectOlderConversation(conversation, incoming);
+    }
+    state.advanceVisibleRead(incoming, conversation: conversation);
+    state.recomputeUnread(conversation);
+    _trim();
+    return state.projectLatestConversation(conversation);
+  }
+
+  void clear() {
+    _states.clear();
+  }
+
+  _ConversationReadPresentationState _stateFor(
+    ConversationSummary conversation, {
+    required String? ownerDid,
+    Iterable<ConversationSummary>? presentationRows,
+    bool matchVisibilityBridge = true,
+  }) {
+    final existing = _findStateFor(
+      conversation,
+      ownerDid: ownerDid,
+      presentationRows: presentationRows,
+      matchVisibilityBridge: matchVisibilityBridge,
+    );
+    if (existing != null) {
+      return existing;
+    }
+    final state = _ConversationReadPresentationState(
+      conversation: conversation,
+      ownerDid: ownerDid,
+    );
+    _states.add(state);
+    return state;
+  }
+
+  _ConversationReadPresentationState? _findStateFor(
+    ConversationSummary conversation, {
+    required String? ownerDid,
+    Iterable<ConversationSummary>? presentationRows,
+    bool matchVisibilityBridge = true,
+  }) {
+    for (var index = _states.length - 1; index >= 0; index -= 1) {
+      final state = _states[index];
+      if (state.matches(
+        conversation,
+        ownerDid: ownerDid,
+        presentationRows: presentationRows,
+        matchVisibilityBridge: matchVisibilityBridge,
+      )) {
+        return state;
+      }
+    }
+    return null;
+  }
+
+  void _trim() {
+    if (_states.length <= _maxStates) {
+      return;
+    }
+    _states.removeRange(0, _states.length - _maxStates);
+  }
+}
+
+class _ConversationReadPresentationState {
+  _ConversationReadPresentationState({
+    required this.conversation,
+    required this.ownerDid,
+  });
+
+  final ConversationSummary conversation;
+  final String? ownerDid;
+  _UnreadWatermark? latest;
+  _ReadWatermark? read;
+  bool isVisible = false;
+  int displayUnreadCount = 0;
+  int displayUnreadMentionCount = 0;
+  String? displayFirstUnreadMentionMessageId;
+
+  bool matches(
+    ConversationSummary candidate, {
+    required String? ownerDid,
+    Iterable<ConversationSummary>? presentationRows,
+    bool matchVisibilityBridge = true,
+  }) {
+    final effectiveOwnerDid = ownerDid ?? this.ownerDid;
+    if (!_sameReadOwner(effectiveOwnerDid, this.ownerDid)) {
+      return false;
+    }
+    return _sameVisiblePresentationConversation(
+      conversation,
+      candidate,
+      ownerDid: effectiveOwnerDid,
+      presentationRows: presentationRows,
+      matchVisibilityBridge: matchVisibilityBridge,
+    );
+  }
+
+  void advanceRead(_ReadWatermark watermark) {
+    if (read == null || watermark.isAfter(read!)) {
+      read = watermark;
+    }
+  }
+
+  void advanceVisibleRead(
+    _UnreadWatermark watermark, {
+    required ConversationSummary conversation,
+  }) {
+    if (!isVisible ||
+        !watermark.hasStablePosition ||
+        !_sameStrictReadPresentationConversation(
+          this.conversation,
+          conversation,
+          ownerDid: ownerDid,
+        )) {
+      return;
+    }
+    advanceRead(_ReadWatermark.fromUnread(watermark));
+  }
+
+  void mergeSameLatestEvidence(ConversationSummary conversation) {
+    final incomingUnread = _normalizedUnreadCount(conversation);
+    if (incomingUnread <= 0 && displayUnreadCount > 0) {
+      return;
+    }
+    displayUnreadMentionCount = _nonNegativeInt(
+      conversation.unreadMentionCount,
+    );
+    displayUnreadCount = incomingUnread;
+    displayFirstUnreadMentionMessageId = displayUnreadMentionCount > 0
+        ? conversation.firstUnreadMentionMessageId
+        : null;
+  }
+
+  void recomputeUnread(ConversationSummary conversation) {
+    final latestMessage =
+        latest ?? _UnreadWatermark.fromConversation(conversation);
+    if (read?.covers(latestMessage) ?? false) {
+      displayUnreadCount = 0;
+      displayUnreadMentionCount = 0;
+      displayFirstUnreadMentionMessageId = null;
+      return;
+    }
+    displayUnreadCount = _nonNegativeInt(displayUnreadCount);
+    displayUnreadMentionCount = _nonNegativeInt(displayUnreadMentionCount);
+  }
+
+  ConversationSummary projectLatestConversation(
+    ConversationSummary conversation,
+  ) {
+    return _copyConversationUnreadIfNeeded(
+      conversation,
+      unreadCount: displayUnreadCount,
+      unreadMentionCount: displayUnreadMentionCount,
+      firstUnreadMentionMessageId: displayFirstUnreadMentionMessageId,
+    );
+  }
+
+  ConversationSummary projectOlderConversation(
+    ConversationSummary conversation,
+    _UnreadWatermark incoming,
+  ) {
+    if (read?.covers(incoming) ?? false) {
+      return _copyConversationUnreadIfNeeded(
+        conversation,
+        unreadCount: 0,
+        unreadMentionCount: 0,
+        firstUnreadMentionMessageId: null,
+      );
+    }
+    return conversation;
+  }
+}
+
+ConversationSummary _copyConversationUnreadIfNeeded(
+  ConversationSummary conversation, {
+  required int unreadCount,
+  required int unreadMentionCount,
+  required String? firstUnreadMentionMessageId,
+}) {
+  if (conversation.unreadCount == unreadCount &&
+      conversation.unreadMentionCount == unreadMentionCount &&
+      conversation.firstUnreadMentionMessageId == firstUnreadMentionMessageId) {
+    return conversation;
+  }
+  return conversation.copyWith(
+    unreadCount: unreadCount,
+    unreadMentionCount: unreadMentionCount,
+    firstUnreadMentionMessageId: firstUnreadMentionMessageId,
+  );
+}
+
+int _displayUnreadCountForLatestAdvance(
+  ConversationSummary conversation, {
+  required String? ownerDid,
+  required bool hadPreviousLatest,
+  required int mentionUnreadCount,
+}) {
+  final providedUnread = _normalizedUnreadCount(conversation);
+  if (providedUnread > 0 || !hadPreviousLatest) {
+    return providedUnread;
+  }
+  return _latestMessageIsFromOtherParticipant(conversation, ownerDid: ownerDid)
+      ? 1
+      : 0;
+}
+
+int _normalizedUnreadCount(ConversationSummary conversation) {
+  return _maxInt(
+    _nonNegativeInt(conversation.unreadCount),
+    _nonNegativeInt(conversation.unreadMentionCount),
+  );
+}
+
+bool _latestMessageIsFromOtherParticipant(
+  ConversationSummary conversation, {
+  required String? ownerDid,
+}) {
+  final snapshot = conversation.lastMessageSnapshot;
+  if (snapshot == null) {
+    return false;
+  }
+  if (snapshot.isMine) {
+    return false;
+  }
+  final owner = ownerDid?.trim();
+  final sender = snapshot.senderDid.trim();
+  if (owner != null && owner.isNotEmpty && sender.isNotEmpty) {
+    return sender != owner;
+  }
+  return true;
+}
+
+int _maxInt(int first, int second) => first >= second ? first : second;
+
+int _nonNegativeInt(int value) => value < 0 ? 0 : value;
+
+class _UnreadWatermark {
+  const _UnreadWatermark({
+    required this.lastMessageAt,
+    required this.lastMessagePreview,
+    this.messageId,
+    this.serverSequence,
+  });
+
+  final DateTime lastMessageAt;
+  final String lastMessagePreview;
+  final String? messageId;
+  final int? serverSequence;
+
+  static _UnreadWatermark fromConversation(ConversationSummary conversation) {
+    return _UnreadWatermark(
+      lastMessageAt: conversation.lastMessageAt.toUtc(),
+      lastMessagePreview: conversation.lastMessagePreview,
+      messageId: _lastMessageIdentity(conversation.lastMessageSnapshot),
+      serverSequence: conversation.lastMessageSnapshot?.serverSequence,
+    );
+  }
+
+  bool isAfter(_UnreadWatermark? other) {
+    if (other == null) {
+      return true;
+    }
+    if (serverSequence != null && other.serverSequence != null) {
+      return serverSequence! > other.serverSequence!;
+    }
+    if (lastMessageAt.isAfter(other.lastMessageAt)) {
+      return true;
+    }
+    if (lastMessageAt.isBefore(other.lastMessageAt)) {
+      return false;
+    }
+    if (messageId != null &&
+        other.messageId != null &&
+        messageId != other.messageId) {
+      return lastMessagePreview != other.lastMessagePreview;
+    }
+    return false;
+  }
+
+  bool sameMessageAs(_UnreadWatermark? other) {
+    if (other == null) {
+      return false;
+    }
+    if (serverSequence != null && other.serverSequence != null) {
+      return serverSequence == other.serverSequence;
+    }
+    if (!lastMessageAt.isAtSameMomentAs(other.lastMessageAt)) {
+      return false;
+    }
+    if (messageId != null && other.messageId != null) {
+      return messageId == other.messageId;
+    }
+    return lastMessagePreview == other.lastMessagePreview;
+  }
+
+  bool get hasStablePosition => messageId != null || serverSequence != null;
+}
+
+class _ReadWatermark {
+  const _ReadWatermark({
+    required this.readAt,
+    this.messageId,
+    this.serverSequence,
+  });
+
+  final DateTime readAt;
+  final String? messageId;
+  final int? serverSequence;
+
+  static _ReadWatermark? fromWatermark(
+    ConversationSummary conversation, {
+    required String? ownerDid,
+    AppThreadReadWatermark? watermark,
+    bool allowConversationFallback = true,
+  }) {
+    if (_isDidBackedLegacyDirectConversation(
+      conversation,
+      ownerDid: ownerDid,
+    )) {
+      return null;
+    }
+    if (watermark == null || watermark.isEmpty) {
+      if (!allowConversationFallback) {
+        return null;
+      }
+      return fromUnread(_UnreadWatermark.fromConversation(conversation));
+    }
+    final snapshot = conversation.lastMessageSnapshot;
+    final watermarkSeq = _parseWatermarkSequence(watermark.lastReadThreadSeq);
+    return _ReadWatermark(
+      readAt:
+          (watermark.readAt ??
+                  snapshot?.createdAt ??
+                  conversation.lastMessageAt)
+              .toUtc(),
+      messageId:
+          _lastMessageIdentityFromParts(
+            remoteId: watermark.lastReadMessageId,
+            localId: snapshot?.localId,
+          ) ??
+          _lastMessageIdentity(snapshot),
+      serverSequence: watermarkSeq ?? snapshot?.serverSequence,
+    );
+  }
+
+  static _ReadWatermark fromUnread(_UnreadWatermark watermark) {
+    return _ReadWatermark(
+      readAt: watermark.lastMessageAt,
+      messageId: watermark.messageId,
+      serverSequence: watermark.serverSequence,
+    );
+  }
+
+  bool isAfter(_ReadWatermark other) {
+    if (serverSequence != null && other.serverSequence != null) {
+      return serverSequence! > other.serverSequence!;
+    }
+    if (readAt.isAfter(other.readAt)) {
+      return true;
+    }
+    if (readAt.isBefore(other.readAt)) {
+      return false;
+    }
+    return messageId != null &&
+        other.messageId != null &&
+        messageId != other.messageId;
+  }
+
+  bool covers(_UnreadWatermark message) {
+    if (serverSequence != null && message.serverSequence != null) {
+      return serverSequence! >= message.serverSequence!;
+    }
+    if (readAt.isAfter(message.lastMessageAt)) {
+      return true;
+    }
+    if (readAt.isBefore(message.lastMessageAt)) {
+      return false;
+    }
+    if (messageId != null && message.messageId != null) {
+      return messageId == message.messageId;
+    }
+    return true;
+  }
+}
+
+String? _lastMessageIdentity(ChatMessage? message) {
+  return _lastMessageIdentityFromParts(
+    remoteId: message?.remoteId,
+    localId: message?.localId,
+  );
+}
+
+String? _lastMessageIdentityFromParts({String? remoteId, String? localId}) {
+  final normalizedRemoteId = remoteId?.trim();
+  if (normalizedRemoteId != null && normalizedRemoteId.isNotEmpty) {
+    return 'remote:$normalizedRemoteId';
+  }
+  final normalizedLocalId = localId?.trim();
+  if (normalizedLocalId != null && normalizedLocalId.isNotEmpty) {
+    return 'local:$normalizedLocalId';
+  }
+  return null;
+}
+
+int? _parseWatermarkSequence(String? value) {
+  final normalized = value?.trim();
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+  return int.tryParse(normalized);
+}
+
+bool _sameReadOwner(String? first, String? second) {
+  final firstOwner = first?.trim();
+  final secondOwner = second?.trim();
+  if (firstOwner == null ||
+      firstOwner.isEmpty ||
+      secondOwner == null ||
+      secondOwner.isEmpty) {
+    return true;
+  }
+  return firstOwner == secondOwner;
+}
+
+bool _sameStrictReadPresentationConversation(
+  ConversationSummary first,
+  ConversationSummary second, {
+  required String? ownerDid,
+}) {
+  if (_sameConversationIdentity(first, second) ||
+      sameConversationThread(first, second)) {
+    return true;
+  }
+  if (first.isGroup || second.isGroup) {
+    return first.isGroup &&
+        second.isGroup &&
+        sameNonEmpty(first.groupId, second.groupId);
+  }
+  if (isPeerScopedDirectConversation(first) &&
+      isPeerScopedDirectConversation(second)) {
+    return false;
+  }
+  if (isPeerScopedDirectConversation(first) &&
+      _isDidBackedLegacyDirectConversation(second, ownerDid: ownerDid)) {
+    return false;
+  }
+  if (isPeerScopedDirectConversation(second) &&
+      _isDidBackedLegacyDirectConversation(first, ownerDid: ownerDid)) {
+    return false;
+  }
+  if (isPeerScopedDirectConversation(first) &&
+      isReplaceableLegacyDirectConversation(second, ownerDid: ownerDid)) {
+    return sameDirectPresentationTarget(first, second);
+  }
+  if (isPeerScopedDirectConversation(second) &&
+      isReplaceableLegacyDirectConversation(first, ownerDid: ownerDid)) {
+    return sameDirectPresentationTarget(first, second);
+  }
+  if (_shouldCollapsePresentationAlias(first, second, ownerDid: ownerDid) ||
+      _shouldCollapsePresentationAlias(second, first, ownerDid: ownerDid)) {
+    return true;
+  }
+  if (_hasExplicitConversationId(first) || _hasExplicitConversationId(second)) {
+    return false;
+  }
+  return sameDirectPresentationTarget(first, second);
+}
+
+bool _sameVisiblePresentationConversation(
+  ConversationSummary visible,
+  ConversationSummary candidate, {
+  required String? ownerDid,
+  Iterable<ConversationSummary>? presentationRows,
+  bool matchVisibilityBridge = true,
+}) {
+  if (_sameStrictReadPresentationConversation(
+    visible,
+    candidate,
+    ownerDid: ownerDid,
+  )) {
+    return true;
+  }
+  if (visible.isGroup || candidate.isGroup) {
+    return false;
+  }
+  if (isPeerScopedDirectConversation(visible) &&
+      isPeerScopedDirectConversation(candidate)) {
+    return false;
+  }
+  if (!matchVisibilityBridge ||
+      !_isUniquePeerScopedAliasBridge(
+        visible,
+        candidate,
+        ownerDid: ownerDid,
+        presentationRows: presentationRows,
+      )) {
+    return false;
+  }
+  return sameDirectPresentationTarget(visible, candidate);
+}
+
+bool _isUniquePeerScopedAliasBridge(
+  ConversationSummary first,
+  ConversationSummary second, {
+  required String? ownerDid,
+  Iterable<ConversationSummary>? presentationRows,
+}) {
+  final firstPeerScoped = isPeerScopedDirectConversation(first);
+  final secondPeerScoped = isPeerScopedDirectConversation(second);
+  if (firstPeerScoped == secondPeerScoped) {
+    return false;
+  }
+  final peerScoped = firstPeerScoped ? first : second;
+  final alias = firstPeerScoped ? second : first;
+  if (_isDidBackedLegacyDirectConversation(alias, ownerDid: ownerDid)) {
+    return false;
+  }
+  if (!isReplaceableLegacyDirectConversation(alias, ownerDid: ownerDid) ||
+      !sameDirectPresentationTarget(peerScoped, alias)) {
+    return false;
+  }
+  final rows = presentationRows;
+  if (rows == null) {
+    return false;
+  }
+  final matchingPeerRows = _matchingPeerScopedPresentationRows(
+    rows,
+    alias: alias,
+  );
+  return matchingPeerRows.length == 1 &&
+      sameConversationThread(matchingPeerRows.single, peerScoped);
+}
+
+bool _isDidBackedLegacyDirectConversation(
+  ConversationSummary conversation, {
+  required String? ownerDid,
+}) {
+  if (conversation.isGroup || isPeerScopedDirectConversation(conversation)) {
+    return false;
+  }
+  final targetDid = conversation.targetDid?.trim();
+  if (targetDid == null || targetDid.isEmpty) {
+    return false;
+  }
+  final targetPeer = normalizedDirectPeer(conversation.targetPeer);
+  if (targetPeer == null || targetPeer != targetDid) {
+    return false;
+  }
+  return isReplaceableLegacyDirectConversation(
+    conversation,
+    ownerDid: ownerDid,
+  );
 }
 
 List<String> _visibilityKeysFor(

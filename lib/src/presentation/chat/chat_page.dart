@@ -179,6 +179,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   final textController = TextEditingController();
   late final _BottomInitialScrollController scrollController;
   late final ChatThreadsController _chatThreadsController;
+  ProviderSubscription<ConversationListState>? _conversationListSubscription;
   late String _displayThreadId;
   AttachmentDraft? _pendingAttachment;
   bool _isApplyingComposerDraft = false;
@@ -203,8 +204,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
     _displayThreadId = _timelineDisplayThreadId(widget.conversation);
     scrollController = _BottomInitialScrollController();
     _chatThreadsController = ref.read(chatThreadsProvider.notifier);
+    _conversationListSubscription = ref.listenManual<ConversationListState>(
+      conversationListProvider,
+      (_, next) => _handleConversationListChanged(next),
+    );
     _beginOpeningBottomAnchor();
-    _markConversationVisible(
+    _scheduleConversationVisible(
       widget.conversation,
       displayThreadId: _displayThreadId,
     );
@@ -217,10 +222,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
   void dispose() {
     _visibleReadAckToken += 1;
     _cancelPendingScrollRequests();
-    _markConversationHidden(
+    _scheduleConversationHidden(
       widget.conversation,
       displayThreadId: _displayThreadId,
     );
+    _conversationListSubscription?.close();
     textController.removeListener(_persistComposerText);
     scrollController.removeListener(_handleScrollPositionChanged);
     textController.dispose();
@@ -233,12 +239,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
     super.didUpdateWidget(oldWidget);
     if (!sameConversationThread(oldWidget.conversation, widget.conversation)) {
       _visibleReadAckToken += 1;
-      _markConversationHidden(
+      _scheduleConversationHidden(
         oldWidget.conversation,
         displayThreadId: _displayThreadId,
       );
       _displayThreadId = _timelineDisplayThreadId(widget.conversation);
-      _markConversationVisible(
+      _scheduleConversationVisible(
         widget.conversation,
         displayThreadId: _displayThreadId,
       );
@@ -274,6 +280,37 @@ class _ChatViewState extends ConsumerState<ChatView> {
       displayThreadId:
           displayThreadId ?? _timelineDisplayThreadId(conversation),
     );
+  }
+
+  void _scheduleConversationVisible(
+    ConversationSummary conversation, {
+    required String displayThreadId,
+  }) {
+    final token = _visibleReadAckToken;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          token != _visibleReadAckToken ||
+          displayThreadId != _displayThreadId ||
+          !sameConversationThread(
+            conversation,
+            _currentConversationSnapshot(),
+          )) {
+        return;
+      }
+      _markConversationVisible(conversation, displayThreadId: displayThreadId);
+    });
+  }
+
+  void _scheduleConversationHidden(
+    ConversationSummary conversation, {
+    required String displayThreadId,
+  }) {
+    Future<void>.delayed(Duration.zero, () {
+      _chatThreadsController.markConversationHidden(
+        conversation,
+        displayThreadId: displayThreadId,
+      );
+    });
   }
 
   void _acknowledgeVisibleConversationRead(
@@ -399,22 +436,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
       (previous, next) =>
           _handleThreadChanged(previous, next, currentConversation),
     );
-    ref.listen<ConversationListState>(conversationListProvider, (_, next) {
-      final migrated = _migrateDisplayThreadIfNeeded(next.conversations);
-      if (migrated) {
-        return;
-      }
-      final updated = _matchingConversationByThread(next.conversations);
-      if (updated == null) {
-        return;
-      }
-      unawaited(
-        _chatThreadsController.syncVisibleConversationAfterSummaryUpdate(
-          updated,
-          displayThreadId: displayThreadId,
-        ),
-      );
-    });
     final messages = thread.messages;
     final deferRealtimeTailFirstPaint =
         thread.isHydratingLocalHistory && messages.length <= 1;
@@ -1357,6 +1378,31 @@ class _ChatViewState extends ConsumerState<ChatView> {
       ),
     );
     return true;
+  }
+
+  void _handleConversationListChanged(ConversationListState next) {
+    if (!mounted) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final migrated = _migrateDisplayThreadIfNeeded(next.conversations);
+      if (migrated) {
+        return;
+      }
+      final updated = _matchingConversationByThread(next.conversations);
+      if (updated == null) {
+        return;
+      }
+      unawaited(
+        _chatThreadsController.syncVisibleConversationAfterSummaryUpdate(
+          updated,
+          displayThreadId: _displayThreadId,
+        ),
+      );
+    });
   }
 
   ConversationSummary? _matchingConversationForDisplay(

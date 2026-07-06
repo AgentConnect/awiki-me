@@ -11,6 +11,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
@@ -1087,26 +1088,43 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    final controllerConversation = _conversation(
-      threadId: 'dm:peer-scope:v1:controller',
-      displayName: 'Controller',
-      unreadCount: 3,
-      targetDid: 'did:agent:runtime',
-      targetPeer: 'agent.awiki.ai',
-    );
-    final runtimeConversation = _conversation(
-      threadId: 'dm:peer-scope:v1:runtime',
-      displayName: 'Runtime Agent',
-      unreadCount: 2,
-      targetDid: 'did:agent:runtime',
-      targetPeer: 'agent.awiki.ai',
-    );
+    final controllerConversation =
+        _conversation(
+          threadId: 'dm:peer-scope:v1:controller',
+          displayName: 'Controller',
+          unreadCount: 3,
+          targetDid: 'did:agent:runtime',
+          targetPeer: 'agent.awiki.ai',
+        ).copyWith(
+          lastMessageSnapshot: _messageSnapshot(
+            threadId: 'dm:peer-scope:v1:controller',
+            remoteId: 'remote-controller',
+            serverSequence: 10,
+          ),
+        );
+    final runtimeConversation =
+        _conversation(
+          threadId: 'dm:peer-scope:v1:runtime',
+          displayName: 'Runtime Agent',
+          unreadCount: 2,
+          targetDid: 'did:agent:runtime',
+          targetPeer: 'agent.awiki.ai',
+        ).copyWith(
+          lastMessageSnapshot: _messageSnapshot(
+            threadId: 'dm:peer-scope:v1:runtime',
+            remoteId: 'remote-runtime',
+            serverSequence: 11,
+          ),
+        );
     final notifier = container.read(conversationListProvider.notifier);
     notifier.upsertConversation(controllerConversation);
     notifier.upsertConversation(runtimeConversation);
     await Future<void>.delayed(Duration.zero);
 
-    notifier.markConversationReadLocal(runtimeConversation);
+    notifier.markConversationReadLocal(
+      runtimeConversation,
+      watermark: _watermarkForConversation(runtimeConversation),
+    );
 
     final byThread = {
       for (final item in container.read(conversationListProvider).conversations)
@@ -1120,14 +1138,97 @@ void main() {
     expect(notifications.lastBadgeCount, controllerConversation.unreadCount);
   });
 
-  test('mark read local does not override later core unread refresh', () async {
-    final refreshedUnread = _conversation(
-      threadId: 'dm:alice:bob',
-      displayName: 'Bob',
-      unreadCount: 2,
-    );
+  test(
+    'mark read local suppresses stale unread refresh for same message',
+    () async {
+      final messageAt = DateTime.utc(2026, 6, 27, 2);
+      final refreshedUnread =
+          _conversation(
+            threadId: 'dm:alice:bob',
+            displayName: 'Bob',
+            unreadCount: 2,
+            lastMessageAt: messageAt,
+          ).copyWith(
+            lastMessageSnapshot: ChatMessage(
+              localId: 'local-1',
+              remoteId: 'remote-1',
+              threadId: 'dm:alice:bob',
+              senderDid: 'did:bob',
+              receiverDid: 'did:alice',
+              content: 'hello',
+              createdAt: messageAt,
+              isMine: false,
+              serverSequence: 10,
+              sendState: MessageSendState.sent,
+            ),
+          );
+      final service = _MutableConversationService(
+        conversations: <ConversationSummary>[refreshedUnread],
+      );
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: service,
+        notifications: notifications,
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(refreshedUnread);
+      await Future<void>.delayed(Duration.zero);
+
+      notifier.markConversationReadLocal(
+        refreshedUnread,
+        watermark: _watermarkForConversation(refreshedUnread),
+      );
+      expect(
+        container
+            .read(conversationListProvider)
+            .conversations
+            .single
+            .unreadCount,
+        0,
+      );
+
+      await notifier.refresh();
+
+      expect(
+        container
+            .read(conversationListProvider)
+            .conversations
+            .single
+            .unreadCount,
+        0,
+      );
+      expect(notifications.lastBadgeCount, 0);
+    },
+  );
+
+  test('mark read local does not suppress newer core unread refresh', () async {
+    final firstMessageAt = DateTime.utc(2026, 6, 27, 2);
+    final secondMessageAt = firstMessageAt.add(const Duration(seconds: 1));
+    final firstUnread =
+        _conversation(
+          threadId: 'dm:alice:bob',
+          displayName: 'Bob',
+          unreadCount: 1,
+          lastMessageAt: firstMessageAt,
+        ).copyWith(
+          lastMessageSnapshot: ChatMessage(
+            localId: 'local-1',
+            remoteId: 'remote-1',
+            threadId: 'dm:alice:bob',
+            senderDid: 'did:bob',
+            receiverDid: 'did:alice',
+            content: 'hello',
+            createdAt: firstMessageAt,
+            isMine: false,
+            serverSequence: 10,
+            sendState: MessageSendState.sent,
+          ),
+        );
     final service = _MutableConversationService(
-      conversations: <ConversationSummary>[refreshedUnread],
+      conversations: <ConversationSummary>[firstUnread],
     );
     final notifications = FakeNotificationFacade();
     final container = _conversationContainer(
@@ -1138,22 +1239,582 @@ void main() {
     addTearDown(container.dispose);
 
     final notifier = container.read(conversationListProvider.notifier);
-    notifier.upsertConversation(refreshedUnread);
+    notifier.upsertConversation(firstUnread);
     await Future<void>.delayed(Duration.zero);
 
-    notifier.markConversationReadLocal(refreshedUnread);
+    notifier.markConversationReadLocal(
+      firstUnread,
+      watermark: _watermarkForConversation(firstUnread),
+    );
     expect(
       container.read(conversationListProvider).conversations.single.unreadCount,
       0,
     );
 
+    final newerUnread = firstUnread.copyWith(
+      lastMessagePreview: 'new hello',
+      lastMessageAt: secondMessageAt,
+      unreadCount: 1,
+      lastMessageSnapshot: ChatMessage(
+        localId: 'local-2',
+        remoteId: 'remote-2',
+        threadId: 'dm:alice:bob',
+        senderDid: 'did:bob',
+        receiverDid: 'did:alice',
+        content: 'new hello',
+        createdAt: secondMessageAt,
+        isMine: false,
+        serverSequence: 11,
+        sendState: MessageSendState.sent,
+      ),
+    );
+    service.currentConversations = <ConversationSummary>[newerUnread];
+
     await notifier.refresh();
 
     expect(
       container.read(conversationListProvider).conversations.single.unreadCount,
-      2,
+      1,
     );
-    expect(notifications.lastBadgeCount, 2);
+    expect(notifications.lastBadgeCount, 1);
+  });
+
+  test(
+    'new remote latest with transient zero unread does not flash read',
+    () async {
+      final firstMessageAt = DateTime.utc(2026, 6, 27, 2);
+      final secondMessageAt = firstMessageAt.add(const Duration(seconds: 1));
+      final firstRead =
+          _conversation(
+            threadId: 'dm:alice:bob',
+            displayName: 'Bob',
+            unreadCount: 0,
+            lastMessageAt: firstMessageAt,
+          ).copyWith(
+            lastMessagePreview: 'old hello',
+            lastMessageSnapshot: ChatMessage(
+              localId: 'local-old',
+              remoteId: 'remote-old',
+              threadId: 'dm:alice:bob',
+              senderDid: 'did:bob',
+              receiverDid: 'did:alice',
+              content: 'old hello',
+              createdAt: firstMessageAt,
+              isMine: false,
+              serverSequence: 10,
+              sendState: MessageSendState.sent,
+            ),
+          );
+      final transientZero = firstRead.copyWith(
+        lastMessagePreview: 'new hello',
+        lastMessageAt: secondMessageAt,
+        unreadCount: 0,
+        lastMessageSnapshot: ChatMessage(
+          localId: 'local-new',
+          remoteId: 'remote-new',
+          threadId: 'dm:alice:bob',
+          senderDid: 'did:bob',
+          receiverDid: 'did:alice',
+          content: 'new hello',
+          createdAt: secondMessageAt,
+          isMine: false,
+          serverSequence: 11,
+          sendState: MessageSendState.sent,
+        ),
+      );
+      final confirmedUnread = transientZero.copyWith(unreadCount: 1);
+      final service = _PatchConversationService(
+        conversations: <ConversationSummary>[confirmedUnread],
+      );
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: service,
+        notifications: notifications,
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(firstRead);
+      await Future<void>.delayed(Duration.zero);
+
+      final unreadEmissions = <int>[];
+      final subscription = container.listen<ConversationListState>(
+        conversationListProvider,
+        (_, next) => unreadEmissions.add(next.unreadCount),
+      );
+      addTearDown(subscription.close);
+
+      notifier.upsertConversation(transientZero);
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 1,
+          items: <ConversationSummary>[confirmedUnread],
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      await notifier.refresh();
+
+      expect(
+        container.read(conversationListProvider).conversations.single,
+        isA<ConversationSummary>()
+            .having((item) => item.lastMessagePreview, 'preview', 'new hello')
+            .having((item) => item.unreadCount, 'unread', 1),
+      );
+      expect(unreadEmissions, isNot(contains(0)));
+      expect(notifications.lastBadgeCount, 1);
+    },
+  );
+
+  test(
+    'old zero unread refresh does not clear newer unread without read watermark',
+    () async {
+      final firstMessageAt = DateTime.utc(2026, 6, 27, 2);
+      final secondMessageAt = firstMessageAt.add(const Duration(seconds: 1));
+      final firstRead =
+          _conversation(
+            threadId: 'dm:alice:bob',
+            displayName: 'Bob',
+            unreadCount: 0,
+            lastMessageAt: firstMessageAt,
+          ).copyWith(
+            lastMessagePreview: 'old hello',
+            lastMessageSnapshot: ChatMessage(
+              localId: 'local-old',
+              remoteId: 'remote-old',
+              threadId: 'dm:alice:bob',
+              senderDid: 'did:bob',
+              receiverDid: 'did:alice',
+              content: 'old hello',
+              createdAt: firstMessageAt,
+              isMine: false,
+              serverSequence: 10,
+              sendState: MessageSendState.sent,
+            ),
+          );
+      final newerUnread = firstRead.copyWith(
+        lastMessagePreview: 'new hello',
+        lastMessageAt: secondMessageAt,
+        unreadCount: 1,
+        lastMessageSnapshot: ChatMessage(
+          localId: 'local-new',
+          remoteId: 'remote-new',
+          threadId: 'dm:alice:bob',
+          senderDid: 'did:bob',
+          receiverDid: 'did:alice',
+          content: 'new hello',
+          createdAt: secondMessageAt,
+          isMine: false,
+          serverSequence: 11,
+          sendState: MessageSendState.sent,
+        ),
+      );
+      final service = _MutableConversationService(
+        conversations: <ConversationSummary>[newerUnread],
+      );
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: service,
+        notifications: notifications,
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(firstRead);
+      notifier.upsertConversation(newerUnread);
+      service.currentConversations = <ConversationSummary>[firstRead];
+
+      await notifier.refresh();
+
+      expect(container.read(conversationListProvider).unreadCount, 1);
+      expect(notifications.lastBadgeCount, 1);
+    },
+  );
+
+  test(
+    'visible conversation keeps unread presentation stable across refresh sources',
+    () async {
+      final initialAt = DateTime.utc(2026, 6, 27, 2);
+      final replyAt = initialAt.add(const Duration(seconds: 1));
+      final initial = _conversation(
+        conversationId: 'group:hangzhou-weather',
+        threadId: 'group:hangzhou-weather',
+        displayName: 'Hangzhou group',
+        lastMessageAt: initialAt,
+        isGroup: true,
+        groupId: 'hangzhou-weather',
+      ).copyWith(lastMessagePreview: 'old visible');
+      final unreadReply = initial.copyWith(
+        lastMessagePreview: 'today is July 6',
+        lastMessageAt: replyAt,
+        unreadCount: 1,
+        unreadMentionCount: 1,
+        firstUnreadMentionMessageId: 'remote-visible-group',
+        lastMessageSnapshot: ChatMessage(
+          localId: 'remote-visible-group',
+          remoteId: 'remote-visible-group',
+          threadId: initial.threadId,
+          senderDid: 'did:agent',
+          groupId: initial.groupId,
+          content: 'today is July 6',
+          createdAt: replyAt,
+          isMine: false,
+          serverSequence: 42,
+          sendState: MessageSendState.sent,
+        ),
+      );
+      final service = _MutableConversationService(
+        conversations: <ConversationSummary>[unreadReply],
+      );
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: service,
+        notifications: notifications,
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(initial);
+      notifier.markConversationVisibleLocal(
+        unreadReply,
+        watermark: const AppThreadReadWatermark(
+          lastReadMessageId: 'remote-visible-group',
+          lastReadThreadSeq: '42',
+        ),
+      );
+      final unreadEmissions = <int>[];
+      final subscription = container.listen<ConversationListState>(
+        conversationListProvider,
+        (_, next) {
+          unreadEmissions.add(next.conversations.single.unreadCount);
+        },
+      );
+      addTearDown(subscription.close);
+
+      notifier.upsertConversation(unreadReply);
+      await notifier.refreshFastLocal();
+      await notifier.refresh();
+      container
+          .read(conversationListProvider.notifier)
+          .applyGroupNames(<GroupSummary>[
+            GroupSummary(
+              groupId: 'hangzhou-weather',
+              displayName: 'Hangzhou Weather',
+              description: '',
+              memberCount: 2,
+              lastMessageAt: replyAt,
+            ),
+          ]);
+
+      final conversation = container
+          .read(conversationListProvider)
+          .conversations
+          .single;
+      expect(conversation.lastMessagePreview, 'today is July 6');
+      expect(conversation.unreadCount, 0);
+      expect(conversation.unreadMentionCount, 0);
+      expect(conversation.firstUnreadMentionMessageId, isNull);
+      expect(unreadEmissions, isNot(contains(1)));
+      expect(notifications.lastBadgeCount, 0);
+    },
+  );
+
+  test(
+    'visible conversation projects stable incoming message read before publish',
+    () async {
+      final initialAt = DateTime.utc(2026, 6, 27, 2);
+      final replyAt = initialAt.add(const Duration(seconds: 1));
+      final initial = _conversation(
+        conversationId: 'group:visible-before-publish',
+        threadId: 'group:visible-before-publish',
+        displayName: 'Visible group',
+        lastMessageAt: initialAt,
+        isGroup: true,
+        groupId: 'visible-before-publish',
+      ).copyWith(lastMessagePreview: 'old visible');
+      final unreadReply = initial.copyWith(
+        lastMessagePreview: 'new visible reply',
+        lastMessageAt: replyAt,
+        unreadCount: 1,
+        unreadMentionCount: 1,
+        firstUnreadMentionMessageId: 'remote-visible-before-publish',
+        lastMessageSnapshot: ChatMessage(
+          localId: 'remote-visible-before-publish',
+          remoteId: 'remote-visible-before-publish',
+          threadId: initial.threadId,
+          senderDid: 'did:agent',
+          groupId: initial.groupId,
+          content: 'new visible reply',
+          createdAt: replyAt,
+          isMine: false,
+          serverSequence: 44,
+          sendState: MessageSendState.sent,
+        ),
+      );
+      final service = _MutableConversationService(
+        conversations: <ConversationSummary>[unreadReply],
+      );
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: service,
+        notifications: notifications,
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(initial);
+      notifier.markConversationVisibleLocal(initial);
+      final unreadEmissions = <int>[];
+      final subscription = container.listen<ConversationListState>(
+        conversationListProvider,
+        (_, next) => unreadEmissions.add(next.conversations.single.unreadCount),
+      );
+      addTearDown(subscription.close);
+
+      notifier.upsertConversation(unreadReply);
+      await notifier.refresh();
+
+      final conversation = container
+          .read(conversationListProvider)
+          .conversations
+          .single;
+      expect(conversation.lastMessagePreview, 'new visible reply');
+      expect(conversation.unreadCount, 0);
+      expect(conversation.unreadMentionCount, 0);
+      expect(conversation.firstUnreadMentionMessageId, isNull);
+      expect(unreadEmissions, isNot(contains(1)));
+      expect(notifications.lastBadgeCount, 0);
+    },
+  );
+
+  test(
+    'hidden conversation can become unread again after visible state ends',
+    () {
+      final initialAt = DateTime.utc(2026, 6, 27, 2);
+      final replyAt = initialAt.add(const Duration(seconds: 1));
+      final initial = _conversation(
+        conversationId: 'group:hidden-after-visible',
+        threadId: 'group:hidden-after-visible',
+        displayName: 'Hidden after visible',
+        lastMessageAt: initialAt,
+        isGroup: true,
+        groupId: 'hidden-after-visible',
+      ).copyWith(lastMessagePreview: 'old visible');
+      final unreadReply = initial.copyWith(
+        lastMessagePreview: 'new hidden reply',
+        lastMessageAt: replyAt,
+        unreadCount: 1,
+        lastMessageSnapshot: ChatMessage(
+          localId: 'remote-hidden-after-visible',
+          remoteId: 'remote-hidden-after-visible',
+          threadId: initial.threadId,
+          senderDid: 'did:agent',
+          groupId: initial.groupId,
+          content: 'new hidden reply',
+          createdAt: replyAt,
+          isMine: false,
+          serverSequence: 45,
+          sendState: MessageSendState.sent,
+        ),
+      );
+      final container = _conversationContainer(
+        service: _StaticConversationService(conversations: const []),
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(initial);
+      notifier.markConversationVisibleLocal(initial);
+      notifier.markConversationHiddenLocal(initial);
+
+      notifier.upsertConversation(unreadReply);
+
+      expect(
+        container
+            .read(conversationListProvider)
+            .conversations
+            .single
+            .unreadCount,
+        1,
+      );
+    },
+  );
+
+  test(
+    'visible conversation survives alias migration and repeated patch unread',
+    () async {
+      final initialAt = DateTime.utc(2026, 6, 27, 2);
+      final replyAt = initialAt.add(const Duration(seconds: 1));
+      const ownerDid = 'did:human';
+      const agentDid = 'did:agent:hermes';
+      const agentHandle = 'hermes.awiki.test';
+      final alias = _conversation(
+        threadId: 'dm:pending:$agentHandle',
+        displayName: 'Hermes alias',
+        lastMessageAt: initialAt,
+        targetDid: '',
+        targetPeer: agentHandle,
+      ).copyWith(lastMessagePreview: 'old visible');
+      final peerScopedUnread =
+          _conversation(
+            conversationId: 'dm:peer-scope:v1:hermes',
+            threadId: 'dm:peer-scope:v1:hermes',
+            displayName: 'Hermes',
+            unreadCount: 1,
+            lastMessageAt: replyAt,
+            targetDid: agentDid,
+            targetPeer: agentHandle,
+          ).copyWith(
+            lastMessagePreview: 'new visible reply',
+            lastMessageSnapshot: ChatMessage(
+              localId: 'remote-visible-agent',
+              remoteId: 'remote-visible-agent',
+              threadId: 'dm:peer-scope:v1:hermes',
+              senderDid: agentDid,
+              receiverDid: ownerDid,
+              content: 'new visible reply',
+              createdAt: replyAt,
+              isMine: false,
+              serverSequence: 43,
+              sendState: MessageSendState.sent,
+            ),
+          );
+      final service = _PatchConversationService(
+        conversations: <ConversationSummary>[peerScopedUnread],
+        repaired: <ConversationSummary>[peerScopedUnread],
+        repairVersion: 2,
+      );
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: service,
+        notifications: notifications,
+        ownerDid: ownerDid,
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(alias);
+      notifier.markConversationVisibleLocal(
+        alias,
+        watermark: const AppThreadReadWatermark(
+          lastReadMessageId: 'remote-visible-agent',
+          lastReadThreadSeq: '43',
+        ),
+      );
+      await notifier.refreshFastLocal();
+      final unreadEmissions = <int>[];
+      final subscription = container.listen<ConversationListState>(
+        conversationListProvider,
+        (_, next) {
+          unreadEmissions.add(next.conversations.single.unreadCount);
+        },
+      );
+      addTearDown(subscription.close);
+
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerDid: ownerDid,
+          version: 1,
+          unreadTotal: 1,
+          item: peerScopedUnread,
+        ),
+      );
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerDid: ownerDid,
+          version: 2,
+          unreadTotal: 1,
+          items: <ConversationSummary>[peerScopedUnread],
+        ),
+      );
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.repairRequired,
+          ownerDid: ownerDid,
+          version: 3,
+          unreadTotal: 1,
+          reason: 'test',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final conversation = container
+          .read(conversationListProvider)
+          .conversations
+          .single;
+      expect(conversation.threadId, 'dm:peer-scope:v1:hermes');
+      expect(conversation.lastMessagePreview, 'new visible reply');
+      expect(conversation.unreadCount, 0);
+      expect(unreadEmissions, isNot(contains(1)));
+      expect(notifications.lastBadgeCount, 0);
+    },
+  );
+
+  test('read watermark covers same summary after later refresh', () async {
+    final messageAt = DateTime.utc(2026, 6, 27, 2);
+    final conversation =
+        _conversation(
+          conversationId: 'group:watermark',
+          threadId: 'group:watermark',
+          displayName: 'Watermark Group',
+          unreadCount: 1,
+          lastMessageAt: messageAt,
+          isGroup: true,
+          groupId: 'watermark',
+        ).copyWith(
+          lastMessagePreview: 'covered by seq',
+          lastMessageSnapshot: ChatMessage(
+            localId: 'local-covered',
+            remoteId: 'remote-covered',
+            threadId: 'group:watermark',
+            senderDid: 'did:agent',
+            groupId: 'watermark',
+            content: 'covered by seq',
+            createdAt: messageAt.subtract(const Duration(milliseconds: 200)),
+            isMine: false,
+            serverSequence: 10,
+            sendState: MessageSendState.sent,
+          ),
+        );
+    final service = _MutableConversationService(
+      conversations: <ConversationSummary>[conversation],
+    );
+    final notifications = FakeNotificationFacade();
+    final container = _conversationContainer(
+      service: service,
+      notifications: notifications,
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(conversationListProvider.notifier);
+    notifier.upsertConversation(conversation);
+    notifier.markConversationReadLocal(
+      conversation,
+      watermark: AppThreadReadWatermark(
+        lastReadMessageId: 'remote-covered',
+        lastReadThreadSeq: '10',
+        readAt: messageAt.subtract(const Duration(milliseconds: 200)),
+      ),
+    );
+    await notifier.refresh();
+
+    final updated = container
+        .read(conversationListProvider)
+        .conversations
+        .single;
+    expect(updated.unreadCount, 0);
+    expect(notifications.lastBadgeCount, 0);
   });
 
   test(
@@ -2193,6 +2854,26 @@ ConversationSummary _conversation({
   );
 }
 
+ChatMessage _messageSnapshot({
+  required String threadId,
+  required String remoteId,
+  int? serverSequence,
+  DateTime? createdAt,
+}) {
+  return ChatMessage(
+    localId: remoteId,
+    remoteId: remoteId,
+    threadId: threadId,
+    senderDid: 'did:bob',
+    receiverDid: 'did:alice',
+    content: 'hello',
+    createdAt: createdAt ?? DateTime.utc(2026, 6, 27, 2),
+    isMine: false,
+    serverSequence: serverSequence,
+    sendState: MessageSendState.sent,
+  );
+}
+
 ProviderContainer _conversationContainer({
   required ConversationService service,
   required FakeNotificationFacade notifications,
@@ -2374,6 +3055,21 @@ class _SlowEnrichConversationService implements ConversationService {
     required ConversationSummary conversation,
     DateTime? updatedAt,
   }) async {}
+}
+
+AppThreadReadWatermark? _watermarkForConversation(
+  ConversationSummary conversation,
+) {
+  final snapshot = conversation.lastMessageSnapshot;
+  if (snapshot == null) {
+    return null;
+  }
+  final remoteId = snapshot.remoteId?.trim();
+  return AppThreadReadWatermark(
+    lastReadMessageId: remoteId?.isNotEmpty ?? false ? remoteId : null,
+    lastReadThreadSeq: snapshot.serverSequence?.toString(),
+    readAt: snapshot.createdAt.toUtc(),
+  );
 }
 
 class _StaticConversationService implements ConversationService {

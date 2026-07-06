@@ -1970,8 +1970,8 @@ void main() {
         .openConversation(canonicalConversation);
     await pumpEventQueue();
 
-    final messaging = container.read(messagingServiceProvider)
-        as FakeMessagingService;
+    final messaging =
+        container.read(messagingServiceProvider) as FakeMessagingService;
     expect(messaging.conversationTimelineCalls, greaterThanOrEqualTo(1));
     expect(
       messaging.lastConversationTimelineId,
@@ -1981,7 +1981,10 @@ void main() {
     expect(gateway.fetchDmHistoryCalls, 0);
     expect(messageSyncService.conversationAfterRequests, hasLength(1));
     expect(
-      messageSyncService.conversationAfterRequests.single.conversation
+      messageSyncService
+          .conversationAfterRequests
+          .single
+          .conversation
           .conversationId,
       canonicalConversation.effectiveConversationId,
     );
@@ -1999,67 +2002,73 @@ void main() {
     );
   });
 
-  test('peer-scope projection 为空时走 conversation-after 而不回退远端 thread history', () async {
-    final canonicalConversation = ConversationSummary(
-      threadId: 'dm:peer-scope:v1:codex-empty',
-      displayName: 'Codex Empty',
-      lastMessagePreview: 'waiting',
-      lastMessageAt: DateTime(2026, 7, 4, 22, 55),
-      unreadCount: 0,
-      isGroup: false,
-      targetDid: 'did:codex:runtime-empty',
-      targetPeer: 'codex-empty.awiki.info',
-    );
-    gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
-      'did:codex:runtime-empty': <ChatMessage>[
-        ChatMessage(
-          localId: 'remote-should-not-load',
-          remoteId: 'remote-should-not-load',
-          threadId: canonicalConversation.threadId,
-          senderDid: 'did:codex:runtime-empty',
-          receiverDid: 'did:me',
-          content: 'should not call remote thread history',
-          createdAt: canonicalConversation.lastMessageAt,
-          isMine: false,
-          sendState: MessageSendState.sent,
-        ),
-      ],
-    };
-    _seedContainerConversationProjection(
-      container,
-      canonicalConversation,
-      const <ChatMessage>[],
-    );
+  test(
+    'peer-scope projection 为空时走 conversation-after 而不回退远端 thread history',
+    () async {
+      final canonicalConversation = ConversationSummary(
+        threadId: 'dm:peer-scope:v1:codex-empty',
+        displayName: 'Codex Empty',
+        lastMessagePreview: 'waiting',
+        lastMessageAt: DateTime(2026, 7, 4, 22, 55),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:codex:runtime-empty',
+        targetPeer: 'codex-empty.awiki.info',
+      );
+      gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
+        'did:codex:runtime-empty': <ChatMessage>[
+          ChatMessage(
+            localId: 'remote-should-not-load',
+            remoteId: 'remote-should-not-load',
+            threadId: canonicalConversation.threadId,
+            senderDid: 'did:codex:runtime-empty',
+            receiverDid: 'did:me',
+            content: 'should not call remote thread history',
+            createdAt: canonicalConversation.lastMessageAt,
+            isMine: false,
+            sendState: MessageSendState.sent,
+          ),
+        ],
+      };
+      _seedContainerConversationProjection(
+        container,
+        canonicalConversation,
+        const <ChatMessage>[],
+      );
 
-    await container
-        .read(chatThreadsProvider.notifier)
-        .openConversation(canonicalConversation);
-    await pumpEventQueue();
+      await container
+          .read(chatThreadsProvider.notifier)
+          .openConversation(canonicalConversation);
+      await pumpEventQueue();
 
-    final messaging = container.read(messagingServiceProvider)
-        as FakeMessagingService;
-    expect(messaging.conversationTimelineCalls, greaterThanOrEqualTo(1));
-    expect(
-      messaging.lastConversationTimelineId,
-      canonicalConversation.effectiveConversationId,
-    );
-    expect(gateway.fetchLocalDmHistoryCalls, 0);
-    expect(gateway.fetchDmHistoryCalls, 0);
-    expect(messageSyncService.conversationAfterRequests, hasLength(1));
-    expect(
-      messageSyncService.conversationAfterRequests.single.conversation
-          .conversationId,
-      canonicalConversation.effectiveConversationId,
-    );
-    expect(messageSyncService.threadAfterRequests, isEmpty);
-    expect(
-      container
-          .read(chatThreadProvider(_timelineThreadId(canonicalConversation)))
-          .messages,
-      isEmpty,
-    );
-    expect(container.read(uiFeedbackProvider), isNull);
-  });
+      final messaging =
+          container.read(messagingServiceProvider) as FakeMessagingService;
+      expect(messaging.conversationTimelineCalls, greaterThanOrEqualTo(1));
+      expect(
+        messaging.lastConversationTimelineId,
+        canonicalConversation.effectiveConversationId,
+      );
+      expect(gateway.fetchLocalDmHistoryCalls, 0);
+      expect(gateway.fetchDmHistoryCalls, 0);
+      expect(messageSyncService.conversationAfterRequests, hasLength(1));
+      expect(
+        messageSyncService
+            .conversationAfterRequests
+            .single
+            .conversation
+            .conversationId,
+        canonicalConversation.effectiveConversationId,
+      );
+      expect(messageSyncService.threadAfterRequests, isEmpty);
+      expect(
+        container
+            .read(chatThreadProvider(_timelineThreadId(canonicalConversation)))
+            .messages,
+        isEmpty,
+      );
+      expect(container.read(uiFeedbackProvider), isNull);
+    },
+  );
 
   test('peer-scope 强制同步时跳过未支持的远端 thread history', () async {
     final canonicalConversation = ConversationSummary(
@@ -2345,7 +2354,11 @@ void main() {
       gateway.lastMarkConversationReadConversationId,
       unreadConversation.effectiveConversationId,
     );
-    expect(gateway.lastMarkConversationReadWatermark, isNull);
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: 'remote-22',
+      sequence: '22',
+    );
   });
 
   test('可见会话收到未读 summary 更新时按 conversationId 补 ACK', () async {
@@ -2403,7 +2416,91 @@ void main() {
       gateway.lastMarkConversationReadConversationId,
       unreadConversation.effectiveConversationId,
     );
-    expect(gateway.lastMarkConversationReadWatermark, isNull);
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: 'remote-visible-summary',
+      sequence: '31',
+    );
+  });
+
+  test('可见会话收到未读 summary 更新时列表不闪现未读', () async {
+    final initial = conversation.copyWith(
+      lastMessagePreview: 'old visible',
+      lastMessageAt: DateTime(2026, 5, 8, 10, 0),
+      unreadCount: 0,
+    );
+    final visibleMessage = ChatMessage(
+      localId: 'remote-visible-no-flicker',
+      remoteId: 'remote-visible-no-flicker',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'visible summary unread no flicker',
+      createdAt: DateTime(2026, 5, 8, 10, 6),
+      isMine: false,
+      serverSequence: 31,
+      sendState: MessageSendState.sent,
+    );
+    final unreadUpdate = initial.copyWith(
+      lastMessagePreview: visibleMessage.content,
+      lastMessageAt: visibleMessage.createdAt,
+      unreadCount: 1,
+      unreadMentionCount: 1,
+      firstUnreadMentionMessageId: visibleMessage.remoteId,
+      lastMessageSnapshot: visibleMessage,
+    );
+    final controller = container.read(chatThreadsProvider.notifier);
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(initial);
+    controller.debugSeedMessageForTesting(
+      visibleMessage.copyWith(conversationId: initial.effectiveConversationId),
+      threadId: _timelineThreadId(initial),
+    );
+    controller.markConversationVisible(
+      initial,
+      displayThreadId: _timelineThreadId(initial),
+    );
+    final unreadEmissions = <int>[];
+    final subscription = container.listen<ConversationListState>(
+      conversationListProvider,
+      (_, next) => unreadEmissions.add(next.conversations.single.unreadCount),
+    );
+    addTearDown(subscription.close);
+
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadUpdate);
+    final published = container
+        .read(conversationListProvider)
+        .conversations
+        .single;
+    await controller.syncVisibleConversationAfterSummaryUpdate(
+      published,
+      displayThreadId: _timelineThreadId(initial),
+    );
+    await pumpEventQueue();
+
+    final updated = container
+        .read(conversationListProvider)
+        .conversations
+        .single;
+    expect(updated.unreadCount, 0);
+    expect(updated.unreadMentionCount, 0);
+    expect(updated.firstUnreadMentionMessageId, isNull);
+    expect(unreadEmissions, isNot(contains(1)));
+    expect(notificationFacade.lastBadgeCount, 0);
+    expect(gateway.markReadCalls, 0);
+    expect(gateway.markConversationReadCalls, 1);
+    expect(
+      gateway.lastMarkConversationReadConversationId,
+      initial.effectiveConversationId,
+    );
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: 'remote-visible-no-flicker',
+      sequence: '31',
+    );
   });
 
   test('重复打开当前可见未读会话时按 conversationId 补 ACK', () async {
@@ -2461,7 +2558,11 @@ void main() {
       gateway.lastMarkConversationReadConversationId,
       unreadConversation.effectiveConversationId,
     );
-    expect(gateway.lastMarkConversationReadWatermark, isNull);
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: 'remote-visible-open',
+      sequence: '32',
+    );
   });
 
   test('延迟的已读 ack 不会把 ack 后进入的 agent 回复清为已读', () async {
@@ -2509,17 +2610,17 @@ void main() {
         .read(conversationListProvider.notifier)
         .upsertConversation(unreadConversation);
 
-    await container
-        .read(chatThreadsProvider.notifier)
-        .openConversation(unreadConversation);
+    final controller = container.read(chatThreadsProvider.notifier);
+
+    await controller.openConversation(unreadConversation);
     await Future<void>.delayed(Duration.zero);
-    container
-        .read(chatThreadsProvider.notifier)
-        .markConversationVisible(unreadConversation);
-    container
-        .read(chatThreadsProvider.notifier)
-        .acknowledgeVisibleConversationRead(unreadConversation);
+    controller.markConversationVisible(unreadConversation);
+    controller.acknowledgeVisibleConversationRead(unreadConversation);
     await Future<void>.delayed(Duration.zero);
+    controller.markConversationHidden(
+      unreadConversation,
+      displayThreadId: _timelineThreadId(unreadConversation),
+    );
 
     final advancedConversation = unreadConversation.copyWith(
       lastMessagePreview: laterAgentReply.content,
@@ -2530,14 +2631,12 @@ void main() {
     container
         .read(conversationListProvider.notifier)
         .upsertConversation(advancedConversation);
-    container
-        .read(chatThreadsProvider.notifier)
-        .debugSeedMessageForTesting(
-          laterAgentReply.copyWith(
-            conversationId: unreadConversation.effectiveConversationId,
-          ),
-          threadId: _timelineThreadId(unreadConversation),
-        );
+    controller.debugSeedMessageForTesting(
+      laterAgentReply.copyWith(
+        conversationId: unreadConversation.effectiveConversationId,
+      ),
+      threadId: _timelineThreadId(unreadConversation),
+    );
     gateway.fetchLocalDmHistoryCompleter?.complete();
     await pumpEventQueue();
 
@@ -2550,7 +2649,11 @@ void main() {
       gateway.lastMarkConversationReadConversationId,
       unreadConversation.effectiveConversationId,
     );
-    expect(gateway.lastMarkConversationReadWatermark, isNull);
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: 'remote-10',
+      sequence: '10',
+    );
     if (latestConversations.isNotEmpty) {
       expect(
         latestConversations.single.lastMessagePreview,
@@ -2605,7 +2708,11 @@ void main() {
       gateway.lastMarkConversationReadConversationId,
       unreadConversation.effectiveConversationId,
     );
-    expect(gateway.lastMarkConversationReadWatermark, isNull);
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: message.remoteId,
+      sequence: message.serverSequence?.toString(),
+    );
     expect(gateway.listConversationsCalls, greaterThanOrEqualTo(1));
   });
 
@@ -2674,7 +2781,11 @@ void main() {
       gateway.lastMarkConversationReadConversationId,
       unreadConversation.effectiveConversationId,
     );
-    expect(gateway.lastMarkConversationReadWatermark, isNull);
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: 'remote-11',
+      sequence: '11',
+    );
   });
 
   test('peer-scope 会话历史使用精确 storage thread，已读使用 conversationId', () async {
@@ -2738,7 +2849,11 @@ void main() {
       gateway.lastMarkConversationReadConversationId,
       unreadPeerScopedConversation.effectiveConversationId,
     );
-    expect(gateway.lastMarkConversationReadWatermark, isNull);
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: 'peer-scoped-local-12',
+      sequence: '12',
+    );
   });
 
   test('打开未读会话时远端 mark-read 不支持也不会抛出或误清未读', () async {
@@ -2852,7 +2967,11 @@ void main() {
       gateway.lastMarkConversationReadConversationId,
       visibleConversation.effectiveConversationId,
     );
-    expect(gateway.lastMarkConversationReadWatermark, isNull);
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: 'msg-visible-unread',
+      sequence: '11',
+    );
   });
 
   test('发送后不触发 full refresh 或 force history 补拉', () async {
@@ -5335,7 +5454,11 @@ void main() {
       gateway.lastMarkConversationReadConversationId,
       readConversation.effectiveConversationId,
     );
-    expect(gateway.lastMarkConversationReadWatermark, isNull);
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: 'agent-msg',
+      sequence: '1',
+    );
 
     gateway.conversations = <ConversationSummary>[
       ConversationSummary(
@@ -6027,4 +6150,16 @@ String _patchThreadId(AppThreadRef thread) {
     AppGroupThreadRef(:final groupDid) => groupDid,
     AppMessageThreadRef(:final threadId) => threadId,
   };
+}
+
+void _expectLastConversationReadWatermark(
+  FakeAwikiGateway gateway, {
+  String? messageId,
+  String? sequence,
+}) {
+  final watermark = gateway.lastMarkConversationReadWatermark;
+  expect(watermark, isNotNull);
+  expect(watermark!.lastReadMessageId, messageId);
+  expect(watermark.lastReadThreadSeq, sequence);
+  expect(watermark.readAt, isNotNull);
 }
