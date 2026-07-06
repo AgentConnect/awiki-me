@@ -399,6 +399,8 @@ class _FakeConversations implements ConversationService {
 
 class _FakeMessages implements MessagingService {
   final List<AppThreadRef> sentThreads = <AppThreadRef>[];
+  final List<AppConversationReadRef> sentAttachmentConversations =
+      <AppConversationReadRef>[];
 
   @override
   Future<AttachmentDownloadResult> downloadAttachment({
@@ -432,6 +434,29 @@ class _FakeMessages implements MessagingService {
   }) async {
     sentThreads.add(thread);
     return _message(caption ?? attachment.filename);
+  }
+
+  @override
+  Future<ChatMessage> sendConversationAttachment({
+    required AppConversationReadRef conversation,
+    required AttachmentDraft attachment,
+    String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) async {
+    sentAttachmentConversations.add(conversation);
+    return ChatMessage(
+      localId: clientMessageId ?? 'sent-conversation-attachment',
+      remoteId: clientMessageId ?? 'sent-conversation-attachment',
+      conversationId: conversation.conversationId,
+      threadId: conversation.conversationId,
+      senderDid: 'did:me',
+      content: caption ?? attachment.filename,
+      createdAt: DateTime.now(),
+      isMine: true,
+      sendState: MessageSendState.sent,
+    );
   }
 
   @override

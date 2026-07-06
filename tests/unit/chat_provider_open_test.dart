@@ -3795,10 +3795,24 @@ void main() {
     expect(attachmentMessages, hasLength(1));
     expect(attachmentMessages.single.sendState, MessageSendState.sent);
     expect(attachmentMessages.single.previewText, '报告');
+    final messaging =
+        sendContainer.read(messagingServiceProvider) as FakeMessagingService;
+    expect(messaging.sendConversationAttachmentCalls, 1);
+    expect(
+      messaging.lastAttachmentConversation?.conversationId,
+      conversation.effectiveConversationId,
+    );
+    expect(
+      messaging.lastSentAttachmentClientMessageId,
+      startsWith('msg-awiki-me-'),
+    );
+    expect(
+      messaging.lastSentAttachmentIdempotencyKey,
+      startsWith('op-msg-awiki-me-'),
+    );
     expect(gateway.lastSentPeerDid, 'did:peer');
     expect(gateway.lastSentAttachment?.filename, 'report.pdf');
     expect(gateway.lastSentAttachmentCaption, '报告');
-    expect(gateway.lastSentAttachmentIdempotencyKey, startsWith('pending-'));
     expect(gateway.listConversationsCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);
   });
@@ -3847,16 +3861,16 @@ void main() {
     final sentAttachment = thread.messages.singleWhere(
       (message) => message.attachment?.filename == 'report.md',
     );
+    expect(sentAttachment.localId, startsWith('msg-awiki-me-'));
     expect(sentAttachment.remoteId, 'sent-agent-attachment');
-    expect(sentAttachment.localId, 'sent-agent-attachment');
     expect(thread.pendingAgentReplyCount, 1);
     expect(
       thread.agentPendingTurns.single.localMessageId,
-      startsWith('pending-'),
+      startsWith('msg-awiki-me-'),
     );
     expect(
       thread.agentPendingTurns.single.remoteMessageId,
-      'sent-agent-attachment',
+      sentAttachment.remoteId,
     );
     expect(thread.pendingAgentTurnForMessage(sentAttachment), isNotNull);
 
@@ -3927,8 +3941,8 @@ void main() {
     );
     expect(thread.messages, hasLength(1));
     final sentAttachment = thread.messages.single;
-    expect(sentAttachment.localId, 'sent-patched');
-    expect(sentAttachment.remoteId, 'sent-patched');
+    expect(sentAttachment.localId, startsWith('msg-awiki-me-'));
+    expect(sentAttachment.remoteId, sentAttachment.localId);
     expect(
       sentAttachment.originalType,
       'application/anp-attachment-manifest+json',
@@ -3985,8 +3999,8 @@ void main() {
       chatThreadProvider(_timelineThreadId(conversation)),
     );
     final sentAttachment = thread.messages.single;
-    expect(sentAttachment.localId, 'sent-patched');
-    expect(sentAttachment.remoteId, 'sent-patched');
+    expect(sentAttachment.localId, startsWith('msg-awiki-me-'));
+    expect(sentAttachment.remoteId, sentAttachment.localId);
     expect(
       sentAttachment.originalType,
       'application/anp-attachment-manifest+json',
@@ -3995,7 +4009,10 @@ void main() {
     expect(sentAttachment.attachment?.caption, '看看附件');
     expect(thread.pendingAgentReplyCount, 1);
     expect(thread.pendingAgentTurnForMessage(sentAttachment), isNotNull);
-    expect(thread.agentPendingTurns.single.remoteMessageId, 'sent-patched');
+    expect(
+      thread.agentPendingTurns.single.remoteMessageId,
+      sentAttachment.localId,
+    );
   });
 
   test('群聊附件 caption 中 @智能体会保留结构化 mention 并显示处理中', () async {
@@ -4081,6 +4098,13 @@ void main() {
     expect(
       thread.pendingAgentTurnForMessage(sentAttachment)?.agentHandle,
       'codex',
+    );
+    final messaging =
+        sendContainer.read(messagingServiceProvider) as FakeMessagingService;
+    expect(messaging.sendConversationAttachmentCalls, 1);
+    expect(
+      messaging.lastAttachmentConversation?.conversationId,
+      groupConversation.effectiveConversationId,
     );
     expect(gateway.lastSentGroupId, 'did:test:group');
     expect(gateway.lastSentAttachmentCaption, '@codex 看看这个文件');
@@ -4278,7 +4302,6 @@ void main() {
       ],
     );
     addTearDown(sendContainer.dispose);
-
     await sendContainer
         .read(chatThreadsProvider.notifier)
         .sendAttachment(
@@ -4414,7 +4437,7 @@ void main() {
     expect(flakyGateway.fetchDmHistoryCalls, 0);
   });
 
-  test('发送群聊附件使用群目标并更新会话预览', () async {
+  test('发送群聊附件使用 conversation id 且不手动更新会话预览', () async {
     const groupId = 'did:test:group:send-attachment';
     final groupConversation = ConversationSummary(
       threadId: 'group:$groupId',
@@ -4445,6 +4468,9 @@ void main() {
       ],
     );
     addTearDown(sendContainer.dispose);
+    gateway.conversations = <ConversationSummary>[groupConversation];
+    await sendContainer.read(conversationListProvider.notifier).refresh();
+    final listConversationsCallsBeforeSend = gateway.listConversationsCalls;
 
     await sendContainer
         .read(chatThreadsProvider.notifier)
@@ -4459,11 +4485,19 @@ void main() {
         );
     await Future<void>.delayed(Duration.zero);
 
+    final messaging =
+        sendContainer.read(messagingServiceProvider) as FakeMessagingService;
+    expect(messaging.sendConversationAttachmentCalls, 1);
+    expect(
+      messaging.lastAttachmentConversation?.conversationId,
+      groupConversation.effectiveConversationId,
+    );
     expect(gateway.lastSentGroupId, groupId);
     final conversations = sendContainer
         .read(conversationListProvider)
         .conversations;
-    expect(conversations.single.lastMessagePreview, 'diagram.png');
+    expect(conversations.single.lastMessagePreview, '');
+    expect(gateway.listConversationsCalls, listConversationsCallsBeforeSend);
   });
 
   test('没有本地路径的失败附件不会触发无效重试', () async {
@@ -5383,9 +5417,11 @@ class _PatchMessagingService
   int watchConversationCalls = 0;
   int cancelledWatches = 0;
   String? lastConversationTimelineId;
+  int sendConversationAttachmentCalls = 0;
   int sendConversationTextCalls = 0;
   int sendConversationMentionTextCalls = 0;
   AppConversationReadRef? lastSendConversation;
+  AppConversationReadRef? lastSendAttachmentConversation;
   String? lastSendContent;
   List<ChatMentionDraft> lastSendMentions = const <ChatMentionDraft>[];
   String? lastClientMessageId;
@@ -5566,6 +5602,44 @@ class _PatchMessagingService
   }
 
   @override
+  Future<ChatMessage> sendConversationAttachment({
+    required AppConversationReadRef conversation,
+    required AttachmentDraft attachment,
+    String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) async {
+    sendConversationAttachmentCalls += 1;
+    lastSendConversation = conversation;
+    lastSendAttachmentConversation = conversation;
+    lastSendContent = caption ?? '';
+    lastSendMentions = mentions;
+    lastClientMessageId = clientMessageId;
+    lastIdempotencyKey = idempotencyKey;
+    final mentionPayload = mentions.isEmpty || caption == null
+        ? null
+        : ChatMentionPayload.toP9Json(text: caption, draftMentions: mentions);
+    return _sentConversationMessage(
+      conversation: conversation,
+      content: caption ?? '',
+      clientMessageId: clientMessageId,
+      payloadJson: mentionPayload == null ? null : jsonEncode(mentionPayload),
+      mentions: <ChatMessageMention>[
+        for (final mention in mentions) ChatMessageMention.fromDraft(mention),
+      ],
+      attachment: ChatAttachment(
+        attachmentId: clientMessageId ?? 'attachment-patched',
+        filename: attachment.filename,
+        mimeType: attachment.mimeType,
+        sizeBytes: attachment.sizeBytes,
+        caption: caption,
+      ),
+      originalType: 'application/anp-attachment-manifest+json',
+    );
+  }
+
+  @override
   Future<ChatMessage> sendMentionText({
     required AppThreadRef thread,
     required String text,
@@ -5733,6 +5807,8 @@ ChatMessage _sentConversationMessage({
   String? clientMessageId,
   String? payloadJson,
   List<ChatMessageMention> mentions = const <ChatMessageMention>[],
+  ChatAttachment? attachment,
+  String? originalType,
 }) {
   final messageId = clientMessageId?.trim().isNotEmpty == true
       ? clientMessageId!.trim()
@@ -5744,12 +5820,14 @@ ChatMessage _sentConversationMessage({
     threadId: conversation.conversationId,
     senderDid: 'did:me',
     content: content,
-    originalType: payloadJson == null ? 'text' : 'application/json',
+    originalType:
+        originalType ?? (payloadJson == null ? 'text' : 'application/json'),
     createdAt: DateTime.now(),
     isMine: true,
     sendState: MessageSendState.sent,
     payloadJson: payloadJson,
     mentions: mentions,
+    attachment: attachment,
   );
 }
 

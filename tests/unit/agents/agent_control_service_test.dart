@@ -1047,6 +1047,18 @@ class _MessagesStub implements MessagingService {
   }
 
   @override
+  Future<ChatMessage> sendConversationAttachment({
+    required AppConversationReadRef conversation,
+    required AttachmentDraft attachment,
+    String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<List<ChatMessage>> loadHistory(
     AppThreadRef thread, {
     int limit = 100,

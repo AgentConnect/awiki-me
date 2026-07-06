@@ -20,6 +20,15 @@ abstract interface class MessagingService {
     String? idempotencyKey,
   });
 
+  Future<ChatMessage> sendConversationAttachment({
+    required AppConversationReadRef conversation,
+    required AttachmentDraft attachment,
+    String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
+    String? clientMessageId,
+    String? idempotencyKey,
+  });
+
   Future<ChatMessage> sendPayload({
     required AppThreadRef thread,
     required Map<String, Object?> payload,
@@ -144,6 +153,25 @@ class ImCoreMessagingService
       attachment: attachment,
       caption: caption,
       mentions: mentions,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  @override
+  Future<ChatMessage> sendConversationAttachment({
+    required AppConversationReadRef conversation,
+    required AttachmentDraft attachment,
+    String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
+    return _messages.sendConversationAttachment(
+      conversation: conversation,
+      attachment: attachment,
+      caption: caption,
+      mentions: mentions,
+      clientMessageId: clientMessageId,
       idempotencyKey: idempotencyKey,
     );
   }

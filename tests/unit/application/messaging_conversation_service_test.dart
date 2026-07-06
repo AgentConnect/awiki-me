@@ -1759,6 +1759,21 @@ class _FakeMessages implements MessageCorePort, LocalHistoryMessageCorePort {
   }
 
   @override
+  Future<ChatMessage> sendConversationAttachment({
+    required AppConversationReadRef conversation,
+    required AttachmentDraft attachment,
+    String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) async {
+    lastSentConversation = conversation;
+    lastClientMessageId = clientMessageId;
+    lastIdempotencyKey = idempotencyKey;
+    return _message(clientMessageId ?? 'conversation-attachment');
+  }
+
+  @override
   Future<ChatMessage> sendPayload({
     required AppThreadRef thread,
     required Map<String, Object?> payload,

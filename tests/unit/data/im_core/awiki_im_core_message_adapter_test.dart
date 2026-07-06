@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_config.dart';
@@ -146,6 +148,42 @@ void main() {
       expect(client.messages.lastIdempotencyKey, 'op-client-payload');
       expect(sent.localId, 'client-payload');
       expect(sent.payloadJson, contains('payload hello'));
+    },
+  );
+
+  test(
+    'sendConversationAttachment forwards conversation id and durable ids',
+    () async {
+      final client = _FakeClient(ownerDid: 'did:alice');
+      final runtime = _FakeRuntime(client);
+      final adapter = AwikiImCoreMessageAdapter(runtime: runtime);
+
+      final sent = await adapter.sendConversationAttachment(
+        conversation: AppConversationReadRef.fromConversationId(
+          'dm:peer-scope:v1:bob',
+        ),
+        attachment: const AttachmentDraft(
+          filename: 'report.pdf',
+          mimeType: 'application/pdf',
+          localPath: '/tmp/report.pdf',
+          sizeBytes: 3,
+        ),
+        caption: 'see attachment',
+        clientMessageId: 'client-attachment',
+        idempotencyKey: 'op-client-attachment',
+      );
+
+      expect(client.attachments.sendConversationCalls, 1);
+      expect(client.attachments.sendCalls, 0);
+      expect(client.attachments.lastConversationId, 'dm:peer-scope:v1:bob');
+      expect(client.attachments.lastCaption, 'see attachment');
+      expect(client.attachments.lastFilename, 'report.pdf');
+      expect(client.attachments.lastMimeType, 'application/pdf');
+      expect(client.attachments.lastClientMessageId, 'client-attachment');
+      expect(client.attachments.lastIdempotencyKey, 'op-client-attachment');
+      expect(sent.localId, 'client-attachment');
+      expect(sent.conversationId, 'dm:peer-scope:v1:bob');
+      expect(sent.attachment?.filename, 'report.pdf');
     },
   );
 
@@ -313,13 +351,17 @@ class _FakeRuntime extends AwikiImCoreRuntime {
 class _FakeClient implements core.AwikiImClient {
   _FakeClient({required String ownerDid})
     : identity = _FakeIdentityApi(ownerDid),
-      messages = _FakeMessageApi(() => ownerDid);
+      messages = _FakeMessageApi(() => ownerDid),
+      attachments = _FakeAttachmentApi(() => ownerDid);
 
   @override
   final _FakeIdentityApi identity;
 
   @override
   final _FakeMessageApi messages;
+
+  @override
+  final _FakeAttachmentApi attachments;
 
   @override
   Future<void> dispose() async {}
@@ -485,6 +527,84 @@ class _FakeMessageApi implements core.MessageApi {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class _FakeAttachmentApi implements core.AttachmentApi {
+  _FakeAttachmentApi(this._ownerDid);
+
+  final String Function() _ownerDid;
+  int sendCalls = 0;
+  int sendConversationCalls = 0;
+  String? lastConversationId;
+  String? lastCaption;
+  String? lastFilename;
+  String? lastMimeType;
+  String? lastClientMessageId;
+  String? lastIdempotencyKey;
+
+  @override
+  Future<core.AttachmentSendResult> send(core.AttachmentSendRequest request) {
+    sendCalls += 1;
+    throw StateError('Legacy attachment send should not be used in this test.');
+  }
+
+  @override
+  Future<core.AttachmentSendResult> sendConversation(
+    core.SendConversationAttachmentRequest request,
+  ) async {
+    sendConversationCalls += 1;
+    lastConversationId = request.conversation.conversationId;
+    lastCaption = request.caption;
+    lastFilename = request.filename;
+    lastMimeType = request.mimeType;
+    lastClientMessageId = request.clientMessageId;
+    lastIdempotencyKey = request.idempotencyKey;
+    final attachmentId = request.clientMessageId ?? 'attachment-1';
+    final filename = request.filename ?? 'attachment.bin';
+    final mimeType = request.mimeType ?? 'application/octet-stream';
+    final manifestJson = jsonEncode(<String, Object?>{
+      'caption': request.caption,
+      'primary_attachment_id': attachmentId,
+      'attachments': <Object?>[
+        <String, Object?>{
+          'attachment_id': attachmentId,
+          'filename': filename,
+          'mime_type': mimeType,
+          'size_bytes': 3,
+          'object_uri': 'memory://attachment',
+        },
+      ],
+    });
+    return core.AttachmentSendResult(
+      message: core.SendMessageResult(
+        deliveryState: 'sent',
+        message: _messageForOwner(
+          _ownerDid(),
+          id: request.clientMessageId ?? 'sent-conversation-attachment',
+          conversationId: request.conversation.conversationId,
+          text: manifestJson,
+          kind: 'application/anp-attachment-manifest+json',
+          payloadJson: manifestJson,
+          contentType: 'application/anp-attachment-manifest+json',
+        ),
+      ),
+      targetKind: 'conversation',
+      targetDid: request.conversation.conversationId,
+      attachment: core.UploadedAttachment(
+        attachmentId: attachmentId,
+        filename: filename,
+        mimeType: mimeType,
+        sizeBytes: 3,
+        size: '3',
+        digestB64u: 'digest',
+        objectUri: 'memory://attachment',
+      ),
+      manifestJson: manifestJson,
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 core.Message _messageForOwner(
   String ownerDid, {
   String id = 'msg-1',
@@ -492,6 +612,7 @@ core.Message _messageForOwner(
   String text = 'hello from did:bob',
   String kind = 'text',
   String? payloadJson,
+  String? contentType,
 }) {
   return core.Message(
     id: id,
@@ -509,6 +630,7 @@ core.Message _messageForOwner(
     metadata: core.MessageMetadata(
       serverSequence: 1,
       conversationIdentity: _conversationIdentity(conversationId),
+      contentType: contentType,
     ),
   );
 }

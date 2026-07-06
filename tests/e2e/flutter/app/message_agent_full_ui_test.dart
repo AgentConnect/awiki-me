@@ -1809,6 +1809,18 @@ class _UiMessagingService implements MessagingService {
   }
 
   @override
+  Future<ChatMessage> sendConversationAttachment({
+    required AppConversationReadRef conversation,
+    required AttachmentDraft attachment,
+    String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<ChatMessage> sendMentionText({
     required AppThreadRef thread,
     required String text,

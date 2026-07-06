@@ -85,6 +85,46 @@ class AwikiImCoreMessageAdapter
   }
 
   @override
+  Future<ChatMessage> sendConversationAttachment({
+    required AppConversationReadRef conversation,
+    required AttachmentDraft attachment,
+    String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) async {
+    return _runtime.withCurrentClient((client) async {
+      final ownerDid = await _currentOwnerDid(client);
+      final mentionPayloadJson = mentions.isEmpty || caption == null
+          ? null
+          : jsonEncode(
+              ChatMentionPayload.toP9Json(
+                text: caption,
+                draftMentions: mentions,
+              ),
+            );
+      final result = await client.attachments.sendConversation(
+        core.SendConversationAttachmentRequest(
+          conversation: core.ConversationReadRef(
+            conversationId: conversation.conversationId,
+          ),
+          input: _attachmentInputToCore(attachment),
+          caption: caption,
+          mentionPayloadJson: mentionPayloadJson,
+          filename: attachment.filename,
+          mimeType: attachment.mimeType,
+          clientMessageId: clientMessageId,
+          idempotencyKey: idempotencyKey,
+        ),
+      );
+      return _mappers.chatMessageFromCore(
+        result.message.message,
+        ownerDid: ownerDid,
+      );
+    });
+  }
+
+  @override
   Future<ChatMessage> sendPayload({
     required AppThreadRef thread,
     required Map<String, Object?> payload,

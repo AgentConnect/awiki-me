@@ -1637,6 +1637,10 @@ class FakeMessagingService
   int? lastConversationTimelineLimit;
   String? lastConversationTimelineId;
   int conversationTimelineCalls = 0;
+  int sendConversationAttachmentCalls = 0;
+  AppConversationReadRef? lastAttachmentConversation;
+  String? lastSentAttachmentClientMessageId;
+  String? lastSentAttachmentIdempotencyKey;
   Completer<void>? repairConversationTimelineCompleter;
   final Map<String, List<ChatMessage>> conversationTimelineById =
       <String, List<ChatMessage>>{};
@@ -1858,6 +1862,54 @@ class FakeMessagingService
   }
 
   @override
+  Future<ChatMessage> sendConversationAttachment({
+    required AppConversationReadRef conversation,
+    required AttachmentDraft attachment,
+    String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) async {
+    sendConversationAttachmentCalls += 1;
+    lastAttachmentConversation = conversation;
+    lastSentAttachmentClientMessageId = clientMessageId;
+    lastSentAttachmentIdempotencyKey = idempotencyKey;
+    gateway.lastSentAttachmentIdempotencyKey = idempotencyKey;
+    final stableSentId = clientMessageId?.trim();
+    if (stableSentId != null &&
+        stableSentId.isNotEmpty &&
+        gateway.nextSentMessageId == null) {
+      gateway.nextSentMessageId = stableSentId;
+    }
+    final mentionPayload = mentions.isEmpty || caption == null
+        ? null
+        : ChatMentionPayload.toP9Json(text: caption, draftMentions: mentions);
+    final payloadJson = mentionPayload == null
+        ? null
+        : jsonEncode(mentionPayload);
+    final messageMentions = <ChatMessageMention>[
+      for (final mention in mentions) ChatMessageMention.fromDraft(mention),
+    ];
+    final sent = await gateway.sendAttachmentMessage(
+      threadId: conversation.conversationId,
+      peerDid: _directPeerDidForConversationId(conversation.conversationId),
+      groupId: _groupDidForConversationId(conversation.conversationId),
+      attachment: attachment,
+      caption: caption,
+      payloadJson: payloadJson,
+      mentions: messageMentions,
+    );
+    return _recordConversationSendResult(
+      conversation: conversation,
+      message: sent,
+      clientMessageId: clientMessageId,
+      payloadJson: payloadJson,
+      mentions: messageMentions,
+      attachment: sent.attachment,
+    );
+  }
+
+  @override
   Future<ChatMessage> sendPayload({
     required AppThreadRef thread,
     required Map<String, Object?> payload,
@@ -2002,6 +2054,7 @@ class FakeMessagingService
     String? clientMessageId,
     String? payloadJson,
     List<ChatMessageMention>? mentions,
+    ChatAttachment? attachment,
   }) {
     final messageId = clientMessageId?.trim().isNotEmpty == true
         ? clientMessageId!.trim()
@@ -2024,7 +2077,7 @@ class FakeMessagingService
       isEncrypted: message.isEncrypted,
       payloadJson: payloadJson ?? message.payloadJson,
       mentions: mentions ?? message.mentions,
-      attachment: message.attachment,
+      attachment: attachment ?? message.attachment,
     );
     final current =
         conversationTimelineById[conversation.conversationId] ??

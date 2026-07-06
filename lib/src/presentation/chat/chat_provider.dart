@@ -25,7 +25,6 @@ import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
 import '../agents/agents_provider.dart';
 import '../app_shell/providers/session_provider.dart';
-import '../app_shell/providers/selected_conversation_provider.dart';
 import '../conversation_list/conversation_provider.dart';
 
 const String _attachmentManifestContentType =
@@ -1134,62 +1133,6 @@ class ChatThreadsController
       );
     }
     return filtered;
-  }
-
-  bool _sentMessageBelongsToConversation(
-    ChatMessage message, {
-    required ConversationSummary conversation,
-    required ChatMessage pending,
-    required String displayThreadId,
-    required String source,
-  }) {
-    final belongs =
-        _messageHasMatchingConversationId(message, conversation) ||
-        _isSameSentConfirmation(pending, message, conversation);
-    if (!belongs) {
-      _chatProviderTrace(
-        'messages.sent_rejected',
-        fields: <String, Object?>{
-          ...AwikiPerformanceLogger.threadField(displayThreadId),
-          'source': source,
-          'message_thread_hash': AwikiPerformanceLogger.safeHash(
-            message.threadId,
-          ),
-          'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
-            conversation.threadId,
-          ),
-          'message_id_hash': AwikiPerformanceLogger.safeHash(
-            _stableMessageId(message),
-          ),
-          'pending_id_hash': AwikiPerformanceLogger.safeHash(
-            _stableMessageId(pending),
-          ),
-        },
-      );
-      AwikiPerformanceLogger.log(
-        'chat.messages.sent_rejected',
-        fields: <String, Object?>{
-          ...AwikiPerformanceLogger.threadField(displayThreadId),
-          'source': source,
-          'message_thread': AwikiPerformanceLogger.safeHash(message.threadId),
-          'conversation_thread': AwikiPerformanceLogger.safeHash(
-            conversation.threadId,
-          ),
-        },
-      );
-    }
-    return belongs;
-  }
-
-  bool _messageHasMatchingConversationId(
-    ChatMessage message,
-    ConversationSummary conversation,
-  ) {
-    final messageConversationId = message.conversationId?.trim();
-    if (messageConversationId == null || messageConversationId.isEmpty) {
-      return false;
-    }
-    return messageConversationId == _conversationTimelineKeyFor(conversation);
   }
 
   List<String> _conversationCacheAliases(
@@ -2697,9 +2640,18 @@ class ChatThreadsController
             text: captionText,
             draftMentions: validMentionDrafts,
           );
-    final pendingId = 'pending-${DateTime.now().microsecondsSinceEpoch}';
+    final conversationRef = _conversationReadRefFor(conversation);
+    if (conversationRef == null) {
+      _chatProviderTrace(
+        'send_attachment.skip_missing_conversation_ref',
+        fields: AwikiPerformanceLogger.threadField(targetThreadId),
+      );
+      return;
+    }
+    final clientMessageId = _newClientMessageId();
+    final idempotencyKey = 'op-$clientMessageId';
     final pendingAttachment = ChatAttachment(
-      attachmentId: pendingId,
+      attachmentId: clientMessageId,
       filename: attachment.filename.trim(),
       mimeType: attachment.mimeType,
       sizeBytes: attachment.sizeBytes,
@@ -2708,7 +2660,7 @@ class ChatThreadsController
       hasLocalSource: true,
     );
     final pending = ChatMessage(
-      localId: pendingId,
+      localId: clientMessageId,
       threadId: targetThreadId,
       senderDid: session.did,
       senderName: session.handle ?? session.displayName,
@@ -2729,101 +2681,49 @@ class ChatThreadsController
     final current = List<ChatMessage>.from(thread(targetThreadId).messages)
       ..add(pending);
     _setMessages(targetThreadId, current);
-    final pendingConversation = _withConversationPreview(conversation, pending);
-    _upsertPendingConversationIfStable(
-      conversation: conversation,
-      pendingConversation: pendingConversation,
-      displayThreadId: targetThreadId,
-    );
     try {
       final sent = await ref
           .read(messagingServiceProvider)
-          .sendAttachment(
-            thread: _sendThreadRefFor(conversation),
+          .sendConversationAttachment(
+            conversation: conversationRef,
             attachment: attachment,
             caption: normalizedCaption,
             mentions: validMentionDrafts,
-            idempotencyKey: pending.localId,
+            clientMessageId: clientMessageId,
+            idempotencyKey: idempotencyKey,
           )
           .timeout(_attachmentSendTimeout);
-      if (!_sentMessageBelongsToConversation(
-        sent,
-        conversation: conversation,
-        pending: pending,
-        displayThreadId: targetThreadId,
-        source: 'send_attachment',
-      )) {
-        throw StateError(
-          'Sent attachment belongs to a different conversation.',
-        );
-      }
-      final resolvedThreadId = _sentDisplayThreadId(
-        sent,
-        fallbackThreadId: targetThreadId,
-      );
       final sentInThread = await _withCachedSentAttachment(
-        sent: _withThreadId(sent, resolvedThreadId),
+        sent: _withThreadId(sent, targetThreadId),
         originalAttachment: attachment,
       );
-      final resolvedConversation = _conversationForResolvedSentMessage(
-        conversation,
-        sentInThread,
-      );
-      ref
-          .read(conversationListProvider.notifier)
-          .upsertConversation(
-            _withConversationPreview(resolvedConversation, sentInThread),
-          );
-      _syncSelectedConversationForResolvedSend(
-        previous: conversation,
-        resolved: resolvedConversation,
-        displayThreadId: targetThreadId,
-      );
-      if (resolvedThreadId != targetThreadId) {
-        _moveThreadStateForResolvedSend(
-          fromThreadId: targetThreadId,
-          toThreadId: resolvedThreadId,
-          pendingLocalId: pending.localId,
-          sentMessage: sentInThread,
-        );
-      }
       final deliveredMessage = _replaceMessage(
-        resolvedThreadId,
+        targetThreadId,
         pending.localId,
         sentInThread,
       );
       _startAgentProcessingForDeliveredMessage(
-        conversation: resolvedConversation,
-        displayThreadId: resolvedThreadId,
+        conversation: conversation,
+        displayThreadId: targetThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
         mentions: validMentionDrafts,
-        submittedLocalMessageId: pending.localId,
+        submittedLocalMessageId: clientMessageId,
         deliveredMessage: deliveredMessage,
       );
-      final sentConversation = _withConversationPreview(
-        _conversationForResolvedSentMessage(
-          resolvedConversation,
-          deliveredMessage,
-        ),
-        deliveredMessage,
+    } catch (error) {
+      _chatProviderTrace(
+        'send_attachment.conversation_failed',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'conversation_ref': _conversationReadRefDebug(conversationRef),
+          'client_message_id_hash': AwikiPerformanceLogger.safeHash(
+            clientMessageId,
+          ),
+          'error': error.toString(),
+        },
       );
-      ref
-          .read(conversationListProvider.notifier)
-          .upsertConversation(sentConversation);
-    } catch (_) {
       final failed = pending.copyWith(sendState: MessageSendState.failed);
-      final failedInThread = _replaceMessage(
-        targetThreadId,
-        pending.localId,
-        failed,
-      );
-      final failedConversation = _withConversationPreview(
-        conversation,
-        failedInThread,
-      );
-      ref
-          .read(conversationListProvider.notifier)
-          .upsertConversation(failedConversation);
+      _replaceMessage(targetThreadId, pending.localId, failed);
     }
   }
 
@@ -2936,6 +2836,29 @@ class ChatThreadsController
     String? displayThreadId,
   }) async {
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
+    final conversationRef = _conversationReadRefFor(conversation);
+    if (conversationRef == null) {
+      _chatProviderTrace(
+        'send_attachment.retry_skip_missing_conversation_ref',
+        fields: AwikiPerformanceLogger.threadField(targetThreadId),
+      );
+      final failed = message.copyWith(sendState: MessageSendState.failed);
+      _replaceMessage(targetThreadId, message.localId, failed);
+      return;
+    }
+    final clientMessageId = _stableMessageId(message);
+    if (clientMessageId.trim().isEmpty) {
+      _chatProviderTrace(
+        'send_attachment.retry_missing_message_id',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'conversation_ref': _conversationReadRefDebug(conversationRef),
+        },
+      );
+      final failed = message.copyWith(sendState: MessageSendState.failed);
+      _replaceMessage(targetThreadId, message.localId, failed);
+      return;
+    }
     final attachment = message.attachment;
     final localPath = attachment?.localPath?.trim();
     if (attachment == null || localPath == null || localPath.isEmpty) {
@@ -2953,8 +2876,8 @@ class ChatThreadsController
     try {
       final retried = await ref
           .read(messagingServiceProvider)
-          .sendAttachment(
-            thread: _sendThreadRefFor(conversation),
+          .sendConversationAttachment(
+            conversation: conversationRef,
             attachment: AttachmentDraft(
               filename: attachment.filename,
               mimeType: attachment.mimeType,
@@ -2963,26 +2886,12 @@ class ChatThreadsController
             ),
             caption: attachment.caption,
             mentions: _messageMentionsToDrafts(retrying.mentions),
-            idempotencyKey: message.localId,
+            clientMessageId: clientMessageId,
+            idempotencyKey: 'retry-$clientMessageId',
           )
           .timeout(_attachmentSendTimeout);
-      if (!_sentMessageBelongsToConversation(
-        retried,
-        conversation: conversation,
-        pending: retrying,
-        displayThreadId: targetThreadId,
-        source: 'retry_attachment',
-      )) {
-        throw StateError(
-          'Retried attachment belongs to a different conversation.',
-        );
-      }
-      final resolvedThreadId = _sentDisplayThreadId(
-        retried,
-        fallbackThreadId: targetThreadId,
-      );
       final retriedInThread = await _withCachedSentAttachment(
-        sent: _withThreadId(retried, resolvedThreadId),
+        sent: _withThreadId(retried, targetThreadId),
         originalAttachment: AttachmentDraft(
           filename: attachment.filename,
           mimeType: attachment.mimeType,
@@ -2990,42 +2899,31 @@ class ChatThreadsController
           sizeBytes: attachment.sizeBytes,
         ),
       );
-      final resolvedConversation = _conversationForResolvedSentMessage(
-        conversation,
-        retriedInThread,
-      );
-      ref
-          .read(conversationListProvider.notifier)
-          .upsertConversation(
-            _withConversationPreview(resolvedConversation, retriedInThread),
-          );
-      _syncSelectedConversationForResolvedSend(
-        previous: conversation,
-        resolved: resolvedConversation,
-        displayThreadId: targetThreadId,
-      );
-      if (resolvedThreadId != targetThreadId) {
-        _moveThreadStateForResolvedSend(
-          fromThreadId: targetThreadId,
-          toThreadId: resolvedThreadId,
-          pendingLocalId: message.localId,
-          sentMessage: retriedInThread,
-        );
-      }
       final deliveredMessage = _replaceMessage(
-        resolvedThreadId,
+        targetThreadId,
         message.localId,
         retriedInThread,
       );
       _startAgentProcessingForDeliveredMessage(
-        conversation: resolvedConversation,
-        displayThreadId: resolvedThreadId,
+        conversation: conversation,
+        displayThreadId: targetThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
         mentions: _messageMentionsToDrafts(retrying.mentions),
-        submittedLocalMessageId: retrying.localId,
+        submittedLocalMessageId: clientMessageId,
         deliveredMessage: deliveredMessage,
       );
-    } catch (_) {
+    } catch (error) {
+      _chatProviderTrace(
+        'send_attachment.retry_conversation_failed',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'conversation_ref': _conversationReadRefDebug(conversationRef),
+          'client_message_id_hash': AwikiPerformanceLogger.safeHash(
+            clientMessageId,
+          ),
+          'error': error.toString(),
+        },
+      );
       final failed = retrying.copyWith(sendState: MessageSendState.failed);
       _replaceMessage(targetThreadId, message.localId, failed);
     }
@@ -4086,216 +3984,6 @@ class ChatThreadsController
     ]);
     _setMessages(threadId, current);
     return resolved;
-  }
-
-  String _sentDisplayThreadId(
-    ChatMessage sent, {
-    required String fallbackThreadId,
-  }) {
-    final sentThreadId = sent.threadId.trim();
-    if (sentThreadId.isEmpty) {
-      return fallbackThreadId;
-    }
-    if (isPeerScopedDirectThreadId(sentThreadId)) {
-      return sentThreadId;
-    }
-    if (sent.groupId?.trim().isNotEmpty == true &&
-        sentThreadId.startsWith('group:')) {
-      return sentThreadId;
-    }
-    if (fallbackThreadId.trim().isEmpty) {
-      return sentThreadId;
-    }
-    return fallbackThreadId;
-  }
-
-  ConversationSummary _conversationForResolvedSentMessage(
-    ConversationSummary conversation,
-    ChatMessage message,
-  ) {
-    final threadId = message.threadId.trim();
-    if (threadId.isEmpty || threadId == conversation.threadId) {
-      return conversation;
-    }
-    if (conversation.isGroup) {
-      final groupId = message.groupId?.trim() ?? conversation.groupId?.trim();
-      if (groupId != null && groupId.isNotEmpty) {
-        return conversation.copyWith(threadId: threadId, groupId: groupId);
-      }
-      return conversation;
-    }
-    if (isPeerScopedDirectThreadId(threadId)) {
-      return conversation.copyWith(threadId: threadId);
-    }
-    return conversation;
-  }
-
-  void _upsertPendingConversationIfStable({
-    required ConversationSummary conversation,
-    required ConversationSummary pendingConversation,
-    required String displayThreadId,
-  }) {
-    if (!_canUpsertPendingConversationImmediately(
-      conversation,
-      displayThreadId: displayThreadId,
-    )) {
-      _chatProviderTrace(
-        'send.pending_recent_deferred',
-        fields: <String, Object?>{
-          ...AwikiPerformanceLogger.threadField(displayThreadId),
-          'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
-            conversation.threadId,
-          ),
-        },
-      );
-      return;
-    }
-    final notifier = ref.read(conversationListProvider.notifier);
-    notifier.restoreConversationBestEffort(pendingConversation);
-    notifier.upsertConversation(pendingConversation);
-  }
-
-  bool _canUpsertPendingConversationImmediately(
-    ConversationSummary conversation, {
-    required String displayThreadId,
-  }) {
-    final displayThread = displayThreadId.trim();
-    if (displayThread.isEmpty) {
-      return false;
-    }
-    if (displayThread != conversation.threadId.trim()) {
-      return false;
-    }
-    if (conversation.isGroup || isPeerScopedDirectConversation(conversation)) {
-      return true;
-    }
-    return !isPresentationOnlyDirectConversationAlias(conversation);
-  }
-
-  void _syncSelectedConversationForResolvedSend({
-    required ConversationSummary previous,
-    required ConversationSummary resolved,
-    required String displayThreadId,
-  }) {
-    final displayThread = displayThreadId.trim();
-    if (sameConversationThread(previous, resolved) &&
-        (displayThread.isEmpty || displayThread == resolved.threadId)) {
-      return;
-    }
-    final selected = ref.read(selectedConversationProvider);
-    if (selected == null) {
-      return;
-    }
-    final shouldReplace =
-        sameConversationThread(selected, previous) ||
-        (displayThread.isNotEmpty && selected.threadId == displayThread) ||
-        (!selected.isGroup &&
-            !resolved.isGroup &&
-            sameDirectPresentationTarget(selected, previous) &&
-            sameDirectPresentationTarget(previous, resolved));
-    if (!shouldReplace) {
-      return;
-    }
-    ref
-        .read(selectedConversationProvider.notifier)
-        .selectConversation(resolved);
-  }
-
-  void _moveThreadStateForResolvedSend({
-    required String fromThreadId,
-    required String toThreadId,
-    required String pendingLocalId,
-    required ChatMessage sentMessage,
-  }) {
-    if (fromThreadId == toThreadId) {
-      return;
-    }
-    final from = state[fromThreadId];
-    if (from == null) {
-      return;
-    }
-    final to = state[toThreadId] ?? ChatThreadState(threadId: toThreadId);
-    final movedMessages = <ChatMessage>[
-      ...to.messages,
-      for (final message in from.messages)
-        if (message.localId != pendingLocalId)
-          _withThreadId(message, toThreadId),
-      sentMessage,
-    ];
-    final merged = _mergeMessageList(movedMessages, trustMessageMatch: true);
-    _touchThreadCache(toThreadId, merged);
-    _recordMessageRoutes(toThreadId, merged);
-    final next = <String, ChatThreadState>{
-      ...state,
-      toThreadId: to.copyWith(
-        messages: _sortMessages(merged),
-        isLoading: from.isLoading || to.isLoading,
-        agentPendingTurns: _mergeAgentPendingTurns(
-          to.agentPendingTurns,
-          from.agentPendingTurns,
-        ),
-        isHydratingLocalHistory:
-            from.isHydratingLocalHistory || to.isHydratingLocalHistory,
-        messageAgentSyncs: _mergeMessageAgentSyncs(
-          to.messageAgentSyncs,
-          from.messageAgentSyncs,
-        ),
-        appActionRecords: <String, AppActionRecord>{
-          ...from.appActionRecords,
-          ...to.appActionRecords,
-        },
-      ),
-    }..remove(fromThreadId);
-    _removeThreadCacheMetadata(fromThreadId);
-    state = _enforceGlobalCachePolicy(next);
-  }
-
-  List<ChatMessage> _mergeMessageList(
-    List<ChatMessage> messages, {
-    bool trustMessageMatch = false,
-  }) {
-    final merged = <ChatMessage>[];
-    final indexes = _MessageMergeIndexes(merged);
-    for (final message in messages.where(
-      (message) => message.hasRenderableContent,
-    )) {
-      final index = indexes.matchingIndex(merged, message, _isMatchingPending);
-      if (index >= 0) {
-        merged[index] = _mergeMessageSemantics(
-          message,
-          merged[index],
-          trustMessageMatch: trustMessageMatch,
-        );
-        indexes.replace(index, merged[index]);
-      } else {
-        indexes.add(merged.length, message);
-        merged.add(message);
-      }
-    }
-    return merged;
-  }
-
-  List<AgentPendingTurn> _mergeAgentPendingTurns(
-    List<AgentPendingTurn> first,
-    List<AgentPendingTurn> second,
-  ) {
-    final byKey = <String, AgentPendingTurn>{};
-    for (final turn in <AgentPendingTurn>[...first, ...second]) {
-      byKey['${turn.agentDid}:${turn.localMessageId}:${turn.remoteMessageId ?? ''}:${turn.mentionId ?? ''}'] =
-          turn;
-    }
-    return byKey.values.toList(growable: false);
-  }
-
-  List<MessageAgentSyncRecord> _mergeMessageAgentSyncs(
-    List<MessageAgentSyncRecord> first,
-    List<MessageAgentSyncRecord> second,
-  ) {
-    final byKey = <String, MessageAgentSyncRecord>{};
-    for (final record in <MessageAgentSyncRecord>[...second, ...first]) {
-      byKey[record.identityKey] = record;
-    }
-    return byKey.values.toList(growable: false);
   }
 
   ChatMessage _mergeMessageSemantics(
@@ -5866,55 +5554,6 @@ class ChatThreadsController
     return delta <= _pendingMatchWindow;
   }
 
-  bool _isSameSentConfirmation(
-    ChatMessage pending,
-    ChatMessage sent,
-    ConversationSummary conversation,
-  ) {
-    if (!pending.isMine || pending.sendState == MessageSendState.sent) {
-      return false;
-    }
-    final pendingId = _stableMessageId(pending);
-    final sentId = _stableMessageId(sent);
-    final sameKnownId = pendingId.isNotEmpty && pendingId == sentId;
-    final sameOutgoingShape =
-        pending.previewText == sent.previewText &&
-        sent.isMine &&
-        sent.sendState == MessageSendState.sent &&
-        pending.createdAt.difference(sent.createdAt).abs() <=
-            _pendingMatchWindow;
-    if (!sameKnownId && !sameOutgoingShape) {
-      return false;
-    }
-    if (conversation.isGroup) {
-      return sameNonEmpty(sent.groupId, conversation.groupId) ||
-          sameNonEmpty(pending.groupId, conversation.groupId);
-    }
-    final sentReceiver = normalizedDirectPeer(sent.receiverDid);
-    final pendingReceiver = normalizedDirectPeer(pending.receiverDid);
-    final targetDid = normalizedDirectPeer(conversation.targetDid);
-    final targetPeer = normalizedDirectPeer(conversation.targetPeer);
-    if (sentReceiver != null &&
-        pendingReceiver != null &&
-        sentReceiver == pendingReceiver) {
-      return true;
-    }
-    return _directPeerMatchesTarget(sentReceiver, targetDid, targetPeer) ||
-        _directPeerMatchesTarget(pendingReceiver, targetDid, targetPeer);
-  }
-
-  bool _directPeerMatchesTarget(
-    String? peer,
-    String? targetDid,
-    String? targetPeer,
-  ) {
-    if (peer == null) {
-      return false;
-    }
-    return (targetDid != null && peer == targetDid) ||
-        (targetPeer != null && peer == targetPeer);
-  }
-
   bool _shouldLoadHistory(
     ChatThreadState current,
     ConversationSummary conversation,
@@ -6258,8 +5897,8 @@ String _newClientMessageId() {
 AppConversationReadRef? _conversationReadRefFor(
   ConversationSummary conversation,
 ) {
-  final conversationId = conversation.conversationId?.trim();
-  if (conversationId == null || conversationId.isEmpty) {
+  final conversationId = conversation.effectiveConversationId.trim();
+  if (conversationId.isEmpty) {
     return null;
   }
   return AppConversationReadRef.fromConversationId(conversationId);
@@ -6395,22 +6034,6 @@ bool _threadPatchMessagesHaveConversationMismatch(
     return true;
   }
   return patch.messages.any(mismatches);
-}
-
-AppThreadRef _sendThreadRefFor(ConversationSummary conversation) {
-  final groupId = conversation.groupId?.trim();
-  if (conversation.isGroup && groupId != null && groupId.isNotEmpty) {
-    return AppThreadRef.group(groupId);
-  }
-  final peerDid = conversation.targetDid?.trim();
-  final peer = conversation.targetPeer?.trim();
-  if (!conversation.isGroup && peer != null && peer.isNotEmpty) {
-    return AppThreadRef.direct(peer);
-  }
-  if (!conversation.isGroup && peerDid != null && peerDid.isNotEmpty) {
-    return AppThreadRef.direct(peerDid);
-  }
-  throw StateError('Cannot send without a direct peer or group id.');
 }
 
 ChatMessage _withThreadId(ChatMessage message, String threadId) {
