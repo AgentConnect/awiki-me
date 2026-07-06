@@ -4618,6 +4618,29 @@ void main() {
   });
 
   test('附件重试成功后不触发 full refresh 或 force history 补拉', () async {
+    final patchMessaging = _PatchMessagingService(
+      localHistory: <ChatMessage>[],
+    );
+    final retryContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        messagingServiceProvider.overrideWithValue(patchMessaging),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(retryContainer.dispose);
     final failedAttachment = ChatMessage(
       localId: 'failed-attachment-retry',
       threadId: _timelineThreadId(conversation),
@@ -4652,26 +4675,33 @@ void main() {
         ),
       ],
     };
-    container
+    retryContainer
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
           failedAttachment,
           threadId: _timelineThreadId(conversation),
         );
 
-    await container
+    await retryContainer
         .read(chatThreadsProvider.notifier)
         .retryMessage(conversation: conversation, message: failedAttachment);
     await Future<void>.delayed(Duration.zero);
 
-    final messages = container
+    expect(patchMessaging.sendConversationAttachmentCalls, 1);
+    expect(
+      patchMessaging.lastSendAttachmentConversation?.conversationId,
+      conversation.effectiveConversationId,
+    );
+    expect(patchMessaging.lastClientMessageId, 'failed-attachment-retry');
+    expect(patchMessaging.lastIdempotencyKey, 'retry-failed-attachment-retry');
+    expect(gateway.lastSentAttachment, isNull);
+    final messages = retryContainer
         .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     final sentAttachment = messages.singleWhere(
       (message) => message.attachment?.filename == 'retry.pdf',
     );
     expect(sentAttachment.sendState, MessageSendState.sent);
-    expect(gateway.lastSentAttachment?.filename, 'retry.pdf');
     expect(messages.map((item) => item.content), isNot(contains('附件远端补拉消息')));
     expect(gateway.listConversationsCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);

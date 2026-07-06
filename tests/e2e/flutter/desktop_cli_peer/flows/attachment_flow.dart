@@ -17,9 +17,13 @@ Future<void> _verifyAttachmentRegression({
   final appAttachmentBytes = Uint8List.fromList(utf8.encode(appAttachmentText));
   final appAttachmentSha256Hex = _sha256Hex(appAttachmentBytes);
   final appAttachmentDigestB64u = _sha256B64u(appAttachmentBytes);
+  final cliDid = await _currentCliDid(config);
+  final appAttachmentClientMessageId =
+      'msg-awiki-e2e-attachment-${config.runId}-$nonce';
+  expect(cliDid.trim(), isNotEmpty);
 
-  final appAttachmentMessage = await messaging.sendAttachment(
-    thread: thread,
+  final appAttachmentMessage = await messaging.sendConversationAttachment(
+    conversation: AppConversationReadRef.fromConversationId('dm:$cliDid'),
     attachment: AttachmentDraft(
       filename: appAttachmentFilename,
       mimeType: 'text/plain',
@@ -27,7 +31,8 @@ Future<void> _verifyAttachmentRegression({
       sizeBytes: appAttachmentBytes.length,
     ),
     caption: appAttachmentCaption,
-    idempotencyKey: 'app-attachment-${config.runId}-$nonce',
+    clientMessageId: appAttachmentClientMessageId,
+    idempotencyKey: 'op-$appAttachmentClientMessageId',
   );
   final appAttachment = appAttachmentMessage.attachment;
   expect(appAttachment, isNotNull);
