@@ -1,5 +1,6 @@
 import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
+import 'package:awiki_me/src/application/agent/agent_control_status_store.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
@@ -235,6 +236,51 @@ void main() {
     expect(find.text('安装命令'), findsNothing);
   });
 
+  testWidgets('stale daemon upgrade snapshot does not show upgrade action', (
+    tester,
+  ) async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'needs_upgrade',
+            platform: 'linux-amd64',
+            needsUpgrade: true,
+          ),
+          daemonEffectiveStatus: DaemonEffectiveStatus(
+            controlState: 'stale',
+            primaryStatus: 'offline',
+            lastReportedStatus: 'needs_upgrade',
+            upgradeAvailable: true,
+            actionable: false,
+          ),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('离线'), findsWidgets);
+    expect(find.text('升级'), findsNothing);
+  });
+
   testWidgets(
     'compact agents workspace returns to list and stays there after status payload',
     (tester) async {
@@ -247,6 +293,12 @@ void main() {
             displayName: '代理 1',
             activeState: 'active',
             latest: AgentLatestStatus(status: 'ready'),
+            daemonEffectiveStatus: DaemonEffectiveStatus(
+              controlState: 'online',
+              primaryStatus: 'ready',
+              lastReportedStatus: 'ready',
+              actionable: true,
+            ),
           ),
           AgentSummary(
             agentDid: 'did:agent:runtime',
@@ -375,15 +427,22 @@ void main() {
             displayName: '代理 1',
             activeState: 'active',
             latest: readyDaemonStatusWithGenericCliCapability,
+            daemonEffectiveStatus: DaemonEffectiveStatus(
+              controlState: 'online',
+              primaryStatus: 'ready',
+              lastReportedStatus: 'ready',
+              actionable: true,
+            ),
           ),
         ];
       tester.view.physicalSize = const Size(1200, 900);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final freshSeenAt = DateTime.now().toUtc().toIso8601String();
 
-      await tester.pumpWidget(
-        buildLocalizedTestApp(
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
           home: const AgentsWorkspacePage(),
           session: const SessionIdentity(
             did: 'did:human:me',
@@ -392,6 +451,20 @@ void main() {
           ),
           providerOverrides: <Override>[
             agentControlServiceProvider.overrideWithValue(control),
+            agentControlStatusStoreProvider.overrideWithValue(
+              _StaticAgentControlStatusStore(
+                daemonPayload: <String, Object?>{
+                  'schema': AgentControlPayloads.statusSchema,
+                  'status_scope': 'daemon',
+                  'daemon_agent_did': 'did:agent:daemon',
+                  'daemon': <String, Object?>{
+                    'agent_did': 'did:agent:daemon',
+                    'status': 'ready',
+                    'last_seen_at': freshSeenAt,
+                  },
+                },
+              ),
+            ),
             agentsProvider.overrideWith((ref) {
               return _SeededAgentsController(
                 ref,
@@ -509,6 +582,12 @@ void main() {
             displayName: '代理 1',
             activeState: 'active',
             latest: readyDaemonStatusWithGenericCliCapability,
+            daemonEffectiveStatus: DaemonEffectiveStatus(
+              controlState: 'online',
+              primaryStatus: 'ready',
+              lastReportedStatus: 'ready',
+              actionable: true,
+            ),
           ),
           const AgentSummary(
             agentDid: 'did:agent:runtime',
@@ -2181,6 +2260,37 @@ class _FailingListAgentControlService extends FakeAgentControlService {
 class _SeededAgentsController extends AgentsController {
   _SeededAgentsController(super.ref, AgentsState initialState) {
     state = initialState;
+  }
+}
+
+class _StaticAgentControlStatusStore implements AgentControlStatusStore {
+  const _StaticAgentControlStatusStore({this.daemonPayload});
+
+  final Map<String, Object?>? daemonPayload;
+
+  @override
+  Future<Map<String, Object?>?> findLatestDaemonStatusPayload({
+    required String daemonAgentDid,
+  }) async {
+    return daemonPayload;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findDaemonStatusPayload({
+    required String daemonAgentDid,
+    required String requestId,
+  }) async {
+    return daemonPayload;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findStatusPayload({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    required String requestId,
+    required String statusScope,
+  }) async {
+    return null;
   }
 }
 

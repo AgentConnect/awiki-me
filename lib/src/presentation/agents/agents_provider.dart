@@ -40,6 +40,7 @@ const agentStatusQueryPollAttempts = 18;
 const agentStatusPayloadLookupTimeout = Duration(milliseconds: 1200);
 const agentDeletionRefreshAttempts = 4;
 const agentDeletionRefreshDelay = Duration(seconds: 2);
+const agentDaemonEffectiveStatusFreshnessWindow = Duration(minutes: 10);
 
 final class AgentActionKeys {
   const AgentActionKeys._();
@@ -321,7 +322,9 @@ class AgentsState {
       return true;
     }
     final daemon = agent.isDaemon ? agent : daemonForRuntime(agent);
-    return daemon != null && _daemonAcceptsControlCommands(daemon);
+    return daemon != null &&
+        !statusQueryErrors.containsKey(daemon.agentDid) &&
+        _daemonAcceptsControlCommands(daemon);
   }
 
   bool isStatusQueryPending(String daemonDid) {
@@ -752,6 +755,15 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(error: AgentUiMessageCodes.loginRequired);
       return;
     }
+    await ensureLoaded();
+    final daemon = _agentByDid(daemonDid);
+    if (daemon == null ||
+        !daemon.isDaemon ||
+        state.statusQueryErrors.containsKey(daemonDid) ||
+        !_daemonCanCreateRuntime(daemon)) {
+      state = state.copyWith(error: AgentUiMessageCodes.selectDaemon);
+      return;
+    }
     await _runAction(AgentActionKeys.createRuntime(daemonDid), () async {
       final requestId = agentCommandId('app_req');
       final pending = PendingRuntimeCreation(
@@ -817,7 +829,10 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     await ensureLoaded();
     final daemon = _agentByDid(daemonDid);
-    if (daemon == null || !daemon.isDaemon) {
+    if (daemon == null ||
+        !daemon.isDaemon ||
+        state.statusQueryErrors.containsKey(daemonDid) ||
+        !_daemonAcceptsControlCommands(daemon)) {
       state = state.copyWith(error: AgentUiMessageCodes.selectDaemon);
       return;
     }
@@ -870,6 +885,16 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   Future<bool> upgradeDaemon(String daemonDid) async {
     if (state.isDaemonUpgradePending(daemonDid)) {
+      return false;
+    }
+    final daemon = _agentByDid(daemonDid);
+    if (daemon == null ||
+        !daemon.isDaemon ||
+        state.statusQueryErrors.containsKey(daemonDid) ||
+        !_daemonCanRequestUpgrade(daemon)) {
+      state = state.copyWith(
+        error: AgentUiMessageCodes.daemonUnreachableUpgrade,
+      );
       return false;
     }
     final actionKey = AgentActionKeys.upgradeDaemon(daemonDid);
@@ -1032,7 +1057,9 @@ class AgentsController extends StateNotifier<AgentsState> {
     final daemon = selected.isDaemon
         ? selected
         : state.daemonForRuntime(selected);
-    if (daemon == null || !_daemonAcceptsControlCommands(daemon)) {
+    if (daemon == null ||
+        state.statusQueryErrors.containsKey(daemon.agentDid) ||
+        !_daemonAcceptsControlCommands(daemon)) {
       state = state.copyWith(
         error: AgentUiMessageCodes.daemonUnreachableDelete,
       );
@@ -2275,6 +2302,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     final daemon = _agentByDid(daemonDid);
     if (daemon == null ||
         !daemon.isDaemon ||
+        state.statusQueryErrors.containsKey(daemonDid) ||
         !_daemonAcceptsControlCommands(daemon)) {
       return null;
     }
@@ -2630,6 +2658,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       displayName: runtime.displayName,
       activeState: runtime.activeState,
       latest: runtime.latest,
+      daemonEffectiveStatus: runtime.daemonEffectiveStatus,
       recentRuns: recentRuns.take(50).toList(),
     );
   }
@@ -2668,6 +2697,14 @@ class AgentsController extends StateNotifier<AgentsState> {
         fallbackEventAt: incomingEventAt,
       ),
     );
+    final daemonEffectiveStatus = kind == AgentKind.daemon
+        ? _daemonEffectiveStatusFromPayload(
+            current?.daemonEffectiveStatus,
+            latest,
+            payload,
+            fallbackEventAt: incomingEventAt,
+          )
+        : null;
     return AgentSummary(
       agentDid: resolvedAgentDid,
       kind: kind,
@@ -2684,7 +2721,44 @@ class AgentsController extends StateNotifier<AgentsState> {
           AgentDisplayName.fallbackForKind(kind),
       activeState: current?.activeState ?? 'active',
       latest: latest,
+      daemonEffectiveStatus: daemonEffectiveStatus,
       recentRuns: current?.recentRuns ?? const <AgentRunStatus>[],
+    );
+  }
+
+  DaemonEffectiveStatus? _daemonEffectiveStatusFromPayload(
+    DaemonEffectiveStatus? current,
+    AgentLatestStatus latest,
+    Map<String, Object?> payload, {
+    DateTime? fallbackEventAt,
+  }) {
+    final effectivePayload = _readMap(payload['daemon_effective_status']);
+    if (effectivePayload.isNotEmpty) {
+      return DaemonEffectiveStatus.fromJson(effectivePayload);
+    }
+    final eventAt = _dateTime(payload['last_seen_at']) ?? fallbackEventAt;
+    if (eventAt == null) {
+      return current;
+    }
+    final observedAt = eventAt.toUtc();
+    final age = DateTime.now().toUtc().difference(observedAt);
+    final effectiveAge = age.isNegative ? Duration.zero : age;
+    final controlState =
+        effectiveAge.compareTo(agentDaemonEffectiveStatusFreshnessWindow) <= 0
+        ? 'online'
+        : 'stale';
+    final status = latest.status.trim().toLowerCase();
+    final upgradeAvailable = latest.needsUpgrade || status == 'needs_upgrade';
+    return DaemonEffectiveStatus(
+      controlState: controlState,
+      primaryStatus: controlState == 'online'
+          ? _daemonPrimaryStatusForLatest(latest)
+          : 'offline',
+      lastReportedStatus: latest.status,
+      lastSeenAt: observedAt,
+      statusAgeSeconds: effectiveAge.inSeconds,
+      upgradeAvailable: upgradeAvailable,
+      actionable: controlState == 'online',
     );
   }
 
@@ -2795,7 +2869,12 @@ bool _daemonAcceptsControlCommands(AgentSummary daemon) {
   if (!daemon.isDaemon || daemon.activeState != 'active') {
     return false;
   }
-  return switch (daemon.latest.status) {
+  final effective = daemon.daemonEffectiveStatus;
+  if (effective != null && !effective.isActionable) {
+    return false;
+  }
+  final status = daemon.latest.status.trim().toLowerCase();
+  return switch (status) {
     'ready' ||
     'needs_config' ||
     'needs_upgrade' ||
@@ -2803,6 +2882,11 @@ bool _daemonAcceptsControlCommands(AgentSummary daemon) {
     'archiving' => true,
     _ => false,
   };
+}
+
+bool _daemonCanCreateRuntime(AgentSummary daemon) {
+  return _daemonAcceptsControlCommands(daemon) &&
+      !_daemonCanRequestUpgrade(daemon);
 }
 
 bool _canUnbindUnfinishedDaemonInstall(AgentSummary agent) {
@@ -2944,6 +3028,39 @@ bool _daemonAgentShowsUpgradeFailed(AgentSummary daemon) {
       status == 'error' ||
       status == 'gateway_error' ||
       daemon.latest.lastErrorSummary != null;
+}
+
+bool _daemonCanRequestUpgrade(AgentSummary daemon) {
+  if (!daemon.isDaemon) {
+    return false;
+  }
+  final effective = daemon.daemonEffectiveStatus;
+  if (effective != null) {
+    return effective.isUpgradeActionable;
+  }
+  return daemon.latest.needsUpgrade ||
+      daemon.latest.status.trim().toLowerCase() == 'needs_upgrade';
+}
+
+String _daemonPrimaryStatusForLatest(AgentLatestStatus latest) {
+  final status = latest.status.trim().toLowerCase();
+  if (latest.needsConfig || status == 'needs_config') {
+    return 'needs_config';
+  }
+  if (latest.needsUpgrade || status == 'needs_upgrade') {
+    return 'needs_upgrade';
+  }
+  return switch (status) {
+    'ready' => 'ready',
+    'installing' ||
+    'registering' ||
+    'creating' ||
+    'upgrading' ||
+    'archiving' => 'processing',
+    'failed' || 'error' || 'gateway_error' => 'failed',
+    'offline' || 'not_running' || 'unavailable' => 'offline',
+    _ => 'unknown',
+  };
 }
 
 bool _commandIdMatches(String? payloadCommandId, String expectedCommandId) {

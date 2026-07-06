@@ -1554,6 +1554,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'The daemon is currently unreachable and cannot be deleted yet.';
 
   @override
+  String get agentErrorDaemonUnreachableUpgrade =>
+      'The daemon is currently unreachable and cannot be upgraded yet. Refresh status or reinstall it first.';
+
+  @override
   String get agentErrorMessageAgentMissing =>
       'This daemon has not created a Message Agent yet.';
 

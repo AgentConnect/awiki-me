@@ -325,6 +325,7 @@ class _AgentDaemonGroup extends StatelessWidget {
             cancellingDaemonUpgrades: state.cancellingDaemonUpgrades,
             daemonUpgradeErrors: state.daemonUpgradeErrors,
             daemonUpgradeProgress: state.daemonUpgradeProgress,
+            statusQueryErrors: state.statusQueryErrors,
             isDeleting: state.isDeletingAgent(daemon.agentDid),
             selected: selectedAgentDid == daemon.agentDid,
             onTap: () => onSelect(daemon.agentDid),
@@ -345,6 +346,7 @@ class _AgentDaemonGroup extends StatelessWidget {
                 cancellingDaemonUpgrades: state.cancellingDaemonUpgrades,
                 daemonUpgradeErrors: state.daemonUpgradeErrors,
                 daemonUpgradeProgress: state.daemonUpgradeProgress,
+                statusQueryErrors: state.statusQueryErrors,
                 isDeleting: state.isDeletingAgent(runtime.agentDid),
                 selected: selectedAgentDid == runtime.agentDid,
                 onTap: () => onSelect(runtime.agentDid),
@@ -402,6 +404,7 @@ class _OrphanRuntimeGroup extends StatelessWidget {
             cancellingDaemonUpgrades:
                 const <String, PendingDaemonUpgradeCancel>{},
             daemonUpgradeProgress: const <String, DaemonUpgradeProgress>{},
+            statusQueryErrors: const <String, String>{},
             isDeleting: false,
             selected: selectedAgentDid == runtime.agentDid,
             onTap: () => onSelect(runtime.agentDid),
@@ -575,6 +578,7 @@ class _AgentListTile extends StatelessWidget {
     required this.onTap,
     this.daemonUpgradeErrors = const <String, String>{},
     this.daemonUpgradeProgress = const <String, DaemonUpgradeProgress>{},
+    this.statusQueryErrors = const <String, String>{},
     this.depth = 0,
     this.runtimeCount,
     this.onRefresh,
@@ -588,6 +592,7 @@ class _AgentListTile extends StatelessWidget {
   final Map<String, PendingDaemonUpgradeCancel> cancellingDaemonUpgrades;
   final Map<String, String> daemonUpgradeErrors;
   final Map<String, DaemonUpgradeProgress> daemonUpgradeProgress;
+  final Map<String, String> statusQueryErrors;
   final bool selected;
   final VoidCallback onTap;
   final int depth;
@@ -610,6 +615,8 @@ class _AgentListTile extends StatelessWidget {
       hasUpgradeError: pendingDaemonUpgrades.containsKey(agent.agentDid)
           ? false
           : daemonUpgradeError != null,
+      hasStatusQueryError:
+          agent.isDaemon && statusQueryErrors.containsKey(agent.agentDid),
     );
     return Padding(
       padding: EdgeInsets.only(

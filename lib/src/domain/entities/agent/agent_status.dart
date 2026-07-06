@@ -152,6 +152,53 @@ class AgentLatestStatus {
       AgentRuntimeCardStatus.fromDiagnosticsSummary(diagnosticsSummary);
 }
 
+class DaemonEffectiveStatus {
+  const DaemonEffectiveStatus({
+    required this.controlState,
+    required this.primaryStatus,
+    this.lastReportedStatus,
+    this.lastSeenAt,
+    this.statusAgeSeconds,
+    this.upgradeAvailable = false,
+    this.actionable = false,
+  });
+
+  final String controlState;
+  final String primaryStatus;
+  final String? lastReportedStatus;
+  final DateTime? lastSeenAt;
+  final int? statusAgeSeconds;
+  final bool upgradeAvailable;
+  final bool actionable;
+
+  factory DaemonEffectiveStatus.fromJson(Map<String, Object?> json) {
+    return DaemonEffectiveStatus(
+      controlState: json['control_state']?.toString() ?? 'unknown',
+      primaryStatus: json['primary_status']?.toString() ?? 'unknown',
+      lastReportedStatus: _optionalString(json['last_reported_status']),
+      lastSeenAt: parseAgentStatusTimestamp(json['last_seen_at']),
+      statusAgeSeconds: _optionalNonNegativeInt(json['status_age_seconds']),
+      upgradeAvailable: json['upgrade_available'] == true,
+      actionable: json['actionable'] == true,
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'control_state': controlState,
+      'primary_status': primaryStatus,
+      'last_reported_status': lastReportedStatus,
+      'last_seen_at': lastSeenAt?.toUtc().toIso8601String(),
+      'status_age_seconds': statusAgeSeconds,
+      'upgrade_available': upgradeAvailable,
+      'actionable': actionable,
+    };
+  }
+
+  bool get isActionable => actionable;
+  bool get isUpgradeActionable => actionable && upgradeAvailable;
+}
+
 class AgentRuntimeCardStatus {
   const AgentRuntimeCardStatus({
     required this.supported,

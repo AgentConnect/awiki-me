@@ -10,6 +10,7 @@ class AgentSummary {
     required this.displayName,
     required this.activeState,
     required this.latest,
+    this.daemonEffectiveStatus,
     this.recentRuns = const <AgentRunStatus>[],
   });
 
@@ -21,6 +22,7 @@ class AgentSummary {
   final String displayName;
   final String activeState;
   final AgentLatestStatus latest;
+  final DaemonEffectiveStatus? daemonEffectiveStatus;
   final List<AgentRunStatus> recentRuns;
 
   bool get isDaemon => kind == AgentKind.daemon;
@@ -40,6 +42,9 @@ class AgentSummary {
         kind,
         AgentLatestStatus.fromJson(_readMap(json['status'])),
       ),
+      daemonEffectiveStatus: kind == AgentKind.daemon
+          ? _daemonEffectiveStatusFromJson(json['daemon_effective_status'])
+          : null,
       recentRuns: _readList(json['recent_runs'])
           .map((item) => AgentRunStatus.fromJson(_readMap(item)))
           .where((run) => run.runId.isNotEmpty)
@@ -57,9 +62,18 @@ class AgentSummary {
       'display_name': displayName,
       'active_state': activeState,
       'status': normalizeAgentLatestStatusForKind(kind, latest).toJson(),
+      'daemon_effective_status': daemonEffectiveStatus?.toJson(),
       'recent_runs': recentRuns.map((run) => run.toJson()).toList(),
     };
   }
+}
+
+DaemonEffectiveStatus? _daemonEffectiveStatusFromJson(Object? value) {
+  final map = _readMap(value);
+  if (map.isEmpty) {
+    return null;
+  }
+  return DaemonEffectiveStatus.fromJson(map);
 }
 
 AgentLatestStatus normalizeAgentLatestStatusForKind(

@@ -2864,6 +2864,12 @@ abstract class AppLocalizations {
   /// **'Daemon 当前不可达，暂时不能删除。'**
   String get agentErrorDaemonUnreachableDelete;
 
+  /// No description provided for @agentErrorDaemonUnreachableUpgrade.
+  ///
+  /// In zh, this message translates to:
+  /// **'Daemon 当前不可达，暂时不能升级。请先刷新状态或重新安装。'**
+  String get agentErrorDaemonUnreachableUpgrade;
+
   /// No description provided for @agentErrorMessageAgentMissing.
   ///
   /// In zh, this message translates to:

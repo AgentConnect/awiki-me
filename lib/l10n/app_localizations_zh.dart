@@ -1490,6 +1490,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentErrorDaemonUnreachableDelete => 'Daemon 当前不可达，暂时不能删除。';
 
   @override
+  String get agentErrorDaemonUnreachableUpgrade =>
+      'Daemon 当前不可达，暂时不能升级。请先刷新状态或重新安装。';
+
+  @override
   String get agentErrorMessageAgentMissing => '当前 Daemon 尚未创建消息处理 Agent。';
 
   @override

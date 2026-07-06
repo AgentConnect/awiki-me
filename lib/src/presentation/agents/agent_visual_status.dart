@@ -22,6 +22,7 @@ class AgentVisualStatus {
     bool hasPendingTurn = false,
     bool isPendingUpgrade = false,
     bool hasUpgradeError = false,
+    bool hasStatusQueryError = false,
     DateTime? now,
   }) {
     if (agent == null) {
@@ -71,11 +72,80 @@ class AgentVisualStatus {
       }
     }
     return agent.isDaemon
-        ? AgentVisualStatus.fromDaemonLatest(agent.latest)
+        ? AgentVisualStatus.fromDaemonLatest(
+            agent.latest,
+            effectiveStatus: agent.daemonEffectiveStatus,
+            hasStatusQueryError: hasStatusQueryError,
+          )
         : AgentVisualStatus.fromRuntimeLatest(agent.latest);
   }
 
-  factory AgentVisualStatus.fromDaemonLatest(AgentLatestStatus latest) {
+  factory AgentVisualStatus.fromDaemonLatest(
+    AgentLatestStatus latest, {
+    DaemonEffectiveStatus? effectiveStatus,
+    bool hasStatusQueryError = false,
+  }) {
+    if (hasStatusQueryError) {
+      return const AgentVisualStatus(
+        AgentVisualStatusKind.offline,
+        rawStatus: 'unreachable',
+      );
+    }
+    if (effectiveStatus != null) {
+      final controlState = effectiveStatus.controlState.trim().toLowerCase();
+      if (controlState == 'stale' || controlState == 'unreachable') {
+        return AgentVisualStatus(
+          AgentVisualStatusKind.offline,
+          rawStatus: controlState,
+        );
+      }
+      if (controlState == 'unknown') {
+        return AgentVisualStatus(
+          AgentVisualStatusKind.unknown,
+          rawStatus: controlState,
+        );
+      }
+      final primary = effectiveStatus.primaryStatus.trim().toLowerCase();
+      return switch (primary) {
+        'needs_upgrade' => AgentVisualStatus(
+          AgentVisualStatusKind.needsUpgrade,
+          rawStatus: primary,
+        ),
+        'needs_config' => AgentVisualStatus(
+          AgentVisualStatusKind.needsConfig,
+          rawStatus: primary,
+        ),
+        'ready' => AgentVisualStatus(
+          AgentVisualStatusKind.ready,
+          rawStatus: primary,
+        ),
+        'processing' ||
+        'installing' ||
+        'registering' ||
+        'creating' ||
+        'upgrading' ||
+        'archiving' => AgentVisualStatus(
+          AgentVisualStatusKind.processing,
+          rawStatus: primary,
+        ),
+        'failed' || 'error' || 'gateway_error' => AgentVisualStatus(
+          AgentVisualStatusKind.failed,
+          rawStatus: primary,
+        ),
+        'offline' || 'not_running' || 'unavailable' => AgentVisualStatus(
+          AgentVisualStatusKind.offline,
+          rawStatus: primary,
+        ),
+        'disabled' || 'archived' || 'deleted' => AgentVisualStatus(
+          AgentVisualStatusKind.disabled,
+          rawStatus: primary,
+        ),
+        _ => AgentVisualStatus(
+          AgentVisualStatusKind.unknown,
+          rawStatus: primary,
+        ),
+      };
+    }
     final status = latest.status.trim().toLowerCase();
     if (latest.needsUpgrade || status == 'needs_upgrade') {
       return AgentVisualStatus(

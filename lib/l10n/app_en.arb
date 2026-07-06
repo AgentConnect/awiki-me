@@ -701,6 +701,7 @@
   "agentErrorSelectDaemon": "Select a running daemon.",
   "agentErrorDaemonBootstrapMissing": "The running daemon has not reported a secure bootstrap public key yet. Refresh status first.",
   "agentErrorDaemonUnreachableDelete": "The daemon is currently unreachable and cannot be deleted yet.",
+  "agentErrorDaemonUnreachableUpgrade": "The daemon is currently unreachable and cannot be upgraded yet. Refresh status or reinstall it first.",
   "agentErrorMessageAgentMissing": "This daemon has not created a Message Agent yet.",
   "agentStatusSyncStillWaiting": "Status sync is still pending. Refresh again later.",
   "agentErrorScopeMismatch": "This computer is already bound to a daemon for another Handle. Manage it with that Handle, or clean up AWiki daemon data on the host before installing again.",

@@ -126,6 +126,32 @@ void main() {
     );
   });
 
+  test('daemon effective stale state overrides last reported upgrade', () {
+    final status = AgentVisualStatus.fromDaemonLatest(
+      const AgentLatestStatus(status: 'needs_upgrade', needsUpgrade: true),
+      effectiveStatus: const DaemonEffectiveStatus(
+        controlState: 'stale',
+        primaryStatus: 'offline',
+        lastReportedStatus: 'needs_upgrade',
+        upgradeAvailable: true,
+        actionable: false,
+      ),
+    );
+
+    expect(status.kind, AgentVisualStatusKind.offline);
+    expect(status.rawStatus, 'stale');
+  });
+
+  test('daemon status query error overrides last reported upgrade', () {
+    final status = AgentVisualStatus.fromDaemonLatest(
+      const AgentLatestStatus(status: 'needs_upgrade', needsUpgrade: true),
+      hasStatusQueryError: true,
+    );
+
+    expect(status.kind, AgentVisualStatusKind.offline);
+    expect(status.rawStatus, 'unreachable');
+  });
+
   test('generic CLI runtime card operational state maps to visual states', () {
     final now = DateTime.utc(2026, 1, 1, 12);
     final expectations = <String, AgentVisualStatusKind>{
@@ -362,6 +388,44 @@ void main() {
       expect(serialized['min_supported_version'], isNull);
       expect(serialized['platform'], isNull);
       expect(serialized['service'], isNull);
+    },
+  );
+
+  test(
+    'daemon summary parses effective status separately from latest snapshot',
+    () {
+      final agent = AgentSummary.fromJson(<String, Object?>{
+        'agent_did': 'did:agent:daemon',
+        'agent_kind': 'daemon',
+        'display_name': '代理 1',
+        'active_state': 'active',
+        'status': <String, Object?>{
+          'status': 'needs_upgrade',
+          'version': '0.1.66',
+          'latest_version': '0.1.67',
+          'needs_upgrade': true,
+        },
+        'daemon_effective_status': <String, Object?>{
+          'control_state': 'stale',
+          'primary_status': 'offline',
+          'last_reported_status': 'needs_upgrade',
+          'status_age_seconds': 3600,
+          'upgrade_available': true,
+          'actionable': false,
+        },
+      });
+
+      expect(agent.latest.status, 'needs_upgrade');
+      expect(agent.latest.needsUpgrade, isTrue);
+      expect(agent.daemonEffectiveStatus?.controlState, 'stale');
+      expect(agent.daemonEffectiveStatus?.primaryStatus, 'offline');
+      expect(agent.daemonEffectiveStatus?.upgradeAvailable, isTrue);
+      expect(agent.daemonEffectiveStatus?.actionable, isFalse);
+      expect(
+        (agent.toJson()['daemon_effective_status']!
+            as Map<String, Object?>)['control_state'],
+        'stale',
+      );
     },
   );
 

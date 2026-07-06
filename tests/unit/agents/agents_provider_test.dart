@@ -748,6 +748,82 @@ void main() {
     expect(container.read(agentsProvider).invocationPolicies, isEmpty);
   });
 
+  test('upgradeDaemon rejects stale daemon effective status', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'needs_upgrade',
+            needsUpgrade: true,
+          ),
+          daemonEffectiveStatus: DaemonEffectiveStatus(
+            controlState: 'stale',
+            primaryStatus: 'offline',
+            lastReportedStatus: 'needs_upgrade',
+            upgradeAvailable: true,
+            actionable: false,
+          ),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+
+    final started = await container
+        .read(agentsProvider.notifier)
+        .upgradeDaemon('did:agent:daemon');
+
+    final state = container.read(agentsProvider);
+    expect(started, isFalse);
+    expect(control.lastUpgradeDaemonDid, isNull);
+    expect(state.pendingDaemonUpgrades, isEmpty);
+    expect(state.daemonUpgradeErrors, isEmpty);
+    expect(state.error, AgentUiMessageCodes.daemonUnreachableUpgrade);
+  });
+
+  test('createRuntimeAgent rejects stale daemon effective status', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          displayName: '代理 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+          daemonEffectiveStatus: DaemonEffectiveStatus(
+            controlState: 'stale',
+            primaryStatus: 'offline',
+            lastReportedStatus: 'ready',
+            upgradeAvailable: false,
+            actionable: false,
+          ),
+        ),
+      ];
+    final container = _container(control);
+    addTearDown(container.dispose);
+    await container.read(agentsProvider.notifier).load();
+
+    await container
+        .read(agentsProvider.notifier)
+        .createRuntimeAgent(
+          'did:agent:daemon',
+          options: const RuntimeAgentCreateOptions(
+            kind: RuntimeAgentKind.hermes,
+            handle: 'alice-hermes',
+            displayName: 'Alice Hermes',
+          ),
+        );
+
+    final state = container.read(agentsProvider);
+    expect(control.lastRuntimeCreateDaemonDid, isNull);
+    expect(state.pendingRuntimeCreations, isEmpty);
+    expect(state.error, AgentUiMessageCodes.selectDaemon);
+  });
+
   test(
     'upgradeDaemon waits for version evidence before final success',
     () async {
@@ -2959,6 +3035,61 @@ void main() {
   );
 
   test(
+    'local daemon status payload does not promote stale server effective status',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'needs_upgrade',
+              lastSeenAt: DateTime.parse('2026-06-03T09:00:00Z'),
+              needsUpgrade: true,
+            ),
+            daemonEffectiveStatus: DaemonEffectiveStatus(
+              controlState: 'stale',
+              primaryStatus: 'offline',
+              lastReportedStatus: 'needs_upgrade',
+              lastSeenAt: DateTime.parse('2026-06-03T09:00:00Z'),
+              statusAgeSeconds: 7200,
+              upgradeAvailable: true,
+              actionable: false,
+            ),
+          ),
+        ];
+      final statusStore = _StaticAgentControlStatusStore(
+        latestDaemonPayload: <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'sent_at': DateTime.now().toUtc().toIso8601String(),
+          'status_scope': 'daemon',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'status': 'needs_upgrade',
+            'last_seen_at': DateTime.parse(
+              '2026-06-03T09:00:00Z',
+            ).toIso8601String(),
+            'needs_upgrade': true,
+          },
+        },
+      );
+      final container = _container(control, statusStore: statusStore);
+      addTearDown(container.dispose);
+
+      await container.read(agentsProvider.notifier).load();
+
+      final daemon = container.read(agentsProvider).agents.single;
+      expect(daemon.latest.status, 'needs_upgrade');
+      expect(daemon.daemonEffectiveStatus?.controlState, 'stale');
+      expect(daemon.daemonEffectiveStatus?.primaryStatus, 'offline');
+      expect(daemon.daemonEffectiveStatus?.isUpgradeActionable, isFalse);
+    },
+  );
+
+  test(
     'runtime activity payload updates controller-visible runtime state',
     () async {
       final control = FakeAgentControlService()
@@ -3049,6 +3180,37 @@ ProviderContainer _container(
       }),
     ],
   );
+}
+
+class _StaticAgentControlStatusStore implements AgentControlStatusStore {
+  const _StaticAgentControlStatusStore({this.latestDaemonPayload});
+
+  final Map<String, Object?>? latestDaemonPayload;
+
+  @override
+  Future<Map<String, Object?>?> findLatestDaemonStatusPayload({
+    required String daemonAgentDid,
+  }) async {
+    return latestDaemonPayload;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findDaemonStatusPayload({
+    required String daemonAgentDid,
+    required String requestId,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findStatusPayload({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    required String requestId,
+    required String statusScope,
+  }) async {
+    return null;
+  }
 }
 
 class _HangingAgentControlStatusStore implements AgentControlStatusStore {

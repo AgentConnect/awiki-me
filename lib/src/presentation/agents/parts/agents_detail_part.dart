@@ -70,6 +70,8 @@ class _AgentDetailPane extends StatelessWidget {
       hasPendingTurn: isDeleting || pendingAgentDids.contains(agent.agentDid),
       isPendingUpgrade: isUpgrading,
       hasUpgradeError: state.daemonUpgradeErrors.containsKey(agent.agentDid),
+      hasStatusQueryError:
+          agent.isDaemon && state.statusQueryErrors.containsKey(agent.agentDid),
     );
     final statusQueryError = agent.isDaemon
         ? state.statusQueryErrors[agent.agentDid]
@@ -81,6 +83,16 @@ class _AgentDetailPane extends StatelessWidget {
         ? state.daemonUpgradeProgress[agent.agentDid]
         : null;
     final runtimeDisplay = agent.isRuntime ? agentRuntimeDisplay(agent) : null;
+    final daemonCanUpgrade =
+        agent.isDaemon &&
+        !state.statusQueryErrors.containsKey(agent.agentDid) &&
+        (agent.daemonEffectiveStatus?.isUpgradeActionable ??
+            agent.latest.needsUpgrade ||
+                agent.latest.status.trim().toLowerCase() == 'needs_upgrade');
+    final daemonCanCreateRuntime =
+        !agent.isDaemon ||
+        (!state.statusQueryErrors.containsKey(agent.agentDid) &&
+            (agent.daemonEffectiveStatus?.isActionable ?? true));
     return SafeArea(
       bottom: false,
       child: SelectionArea(
@@ -141,7 +153,8 @@ class _AgentDetailPane extends StatelessWidget {
                       label: context.l10n.agentCreateRuntime,
                       onPressed:
                           isCreatingRuntime ||
-                              (agent.isDaemon && agent.latest.needsUpgrade)
+                              !daemonCanCreateRuntime ||
+                              daemonCanUpgrade
                           ? null
                           : () => onCreateRuntime(agent),
                     ),
@@ -156,7 +169,7 @@ class _AgentDetailPane extends StatelessWidget {
                     label: context.l10n.agentRename,
                     onPressed: isRenaming ? null : () => onRename(agent),
                   ),
-                  if (agent.isDaemon && agent.latest.needsUpgrade)
+                  if (daemonCanUpgrade)
                     _ActionButton(
                       icon: CupertinoIcons.arrow_up_circle,
                       label: isUpgrading

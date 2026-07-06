@@ -701,6 +701,7 @@
   "agentErrorSelectDaemon": "请选择运行 Daemon。",
   "agentErrorDaemonBootstrapMissing": "运行 Daemon 尚未上报安全 bootstrap 公钥，请先刷新状态。",
   "agentErrorDaemonUnreachableDelete": "Daemon 当前不可达，暂时不能删除。",
+  "agentErrorDaemonUnreachableUpgrade": "Daemon 当前不可达，暂时不能升级。请先刷新状态或重新安装。",
   "agentErrorMessageAgentMissing": "当前 Daemon 尚未创建消息处理 Agent。",
   "agentStatusSyncStillWaiting": "状态同步仍在等待，请稍后刷新查看。",
   "agentErrorScopeMismatch": "这台电脑已经绑定到另一个 Handle 的 Daemon。请使用对应 Handle 管理，或先清理宿主机上的 AWiki Daemon 数据后重新安装。",
