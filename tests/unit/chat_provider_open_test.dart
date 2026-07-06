@@ -920,6 +920,12 @@ void main() {
     expect(patchMessaging.repairCalls, 0);
     expect(messageSyncService.conversationAfterRequests, hasLength(1));
     expect(messageSyncService.threadAfterRequests, isEmpty);
+    expect(gateway.markReadCalls, 0);
+    expect(gateway.markConversationReadCalls, 1);
+    expect(
+      gateway.lastMarkConversationReadConversationId,
+      updatedConversation.effectiveConversationId,
+    );
   });
 
   test('visible stale guard ignores repair completion after dispose', () async {
@@ -2305,6 +2311,122 @@ void main() {
         .acknowledgeVisibleConversationRead(unreadConversation);
     await pumpEventQueue();
 
+    expect(gateway.markReadCalls, 0);
+    expect(gateway.markConversationReadCalls, 1);
+    expect(
+      gateway.lastMarkConversationReadConversationId,
+      unreadConversation.effectiveConversationId,
+    );
+    expect(gateway.lastMarkConversationReadWatermark, isNull);
+  });
+
+  test('可见会话收到未读 summary 更新时按 conversationId 补 ACK', () async {
+    final visibleMessage = ChatMessage(
+      localId: 'remote-visible-summary',
+      remoteId: 'remote-visible-summary',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'visible summary unread',
+      createdAt: DateTime(2026, 5, 8, 10, 6),
+      isMine: false,
+      serverSequence: 31,
+      sendState: MessageSendState.sent,
+    );
+    final unreadConversation = conversation.copyWith(
+      lastMessagePreview: visibleMessage.content,
+      lastMessageAt: visibleMessage.createdAt,
+      unreadCount: 1,
+      lastMessageSnapshot: visibleMessage,
+    );
+    final controller = container.read(chatThreadsProvider.notifier);
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadConversation);
+    controller.debugSeedMessageForTesting(
+      visibleMessage.copyWith(
+        conversationId: unreadConversation.effectiveConversationId,
+      ),
+      threadId: _timelineThreadId(unreadConversation),
+    );
+    controller.markConversationVisible(
+      unreadConversation,
+      displayThreadId: _timelineThreadId(unreadConversation),
+    );
+
+    await controller.syncVisibleConversationAfterSummaryUpdate(
+      unreadConversation,
+      displayThreadId: _timelineThreadId(unreadConversation),
+    );
+    await pumpEventQueue();
+
+    final updated = container
+        .read(conversationListProvider)
+        .conversations
+        .singleWhere(
+          (item) =>
+              item.effectiveConversationId ==
+              unreadConversation.effectiveConversationId,
+        );
+    expect(updated.unreadCount, 0);
+    expect(gateway.markReadCalls, 0);
+    expect(gateway.markConversationReadCalls, 1);
+    expect(
+      gateway.lastMarkConversationReadConversationId,
+      unreadConversation.effectiveConversationId,
+    );
+    expect(gateway.lastMarkConversationReadWatermark, isNull);
+  });
+
+  test('重复打开当前可见未读会话时按 conversationId 补 ACK', () async {
+    final visibleMessage = ChatMessage(
+      localId: 'remote-visible-open',
+      remoteId: 'remote-visible-open',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'visible open unread',
+      createdAt: DateTime(2026, 5, 8, 10, 7),
+      isMine: false,
+      serverSequence: 32,
+      sendState: MessageSendState.sent,
+    );
+    final unreadConversation = conversation.copyWith(
+      lastMessagePreview: visibleMessage.content,
+      lastMessageAt: visibleMessage.createdAt,
+      unreadCount: 1,
+      lastMessageSnapshot: visibleMessage,
+    );
+    final controller = container.read(chatThreadsProvider.notifier);
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadConversation);
+    controller.debugSeedMessageForTesting(
+      visibleMessage.copyWith(
+        conversationId: unreadConversation.effectiveConversationId,
+      ),
+      threadId: _timelineThreadId(unreadConversation),
+    );
+    controller.markConversationVisible(
+      unreadConversation,
+      displayThreadId: _timelineThreadId(unreadConversation),
+    );
+
+    await controller.openConversation(
+      unreadConversation,
+      displayThreadId: _timelineThreadId(unreadConversation),
+    );
+    await pumpEventQueue();
+
+    final updated = container
+        .read(conversationListProvider)
+        .conversations
+        .singleWhere(
+          (item) =>
+              item.effectiveConversationId ==
+              unreadConversation.effectiveConversationId,
+        );
+    expect(updated.unreadCount, 0);
     expect(gateway.markReadCalls, 0);
     expect(gateway.markConversationReadCalls, 1);
     expect(

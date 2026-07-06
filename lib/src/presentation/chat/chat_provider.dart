@@ -700,6 +700,15 @@ class ChatThreadsController
       conversation,
       displayThreadId: targetThreadId,
     );
+    if (_hasUnreadConversation(conversation) &&
+        _cacheMetadataByThreadId[targetThreadId]?.isVisible == true) {
+      acknowledgeVisibleConversationRead(
+        conversation,
+        displayThreadId: targetThreadId,
+        reason: 'open_visible_unread',
+        forcePersistentAck: true,
+      );
+    }
     unawaited(
       _openConversationLocalFirst(
         conversation,
@@ -1386,6 +1395,14 @@ class ChatThreadsController
       thread(targetThreadId).messages,
     );
     final metadata = _cacheMetadataByThreadId[targetThreadId];
+    if (metadata?.isVisible == true && _hasUnreadConversation(conversation)) {
+      acknowledgeVisibleConversationRead(
+        conversation,
+        displayThreadId: targetThreadId,
+        reason: 'visible_summary_unread',
+        forcePersistentAck: true,
+      );
+    }
     final needsGuard = _needsVisibleThreadStaleGuard(
       thread(targetThreadId),
       conversation,
@@ -5917,6 +5934,10 @@ class ChatThreadsController
     // covers the summary timestamp, repeatedly reloading history only creates
     // a conversation-list -> history-sync feedback loop.
     return conversation.lastMessageAt.isAfter(latestLocalAt);
+  }
+
+  bool _hasUnreadConversation(ConversationSummary conversation) {
+    return conversation.unreadCount > 0 || conversation.unreadMentionCount > 0;
   }
 
   bool _supportsRemoteHistory(ConversationSummary conversation) {

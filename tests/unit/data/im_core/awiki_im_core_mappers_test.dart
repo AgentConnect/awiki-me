@@ -138,6 +138,30 @@ void main() {
     expect(mapped.serverSequence, 42);
   });
 
+  test('accepted outgoing SDK message stops local sending indicator', () {
+    const message = core.Message(
+      id: 'msg-accepted',
+      threadKind: 'direct',
+      threadId: 'did:bob',
+      direction: core.MessageDirection.outgoing,
+      sender: 'did:alice',
+      receiver: 'did:bob',
+      body: core.MessageBodyView(text: 'hello agent', kind: 'text'),
+      sentAt: '2026-07-06T01:00:00Z',
+      metadata: core.MessageMetadata(
+        deliveryState: 'accepted',
+        sendState: 'accepted',
+        serverSequence: 99,
+      ),
+    );
+
+    final mapped = mapper.chatMessageFromCore(message, ownerDid: 'did:alice');
+
+    expect(mapped.isMine, isTrue);
+    expect(mapped.sendState, MessageSendState.sent);
+    expect(mapped.serverSequence, 99);
+  });
+
   test('core conversation identity maps to app conversation id', () {
     const identity = core.ConversationIdentity(
       conversationId: 'dm:peer-scope:v1:bob',

@@ -249,10 +249,18 @@ MVP 要证明一个闭环：
 ### 发送状态
 
 - `sending`：发送中，气泡旁显示小 loading。
-- `sent`：已发送。
+- `sent`：已发送；SDK / 服务端返回 `accepted` 或 `sent` 都视为发送完成，气泡旁 loading 应立即停止。
 - `failed`：发送失败，展示重试按钮。
 - `received`：对方消息已入库。
 - `read`：MVP 可不做强已读，只做本地未读清零。
+
+Agent 对消息的后续处理、任务执行或回复等待，不属于发送状态；应由独立的 Agent processing / 任务状态提示表达，不能让用户本人消息继续保持 `sending`。
+
+### 已读与未读同步
+
+- 新消息架构下，单聊和 Agent 会话的已读上报必须使用 im-core 下发的 canonical `conversationIdentity.conversationId`，不得回退到旧的 `dm:<did>` 展示线程。
+- 当当前会话处于可见状态，且会话摘要刷新为 `unreadCount > 0` 或用户重复打开当前可见未读会话时，客户端需要补发一次 `markConversationRead(conversationId)`，确保本地 read watermark 推进到最新可见消息。
+- 未读清零以 im-core / conversationId read watermark 为持久化真相源；本地 UI 清零只作为成功 ACK 后的展示同步，不能覆盖后续 core 刷新的未读状态。
 
 ### 页面设计稿
 
