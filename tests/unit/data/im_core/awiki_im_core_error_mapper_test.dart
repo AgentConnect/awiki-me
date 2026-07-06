@@ -27,4 +27,24 @@ void main() {
     expect(mapped.message, isNot(contains('raw')));
     expect(mapped.message, contains('<redacted>'));
   });
+
+  test('preserves service error code and data from SDK errors', () {
+    final mapped = mapper.map(
+      const core.AwikiImCoreException(
+        code: 'service_error',
+        message: 'target did is inactive',
+        statusCode: 409,
+        serviceCode: '1007',
+        serviceDataJson: '{"did":"did:example:old","handle":"alice"}',
+      ),
+    );
+
+    expect(mapped.code, 'service_error');
+    expect(mapped.statusCode, 409);
+    expect(mapped.serviceCode, '1007');
+    expect(
+      mapped.serviceDataJson,
+      '{"did":"did:example:old","handle":"alice"}',
+    );
+  });
 }

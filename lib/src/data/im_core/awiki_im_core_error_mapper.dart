@@ -7,6 +7,8 @@ class ImCoreMappedError {
     this.field,
     this.statusCode,
     this.capability,
+    this.serviceCode,
+    this.serviceDataJson,
   });
 
   final String code;
@@ -14,6 +16,8 @@ class ImCoreMappedError {
   final String? field;
   final int? statusCode;
   final String? capability;
+  final String? serviceCode;
+  final String? serviceDataJson;
 
   bool get isUnsupported => code == 'unsupported_capability';
 }
@@ -29,6 +33,8 @@ class AwikiImCoreErrorMapper {
         field: error.field,
         statusCode: error.statusCode,
         capability: error.capability,
+        serviceCode: error.serviceCode,
+        serviceDataJson: error.serviceDataJson,
       );
     }
     if (error is UnsupportedError) {
