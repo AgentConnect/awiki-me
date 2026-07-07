@@ -49,8 +49,8 @@ domain, OTP, App/CLI peer handles, and `awiki-cli` binary path.
 
 The app reads a single backend root from `AWIKI_BASE_URL` and derives the
 default user-service, message-service, mail-service, DID domain, ANP endpoint,
-daemon download root, package channel, update manifest, and release page from
-it. The same bootstrapped environment is reused by Agent inventory, runtime
+daemon download root, update manifest, and release page from it. The same
+bootstrapped environment is reused by Agent inventory, runtime
 creation, daemon install command rendering, and runtime conversation handle
 projection, so the App should not mix `awiki.info` and `awiki.ai` inside one
 package. For packaging, `scripts/package_app.config` is the single domain
@@ -80,7 +80,6 @@ AWIKI_STATE_NAMESPACE
 AWIKI_ANP_SERVICE_URL
 AWIKI_ANP_SERVICE_DID
 AWIKI_DAEMON_DOWNLOAD_BASE_URL
-AWIKI_PACKAGE_CHANNEL
 AWIKI_UPDATE_MANIFEST_URL
 AWIKI_RELEASES_URL
 ```
@@ -95,13 +94,10 @@ scripts/package_app.sh
 
 Package settings live in `scripts/package_app.config`. The script accepts no
 arguments and does not read package settings from environment variables. For
-normal packaging, edit only `AWIKI_DOMAIN`; keep `PACKAGE_CHANNEL="test"` for
-installable non-store packages. The script derives `AWIKI_BASE_URL`,
-`AWIKI_DID_DOMAIN`, `AWIKI_ANP_SERVICE_URL`,
+normal packaging, edit only `AWIKI_DOMAIN`. The script derives
+`AWIKI_BASE_URL`, `AWIKI_DID_DOMAIN`, `AWIKI_ANP_SERVICE_URL`,
 `AWIKI_DAEMON_DOWNLOAD_BASE_URL`, `AWIKI_UPDATE_MANIFEST_URL`, and
-`AWIKI_RELEASES_URL` from that domain unless an advanced override is set. The
-channel only separates output directories, file names, and `latest.json`; it
-does not control store release status or code signing.
+`AWIKI_RELEASES_URL` from that domain unless an advanced override is set.
 
 The script always builds user-facing artifacts for Android arm64, macOS arm64,
 and macOS x64. Android is built in Flutter release mode so debug diagnostics
@@ -111,26 +107,23 @@ distribution certificate and does not require store signing. macOS is packaged
 as profile DMGs. The script also rebuilds the native SDK artifacts before
 packaging.
 
-The current checked-in config builds the installable online test package:
+The current checked-in config publishes packages that point at:
 
 ```text
-PACKAGE_CHANNEL="test"
-AWIKI_DOMAIN="awiki.info"
+AWIKI_DOMAIN="awiki.ai"
 ```
 
-For a future stable distribution track, update the same config file, for
-example:
+For internal mirror packages, update the same config file:
 
 ```text
-PACKAGE_CHANNEL="stable"
 AWIKI_DOMAIN="awiki.info"
 ```
 
 The script writes artifacts and `latest.json` under:
 
 ```text
-dist/<channel>/<version>/
-dist/<channel>/latest.json
+dist/<version>/
+dist/latest.json
 ```
 
 ## Message Sync

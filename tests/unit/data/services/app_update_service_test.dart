@@ -16,7 +16,7 @@ void main() {
   test('default update URLs follow the default AWiki environment', () {
     expect(
       kDefaultUpdateManifestUrl,
-      'https://awiki.info/downloads/awiki-me/test/latest.json',
+      'https://awiki.info/downloads/awiki-me/latest.json',
     );
     expect(kDefaultReleasesUrl, 'https://awiki.info/#download');
   });

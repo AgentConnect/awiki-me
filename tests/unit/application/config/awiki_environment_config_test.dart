@@ -14,10 +14,9 @@ void main() {
     expect(config.anpServiceUrl, 'https://awiki.info/anp-im/rpc');
     expect(config.anpServiceDid, 'did:wba:awiki.info');
     expect(config.daemonDownloadBaseUrl, 'https://awiki.info/daemon');
-    expect(config.packageChannel, 'test');
     expect(
       config.updateManifestUrl,
-      'https://awiki.info/downloads/awiki-me/test/latest.json',
+      'https://awiki.info/downloads/awiki-me/latest.json',
     );
     expect(config.releasesUrl, 'https://awiki.info/#download');
     expect(config.agentImEnabled, isTrue);
@@ -37,7 +36,7 @@ void main() {
     expect(config.daemonDownloadBaseUrl, 'https://anpclaw.com/daemon');
     expect(
       config.updateManifestUrl,
-      'https://anpclaw.com/downloads/awiki-me/test/latest.json',
+      'https://anpclaw.com/downloads/awiki-me/latest.json',
     );
     expect(config.releasesUrl, 'https://anpclaw.com/#download');
   });
@@ -59,7 +58,6 @@ void main() {
       anpServiceUrl: 'https://anp.example.test/rpc/',
       anpServiceDid: 'did:wba:anp.example.test',
       daemonDownloadBaseUrl: 'https://static.example.test/daemon/',
-      packageChannel: 'internal beta',
       updateManifestUrl: 'https://updates.example.test/app/latest.json',
       releasesUrl: 'https://download.example.test/releases/',
       agentImEnabled: true,
@@ -74,7 +72,6 @@ void main() {
     expect(config.anpServiceUrl, 'https://anp.example.test/rpc');
     expect(config.anpServiceDid, 'did:wba:anp.example.test');
     expect(config.daemonDownloadBaseUrl, 'https://static.example.test/daemon');
-    expect(config.packageChannel, 'internal-beta');
     expect(
       config.updateManifestUrl,
       'https://updates.example.test/app/latest.json',

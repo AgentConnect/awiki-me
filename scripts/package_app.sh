@@ -16,6 +16,7 @@ PACKAGE_ANDROID_BUILD_MODE="release"
 PACKAGE_MACOS_BUILD_MODE="profile"
 XCODE_CONFIGURATION="Profile"
 DIST_ROOT="$ROOT_DIR/dist"
+ANDROID_PLUGIN_REGISTRANT="$ROOT_DIR/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java"
 
 PUBSPEC_PATH="$ROOT_DIR/pubspec.yaml"
 PUBSPEC_BACKUP=""
@@ -149,12 +150,10 @@ json_string() {
 require_cmd python3
 
 for required_name in \
-  PACKAGE_CHANNEL \
   PACKAGE_VERSION_BUMP; do
   require_config_var "$required_name"
 done
 
-require_non_empty_config_var PACKAGE_CHANNEL
 require_non_empty_config_var PACKAGE_VERSION_BUMP
 if [[ ! "${AWIKI_DOMAIN+x}" ]]; then
   AWIKI_DOMAIN=""
@@ -164,7 +163,6 @@ if [[ ! "${AWIKI_BASE_URL+x}" ]]; then
 fi
 
 for value_name in \
-  PACKAGE_CHANNEL \
   AWIKI_DOMAIN \
   AWIKI_BASE_URL \
   AWIKI_SERVICE_BASE_URL \
@@ -183,12 +181,6 @@ for value_name in \
     validate_no_newline "$value_name" "${!value_name}"
   fi
 done
-
-case "$PACKAGE_CHANNEL" in
-  *[!A-Za-z0-9._-]*)
-    fail "PACKAGE_CHANNEL may only contain letters, numbers, dot, underscore, and hyphen"
-    ;;
-esac
 
 case "$PACKAGE_VERSION_BUMP" in
   build|patch|minor|major|none)
@@ -233,7 +225,7 @@ if [[ -z "${AWIKI_DAEMON_DOWNLOAD_BASE_URL:-}" ]]; then
   AWIKI_DAEMON_DOWNLOAD_BASE_URL="$(join_url "$AWIKI_BASE_URL" "daemon")"
 fi
 if [[ -z "${AWIKI_UPDATE_MANIFEST_URL:-}" ]]; then
-  AWIKI_UPDATE_MANIFEST_URL="$(join_url "$AWIKI_BASE_URL" "downloads/awiki-me/$PACKAGE_CHANNEL/latest.json")"
+  AWIKI_UPDATE_MANIFEST_URL="$(join_url "$AWIKI_BASE_URL" "downloads/awiki-me/latest.json")"
 fi
 if [[ -z "${AWIKI_RELEASES_URL:-}" ]]; then
   AWIKI_RELEASES_URL="$(join_url "$AWIKI_BASE_URL" "#download")"
@@ -247,8 +239,7 @@ AWIKI_DAEMON_DOWNLOAD_BASE_URL="$(trim_trailing_slash "$AWIKI_DAEMON_DOWNLOAD_BA
 AWIKI_UPDATE_MANIFEST_URL="$(trim_trailing_slash "$AWIKI_UPDATE_MANIFEST_URL")"
 AWIKI_RELEASES_URL="$(trim_trailing_slash "$AWIKI_RELEASES_URL")"
 
-CHANNEL_DIST_ROOT="$DIST_ROOT/$PACKAGE_CHANNEL"
-LATEST_MANIFEST="$CHANNEL_DIST_ROOT/latest.json"
+LATEST_MANIFEST="$DIST_ROOT/latest.json"
 SDK_REPO_DIR="$(resolve_repo_path "$PACKAGE_SDK_REPO_DIR")"
 SDK_NATIVE_BUILD_SCRIPT="$SDK_REPO_DIR/scripts/flutter/build-sdk-native.sh"
 
@@ -275,7 +266,6 @@ add_dart_define "AWIKI_STATE_NAMESPACE" "${AWIKI_STATE_NAMESPACE:-}"
 add_dart_define "AWIKI_ANP_SERVICE_URL" "$AWIKI_ANP_SERVICE_URL"
 add_dart_define "AWIKI_ANP_SERVICE_DID" "$AWIKI_ANP_SERVICE_DID"
 add_dart_define "AWIKI_DAEMON_DOWNLOAD_BASE_URL" "$AWIKI_DAEMON_DOWNLOAD_BASE_URL"
-add_dart_define "AWIKI_PACKAGE_CHANNEL" "$PACKAGE_CHANNEL"
 add_dart_define "AWIKI_UPDATE_MANIFEST_URL" "$AWIKI_UPDATE_MANIFEST_URL"
 add_dart_define "AWIKI_RELEASES_URL" "$AWIKI_RELEASES_URL"
 
@@ -499,6 +489,64 @@ file_sha256() {
   shasum -a 256 "$1" | awk '{print $1}'
 }
 
+prepare_android_release_sources() {
+  [[ "$PACKAGE_ANDROID_BUILD_MODE" == "release" ]] ||
+    fail "Android user-facing packages must use release mode"
+
+  mkdir -p "$(dirname "$ANDROID_PLUGIN_REGISTRANT")"
+  rm -f "$ANDROID_PLUGIN_REGISTRANT"
+}
+
+verify_android_release_apk_contents() {
+  local apk="$1"
+  [[ "$PACKAGE_ANDROID_BUILD_MODE" == "release" ]] ||
+    fail "Android user-facing packages must use release mode"
+
+  python3 - "$apk" "$ROOT_DIR/.flutter-plugins-dependencies" <<'PY'
+import json
+import pathlib
+import sys
+import zipfile
+
+apk_path = pathlib.Path(sys.argv[1])
+dependencies_path = pathlib.Path(sys.argv[2])
+
+dev_plugin_names = []
+if dependencies_path.exists():
+    dependencies = json.loads(dependencies_path.read_text(encoding="utf-8"))
+    for plugin in dependencies.get("plugins", {}).get("android", []):
+        if plugin.get("dev_dependency"):
+            name = str(plugin.get("name") or "").strip()
+            if name:
+                dev_plugin_names.append(name)
+
+if not dev_plugin_names:
+    sys.exit(0)
+
+scan_bytes = bytearray()
+with zipfile.ZipFile(apk_path) as archive:
+    for info in archive.infolist():
+        name = info.filename
+        if name.endswith(".dex") or name.startswith("lib/") or name.startswith("META-INF/services/"):
+            scan_bytes.extend(name.encode("utf-8", errors="ignore"))
+            scan_bytes.extend(b"\0")
+            scan_bytes.extend(archive.read(info))
+
+leaked = sorted({
+    name
+    for name in dev_plugin_names
+    if name.encode("utf-8") in scan_bytes
+})
+if leaked:
+    sys.stderr.write(
+        "Android release APK contains dev-only plugins: "
+        + ", ".join(leaked)
+        + "\n"
+    )
+    sys.exit(1)
+PY
+}
+
 verify_android_apk() {
   local apk="$1"
   local aapt_tool="$2"
@@ -523,6 +571,7 @@ verify_android_apk() {
   if printf '%s\n' "$badging" | grep -q '^application-debuggable'; then
     fail "Android package is debuggable; user-facing packages must be built in release mode"
   fi
+  verify_android_release_apk_contents "$apk"
 
   local verify_output
   verify_output="$("$apksigner_tool" verify --print-certs "$apk" 2>&1)" ||
@@ -582,8 +631,8 @@ create_dmg() {
   local app="$1"
   local arch_label="$2"
   local output="$3"
-  local stage_dir="$ROOT_DIR/build/package/stage-macos-$PACKAGE_CHANNEL-$PACKAGE_MACOS_BUILD_MODE-$arch_label"
-  local volume_name="$PACKAGE_APP_DISPLAY_NAME $VERSION_NAME $PACKAGE_CHANNEL $arch_label"
+  local stage_dir="$ROOT_DIR/build/package/stage-macos-$PACKAGE_MACOS_BUILD_MODE-$arch_label"
+  local volume_name="$PACKAGE_APP_DISPLAY_NAME $VERSION_NAME $arch_label"
 
   rm -rf "$stage_dir" "$output"
   mkdir -p "$stage_dir"
@@ -603,6 +652,7 @@ build_android_arm64() {
   local apksigner_tool="$3"
 
   log "building Android arm64 $PACKAGE_ANDROID_BUILD_MODE APK"
+  prepare_android_release_sources
   sync_android_local_version
   rm -f "build/app/outputs/flutter-apk/app-arm64-v8a-$PACKAGE_ANDROID_BUILD_MODE.apk"
   "$PACKAGE_FLUTTER_BIN" build apk \
@@ -625,7 +675,7 @@ build_macos_arch() {
   local arch="$1"
   local arch_label="$2"
   local output_dmg="$3"
-  local derived_data="$ROOT_DIR/build/package/derived-macos-$PACKAGE_CHANNEL-$PACKAGE_MACOS_BUILD_MODE-$arch_label"
+  local derived_data="$ROOT_DIR/build/package/derived-macos-$PACKAGE_MACOS_BUILD_MODE-$arch_label"
   local app="$derived_data/Build/Products/$XCODE_CONFIGURATION/$PACKAGE_APP_DISPLAY_NAME.app"
 
   log "building macOS $arch_label $PACKAGE_MACOS_BUILD_MODE app"
@@ -719,14 +769,14 @@ JSON
   cp "$manifest" "$LATEST_MANIFEST"
 }
 
-publish_stable_download_aliases() {
+publish_download_aliases() {
   local android_file="$1"
   local macos_arm64_file="$2"
   local macos_x64_file="$3"
 
-  cp "$android_file" "$CHANNEL_DIST_ROOT/AWiki-Me-Android-arm64.apk"
-  cp "$macos_arm64_file" "$CHANNEL_DIST_ROOT/AWiki-Me-macOS-arm64.dmg"
-  cp "$macos_x64_file" "$CHANNEL_DIST_ROOT/AWiki-Me-macOS-x64.dmg"
+  cp "$android_file" "$DIST_ROOT/AWiki-Me-Android-arm64.apk"
+  cp "$macos_arm64_file" "$DIST_ROOT/AWiki-Me-macOS-arm64.dmg"
+  cp "$macos_x64_file" "$DIST_ROOT/AWiki-Me-macOS-x64.dmg"
 }
 
 write_manifest() {
@@ -741,7 +791,6 @@ write_manifest() {
 {
   "version": $(json_string "$VERSION_NAME"),
   "buildNumber": $BUILD_NUMBER,
-  "channel": $(json_string "$PACKAGE_CHANNEL"),
   "buildModes": {
     "android": $(json_string "$PACKAGE_ANDROID_BUILD_MODE"),
     "macos": $(json_string "$PACKAGE_MACOS_BUILD_MODE")
@@ -776,7 +825,7 @@ JSON
     "$android_file" \
     "$macos_arm64_file" \
     "$macos_x64_file"
-  publish_stable_download_aliases \
+  publish_download_aliases \
     "$android_file" \
     "$macos_arm64_file" \
     "$macos_x64_file"
@@ -806,7 +855,6 @@ fi
 check_source_identity
 
 log "config:          $CONFIG_PATH"
-log "channel:         $PACKAGE_CHANNEL"
 log "android mode:    $PACKAGE_ANDROID_BUILD_MODE"
 log "macOS mode:      $PACKAGE_MACOS_BUILD_MODE"
 log "domain:          ${AWIKI_DOMAIN:-$(host_from_url "$AWIKI_BASE_URL")}"
@@ -837,7 +885,7 @@ if [[ "$NEXT_VERSION" != "$CURRENT_VERSION" ]]; then
   log "updated pubspec.yaml version to $NEXT_VERSION"
 fi
 
-mkdir -p "$CHANNEL_DIST_ROOT"
+mkdir -p "$DIST_ROOT"
 
 AAPT_TOOL=""
 APKSIGNER_TOOL=""
@@ -848,7 +896,7 @@ prepare_macos_project
 
 build_sdk_native
 
-OUTPUT_DIR="$CHANNEL_DIST_ROOT/$VERSION_NAME"
+OUTPUT_DIR="$DIST_ROOT/$VERSION_NAME"
 mkdir -p "$OUTPUT_DIR"
 
 ANDROID_APK=""

@@ -9,7 +9,6 @@ class AwikiEnvironmentConfig {
     String? anpServiceUrl,
     String? anpServiceDid,
     String? daemonDownloadBaseUrl,
-    String? packageChannel,
     String? updateManifestUrl,
     String? releasesUrl,
     bool? agentImEnabled,
@@ -17,10 +16,6 @@ class AwikiEnvironmentConfig {
     final normalizedBase = _normalizeBaseUrl(
       baseUrl ?? const String.fromEnvironment('AWIKI_BASE_URL'),
       fallback: 'https://awiki.info',
-    );
-    final normalizedPackageChannel = _normalizePackageChannel(
-      packageChannel ?? const String.fromEnvironment('AWIKI_PACKAGE_CHANNEL'),
-      fallback: 'test',
     );
     this.baseUrl = normalizedBase;
     this.userServiceUrl = _normalizeBaseUrl(
@@ -53,13 +48,9 @@ class AwikiEnvironmentConfig {
       daemonDownloadBaseUrl,
       fallback: _joinUrl(normalizedBase, '/daemon'),
     );
-    this.packageChannel = normalizedPackageChannel;
     this.updateManifestUrl = _normalizeBaseUrl(
       updateManifestUrl,
-      fallback: _joinUrl(
-        normalizedBase,
-        '/downloads/awiki-me/$normalizedPackageChannel/latest.json',
-      ),
+      fallback: _joinUrl(normalizedBase, '/downloads/awiki-me/latest.json'),
     );
     this.releasesUrl = _normalizeBaseUrl(
       releasesUrl,
@@ -83,7 +74,6 @@ class AwikiEnvironmentConfig {
       daemonDownloadBaseUrl: const String.fromEnvironment(
         'AWIKI_DAEMON_DOWNLOAD_BASE_URL',
       ),
-      packageChannel: const String.fromEnvironment('AWIKI_PACKAGE_CHANNEL'),
       updateManifestUrl: const String.fromEnvironment(
         'AWIKI_UPDATE_MANIFEST_URL',
       ),
@@ -104,7 +94,6 @@ class AwikiEnvironmentConfig {
   late final String anpServiceUrl;
   late final String anpServiceDid;
   late final String daemonDownloadBaseUrl;
-  late final String packageChannel;
   late final String updateManifestUrl;
   late final String releasesUrl;
   late final bool agentImEnabled;
@@ -135,15 +124,6 @@ String _joinUrl(String baseUrl, String path) {
   final normalizedBase = baseUrl.trim().replaceAll(RegExp(r'/+$'), '');
   final normalizedPath = path.startsWith('/') ? path : '/$path';
   return '$normalizedBase$normalizedPath';
-}
-
-String _normalizePackageChannel(String? value, {required String fallback}) {
-  final raw = _firstNonEmpty(value, fallback);
-  final normalized = raw
-      .replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '-')
-      .replaceAll(RegExp(r'-+'), '-')
-      .replaceAll(RegExp(r'^[-.]+|[-.]+$'), '');
-  return normalized.isEmpty ? fallback : normalized;
 }
 
 String _normalizeStateNamespace(

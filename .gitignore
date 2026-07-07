@@ -45,6 +45,7 @@ android/local.properties
 android/key.properties
 android/*.jks
 android/*.keystore
+**/android/**/GeneratedPluginRegistrant.java
 android/app/debug/
 android/app/profile/
 android/app/release/
