@@ -2,7 +2,7 @@
 
 本文档是 AWiki Me 会话展示、消息可见性、消息渲染分层和首屏展示链路的当前唯一入口文档。它覆盖 conversation presentation projection、message timeline、SDK DTO 到 App domain model 的映射、普通文本 / Markdown / mention / attachment / control payload 的展示规则，以及 local-first 打开会话的职责边界。
 
-历史 plan 文档只作为执行台账和决策背景保留；如果历史 plan 与本文档或当前代码不一致，以本文档和当前代码为准。
+历史 plan 文档只作为执行台账和决策背景保留；如果历史 plan 与本文档或当前代码不一致，以本文档和当前代码为准。已过时且会误导执行的旧 SDK migration plan 不再保留在 `docs/` 主路径下。
 
 ## 1. 当前结论
 
@@ -110,12 +110,14 @@ Flutter SDK conversation DTO 必须保持 core-only。以下字段不得加入 S
 
 当前应保持的 DTO 形状：
 
-- `crates/im-core/src/messages/dto.rs` 的 `ConversationSnapshotItem` 只包含 thread kind/id、participants、last message、unread count、unread mention、message count 和 last message time。
+- `crates/im-core/src/messages/dto.rs` 的 `ConversationSnapshotItem` 是 core-only conversation projection DTO，可包含 thread kind/id、`conversation_identity`、participants、last message、unread count、unread mention marker、message count 和 last message time。
 - `crates/im-core-dart/src/dto/message.rs` 的 `DartConversationSnapshotItem` 与 Rust core DTO 对齐。
 - `packages/awiki_im_core/lib/src/models/message.dart` 的 `ConversationSnapshotItem` 是 SDK model，不引用 `awiki-me` domain。
 - `awiki-me/lib/src/domain/entities/chat_message.dart` 是 App domain model，不得移动到 SDK 或 FRB generated DTO。
 
 如果未来需要把 presentation projection 下沉到 Rust，必须先新增独立的 presentation projection contract 和写入 API，不能直接扩展现有 core snapshot 来承载 App-only overlay。
+
+`conversationIdentity`、`serverSequence`、`sendState`、`retryPlan`、unread mention marker 和 redacted attachment manifest 属于 core projection / SDK DTO 范畴；它们可以进入 SDK DTO。`hidden`、`pinned`、`muted`、`customTitle`、`avatarSeed`、Agent lifecycle、`ConversationSummary`、`ChatMessage` 和 UI window 状态属于 AWiki Me presentation/application 范畴，不能进入 SDK DTO。
 
 ## 6. SDK Message 到 ChatMessage 的映射
 
@@ -165,6 +167,8 @@ Flutter SDK conversation DTO 必须保持 core-only。以下字段不得加入 S
 
 `_MessageTextContent` 当前位于 `awiki-me/lib/src/presentation/chat/parts/chat_message_part.dart`。它不直接解析 SDK DTO，只接收 App `ChatMessage` 已投影出的 `text`、`mentions` 和 `payloadJson`。
 
+附件显示的 SDK 输入和显示投影要分开理解：发送请求可以使用 SDK `MessageBody::Attachment` / `sendConversationAttachment`，但当前 SDK display DTO 不新增 `MessageBodyView::Attachment`。附件消息通过 core 持久化的 redacted attachment manifest、content type、metadata attributes 和 mapper 投影为 `ChatMessage.attachment`；AWiki Me 不能用本地临时文件 preview 替代 core projection 来决定 list/detail/send correctness。
+
 mention 渲染规则：
 
 1. 先用 `ChatMessage.mentions` 校验 `rangeMatches(text)`。
@@ -210,7 +214,7 @@ Chat presentation 是单向的：
 
 - `ConversationListProvider` 负责 recents / unread / badge 状态，base row 来自 core conversation read model，App 只叠加 product overlay 和 read presentation waterline。
 - `ChatThreadsProvider` / `ChatThreadsController` 负责 conversation timeline window、merge、sort、repair 和 read ack 调度，主 key 是 `ConversationSummary.effectiveConversationId` / `AppConversationReadRef`。
-- `ChatPage` 渲染 selected thread；它可以确认当前会话可见并触发 read ack，但不得因 summary 更新主动补拉 history。
+- `ChatPage` 渲染 selected conversation；它可以确认当前会话可见并触发 read ack，但不得因 summary 更新主动补拉 history。
 
 打开会话的 first-paint 路径：
 
@@ -241,6 +245,15 @@ Chat presentation 是单向的：
 - App 不从 conversation summary 变化反向调用 thread history sync。
 - App 不用 target DID、handle、legacy direct alias 或 display thread id 自行决定消息属于哪个会话。
 - App 必须用当前 renderable cache 计算本次 read ack 覆盖的 message watermark；core 负责校验 watermark、提交本地 read-state projection，并处理远端 ack / pending ack。
+
+旧路径退场清单：
+
+- `ThreadRef` history、`watchThreadPatches(ThreadRef)`、`repairThreadStore(ThreadRef)`、`syncThreadAfter(ThreadRef)` 只允许 CLI、legacy adapter、migration 或低层诊断使用；AWiki Me display correctness 必须走 conversationId-first API。
+- target DID / handle / legacy direct alias / old Flutter sorted direct id 只允许作为 core resolver 输入或诊断字段；AWiki Me 不得用它们重新推导 canonical direct key。
+- alias prewarm 只允许作为迁移期性能辅助，不得作为消息归属、patch key、read ack key 或 send route 的判断依据。
+- UI renderable cache 只能决定当前窗口是否有内容可展示，不得计算默认 read watermark 或过滤 core 已经归属到当前 conversation 的 committed message。
+- memory pending、local thread move、本地 upsert conversation row 只能作为短生命周期 UI 状态，不得替代 core durable send/outbox row、conversation patch 或 timeline patch。
+- generic SDK `retryMessage(messageId)` 当前仍是 unsupported；AWiki Me 重试文本、payload 和附件时必须用 `AppConversationReadRef` 重新调用 `sendConversationText`、`sendConversationPayload` 或 `sendConversationAttachment`，并保留稳定 `clientMessageId` / `idempotencyKey`。
 
 诊断事件：
 
