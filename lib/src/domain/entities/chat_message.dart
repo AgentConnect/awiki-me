@@ -1,6 +1,7 @@
 import 'chat_attachment.dart';
 import 'chat_mention.dart';
 import 'agent/agent_control_payloads.dart';
+import 'group_system_event.dart';
 
 enum MessageSendState { sending, sent, failed }
 
@@ -56,8 +57,14 @@ class ChatMessage {
 
   bool get isAgentControlPayload => AgentControlPayloads.isControl(payloadJson);
 
+  GroupSystemEvent? get groupSystemEvent =>
+      GroupSystemEvent.tryParse(payloadJson);
+
+  bool get isGroupSystemEvent => groupSystemEvent != null;
+
   bool get hasRenderableContent =>
-      !isAgentControlPayload && (hasDisplayableText || attachment != null);
+      !isAgentControlPayload &&
+      (isGroupSystemEvent || hasDisplayableText || attachment != null);
 
   bool get isTextMessage {
     final type = originalType.trim().toLowerCase();
@@ -71,6 +78,9 @@ class ChatMessage {
   bool get isAttachmentMessage => attachment != null;
 
   String get previewText {
+    if (isGroupSystemEvent) {
+      return groupSystemEvent?.type ?? '';
+    }
     final text = content.trim();
     if (text.isNotEmpty && (isTextMessage || attachment == null)) {
       return text;

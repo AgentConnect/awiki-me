@@ -92,6 +92,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
         : AgentVisualStatus.fromAgent(runtimeAgent);
     final looksLikeAgent =
         runtimeAgent != null || conversationTargetDidLooksLikeAgent(targetDid);
+    final canFollowProfile = profileDid.startsWith('did:');
     final inboxHeight = (maxDialogHeight * 0.48).clamp(320.0, 440.0).toDouble();
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 20),
@@ -240,55 +241,50 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                     onTap: () => _openHomepage(homepageUrl),
                   ),
                 ],
-                const SizedBox(height: 16),
-                _PeerInfoSection(
-                  title: context.l10n.chatPeerInfoIdentityCard,
-                  child: profileContent.isEmpty
-                      ? _profilePlaceholder(state)
-                      : MarkdownBody(
-                          data: profileContent,
-                          selectable: false,
-                          styleSheet: _chatMarkdownStyleSheet(
-                            context,
-                            const TextStyle(
-                              color: Color(0xFF17213A),
-                              fontSize: 13,
-                              height: 1.45,
-                            ),
-                          ),
-                        ),
-                ),
               ],
             ),
           ),
+          if (canFollowProfile) ...<Widget>[
+            const SizedBox(height: 14),
+            _ChatFollowButton(
+              isFollowing: isFollowing,
+              compact: false,
+              onTap: () => _toggleFollow(profileDid),
+            ),
+          ],
           const SizedBox(height: 16),
-          Row(
-            children: <Widget>[
-              if (profileDid.startsWith('did:')) ...<Widget>[
-                Expanded(
-                  child: _ChatFollowButton(
-                    isFollowing: isFollowing,
-                    compact: false,
-                    onTap: () => _toggleFollow(profileDid),
-                  ),
-                ),
-                const SizedBox(width: 10),
-              ],
-              if (runtimeAgent != null)
-                Expanded(
-                  child: AppSecondaryButton(
-                    label: _showAgentInbox
-                        ? context.l10n.chatPeerInfoCollapseAgentInbox
-                        : context.l10n.chatPeerInfoAgentInbox,
-                    onPressed: () {
-                      setState(() {
-                        _showAgentInbox = !_showAgentInbox;
-                      });
-                    },
-                  ),
-                ),
-            ],
+          SelectionArea(
+            child: _PeerInfoSection(
+              title: context.l10n.chatPeerInfoIdentityCard,
+              child: profileContent.isEmpty
+                  ? _profilePlaceholder(state)
+                  : MarkdownBody(
+                      data: profileContent,
+                      selectable: false,
+                      styleSheet: _chatMarkdownStyleSheet(
+                        context,
+                        const TextStyle(
+                          color: Color(0xFF17213A),
+                          fontSize: 13,
+                          height: 1.45,
+                        ),
+                      ),
+                    ),
+            ),
           ),
+          if (runtimeAgent != null) ...<Widget>[
+            const SizedBox(height: 16),
+            AppSecondaryButton(
+              label: _showAgentInbox
+                  ? context.l10n.chatPeerInfoCollapseAgentInbox
+                  : context.l10n.chatPeerInfoAgentInbox,
+              onPressed: () {
+                setState(() {
+                  _showAgentInbox = !_showAgentInbox;
+                });
+              },
+            ),
+          ],
           if (runtimeAgent != null && _showAgentInbox) ...<Widget>[
             const SizedBox(height: 16),
             SizedBox(

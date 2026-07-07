@@ -254,6 +254,95 @@ class _MessageAgentProcessingStatus extends StatelessWidget {
   }
 }
 
+class _GroupSystemEventNotice extends StatelessWidget {
+  const _GroupSystemEventNotice({
+    required this.message,
+    required this.macStyle,
+  });
+
+  final ChatMessage message;
+  final bool macStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final text = localizeMessagePreview(context.l10n, message);
+    final foreground = macStyle ? const Color(0xFF5F6E84) : theme.secondaryText;
+    final background = macStyle
+        ? const Color(0xFFF6F8FC)
+        : theme.subtleSurface.withValues(alpha: 0.92);
+    final border = macStyle
+        ? const Color(0xFFE0E7F1)
+        : theme.border.withValues(alpha: 0.72);
+    final iconSize = macStyle
+        ? responsive.displayScaled(12)
+        : responsive.scaled(12);
+    return Semantics(
+      liveRegion: true,
+      label: text,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: macStyle
+                ? responsive.displayScaled(360)
+                : (responsive.isLarge ? 420 : 300),
+          ),
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: macStyle
+                  ? responsive.displayScaled(10)
+                  : responsive.spacing(11),
+              vertical: macStyle
+                  ? responsive.displayScaled(5)
+                  : responsive.spacing(6),
+            ),
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(
+                macStyle ? responsive.displayScaled(999) : 999,
+              ),
+              border: Border.all(color: border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Icon(
+                  CupertinoIcons.person_2_fill,
+                  size: iconSize,
+                  color: foreground.withValues(alpha: 0.82),
+                ),
+                SizedBox(
+                  width: macStyle
+                      ? responsive.displayScaled(6)
+                      : responsive.spacing(6),
+                ),
+                Flexible(
+                  child: Text(
+                    text,
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: foreground,
+                      fontSize: macStyle
+                          ? responsive.displayScaled(11.5)
+                          : responsive.metaSm,
+                      fontWeight: FontWeight.w500,
+                      height: 1.25,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 sealed class _MessageAgentTimelineItem {
   const _MessageAgentTimelineItem();
 }

@@ -1101,10 +1101,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentEmpty => '暂无代理';
 
   @override
-  String get agentEmptyWaitingHost => '在宿主机完成 Daemon 安装后，这里会自动同步。';
+  String get agentEmptyWaitingHost => '当前账号还没有可用的 Daemon。安装完成后可自动同步，也可以手动刷新。';
 
   @override
-  String get agentEmptySyncingHost => '正在同步宿主机上的 Daemon，安装完成后会自动出现。';
+  String get agentEmptyInstallWaitingHost => '正在等待宿主机完成 Daemon 安装，完成后会自动出现。';
 
   @override
   String get agentSelectOne => '选择一个代理';
@@ -2075,4 +2075,37 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get groupNameRequired => '群名称不能为空';
+
+  @override
+  String chatGroupMemberAddedByYou(Object member) {
+    return '你邀请$member加入了群聊';
+  }
+
+  @override
+  String chatGroupMemberAddedBy(Object actor, Object member) {
+    return '$actor邀请$member加入了群聊';
+  }
+
+  @override
+  String chatGroupMemberJoined(Object member) {
+    return '$member加入了群聊';
+  }
+
+  @override
+  String chatGroupMemberRemovedByYou(Object member) {
+    return '你将$member移出了群聊';
+  }
+
+  @override
+  String chatGroupMemberRemovedBy(Object actor, Object member) {
+    return '$actor将$member移出了群聊';
+  }
+
+  @override
+  String chatGroupMemberLeft(Object member) {
+    return '$member退出了群聊';
+  }
+
+  @override
+  String get chatGroupProfileUpdated => '群信息已更新';
 }

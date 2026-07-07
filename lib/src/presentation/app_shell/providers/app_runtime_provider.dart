@@ -487,6 +487,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       );
       return;
     }
+    if (update.group != null) {
+      ref.read(groupProvider.notifier).upsertGroup(update.group!);
+    }
     final message = update.message;
     final conversationHint = update.conversationHint;
     if (message == null || conversationHint == null) {
@@ -523,9 +526,6 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         ),
       },
     );
-    if (update.group != null) {
-      ref.read(groupProvider.notifier).upsertGroup(update.group!);
-    }
     if (!message.isMine) {
       final title = _notificationTitle(update, normalizedConversationHint);
       final preview = localizeMessagePreview(_currentLocalizations(), message);

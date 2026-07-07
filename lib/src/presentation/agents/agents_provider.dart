@@ -219,6 +219,8 @@ final agentImEnabledProvider = Provider<bool>(
   (ref) => ref.watch(awikiEnvironmentConfigProvider).agentImEnabled,
 );
 
+enum AgentInventoryAutoSyncReason { backgroundDiscovery, daemonInstall }
+
 class AgentsState {
   const AgentsState({
     this.agents = const <AgentSummary>[],
@@ -242,7 +244,7 @@ class AgentsState {
     this.daemonUpgradeProgress = const <String, DaemonUpgradeProgress>{},
     this.pendingRuntimeCreations = const <PendingRuntimeCreation>[],
     this.pendingDeletionAgentDids = const <String>{},
-    this.isAutoSyncingInventory = false,
+    this.inventoryAutoSyncReason,
   });
 
   final List<AgentSummary> agents;
@@ -265,7 +267,7 @@ class AgentsState {
   final Map<String, DaemonUpgradeProgress> daemonUpgradeProgress;
   final List<PendingRuntimeCreation> pendingRuntimeCreations;
   final Set<String> pendingDeletionAgentDids;
-  final bool isAutoSyncingInventory;
+  final AgentInventoryAutoSyncReason? inventoryAutoSyncReason;
 
   AgentSummary? get selectedAgent {
     final selectedDid = selectedAgentDid;
@@ -281,6 +283,11 @@ class AgentsState {
   }
 
   bool get isActing => pendingActionKeys.isNotEmpty;
+
+  bool get isAutoSyncingInventory => inventoryAutoSyncReason != null;
+
+  bool get isWaitingForDaemonInstall =>
+      inventoryAutoSyncReason == AgentInventoryAutoSyncReason.daemonInstall;
 
   bool isActionPending(String actionKey) {
     return pendingActionKeys.contains(actionKey);
@@ -381,7 +388,8 @@ class AgentsState {
     Map<String, DaemonUpgradeProgress>? daemonUpgradeProgress,
     List<PendingRuntimeCreation>? pendingRuntimeCreations,
     Set<String>? pendingDeletionAgentDids,
-    bool? isAutoSyncingInventory,
+    AgentInventoryAutoSyncReason? inventoryAutoSyncReason,
+    bool clearInventoryAutoSyncReason = false,
   }) {
     return AgentsState(
       agents: agents ?? this.agents,
@@ -419,8 +427,9 @@ class AgentsState {
           pendingRuntimeCreations ?? this.pendingRuntimeCreations,
       pendingDeletionAgentDids:
           pendingDeletionAgentDids ?? this.pendingDeletionAgentDids,
-      isAutoSyncingInventory:
-          isAutoSyncingInventory ?? this.isAutoSyncingInventory,
+      inventoryAutoSyncReason: clearInventoryAutoSyncReason
+          ? null
+          : (inventoryAutoSyncReason ?? this.inventoryAutoSyncReason),
     );
   }
 }
@@ -588,9 +597,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         agents: agents,
         selectedAgentDid: _nextSelection(agents),
         isLoading: false,
-        isAutoSyncingInventory: hasDaemon
-            ? false
-            : state.isAutoSyncingInventory,
+        clearInventoryAutoSyncReason: hasDaemon,
         pendingRuntimeCreations: pendingRuntimeCreations,
         pendingDaemonUpgrades: pendingDaemonUpgrades,
         cancellingDaemonUpgrades: cancellingDaemonUpgrades,
@@ -665,11 +672,16 @@ class AgentsController extends StateNotifier<AgentsState> {
           );
       state = state.copyWith(installCommand: command, clearError: true);
       _inventoryAutoSyncExhaustedOwner = null;
-      startInventoryAutoSync();
+      startInventoryAutoSync(
+        reason: AgentInventoryAutoSyncReason.daemonInstall,
+      );
     });
   }
 
-  void startInventoryAutoSync() {
+  void startInventoryAutoSync({
+    AgentInventoryAutoSyncReason reason =
+        AgentInventoryAutoSyncReason.backgroundDiscovery,
+  }) {
     final session = ref.read(sessionProvider).session;
     final owner = session == null ? null : _agentCacheOwner(session);
     if (owner == null || state.agents.any((agent) => agent.isDaemon)) {
@@ -680,11 +692,17 @@ class AgentsController extends StateNotifier<AgentsState> {
       return;
     }
     if (_inventoryAutoSyncTimer != null) {
-      state = state.copyWith(isAutoSyncingInventory: true);
+      final nextReason = _preferredInventoryAutoSyncReason(
+        state.inventoryAutoSyncReason,
+        reason,
+      );
+      if (state.inventoryAutoSyncReason != nextReason) {
+        state = state.copyWith(inventoryAutoSyncReason: nextReason);
+      }
       return;
     }
     _inventoryAutoSyncAttempts = 0;
-    state = state.copyWith(isAutoSyncingInventory: true);
+    state = state.copyWith(inventoryAutoSyncReason: reason);
     _runInventoryAutoSyncAttempt();
     _inventoryAutoSyncTimer = Timer.periodic(
       agentInventoryAutoSyncInterval,
@@ -2246,7 +2264,10 @@ class AgentsController extends StateNotifier<AgentsState> {
           );
         } else if (_inventoryAutoSyncTimer != null &&
             !state.isAutoSyncingInventory) {
-          state = state.copyWith(isAutoSyncingInventory: true);
+          state = state.copyWith(
+            inventoryAutoSyncReason:
+                AgentInventoryAutoSyncReason.backgroundDiscovery,
+          );
         }
       }),
     );
@@ -2264,7 +2285,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     _inventoryAutoSyncAttempts = 0;
     _inventoryAutoSyncInFlight = false;
     if (mounted && state.isAutoSyncingInventory) {
-      state = state.copyWith(isAutoSyncingInventory: false);
+      state = state.copyWith(clearInventoryAutoSyncReason: true);
     }
   }
 
@@ -3477,6 +3498,17 @@ String _agentCacheOwner(SessionIdentity session) {
     return 'controller-handle:$handle';
   }
   return 'controller-did:${session.did.trim()}';
+}
+
+AgentInventoryAutoSyncReason _preferredInventoryAutoSyncReason(
+  AgentInventoryAutoSyncReason? current,
+  AgentInventoryAutoSyncReason incoming,
+) {
+  if (current == AgentInventoryAutoSyncReason.daemonInstall ||
+      incoming == AgentInventoryAutoSyncReason.daemonInstall) {
+    return AgentInventoryAutoSyncReason.daemonInstall;
+  }
+  return current ?? incoming;
 }
 
 DateTime? _dateTime(Object? value) {

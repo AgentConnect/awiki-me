@@ -474,8 +474,8 @@
   "agentCreateDaemon": "创建 Daemon",
   "agentRefreshList": "刷新智能体列表",
   "agentEmpty": "暂无代理",
-  "agentEmptyWaitingHost": "在宿主机完成 Daemon 安装后，这里会自动同步。",
-  "agentEmptySyncingHost": "正在同步宿主机上的 Daemon，安装完成后会自动出现。",
+  "agentEmptyWaitingHost": "当前账号还没有可用的 Daemon。安装完成后可自动同步，也可以手动刷新。",
+  "agentEmptyInstallWaitingHost": "正在等待宿主机完成 Daemon 安装，完成后会自动出现。",
   "agentSelectOne": "选择一个代理",
   "agentCreateRuntime": "创建 Agent",
   "agentOpenChat": "打开聊天",
@@ -929,5 +929,44 @@
       "detail": {}
     }
   },
-  "groupNameRequired": "群名称不能为空"
+  "groupNameRequired": "群名称不能为空",
+  "chatGroupMemberAddedByYou": "你邀请{member}加入了群聊",
+  "@chatGroupMemberAddedByYou": {
+    "placeholders": {
+      "member": {}
+    }
+  },
+  "chatGroupMemberAddedBy": "{actor}邀请{member}加入了群聊",
+  "@chatGroupMemberAddedBy": {
+    "placeholders": {
+      "actor": {},
+      "member": {}
+    }
+  },
+  "chatGroupMemberJoined": "{member}加入了群聊",
+  "@chatGroupMemberJoined": {
+    "placeholders": {
+      "member": {}
+    }
+  },
+  "chatGroupMemberRemovedByYou": "你将{member}移出了群聊",
+  "@chatGroupMemberRemovedByYou": {
+    "placeholders": {
+      "member": {}
+    }
+  },
+  "chatGroupMemberRemovedBy": "{actor}将{member}移出了群聊",
+  "@chatGroupMemberRemovedBy": {
+    "placeholders": {
+      "actor": {},
+      "member": {}
+    }
+  },
+  "chatGroupMemberLeft": "{member}退出了群聊",
+  "@chatGroupMemberLeft": {
+    "placeholders": {
+      "member": {}
+    }
+  },
+  "chatGroupProfileUpdated": "群信息已更新"
 }

@@ -9,6 +9,8 @@ class _ChatHeader extends StatelessWidget {
     required this.isDeletedAgentConversation,
     required this.onPeerInfoTap,
     this.onBack,
+    this.onAddGroupMemberTap,
+    this.isAddGroupMemberLoading = false,
   });
 
   final ConversationSummary conversation;
@@ -18,6 +20,8 @@ class _ChatHeader extends StatelessWidget {
   final ConversationPeerClassification classification;
   final bool isDeletedAgentConversation;
   final VoidCallback onPeerInfoTap;
+  final VoidCallback? onAddGroupMemberTap;
+  final bool isAddGroupMemberLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +39,8 @@ class _ChatHeader extends StatelessWidget {
       classification,
     );
     final openInfoLabel = context.l10n.chatOpenPeerInfo(detailTypeLabel);
+    final showAddGroupMemberButton =
+        conversation.isGroup && onAddGroupMemberTap != null;
     if (macStyle) {
       return Container(
         height: responsive.displayScaled(64),
@@ -81,6 +87,13 @@ class _ChatHeader extends StatelessWidget {
                     onNameTap: onPeerInfoTap,
                   ),
                 ),
+                if (showAddGroupMemberButton) ...<Widget>[
+                  SizedBox(width: responsive.displayScaled(12)),
+                  _ChatHeaderAddGroupMemberButton(
+                    onTap: isAddGroupMemberLoading ? null : onAddGroupMemberTap,
+                    isLoading: isAddGroupMemberLoading,
+                  ),
+                ],
               ],
             );
           },
@@ -186,7 +199,46 @@ class _ChatHeader extends StatelessWidget {
               ],
             ),
           ),
+          if (showAddGroupMemberButton) ...<Widget>[
+            SizedBox(width: responsive.spacing(10)),
+            _ChatHeaderAddGroupMemberButton(
+              onTap: isAddGroupMemberLoading ? null : onAddGroupMemberTap,
+              isLoading: isAddGroupMemberLoading,
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _ChatHeaderAddGroupMemberButton extends StatelessWidget {
+  const _ChatHeaderAddGroupMemberButton({
+    required this.onTap,
+    required this.isLoading,
+  });
+
+  final VoidCallback? onTap;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    return AppIconButton(
+      key: const Key('chat-header-add-group-member-button'),
+      onPressed: onTap,
+      semanticLabel: context.l10n.groupAddMembers,
+      semanticsIdentifier: 'e2e-chat-header-add-group-member-button',
+      isLoading: isLoading,
+      size: responsive.compactControlHeight,
+      borderRadius: BorderRadius.circular(responsive.radius(10)),
+      backgroundColor: theme.primary.withValues(alpha: 0.06),
+      borderColor: theme.primary.withValues(alpha: 0.12),
+      child: Icon(
+        CupertinoIcons.person_add,
+        size: responsive.iconSm,
+        color: theme.primaryDark,
       ),
     );
   }

@@ -7,11 +7,13 @@ import '../../../domain/entities/agent/agent_summary.dart';
 import '../../../domain/entities/chat_attachment.dart';
 import '../../../domain/entities/chat_message.dart';
 import '../../../domain/entities/conversation_summary.dart';
+import '../../../domain/entities/group_system_event.dart';
 import '../../agents/agent_runtime_display.dart';
 import '../../agents/agent_ui_messages.dart';
 import '../../agents/agent_visual_status.dart';
 import '../../agents/agents_provider.dart';
 import '../../conversation_list/conversation_peer_classifier.dart';
+import 'display_formatters.dart';
 import 'markdown_preview_formatter.dart';
 
 String localizeAgentTitle(AppLocalizations l10n, AgentSummary agent) {
@@ -247,6 +249,16 @@ String localizeAttachmentFilename(AppLocalizations l10n, String filename) {
 }
 
 String localizeMessagePreview(AppLocalizations l10n, ChatMessage message) {
+  final systemEvent = message.groupSystemEvent;
+  if (systemEvent != null) {
+    return localizeGroupSystemEvent(
+      l10n,
+      systemEvent,
+      actorIsMe:
+          systemEvent.actorDid?.trim() == message.senderDid.trim() &&
+          message.isMine,
+    );
+  }
   final attachment = message.attachment;
   if (attachment != null) {
     final caption = attachment.caption?.trim();
@@ -260,6 +272,38 @@ String localizeMessagePreview(AppLocalizations l10n, ChatMessage message) {
   return localizeLegacyConversationPreview(l10n, message.previewText);
 }
 
+String localizeGroupSystemEvent(
+  AppLocalizations l10n,
+  GroupSystemEvent event, {
+  bool actorIsMe = false,
+}) {
+  final actor = _groupSystemEventName(event.actorDid, l10n);
+  final member = _groupSystemEventName(event.subjectDid, l10n);
+  return switch (event.type) {
+    'member_added' =>
+      actorIsMe
+          ? l10n.chatGroupMemberAddedByYou(member)
+          : actor.isEmpty
+          ? l10n.chatGroupMemberJoined(member)
+          : l10n.chatGroupMemberAddedBy(actor, member),
+    'member_removed' =>
+      actorIsMe
+          ? l10n.chatGroupMemberRemovedByYou(member)
+          : l10n.chatGroupMemberRemovedBy(actor, member),
+    'member_left' => l10n.chatGroupMemberLeft(member),
+    'group_profile_updated' => l10n.chatGroupProfileUpdated,
+    _ => l10n.chatGroupProfileUpdated,
+  };
+}
+
+String _groupSystemEventName(String? did, AppLocalizations l10n) {
+  final raw = did?.trim() ?? '';
+  if (raw.isEmpty) {
+    return l10n.commonUnknown;
+  }
+  return DidDisplayFormatter.compactDid(raw);
+}
+
 String localizeConversationPreview(
   AppLocalizations l10n,
   ConversationSummary conversation,
@@ -267,6 +311,12 @@ String localizeConversationPreview(
   final snapshot = conversation.lastMessageSnapshot;
   if (snapshot != null) {
     return localizeMessagePreview(l10n, snapshot);
+  }
+  final systemEvent = GroupSystemEvent.tryParse(
+    conversation.lastMessagePayloadJson,
+  );
+  if (systemEvent != null) {
+    return localizeGroupSystemEvent(l10n, systemEvent);
   }
   return localizeLegacyConversationPreview(
     l10n,

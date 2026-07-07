@@ -195,6 +195,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
   _ChatScrollAnchorPhase _scrollAnchorPhase = _ChatScrollAnchorPhase.opening;
   bool _openingAnchorObservedContent = false;
   int _openingAnchorToken = 0;
+  bool _isOpeningGroupInvite = false;
+  final Set<String> _requestedGroupRoleIds = <String>{};
   final Set<String> _downloadingAttachmentMessageIds = <String>{};
   static const double _nearBottomExtent = 96;
 
@@ -415,6 +417,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final groupSendDisabledReason = _groupSendDisabledReason(
       currentConversation,
     );
+    final inviteTarget = _groupInviteTarget(
+      currentConversation,
+      ref.watch(groupProvider).groups,
+    );
+    final canInviteGroupMembers =
+        inviteTarget != null && canManageGroupMembers(inviteTarget);
+    _requestGroupRoleIfNeeded(currentConversation);
     final peerClassification = ref
         .watch(
           conversationPeerClassificationProvider(
@@ -484,6 +493,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
             isDeletedAgentConversation: isDeletedAgentConversation,
             onBack: widget.onBack,
             onPeerInfoTap: _openDetails,
+            onAddGroupMemberTap: canInviteGroupMembers
+                ? () => _openGroupInviteDialog(currentConversation)
+                : null,
+            isAddGroupMemberLoading: _isOpeningGroupInvite,
           ),
           Expanded(
             child: Listener(
@@ -633,58 +646,63 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                       previous: previous?.createdAt,
                                     ),
                                   ),
-                                _MessageBubble(
-                                  message: message,
-                                  senderLabel: senderLabel,
-                                  showSenderLabel: showSenderLabel,
-                                  macStyle: macStyle,
-                                  onRetry:
-                                      message.sendState ==
-                                          MessageSendState.failed
-                                      ? (_canRetryMessage(message)
-                                            ? () async {
-                                                await ref
-                                                    .read(
-                                                      chatThreadsProvider
-                                                          .notifier,
-                                                    )
-                                                    .retryMessage(
-                                                      conversation:
-                                                          currentConversation,
-                                                      message: message,
-                                                      expectedAgentReplyDid:
-                                                          _expectedAgentReplyDidForConversation(
+                                if (message.isGroupSystemEvent)
+                                  _GroupSystemEventNotice(
+                                    message: message,
+                                    macStyle: macStyle,
+                                  )
+                                else
+                                  _MessageBubble(
+                                    message: message,
+                                    senderLabel: senderLabel,
+                                    showSenderLabel: showSenderLabel,
+                                    macStyle: macStyle,
+                                    onRetry:
+                                        message.sendState ==
+                                            MessageSendState.failed
+                                        ? (_canRetryMessage(message)
+                                              ? () async {
+                                                  await ref
+                                                      .read(
+                                                        chatThreadsProvider
+                                                            .notifier,
+                                                      )
+                                                      .retryMessage(
+                                                        conversation:
                                                             currentConversation,
-                                                            runtimeAgent:
-                                                                runtimeAgent,
-                                                            classification:
-                                                                peerClassification,
-                                                          ),
-                                                      displayThreadId:
-                                                          _displayThreadId,
-                                                    );
-                                              }
-                                            : null)
-                                      : null,
-                                  onDownload:
-                                      message.attachment != null &&
-                                          message.sendState ==
-                                              MessageSendState.sent
-                                      ? () => _openAttachment(
-                                          currentConversation,
-                                          message,
-                                        )
-                                      : null,
-                                  isDownloading:
-                                      _downloadingAttachmentMessageIds.contains(
-                                        message.localId,
-                                      ),
-                                  onPeerInfoTap: _peerInfoTapForMessage(
-                                    currentConversation,
-                                    message,
-                                    senderLabel,
+                                                        message: message,
+                                                        expectedAgentReplyDid:
+                                                            _expectedAgentReplyDidForConversation(
+                                                              currentConversation,
+                                                              runtimeAgent:
+                                                                  runtimeAgent,
+                                                              classification:
+                                                                  peerClassification,
+                                                            ),
+                                                        displayThreadId:
+                                                            _displayThreadId,
+                                                      );
+                                                }
+                                              : null)
+                                        : null,
+                                    onDownload:
+                                        message.attachment != null &&
+                                            message.sendState ==
+                                                MessageSendState.sent
+                                        ? () => _openAttachment(
+                                            currentConversation,
+                                            message,
+                                          )
+                                        : null,
+                                    isDownloading:
+                                        _downloadingAttachmentMessageIds
+                                            .contains(message.localId),
+                                    onPeerInfoTap: _peerInfoTapForMessage(
+                                      currentConversation,
+                                      message,
+                                      senderLabel,
+                                    ),
                                   ),
-                                ),
                                 if (pendingTurns.isNotEmpty) ...<Widget>[
                                   SizedBox(
                                     height: macStyle
@@ -794,6 +812,56 @@ class _ChatViewState extends ConsumerState<ChatView> {
         initialGroup: _groupSummaryForConversation(conversation),
       ),
     );
+  }
+
+  Future<void> _openGroupInviteDialog(ConversationSummary conversation) async {
+    final group = _groupInviteTarget(
+      conversation,
+      ref.read(groupProvider).groups,
+    );
+    if (group == null || !canManageGroupMembers(group)) {
+      return;
+    }
+    if (_isOpeningGroupInvite) {
+      return;
+    }
+    setState(() => _isOpeningGroupInvite = true);
+    try {
+      final latestGroup = await ref
+          .read(groupProvider.notifier)
+          .refreshGroup(group.groupId);
+      if (!canManageGroupMembers(latestGroup)) {
+        return;
+      }
+      final members = ref.read(groupMembersProvider(group.groupId));
+      if (!mounted) {
+        return;
+      }
+      await AppNavigator.showDialog<void>(
+        context,
+        (dialogContext) => AddGroupMemberDialog(
+          groupId: latestGroup.groupId,
+          existingMembers: members,
+          onGroupUpdated: (updated) {
+            if (!mounted) {
+              return;
+            }
+            ref.read(groupProvider.notifier).upsertGroup(updated);
+          },
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
+    } finally {
+      if (mounted) {
+        setState(() => _isOpeningGroupInvite = false);
+      }
+    }
   }
 
   VoidCallback? _peerInfoTapForMessage(
@@ -1532,6 +1600,56 @@ class _ChatViewState extends ConsumerState<ChatView> {
     return null;
   }
 
+  GroupSummary? _groupInviteTarget(
+    ConversationSummary conversation,
+    List<GroupSummary> groups,
+  ) {
+    if (!conversation.isGroup) {
+      return null;
+    }
+    final groupId = conversation.groupId?.trim().isNotEmpty == true
+        ? conversation.groupId!.trim()
+        : conversation.threadId.trim();
+    if (groupId.isEmpty) {
+      return null;
+    }
+    for (final group in groups) {
+      if (group.groupId == groupId && hasKnownGroupRole(group)) {
+        return group;
+      }
+    }
+    return null;
+  }
+
+  void _requestGroupRoleIfNeeded(ConversationSummary conversation) {
+    if (!conversation.isGroup) {
+      return;
+    }
+    final groupId = conversation.groupId?.trim().isNotEmpty == true
+        ? conversation.groupId!.trim()
+        : conversation.threadId.trim();
+    if (groupId.isEmpty || _requestedGroupRoleIds.contains(groupId)) {
+      return;
+    }
+    final groups = ref.read(groupProvider).groups;
+    for (final group in groups) {
+      if (group.groupId == groupId && hasKnownGroupRole(group)) {
+        return;
+      }
+    }
+    _requestedGroupRoleIds.add(groupId);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        return;
+      }
+      try {
+        await ref.read(groupProvider.notifier).refreshGroup(groupId);
+      } catch (_) {
+        _requestedGroupRoleIds.remove(groupId);
+      }
+    });
+  }
+
   String _dateLabel(DateTime date) {
     final month = date.month.toString().padLeft(2, '0');
     final day = date.day.toString().padLeft(2, '0');
@@ -1550,6 +1668,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   bool _shouldShowSenderLabel(ChatMessage? previous, ChatMessage current) {
+    if (current.isGroupSystemEvent) {
+      return false;
+    }
     if (!widget.conversation.isGroup || current.isMine) {
       return false;
     }
@@ -1593,7 +1714,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   bool _shouldTightenBeforeSenderLabel(ChatMessage current, ChatMessage? next) {
-    if (next == null || !current.isMine || _shouldShowDivider(current, next)) {
+    if (next == null ||
+        current.isGroupSystemEvent ||
+        next.isGroupSystemEvent ||
+        !current.isMine ||
+        _shouldShowDivider(current, next)) {
       return false;
     }
     return _shouldShowSenderLabel(current, next);

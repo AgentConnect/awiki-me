@@ -474,8 +474,8 @@
   "agentCreateDaemon": "Create Daemon",
   "agentRefreshList": "Refresh agent list",
   "agentEmpty": "No agents yet",
-  "agentEmptyWaitingHost": "After daemon installation finishes on the host, this list will sync automatically.",
-  "agentEmptySyncingHost": "Syncing host daemons. New daemons will appear here after installation finishes.",
+  "agentEmptyWaitingHost": "This account has no available daemon yet. The list can sync automatically after installation, or you can refresh it manually.",
+  "agentEmptyInstallWaitingHost": "Waiting for daemon installation to finish on the host. It will appear here automatically.",
   "agentSelectOne": "Select an agent",
   "agentCreateRuntime": "Create Agent",
   "agentOpenChat": "Open chat",
@@ -929,5 +929,44 @@
       "detail": {}
     }
   },
-  "groupNameRequired": "Group name cannot be empty"
+  "groupNameRequired": "Group name cannot be empty",
+  "chatGroupMemberAddedByYou": "You invited {member} to the group",
+  "@chatGroupMemberAddedByYou": {
+    "placeholders": {
+      "member": {}
+    }
+  },
+  "chatGroupMemberAddedBy": "{actor} invited {member} to the group",
+  "@chatGroupMemberAddedBy": {
+    "placeholders": {
+      "actor": {},
+      "member": {}
+    }
+  },
+  "chatGroupMemberJoined": "{member} joined the group",
+  "@chatGroupMemberJoined": {
+    "placeholders": {
+      "member": {}
+    }
+  },
+  "chatGroupMemberRemovedByYou": "You removed {member} from the group",
+  "@chatGroupMemberRemovedByYou": {
+    "placeholders": {
+      "member": {}
+    }
+  },
+  "chatGroupMemberRemovedBy": "{actor} removed {member} from the group",
+  "@chatGroupMemberRemovedBy": {
+    "placeholders": {
+      "actor": {},
+      "member": {}
+    }
+  },
+  "chatGroupMemberLeft": "{member} left the group",
+  "@chatGroupMemberLeft": {
+    "placeholders": {
+      "member": {}
+    }
+  },
+  "chatGroupProfileUpdated": "Group info updated"
 }

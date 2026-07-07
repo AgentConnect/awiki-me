@@ -1147,11 +1147,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentEmptyWaitingHost =>
-      'After daemon installation finishes on the host, this list will sync automatically.';
+      'This account has no available daemon yet. The list can sync automatically after installation, or you can refresh it manually.';
 
   @override
-  String get agentEmptySyncingHost =>
-      'Syncing host daemons. New daemons will appear here after installation finishes.';
+  String get agentEmptyInstallWaitingHost =>
+      'Waiting for daemon installation to finish on the host. It will appear here automatically.';
 
   @override
   String get agentSelectOne => 'Select an agent';
@@ -2190,4 +2190,37 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get groupNameRequired => 'Group name cannot be empty';
+
+  @override
+  String chatGroupMemberAddedByYou(Object member) {
+    return 'You invited $member to the group';
+  }
+
+  @override
+  String chatGroupMemberAddedBy(Object actor, Object member) {
+    return '$actor invited $member to the group';
+  }
+
+  @override
+  String chatGroupMemberJoined(Object member) {
+    return '$member joined the group';
+  }
+
+  @override
+  String chatGroupMemberRemovedByYou(Object member) {
+    return 'You removed $member from the group';
+  }
+
+  @override
+  String chatGroupMemberRemovedBy(Object actor, Object member) {
+    return '$actor removed $member from the group';
+  }
+
+  @override
+  String chatGroupMemberLeft(Object member) {
+    return '$member left the group';
+  }
+
+  @override
+  String get chatGroupProfileUpdated => 'Group info updated';
 }

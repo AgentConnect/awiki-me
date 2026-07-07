@@ -102,8 +102,7 @@ class _AgentListPane extends StatelessWidget {
                 ],
                 if (state.agents.isEmpty)
                   _AgentEmptyState(
-                    isSyncing: state.isAutoSyncingInventory,
-                    onRefresh: onSyncInventory,
+                    isWaitingForDaemonInstall: state.isWaitingForDaemonInstall,
                   ),
                 _AgentHierarchyList(
                   state: state,
@@ -123,10 +122,9 @@ class _AgentListPane extends StatelessWidget {
 }
 
 class _AgentEmptyState extends StatelessWidget {
-  const _AgentEmptyState({required this.isSyncing, required this.onRefresh});
+  const _AgentEmptyState({required this.isWaitingForDaemonInstall});
 
-  final bool isSyncing;
-  final VoidCallback onRefresh;
+  final bool isWaitingForDaemonInstall;
 
   @override
   Widget build(BuildContext context) {
@@ -146,13 +144,13 @@ class _AgentEmptyState extends StatelessWidget {
             SizedBox(
               width: responsive.displayScaled(22),
               height: responsive.displayScaled(22),
-              child: isSyncing
-                  ? const CupertinoActivityIndicator()
-                  : Icon(
-                      CupertinoIcons.desktopcomputer,
-                      color: const Color(0xFF66728A),
-                      size: responsive.iconSm,
-                    ),
+              child: Icon(
+                isWaitingForDaemonInstall
+                    ? CupertinoIcons.clock
+                    : CupertinoIcons.desktopcomputer,
+                color: const Color(0xFF66728A),
+                size: responsive.iconSm,
+              ),
             ),
             SizedBox(width: responsive.spacing(10)),
             Expanded(
@@ -169,8 +167,8 @@ class _AgentEmptyState extends StatelessWidget {
                   ),
                   SizedBox(height: responsive.spacing(4)),
                   Text(
-                    isSyncing
-                        ? context.l10n.agentEmptySyncingHost
+                    isWaitingForDaemonInstall
+                        ? context.l10n.agentEmptyInstallWaitingHost
                         : context.l10n.agentEmptyWaitingHost,
                     style: TextStyle(
                       color: const Color(0xFF66728A),
@@ -180,17 +178,6 @@ class _AgentEmptyState extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
-            SizedBox(width: responsive.spacing(8)),
-            AppIconButton(
-              onPressed: onRefresh,
-              semanticLabel: context.l10n.agentRefreshList,
-              tooltip: context.l10n.agentRefreshList,
-              size: responsive.displayScaled(30),
-              backgroundColor: CupertinoColors.white,
-              borderColor: const Color(0xFFE1E8F2),
-              borderRadius: BorderRadius.circular(responsive.radius(8)),
-              child: const Icon(CupertinoIcons.refresh),
             ),
           ],
         ),

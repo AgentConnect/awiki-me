@@ -92,7 +92,10 @@ void main() {
           agentsProvider.overrideWith((ref) {
             controller = _NoopSeededAgentsController(
               ref,
-              const AgentsState(isAutoSyncingInventory: true),
+              const AgentsState(
+                inventoryAutoSyncReason:
+                    AgentInventoryAutoSyncReason.backgroundDiscovery,
+              ),
             );
             return controller;
           }),
@@ -187,9 +190,13 @@ void main() {
     await tester.pump();
 
     expect(find.text('暂无代理'), findsOneWidget);
-    expect(find.text('正在同步宿主机上的 Daemon，安装完成后会自动出现。'), findsOneWidget);
+    expect(find.textContaining('当前账号还没有可用的 Daemon'), findsOneWidget);
+    expect(find.text('正在等待宿主机完成 Daemon 安装，完成后会自动出现。'), findsNothing);
+    expect(find.byIcon(CupertinoIcons.desktopcomputer), findsOneWidget);
+    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    expect(find.byTooltip('刷新智能体列表'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('刷新智能体列表').first);
+    await tester.tap(find.byTooltip('刷新智能体列表'));
     await tester.pump();
     await tester.pumpAndSettle();
 
@@ -197,6 +204,39 @@ void main() {
     expect(find.text('Daemon 1'), findsWidgets);
     expect(find.text('暂无代理'), findsNothing);
   });
+
+  testWidgets(
+    'empty agents workspace shows install waiting state only for install flow',
+    (tester) async {
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+          ),
+          providerOverrides: <Override>[
+            agentsProvider.overrideWith((ref) {
+              return _NoopSeededAgentsController(
+                ref,
+                const AgentsState(
+                  inventoryAutoSyncReason:
+                      AgentInventoryAutoSyncReason.daemonInstall,
+                ),
+              );
+            }),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('暂无代理'), findsOneWidget);
+      expect(find.text('正在等待宿主机完成 Daemon 安装，完成后会自动出现。'), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.clock), findsOneWidget);
+      expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    },
+  );
 
   testWidgets('daemon upgrade action appears only when upgrade is needed', (
     tester,
@@ -436,13 +476,13 @@ void main() {
           ),
         ];
       tester.view.physicalSize = const Size(1200, 900);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final freshSeenAt = DateTime.now().toUtc().toIso8601String();
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final freshSeenAt = DateTime.now().toUtc().toIso8601String();
 
-    await tester.pumpWidget(
-      buildLocalizedTestApp(
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
           home: const AgentsWorkspacePage(),
           session: const SessionIdentity(
             did: 'did:human:me',

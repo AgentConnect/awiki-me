@@ -2183,14 +2183,14 @@ abstract class AppLocalizations {
   /// No description provided for @agentEmptyWaitingHost.
   ///
   /// In zh, this message translates to:
-  /// **'在宿主机完成 Daemon 安装后，这里会自动同步。'**
+  /// **'当前账号还没有可用的 Daemon。安装完成后可自动同步，也可以手动刷新。'**
   String get agentEmptyWaitingHost;
 
-  /// No description provided for @agentEmptySyncingHost.
+  /// No description provided for @agentEmptyInstallWaitingHost.
   ///
   /// In zh, this message translates to:
-  /// **'正在同步宿主机上的 Daemon，安装完成后会自动出现。'**
-  String get agentEmptySyncingHost;
+  /// **'正在等待宿主机完成 Daemon 安装，完成后会自动出现。'**
+  String get agentEmptyInstallWaitingHost;
 
   /// No description provided for @agentSelectOne.
   ///
@@ -3967,6 +3967,48 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'群名称不能为空'**
   String get groupNameRequired;
+
+  /// No description provided for @chatGroupMemberAddedByYou.
+  ///
+  /// In zh, this message translates to:
+  /// **'你邀请{member}加入了群聊'**
+  String chatGroupMemberAddedByYou(Object member);
+
+  /// No description provided for @chatGroupMemberAddedBy.
+  ///
+  /// In zh, this message translates to:
+  /// **'{actor}邀请{member}加入了群聊'**
+  String chatGroupMemberAddedBy(Object actor, Object member);
+
+  /// No description provided for @chatGroupMemberJoined.
+  ///
+  /// In zh, this message translates to:
+  /// **'{member}加入了群聊'**
+  String chatGroupMemberJoined(Object member);
+
+  /// No description provided for @chatGroupMemberRemovedByYou.
+  ///
+  /// In zh, this message translates to:
+  /// **'你将{member}移出了群聊'**
+  String chatGroupMemberRemovedByYou(Object member);
+
+  /// No description provided for @chatGroupMemberRemovedBy.
+  ///
+  /// In zh, this message translates to:
+  /// **'{actor}将{member}移出了群聊'**
+  String chatGroupMemberRemovedBy(Object actor, Object member);
+
+  /// No description provided for @chatGroupMemberLeft.
+  ///
+  /// In zh, this message translates to:
+  /// **'{member}退出了群聊'**
+  String chatGroupMemberLeft(Object member);
+
+  /// No description provided for @chatGroupProfileUpdated.
+  ///
+  /// In zh, this message translates to:
+  /// **'群信息已更新'**
+  String get chatGroupProfileUpdated;
 }
 
 class _AppLocalizationsDelegate

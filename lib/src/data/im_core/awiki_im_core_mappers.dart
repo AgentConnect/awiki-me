@@ -16,6 +16,7 @@ import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_summary.dart';
+import '../../domain/entities/group_system_event.dart';
 import '../../domain/entities/profile_patch.dart';
 import '../../domain/entities/realtime_update.dart';
 import '../../domain/entities/relationship_summary.dart';
@@ -94,6 +95,7 @@ class AwikiImCoreMappers {
   }) {
     final manifest = _attachmentManifestJson(message);
     final attachment = _attachmentFromCoreMessage(message, manifest: manifest);
+    final systemEvent = GroupSystemEvent.tryParse(message.body.payloadJson);
     final bodyMentionPayload = ChatMentionPayload.tryParsePayloadJson(
       message.body.payloadJson,
     );
@@ -133,9 +135,13 @@ class AwikiImCoreMappers {
           _attribute(message.metadata, 'sender_name'),
       receiverDid: _nonEmpty(message.receiver),
       groupId: groupId,
-      content: attachment?.caption ?? mentionPayload?.text ?? bodyText,
+      content: systemEvent == null
+          ? attachment?.caption ?? mentionPayload?.text ?? bodyText
+          : '',
       originalType: attachment != null
           ? _attachmentManifestContentType
+          : systemEvent != null
+          ? 'application/json'
           : mentionPayload == null
           ? message.body.kind ?? message.metadata.contentType ?? 'text'
           : 'application/json',
@@ -156,6 +162,7 @@ class AwikiImCoreMappers {
   }) {
     final manifest = _snapshotAttachmentManifestJson(message);
     final attachment = _attachmentFromManifest(manifest);
+    final systemEvent = GroupSystemEvent.tryParse(message.body.payloadJson);
     final bodyMentionPayload = ChatMentionPayload.tryParsePayloadJson(
       message.body.payloadJson,
     );
@@ -196,9 +203,13 @@ class AwikiImCoreMappers {
           _snapshotAttribute(message, 'sender_name'),
       receiverDid: _nonEmpty(message.receiver),
       groupId: groupId,
-      content: attachment?.caption ?? mentionPayload?.text ?? bodyText,
+      content: systemEvent == null
+          ? attachment?.caption ?? mentionPayload?.text ?? bodyText
+          : '',
       originalType: attachment != null
           ? _attachmentManifestContentType
+          : systemEvent != null
+          ? 'application/json'
           : mentionPayload == null
           ? message.body.kind ?? message.contentType ?? 'text'
           : 'application/json',
@@ -504,6 +515,26 @@ class AwikiImCoreMappers {
   }) {
     final message = event.message;
     if (message == null) {
+      if (event.kind == 'group_updated') {
+        final groupId = _nonEmpty(event.group);
+        final group = groupId == null
+            ? null
+            : GroupSummary(
+                groupId: groupId,
+                displayName: groupId,
+                description: '',
+                memberCount: 0,
+                lastMessageAt: null,
+                membershipStatus: null,
+              );
+        return RealtimeUpdate(
+          group: group,
+          syncDirty: event.sync?.syncDirty ?? true,
+          gapDetected: event.sync?.gapDetected ?? false,
+          syncEventSeq: event.sync?.eventSeq,
+          syncEventType: event.sync?.eventType,
+        );
+      }
       return null;
     }
     final chatMessage = chatMessageFromCore(message, ownerDid: ownerDid);
@@ -863,6 +894,10 @@ String _messagePreview(core.Message message) {
   if (AgentControlPayloads.isControl(message.body.payloadJson)) {
     return _controlMessagePreview(message.body.text);
   }
+  final systemEvent = GroupSystemEvent.tryParse(message.body.payloadJson);
+  if (systemEvent != null) {
+    return systemEvent.type;
+  }
   final manifest = _attachmentManifestJson(message);
   final attachment = _attachmentFromCoreMessage(message, manifest: manifest);
   if (attachment != null) {
@@ -888,6 +923,10 @@ String _messagePreview(core.Message message) {
 String _snapshotMessagePreview(core.ConversationSnapshotMessage message) {
   if (AgentControlPayloads.isControl(message.body.payloadJson)) {
     return _controlMessagePreview(message.body.text);
+  }
+  final systemEvent = GroupSystemEvent.tryParse(message.body.payloadJson);
+  if (systemEvent != null) {
+    return systemEvent.type;
   }
   final manifest = _snapshotAttachmentManifestJson(message);
   final attachment = _attachmentFromManifest(manifest);
