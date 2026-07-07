@@ -12,7 +12,7 @@ PACKAGE_MACOS_BUNDLE_ID="ai.awiki.awikiMe"
 PACKAGE_FLUTTER_BIN="flutter"
 PACKAGE_SDK_REPO_DIR="../awiki-cli-rs2"
 PACKAGE_ANDROID_EXPECTED_CERT_SHA256="F2:67:E9:18:57:54:ED:C1:2B:E5:69:69:1B:39:B9:EF:D4:EF:1E:CF:2D:7E:D8:18:81:42:69:B3:70:85:D8:75"
-PACKAGE_ANDROID_BUILD_MODE="debug"
+PACKAGE_ANDROID_BUILD_MODE="release"
 PACKAGE_MACOS_BUILD_MODE="profile"
 XCODE_CONFIGURATION="Profile"
 DIST_ROOT="$ROOT_DIR/dist"
@@ -520,6 +520,9 @@ verify_android_apk() {
   expected_version_code=$((BUILD_NUMBER + 2000))
   [[ "$version_code" == "$expected_version_code" ]] ||
     fail "Android arm64 split APK versionCode is $version_code, expected $expected_version_code"
+  if printf '%s\n' "$badging" | grep -q '^application-debuggable'; then
+    fail "Android package is debuggable; user-facing packages must be built in release mode"
+  fi
 
   local verify_output
   verify_output="$("$apksigner_tool" verify --print-certs "$apk" 2>&1)" ||

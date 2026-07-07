@@ -103,8 +103,13 @@ installable non-store packages. The script derives `AWIKI_BASE_URL`,
 channel only separates output directories, file names, and `latest.json`; it
 does not control store release status or code signing.
 
-The script always builds release artifacts for Android arm64, macOS arm64, and
-macOS x64. It also rebuilds the native SDK artifacts before packaging.
+The script always builds user-facing artifacts for Android arm64, macOS arm64,
+and macOS x64. Android is built in Flutter release mode so debug diagnostics
+such as layout overflow banners are never shipped to users. The Android signing
+certificate still comes from `android/key.properties`; this can be an internal
+distribution certificate and does not require store signing. macOS is packaged
+as profile DMGs. The script also rebuilds the native SDK artifacts before
+packaging.
 
 The current checked-in config builds the installable online test package:
 
