@@ -1,5 +1,7 @@
 # Plan：AWiki Me 新消息点开首屏秒开优化
 
+> 归档说明：本文档是 2026-06-28 的历史执行台账，用于追溯首屏性能、realtime tail 和 local-first 决策，不是当前消息显示架构入口，也不应继续按文中的 Codex Goal 提示词执行。当前 correctness key、patch/read/send 边界和旧路径退场规则以 `awiki-me/docs/conversation-presentation-ownership.md`、`awiki-me/docs/performance-tracing.md` 和 `awiki-cli-rs2/docs/api/im-core-interface/04-message-interface.md` 为准。
+
 状态：done
 DOC：`awiki-me/docs/plan/20260628-chat-open-realtime-tail/`  
 Harness：`awiki-harness/`  

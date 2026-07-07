@@ -86,6 +86,8 @@ performance gate 的 hard evidence。
 | `message.cli_send_app_thread_after_ms` | 打开首屏之后显式 conversation-after / legacy thread-after 的后台补新耗时。 | 只能作为后台补同步证据，不能替代 first-paint 指标。 |
 | `message.cli_send_to_app_history_visible_ms` | App history 查询最终可见该消息的耗时。 | 用于确认本地 projection/history 最终一致，不能替代 first-paint 指标。 |
 
+部分 metric 名称保留 `thread` 字样是历史兼容，不表示 `ThreadRef` 是当前消息显示 correctness key。当前判断可见性和首屏性能时，仍以 `ConversationSummary.effectiveConversationId` / `AppConversationReadRef` 打开的 canonical conversation timeline 为准。
+
 first-paint gate 必须先等待 fast local conversation preview，然后使用
 `ConversationSummary.effectiveConversationId` 打开会话，通过 `AppConversationReadRef`
 读取 canonical conversation timeline 或等待 conversation timeline patch，最后轮询当前

@@ -1,5 +1,7 @@
 # Plan：ANP P9 消息 Mention 扩展落地方案
 
+> 归档说明：本文档是 2026-06-14 的历史执行台账和 P9 mention 决策背景，不是当前消息显示 / 发送架构入口，也不应继续按文中的 Codex Goal 提示词执行。当前 list/detail/read/send/timeline correctness 以 `awiki-me/docs/conversation-presentation-ownership.md` 和 `awiki-cli-rs2/docs/api/im-core-interface/04-message-interface.md` 为准；发送路径必须使用 conversationId-first API。
+
 状态：done（Step 01-05 已完成；远端 App+CLI group P9 E2E 已通过，Daemon live prompt 作为后续专项 gate）
 DOC：`awiki-me-group/docs/message-mention-extension-implementation-plan/`
 Harness：`awiki-harness/`
