@@ -3858,6 +3858,112 @@ void main() {
     expect(thread.messages, isEmpty);
   });
 
+  test('可见群聊刷新本地投影后展示成员加入系统事件', () async {
+    const groupId = 'did:test:group:feedback';
+    final groupConversation = ConversationSummary(
+      conversationId: 'group:$groupId',
+      threadId: 'group:$groupId',
+      displayName: '反馈群',
+      lastMessagePreview: '旧消息',
+      lastMessageAt: DateTime(2026, 5, 8, 10, 0),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: groupId,
+    );
+    final oldMessage = ChatMessage(
+      localId: 'group-feedback-message-1',
+      remoteId: 'group-feedback-message-1',
+      conversationId: groupConversation.effectiveConversationId,
+      threadId: groupConversation.threadId,
+      senderDid: 'did:member:old',
+      groupId: groupId,
+      content: '旧消息',
+      createdAt: DateTime(2026, 5, 8, 10, 0),
+      isMine: false,
+      sendState: MessageSendState.sent,
+      serverSequence: 1,
+    );
+    _seedContainerConversationProjection(
+      container,
+      groupConversation,
+      <ChatMessage>[oldMessage],
+    );
+
+    final controller = container.read(chatThreadsProvider.notifier);
+    await controller.openConversation(groupConversation);
+    controller.markConversationVisible(
+      groupConversation,
+      displayThreadId: _timelineThreadId(groupConversation),
+    );
+    await pumpEventQueue();
+
+    final initialThread = container.read(
+      chatThreadProvider(_timelineThreadId(groupConversation)),
+    );
+    expect(initialThread.messages.map((item) => item.content), contains('旧消息'));
+    expect(
+      initialThread.messages.where((item) => item.isGroupSystemEvent),
+      isEmpty,
+    );
+
+    final messagingService =
+        container.read(messagingServiceProvider) as FakeMessagingService;
+    final callsBeforeRefresh = messagingService.conversationTimelineCalls;
+    await messagingService.persistConversationMessages(
+      groupConversation.effectiveConversationId,
+      <ChatMessage>[
+        ChatMessage(
+          localId: 'group-feedback-event-2',
+          remoteId: 'group-feedback-event-2',
+          conversationId: groupConversation.effectiveConversationId,
+          threadId: groupConversation.threadId,
+          senderDid: 'did:me',
+          groupId: groupId,
+          content: '',
+          originalType: 'application/json',
+          payloadJson: jsonEncode(<String, Object?>{
+            'schema': 'awiki.group.system_event.v1',
+            'type': 'member_added',
+            'group_did': groupId,
+            'group_event_seq': '2',
+            'actor_did': 'did:me',
+            'subject_did': 'did:member:new',
+            'changed_at': '2026-05-08T10:01:00.000Z',
+          }),
+          createdAt: DateTime(2026, 5, 8, 10, 1),
+          isMine: true,
+          sendState: MessageSendState.sent,
+          serverSequence: 2,
+        ),
+      ],
+    );
+
+    await controller.refreshVisibleLocalProjections();
+    await pumpEventQueue();
+
+    final refreshedThread = container.read(
+      chatThreadProvider(_timelineThreadId(groupConversation)),
+    );
+    expect(
+      refreshedThread.messages.map((item) => item.content),
+      contains('旧消息'),
+    );
+    final systemEvents = refreshedThread.messages
+        .where((item) => item.isGroupSystemEvent)
+        .toList(growable: false);
+    expect(systemEvents, hasLength(1));
+    expect(systemEvents.single.groupSystemEvent?.isMemberAdded, isTrue);
+    expect(systemEvents.single.groupSystemEvent?.subjectDid, 'did:member:new');
+    expect(
+      messagingService.conversationTimelineCalls,
+      greaterThan(callsBeforeRefresh),
+    );
+    expect(
+      messagingService.lastConversationTimelineId,
+      groupConversation.effectiveConversationId,
+    );
+  });
+
   test('打开群聊时附件消息不会被文本过滤移除', () async {
     const groupId = 'did:test:group:attachments';
     final groupConversation = ConversationSummary(

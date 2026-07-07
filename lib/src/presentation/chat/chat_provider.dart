@@ -828,6 +828,76 @@ class ChatThreadsController
     );
   }
 
+  Future<void> refreshLocalProjectionForConversation(
+    ConversationSummary conversation, {
+    String? displayThreadId,
+    bool force = false,
+    int limit = _initialLocalHistoryLimit,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+    final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
+    final current = thread(targetThreadId);
+    final shouldLoad =
+        force ||
+        _shouldLoadLocalHistoryForOpen(targetThreadId, current) ||
+        _shouldLoadHistory(current, conversation);
+    _chatProviderTrace(
+      'local_projection.refresh.request',
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(targetThreadId),
+        'force': force,
+        'should_load': shouldLoad,
+        'messages': current.messages.length,
+        'renderable': _renderableMessageCount(current),
+        'last_at': conversation.lastMessageAt,
+      },
+    );
+    if (!shouldLoad) {
+      return;
+    }
+    await _loadLocalHistory(
+      _refreshedConversationFor(conversation),
+      intoThreadId: targetThreadId,
+      limit: limit,
+      showHydratingState: false,
+      markLoadedWhenEmpty: false,
+    );
+  }
+
+  Future<void> refreshVisibleLocalProjections({
+    bool force = true,
+    int limit = _initialLocalHistoryLimit,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+    final visibleEntries = <MapEntry<String, _ThreadCacheMetadata>>[
+      for (final entry in _cacheMetadataByThreadId.entries)
+        if (entry.value.isVisible && entry.value.visibleConversation != null)
+          entry,
+    ];
+    if (visibleEntries.isEmpty) {
+      return;
+    }
+    for (final entry in visibleEntries) {
+      if (!mounted) {
+        break;
+      }
+      final conversation = entry.value.visibleConversation;
+      if (conversation == null) {
+        continue;
+      }
+      await refreshLocalProjectionForConversation(
+        conversation,
+        displayThreadId: entry.key,
+        force: force,
+        limit: limit,
+      );
+    }
+  }
+
   Future<void> _openConversationLocalFirst(
     ConversationSummary conversation, {
     required String displayThreadId,

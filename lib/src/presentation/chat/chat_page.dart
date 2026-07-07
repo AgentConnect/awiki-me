@@ -224,7 +224,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   void dispose() {
     _visibleReadAckToken += 1;
     _cancelPendingScrollRequests();
-    _scheduleConversationHidden(
+    _markConversationHidden(
       widget.conversation,
       displayThreadId: _displayThreadId,
     );
@@ -241,7 +241,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     super.didUpdateWidget(oldWidget);
     if (!sameConversationThread(oldWidget.conversation, widget.conversation)) {
       _visibleReadAckToken += 1;
-      _scheduleConversationHidden(
+      _markConversationHidden(
         oldWidget.conversation,
         displayThreadId: _displayThreadId,
       );
@@ -300,18 +300,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
         return;
       }
       _markConversationVisible(conversation, displayThreadId: displayThreadId);
-    });
-  }
-
-  void _scheduleConversationHidden(
-    ConversationSummary conversation, {
-    required String displayThreadId,
-  }) {
-    Future<void>.delayed(Duration.zero, () {
-      _chatThreadsController.markConversationHidden(
-        conversation,
-        displayThreadId: displayThreadId,
-      );
     });
   }
 
@@ -806,15 +794,43 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   Future<void> _showGroupInfoDialog(ConversationSummary conversation) async {
+    final displayThreadId = _displayThreadId;
     await AppNavigator.showDialog<void>(
       context,
       (dialogContext) => _GroupInfoDialog(
         initialGroup: _groupSummaryForConversation(conversation),
+        onGroupUpdated: (updated) => _refreshGroupLocalProjection(
+          conversation,
+          updated,
+          displayThreadId: displayThreadId,
+        ),
+      ),
+    );
+  }
+
+  void _refreshGroupLocalProjection(
+    ConversationSummary conversation,
+    GroupSummary updated, {
+    required String displayThreadId,
+  }) {
+    if (!mounted) {
+      return;
+    }
+    final refreshedConversation = conversation.copyWith(
+      groupId: updated.groupId,
+      conversationId: 'group:${updated.groupId}',
+    );
+    unawaited(
+      _chatThreadsController.refreshLocalProjectionForConversation(
+        refreshedConversation,
+        displayThreadId: displayThreadId,
+        force: true,
       ),
     );
   }
 
   Future<void> _openGroupInviteDialog(ConversationSummary conversation) async {
+    final displayThreadId = _displayThreadId;
     final group = _groupInviteTarget(
       conversation,
       ref.read(groupProvider).groups,
@@ -847,6 +863,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
               return;
             }
             ref.read(groupProvider.notifier).upsertGroup(updated);
+            _refreshGroupLocalProjection(
+              conversation,
+              updated,
+              displayThreadId: displayThreadId,
+            );
           },
         ),
       );

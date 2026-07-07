@@ -543,9 +543,13 @@ class _PeerInfoSection extends StatelessWidget {
 }
 
 class _GroupInfoDialog extends ConsumerStatefulWidget {
-  const _GroupInfoDialog({required this.initialGroup});
+  const _GroupInfoDialog({
+    required this.initialGroup,
+    required this.onGroupUpdated,
+  });
 
   final GroupSummary initialGroup;
+  final ValueChanged<GroupSummary> onGroupUpdated;
 
   @override
   ConsumerState<_GroupInfoDialog> createState() => _GroupInfoDialogState();
@@ -848,6 +852,7 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
             return;
           }
           setState(() => _group = updated);
+          widget.onGroupUpdated(updated);
         },
       ),
     );
@@ -864,6 +869,7 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
           return;
         }
         setState(() => _group = updated);
+        widget.onGroupUpdated(updated);
       },
     );
   }

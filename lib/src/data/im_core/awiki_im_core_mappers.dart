@@ -891,12 +891,12 @@ String? _subjectTypeFromDid(String did) {
 }
 
 String _messagePreview(core.Message message) {
-  if (AgentControlPayloads.isControl(message.body.payloadJson)) {
-    return _controlMessagePreview(message.body.text);
-  }
   final systemEvent = GroupSystemEvent.tryParse(message.body.payloadJson);
   if (systemEvent != null) {
     return systemEvent.type;
+  }
+  if (_isHiddenControlPayload(message.body.payloadJson)) {
+    return _controlMessagePreview(message.body.text);
   }
   final manifest = _attachmentManifestJson(message);
   final attachment = _attachmentFromCoreMessage(message, manifest: manifest);
@@ -921,12 +921,12 @@ String _messagePreview(core.Message message) {
 }
 
 String _snapshotMessagePreview(core.ConversationSnapshotMessage message) {
-  if (AgentControlPayloads.isControl(message.body.payloadJson)) {
-    return _controlMessagePreview(message.body.text);
-  }
   final systemEvent = GroupSystemEvent.tryParse(message.body.payloadJson);
   if (systemEvent != null) {
     return systemEvent.type;
+  }
+  if (_isHiddenControlPayload(message.body.payloadJson)) {
+    return _controlMessagePreview(message.body.text);
   }
   final manifest = _snapshotAttachmentManifestJson(message);
   final attachment = _attachmentFromManifest(manifest);
@@ -957,7 +957,14 @@ bool _shouldIncludeConversationLastMessage({
   required String? payloadJson,
   required String preview,
 }) {
-  return !AgentControlPayloads.isControl(payloadJson);
+  return !_isHiddenControlPayload(payloadJson);
+}
+
+bool _isHiddenControlPayload(String? payloadJson) {
+  if (GroupSystemEvent.tryParse(payloadJson) != null) {
+    return false;
+  }
+  return AgentControlPayloads.isControl(payloadJson);
 }
 
 MessageSendState _sendStateFromCore(

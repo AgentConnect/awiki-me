@@ -228,6 +228,9 @@ class MessageSyncCoordinator
           await ref
               .read(chatThreadsProvider.notifier)
               .prewarmLocalHistoryForConversations(conversations);
+          await ref
+              .read(chatThreadsProvider.notifier)
+              .refreshVisibleLocalProjections(force: true);
           if (_disposed) {
             return;
           }

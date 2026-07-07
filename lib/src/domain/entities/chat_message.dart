@@ -55,12 +55,13 @@ class ChatMessage {
   bool get hasDisplayableText =>
       content.trim().isNotEmpty && (isTextMessage || isMentionPayload);
 
-  bool get isAgentControlPayload => AgentControlPayloads.isControl(payloadJson);
-
   GroupSystemEvent? get groupSystemEvent =>
       GroupSystemEvent.tryParse(payloadJson);
 
   bool get isGroupSystemEvent => groupSystemEvent != null;
+
+  bool get isAgentControlPayload =>
+      !isGroupSystemEvent && AgentControlPayloads.isControl(payloadJson);
 
   bool get hasRenderableContent =>
       !isAgentControlPayload &&

@@ -280,6 +280,95 @@ void main() {
     expect(mapped.hasRenderableContent, isFalse);
   });
 
+  test('group system event maps into renderable chat message', () {
+    const payload =
+        '{"schema":"awiki.group.system_event.v1","type":"member_added","group_did":"did:test:group","group_event_seq":"2","actor_did":"did:alice","subject_did":"did:bob","changed_at":"2026-05-23T09:00:00Z"}';
+    const identity = core.ConversationIdentity(
+      conversationId: 'group:did:test:group',
+      canonicalThreadKind: 'group',
+      canonicalThreadId: 'did:test:group',
+      storageThreadRef: core.ConversationStorageThreadRef(
+        kind: 'group',
+        id: 'did:test:group',
+      ),
+      identityScope: core.ConversationIdentityScope.group,
+      migrationState: core.ConversationMigrationState.canonical,
+    );
+    const message = core.Message(
+      id: 'msg-group-event',
+      threadKind: 'group',
+      threadId: 'group:did:test:group',
+      direction: core.MessageDirection.outgoing,
+      sender: 'did:alice',
+      group: 'did:test:group',
+      body: core.MessageBodyView(payloadJson: payload, kind: 'payload'),
+      sentAt: '2026-05-23T09:00:00Z',
+      metadata: core.MessageMetadata(
+        conversationIdentity: identity,
+        serverSequence: 2,
+      ),
+    );
+
+    final mapped = mapper.chatMessageFromCore(message, ownerDid: 'did:alice');
+
+    expect(mapped.payloadJson, payload);
+    expect(mapped.isGroupSystemEvent, isTrue);
+    expect(mapped.groupSystemEvent?.isMemberAdded, isTrue);
+    expect(mapped.isAgentControlPayload, isFalse);
+    expect(mapped.hasRenderableContent, isTrue);
+    expect(mapped.previewText, 'member_added');
+  });
+
+  test('group system event remains visible in conversation summary', () {
+    const payload =
+        '{"schema":"awiki.group.system_event.v1","type":"member_added","group_did":"did:test:group","group_event_seq":"2","actor_did":"did:alice","subject_did":"did:bob"}';
+    const identity = core.ConversationIdentity(
+      conversationId: 'group:did:test:group',
+      canonicalThreadKind: 'group',
+      canonicalThreadId: 'did:test:group',
+      storageThreadRef: core.ConversationStorageThreadRef(
+        kind: 'group',
+        id: 'did:test:group',
+      ),
+      identityScope: core.ConversationIdentityScope.group,
+      migrationState: core.ConversationMigrationState.canonical,
+    );
+    const lastMessage = core.Message(
+      id: 'msg-group-event',
+      threadKind: 'group',
+      threadId: 'group:did:test:group',
+      direction: core.MessageDirection.outgoing,
+      sender: 'did:alice',
+      group: 'did:test:group',
+      body: core.MessageBodyView(payloadJson: payload, kind: 'payload'),
+      sentAt: '2026-05-23T09:00:00Z',
+      metadata: core.MessageMetadata(
+        conversationIdentity: identity,
+        serverSequence: 2,
+      ),
+    );
+    const conversation = core.Conversation(
+      threadKind: 'group',
+      threadId: 'group:did:test:group',
+      conversationIdentity: identity,
+      title: '测试群',
+      lastMessage: lastMessage,
+      unreadCount: 0,
+      messageCount: 1,
+    );
+
+    final mapped = mapper.conversationFromCore(
+      conversation,
+      ownerDid: 'did:alice',
+    );
+
+    expect(mapper.shouldIncludeConversation(conversation), isTrue);
+    expect(mapped.lastMessagePreview, 'member_added');
+    expect(mapped.lastMessagePayloadJson, payload);
+    expect(mapped.lastMessageSnapshot?.isGroupSystemEvent, isTrue);
+    expect(mapped.lastMessageSnapshot?.hasRenderableContent, isTrue);
+  });
+
   test('attachment manifest message maps into attachment chat message', () {
     const manifest =
         '{"attachments":[{"attachment_id":"att-1","filename":"report.pdf","mime_type":"application/pdf","size":"1024","access_info":{"object_uri":"https://objects.example/att-1"}}],"primary_attachment_id":"att-1","caption":"季度报告"}';
