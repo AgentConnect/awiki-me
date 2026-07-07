@@ -17,6 +17,8 @@ PACKAGE_MACOS_BUILD_MODE="profile"
 XCODE_CONFIGURATION="Profile"
 DIST_ROOT="$ROOT_DIR/dist"
 ANDROID_PLUGIN_REGISTRANT="$ROOT_DIR/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java"
+ANDROID_PLUGIN_REGISTRANT_BACKUP=""
+ANDROID_PLUGIN_REGISTRANT_EXISTED=0
 
 PUBSPEC_PATH="$ROOT_DIR/pubspec.yaml"
 PUBSPEC_BACKUP=""
@@ -36,6 +38,15 @@ on_exit() {
   if [[ "$status" -ne 0 && "$PUBSPEC_WAS_UPDATED" -eq 1 && -n "$PUBSPEC_BACKUP" && -f "$PUBSPEC_BACKUP" ]]; then
     cp "$PUBSPEC_BACKUP" "$PUBSPEC_PATH"
     log "restored pubspec.yaml version after failed build"
+  fi
+  if [[ -n "$ANDROID_PLUGIN_REGISTRANT_BACKUP" && -f "$ANDROID_PLUGIN_REGISTRANT_BACKUP" ]]; then
+    if [[ "$ANDROID_PLUGIN_REGISTRANT_EXISTED" -eq 1 ]]; then
+      mkdir -p "$(dirname "$ANDROID_PLUGIN_REGISTRANT")"
+      cp "$ANDROID_PLUGIN_REGISTRANT_BACKUP" "$ANDROID_PLUGIN_REGISTRANT"
+    else
+      rm -f "$ANDROID_PLUGIN_REGISTRANT"
+    fi
+    rm -f "$ANDROID_PLUGIN_REGISTRANT_BACKUP"
   fi
   if [[ -n "$PUBSPEC_BACKUP" && -f "$PUBSPEC_BACKUP" ]]; then
     rm -f "$PUBSPEC_BACKUP"
@@ -150,10 +161,12 @@ json_string() {
 require_cmd python3
 
 for required_name in \
+  PACKAGE_ANDROID_STARTUP_SMOKE_TEST \
   PACKAGE_VERSION_BUMP; do
   require_config_var "$required_name"
 done
 
+require_non_empty_config_var PACKAGE_ANDROID_STARTUP_SMOKE_TEST
 require_non_empty_config_var PACKAGE_VERSION_BUMP
 if [[ ! "${AWIKI_DOMAIN+x}" ]]; then
   AWIKI_DOMAIN=""
@@ -176,6 +189,7 @@ for value_name in \
   AWIKI_DAEMON_DOWNLOAD_BASE_URL \
   AWIKI_UPDATE_MANIFEST_URL \
   AWIKI_RELEASES_URL \
+  PACKAGE_ANDROID_STARTUP_SMOKE_TEST \
   PACKAGE_VERSION_BUMP; do
   if [[ "${!value_name+x}" ]]; then
     validate_no_newline "$value_name" "${!value_name}"
@@ -187,6 +201,14 @@ case "$PACKAGE_VERSION_BUMP" in
     ;;
   *)
     fail "PACKAGE_VERSION_BUMP must be one of: build, patch, minor, major, none"
+    ;;
+esac
+
+case "$PACKAGE_ANDROID_STARTUP_SMOKE_TEST" in
+  auto|always|never)
+    ;;
+  *)
+    fail "PACKAGE_ANDROID_STARTUP_SMOKE_TEST must be one of: auto, always, never"
     ;;
 esac
 
@@ -493,8 +515,128 @@ prepare_android_release_sources() {
   [[ "$PACKAGE_ANDROID_BUILD_MODE" == "release" ]] ||
     fail "Android user-facing packages must use release mode"
 
-  mkdir -p "$(dirname "$ANDROID_PLUGIN_REGISTRANT")"
-  rm -f "$ANDROID_PLUGIN_REGISTRANT"
+  if [[ -z "$ANDROID_PLUGIN_REGISTRANT_BACKUP" ]]; then
+    ANDROID_PLUGIN_REGISTRANT_BACKUP="$(mktemp)"
+    if [[ -f "$ANDROID_PLUGIN_REGISTRANT" ]]; then
+      ANDROID_PLUGIN_REGISTRANT_EXISTED=1
+      cp "$ANDROID_PLUGIN_REGISTRANT" "$ANDROID_PLUGIN_REGISTRANT_BACKUP"
+    else
+      ANDROID_PLUGIN_REGISTRANT_EXISTED=0
+      : > "$ANDROID_PLUGIN_REGISTRANT_BACKUP"
+    fi
+  fi
+
+  "$PACKAGE_FLUTTER_BIN" pub get
+  write_android_release_plugin_registrant
+}
+
+write_android_release_plugin_registrant() {
+  python3 - "$ROOT_DIR" "$ANDROID_PLUGIN_REGISTRANT" <<'PY'
+import json
+import pathlib
+import re
+import sys
+
+root_dir = pathlib.Path(sys.argv[1])
+registrant_path = pathlib.Path(sys.argv[2])
+dependencies_path = root_dir / ".flutter-plugins-dependencies"
+
+if not dependencies_path.exists():
+    raise SystemExit(".flutter-plugins-dependencies is missing after flutter pub get")
+
+dependencies = json.loads(dependencies_path.read_text(encoding="utf-8"))
+plugins = dependencies.get("plugins", {}).get("android", [])
+
+
+def android_block(pubspec_text):
+    lines = pubspec_text.splitlines()
+    for index, line in enumerate(lines):
+        if re.match(r"^\s{6}android:\s*(?:#.*)?$", line):
+            block = []
+            for next_line in lines[index + 1 :]:
+                if not next_line.startswith("        "):
+                    break
+                block.append(next_line[8:])
+            return "\n".join(block)
+    return ""
+
+
+def pubspec_value(block, key):
+    match = re.search(rf"^\s*{re.escape(key)}:\s*(.+?)\s*$", block, re.MULTILINE)
+    if not match:
+        return None
+    value = match.group(1).split("#", 1)[0].strip().strip("\"'")
+    return value or None
+
+
+registrations = []
+dev_plugin_names = []
+for plugin in plugins:
+    name = str(plugin.get("name") or "").strip()
+    if not name:
+        continue
+    if plugin.get("dev_dependency"):
+        dev_plugin_names.append(name)
+        continue
+    pubspec_path = pathlib.Path(str(plugin.get("path") or "")) / "pubspec.yaml"
+    if not pubspec_path.exists():
+        raise SystemExit(f"pubspec.yaml missing for Android plugin {name}: {pubspec_path}")
+    block = android_block(pubspec_path.read_text(encoding="utf-8"))
+    plugin_package = pubspec_value(block, "package")
+    plugin_class = pubspec_value(block, "pluginClass")
+    if plugin_package and plugin_class:
+        registrations.append((name, plugin_package, plugin_class))
+
+if not registrations:
+    raise SystemExit("no Android method-channel plugin registrations were generated")
+
+body_lines = []
+for name, plugin_package, plugin_class in registrations:
+    full_class = f"{plugin_package}.{plugin_class}"
+    body_lines.extend(
+        [
+            "    try {",
+            f"      flutterEngine.getPlugins().add(new {full_class}());",
+            "    } catch (Exception e) {",
+            f'      Log.e(TAG, "Error registering plugin {name}, {full_class}", e);',
+            "    }",
+        ]
+    )
+
+source = f'''package io.flutter.plugins;
+
+import androidx.annotation.Keep;
+import androidx.annotation.NonNull;
+import io.flutter.Log;
+
+import io.flutter.embedding.engine.FlutterEngine;
+
+/**
+ * Generated file. Do not edit.
+ * This file is generated by scripts/package_app.sh for release packaging.
+ */
+@Keep
+public final class GeneratedPluginRegistrant {{
+  private static final String TAG = "GeneratedPluginRegistrant";
+  public static void registerWith(@NonNull FlutterEngine flutterEngine) {{
+{chr(10).join(body_lines)}
+  }}
+}}
+'''
+
+for dev_name in dev_plugin_names:
+    if dev_name in source:
+        raise SystemExit(f"release GeneratedPluginRegistrant still references dev plugin {dev_name}")
+
+registrant_path.parent.mkdir(parents=True, exist_ok=True)
+registrant_path.write_text(source, encoding="utf-8")
+
+print(
+    "generated release Android plugin registrant with "
+    f"{len(registrations)} production plugins; excluded "
+    f"{len(dev_plugin_names)} dev plugins"
+)
+PY
 }
 
 verify_android_release_apk_contents() {
@@ -505,6 +647,7 @@ verify_android_release_apk_contents() {
   python3 - "$apk" "$ROOT_DIR/.flutter-plugins-dependencies" <<'PY'
 import json
 import pathlib
+import re
 import sys
 import zipfile
 
@@ -512,6 +655,7 @@ apk_path = pathlib.Path(sys.argv[1])
 dependencies_path = pathlib.Path(sys.argv[2])
 
 dev_plugin_names = []
+dev_plugin_markers = []
 if dependencies_path.exists():
     dependencies = json.loads(dependencies_path.read_text(encoding="utf-8"))
     for plugin in dependencies.get("plugins", {}).get("android", []):
@@ -519,9 +663,16 @@ if dependencies_path.exists():
             name = str(plugin.get("name") or "").strip()
             if name:
                 dev_plugin_names.append(name)
-
-if not dev_plugin_names:
-    sys.exit(0)
+                dev_plugin_markers.append(name.encode("utf-8"))
+                pubspec_path = pathlib.Path(str(plugin.get("path") or "")) / "pubspec.yaml"
+                if pubspec_path.exists():
+                    raw_pubspec = pubspec_path.read_text(encoding="utf-8", errors="ignore")
+                    for key in ("pluginClass", "package"):
+                        match = re.search(rf"^\s*{key}:\s*(.+?)\s*$", raw_pubspec, re.MULTILINE)
+                        if match:
+                            marker = match.group(1).split("#", 1)[0].strip().strip("\"'")
+                            if marker:
+                                dev_plugin_markers.append(marker.encode("utf-8"))
 
 scan_bytes = bytearray()
 with zipfile.ZipFile(apk_path) as archive:
@@ -532,11 +683,22 @@ with zipfile.ZipFile(apk_path) as archive:
             scan_bytes.extend(b"\0")
             scan_bytes.extend(archive.read(info))
 
+if b"Lio/flutter/plugins/GeneratedPluginRegistrant;" not in scan_bytes:
+    sys.stderr.write(
+        "Android release APK is missing io.flutter.plugins.GeneratedPluginRegistrant; "
+        "Flutter plugins will not register at startup.\n"
+    )
+    sys.exit(1)
+
 leaked = sorted({
     name
     for name in dev_plugin_names
     if name.encode("utf-8") in scan_bytes
 })
+for marker in dev_plugin_markers:
+    if marker in scan_bytes:
+        leaked.append(marker.decode("utf-8", errors="replace"))
+leaked = sorted(set(leaked))
 if leaked:
     sys.stderr.write(
         "Android release APK contains dev-only plugins: "
@@ -589,6 +751,66 @@ verify_android_apk() {
     [[ "$actual_norm" == "$expected_norm" ]] ||
       fail "Android signing certificate changed: $actual_cert"
   fi
+}
+
+android_smoke_test_device() {
+  case "$PACKAGE_ANDROID_STARTUP_SMOKE_TEST" in
+    never)
+      return 0
+      ;;
+  esac
+  if ! command -v adb >/dev/null 2>&1; then
+    [[ "$PACKAGE_ANDROID_STARTUP_SMOKE_TEST" == "auto" ]] && return 0
+    fail "adb is required for Android startup smoke test"
+  fi
+
+  local devices
+  devices="$(adb devices | awk 'NR > 1 && $2 == "device" { print $1 }')"
+  local emulator_devices
+  emulator_devices="$(printf '%s\n' "$devices" | sed '/^$/d' | grep '^emulator-' || true)"
+  local count
+  count="$(printf '%s\n' "$emulator_devices" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
+
+  if [[ "$PACKAGE_ANDROID_STARTUP_SMOKE_TEST" == "auto" ]]; then
+    if [[ "$count" -eq 1 ]]; then
+      printf '%s\n' "$emulator_devices" | sed -n '1p'
+    fi
+    return 0
+  fi
+
+  [[ "$count" -eq 1 ]] ||
+    fail "Android startup smoke test requires exactly one emulator device; found $count"
+  printf '%s\n' "$emulator_devices" | sed -n '1p'
+}
+
+verify_android_startup_smoke() {
+  local apk="$1"
+  local device
+  device="$(android_smoke_test_device)"
+  if [[ -z "$device" ]]; then
+    log "skipping Android startup smoke test"
+    return 0
+  fi
+
+  log "running Android startup smoke test on $device"
+  adb -s "$device" install -r "$apk" >/dev/null
+  adb -s "$device" shell pm clear "$PACKAGE_ANDROID_APP_ID" >/dev/null
+  adb -s "$device" logcat -c
+  adb -s "$device" shell monkey \
+    -p "$PACKAGE_ANDROID_APP_ID" \
+    -c android.intent.category.LAUNCHER \
+    1 >/dev/null
+  sleep 6
+
+  local pid crash_log
+  pid="$(adb -s "$device" shell pidof "$PACKAGE_ANDROID_APP_ID" 2>/dev/null | tr -d '\r' || true)"
+  crash_log="$(adb -s "$device" logcat -d -t 1200 | grep -Ei \
+    'FATAL EXCEPTION|Fatal signal|SIGSEGV|UnsatisfiedLink|ClassNotFoundException|dlopen failed|native crash|tombstone|Force finishing activity' || true)"
+  if [[ -z "$pid" || -n "$crash_log" ]]; then
+    printf '%s\n' "$crash_log" >&2
+    fail "Android startup smoke test failed"
+  fi
+  log "Android startup smoke test passed"
 }
 
 verify_macos_app() {
@@ -668,6 +890,7 @@ build_android_arm64() {
   [[ -f "$built_apk" ]] ||
     fail "expected Android arm64 APK not found: $built_apk"
   verify_android_apk "$built_apk" "$aapt_tool" "$apksigner_tool"
+  verify_android_startup_smoke "$built_apk"
   cp "$built_apk" "$output_apk"
 }
 
@@ -727,12 +950,12 @@ download_url_for() {
   printf '%s/%s/%s\n' "$(download_base_url)" "$VERSION_NAME" "$file_name"
 }
 
-write_app_update_manifest() {
+write_latest_manifest() {
   local output_dir="$1"
   local android_file="$2"
   local macos_arm64_file="$3"
   local macos_x64_file="$4"
-  local manifest="$output_dir/latest.json"
+  local manifest="$LATEST_MANIFEST"
   local android_name macos_arm64_name macos_x64_name
 
   android_name="$(basename "$android_file")"
@@ -766,17 +989,6 @@ write_app_update_manifest() {
   }
 }
 JSON
-  cp "$manifest" "$LATEST_MANIFEST"
-}
-
-publish_download_aliases() {
-  local android_file="$1"
-  local macos_arm64_file="$2"
-  local macos_x64_file="$3"
-
-  cp "$android_file" "$DIST_ROOT/AWiki-Me-Android-arm64.apk"
-  cp "$macos_arm64_file" "$DIST_ROOT/AWiki-Me-macOS-arm64.dmg"
-  cp "$macos_x64_file" "$DIST_ROOT/AWiki-Me-macOS-x64.dmg"
 }
 
 write_manifest() {
@@ -820,12 +1032,8 @@ JSON
 }
 JSON
   } > "$manifest"
-  write_app_update_manifest \
+  write_latest_manifest \
     "$output_dir" \
-    "$android_file" \
-    "$macos_arm64_file" \
-    "$macos_x64_file"
-  publish_download_aliases \
     "$android_file" \
     "$macos_arm64_file" \
     "$macos_x64_file"
@@ -916,6 +1124,5 @@ write_manifest "$OUTPUT_DIR" "$ANDROID_APK" "$MACOS_ARM64_DMG" "$MACOS_X64_DMG"
 
 log "done"
 log "output: $OUTPUT_DIR"
-log "manifest: $OUTPUT_DIR/latest.json"
 log "package manifest: $OUTPUT_DIR/package-manifest.json"
 log "latest: $LATEST_MANIFEST"

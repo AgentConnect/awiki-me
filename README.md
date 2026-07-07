@@ -105,7 +105,13 @@ such as layout overflow banners are never shipped to users. The Android signing
 certificate still comes from `android/key.properties`; this can be an internal
 distribution certificate and does not require store signing. macOS is packaged
 as profile DMGs. The script also rebuilds the native SDK artifacts before
-packaging.
+packaging. During Android release packaging, the script rewrites Flutter's
+generated plugin registrant from `.flutter-plugins-dependencies` so production
+plugins still register while dev-only plugins such as `integration_test` are
+excluded. The APK verification fails if the registrant is missing or a dev-only
+plugin leaks into the package. When exactly one Android emulator is connected,
+the script also installs the APK, clears app data, and launches it as a startup
+smoke test.
 
 The current checked-in config publishes packages that point at:
 
@@ -119,7 +125,8 @@ For internal mirror packages, update the same config file:
 AWIKI_DOMAIN="awiki.info"
 ```
 
-The script writes artifacts and `latest.json` under:
+The script writes installable artifacts under versioned directories and keeps a
+single latest manifest at the dist root:
 
 ```text
 dist/<version>/
