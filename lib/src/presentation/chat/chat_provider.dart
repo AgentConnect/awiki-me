@@ -4175,6 +4175,13 @@ class ChatThreadsController
     final existingAttachment = existing.attachment;
     final sameStableMessage = _sameStableMessage(incoming, existing);
     final canPreserveExistingSemantics = trustMessageMatch || sameStableMessage;
+    if (_shouldKeepExistingDeliveredMessage(
+      incoming,
+      existing,
+      canPreserveExistingSemantics: canPreserveExistingSemantics,
+    )) {
+      return _withPreservedMentionState(existing, incoming);
+    }
     if (existingAttachment == null) {
       return _withPreservedMentionState(incoming, existing);
     }
@@ -4470,6 +4477,26 @@ class ChatThreadsController
       return incoming.attachment?.caption == existing.attachment?.caption;
     }
     return incoming.previewText == existing.previewText;
+  }
+
+  bool _shouldKeepExistingDeliveredMessage(
+    ChatMessage incoming,
+    ChatMessage existing, {
+    required bool canPreserveExistingSemantics,
+  }) {
+    if (!canPreserveExistingSemantics ||
+        !incoming.isMine ||
+        !existing.isMine ||
+        incoming.threadId != existing.threadId ||
+        incoming.sendState == MessageSendState.sent ||
+        existing.sendState != MessageSendState.sent) {
+      return false;
+    }
+    if (!_sameStableMessage(incoming, existing) &&
+        existing.serverSequence == null) {
+      return false;
+    }
+    return _sameMessageTextForMentions(incoming, existing);
   }
 
   bool _sameStableMessage(ChatMessage first, ChatMessage second) {
@@ -6048,6 +6075,7 @@ class _MessageMergeIndexes {
   final Map<String, List<int>> _byRemoteId = <String, List<int>>{};
   final Map<String, List<int>> _byLocalId = <String, List<int>>{};
   final Set<int> _pendingIndexes = <int>{};
+  final Set<int> _sentMineIndexes = <int>{};
 
   int matchingIndex(
     List<ChatMessage> current,
@@ -6076,15 +6104,28 @@ class _MessageMergeIndexes {
         return localIndex;
       }
     }
-    if (!incoming.isMine || incoming.sendState != MessageSendState.sent) {
-      return -1;
-    }
-    for (final index in _pendingIndexes) {
-      if (index >= current.length) {
-        continue;
-      }
-      if (isMatchingPending(current[index], incoming)) {
-        return index;
+    if (incoming.isMine) {
+      if (incoming.sendState == MessageSendState.sent) {
+        for (final index in _pendingIndexes) {
+          if (index >= current.length) {
+            continue;
+          }
+          if (isMatchingPending(current[index], incoming)) {
+            return index;
+          }
+        }
+      } else {
+        for (final index in _sentMineIndexes) {
+          if (index >= current.length) {
+            continue;
+          }
+          final sent = current[index];
+          if (sent.sendState == MessageSendState.sent &&
+              sent.serverSequence != null &&
+              isMatchingPending(incoming, sent)) {
+            return index;
+          }
+        }
       }
     }
     return -1;
@@ -6102,10 +6143,14 @@ class _MessageMergeIndexes {
     if (_isPendingCandidate(message)) {
       _pendingIndexes.add(index);
     }
+    if (_isSentMineCandidate(message)) {
+      _sentMineIndexes.add(index);
+    }
   }
 
   void replace(int index, ChatMessage next) {
     _pendingIndexes.remove(index);
+    _sentMineIndexes.remove(index);
     add(index, next);
   }
 
@@ -6133,6 +6178,10 @@ class _MessageMergeIndexes {
 
   static bool _isPendingCandidate(ChatMessage message) {
     return message.isMine && message.sendState != MessageSendState.sent;
+  }
+
+  static bool _isSentMineCandidate(ChatMessage message) {
+    return message.isMine && message.sendState == MessageSendState.sent;
   }
 
   static String? _nonEmptyKey(String? value) {
