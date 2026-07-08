@@ -1,25 +1,133 @@
-# AWiki Me Flutter App
+# AWiki Me
 
-AWiki Me is a Dart-only Flutter messaging client built on the ANP Dart SDK.
-Account creation, DID-WBA authentication, User Service calls, IM, and message
-proof generation all run through Dart code.
+[English](README.md) | [中文](README_zh.md)
+
+AWiki Me is AWiki's cross-platform Flutter client for human users and intelligent agents. It is an application implementation that supports the **Agent Network Protocol (ANP)** protocol suite. The app combines account onboarding, `did:wba` identity, DID-WBA authentication, ANP instant messaging, group collaboration, attachments, message mentions, Agent/Daemon control, and local secure storage in one Dart/Flutter client.
+
+- **ANP protocol link**: <https://github.com/agent-network-protocol/AgentNetworkProtocol>
+- **Project positioning**: Dart-only app. Flutter owns product UI and application orchestration; `awiki_im_core` / Rust `im-core` owns protocol correctness, local IM state, sync, outbox, identity vault, and sensitive cryptographic material.
+- **Platforms**: Android, iOS, macOS, and Web. Current automated validation focuses on desktop flows plus Android/macOS packaging.
+
+## Contents
+
+- [Product Positioning](#product-positioning)
+- [ANP Support Scope](#anp-support-scope)
+- [Core Features](#core-features)
+- [Architecture Overview](#architecture-overview)
+- [Repository Layout](#repository-layout)
+- [Requirements](#requirements)
+- [Quick Start](#quick-start)
+- [Runtime Configuration](#runtime-configuration)
+- [Testing](#testing)
+- [Packaging and Release Artifacts](#packaging-and-release-artifacts)
+- [Building on macOS with Xcode](#building-on-macos-with-xcode)
+- [Security Boundaries](#security-boundaries)
+- [Key Documents](#key-documents)
+- [Contributor Checklist](#contributor-checklist)
+- [License](#license)
+
+## Product Positioning
+
+AWiki Me is designed to be a trusted IM client and Agent console for the Agent era:
+
+1. **Identity before Message**: conversations, contacts, groups, and Agents are anchored by DID / handle identities.
+2. **Permission before Action**: high-risk Agent actions must go through explicit authorization or confirmation.
+3. **Task over Chat**: normal messages, Agent status, authorization requests, task progress, and results can all appear in one trusted conversation flow.
+4. **Hide Protocol, Show Trust**: users see product-level language such as “identity verified”, “message encrypted”, and “operation authorized”, while ANP / DID-WBA / im-core provide the protocol foundation.
+
+## ANP Support Scope
+
+The ANP 1.1 release line organizes protocol capabilities around identity, naming, Agent description, discovery, end-to-end instant messaging, and application protocols. AWiki Me currently implements and integrates the following scope:
+
+| ANP / AWiki capability | AWiki Me status | Main entry points |
+| --- | --- | --- |
+| `did:wba` identity and DID-WBA authentication | Account onboarding, identity activation, User Service calls, and Message Service calls go through Dart service clients and `awiki_im_core`; new identities follow the e1 DID-only direction. | `lib/src/application/auth/`, `lib/src/data/im_core/` |
+| `ANPMessageService` endpoint | The app derives the default ANP message endpoint `/anp-im/rpc` and service DID `did:wba:<domain>` from `AWIKI_BASE_URL`; explicit overrides are supported. | `lib/src/application/config/awiki_environment_config.dart` |
+| ANP instant messaging P1/P2/P3/P4 direction | Direct/group conversations, send, history, local projections, unread state, read ack, realtime patch, and reliable sync. | `lib/src/application/messaging_service.dart`, `lib/src/application/message_sync_service.dart` |
+| ANP attachments / Object Transfer (P7 direction) | Attachment send, download, save, and native open. Display correctness comes from im-core persisted redacted attachment manifests, not UI memory alone. | `lib/src/application/attachment_*`, `lib/src/presentation/chat/` |
+| ANP message mentions (P9 direction) | Group `@` composer, P9 JSON payload sending, valid-range highlighting, and safe fallback for invalid mentions. | `lib/src/domain/entities/chat_mention.dart`, `docs/message-mention-extension-implementation-plan/` |
+| Agent / Daemon / Message Agent collaboration | Agents page, daemon status, runtime conversation, and Message Agent binding/recovery flows provide the App entry for Agent collaboration. | `lib/src/presentation/agents/`, `docs/message-agent/message-agent-design.md` |
+| E2EE and secret vault | The app does not directly own DID private keys, JWTs, Direct E2EE session/prekey material, or daemon subkey package persistence; these are owned by the im-core identity SecretVault. | `docs/identity-secret-storage.md` |
+
+> AWiki Me is a client implementation that supports the ANP protocol suite. It does not claim to cover every ANP application protocol at once. AP2 payments, full cross-domain federation, and full Group E2EE plaintext processing should continue through shared SDK, service-side, and product rollout plans.
+
+## Core Features
+
+- **Account and identity**: registration/login, DID identity initialization, active identity vault checks, profile display and editing.
+- **Trusted IM**: direct chat, group chat, conversation list, local-first first paint, realtime patches, reliable sync, unread waterlines, retry, and failure states.
+- **Group collaboration**: group creation, member summaries, group messages, group system events, group mentions, and Agent group collaboration entry points.
+- **Contacts and profiles**: friends/relationship state, peer profile, handle / DID display, copy actions, and identity cards.
+- **Attachments**: attachment picking, upload/send, download, save, native open, and App + CLI E2E interoperability.
+- **Agent console**: Agent inventory, local-first refresh, daemon install command rendering, runtime status, Agent inbox, and control payload projection.
+- **Local security**: platform secure storage, native macOS Keychain bridge, E2E private file provider, and secret redaction.
+- **Packaging and updates**: Android arm64 APK, macOS arm64/x64 DMG, versioned dist output, latest manifest, and Sparkle feed placeholder.
+
+## Architecture Overview
+
+```text
+Flutter UI / Riverpod providers
+  -> Application services
+     (auth, session, messaging, groups, profile, agents, realtime, attachments)
+  -> Domain ports + data adapters
+  -> awiki_im_core Dart package
+  -> Rust im-core / SQLite / native bridge
+  -> User Service / Message Service / ANP endpoint / Daemon
+```
+
+Important boundaries:
+
+- `lib/src/domain/`: entities, repository/port contracts, and focused domain logic.
+- `lib/src/application/`: use-case orchestration, session, messaging, groups, contacts, agents, attachments, and environment config.
+- `lib/src/data/`: Dart service clients, `awiki_im_core` adapters, secure/local persistence, and platform bridges.
+- `lib/src/presentation/`: Flutter pages, Riverpod providers, responsive layout, and user feedback.
+- `awiki_im_core` / Rust `im-core`: source of truth for messages, threads, groups, conversation identity, read-state, send/outbox, sync/realtime/backfill, local projections, and identity vault.
+
+The App may own product overlays, UI waterlines, and short-lived pending presentation state. It must not bypass im-core to write the global reliable checkpoint, `since_event_seq`, `next_event_seq`, or raw `/im/rpc` sync payloads.
+
+## Repository Layout
+
+```text
+lib/                  Flutter application source
+  src/domain/         Domain entities and interface contracts
+  src/application/    Application services, use cases, and ports
+  src/data/           im-core adapters, service clients, local/secure storage, platform bridges
+  src/presentation/   UI pages, providers, components, and responsive layout
+assets/               Branding, icons, and static assets
+android/ ios/ macos/ web/
+                      Platform runners; avoid unrelated platform metadata changes
+docs/                 PRD, testing, message presentation, Agent, identity vault, performance, and plan docs
+tests/unit/           Fast deterministic unit/widget/provider/fake-backed harness tests
+tests/e2e/            E2E runners, configs, Flutter shims, App + CLI peer/backend/device assets
+integration_test/     Flutter tooling shims only; real implementations live under tests/e2e/flutter/
+scripts/              macOS bootstrap plus packaging scripts and config
+```
 
 ## Requirements
 
-- Flutter 3.24.0 or newer with Dart 3.8.0 or newer
+- Flutter **3.24.0+**
+- Dart **3.8.0+**
+- Sibling workspace checkout at `../awiki-cli-rs2/packages/awiki_im_core`
+- CocoaPods for macOS desktop development
+- System `libsqlite3` and desktop dependencies for Linux desktop/E2E runners
+- Tsinghua pub mirror is recommended for dependency installation
 
-## Getting Started
+To rebuild Flutter SDK native artifacts from the sibling CLI repository:
+
+```bash
+cd ../awiki-cli-rs2
+scripts/flutter/build-sdk-native.sh --macos-only     # common for macOS local development
+scripts/flutter/build-sdk-native.sh --linux-only     # Linux CI / desktop E2E
+scripts/flutter/build-sdk-native.sh --android-only   # Android packaging
+```
+
+## Quick Start
 
 ```bash
 PUB_HOSTED_URL=https://mirrors.tuna.tsinghua.edu.cn/dart-pub flutter pub get
 dart analyze
 dart run tests/unit/runner.dart
-flutter run
+flutter run --dart-define=AWIKI_BASE_URL=https://awiki.info
 ```
-
-## Testing
-
-The testing strategy is documented in [docs/testing.md](docs/testing.md).
 
 Recommended local gate:
 
@@ -30,46 +138,30 @@ dart run tests/unit/runner.dart
 dart run tests/e2e/runner.dart --case smoke
 ```
 
-The test gates use the operating system SQLite library through Dart native
-asset hooks, so they do not need to download a prebuilt SQLite dylib from
-GitHub. macOS includes SQLite. Linux machines should install `libsqlite3-dev`
-or the equivalent system package.
+The `smoke` E2E case uses Flutter desktop shims and native im-core smoke. It does not require a real OTP, real account, real backend, or `awiki-cli` binary.
 
-Full real-backend E2E uses `tests/e2e/configs/e2e.local.yaml` by default:
+## Runtime Configuration
 
-```bash
-cp tests/e2e/configs/e2e.example.yaml tests/e2e/configs/e2e.local.yaml
-dart run tests/e2e/runner.dart --case full
-```
-
-The local YAML is ignored by Git and should hold the test backend URL, DID
-domain, OTP, App/CLI peer handles, and `awiki-cli` binary path.
-
-## Backend Environment
-
-The app reads a single backend root from `AWIKI_BASE_URL` and derives the
-default user-service, message-service, mail-service, DID domain, ANP endpoint,
-daemon download root, update manifest, and release page from it. The same
-bootstrapped environment is reused by Agent inventory, runtime
-creation, daemon install command rendering, and runtime conversation handle
-projection, so the App should not mix `awiki.info` and `awiki.ai` inside one
-package. For packaging, `scripts/package_app.config` is the single domain
-switch: set `AWIKI_DOMAIN="awiki.info"` or `AWIKI_DOMAIN="awiki.ai"` and leave
-the advanced overrides empty.
+The app reads one backend root and derives User Service, Message Service, Mail Service, DID domain, ANP endpoint, daemon download root, and update URLs from it:
 
 ```bash
 flutter run --dart-define=AWIKI_BASE_URL=https://awiki.info
 ```
 
-Production defaults to `https://awiki.info`. Future online test builds can switch
-to:
+Defaults:
 
-```bash
-flutter run --dart-define=AWIKI_BASE_URL=https://anpclaw.com
+```text
+AWIKI_BASE_URL=https://awiki.info
+AWIKI_DID_DOMAIN=<AWIKI_BASE_URL host>
+AWIKI_ANP_SERVICE_URL=<AWIKI_BASE_URL>/anp-im/rpc
+AWIKI_ANP_SERVICE_DID=did:wba:<AWIKI_DID_DOMAIN>
+AWIKI_DAEMON_DOWNLOAD_BASE_URL=<AWIKI_BASE_URL>/daemon
+AWIKI_UPDATE_MANIFEST_URL=<AWIKI_BASE_URL>/downloads/awiki-me/latest.json
+AWIKI_RELEASES_URL=<AWIKI_BASE_URL>/#download
+AWIKI_AGENT_IM_ENABLED=true
 ```
 
-Advanced overrides are available when a service needs to be split from the main
-domain:
+Advanced overrides are only needed when splitting services or debugging a specific environment:
 
 ```text
 AWIKI_USER_SERVICE_URL
@@ -82,219 +174,124 @@ AWIKI_ANP_SERVICE_DID
 AWIKI_DAEMON_DOWNLOAD_BASE_URL
 AWIKI_UPDATE_MANIFEST_URL
 AWIKI_RELEASES_URL
+AWIKI_AGENT_IM_ENABLED
 ```
 
-## Packaging
+Do not mix `awiki.info`, `awiki.ai`, or other service domains inside one App package. Mixing domains can break DID domain, ANP service DID, state namespace, daemon token, and download-channel consistency.
 
-The installer package entrypoint is:
+## Testing
+
+See [docs/testing.md](docs/testing.md) for the full testing strategy.
+
+| Test domain | Command | Purpose | Must not require |
+| --- | --- | --- | --- |
+| Unit / Widget / Provider | `dart run tests/unit/runner.dart` | Dart logic, mappers, providers, widgets, fake services, E2E runner planning/redaction | Real backend, OTP, CLI, devices |
+| Desktop smoke E2E | `dart run tests/e2e/runner.dart --case smoke` | App shell, Flutter platform shims, native im-core open smoke | Real accounts, OTP, CLI peer |
+| Real backend App + CLI E2E | `dart run tests/e2e/runner.dart --case full` | direct, group, attachment, contacts, real App + CLI peer flows | Unconfigured account pools or committed local credentials |
+
+Prepare real-backend E2E config locally:
+
+```bash
+cp tests/e2e/configs/e2e.example.yaml tests/e2e/configs/e2e.local.yaml
+dart run tests/e2e/runner.dart --case full
+```
+
+Local YAML config is ignored by Git and may contain OTP, test accounts, backend URLs, and `awiki-cli` paths. Do not commit it. On macOS, choose an explicit macOS config such as `tests/e2e/configs/e2e.codex-macos-allowed.local.yaml`; do not accidentally use a Linux local config.
+
+The repository configures `package:sqlite3` to use the system SQLite native asset hook. macOS includes SQLite. Linux machines need `libsqlite3-dev` or an equivalent system package.
+
+## Packaging and Release Artifacts
+
+Entrypoint:
 
 ```bash
 scripts/package_app.sh
 ```
 
-Package settings live in `scripts/package_app.config`. The script accepts no
-arguments and does not read package settings from environment variables. For
-normal packaging, edit only `AWIKI_DOMAIN`. The script derives
-`AWIKI_BASE_URL`, `AWIKI_DID_DOMAIN`, `AWIKI_ANP_SERVICE_URL`,
-`AWIKI_DAEMON_DOWNLOAD_BASE_URL`, `AWIKI_UPDATE_MANIFEST_URL`, and
-`AWIKI_RELEASES_URL` from that domain unless an advanced override is set.
-
-The script always builds user-facing artifacts for Android arm64, macOS arm64,
-and macOS x64. Android is built in Flutter release mode so debug diagnostics
-such as layout overflow banners are never shipped to users. The Android signing
-certificate still comes from `android/key.properties`; this can be an internal
-distribution certificate and does not require store signing. macOS is packaged
-as profile DMGs. The script also rebuilds the native SDK artifacts before
-packaging. During Android release packaging, the script rewrites Flutter's
-generated plugin registrant from `.flutter-plugins-dependencies` so production
-plugins still register while dev-only plugins such as `integration_test` are
-excluded. The APK verification fails if the registrant is missing or a dev-only
-plugin leaks into the package. When exactly one Android emulator is connected,
-the script also installs the APK, clears app data, and launches it as a startup
-smoke test.
-
-The current checked-in config publishes packages that point at:
+Config file: [`scripts/package_app.config`](scripts/package_app.config). For normal packaging, edit only `AWIKI_DOMAIN`:
 
 ```text
-AWIKI_DOMAIN="awiki.ai"
+AWIKI_DOMAIN="awiki.ai"    # current checked-in default
+AWIKI_DOMAIN="awiki.info"  # common internal mirror / integration package
 ```
 
-For internal mirror packages, update the same config file:
+The script derives `AWIKI_BASE_URL`, DID domain, ANP service, daemon download URL, update manifest, and release URL from `AWIKI_DOMAIN`. Advanced overrides should normally stay empty.
 
-```text
-AWIKI_DOMAIN="awiki.info"
-```
+Packaging behavior:
 
-The script writes installable artifacts under versioned directories and keeps a
-single latest manifest at the dist root:
+- Android arm64: Flutter release APK, signed through `android/key.properties` for internal distribution.
+- macOS arm64 / x64: profile DMG.
+- Native SDK artifacts are rebuilt before packaging.
+- Android release packaging validates the production plugin registrant and blocks dev-only plugins such as `integration_test` from shipping.
+- If exactly one Android emulator is connected, the script installs the APK, clears app data, and launches a startup smoke test by default.
+- Output:
 
 ```text
 dist/<version>/
 dist/latest.json
 ```
 
-## Message Sync
-
-AWiki Me keeps message views local-first and delegates reliable recovery to the
-Flutter SDK / Rust `im-core` boundary. `MessageSyncCoordinator` schedules
-`syncDelta` on startup, foreground resume, reconnect, and realtime dirty/gap
-signals, then refreshes local projections after a successful SDK sync. Chat
-opening is memory/local-first: it renders the in-memory tail or recent local
-projection before backgrounding `syncThreadAfter` with a thread-local
-`afterServerSeq`. The performance E2E gate records both CLI-to-App open
-first-paint latency and the later thread-after/history reconcile timings so the
-click path cannot be proven only by a remote history query.
-
-Chat presentation is intentionally one-way. `ConversationListProvider` owns the
-recent-conversation list and badge state; `ChatThreadsProvider` owns message
-threads. `ChatPage` renders the selected thread and may acknowledge a visible
-conversation as read, but it must not treat conversation-list summary changes as
-a signal to pull thread history. Necessary thread reconciliation is limited to
-opening a conversation, thread patch version-gap repair, and thread patch stream
-repair/re-subscription. The macOS chat header no longer exposes a manual
-conversation refresh button.
-
-Unread presentation is causal and monotonic. `ConversationListProvider` publishes
-all recent-conversation state through one presentation waterline model: the latest
-message watermark can only move forward, and the local read watermark can only
-move forward. Refresh, enrichment, patch, repair, group-name, and read-ack
-updates are projected through that same model before they reach the UI or badge.
-A summary-only update cannot clear unread unless a real rendered message
-watermark has advanced the read waterline; stale unread for a message already
-covered by the read waterline cannot reappear. `ChatThreadsProvider` supplies
-those read watermarks from messages actually present in the visible thread window
-and sends `markConversationRead(AppConversationReadRef, watermark)` with the
-same message watermark.
-
-The App must not read or write the global reliable checkpoint, pass
-`since_event_seq`, manually advance `next_event_seq`, build raw `/im/rpc`
-`sync.*` payloads, or treat realtime `sync` hints as checkpoint commits. Those
-remain `im-core` Rust/SQLite responsibilities.
-
-## Agent Inventory Refresh
-
-The Agents tab is local-first after the first load. Entering the left-rail
-Agents tab calls `ensureLoaded()`, which reuses the in-memory/cache-backed
-inventory for the active account instead of forcing a remote `list_agents`
-request on every tab re-entry. Explicit retry, session activation, foreground
-resume, and realtime reconnect still use the authenticated background refresh
-path when fresh inventory is required. Daemon status remains separate: the
-manual refresh button sends a status query to the selected daemon, while
-realtime agent-control payloads update the page automatically. Lifecycle-triggered
-auto-sync start/stop is scheduled outside widget build/dispose so Riverpod state
-changes do not occur while Flutter is finalizing the widget tree.
-
 ## Building on macOS with Xcode
 
-Before opening the project in Xcode, generate the CocoaPods support files:
+Generate CocoaPods support files before opening Xcode:
 
 ```bash
 scripts/bootstrap_macos.sh
 open macos/Runner.xcworkspace
 ```
 
-Use `Runner.xcworkspace`, not `Runner.xcodeproj`. If Xcode reports
-`Unable to load contents of file list: '/Target Support Files/Pods-Runner/...'`,
-the generated `macos/Pods` support files are missing or CocoaPods is not on
-`PATH`; rerun the bootstrap script.
+Open `Runner.xcworkspace`, not `Runner.xcodeproj`. If Xcode reports `Unable to load contents of file list: '/Target Support Files/Pods-Runner/...'`, the generated `macos/Pods` support files are missing or CocoaPods is not on `PATH`; rerun the bootstrap script.
 
-The macOS Info.plist intentionally omits `SUPublicEDKey` until release CI owns a
-real Sparkle EdDSA public key and matching signed appcast artifacts. Do not ship
-an empty `SUPublicEDKey`; Sparkle treats the empty value as an invalid key and
-logs `The provided EdDSA key could not be decoded.` The Sparkle feed URL in
-`macos/Runner/Configs/AppInfo.xcconfig` uses `$()` between the two slashes so
-Xcode does not parse the URL as an xcconfig comment.
+macOS debug/profile builds are usually ad-hoc signed. To avoid a successful backend registration surfacing as a registration failure because a local unsigned runner cannot write Keychain, debug/profile account credentials are stored in `awiki_me_credentials.json` under the app support directory. Release builds still use platform secure storage. Identity vault root key and device id use macOS Keychain by default; see [docs/identity-secret-storage.md](docs/identity-secret-storage.md).
 
-Local macOS debug/profile builds are usually ad-hoc signed. To avoid a
-successful backend registration surfacing as a registration failure because a
-Keychain write failed, debug/profile builds store account credentials in
-`awiki_me_credentials.json` under the app support directory; release builds still
-use platform secure storage.
-
-The identity vault root key and device id still use encrypted macOS Keychain
-storage outside explicit `AWIKI_E2E_APP_STATE_ROOT` runs. Local/debug builds use
-the login Keychain rather than the Data Protection Keychain so they can run
-without a provisioning profile. New macOS writes go through the AWiki native
-Keychain bridge, which stores the item with an ACL that trusts the current app
-executable path. Existing native items keep their established ACL on normal reads
-and updates; the App does not rewrite Keychain item access permissions on every
-bootstrap because that triggers macOS "change access permissions/owner"
-authorization dialogs. Values that were written by the older
-`flutter_secure_storage` path are read as a legacy fallback, migrated into the
-native bridge when the native write succeeds, and then removed from the legacy
-Keychain service before the read returns so future launches do not keep touching
-the old item. Local test/debug runners that cannot obtain Authorization Services
-permission for a custom ACL may fall back to the system default Keychain ACL for
-the new native item; this still keeps the secret in macOS Keychain and allows the
-old service item to be retired. A real user should see the Keychain authorization
-prompt only for first access, migration, or when a locally rebuilt Xcode binary
-no longer matches the trusted executable recorded on an existing item; stable
-release builds should not ask on every launch. The plugin's Data Protection
-Keychain mode still requires Keychain Sharing entitlements and a valid
-development/release signing identity; if that entitlement is missing, runtime
-writes fail with OSStatus `-34018` (`errSecMissingEntitlement`), and if the
-entitlement is present without a usable signing profile, local Flutter builds
-fail before launch. After changing macOS signing, entitlements, or
-secure-storage options, run
-`flutter test --no-pub integration_test/secure_storage_smoke_test.dart -d macos`
-to prove the signed runner can write, read, and delete a secure-storage value.
-
-## Identity Secret Storage
-
-App-side root-key handling, activation-time verification, and E2E test state are
-documented in [docs/identity-secret-storage.md](docs/identity-secret-storage.md).
-The shared SDK/CLI/daemon design lives in
-`awiki-cli-rs2/docs/architecture/identity-secret-storage.md`.
-
-AWiki Me opens the Flutter SDK / Rust `im-core` boundary with identity
-`VaultRequired` options. DID private keys, E2EE static key material, auth/JWT
-state, and daemon subkey package persistence are owned by `im-core`; the App
-only supplies the no-prompt vault root key and stable host context.
-
-Production and ordinary custom-state-root runs use `SecureAppKeyValueStore`
-backed by `flutter_secure_storage` for the App-local vault root key and device
-id. The App state namespace owns the vault directory:
-
-```text
-<app support>/im-core/<namespace>/identity-vault
-vaultWorkspaceId = awiki-me-<namespace>
-deviceId = app-device-<stable-random>
-```
-
-Only explicit E2E runs with `AWIKI_E2E_APP_STATE_ROOT` use the private file test
-provider `awiki_me_im_core_vault.json`; ordinary `appStateRoot` overrides do not
-move the vault root key into JSON. The test file may contain a base64 test root
-key and must remain local/untracked.
-
-When activating an identity, AWiki Me checks the identity vault before switching
-the active SDK client or writing the active session:
-
-```text
-identityVaultStatus
-  -> migrateIdentityVault when legacy metadata is absent
-  -> verifyIdentityVault
-  -> switchIdentity
-  -> ensureSession
-```
-
-If existing vault metadata is present but cannot be selected/verified, the App
-fails closed instead of re-sealing legacy plaintext under a new root key. The
-App bootstrap path can still receive a daemon subkey private key plaintext DTO;
-that transport exception is temporary and separate from local persistence.
-
-## Project Structure
-
-- `lib/`: application, domain, data, and presentation code
-- `assets/`: bundled branding and UI assets
-- `tests/unit/`: unit, widget, provider, and pure Dart tests
-- `tests/e2e/`: desktop E2E runner, Flutter platform test implementations, and support code
-- `integration_test/`: Flutter tooling shims only
-- `android/`, `ios/`, `macos/`, `web/`: platform runners
-
-## App Icons
+After changing macOS signing, entitlements, or secure-storage options, run:
 
 ```bash
-dart run flutter_launcher_icons
+flutter test --no-pub integration_test/secure_storage_smoke_test.dart -d macos
 ```
 
-The icon source lives at `assets/branding/awiki-me-logo.png`.
+## Security Boundaries
+
+AWiki Me must follow these constraints:
+
+- Do not commit real credentials, generated local state, signing keys, JWTs, private keys, or custom runtime config.
+- Do not add Python CLI tools, Python dependency manifests, legacy credential migrations, or old RPC gateway paths.
+- The App must not directly read or persist DID private keys, JWT files, vault records, Direct E2EE session/prekey secrets, or daemon subkey packages.
+- Root keys must not appear in ordinary JSON state, logs, UI, E2E reports, performance traces, DTO dumps, or fixtures.
+- Only explicit `AWIKI_E2E_APP_STATE_ROOT` E2E mode may use the private file test provider `awiki_me_im_core_vault.json`; that file must remain local and untracked.
+- Group E2EE opaque messages must not be decrypted and delivered to Agent prompts without a separate security design.
+- Before changing platform runners, Pod/Gradle/Xcode metadata, entitlements, bundle IDs, or signing settings, confirm the task truly requires it. Revert unrelated platform files generated by tools.
+
+## Key Documents
+
+| Document | Purpose |
+| --- | --- |
+| [docs/testing.md](docs/testing.md) | Unit, desktop smoke, and real-backend E2E domains and gate policy |
+| [docs/identity-secret-storage.md](docs/identity-secret-storage.md) | App-side identity vault, root key provider, E2E file provider, and security red lines |
+| [docs/conversation-presentation-ownership.md](docs/conversation-presentation-ownership.md) | Conversation display, local-first path, timeline, read waterline, attachment / mention / control payload rendering boundaries |
+| [docs/performance-tracing.md](docs/performance-tracing.md) | Startup, list, chat-open, sync/realtime performance trace keys and diagnosis |
+| [docs/message-agent/message-agent-design.md](docs/message-agent/message-agent-design.md) | Message Agent MVP, daemon binding, delegated key, secure bootstrap, disable/delete behavior |
+| [docs/group/group-chat-processing-plan.md](docs/group/group-chat-processing-plan.md) | Runtime Agent group-message handling, group session isolation, and safety prompt gate |
+| [docs/awiki-me-prd.md](docs/awiki-me-prd.md) | Product positioning, information architecture, core objects, MVP flows, and acceptance criteria |
+| [../awiki-cli-rs2/docs/api/im-core-interface/README.md](../awiki-cli-rs2/docs/api/im-core-interface/README.md) | Sibling SDK / Rust im-core API entry |
+| [../awiki-cli-rs2/docs/architecture/identity-secret-storage.md](../awiki-cli-rs2/docs/architecture/identity-secret-storage.md) | Shared CLI / SDK / daemon identity secret storage design |
+
+## Contributor Checklist
+
+1. Keep changes scoped to the platform and shared Dart code required by the task.
+2. Pair behavior changes with tests. Prefer `tests/unit/`; add `tests/e2e/` when platform, backend, CLI peer, or device flows are involved.
+3. Run and record:
+
+   ```bash
+   PUB_HOSTED_URL=https://mirrors.tuna.tsinghua.edu.cn/dart-pub flutter pub get
+   dart analyze
+   dart run tests/unit/runner.dart
+   dart run tests/e2e/runner.dart --case smoke
+   ```
+
+4. Run real backend, CLI peer, OTP, mobile-device, or release packaging validation only when that environment is prepared, and record the configuration context.
+5. Check `git diff` for unrelated platform generated files, local config, E2E reports, secrets, and absolute paths.
+
+## License
+
+This repository uses [Apache License 2.0](LICENSE). For the ANP protocol documents and upstream implementations, refer to the official ANP repository: <https://github.com/agent-network-protocol/AgentNetworkProtocol>.
