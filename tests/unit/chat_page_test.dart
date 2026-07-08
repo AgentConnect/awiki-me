@@ -28,6 +28,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_provide
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'
@@ -4153,6 +4154,76 @@ void main() {
       composing: const TextRange(start: 0, end: 2),
     );
     await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastSentContent, isNull);
+    expect(input.controller?.text, 'ni');
+  });
+
+  testWidgets('输入法组合输入时发送按钮保持高亮但不会发送', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:ime-composing-send-button',
+      displayName: 'Tester',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+
+    await tester.tap(find.byType(CupertinoTextField));
+    await tester.enterText(find.byType(CupertinoTextField), 'ni');
+    await tester.pump();
+    var sendIcon = tester.widget<AwikiAssetIcon>(
+      find.descendant(
+        of: find.byKey(const Key('chat-send-button')),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is AwikiAssetIcon &&
+              widget.assetName == 'assets/icons/icon_send.svg',
+        ),
+      ),
+    );
+    expect(sendIcon.color, const Color(0xFF0B65F8));
+
+    final input = tester.widget<CupertinoTextField>(
+      find.byType(CupertinoTextField),
+    );
+    input.controller!.value = input.controller!.value.copyWith(
+      composing: const TextRange(start: 0, end: 2),
+    );
+    await tester.pump();
+
+    sendIcon = tester.widget<AwikiAssetIcon>(
+      find.descendant(
+        of: find.byKey(const Key('chat-send-button')),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is AwikiAssetIcon &&
+              widget.assetName == 'assets/icons/icon_send.svg',
+        ),
+      ),
+    );
+    expect(sendIcon.color, const Color(0xFF0B65F8));
 
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();

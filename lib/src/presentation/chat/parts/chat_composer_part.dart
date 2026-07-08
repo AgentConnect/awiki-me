@@ -359,6 +359,7 @@ class _ComposerState extends ConsumerState<_Composer> {
     final responsive = context.awikiResponsive;
     final canSubmit = _canSubmit;
     final canUseSendButton = canSubmit && !_isSending && !_isComposingInput;
+    final highlightSendButton = canSubmit && !_isSending;
     final disabledReason =
         widget.disabledReason ?? context.l10n.chatCurrentConversationCannotSend;
     if (widget.macStyle) {
@@ -495,7 +496,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                               width: responsive.displayScaled(36),
                               height: responsive.displayScaled(36),
                               decoration: BoxDecoration(
-                                color: canUseSendButton
+                                color: highlightSendButton
                                     ? const Color(0xFF0B65F8)
                                     : const Color(0xFFE5EAF2),
                                 borderRadius: BorderRadius.circular(
@@ -504,7 +505,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                               ),
                               child: Icon(
                                 CupertinoIcons.paperplane_fill,
-                                color: canUseSendButton
+                                color: highlightSendButton
                                     ? CupertinoColors.white
                                     : const Color(0xFF8A96AA),
                                 size: responsive.displayScaled(18),
@@ -635,7 +636,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                           padding: EdgeInsets.all(responsive.spacing(6)),
                           child: AwikiAssetIcon(
                             assetName: 'assets/icons/icon_send.svg',
-                            color: canUseSendButton
+                            color: highlightSendButton
                                 ? theme.primary
                                 : theme.secondaryText,
                             size: responsive.iconMd,
