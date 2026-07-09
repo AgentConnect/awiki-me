@@ -4,6 +4,7 @@ import '../../app/app_services.dart';
 import '../../core/group_display_name.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_summary.dart';
+import '../../domain/entities/user_profile.dart';
 import '../app_shell/providers/selected_conversation_provider.dart';
 import '../conversation_list/conversation_provider.dart';
 
@@ -59,13 +60,40 @@ class GroupController extends StateNotifier<GroupState> {
     final members = await ref
         .read(groupApplicationServiceProvider)
         .listMembers(groupId);
+    final hydratedMembers = await _hydrateMemberProfiles(members);
     state = state.copyWith(
       membersByGroup: <String, List<GroupMemberSummary>>{
         ...state.membersByGroup,
-        groupId: members,
+        groupId: hydratedMembers,
       },
     );
-    return members;
+    return hydratedMembers;
+  }
+
+  Future<List<GroupMemberSummary>> _hydrateMemberProfiles(
+    List<GroupMemberSummary> members,
+  ) async {
+    if (members.isEmpty) {
+      return members;
+    }
+    final profiles = ref.read(profileApplicationServiceProvider);
+    return Future.wait<GroupMemberSummary>(
+      members.map((member) async {
+        final subject = _memberProfileSubject(member);
+        if (subject == null) {
+          return member;
+        }
+        try {
+          final profile = await profiles.loadPublicProfile(subject);
+          return _mergeMemberProfile(member, profile);
+        } catch (_) {
+          // Profile hydration is best-effort. The group membership snapshot is
+          // still authoritative for DID/role/status, so keep the raw member if
+          // a public profile is unavailable.
+          return member;
+        }
+      }),
+    );
   }
 
   Future<GroupSummary> refreshGroup(String groupId) async {
@@ -279,4 +307,61 @@ String? _trimToNull(String? value) {
 
 bool _isKnownGroupRole(String? role) {
   return role == 'owner' || role == 'admin' || role == 'member';
+}
+
+String? _memberProfileSubject(GroupMemberSummary member) {
+  final did = _trimToNull(member.did);
+  if (did != null) {
+    return did;
+  }
+  return _trimToNull(member.handle);
+}
+
+GroupMemberSummary _mergeMemberProfile(
+  GroupMemberSummary member,
+  UserProfile profile,
+) {
+  final did = member.did.trim();
+  final profileHandle =
+      _trimToNull(profile.fullHandle) ?? _trimToNull(profile.handle);
+  final memberHandle = _trimToNull(member.handle);
+  final mergedHandle = memberHandle == null || memberHandle == did
+      ? profileHandle ?? member.handle
+      : member.handle;
+  final subjectType = member.subjectType == GroupMemberSubjectType.unknown
+      ? GroupMemberSubjectType.parse(profile.subjectType)
+      : member.subjectType;
+  return GroupMemberSummary(
+    userId: member.userId,
+    did: member.did,
+    handle: mergedHandle,
+    role: member.role,
+    profileUrl: _preferNonEmptyOptional(member.profileUrl, profile.profileUri),
+    displayName: _preferNonEmptyOptional(
+      member.displayName,
+      _profileDisplayName(profile),
+    ),
+    avatarUri: _preferNonEmptyOptional(member.avatarUri, profile.avatarUri),
+    subjectType: subjectType,
+    membershipStatus: member.membershipStatus,
+  );
+}
+
+String? _profileDisplayName(UserProfile profile) {
+  final displayName = _trimToNull(profile.displayName);
+  final did = _trimToNull(profile.did);
+  if (displayName == null || did == null) {
+    return displayName;
+  }
+  if (displayName == did || displayName.startsWith('did:')) {
+    return null;
+  }
+  if (did.length > 18) {
+    final compactDid =
+        '${did.substring(0, 10)}…${did.substring(did.length - 6)}';
+    if (displayName == compactDid) {
+      return null;
+    }
+  }
+  return displayName;
 }

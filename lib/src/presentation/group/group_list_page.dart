@@ -671,12 +671,12 @@ class GroupMemberRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = _handleLabel(item);
+    final title = _memberTitle(item);
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     return Row(
       children: <Widget>[
-        AvatarBadge(seed: title, size: 36),
+        AvatarBadge(seed: title, size: 36, avatarUri: item.avatarUri),
         const SizedBox(width: 12),
         Expanded(
           child: Text(
@@ -709,14 +709,7 @@ class GroupMemberRow extends StatelessWidget {
     );
   }
 
-  String _handleLabel(GroupMemberSummary item) {
-    final handle = item.handle.trim();
-    final did = item.did.trim();
-    if (handle.isNotEmpty && handle != did) {
-      return handle;
-    }
-    return DidDisplayFormatter.compactDid(did);
-  }
+  String _memberTitle(GroupMemberSummary item) => _memberDisplayLabel(item);
 }
 
 Future<void> showRemoveGroupMemberDialog({
@@ -763,6 +756,10 @@ Future<void> showRemoveGroupMemberDialog({
 }
 
 String _memberDisplayLabel(GroupMemberSummary member) {
+  final displayName = member.displayName?.trim();
+  if (displayName != null && displayName.isNotEmpty) {
+    return displayName;
+  }
   final handle = member.handle.trim();
   final did = member.did.trim();
   if (handle.isNotEmpty && handle != did) {

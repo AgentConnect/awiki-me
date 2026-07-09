@@ -11,6 +11,7 @@ import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
+import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -196,6 +197,74 @@ void main() {
 
     expect(find.textContaining('Join-code'), findsNothing);
     expect(find.textContaining('join-code'), findsNothing);
+  });
+
+  test('群成员加载会用公开 Profile Display Name 补全展示名', () async {
+    const groupDid = 'did:wba:awiki.ai:group:e1_group';
+    const memberDid = 'did:wba:awiki.ai:user:lzc:e1_member';
+    final gateway = FakeAwikiGateway()
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        memberDid: UserProfile(
+          did: memberDid,
+          nickName: '李智诚',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          handle: 'lzc',
+          fullHandle: 'lzc.awiki.ai',
+          avatarUri: 'https://example.test/lzc.png',
+        ),
+      }
+      ..groupMembersByGroupId = const <String, List<GroupMemberSummary>>{
+        groupDid: <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: memberDid,
+            did: memberDid,
+            handle: 'lzc',
+            role: 'member',
+          ),
+        ],
+      };
+    final container = ProviderContainer(
+      overrides: fakeApplicationServiceOverrides(gateway),
+    );
+    addTearDown(container.dispose);
+
+    final members = await container
+        .read(groupProvider.notifier)
+        .loadGroupMembers(groupDid);
+
+    expect(members.single.displayName, '李智诚');
+    expect(members.single.handle, 'lzc');
+    expect(members.single.avatarUri, 'https://example.test/lzc.png');
+    expect(
+      container.read(groupMembersProvider(groupDid)).single.displayName,
+      '李智诚',
+    );
+  });
+
+  testWidgets('群成员行优先展示 Display Name 而不是 handle', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const CupertinoPageScaffold(
+          child: Center(
+            child: GroupMemberRow(
+              item: GroupMemberSummary(
+                userId: 'did:wba:awiki.ai:user:lzc:e1_member',
+                did: 'did:wba:awiki.ai:user:lzc:e1_member',
+                handle: 'lzc',
+                role: 'member',
+                displayName: '李智诚',
+              ),
+              onRemove: null,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('李智诚'), findsOneWidget);
+    expect(find.text('lzc'), findsNothing);
   });
 
   testWidgets('群详情可以添加成员并刷新成员列表', (tester) async {
