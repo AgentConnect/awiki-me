@@ -126,6 +126,91 @@ void main() {
     expect(find.text('查看全部'), findsNWidgets(2));
   });
 
+  testWidgets('联系人页关注我的预览可直接回关联系人', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..followers = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: 'did:test:follower-1',
+          displayName: 'Erin',
+          relationship: 'follower',
+        ),
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const FriendsPage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          friendsProvider.overrideWith(
+            (ref) => _StaticFriendsController(
+              ref,
+              const FriendsState(
+                followers: <RelationshipSummary>[
+                  RelationshipSummary(
+                    did: 'did:test:follower-1',
+                    displayName: 'Erin',
+                    relationship: 'follower',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('关注'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastFollowedDidOrHandle, 'did:test:follower-1');
+    expect(gateway.following.single.did, 'did:test:follower-1');
+    expect(find.text('Erin'), findsNothing);
+  });
+
+  testWidgets('回关联系人成功后列表刷新失败也保持乐观关注态', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..failListFollowing = true
+      ..followers = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: 'did:test:follower-1',
+          displayName: 'Erin',
+          relationship: 'follower',
+        ),
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const FriendsPage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          friendsProvider.overrideWith(
+            (ref) => _StaticFriendsController(
+              ref,
+              const FriendsState(
+                followers: <RelationshipSummary>[
+                  RelationshipSummary(
+                    did: 'did:test:follower-1',
+                    displayName: 'Erin',
+                    relationship: 'follower',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('关注'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastFollowedDidOrHandle, 'did:test:follower-1');
+    expect(gateway.following.single.did, 'did:test:follower-1');
+    expect(find.text('Erin'), findsNothing);
+  });
+
   testWidgets('点击我关注的联系人会打开被点击对象的直聊', (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.binding.setSurfaceSize(const Size(1280, 900));

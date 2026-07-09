@@ -3,6 +3,7 @@ import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
+import 'package:awiki_me/src/presentation/friends/friends_page.dart';
 import 'package:awiki_me/src/presentation/shared/identity_flow.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
@@ -141,6 +142,44 @@ void main() {
     await tester.ensureVisible(
       find.byKey(const Key('identity-add-contact-button')),
     );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('identity-add-contact-button')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastFollowedDidOrHandle, 'did:test:peer');
+    expect(gateway.following.single.did, 'did:test:peer');
+  });
+
+  testWidgets('联系人页快捷操作关注联系人会打开解析流并关注', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..publicProfilesByQuery = <String, UserProfile>{
+        'cgw.awiki.ai': peerProfile,
+      };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const FriendsPage(),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is TopBarActionButton && widget.semanticsLabel == '更多操作',
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('关注联系人'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('identity-lookup-input')),
+      'cgw.awiki.ai',
+    );
+    await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('identity-add-contact-button')));
     await tester.pumpAndSettle();

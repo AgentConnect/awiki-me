@@ -24,31 +24,24 @@ Future<void> showCommonQuickActionsMenu(
           label: l10n.quickActionStartConversation,
           icon: CupertinoIcons.square_pencil,
           semanticsIdentifier: 'e2e-start-conversation-menu-item',
-          onTap: () {
-            showStartConversationDialog(rootContext, ref);
-          },
+          onTap: () => showStartConversationDialog(rootContext, ref),
         ),
         AppDropMenuItem(
           label: l10n.quickActionCreateGroup,
           icon: CupertinoIcons.person_3_fill,
-          onTap: () {
-            showCreateGroupDialog(rootContext, ref);
-          },
+          onTap: () => showCreateGroupDialog(rootContext, ref),
         ),
         AppDropMenuItem(
           label: l10n.quickActionJoinGroup,
           icon: CupertinoIcons.link,
-          onTap: () {
-            AppNavigator.push(rootContext, (_) => const GroupListPage());
-          },
+          onTap: () =>
+              AppNavigator.push(rootContext, (_) => const GroupListPage()),
         ),
         if (includeFollowContact)
           AppDropMenuItem(
             label: l10n.quickActionFollowContact,
             icon: CupertinoIcons.person_badge_plus,
-            onTap: () {
-              showFollowIdentityDialog(rootContext, ref);
-            },
+            onTap: () => showFollowIdentityDialog(rootContext, ref),
           ),
       ],
     ),

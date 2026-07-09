@@ -56,7 +56,7 @@ The ANP 1.1 release line organizes protocol capabilities around identity, naming
 - **Account and identity**: registration/login, DID identity initialization, active identity vault checks, profile display and editing.
 - **Trusted IM**: direct chat, group chat, conversation list, local-first first paint, realtime patches, reliable sync, unread waterlines, retry, and failure states.
 - **Group collaboration**: group creation, member summaries hydrated from public profile Display Name, group messages, group system events, group mentions, and Agent group collaboration entry points.
-- **Contacts and profiles**: friends/relationship state, peer profile, Display Name-first identity labels with handle / DID fallback, copy actions, and identity cards.
+- **Contacts and profiles**: friends/relationship state, peer profile, Display Name-first identity labels with handle / DID fallback, copy actions, identity cards, and optimistic follow/unfollow UI state so optional relationship-list refresh failures do not make successful taps appear inert.
 - **Attachments**: attachment picking, upload/send, download, save, native open, and App + CLI E2E interoperability.
 - **Agent console**: Agent inventory, local-first refresh, daemon install command rendering, runtime status, Agent inbox, and control payload projection.
 - **Local security**: platform secure storage, native macOS Keychain bridge, E2E private file provider, and secret redaction.
