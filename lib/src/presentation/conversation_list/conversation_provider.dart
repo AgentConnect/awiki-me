@@ -395,13 +395,17 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         );
   }
 
-  Future<void> _cancelPatchSubscription() async {
+  Future<void> _cancelPatchSubscription() {
     final subscription = _patchSubscription;
     _patchSubscription = null;
     _patchSubscriptionOwnerDid = null;
     _patchSubscriptionToken += 1;
     _lastPatchVersion = 0;
-    await subscription?.cancel();
+    final cancelFuture = subscription?.cancel();
+    if (cancelFuture != null) {
+      unawaited(cancelFuture.catchError((_) {}));
+    }
+    return Future<void>.value();
   }
 
   void _handleConversationPatch(
@@ -1159,17 +1163,18 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     _readPresentation.markHidden(conversation, ownerDid: _currentOwnerDid);
   }
 
-  Future<void> clear() async {
+  Future<void> clear() {
     _refreshGeneration += 1;
     _refreshOperation = null;
     _refreshOperationFastLocal = false;
     _snapshotBootstrapActive = false;
     _snapshotBootstrapAllowedGeneration = null;
-    await _cancelPatchSubscription();
+    unawaited(_cancelPatchSubscription());
     _locallyHiddenConversationKeys.clear();
     _readPresentation.clear();
     state = const ConversationListState();
-    await _updateBadgeCountBestEffort(0, source: 'clear');
+    unawaited(_updateBadgeCountBestEffort(0, source: 'clear'));
+    return Future<void>.value();
   }
 
   @override

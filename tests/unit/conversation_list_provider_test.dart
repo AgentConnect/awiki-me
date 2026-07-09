@@ -2507,6 +2507,44 @@ void main() {
     expect(service.cancelled, isTrue);
   });
 
+  test('clear does not wait for hung patch stream cancellation', () async {
+    final service = _HangingCancelPatchConversationService(
+      conversations: const <ConversationSummary>[],
+    );
+    final container = _conversationContainer(
+      service: service,
+      notifications: FakeNotificationFacade(),
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(conversationListProvider.notifier);
+    await notifier.refreshFastLocal();
+
+    await expectLater(
+      notifier.clear().timeout(const Duration(milliseconds: 100)),
+      completes,
+    );
+    expect(service.cancelRequested, isTrue);
+
+    service.emitPatch(
+      ConversationListPatch(
+        kind: ConversationListPatchKind.upsert,
+        ownerDid: 'did:alice',
+        version: 1,
+        unreadTotal: 1,
+        item: _conversation(
+          threadId: 'dm:alice:bob',
+          displayName: 'Bob stale',
+          unreadCount: 1,
+        ),
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(container.read(conversationListProvider).conversations, isEmpty);
+  });
+
   test('fast hydrate removes stale snapshot-only conversations', () async {
     final service = _StaticConversationService(
       conversations: const <ConversationSummary>[],
@@ -3372,5 +3410,42 @@ class _PatchConversationService extends _StaticConversationService {
       conversations: repaired,
       version: repairVersion,
     );
+  }
+}
+
+class _HangingCancelPatchConversationService
+    extends _StaticConversationService {
+  _HangingCancelPatchConversationService({required super.conversations});
+
+  final StreamController<ConversationListPatch> _patches =
+      StreamController<ConversationListPatch>.broadcast(sync: true);
+  final Completer<void> _cancelCompleter = Completer<void>();
+  bool cancelRequested = false;
+
+  void emitPatch(ConversationListPatch patch) {
+    _patches.add(patch);
+  }
+
+  @override
+  Stream<ConversationListPatch> watchConversationPatches({
+    required String ownerDid,
+  }) {
+    late final StreamController<ConversationListPatch> controller;
+    late final StreamSubscription<ConversationListPatch> subscription;
+    controller = StreamController<ConversationListPatch>(
+      sync: true,
+      onListen: () {
+        subscription = _patches.stream.listen(
+          controller.add,
+          onError: controller.addError,
+          onDone: controller.close,
+        );
+      },
+      onCancel: () {
+        cancelRequested = true;
+        return _cancelCompleter.future.whenComplete(subscription.cancel);
+      },
+    );
+    return controller.stream;
   }
 }
