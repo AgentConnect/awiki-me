@@ -531,7 +531,7 @@ void main() {
     expect(gateway.lastRegisteredProfileMarkdown, '# alice\n\n');
   });
 
-  testWidgets('手机号提交时已注册 handle 提示导入凭证或换 handle', (tester) async {
+  testWidgets('手机号提交时已注册 handle 走恢复路径', (tester) async {
     final gateway = FakeAwikiGateway()
       ..handleRegistrationStatus = HandleRegistrationStatus.registered;
 
@@ -553,17 +553,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gateway.lookupHandleRegistrationCalls, 1);
-    expect(gateway.recoverHandleCalls, 0);
+    expect(gateway.recoverHandleCalls, 1);
     expect(gateway.registerHandleCalls, 0);
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(OnboardingPage)),
-    );
-    final feedback = container.read(uiFeedbackProvider);
-    expect(feedback?.message.id, 'handleAlreadyRegisteredImportCredential');
-    expect(feedback?.danger, isTrue);
+    expect(gateway.lastRecoveredPhone, '13800138000');
+    expect(gateway.lastRecoveredOtp, '123456');
   });
 
-  testWidgets('邮箱提交遇到已注册 handle 时提示导入凭证或换 handle', (tester) async {
+  testWidgets('邮箱提交遇到已注册 handle 时提示用手机号恢复', (tester) async {
     final gateway = FakeAwikiGateway()
       ..emailVerificationResult = true
       ..handleRegistrationStatus = HandleRegistrationStatus.registered;

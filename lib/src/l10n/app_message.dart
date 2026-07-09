@@ -71,9 +71,6 @@ class AppMessage {
   factory AppMessage.emailLoginUnsupportedForRegisteredHandle() =>
       const AppMessage._('emailLoginUnsupportedForRegisteredHandle');
 
-  factory AppMessage.handleAlreadyRegisteredImportCredential() =>
-      const AppMessage._('handleAlreadyRegisteredImportCredential');
-
   factory AppMessage.emailNotActivatedClickLink() =>
       const AppMessage._('emailNotActivatedClickLink');
 
@@ -203,9 +200,6 @@ class AppMessage {
     if (raw == 'email_login_unsupported_for_registered_handle' ||
         raw == '该 handle 已注册。邮箱当前仅支持新注册，请使用手机号验证码登录或导入身份凭证。') {
       return AppMessage.emailLoginUnsupportedForRegisteredHandle();
-    }
-    if (raw == 'handle_already_registered_import_credential') {
-      return AppMessage.handleAlreadyRegisteredImportCredential();
     }
     if (raw == 'session_expired' || raw == '登录状态已失效，请重新登录。') {
       return AppMessage.sessionExpiredRelogin();
@@ -362,8 +356,6 @@ class AppMessage {
         return l10n.activationEmailSent;
       case 'emailLoginUnsupportedForRegisteredHandle':
         return l10n.emailLoginUnsupportedForRegisteredHandle;
-      case 'handleAlreadyRegisteredImportCredential':
-        return l10n.handleAlreadyRegisteredImportCredential;
       case 'emailNotActivatedClickLink':
         return l10n.emailNotActivatedClickLink;
       case 'sessionExpiredRelogin':
@@ -466,9 +458,7 @@ class AppMessage {
       case 'activationEmailSent':
         return 'Activation email sent. Please check your inbox.';
       case 'emailLoginUnsupportedForRegisteredHandle':
-        return 'This handle is already registered. Choose another handle or import an identity credential.';
-      case 'handleAlreadyRegisteredImportCredential':
-        return 'This handle is already registered. Choose another handle or import an identity credential.';
+        return 'This handle is already registered. Use phone sign-in to recover it, choose another handle, or import an identity credential.';
       case 'didNotFoundOrRevoked':
         return 'This DID does not exist or has been revoked. Check the DID and try again, or switch to a valid identity.';
       case 'conversationRemovedFromRecents':

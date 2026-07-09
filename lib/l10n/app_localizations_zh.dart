@@ -173,7 +173,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get onboardingLoginRegisterHint =>
-      'Open Server 可用手机号直接注册新 Handle，暂不支持用手机号恢复已有 Handle；已有身份请导入本地凭证。';
+      'Open Server 可用手机号直接注册新 Handle 或恢复已有 Handle，无需短信验证码。';
 
   @override
   String get onboardingAuthMethod => '验证方式';
@@ -1967,11 +1967,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get emailLoginUnsupportedForRegisteredHandle =>
-      '该 handle 已注册。请选择新的 handle，或导入已有身份凭证。';
-
-  @override
-  String get handleAlreadyRegisteredImportCredential =>
-      '该 handle 已注册。请选择新的 handle，或导入已有身份凭证。';
+      '该 handle 已注册。请用手机号恢复，或选择新的 handle，或导入已有身份凭证。';
 
   @override
   String get emailNotActivatedClickLink => '邮箱尚未激活，请先点击邮件中的激活链接。';
