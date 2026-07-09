@@ -190,11 +190,15 @@ dart run tests/e2e/runner.dart --case full
 scripts/package_app.sh
 ```
 
-配置文件：[`scripts/package_app.config`](scripts/package_app.config)。日常打包只改 `AWIKI_DOMAIN`：
+配置文件：[`scripts/package_app.config`](scripts/package_app.config)。日常打包主要改 `AWIKI_DOMAIN`，需要选择平台时改 `PACKAGE_TARGETS`：
 
 ```text
 AWIKI_DOMAIN="awiki.ai"    # 当前提交默认
 AWIKI_DOMAIN="awiki.info"  # 内部镜像 / 联调包下载
+
+PACKAGE_TARGETS="android-arm64,macos-arm64,macos-x64"  # 全平台
+PACKAGE_TARGETS="android-arm64"                        # 只打 Android
+PACKAGE_TARGETS="macos-arm64,macos-x64"                # 只打 macOS
 ```
 
 脚本只用 `AWIKI_DOMAIN` 生成发布元数据：Daemon 下载地址、更新清单地址和下载页。它不会把后端地址、DID Host 或本地状态命名空间注入到 App；这些由 App 启动后的租户注册表控制。
@@ -203,9 +207,10 @@ AWIKI_DOMAIN="awiki.info"  # 内部镜像 / 联调包下载
 
 - Android arm64：Flutter release APK；读取 `android/key.properties` 中的内部分发签名。
 - macOS arm64 / x64：profile DMG。
-- 打包前重建 native SDK artifacts。
+- 只为本次选择的目标重建 native SDK artifacts。
 - Android release 打包会校验生产插件 registrant，并阻止 `integration_test` 等 dev-only 插件进入用户包。
 - 当且仅当检测到一个 Android 模拟器时，默认安装 APK、清数据并启动做 startup smoke。
+- `dist/latest.json` 只包含本次实际产出的平台。
 - 产物输出：
 
 ```text

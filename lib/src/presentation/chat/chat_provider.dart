@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
@@ -24,6 +25,7 @@ import '../../domain/entities/conversation_summary.dart';
 import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
 import '../agents/agents_provider.dart';
+import '../app_shell/providers/app_lifecycle_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../conversation_list/conversation_provider.dart';
 
@@ -628,7 +630,12 @@ class ChatThreadsController
     this.ref, {
     ThreadMemoryCachePolicy cachePolicy = const ThreadMemoryCachePolicy(),
   }) : _cachePolicy = cachePolicy,
-       super(const <String, ChatThreadState>{});
+       super(const <String, ChatThreadState>{}) {
+    _appLifecycleSubscription = ref.listen<AppLifecycleState>(
+      appLifecycleProvider,
+      _handleAppLifecycleChanged,
+    );
+  }
 
   final Ref ref;
   final ThreadMemoryCachePolicy _cachePolicy;
@@ -669,6 +676,7 @@ class ChatThreadsController
   final Map<String, Timer> _threadPatchSubscriptionTtlTimers =
       <String, Timer>{};
   final Map<String, Timer> _hiddenThreadCacheTrimTimers = <String, Timer>{};
+  late final ProviderSubscription<AppLifecycleState> _appLifecycleSubscription;
   final Map<String, DateTime> _lastThreadPatchStreamEndAt =
       <String, DateTime>{};
   final Set<String> _activeReadReceipts = <String>{};
@@ -683,6 +691,9 @@ class ChatThreadsController
   ChatThreadState thread(String threadId) {
     return state[threadId] ?? ChatThreadState(threadId: threadId);
   }
+
+  bool get _canAcknowledgeVisibleRead =>
+      ref.read(appLifecycleProvider) == AppLifecycleState.resumed;
 
   Future<void> openConversation(
     ConversationSummary conversation, {
@@ -705,7 +716,8 @@ class ChatThreadsController
       displayThreadId: targetThreadId,
     );
     if (_hasUnreadConversation(conversation) &&
-        _cacheMetadataByThreadId[targetThreadId]?.isVisible == true) {
+        _cacheMetadataByThreadId[targetThreadId]?.isVisible == true &&
+        _canAcknowledgeVisibleRead) {
       acknowledgeVisibleConversationRead(
         conversation,
         displayThreadId: targetThreadId,
@@ -1416,6 +1428,7 @@ class ChatThreadsController
     final visibleConversation = metadata?.visibleConversation;
     final shouldAckVisibleUpdate =
         metadata?.isVisible == true &&
+        _canAcknowledgeVisibleRead &&
         (_hasUnreadConversation(conversation) ||
             (visibleConversation != null &&
                 _conversationAdvancedSinceVisible(
@@ -1609,6 +1622,24 @@ class ChatThreadsController
           'metadata_visible': metadata?.isVisible,
         },
       );
+      return;
+    }
+    if (!_canAcknowledgeVisibleRead) {
+      _chatProviderTrace(
+        'mark_read.skip',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(targetThreadId),
+          'reason': 'app_not_foreground',
+          'app_lifecycle': ref.read(appLifecycleProvider).name,
+        },
+      );
+      if (requireVisible && metadata?.isVisible == true) {
+        _pendingReadAcksByThreadId[targetThreadId] = _PendingReadAck(
+          conversation: conversation,
+          reason: reason,
+          forcePersistentAck: forcePersistentAck,
+        );
+      }
       return;
     }
     if (_activeLocalHistoryLoads.contains(targetThreadId) ||
@@ -2191,6 +2222,9 @@ class ChatThreadsController
     ConversationSummary conversation, {
     required String displayThreadId,
   }) {
+    if (!_canAcknowledgeVisibleRead) {
+      return;
+    }
     final metadata = _cacheMetadataByThreadId[displayThreadId];
     if (metadata?.isVisible != true) {
       return;
@@ -2223,6 +2257,18 @@ class ChatThreadsController
           'reason': 'no_pending',
         },
       );
+      return;
+    }
+    if (!_canAcknowledgeVisibleRead) {
+      _chatProviderTrace(
+        'mark_read.flush_defer',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(threadId),
+          'reason': 'app_not_foreground',
+          'app_lifecycle': ref.read(appLifecycleProvider).name,
+        },
+      );
+      _pendingReadAcksByThreadId[threadId] = pending;
       return;
     }
     final current = thread(threadId);
@@ -3241,15 +3287,9 @@ class ChatThreadsController
     String? displayThreadId,
   }) {
     final threadId = _displayThreadIdFor(conversation, displayThreadId);
-    ref
-        .read(conversationListProvider.notifier)
-        .markConversationVisibleLocal(
-          conversation,
-          watermark: _visibleReadWatermarkForThread(
-            conversation,
-            displayThreadId: threadId,
-          ),
-        );
+    if (_canAcknowledgeVisibleRead) {
+      _markConversationVisibleForReadEligibility(conversation, threadId);
+    }
     _cancelHiddenThreadCacheTrim(threadId);
     _touchConversationCache(conversation, threadId, visible: true);
     final metadata = _cacheMetadataByThreadId[threadId];
@@ -5682,8 +5722,81 @@ class ChatThreadsController
     return displayThreadId;
   }
 
+  void _handleAppLifecycleChanged(
+    AppLifecycleState? previous,
+    AppLifecycleState next,
+  ) {
+    if (previous == next) {
+      return;
+    }
+    if (next != AppLifecycleState.resumed) {
+      _suspendVisibleReadEligibility();
+      return;
+    }
+    _restoreVisibleReadEligibility();
+  }
+
+  void _suspendVisibleReadEligibility() {
+    final visibleConversations = <ConversationSummary>[];
+    for (final metadata in _cacheMetadataByThreadId.values) {
+      if (metadata.isVisible && metadata.visibleConversation != null) {
+        visibleConversations.add(metadata.visibleConversation!);
+      }
+    }
+    if (visibleConversations.isEmpty) {
+      return;
+    }
+    final conversations = ref.read(conversationListProvider.notifier);
+    for (final conversation in visibleConversations) {
+      conversations.markConversationHiddenLocal(conversation);
+    }
+  }
+
+  void _restoreVisibleReadEligibility() {
+    final visibleEntries = <MapEntry<String, _ThreadCacheMetadata>>[
+      for (final entry in _cacheMetadataByThreadId.entries)
+        if (entry.value.isVisible && entry.value.visibleConversation != null)
+          entry,
+    ];
+    if (visibleEntries.isEmpty) {
+      return;
+    }
+    for (final entry in visibleEntries) {
+      final conversation = _refreshedConversationFor(
+        entry.value.visibleConversation!,
+      );
+      _markConversationVisibleForReadEligibility(conversation, entry.key);
+      _cacheMetadataByThreadId[entry.key] = entry.value.copyWith(
+        visibleConversation: conversation,
+      );
+      acknowledgeVisibleConversationRead(
+        conversation,
+        displayThreadId: entry.key,
+        reason: 'app_resumed_visible',
+        forcePersistentAck: _hasUnreadConversation(conversation),
+      );
+      _flushPendingReadAck(entry.key);
+    }
+  }
+
+  void _markConversationVisibleForReadEligibility(
+    ConversationSummary conversation,
+    String displayThreadId,
+  ) {
+    ref
+        .read(conversationListProvider.notifier)
+        .markConversationVisibleLocal(
+          conversation,
+          watermark: _visibleReadWatermarkForThread(
+            conversation,
+            displayThreadId: displayThreadId,
+          ),
+        );
+  }
+
   @override
   void dispose() {
+    _appLifecycleSubscription.close();
     _cancelAgentProcessingTimers();
     _cancelThreadPatchSubscriptions();
     _cancelThreadPatchSubscriptionTtls();
@@ -5810,6 +5923,9 @@ class ChatThreadsController
   }
 
   void _syncVisibleReadIntentForThread(String displayThreadId) {
+    if (!_canAcknowledgeVisibleRead) {
+      return;
+    }
     final metadata = _cacheMetadataByThreadId[displayThreadId];
     if (metadata?.isVisible != true) {
       return;

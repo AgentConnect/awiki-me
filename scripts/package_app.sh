@@ -19,6 +19,7 @@ DIST_ROOT="$ROOT_DIR/dist"
 ANDROID_PLUGIN_REGISTRANT="$ROOT_DIR/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java"
 ANDROID_PLUGIN_REGISTRANT_BACKUP=""
 ANDROID_PLUGIN_REGISTRANT_EXISTED=0
+FLUTTER_PUB_GET_DONE=0
 
 PUBSPEC_PATH="$ROOT_DIR/pubspec.yaml"
 PUBSPEC_BACKUP=""
@@ -158,14 +159,82 @@ json_string() {
   printf '"%s"' "$value"
 }
 
+PACKAGE_TARGET_LIST=()
+
+target_enabled() {
+  local expected="$1"
+  local target
+  for target in ${PACKAGE_TARGET_LIST[@]+"${PACKAGE_TARGET_LIST[@]}"}; do
+    if [[ "$target" == "$expected" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+needs_android() {
+  target_enabled "android-arm64"
+}
+
+needs_macos() {
+  target_enabled "macos-arm64" || target_enabled "macos-x64"
+}
+
+parse_package_targets() {
+  local raw="$1"
+  local token
+  PACKAGE_TARGET_LIST=()
+
+  raw="${raw//,/ }"
+  for token in $raw; do
+    case "$token" in
+      android-arm64|macos-arm64|macos-x64)
+        if ! target_enabled "$token"; then
+          PACKAGE_TARGET_LIST+=("$token")
+        fi
+        ;;
+      *)
+        fail "PACKAGE_TARGETS contains unsupported target: $token"
+        ;;
+    esac
+  done
+
+  if [[ "${#PACKAGE_TARGET_LIST[@]}" -eq 0 ]]; then
+    fail "PACKAGE_TARGETS must include at least one target"
+  fi
+}
+
+target_description() {
+  case "$1" in
+    android-arm64)
+      printf 'android-arm64 %s APK\n' "$PACKAGE_ANDROID_BUILD_MODE"
+      ;;
+    macos-arm64)
+      printf 'macos-arm64 %s DMG\n' "$PACKAGE_MACOS_BUILD_MODE"
+      ;;
+    macos-x64)
+      printf 'macos-x64 %s DMG\n' "$PACKAGE_MACOS_BUILD_MODE"
+      ;;
+    *)
+      fail "unknown package target: $1"
+      ;;
+  esac
+}
+
 require_cmd python3
 
+if [[ ! "${PACKAGE_TARGETS+x}" ]]; then
+  PACKAGE_TARGETS="android-arm64,macos-arm64,macos-x64"
+fi
+
 for required_name in \
+  PACKAGE_TARGETS \
   PACKAGE_ANDROID_STARTUP_SMOKE_TEST \
   PACKAGE_VERSION_BUMP; do
   require_config_var "$required_name"
 done
 
+require_non_empty_config_var PACKAGE_TARGETS
 require_non_empty_config_var PACKAGE_ANDROID_STARTUP_SMOKE_TEST
 require_non_empty_config_var PACKAGE_VERSION_BUMP
 if [[ ! "${AWIKI_DOMAIN+x}" ]]; then
@@ -177,12 +246,15 @@ for value_name in \
   AWIKI_DAEMON_DOWNLOAD_BASE_URL \
   AWIKI_UPDATE_MANIFEST_URL \
   AWIKI_RELEASES_URL \
+  PACKAGE_TARGETS \
   PACKAGE_ANDROID_STARTUP_SMOKE_TEST \
   PACKAGE_VERSION_BUMP; do
   if [[ "${!value_name+x}" ]]; then
     validate_no_newline "$value_name" "${!value_name}"
   fi
 done
+
+parse_package_targets "$PACKAGE_TARGETS"
 
 case "$PACKAGE_VERSION_BUMP" in
   build|patch|minor|major|none)
@@ -348,15 +420,19 @@ sync_android_local_version() {
 }
 
 check_source_identity() {
-  grep -Fq "namespace = \"$PACKAGE_ANDROID_APP_ID\"" \
-    android/app/build.gradle ||
-    fail "android namespace must stay $PACKAGE_ANDROID_APP_ID"
-  grep -Fq "applicationId = \"$PACKAGE_ANDROID_APP_ID\"" \
-    android/app/build.gradle ||
-    fail "android applicationId must stay $PACKAGE_ANDROID_APP_ID"
-  grep -Fq "PRODUCT_BUNDLE_IDENTIFIER = $PACKAGE_MACOS_BUNDLE_ID" \
-    macos/Runner/Configs/AppInfo.xcconfig ||
-    fail "macOS PRODUCT_BUNDLE_IDENTIFIER must stay $PACKAGE_MACOS_BUNDLE_ID"
+  if needs_android; then
+    grep -Fq "namespace = \"$PACKAGE_ANDROID_APP_ID\"" \
+      android/app/build.gradle ||
+      fail "android namespace must stay $PACKAGE_ANDROID_APP_ID"
+    grep -Fq "applicationId = \"$PACKAGE_ANDROID_APP_ID\"" \
+      android/app/build.gradle ||
+      fail "android applicationId must stay $PACKAGE_ANDROID_APP_ID"
+  fi
+  if needs_macos; then
+    grep -Fq "PRODUCT_BUNDLE_IDENTIFIER = $PACKAGE_MACOS_BUNDLE_ID" \
+      macos/Runner/Configs/AppInfo.xcconfig ||
+      fail "macOS PRODUCT_BUNDLE_IDENTIFIER must stay $PACKAGE_MACOS_BUNDLE_ID"
+  fi
 }
 
 android_sdk_dir() {
@@ -442,7 +518,7 @@ prepare_android_release_sources() {
     fi
   fi
 
-  "$PACKAGE_FLUTTER_BIN" pub get
+  ensure_flutter_pub_get
   write_android_release_plugin_registrant
 }
 
@@ -754,15 +830,26 @@ prepare_macos_project() {
   fi
 }
 
+ensure_flutter_pub_get() {
+  if [[ "$FLUTTER_PUB_GET_DONE" -eq 0 ]]; then
+    "$PACKAGE_FLUTTER_BIN" pub get
+    FLUTTER_PUB_GET_DONE=1
+  fi
+}
+
 build_sdk_native() {
   [[ -x "$SDK_NATIVE_BUILD_SCRIPT" ]] ||
     fail "SDK native build script not found or not executable: $SDK_NATIVE_BUILD_SCRIPT"
 
-  log "building awiki_im_core macOS native SDK artifact"
-  "$SDK_NATIVE_BUILD_SCRIPT" --macos-only
+  if needs_macos; then
+    log "building awiki_im_core macOS native SDK artifact"
+    "$SDK_NATIVE_BUILD_SCRIPT" --macos-only
+  fi
 
-  log "building awiki_im_core Android native SDK artifact"
-  "$SDK_NATIVE_BUILD_SCRIPT" --android-only --skip-codegen-check
+  if needs_android; then
+    log "building awiki_im_core Android native SDK artifact"
+    "$SDK_NATIVE_BUILD_SCRIPT" --android-only --skip-codegen-check
+  fi
 }
 
 create_dmg() {
@@ -818,6 +905,7 @@ build_macos_arch() {
 
   log "building macOS $arch_label $PACKAGE_MACOS_BUILD_MODE app"
   rm -rf "$derived_data"
+  ensure_flutter_pub_get
   "$PACKAGE_FLUTTER_BIN" build macos \
     "--$PACKAGE_MACOS_BUILD_MODE" \
     --no-pub \
@@ -858,6 +946,23 @@ write_platform_entry() {
 JSON
 }
 
+write_latest_platform_entry() {
+  local key="$1"
+  local file="$2"
+  local prefix_comma="$3"
+  local name
+  name="$(basename "$file")"
+  if [[ "$prefix_comma" == "1" ]]; then
+    printf ',\n'
+  fi
+  cat <<JSON
+    $(json_string "$key"): {
+      "downloadUrl": $(json_string "$(download_url_for "$name")"),
+      "sha256": $(json_string "$(file_sha256 "$file")")
+    }
+JSON
+}
+
 download_url_for() {
   local file_name="$1"
   printf '%s/%s/%s\n' "$(download_base_url)" "$VERSION_NAME" "$file_name"
@@ -869,13 +974,16 @@ write_latest_manifest() {
   local macos_arm64_file="$3"
   local macos_x64_file="$4"
   local manifest="$LATEST_MANIFEST"
-  local android_name macos_arm64_name macos_x64_name
+  local wrote=0
+  local macos_default_file=""
+  if [[ -n "$macos_arm64_file" ]]; then
+    macos_default_file="$macos_arm64_file"
+  elif [[ -n "$macos_x64_file" ]]; then
+    macos_default_file="$macos_x64_file"
+  fi
 
-  android_name="$(basename "$android_file")"
-  macos_arm64_name="$(basename "$macos_arm64_file")"
-  macos_x64_name="$(basename "$macos_x64_file")"
-
-  cat > "$manifest" <<JSON
+  {
+    cat <<JSON
 {
   "version": $(json_string "$VERSION_NAME"),
   "buildNumber": $BUILD_NUMBER,
@@ -883,25 +991,29 @@ write_latest_manifest() {
   "releaseNotesUrl": $(json_string "$AWIKI_RELEASES_URL"),
   "githubReleaseUrl": $(json_string "$AWIKI_RELEASES_URL"),
   "platforms": {
-    "android": {
-      "downloadUrl": $(json_string "$(download_url_for "$android_name")"),
-      "sha256": $(json_string "$(file_sha256 "$output_dir/$android_name")")
-    },
-    "macos": {
-      "downloadUrl": $(json_string "$(download_url_for "$macos_arm64_name")"),
-      "sha256": $(json_string "$(file_sha256 "$output_dir/$macos_arm64_name")")
-    },
-    "macos-arm64": {
-      "downloadUrl": $(json_string "$(download_url_for "$macos_arm64_name")"),
-      "sha256": $(json_string "$(file_sha256 "$output_dir/$macos_arm64_name")")
-    },
-    "macos-x64": {
-      "downloadUrl": $(json_string "$(download_url_for "$macos_x64_name")"),
-      "sha256": $(json_string "$(file_sha256 "$output_dir/$macos_x64_name")")
-    }
+JSON
+    if [[ -n "$android_file" ]]; then
+      write_latest_platform_entry "android" "$android_file" "$wrote"
+      wrote=1
+    fi
+    if [[ -n "$macos_default_file" ]]; then
+      write_latest_platform_entry "macos" "$macos_default_file" "$wrote"
+      wrote=1
+    fi
+    if [[ -n "$macos_arm64_file" ]]; then
+      write_latest_platform_entry "macos-arm64" "$macos_arm64_file" "$wrote"
+      wrote=1
+    fi
+    if [[ -n "$macos_x64_file" ]]; then
+      write_latest_platform_entry "macos-x64" "$macos_x64_file" "$wrote"
+      wrote=1
+    fi
+    cat <<'JSON'
+
   }
 }
 JSON
+  } > "$manifest"
 }
 
 write_manifest() {
@@ -957,11 +1069,12 @@ require_cmd grep
 require_cmd sed
 require_cmd "$PACKAGE_FLUTTER_BIN"
 require_cmd shasum
-require_cmd base64
-require_cmd hdiutil
-require_cmd lipo
-require_cmd xcodebuild
-require_cmd /usr/libexec/PlistBuddy
+if needs_macos; then
+  require_cmd hdiutil
+  require_cmd lipo
+  require_cmd xcodebuild
+  require_cmd /usr/libexec/PlistBuddy
+fi
 
 CURRENT_VERSION="$(read_pubspec_version)"
 NEXT_VERSION="$(compute_next_version "$CURRENT_VERSION")"
@@ -988,9 +1101,9 @@ log "next version:    $NEXT_VERSION"
 log "dist root:       $DIST_ROOT"
 log "SDK repo:        $SDK_REPO_DIR"
 log "targets:"
-log "  - android-arm64 $PACKAGE_ANDROID_BUILD_MODE APK"
-log "  - macos-arm64 $PACKAGE_MACOS_BUILD_MODE DMG"
-log "  - macos-x64 $PACKAGE_MACOS_BUILD_MODE DMG"
+for target in ${PACKAGE_TARGET_LIST[@]+"${PACKAGE_TARGET_LIST[@]}"}; do
+  log "  - $(target_description "$target")"
+done
 
 if [[ "$NEXT_VERSION" != "$CURRENT_VERSION" ]]; then
   PUBSPEC_BACKUP="$(mktemp)"
@@ -1004,10 +1117,14 @@ mkdir -p "$DIST_ROOT"
 
 AAPT_TOOL=""
 APKSIGNER_TOOL=""
-AAPT_TOOL="$(find_android_tool aapt)"
-APKSIGNER_TOOL="$(find_android_tool apksigner)"
+if needs_android; then
+  AAPT_TOOL="$(find_android_tool aapt)"
+  APKSIGNER_TOOL="$(find_android_tool apksigner)"
+fi
 
-prepare_macos_project
+if needs_macos; then
+  prepare_macos_project
+fi
 
 build_sdk_native
 
@@ -1018,14 +1135,20 @@ ANDROID_APK=""
 MACOS_ARM64_DMG=""
 MACOS_X64_DMG=""
 
-ANDROID_APK="$OUTPUT_DIR/AWiki-Me-Android-arm64-$VERSION_NAME.apk"
-build_android_arm64 "$ANDROID_APK" "$AAPT_TOOL" "$APKSIGNER_TOOL"
+if needs_android; then
+  ANDROID_APK="$OUTPUT_DIR/AWiki-Me-Android-arm64-$VERSION_NAME.apk"
+  build_android_arm64 "$ANDROID_APK" "$AAPT_TOOL" "$APKSIGNER_TOOL"
+fi
 
-MACOS_ARM64_DMG="$OUTPUT_DIR/AWiki-Me-macOS-arm64-$VERSION_NAME.dmg"
-build_macos_arch "arm64" "arm64" "$MACOS_ARM64_DMG"
+if target_enabled "macos-arm64"; then
+  MACOS_ARM64_DMG="$OUTPUT_DIR/AWiki-Me-macOS-arm64-$VERSION_NAME.dmg"
+  build_macos_arch "arm64" "arm64" "$MACOS_ARM64_DMG"
+fi
 
-MACOS_X64_DMG="$OUTPUT_DIR/AWiki-Me-macOS-x64-$VERSION_NAME.dmg"
-build_macos_arch "x86_64" "x64" "$MACOS_X64_DMG"
+if target_enabled "macos-x64"; then
+  MACOS_X64_DMG="$OUTPUT_DIR/AWiki-Me-macOS-x64-$VERSION_NAME.dmg"
+  build_macos_arch "x86_64" "x64" "$MACOS_X64_DMG"
+fi
 
 write_manifest "$OUTPUT_DIR" "$ANDROID_APK" "$MACOS_ARM64_DMG" "$MACOS_X64_DMG"
 

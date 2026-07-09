@@ -17,11 +17,13 @@ import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -2453,13 +2455,13 @@ void main() {
     container
         .read(conversationListProvider.notifier)
         .upsertConversation(initial);
-    controller.debugSeedMessageForTesting(
-      visibleMessage.copyWith(conversationId: initial.effectiveConversationId),
-      threadId: _timelineThreadId(initial),
-    );
     controller.markConversationVisible(
       initial,
       displayThreadId: _timelineThreadId(initial),
+    );
+    controller.debugSeedMessageForTesting(
+      visibleMessage.copyWith(conversationId: initial.effectiveConversationId),
+      threadId: _timelineThreadId(initial),
     );
     final unreadEmissions = <int>[];
     final subscription = container.listen<ConversationListState>(
@@ -2500,6 +2502,149 @@ void main() {
       gateway,
       messageId: 'remote-visible-no-flicker',
       sequence: '31',
+    );
+  });
+
+  test('后台可见会话收到未读 summary 更新时不会自动标为已读', () async {
+    final initial = conversation.copyWith(
+      lastMessagePreview: 'old visible',
+      lastMessageAt: DateTime(2026, 5, 8, 10, 0),
+      unreadCount: 0,
+    );
+    final visibleMessage = ChatMessage(
+      localId: 'remote-background-summary',
+      remoteId: 'remote-background-summary',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'background summary unread',
+      createdAt: DateTime(2026, 5, 8, 10, 6),
+      isMine: false,
+      serverSequence: 33,
+      sendState: MessageSendState.sent,
+    );
+    final unreadUpdate = initial.copyWith(
+      lastMessagePreview: visibleMessage.content,
+      lastMessageAt: visibleMessage.createdAt,
+      unreadCount: 1,
+      lastMessageSnapshot: visibleMessage,
+    );
+    final controller = container.read(chatThreadsProvider.notifier);
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(initial);
+    controller.markConversationVisible(
+      initial,
+      displayThreadId: _timelineThreadId(initial),
+    );
+    container
+        .read(appLifecycleProvider.notifier)
+        .setLifecycle(AppLifecycleState.inactive);
+
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadUpdate);
+    controller.debugSeedMessageForTesting(
+      visibleMessage.copyWith(conversationId: initial.effectiveConversationId),
+      threadId: _timelineThreadId(initial),
+    );
+    final published = container
+        .read(conversationListProvider)
+        .conversations
+        .single;
+    await controller.syncVisibleConversationAfterSummaryUpdate(
+      published,
+      displayThreadId: _timelineThreadId(initial),
+    );
+    await pumpEventQueue();
+
+    final updated = container
+        .read(conversationListProvider)
+        .conversations
+        .single;
+    expect(updated.unreadCount, 1);
+    expect(gateway.markReadCalls, 0);
+    expect(gateway.markConversationReadCalls, 0);
+  });
+
+  test('后台收到的当前会话未读消息在回到前台后才标为已读', () async {
+    final initial = conversation.copyWith(
+      lastMessagePreview: 'old visible',
+      lastMessageAt: DateTime(2026, 5, 8, 10, 0),
+      unreadCount: 0,
+    );
+    final visibleMessage = ChatMessage(
+      localId: 'remote-resumed-summary',
+      remoteId: 'remote-resumed-summary',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'resumed summary unread',
+      createdAt: DateTime(2026, 5, 8, 10, 6),
+      isMine: false,
+      serverSequence: 34,
+      sendState: MessageSendState.sent,
+    );
+    final unreadUpdate = initial.copyWith(
+      lastMessagePreview: visibleMessage.content,
+      lastMessageAt: visibleMessage.createdAt,
+      unreadCount: 1,
+      lastMessageSnapshot: visibleMessage,
+    );
+    final controller = container.read(chatThreadsProvider.notifier);
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(initial);
+    controller.markConversationVisible(
+      initial,
+      displayThreadId: _timelineThreadId(initial),
+    );
+    container
+        .read(appLifecycleProvider.notifier)
+        .setLifecycle(AppLifecycleState.inactive);
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadUpdate);
+    controller.debugSeedMessageForTesting(
+      visibleMessage.copyWith(conversationId: initial.effectiveConversationId),
+      threadId: _timelineThreadId(initial),
+    );
+    final published = container
+        .read(conversationListProvider)
+        .conversations
+        .single;
+    await controller.syncVisibleConversationAfterSummaryUpdate(
+      published,
+      displayThreadId: _timelineThreadId(initial),
+    );
+    await pumpEventQueue();
+
+    expect(
+      container.read(conversationListProvider).conversations.single.unreadCount,
+      1,
+    );
+    expect(gateway.markConversationReadCalls, 0);
+
+    container
+        .read(appLifecycleProvider.notifier)
+        .setLifecycle(AppLifecycleState.resumed);
+    await pumpEventQueue();
+
+    final updated = container
+        .read(conversationListProvider)
+        .conversations
+        .single;
+    expect(updated.unreadCount, 0);
+    expect(gateway.markReadCalls, 0);
+    expect(gateway.markConversationReadCalls, 1);
+    expect(
+      gateway.lastMarkConversationReadConversationId,
+      initial.effectiveConversationId,
+    );
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: 'remote-resumed-summary',
+      sequence: '34',
     );
   });
 

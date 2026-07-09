@@ -191,11 +191,15 @@ Entrypoint:
 scripts/package_app.sh
 ```
 
-Config file: [`scripts/package_app.config`](scripts/package_app.config). For normal packaging, edit only `AWIKI_DOMAIN`:
+Config file: [`scripts/package_app.config`](scripts/package_app.config). For normal packaging, edit `AWIKI_DOMAIN` and, when needed, `PACKAGE_TARGETS`:
 
 ```text
 AWIKI_DOMAIN="awiki.ai"    # current checked-in default
 AWIKI_DOMAIN="awiki.info"  # internal mirror / integration package downloads
+
+PACKAGE_TARGETS="android-arm64,macos-arm64,macos-x64"  # all targets
+PACKAGE_TARGETS="android-arm64"                        # Android only
+PACKAGE_TARGETS="macos-arm64,macos-x64"                # macOS only
 ```
 
 The script uses `AWIKI_DOMAIN` only for release metadata: daemon download URL, update manifest URL, and the download page. It does not inject backend base URL, DID host, or state namespace into the app; those are controlled by the in-app tenant registry after launch.
@@ -204,9 +208,10 @@ Packaging behavior:
 
 - Android arm64: Flutter release APK, signed through `android/key.properties` for internal distribution.
 - macOS arm64 / x64: profile DMG.
-- Native SDK artifacts are rebuilt before packaging.
+- Native SDK artifacts are rebuilt only for the selected targets.
 - Android release packaging validates the production plugin registrant and blocks dev-only plugins such as `integration_test` from shipping.
 - If exactly one Android emulator is connected, the script installs the APK, clears app data, and launches a startup smoke test by default.
+- `dist/latest.json` contains the platforms produced by the current packaging run.
 - Output:
 
 ```text
