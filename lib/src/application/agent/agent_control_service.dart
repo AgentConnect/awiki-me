@@ -157,6 +157,9 @@ class DefaultAgentControlService implements AgentControlService {
 
   @override
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) {
+    if (!_agentImEnabled) {
+      return Future<List<AgentSummary>>.value(const <AgentSummary>[]);
+    }
     return _inventory.listAgents(includeInactive: includeInactive);
   }
 
@@ -166,6 +169,7 @@ class DefaultAgentControlService implements AgentControlService {
     required String controllerHandle,
     required String clientPlatform,
   }) async {
+    _requireAgentsEnabled();
     final token = await _inventory.issueDaemonToken(
       controllerDid: controllerDid,
       controllerHandle: controllerHandle,
@@ -196,6 +200,7 @@ class DefaultAgentControlService implements AgentControlService {
 
   @override
   Future<void> refreshDaemonStatus(String daemonAgentDid, {String? commandId}) {
+    _requireAgentsEnabled();
     final effectiveCommandId = commandId ?? agentCommandId('cmd_agent_status');
     return _sendDaemonPayload(
       daemonAgentDid,
@@ -233,6 +238,7 @@ class DefaultAgentControlService implements AgentControlService {
     required RuntimeAgentCreateOptions options,
     String? clientRequestId,
   }) async {
+    _requireAgentsEnabled();
     final kind = options.kind;
     final driverConfig = options.driverConfig;
     final preferredLanguage =
@@ -283,9 +289,7 @@ class DefaultAgentControlService implements AgentControlService {
     String? runtimeRegistrationToken,
     String? runId,
   }) async {
-    if (!_agentImEnabled) {
-      throw StateError('Message Agent is disabled.');
-    }
+    _requireAgentsEnabled();
     final userDid = userSubkeyPackage.userDid;
     final idempotencyKey = messageAgentBootstrapAttemptIdempotencyKey(
       userDid: userDid,
@@ -388,6 +392,7 @@ class DefaultAgentControlService implements AgentControlService {
     int limit = 20,
     String? cursor,
   }) async {
+    _requireAgentsEnabled();
     final commandId = agentCommandId('cmd_runtime_inbox');
     await _sendDaemonPayload(
       daemonAgentDid,
@@ -415,6 +420,7 @@ class DefaultAgentControlService implements AgentControlService {
     int limit = 20,
     String? cursor,
   }) async {
+    _requireAgentsEnabled();
     final commandId = agentCommandId('cmd_runtime_inbox_thread');
     await _sendDaemonPayload(
       daemonAgentDid,
@@ -440,6 +446,7 @@ class DefaultAgentControlService implements AgentControlService {
     String daemonAgentDid, {
     String? commandId,
   }) async {
+    _requireAgentsEnabled();
     final effectiveCommandId =
         commandId ?? agentCommandId('cmd_daemon_upgrade');
     await _sendDaemonPayload(
@@ -456,6 +463,7 @@ class DefaultAgentControlService implements AgentControlService {
     String? commandId,
     String? upgradeCommandId,
   }) async {
+    _requireAgentsEnabled();
     final effectiveCommandId =
         commandId ?? agentCommandId('cmd_daemon_upgrade_cancel');
     await _sendDaemonPayload(
@@ -472,6 +480,7 @@ class DefaultAgentControlService implements AgentControlService {
 
   @override
   Future<void> deleteDaemon(String daemonAgentDid) {
+    _requireAgentsEnabled();
     return _sendDaemonPayload(
       daemonAgentDid,
       daemonDeletePayload(daemonAgentDid: daemonAgentDid),
@@ -483,6 +492,7 @@ class DefaultAgentControlService implements AgentControlService {
     required String daemonAgentDid,
     required String runtimeAgentDid,
   }) {
+    _requireAgentsEnabled();
     return _sendDaemonPayload(
       daemonAgentDid,
       runtimeAgentDeletePayload(runtimeAgentDid: runtimeAgentDid),
@@ -494,6 +504,7 @@ class DefaultAgentControlService implements AgentControlService {
     required String daemonAgentDid,
     required String messageAgentDid,
   }) async {
+    _requireAgentsEnabled();
     final binding = await _requireMessageAgentBindings().disableBinding(
       messageAgentDid: messageAgentDid,
     );
@@ -514,6 +525,7 @@ class DefaultAgentControlService implements AgentControlService {
     required String daemonAgentDid,
     required String messageAgentDid,
   }) async {
+    _requireAgentsEnabled();
     final binding = await pauseMessageAgent(
       daemonAgentDid: daemonAgentDid,
       messageAgentDid: messageAgentDid,
@@ -530,6 +542,7 @@ class DefaultAgentControlService implements AgentControlService {
     required String daemonAgentDid,
     required String messageAgentDid,
   }) async {
+    _requireAgentsEnabled();
     final bindings = _requireMessageAgentBindings();
     final activeBinding = await bindings.getActiveBinding();
     if (activeBinding == null) {
@@ -565,6 +578,7 @@ class DefaultAgentControlService implements AgentControlService {
     required String agentDid,
     required String displayName,
   }) {
+    _requireAgentsEnabled();
     return _inventory.updateDisplayName(
       agentDid: agentDid,
       displayName: displayName,
@@ -573,16 +587,19 @@ class DefaultAgentControlService implements AgentControlService {
 
   @override
   Future<void> unbindAgent(String agentDid) {
+    _requireAgentsEnabled();
     return _inventory.unbindAgent(agentDid: agentDid);
   }
 
   @override
   Future<List<AgentSummary>> removeAgentFromAccount(String agentDid) {
+    _requireAgentsEnabled();
     return _inventory.removeAgentFromAccount(agentDid: agentDid);
   }
 
   @override
   Future<AgentInvocationPolicy> getInvocationPolicy(String agentDid) {
+    _requireAgentsEnabled();
     return _inventory.getInvocationPolicy(agentDid: agentDid);
   }
 
@@ -591,6 +608,7 @@ class DefaultAgentControlService implements AgentControlService {
     required String agentDid,
     required AgentInvocationPolicy policy,
   }) {
+    _requireAgentsEnabled();
     return _inventory.updateInvocationPolicy(
       agentDid: agentDid,
       policy: policy,
@@ -611,6 +629,12 @@ class DefaultAgentControlService implements AgentControlService {
           idempotencyKey: idempotencyKey,
         )
         .timeout(_daemonPayloadSendTimeout);
+  }
+
+  void _requireAgentsEnabled() {
+    if (!_agentImEnabled) {
+      throw StateError('Agent features are not supported by this tenant.');
+    }
   }
 
   MessageAgentBindingPort _requireMessageAgentBindings() {

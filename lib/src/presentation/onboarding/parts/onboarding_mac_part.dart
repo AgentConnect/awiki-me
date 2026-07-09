@@ -18,6 +18,8 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.onCheckEmailActivation,
     required this.onRegisterStepChanged,
     required this.onSubmitRegister,
+    required this.activeTenant,
+    required this.onTenantPressed,
   });
 
   final OnboardingState onboarding;
@@ -36,6 +38,8 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final VoidCallback onCheckEmailActivation;
   final ValueChanged<int> onRegisterStepChanged;
   final VoidCallback onSubmitRegister;
+  final AppTenantProfile activeTenant;
+  final VoidCallback onTenantPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -49,50 +53,70 @@ class _MacOnboardingScaffold extends StatelessWidget {
             colors: <Color>[Color(0xFFF7FAFF), Color(0xFFFFFFFF)],
           ),
         ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final useCompactMacLayout = constraints.maxWidth < 1040;
-            final authCard = _MacAuthCard(
-              onboarding: onboarding,
-              credentials: credentials,
-              phoneController: phoneController,
-              otpController: otpController,
-              emailController: emailController,
-              handleController: handleController,
-              onLogin: onLogin,
-              onImport: onImport,
-              onRefresh: onRefresh,
-              onModeChanged: onModeChanged,
-              onAuthModeChanged: onAuthModeChanged,
-              onRequestOtp: onRequestOtp,
-              onRequestEmailActivation: onRequestEmailActivation,
-              onCheckEmailActivation: onCheckEmailActivation,
-              onRegisterStepChanged: onRegisterStepChanged,
-              onSubmitRegister: onSubmitRegister,
-            );
-            return SafeArea(
-              child: Padding(
-                padding: useCompactMacLayout
-                    ? const EdgeInsets.fromLTRB(28, 32, 28, 36)
-                    : const EdgeInsets.fromLTRB(54, 42, 72, 54),
-                child: useCompactMacLayout
-                    ? Center(child: authCard)
-                    : Row(
-                        children: <Widget>[
-                          const Expanded(flex: 11, child: _MacOnboardingHero()),
-                          const SizedBox(width: 76),
-                          Expanded(
-                            flex: 9,
-                            child: Align(
-                              alignment: Alignment.center,
-                              child: authCard,
+        child: Stack(
+          children: <Widget>[
+            Positioned.fill(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final useCompactMacLayout = constraints.maxWidth < 1040;
+                  final authCard = _MacAuthCard(
+                    onboarding: onboarding,
+                    credentials: credentials,
+                    phoneController: phoneController,
+                    otpController: otpController,
+                    emailController: emailController,
+                    handleController: handleController,
+                    onLogin: onLogin,
+                    onImport: onImport,
+                    onRefresh: onRefresh,
+                    onModeChanged: onModeChanged,
+                    onAuthModeChanged: onAuthModeChanged,
+                    onRequestOtp: onRequestOtp,
+                    onRequestEmailActivation: onRequestEmailActivation,
+                    onCheckEmailActivation: onCheckEmailActivation,
+                    onRegisterStepChanged: onRegisterStepChanged,
+                    onSubmitRegister: onSubmitRegister,
+                  );
+                  return SafeArea(
+                    child: Padding(
+                      padding: useCompactMacLayout
+                          ? const EdgeInsets.fromLTRB(28, 32, 28, 56)
+                          : const EdgeInsets.fromLTRB(54, 42, 72, 64),
+                      child: useCompactMacLayout
+                          ? Center(child: authCard)
+                          : Row(
+                              children: <Widget>[
+                                const Expanded(
+                                  flex: 11,
+                                  child: _MacOnboardingHero(),
+                                ),
+                                const SizedBox(width: 76),
+                                Expanded(
+                                  flex: 9,
+                                  child: Align(
+                                    alignment: Alignment.center,
+                                    child: authCard,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
+                    ),
+                  );
+                },
               ),
-            );
-          },
+            ),
+            Positioned(
+              right: 24,
+              bottom: 22,
+              child: SafeArea(
+                minimum: EdgeInsets.zero,
+                child: _TenantSwitcherButton(
+                  tenant: activeTenant,
+                  onPressed: onTenantPressed,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -145,6 +169,7 @@ class _MacOnboardingHero extends StatelessWidget {
             const SizedBox(width: 18),
             const Text(
               'AWiki',
+              key: Key('onboarding-mac-hero-title'),
               style: TextStyle(
                 color: ink,
                 fontSize: 38,

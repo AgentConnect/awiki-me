@@ -147,8 +147,13 @@ class ImCoreAppSessionService implements AppSessionService {
 
   @override
   Future<void> logout() async {
+    await _activeSessionStore?.clearActiveIdentityId();
+    _current = null;
+    unawaited(_stopRealtimeBestEffort());
+  }
+
+  Future<void> disposeRuntime() async {
     try {
-      await _activeSessionStore?.clearActiveIdentityId();
       await _stopRealtimeBestEffort();
       await _disposeRuntimeBestEffort();
     } finally {

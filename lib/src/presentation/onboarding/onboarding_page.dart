@@ -1,13 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../../app/e2e_semantics.dart';
+import '../../application/tenant/app_tenant.dart';
+import '../../data/tenant/app_tenant_store.dart';
 import '../../l10n/l10n.dart';
 import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
 import '../app_shell/providers/session_provider.dart';
+import '../shared/app_dialog.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/responsive_layout.dart';
@@ -17,6 +22,7 @@ import 'onboarding_provider.dart';
 part 'parts/onboarding_mac_part.dart';
 part 'parts/onboarding_mobile_controls_part.dart';
 part 'parts/onboarding_credentials_part.dart';
+part 'parts/onboarding_tenant_part.dart';
 
 class OnboardingPage extends ConsumerStatefulWidget {
   const OnboardingPage({super.key});
@@ -35,9 +41,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   final handleController = TextEditingController();
   final _mobileScrollController = ScrollController();
   ProviderSubscription<AppRuntimeState>? _runtimeSubscription;
+  ProviderSubscription<SessionState>? _sessionSubscription;
   Timer? _e2eOtpRetryTimer;
   int _e2eOtpAttempts = 0;
-  bool _initialEntryModeResolved = false;
+  bool _autoEntryModeEnabled = true;
 
   String get _normalizedPhone => phoneController.text.trim();
 
@@ -47,21 +54,20 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     _runtimeSubscription = ref.listenManual<AppRuntimeState>(
       appRuntimeProvider,
       (_, next) {
-        if (next.isInitialized && !next.isBusy) {
-          _resolveInitialEntryMode();
-        }
+        _resolveEntryModeFromLocalCredentials();
       },
     );
+    _sessionSubscription = ref.listenManual<SessionState>(sessionProvider, (
+      _,
+      next,
+    ) {
+      _resolveEntryModeFromLocalCredentials();
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
-      final runtime = ref.read(appRuntimeProvider);
-      final credentials = ref.read(sessionProvider).localCredentials;
-      if (!runtime.isBusy &&
-          (runtime.isInitialized || credentials.isNotEmpty)) {
-        _resolveInitialEntryMode();
-      }
+      _resolveEntryModeFromLocalCredentials();
     });
   }
 
@@ -69,6 +75,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   void dispose() {
     _stopE2eOtpRequestLoop();
     _runtimeSubscription?.close();
+    _sessionSubscription?.close();
     phoneController.dispose();
     otpController.dispose();
     emailController.dispose();
@@ -77,28 +84,30 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     super.dispose();
   }
 
-  void _resolveInitialEntryMode() {
-    if (_initialEntryModeResolved || !mounted) {
+  void _resolveEntryModeFromLocalCredentials() {
+    if (!_autoEntryModeEnabled || !mounted) {
       return;
     }
     final runtime = ref.read(appRuntimeProvider);
     final credentials = ref.read(sessionProvider).localCredentials;
-    if (runtime.isBusy) {
-      return;
-    }
     if (!runtime.isInitialized && credentials.isEmpty) {
       return;
     }
-    _initialEntryModeResolved = true;
     ref
         .read(onboardingProvider.notifier)
         .setEntryModeFromLocalCredentials(credentials);
+  }
+
+  void _setEntryModeManually(String value) {
+    _autoEntryModeEnabled = false;
+    ref.read(onboardingProvider.notifier).setEntryMode(value);
   }
 
   @override
   Widget build(BuildContext context) {
     final onboarding = ref.watch(onboardingProvider);
     final credentials = ref.watch(sessionProvider).localCredentials;
+    final activeTenant = ref.watch(activeAppTenantProvider);
     final runtime = ref.read(appRuntimeProvider.notifier);
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
@@ -113,7 +122,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         onLogin: runtime.loginWithLocalCredential,
         onImport: runtime.importCredentialArchive,
         onRefresh: runtime.refreshLocalCredentials,
-        onModeChanged: ref.read(onboardingProvider.notifier).setEntryMode,
+        onModeChanged: _setEntryModeManually,
         onAuthModeChanged: ref.read(onboardingProvider.notifier).setAuthMode,
         onRequestOtp: _requestOtp,
         onRequestEmailActivation: () => ref
@@ -126,6 +135,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             .read(onboardingProvider.notifier)
             .setRegisterStep,
         onSubmitRegister: () => _submitRegister(context),
+        activeTenant: activeTenant,
+        onTenantPressed: _showTenantManagementDialog,
       );
     }
     return CupertinoPageScaffold(
@@ -186,7 +197,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 'register': context.l10n.onboardingRegister,
                 'login': context.l10n.onboardingLogin,
               },
-              onChanged: ref.read(onboardingProvider.notifier).setEntryMode,
+              onChanged: _setEntryModeManually,
             ),
             SizedBox(height: responsive.spacing(24)),
             if (onboarding.entryMode == 'login') ...<Widget>[
@@ -352,20 +363,24 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               ],
             ],
             SizedBox(height: responsive.spacing(56)),
-            Center(
-              child: Text(
-                'Based on awiki.info',
-                style: TextStyle(
-                  color: theme.infoAccent,
-                  fontSize: responsive.titleLg,
-                  fontStyle: FontStyle.italic,
-                  fontWeight: FontWeight.w500,
-                ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: _TenantSwitcherButton(
+                tenant: activeTenant,
+                onPressed: _showTenantManagementDialog,
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _showTenantManagementDialog() async {
+    await showCupertinoDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => const _TenantManagementDialog(),
     );
   }
 

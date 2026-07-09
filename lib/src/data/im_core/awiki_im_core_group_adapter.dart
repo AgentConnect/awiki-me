@@ -27,7 +27,7 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
     String? messagePrompt,
   }) async {
     if ((_runtime.config.anpServiceDid ?? '').trim().isEmpty) {
-      throw StateError('Group creation requires AWIKI_ANP_SERVICE_DID');
+      throw StateError('Group creation requires an ANP service DID.');
     }
     final result = await _runtime.withCurrentClient(
       (client) => client.groups.createGroup(

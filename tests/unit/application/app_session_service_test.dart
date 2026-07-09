@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/application/active_session_store.dart';
 import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/models/app_auth_state.dart';
@@ -234,7 +236,7 @@ void main() {
       },
     );
 
-    test('logout stops realtime and disposes runtime', () async {
+    test('logout clears active identity without disposing runtime', () async {
       final runtime = _FakeRuntime();
       final realtime = _FakeRealtime();
       final active = _FakeActiveSessionStore('id-default');
@@ -248,22 +250,46 @@ void main() {
 
       await service.restoreSession();
       await service.logout();
+      await pumpEventQueue();
 
       expect(realtime.stopCount, 1);
-      expect(runtime.disposeCount, 1);
+      expect(runtime.disposeCount, 0);
       expect(await service.currentSession(), isNull);
       expect(await active.readActiveIdentityId(), isNull);
     });
 
-    test('logout keeps the current session while stopping realtime', () async {
+    test('logout is not blocked by slow realtime shutdown', () async {
       final runtime = _FakeRuntime();
-      late ImCoreAppSessionService service;
+      final stopCompleter = Completer<void>();
       final realtime = _FakeRealtime(
         onStop: () async {
-          expect(await service.currentSession(), isNotNull);
+          await stopCompleter.future;
         },
       );
-      service = ImCoreAppSessionService(
+      final active = _FakeActiveSessionStore('id-default');
+      final service = ImCoreAppSessionService(
+        runtime: runtime,
+        identities: _FakeIdentities(defaultIdentity: _session('id-default')),
+        auth: _FakeAuth(),
+        activeSessionStore: active,
+        realtime: realtime,
+      );
+
+      await service.restoreSession();
+      await service.logout();
+
+      expect(await service.currentSession(), isNull);
+      expect(await active.readActiveIdentityId(), isNull);
+      expect(runtime.disposeCount, 0);
+      expect(realtime.stopCount, 1);
+      stopCompleter.complete();
+      await pumpEventQueue();
+    });
+
+    test('disposeRuntime stops realtime and disposes runtime', () async {
+      final runtime = _FakeRuntime();
+      final realtime = _FakeRealtime();
+      final service = ImCoreAppSessionService(
         runtime: runtime,
         identities: _FakeIdentities(defaultIdentity: _session('id-default')),
         auth: _FakeAuth(),
@@ -272,8 +298,10 @@ void main() {
       );
 
       await service.restoreSession();
-      await service.logout();
+      await service.disposeRuntime();
 
+      expect(realtime.stopCount, 1);
+      expect(runtime.disposeCount, 1);
       expect(await service.currentSession(), isNull);
     });
 

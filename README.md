@@ -42,7 +42,7 @@ The ANP 1.1 release line organizes protocol capabilities around identity, naming
 | ANP / AWiki capability | AWiki Me status | Main entry points |
 | --- | --- | --- |
 | `did:wba` identity and DID-WBA authentication | Account onboarding, identity activation, User Service calls, and Message Service calls go through Dart service clients and `awiki_im_core`; new identities follow the e1 DID-only direction. | `lib/src/application/auth/`, `lib/src/data/im_core/` |
-| `ANPMessageService` endpoint | The app derives the default ANP message endpoint `/anp-im/rpc` and service DID `did:wba:<domain>` from `AWIKI_BASE_URL`; explicit overrides are supported. | `lib/src/application/config/awiki_environment_config.dart` |
+| `ANPMessageService` endpoint | The app derives the ANP message endpoint `/anp-im/rpc` and service DID `did:wba:<domain>` from the active in-app tenant. The default tenant is AWiki (`https://awiki.ai` + `awiki.ai`). | `lib/src/application/config/awiki_environment_config.dart`, `lib/src/application/tenant/` |
 | ANP instant messaging P1/P2/P3/P4 direction | Direct/group conversations, send, history, local projections, unread state, read ack, realtime patch, and reliable sync. | `lib/src/application/messaging_service.dart`, `lib/src/application/message_sync_service.dart` |
 | ANP attachments / Object Transfer (P7 direction) | Attachment send, download, save, and native open. Display correctness comes from im-core persisted redacted attachment manifests, not UI memory alone. | `lib/src/application/attachment_*`, `lib/src/presentation/chat/` |
 | ANP message mentions (P9 direction) | Group `@` composer, P9 JSON payload sending, valid-range highlighting, and safe fallback for invalid mentions. | `lib/src/domain/entities/chat_mention.dart`, `docs/message-mention-extension-implementation-plan/` |
@@ -126,7 +126,7 @@ scripts/flutter/build-sdk-native.sh --android-only   # Android packaging
 PUB_HOSTED_URL=https://mirrors.tuna.tsinghua.edu.cn/dart-pub flutter pub get
 dart analyze
 dart run tests/unit/runner.dart
-flutter run --dart-define=AWIKI_BASE_URL=https://awiki.info
+flutter run
 ```
 
 Recommended local gate:
@@ -142,42 +142,25 @@ The `smoke` E2E case uses Flutter desktop shims and native im-core smoke. It doe
 
 ## Runtime Configuration
 
-The app reads one backend root and derives User Service, Message Service, Mail Service, DID domain, ANP endpoint, daemon download root, and update URLs from it:
+Tenant configuration is managed inside the app, not through Flutter `--dart-define` service URL flags. The login page has a low-emphasis tenant switcher in the bottom-right corner. Each tenant stores:
 
-```bash
-flutter run --dart-define=AWIKI_BASE_URL=https://awiki.info
-```
+- tenant name
+- backend base URL
+- DID host
+- an isolated local state namespace
 
-Defaults:
-
-```text
-AWIKI_BASE_URL=https://awiki.info
-AWIKI_DID_DOMAIN=<AWIKI_BASE_URL host>
-AWIKI_ANP_SERVICE_URL=<AWIKI_BASE_URL>/anp-im/rpc
-AWIKI_ANP_SERVICE_DID=did:wba:<AWIKI_DID_DOMAIN>
-AWIKI_DAEMON_DOWNLOAD_BASE_URL=<AWIKI_BASE_URL>/daemon
-AWIKI_UPDATE_MANIFEST_URL=<AWIKI_BASE_URL>/downloads/awiki-me/latest.json
-AWIKI_RELEASES_URL=<AWIKI_BASE_URL>/#download
-AWIKI_AGENT_IM_ENABLED=true
-```
-
-Advanced overrides are only needed when splitting services or debugging a specific environment:
+The default tenant is `AWiki`:
 
 ```text
-AWIKI_USER_SERVICE_URL
-AWIKI_MESSAGE_SERVICE_URL
-AWIKI_MAIL_SERVICE_URL
-AWIKI_DID_DOMAIN
-AWIKI_STATE_NAMESPACE
-AWIKI_ANP_SERVICE_URL
-AWIKI_ANP_SERVICE_DID
-AWIKI_DAEMON_DOWNLOAD_BASE_URL
-AWIKI_UPDATE_MANIFEST_URL
-AWIKI_RELEASES_URL
-AWIKI_AGENT_IM_ENABLED
+backend base URL: https://awiki.ai
+DID host: awiki.ai
 ```
 
-Do not mix `awiki.info`, `awiki.ai`, or other service domains inside one App package. Mixing domains can break DID domain, ANP service DID, state namespace, daemon token, and download-channel consistency.
+Switching tenants rebuilds the app runtime and uses a separate im-core / product local-state namespace, so identities, conversations, groups, and local caches stay separated. Tenants with local data cannot have their backend URL or DID host edited; create a new tenant instead.
+
+Agent and Daemon features are currently supported only on the default AWiki tenant. Other tenants show a friendly unsupported state on the Agents page and do not call Agent backend APIs.
+
+The app still supports non-tenant build flags such as `AWIKI_E2E` and `AWIKI_E2E_APP_STATE_ROOT` for test harnesses.
 
 ## Testing
 
@@ -212,10 +195,10 @@ Config file: [`scripts/package_app.config`](scripts/package_app.config). For nor
 
 ```text
 AWIKI_DOMAIN="awiki.ai"    # current checked-in default
-AWIKI_DOMAIN="awiki.info"  # common internal mirror / integration package
+AWIKI_DOMAIN="awiki.info"  # internal mirror / integration package downloads
 ```
 
-The script derives `AWIKI_BASE_URL`, DID domain, ANP service, daemon download URL, update manifest, and release URL from `AWIKI_DOMAIN`. Advanced overrides should normally stay empty.
+The script uses `AWIKI_DOMAIN` only for release metadata: daemon download URL, update manifest URL, and the download page. It does not inject backend base URL, DID host, or state namespace into the app; those are controlled by the in-app tenant registry after launch.
 
 Packaging behavior:
 

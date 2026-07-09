@@ -41,6 +41,15 @@ class SessionController extends StateNotifier<SessionState> {
     state = state.copyWith(localCredentials: credentials);
   }
 
+  void upsertLocalCredential(SessionIdentity credential) {
+    final next = <SessionIdentity>[
+      for (final item in state.localCredentials)
+        if (item.credentialName != credential.credentialName) item,
+      credential,
+    ]..sort((a, b) => a.credentialName.compareTo(b.credentialName));
+    state = state.copyWith(localCredentials: next);
+  }
+
   void setSession(SessionIdentity? session) {
     state = state.copyWith(session: session, clearSession: session == null);
   }

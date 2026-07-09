@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/agent/agent_control_service.dart';
@@ -34,6 +33,7 @@ import 'package:awiki_me/src/application/profile_homepage_resolver.dart';
 import 'package:awiki_me/src/application/realtime_application_service.dart';
 import 'package:awiki_me/src/application/relationship_application_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/domain/entities/bridge_capabilities.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
@@ -221,6 +221,14 @@ Widget buildLocalizedTestApp({
         attachmentCacheService: attachmentCacheService,
       ),
       appLocaleModeProvider.overrideWith((ref) => localeMode),
+      appTenantRegistryProvider.overrideWithValue(
+        AppTenantRegistry(
+          activeTenantId: defaultTenantId,
+          tenants: <AppTenantProfile>[defaultTenantProfile()],
+        ),
+      ),
+      activeAppTenantProvider.overrideWithValue(defaultTenantProfile()),
+      appTenantActionsProvider.overrideWithValue(FakeAppTenantActions()),
       sessionProvider.overrideWith((ref) {
         final controller = SessionController();
         if (session != null) {
@@ -1431,7 +1439,7 @@ class FakeAppSessionService implements AppSessionService {
   @override
   Future<void> logout() async {
     _current = null;
-    await gateway.logout();
+    gateway.logoutCalls += 1;
   }
 
   @override
@@ -2641,6 +2649,110 @@ class FakeAgentControlService implements AgentControlService {
     lastCancelledUpgradeCommandId = commandId;
     lastCancelledUpgradeTargetCommandId = upgradeCommandId;
     return commandId ?? nextCancelUpgradeCommandId;
+  }
+}
+
+class FakeAppTenantActions implements AppTenantActions {
+  FakeAppTenantActions({AppTenantRegistry? initialRegistry, this.onChanged})
+    : registry =
+          initialRegistry ??
+          AppTenantRegistry(
+            activeTenantId: defaultTenantId,
+            tenants: <AppTenantProfile>[defaultTenantProfile()],
+          );
+
+  AppTenantRegistry registry;
+  VoidCallback? onChanged;
+  final Set<String> tenantsWithData = <String>{};
+  int useTenantCalls = 0;
+  int createTenantCalls = 0;
+  int updateTenantCalls = 0;
+  int deleteTenantCalls = 0;
+  Object? nextCreateError;
+  Object? nextUseError;
+
+  @override
+  Future<AppTenantRegistry> createTenant(AppTenantCreateInput input) async {
+    createTenantCalls += 1;
+    final error = nextCreateError;
+    if (error != null) {
+      nextCreateError = null;
+      throw error;
+    }
+    final name = input.name.trim();
+    final id = name
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9._-]+'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^[-.]+|[-.]+$'), '');
+    final now = DateTime.utc(2026, 7, 1).toIso8601String();
+    final tenant = AppTenantProfile(
+      id: id.isEmpty ? 'tenant' : id,
+      name: name,
+      backendBaseUrl: input.backendBaseUrl.trim().replaceAll(
+        RegExp(r'/+$'),
+        '',
+      ),
+      didHost: input.didHost.trim().toLowerCase(),
+      stateNamespace: 'tenant-${id.isEmpty ? 'tenant' : id}',
+      createdAt: now,
+      updatedAt: now,
+    );
+    registry = registry.copyWith(
+      tenants: <AppTenantProfile>[...registry.tenants, tenant],
+    );
+    onChanged?.call();
+    return registry;
+  }
+
+  @override
+  Future<AppTenantRegistry> useTenant(String tenantId) async {
+    useTenantCalls += 1;
+    final error = nextUseError;
+    if (error != null) {
+      nextUseError = null;
+      throw error;
+    }
+    registry = registry.copyWith(activeTenantId: tenantId);
+    onChanged?.call();
+    return registry;
+  }
+
+  @override
+  Future<AppTenantRegistry> updateTenant(AppTenantUpdateInput input) async {
+    updateTenantCalls += 1;
+    final tenants = <AppTenantProfile>[
+      for (final tenant in registry.tenants)
+        if (tenant.id == input.id)
+          tenant.copyWith(
+            name: input.name,
+            backendBaseUrl: input.backendBaseUrl,
+            didHost: input.didHost,
+            updatedAt: DateTime.utc(2026, 7, 1).toIso8601String(),
+          )
+        else
+          tenant,
+    ];
+    registry = registry.copyWith(tenants: tenants);
+    onChanged?.call();
+    return registry;
+  }
+
+  @override
+  Future<AppTenantRegistry> deleteTenant(String tenantId) async {
+    deleteTenantCalls += 1;
+    registry = registry.copyWith(
+      tenants: registry.tenants
+          .where((tenant) => tenant.id != tenantId)
+          .toList(growable: false),
+    );
+    onChanged?.call();
+    return registry;
+  }
+
+  @override
+  Future<bool> tenantHasData(String tenantId) async {
+    return tenantsWithData.contains(tenantId);
   }
 }
 

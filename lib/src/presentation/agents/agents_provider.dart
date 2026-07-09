@@ -463,7 +463,22 @@ class AgentsController extends StateNotifier<AgentsState> {
   bool _inventoryAutoSyncInFlight = false;
   String? _inventoryAutoSyncExhaustedOwner;
 
+  bool get _agentsAvailable => ref.read(agentImEnabledProvider);
+
+  void _setTenantUnsupported() {
+    _loadedCacheOwner = null;
+    _stateEpoch += 1;
+    _inventoryAutoSyncExhaustedOwner = null;
+    _stopInventoryAutoSync();
+    _cancelStatusTimers();
+    state = const AgentsState(error: AgentUiMessageCodes.tenantUnsupported);
+  }
+
   Future<void> ensureLoaded() {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return Future<void>.value();
+    }
     final session = ref.read(sessionProvider).session;
     if (session == null) {
       AwikiPerformanceLogger.log(
@@ -501,6 +516,10 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<void> load({bool showLoading = true, bool surfaceError = true}) async {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return;
+    }
     final session = ref.read(sessionProvider).session;
     final cacheOwner = session == null ? null : _agentCacheOwner(session);
     final epoch = _stateEpoch;
@@ -533,6 +552,10 @@ class AgentsController extends StateNotifier<AgentsState> {
     bool resetAutoSyncExhaustion = true,
     bool surfaceError = true,
   }) {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return Future<void>.value();
+    }
     if (resetAutoSyncExhaustion) {
       _inventoryAutoSyncExhaustedOwner = null;
     }
@@ -543,6 +566,10 @@ class AgentsController extends StateNotifier<AgentsState> {
     bool showLoading = true,
     bool surfaceError = true,
   }) async {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return;
+    }
     final totalWatch = Stopwatch()..start();
     final session = ref.read(sessionProvider).session;
     if (session == null) {
@@ -652,6 +679,10 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<void> createDaemonInstallCommand() async {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return;
+    }
     final session = ref.read(sessionProvider).session;
     if (session == null) {
       state = state.copyWith(error: AgentUiMessageCodes.loginRequired);
@@ -682,6 +713,10 @@ class AgentsController extends StateNotifier<AgentsState> {
     AgentInventoryAutoSyncReason reason =
         AgentInventoryAutoSyncReason.backgroundDiscovery,
   }) {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return;
+    }
     final session = ref.read(sessionProvider).session;
     final owner = session == null ? null : _agentCacheOwner(session);
     if (owner == null || state.agents.any((agent) => agent.isDaemon)) {
@@ -718,6 +753,10 @@ class AgentsController extends StateNotifier<AgentsState> {
     String daemonDid, {
     bool fromAutoLoad = false,
   }) async {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return;
+    }
     final now = DateTime.now().toUtc();
     if (state.isStatusQueryPending(daemonDid)) {
       return;
@@ -789,6 +828,10 @@ class AgentsController extends StateNotifier<AgentsState> {
     String daemonDid, {
     required RuntimeAgentCreateOptions options,
   }) async {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return;
+    }
     final session = ref.read(sessionProvider).session;
     if (session == null) {
       state = state.copyWith(error: AgentUiMessageCodes.loginRequired);
@@ -857,6 +900,10 @@ class AgentsController extends StateNotifier<AgentsState> {
     UserSubkeyPackage? userSubkeyPackage,
     String? appInstanceId,
   }) async {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return;
+    }
     final session = ref.read(sessionProvider).session;
     if (session == null) {
       state = state.copyWith(error: AgentUiMessageCodes.loginRequired);
@@ -923,6 +970,10 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<bool> upgradeDaemon(String daemonDid) async {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return false;
+    }
     if (state.isDaemonUpgradePending(daemonDid)) {
       return false;
     }
@@ -1012,6 +1063,10 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<bool> cancelDaemonUpgrade(String daemonDid) async {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return false;
+    }
     if (!state.isDaemonUpgradePending(daemonDid) ||
         state.isDaemonUpgradeCancelling(daemonDid)) {
       return false;
@@ -1060,6 +1115,10 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<void> unbindSelected() async {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return;
+    }
     final selected = state.selectedAgent;
     if (selected == null) {
       return;
@@ -1073,6 +1132,10 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<void> deleteSelected() async {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return;
+    }
     final selected = state.selectedAgent;
     if (selected == null) {
       return;
@@ -1306,6 +1369,10 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<void> pauseMessageAgentForDaemon(String daemonDid) async {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return;
+    }
     final target = _messageAgentTargetForDaemon(daemonDid);
     if (target == null) {
       state = state.copyWith(error: AgentUiMessageCodes.messageAgentMissing);
@@ -1322,6 +1389,10 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<void> deleteMessageAgentForDaemon(String daemonDid) async {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return;
+    }
     final target = _messageAgentTargetForDaemon(daemonDid);
     if (target == null) {
       state = state.copyWith(error: AgentUiMessageCodes.messageAgentMissing);
@@ -1386,6 +1457,10 @@ class AgentsController extends StateNotifier<AgentsState> {
   Future<void> revokeMessageAgentAuthorizationForDaemon(
     String daemonDid,
   ) async {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return;
+    }
     final target = _messageAgentTargetForDaemon(daemonDid);
     if (target == null) {
       state = state.copyWith(error: AgentUiMessageCodes.messageAgentMissing);
@@ -1413,6 +1488,10 @@ class AgentsController extends StateNotifier<AgentsState> {
     required String agentDid,
     required String displayName,
   }) async {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return;
+    }
     final normalizedAgentDid = agentDid.trim();
     final normalizedDisplayName = displayName.trim();
     if (normalizedAgentDid.isEmpty || normalizedDisplayName.isEmpty) {
@@ -1430,6 +1509,10 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<void> loadInvocationPolicy(String agentDid) async {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return;
+    }
     final normalized = agentDid.trim();
     if (normalized.isEmpty ||
         _agentByDid(normalized)?.isRuntime != true ||
@@ -1479,6 +1562,10 @@ class AgentsController extends StateNotifier<AgentsState> {
     String agentDid,
     AgentInvocationPolicy policy,
   ) async {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return false;
+    }
     final normalized = agentDid.trim();
     if (normalized.isEmpty ||
         _agentByDid(normalized)?.isRuntime != true ||
@@ -1539,6 +1626,10 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   void applyControlPayload(Map<String, Object?> payload) {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return;
+    }
     if (payload['schema'] != AgentControlPayloads.statusSchema) {
       return;
     }

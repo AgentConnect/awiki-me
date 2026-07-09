@@ -191,6 +191,104 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingMissingLocalCredential => '暂未识别到本地凭证，请先重新识别。';
 
   @override
+  String get tenantSwitcherLabel => '管理租户';
+
+  @override
+  String get tenantManagementTitle => '租户';
+
+  @override
+  String get tenantManagementSubtitle => '切换这个 App 使用的后端和 DID Host。';
+
+  @override
+  String get tenantPrimaryAgentNote => '智能体功能目前只支持 AWiki 主租户。';
+
+  @override
+  String get tenantCreate => '创建租户';
+
+  @override
+  String get tenantEdit => '编辑租户';
+
+  @override
+  String get tenantUse => '使用';
+
+  @override
+  String get tenantCurrent => '当前';
+
+  @override
+  String get tenantName => '租户名称';
+
+  @override
+  String get tenantNamePlaceholder => '团队或服务名称';
+
+  @override
+  String get tenantBackendBaseUrl => '后端地址';
+
+  @override
+  String get tenantBackendBaseUrlPlaceholder => 'https://example.com';
+
+  @override
+  String get tenantDidHost => 'DID Host';
+
+  @override
+  String get tenantDidHostPlaceholder => 'example.com';
+
+  @override
+  String get tenantCreateTitle => '创建租户';
+
+  @override
+  String get tenantEditTitle => '编辑租户';
+
+  @override
+  String get tenantSaving => '保存中...';
+
+  @override
+  String get tenantDeleteTitle => '删除租户';
+
+  @override
+  String tenantDeleteContent(Object tenantName) {
+    return '删除 $tenantName？本机数据会保留，但这个租户不会再出现在切换列表中。';
+  }
+
+  @override
+  String get tenantCannotEditDefault => '默认 AWiki 租户不能编辑。接入其他后端请创建新租户。';
+
+  @override
+  String get tenantCannotEditWithData =>
+      '这个租户已经有本地数据。请创建新租户，不要修改它的后端或 DID Host。';
+
+  @override
+  String get tenantCannotDeleteDefault => '默认 AWiki 租户不能删除。';
+
+  @override
+  String get tenantCannotDeleteActive => '请先切换到其他租户，再删除当前租户。';
+
+  @override
+  String get tenantValidationNameInvalid => '请使用 2-32 个字符：字母、数字、空格、点、下划线或中划线。';
+
+  @override
+  String get tenantValidationBackendInvalid =>
+      '请输入有效的 http 或 https 后端地址，不能包含 query 或 fragment。';
+
+  @override
+  String get tenantValidationDidHostInvalid =>
+      '请输入有效的 DID Host，例如 example.com。';
+
+  @override
+  String get tenantValidationNameExists => '已经存在同名租户。';
+
+  @override
+  String get tenantValidationEndpointExists => '已经存在相同后端和 DID Host 的租户。';
+
+  @override
+  String get tenantValidationHasData => '这个租户已经有本地数据，请创建新租户。';
+
+  @override
+  String get tenantNotFound => '租户不存在。';
+
+  @override
+  String get tenantOperationFailed => '租户操作失败，请稍后重试。';
+
+  @override
   String get onboardingIncompletePhoneTitle => '手机号不完整';
 
   @override
@@ -1491,6 +1589,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentErrorMessageAgentDisabled => '消息处理 Agent 功能未开启。';
 
   @override
+  String get agentTenantUnsupportedTitle => '当前租户暂不支持智能体';
+
+  @override
+  String get agentTenantUnsupportedSubtitle =>
+      '请回到登录页切换到 AWiki 主租户后，再管理 Daemon 和智能体。';
+
+  @override
+  String get agentErrorTenantUnsupported => '当前租户暂不支持智能体功能。';
+
+  @override
   String get agentErrorSelectDaemon => '请选择运行 Daemon。';
 
   @override
@@ -1792,7 +1900,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get messageAgentPermissionSummaryDisabled =>
-      '启用 AWIKI_AGENT_IM_ENABLED 后可配置消息处理 Agent。';
+      '切回 AWiki 主租户后可配置消息处理 Agent。';
 
   @override
   String get messageAgentPauseTitle => '暂停处理消息';

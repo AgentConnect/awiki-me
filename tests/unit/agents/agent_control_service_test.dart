@@ -542,7 +542,7 @@ void main() {
   });
 
   test(
-    'ensureMessageAgentBootstrap is disabled unless Agent IM flag is enabled',
+    'agent control operations are disabled unless tenant supports Agents',
     () async {
       final inventory = _InventoryStub();
       final messages = _MessagesStub();
@@ -552,6 +552,15 @@ void main() {
         agentImEnabled: false,
       );
 
+      expect(await service.listAgents(), isEmpty);
+      await expectLater(
+        service.createDaemonInstallCommand(
+          controllerDid: 'did:human:me',
+          controllerHandle: 'alice.awiki.info',
+          clientPlatform: 'macos',
+        ),
+        throwsStateError,
+      );
       await expectLater(
         service.ensureMessageAgentBootstrap(
           daemonAgentDid: 'did:agent:daemon',
@@ -771,24 +780,24 @@ void main() {
       expect(command.command, isNot(contains('did:human:me')));
       expect(
         command.command,
-        "curl -fsSL 'https://awiki.info/daemon/install.sh' | "
-        "AWIKI_DAEMON_BASE_URL='https://awiki.info' "
-        "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='https://awiki.info/daemon' "
+        "curl -fsSL 'https://awiki.ai/daemon/install.sh' | "
+        "AWIKI_DAEMON_BASE_URL='https://awiki.ai' "
+        "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='https://awiki.ai/daemon' "
         "sh -s -- --token 'daemon-token'",
       );
       expect(
         command.fallbackCommand,
-        'awiki-deamon install --token daemon-token --base-url https://awiki.info',
+        'awiki-deamon install --token daemon-token --base-url https://awiki.ai',
       );
-      expect(command.installerUrl, 'https://awiki.info/daemon/install.sh');
-      expect(command.cleanupUrl, 'https://awiki.info/daemon/cleanup.sh');
+      expect(command.installerUrl, 'https://awiki.ai/daemon/install.sh');
+      expect(command.cleanupUrl, 'https://awiki.ai/daemon/cleanup.sh');
       expect(
         command.cleanupCommand,
-        'curl -fsSL https://awiki.info/daemon/cleanup.sh | sh',
+        'curl -fsSL https://awiki.ai/daemon/cleanup.sh | sh',
       );
       expect(
         command.packageUrlTemplate,
-        'https://awiki.info/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
+        'https://awiki.ai/daemon/releases/<version>/awiki-deamon-<os>-<arch>.tar.gz',
       );
     },
   );
@@ -800,25 +809,27 @@ void main() {
       final service = DefaultAgentControlService(
         inventory: inventory,
         messages: _MessagesStub(),
-        environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
+        environment: AwikiEnvironmentConfig(
+          baseUrl: 'https://tenant.example.com',
+        ),
       );
 
       final command = await service.createDaemonInstallCommand(
         controllerDid: 'did:human:me',
-        controllerHandle: 'alice.awiki.ai',
+        controllerHandle: 'alice.tenant.example.com',
         clientPlatform: 'macos',
       );
 
       expect(
         command.command,
-        "curl -fsSL 'https://awiki.ai/daemon/install.sh' | "
-        "AWIKI_DAEMON_BASE_URL='https://awiki.ai' "
-        "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='https://awiki.ai/daemon' "
+        "curl -fsSL 'https://tenant.example.com/daemon/install.sh' | "
+        "AWIKI_DAEMON_BASE_URL='https://tenant.example.com' "
+        "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='https://tenant.example.com/daemon' "
         "sh -s -- --token 'daemon-token'",
       );
       expect(
         command.fallbackCommand,
-        'awiki-deamon install --token daemon-token --base-url https://awiki.ai',
+        'awiki-deamon install --token daemon-token --base-url https://tenant.example.com',
       );
     },
   );

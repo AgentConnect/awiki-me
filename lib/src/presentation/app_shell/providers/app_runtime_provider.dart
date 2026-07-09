@@ -155,24 +155,18 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   Future<void> logout() async {
-    await _runBusy(() async {
-      _isLoggingOut = true;
-      try {
-        ref.read(sessionProvider.notifier).clear();
-        ref.read(profileProvider.notifier).clear();
-        ref.read(agentsProvider.notifier).clear();
-        ref.read(selectedConversationProvider.notifier).clearSelection();
-        await ref.read(conversationListProvider.notifier).clear();
-        ref.read(chatThreadsProvider.notifier).clear();
-        ref.read(friendsProvider.notifier).clear();
-        ref.read(groupProvider.notifier).clear();
-        await ref.read(appSessionServiceProvider).logout();
-        final credentials = await _localCredentialsFor(ref);
-        ref.read(sessionProvider.notifier).setLocalCredentials(credentials);
-      } finally {
-        _isLoggingOut = false;
-      }
-    });
+    final currentSession = ref.read(sessionProvider).session;
+    if (currentSession != null) {
+      ref.read(sessionProvider.notifier).upsertLocalCredential(currentSession);
+    }
+    _isLoggingOut = true;
+    _clearAuthenticatedUiState();
+    state = state.copyWith(isBusy: false, isInitialized: true);
+    try {
+      await ref.read(appSessionServiceProvider).logout();
+    } finally {
+      _isLoggingOut = false;
+    }
   }
 
   Future<void> deleteCurrentCredential() async {
@@ -200,6 +194,17 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         _isLoggingOut = false;
       }
     });
+  }
+
+  void _clearAuthenticatedUiState() {
+    ref.read(sessionProvider.notifier).clear();
+    ref.read(profileProvider.notifier).clear();
+    ref.read(agentsProvider.notifier).clear();
+    ref.read(selectedConversationProvider.notifier).clearSelection();
+    ref.read(conversationListProvider.notifier).clearLocal();
+    ref.read(chatThreadsProvider.notifier).clear();
+    ref.read(friendsProvider.notifier).clear();
+    ref.read(groupProvider.notifier).clear();
   }
 
   Future<void> exportCurrentCredential() async {

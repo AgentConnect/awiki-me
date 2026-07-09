@@ -57,6 +57,7 @@ import '../domain/services/notification_facade.dart';
 import '../domain/services/realtime_gateway.dart';
 import '../domain/services/update_service.dart';
 import '../core/performance_logger.dart';
+import '../application/tenant/app_tenant.dart';
 
 class AppBootstrap {
   AppBootstrap({
@@ -118,10 +119,19 @@ class AppBootstrap {
   static Future<AppBootstrap> create({
     AwikiEnvironmentConfig? environment,
     String? appStateRoot,
+    AppTenantProfile? tenant,
   }) async {
     final totalWatch = Stopwatch()..start();
     final effectiveEnvironment =
-        environment ?? AwikiEnvironmentConfig.fromEnvironment();
+        environment ??
+        (tenant == null
+            ? AwikiEnvironmentConfig.fromEnvironment()
+            : AwikiEnvironmentConfig(
+                baseUrl: tenant.backendBaseUrl,
+                didDomain: tenant.didHost,
+                stateNamespace: tenant.stateNamespace,
+                agentImEnabled: tenant.isPrimaryTenant,
+              ));
     final preferenceStorage = await AwikiPerformanceLogger.async(
       'bootstrap.preference_store',
       () => _buildPreferenceStore(appStateRoot: appStateRoot),
@@ -290,6 +300,17 @@ class AppBootstrap {
       },
     );
     return bootstrap;
+  }
+
+  Future<void> dispose() async {
+    await Future.wait<void>(<Future<void>>[
+      if (realtimeApplicationService != null)
+        realtimeApplicationService!.stop().catchError((_) {}),
+      if (appSessionService is ImCoreAppSessionService)
+        (appSessionService! as ImCoreAppSessionService)
+            .disposeRuntime()
+            .catchError((_) {}),
+    ]);
   }
 
   @visibleForTesting

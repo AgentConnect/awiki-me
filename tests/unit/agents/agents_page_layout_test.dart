@@ -75,6 +75,33 @@ void main() {
     expect(control.listAgentsCalls, 1);
   });
 
+  testWidgets('agents workspace is disabled for non-primary tenants', (
+    tester,
+  ) async {
+    final control = _CountingListAgentControlService();
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+          agentImEnabledProvider.overrideWithValue(false),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('当前租户暂不支持智能体'), findsOneWidget);
+    expect(find.text('暂无代理'), findsNothing);
+    expect(find.byTooltip('刷新智能体列表'), findsNothing);
+    expect(control.listAgentsCalls, 0);
+  });
+
   testWidgets('agents workspace defers auto sync stop during dispose', (
     tester,
   ) async {
@@ -595,7 +622,7 @@ void main() {
     );
     expect(
       container.read(selectedConversationProvider)?.targetPeer,
-      'awiki-agent-hermes.awiki.info',
+      'awiki-agent-hermes.awiki.ai',
     );
     expect(
       container.read(selectedConversationProvider)?.effectiveConversationId,
@@ -603,7 +630,7 @@ void main() {
     );
     expect(
       container.read(selectedConversationProvider)?.targetPeer,
-      'awiki-agent-hermes.awiki.info',
+      'awiki-agent-hermes.awiki.ai',
     );
 
     expect(find.text('重置 Session'), findsNothing);
@@ -697,7 +724,7 @@ void main() {
 
       final handleField = tester.widget<CupertinoTextField>(handleFieldFinder);
       expect(handleField.controller?.text, 'my-agent');
-      expect(find.text('最终 Handle：@my-agent.awiki.info'), findsOneWidget);
+      expect(find.text('最终 Handle：@my-agent.awiki.ai'), findsOneWidget);
       expect(find.text('这个 Handle 可以使用'), findsOneWidget);
 
       await tester.enterText(nameFieldFinder, '写作助手');
@@ -1089,7 +1116,7 @@ void main() {
     expect(control.lastInvocationPolicyAgentDid, isNull);
   });
 
-  testWidgets('message Agent panel is hidden when feature flag is off', (
+  testWidgets('message Agent controls are hidden when tenant is unsupported', (
     tester,
   ) async {
     final control = FakeAgentControlService()
@@ -1133,6 +1160,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('当前租户暂不支持智能体'), findsOneWidget);
     expect(find.byKey(const Key('message-agent-settings-panel')), findsNothing);
     expect(find.text('消息处理 Agent'), findsNothing);
     expect(find.text('启用消息处理 Agent'), findsNothing);

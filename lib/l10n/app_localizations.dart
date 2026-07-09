@@ -452,6 +452,192 @@ abstract class AppLocalizations {
   /// **'暂未识别到本地凭证，请先重新识别。'**
   String get onboardingMissingLocalCredential;
 
+  /// No description provided for @tenantSwitcherLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理租户'**
+  String get tenantSwitcherLabel;
+
+  /// No description provided for @tenantManagementTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'租户'**
+  String get tenantManagementTitle;
+
+  /// No description provided for @tenantManagementSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'切换这个 App 使用的后端和 DID Host。'**
+  String get tenantManagementSubtitle;
+
+  /// No description provided for @tenantPrimaryAgentNote.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体功能目前只支持 AWiki 主租户。'**
+  String get tenantPrimaryAgentNote;
+
+  /// No description provided for @tenantCreate.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建租户'**
+  String get tenantCreate;
+
+  /// No description provided for @tenantEdit.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑租户'**
+  String get tenantEdit;
+
+  /// No description provided for @tenantUse.
+  ///
+  /// In zh, this message translates to:
+  /// **'使用'**
+  String get tenantUse;
+
+  /// No description provided for @tenantCurrent.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前'**
+  String get tenantCurrent;
+
+  /// No description provided for @tenantName.
+  ///
+  /// In zh, this message translates to:
+  /// **'租户名称'**
+  String get tenantName;
+
+  /// No description provided for @tenantNamePlaceholder.
+  ///
+  /// In zh, this message translates to:
+  /// **'团队或服务名称'**
+  String get tenantNamePlaceholder;
+
+  /// No description provided for @tenantBackendBaseUrl.
+  ///
+  /// In zh, this message translates to:
+  /// **'后端地址'**
+  String get tenantBackendBaseUrl;
+
+  /// No description provided for @tenantBackendBaseUrlPlaceholder.
+  ///
+  /// In zh, this message translates to:
+  /// **'https://example.com'**
+  String get tenantBackendBaseUrlPlaceholder;
+
+  /// No description provided for @tenantDidHost.
+  ///
+  /// In zh, this message translates to:
+  /// **'DID Host'**
+  String get tenantDidHost;
+
+  /// No description provided for @tenantDidHostPlaceholder.
+  ///
+  /// In zh, this message translates to:
+  /// **'example.com'**
+  String get tenantDidHostPlaceholder;
+
+  /// No description provided for @tenantCreateTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建租户'**
+  String get tenantCreateTitle;
+
+  /// No description provided for @tenantEditTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑租户'**
+  String get tenantEditTitle;
+
+  /// No description provided for @tenantSaving.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存中...'**
+  String get tenantSaving;
+
+  /// No description provided for @tenantDeleteTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除租户'**
+  String get tenantDeleteTitle;
+
+  /// No description provided for @tenantDeleteContent.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除 {tenantName}？本机数据会保留，但这个租户不会再出现在切换列表中。'**
+  String tenantDeleteContent(Object tenantName);
+
+  /// No description provided for @tenantCannotEditDefault.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认 AWiki 租户不能编辑。接入其他后端请创建新租户。'**
+  String get tenantCannotEditDefault;
+
+  /// No description provided for @tenantCannotEditWithData.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个租户已经有本地数据。请创建新租户，不要修改它的后端或 DID Host。'**
+  String get tenantCannotEditWithData;
+
+  /// No description provided for @tenantCannotDeleteDefault.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认 AWiki 租户不能删除。'**
+  String get tenantCannotDeleteDefault;
+
+  /// No description provided for @tenantCannotDeleteActive.
+  ///
+  /// In zh, this message translates to:
+  /// **'请先切换到其他租户，再删除当前租户。'**
+  String get tenantCannotDeleteActive;
+
+  /// No description provided for @tenantValidationNameInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'请使用 2-32 个字符：字母、数字、空格、点、下划线或中划线。'**
+  String get tenantValidationNameInvalid;
+
+  /// No description provided for @tenantValidationBackendInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入有效的 http 或 https 后端地址，不能包含 query 或 fragment。'**
+  String get tenantValidationBackendInvalid;
+
+  /// No description provided for @tenantValidationDidHostInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入有效的 DID Host，例如 example.com。'**
+  String get tenantValidationDidHostInvalid;
+
+  /// No description provided for @tenantValidationNameExists.
+  ///
+  /// In zh, this message translates to:
+  /// **'已经存在同名租户。'**
+  String get tenantValidationNameExists;
+
+  /// No description provided for @tenantValidationEndpointExists.
+  ///
+  /// In zh, this message translates to:
+  /// **'已经存在相同后端和 DID Host 的租户。'**
+  String get tenantValidationEndpointExists;
+
+  /// No description provided for @tenantValidationHasData.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个租户已经有本地数据，请创建新租户。'**
+  String get tenantValidationHasData;
+
+  /// No description provided for @tenantNotFound.
+  ///
+  /// In zh, this message translates to:
+  /// **'租户不存在。'**
+  String get tenantNotFound;
+
+  /// No description provided for @tenantOperationFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'租户操作失败，请稍后重试。'**
+  String get tenantOperationFailed;
+
   /// No description provided for @onboardingIncompletePhoneTitle.
   ///
   /// In zh, this message translates to:
@@ -2864,6 +3050,24 @@ abstract class AppLocalizations {
   /// **'消息处理 Agent 功能未开启。'**
   String get agentErrorMessageAgentDisabled;
 
+  /// No description provided for @agentTenantUnsupportedTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前租户暂不支持智能体'**
+  String get agentTenantUnsupportedTitle;
+
+  /// No description provided for @agentTenantUnsupportedSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'请回到登录页切换到 AWiki 主租户后，再管理 Daemon 和智能体。'**
+  String get agentTenantUnsupportedSubtitle;
+
+  /// No description provided for @agentErrorTenantUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前租户暂不支持智能体功能。'**
+  String get agentErrorTenantUnsupported;
+
   /// No description provided for @agentErrorSelectDaemon.
   ///
   /// In zh, this message translates to:
@@ -3449,7 +3653,7 @@ abstract class AppLocalizations {
   /// No description provided for @messageAgentPermissionSummaryDisabled.
   ///
   /// In zh, this message translates to:
-  /// **'启用 AWIKI_AGENT_IM_ENABLED 后可配置消息处理 Agent。'**
+  /// **'切回 AWiki 主租户后可配置消息处理 Agent。'**
   String get messageAgentPermissionSummaryDisabled;
 
   /// No description provided for @messageAgentPauseTitle.

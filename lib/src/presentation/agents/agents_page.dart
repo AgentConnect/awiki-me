@@ -77,6 +77,10 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
   }
 
   Future<void> _ensureLoadedAndWatchForHostInstall() async {
+    if (!ref.read(agentImEnabledProvider)) {
+      _deferAgentsMutation((controller) => controller.stopInventoryAutoSync());
+      return;
+    }
     await _agentsController.ensureLoaded();
     if (_disposed || !mounted) {
       return;
@@ -104,6 +108,10 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
 
   @override
   Widget build(BuildContext context) {
+    final messageAgentEnabled = ref.watch(agentImEnabledProvider);
+    if (!messageAgentEnabled) {
+      return const _AgentsTenantUnsupportedView();
+    }
     ref.listen<AgentsState>(agentsProvider, (previous, next) {
       final command = next.installCommand;
       if (command != null && previous?.installCommand != command) {
@@ -128,7 +136,6 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
     });
 
     final state = ref.watch(agentsProvider);
-    final messageAgentEnabled = ref.watch(agentImEnabledProvider);
     final responsive = context.awikiResponsive;
     final pendingAgentDids = ref.watch(pendingAgentDidsProvider);
     final selected = _agentSelectionForLayout(
@@ -241,4 +248,71 @@ AgentSummary? _agentSelectionForLayout(
     return state.agents.first;
   }
   return null;
+}
+
+class _AgentsTenantUnsupportedView extends StatelessWidget {
+  const _AgentsTenantUnsupportedView();
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return DecoratedBox(
+      decoration: const BoxDecoration(color: Color(0xFFFBFDFF)),
+      child: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: responsive.displayScaled(420),
+            ),
+            child: Padding(
+              padding: EdgeInsets.all(responsive.spacing(24)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Container(
+                    width: responsive.displayScaled(52),
+                    height: responsive.displayScaled(52),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAF2FF),
+                      borderRadius: BorderRadius.circular(
+                        responsive.radius(14),
+                      ),
+                      border: Border.all(color: const Color(0xFFD7E5FF)),
+                    ),
+                    child: Icon(
+                      CupertinoIcons.sparkles,
+                      color: const Color(0xFF0B65F8),
+                      size: responsive.iconLg,
+                    ),
+                  ),
+                  SizedBox(height: responsive.spacing(16)),
+                  Text(
+                    context.l10n.agentTenantUnsupportedTitle,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: const Color(0xFF101B32),
+                      fontSize: responsive.titleXl,
+                      fontWeight: FontWeight.w700,
+                      height: 1.2,
+                    ),
+                  ),
+                  SizedBox(height: responsive.spacing(8)),
+                  Text(
+                    context.l10n.agentTenantUnsupportedSubtitle,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: const Color(0xFF66728A),
+                      fontSize: responsive.bodyMd,
+                      height: 1.45,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

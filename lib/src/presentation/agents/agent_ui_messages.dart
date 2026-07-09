@@ -4,6 +4,7 @@ final class AgentUiMessageCodes {
   static const loginRequired = 'agent.login_required';
   static const handleUnavailable = 'agent.handle_unavailable';
   static const messageAgentDisabled = 'agent.message_agent_disabled';
+  static const tenantUnsupported = 'agent.tenant_unsupported';
   static const selectDaemon = 'agent.select_daemon';
   static const daemonBootstrapMissing = 'agent.daemon_bootstrap_missing';
   static const daemonUnreachableDelete = 'agent.daemon_unreachable_delete';

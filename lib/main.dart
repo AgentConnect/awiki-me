@@ -1,12 +1,9 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'src/app/awiki_me_app.dart';
-import 'src/app/app_locale.dart';
-import 'src/app/bootstrap.dart';
 import 'src/core/performance_logger.dart';
 import 'src/presentation/shared/awiki_me_design.dart';
+import 'src/app/tenant_aware_awiki_me_app.dart';
 
 Future<void> main() async {
   final startupWatch = Stopwatch()..start();
@@ -35,23 +32,7 @@ Future<void> main() async {
     ),
     level: AwikiPerformanceLogLevel.verbose,
   );
-  final bootstrap = await AwikiPerformanceLogger.async(
-    'main.bootstrap_create',
-    AppBootstrap.create,
-  );
-  final localeMode = await AwikiPerformanceLogger.async(
-    'main.load_locale',
-    bootstrap.localePreferenceService.loadMode,
-    level: AwikiPerformanceLogLevel.verbose,
-  );
-  runApp(
-    AwikiMeApp(
-      bootstrap: bootstrap,
-      providerOverrides: <Override>[
-        appLocaleModeProvider.overrideWith((ref) => localeMode),
-      ],
-    ),
-  );
+  runApp(const TenantAwareAwikiMeApp());
   AwikiPerformanceLogger.log('main.run_app', elapsed: startupWatch.elapsed);
   if (AwikiPerformanceLogger.enabled) {
     WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -136,6 +136,7 @@ String localizeAgentUiMessage(AppLocalizations l10n, String message) {
     AgentUiMessageCodes.handleUnavailable => l10n.agentErrorHandleUnavailable,
     AgentUiMessageCodes.messageAgentDisabled =>
       l10n.agentErrorMessageAgentDisabled,
+    AgentUiMessageCodes.tenantUnsupported => l10n.agentErrorTenantUnsupported,
     AgentUiMessageCodes.selectDaemon => l10n.agentErrorSelectDaemon,
     AgentUiMessageCodes.daemonBootstrapMissing =>
       l10n.agentErrorDaemonBootstrapMissing,

@@ -2433,7 +2433,7 @@ void main() {
       expect(control.lastBootstrapDaemonDid, isNull);
       expect(
         container.read(agentsProvider).error,
-        AgentUiMessageCodes.messageAgentDisabled,
+        AgentUiMessageCodes.tenantUnsupported,
       );
     },
   );

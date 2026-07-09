@@ -14,8 +14,8 @@ class AwikiEnvironmentConfig {
     bool? agentImEnabled,
   }) {
     final normalizedBase = _normalizeBaseUrl(
-      baseUrl ?? const String.fromEnvironment('AWIKI_BASE_URL'),
-      fallback: 'https://awiki.info',
+      baseUrl,
+      fallback: 'https://awiki.ai',
     );
     this.baseUrl = normalizedBase;
     this.userServiceUrl = _normalizeBaseUrl(
@@ -60,29 +60,7 @@ class AwikiEnvironmentConfig {
   }
 
   factory AwikiEnvironmentConfig.fromEnvironment() {
-    return AwikiEnvironmentConfig(
-      baseUrl: const String.fromEnvironment('AWIKI_BASE_URL'),
-      userServiceUrl: const String.fromEnvironment('AWIKI_USER_SERVICE_URL'),
-      messageServiceUrl: const String.fromEnvironment(
-        'AWIKI_MESSAGE_SERVICE_URL',
-      ),
-      mailServiceUrl: const String.fromEnvironment('AWIKI_MAIL_SERVICE_URL'),
-      didDomain: const String.fromEnvironment('AWIKI_DID_DOMAIN'),
-      stateNamespace: const String.fromEnvironment('AWIKI_STATE_NAMESPACE'),
-      anpServiceUrl: const String.fromEnvironment('AWIKI_ANP_SERVICE_URL'),
-      anpServiceDid: const String.fromEnvironment('AWIKI_ANP_SERVICE_DID'),
-      daemonDownloadBaseUrl: const String.fromEnvironment(
-        'AWIKI_DAEMON_DOWNLOAD_BASE_URL',
-      ),
-      updateManifestUrl: const String.fromEnvironment(
-        'AWIKI_UPDATE_MANIFEST_URL',
-      ),
-      releasesUrl: const String.fromEnvironment('AWIKI_RELEASES_URL'),
-      agentImEnabled: const bool.fromEnvironment(
-        'AWIKI_AGENT_IM_ENABLED',
-        defaultValue: true,
-      ),
-    );
+    return AwikiEnvironmentConfig();
   }
 
   late final String baseUrl;
@@ -115,7 +93,7 @@ String _firstNonEmpty(String? value, String fallback) {
 String _hostFromUrl(String baseUrl) {
   final host = Uri.tryParse(baseUrl.trim())?.host.trim().toLowerCase();
   if (host == null || host.isEmpty) {
-    return 'awiki.info';
+    return 'awiki.ai';
   }
   return host;
 }

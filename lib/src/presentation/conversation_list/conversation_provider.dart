@@ -1160,16 +1160,26 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   }
 
   Future<void> clear() async {
+    _resetLocalState();
+    await _cancelPatchSubscription();
+    await _updateBadgeCountBestEffort(0, source: 'clear');
+  }
+
+  void clearLocal() {
+    _resetLocalState();
+    unawaited(_cancelPatchSubscription());
+    unawaited(_updateBadgeCountBestEffort(0, source: 'clear'));
+  }
+
+  void _resetLocalState() {
     _refreshGeneration += 1;
     _refreshOperation = null;
     _refreshOperationFastLocal = false;
     _snapshotBootstrapActive = false;
     _snapshotBootstrapAllowedGeneration = null;
-    await _cancelPatchSubscription();
     _locallyHiddenConversationKeys.clear();
     _readPresentation.clear();
     state = const ConversationListState();
-    await _updateBadgeCountBestEffort(0, source: 'clear');
   }
 
   @override

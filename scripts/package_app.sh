@@ -102,13 +102,13 @@ join_url() {
 
 derive_base_url_from_domain() {
   local domain="$1"
-  [[ -n "$domain" ]] || fail "AWIKI_DOMAIN must not be empty when AWIKI_BASE_URL is not set"
+  [[ -n "$domain" ]] || fail "AWIKI_DOMAIN must not be empty"
   case "$domain" in
     http://*|https://*)
       trim_trailing_slash "$domain"
       ;;
     */*)
-      fail "AWIKI_DOMAIN must be a hostname, or set AWIKI_BASE_URL for full URLs"
+      fail "AWIKI_DOMAIN must be a hostname or full http(s) URL"
       ;;
     *)
       printf 'https://%s\n' "$domain"
@@ -171,21 +171,9 @@ require_non_empty_config_var PACKAGE_VERSION_BUMP
 if [[ ! "${AWIKI_DOMAIN+x}" ]]; then
   AWIKI_DOMAIN=""
 fi
-if [[ ! "${AWIKI_BASE_URL+x}" ]]; then
-  AWIKI_BASE_URL=""
-fi
 
 for value_name in \
   AWIKI_DOMAIN \
-  AWIKI_BASE_URL \
-  AWIKI_SERVICE_BASE_URL \
-  AWIKI_USER_SERVICE_URL \
-  AWIKI_MESSAGE_SERVICE_URL \
-  AWIKI_MAIL_SERVICE_URL \
-  AWIKI_DID_DOMAIN \
-  AWIKI_STATE_NAMESPACE \
-  AWIKI_ANP_SERVICE_URL \
-  AWIKI_ANP_SERVICE_DID \
   AWIKI_DAEMON_DOWNLOAD_BASE_URL \
   AWIKI_UPDATE_MANIFEST_URL \
   AWIKI_RELEASES_URL \
@@ -212,51 +200,22 @@ case "$PACKAGE_ANDROID_STARTUP_SMOKE_TEST" in
     ;;
 esac
 
-if [[ -z "$AWIKI_BASE_URL" ]]; then
-  AWIKI_BASE_URL="$(derive_base_url_from_domain "$AWIKI_DOMAIN")"
-fi
-AWIKI_BASE_URL="$(trim_trailing_slash "$AWIKI_BASE_URL")"
-case "$AWIKI_BASE_URL" in
+PACKAGE_RELEASE_BASE_URL="$(derive_base_url_from_domain "$AWIKI_DOMAIN")"
+PACKAGE_RELEASE_BASE_URL="$(trim_trailing_slash "$PACKAGE_RELEASE_BASE_URL")"
+case "$PACKAGE_RELEASE_BASE_URL" in
   http://*|https://*) ;;
-  *) fail "AWIKI_BASE_URL must start with http:// or https://" ;;
+  *) fail "AWIKI_DOMAIN must derive an http:// or https:// URL" ;;
 esac
 
-if [[ -z "${AWIKI_DID_DOMAIN:-}" ]]; then
-  AWIKI_DID_DOMAIN="$(host_from_url "$AWIKI_BASE_URL")"
-fi
-[[ -n "$AWIKI_DID_DOMAIN" ]] || fail "could not derive AWIKI_DID_DOMAIN from AWIKI_BASE_URL"
-if [[ -z "${AWIKI_SERVICE_BASE_URL:-}" ]]; then
-  AWIKI_SERVICE_BASE_URL="$AWIKI_BASE_URL"
-fi
-if [[ -z "${AWIKI_USER_SERVICE_URL:-}" ]]; then
-  AWIKI_USER_SERVICE_URL="$AWIKI_BASE_URL"
-fi
-if [[ -z "${AWIKI_MESSAGE_SERVICE_URL:-}" ]]; then
-  AWIKI_MESSAGE_SERVICE_URL="$AWIKI_BASE_URL"
-fi
-if [[ -z "${AWIKI_MAIL_SERVICE_URL:-}" ]]; then
-  AWIKI_MAIL_SERVICE_URL="$AWIKI_BASE_URL"
-fi
-if [[ -z "${AWIKI_ANP_SERVICE_URL:-}" ]]; then
-  AWIKI_ANP_SERVICE_URL="$(join_url "$AWIKI_BASE_URL" "anp-im/rpc")"
-fi
-if [[ -z "${AWIKI_ANP_SERVICE_DID:-}" ]]; then
-  AWIKI_ANP_SERVICE_DID="did:wba:$AWIKI_DID_DOMAIN"
-fi
 if [[ -z "${AWIKI_DAEMON_DOWNLOAD_BASE_URL:-}" ]]; then
-  AWIKI_DAEMON_DOWNLOAD_BASE_URL="$(join_url "$AWIKI_BASE_URL" "daemon")"
+  AWIKI_DAEMON_DOWNLOAD_BASE_URL="$(join_url "$PACKAGE_RELEASE_BASE_URL" "daemon")"
 fi
 if [[ -z "${AWIKI_UPDATE_MANIFEST_URL:-}" ]]; then
-  AWIKI_UPDATE_MANIFEST_URL="$(join_url "$AWIKI_BASE_URL" "downloads/awiki-me/latest.json")"
+  AWIKI_UPDATE_MANIFEST_URL="$(join_url "$PACKAGE_RELEASE_BASE_URL" "downloads/awiki-me/latest.json")"
 fi
 if [[ -z "${AWIKI_RELEASES_URL:-}" ]]; then
-  AWIKI_RELEASES_URL="$(join_url "$AWIKI_BASE_URL" "#download")"
+  AWIKI_RELEASES_URL="$(join_url "$PACKAGE_RELEASE_BASE_URL" "#download")"
 fi
-AWIKI_ANP_SERVICE_URL="$(trim_trailing_slash "$AWIKI_ANP_SERVICE_URL")"
-AWIKI_SERVICE_BASE_URL="$(trim_trailing_slash "$AWIKI_SERVICE_BASE_URL")"
-AWIKI_USER_SERVICE_URL="$(trim_trailing_slash "$AWIKI_USER_SERVICE_URL")"
-AWIKI_MESSAGE_SERVICE_URL="$(trim_trailing_slash "$AWIKI_MESSAGE_SERVICE_URL")"
-AWIKI_MAIL_SERVICE_URL="$(trim_trailing_slash "$AWIKI_MAIL_SERVICE_URL")"
 AWIKI_DAEMON_DOWNLOAD_BASE_URL="$(trim_trailing_slash "$AWIKI_DAEMON_DOWNLOAD_BASE_URL")"
 AWIKI_UPDATE_MANIFEST_URL="$(trim_trailing_slash "$AWIKI_UPDATE_MANIFEST_URL")"
 AWIKI_RELEASES_URL="$(trim_trailing_slash "$AWIKI_RELEASES_URL")"
@@ -264,49 +223,6 @@ AWIKI_RELEASES_URL="$(trim_trailing_slash "$AWIKI_RELEASES_URL")"
 LATEST_MANIFEST="$DIST_ROOT/latest.json"
 SDK_REPO_DIR="$(resolve_repo_path "$PACKAGE_SDK_REPO_DIR")"
 SDK_NATIVE_BUILD_SCRIPT="$SDK_REPO_DIR/scripts/flutter/build-sdk-native.sh"
-
-DART_DEFINE_ARGS=()
-DART_DEFINE_KEYS=()
-DART_DEFINE_VALUES=()
-
-add_dart_define() {
-  local key="$1"
-  local value="$2"
-  [[ -n "$value" ]] || return 0
-  DART_DEFINE_ARGS+=("--dart-define=$key=$value")
-  DART_DEFINE_KEYS+=("$key")
-  DART_DEFINE_VALUES+=("$value")
-}
-
-add_dart_define "AWIKI_BASE_URL" "$AWIKI_BASE_URL"
-add_dart_define "AWIKI_SERVICE_BASE_URL" "$AWIKI_SERVICE_BASE_URL"
-add_dart_define "AWIKI_USER_SERVICE_URL" "$AWIKI_USER_SERVICE_URL"
-add_dart_define "AWIKI_MESSAGE_SERVICE_URL" "$AWIKI_MESSAGE_SERVICE_URL"
-add_dart_define "AWIKI_MAIL_SERVICE_URL" "$AWIKI_MAIL_SERVICE_URL"
-add_dart_define "AWIKI_DID_DOMAIN" "$AWIKI_DID_DOMAIN"
-add_dart_define "AWIKI_STATE_NAMESPACE" "${AWIKI_STATE_NAMESPACE:-}"
-add_dart_define "AWIKI_ANP_SERVICE_URL" "$AWIKI_ANP_SERVICE_URL"
-add_dart_define "AWIKI_ANP_SERVICE_DID" "$AWIKI_ANP_SERVICE_DID"
-add_dart_define "AWIKI_DAEMON_DOWNLOAD_BASE_URL" "$AWIKI_DAEMON_DOWNLOAD_BASE_URL"
-add_dart_define "AWIKI_UPDATE_MANIFEST_URL" "$AWIKI_UPDATE_MANIFEST_URL"
-add_dart_define "AWIKI_RELEASES_URL" "$AWIKI_RELEASES_URL"
-
-encode_dart_defines() {
-  local joined=""
-  local i part define
-  for i in "${!DART_DEFINE_KEYS[@]}"; do
-    define="${DART_DEFINE_KEYS[$i]}=${DART_DEFINE_VALUES[$i]}"
-    part="$(printf '%s' "$define" | base64 | tr -d '\n')"
-    if [[ -n "$joined" ]]; then
-      joined="$joined,$part"
-    else
-      joined="$part"
-    fi
-  done
-  printf '%s\n' "$joined"
-}
-
-DART_DEFINES_ENCODED="$(encode_dart_defines)"
 
 read_pubspec_version() {
   local raw
@@ -880,7 +796,6 @@ build_android_arm64() {
   "$PACKAGE_FLUTTER_BIN" build apk \
     "--$PACKAGE_ANDROID_BUILD_MODE" \
     --no-pub \
-    "${DART_DEFINE_ARGS[@]}" \
     --target-platform android-arm64 \
     --split-per-abi \
     --build-name "$VERSION_NAME" \
@@ -906,7 +821,6 @@ build_macos_arch() {
   "$PACKAGE_FLUTTER_BIN" build macos \
     "--$PACKAGE_MACOS_BUILD_MODE" \
     --no-pub \
-    "${DART_DEFINE_ARGS[@]}" \
     --config-only \
     --build-name "$VERSION_NAME" \
     --build-number "$BUILD_NUMBER"
@@ -920,7 +834,6 @@ build_macos_arch() {
     ONLY_ACTIVE_ARCH=NO \
     FLUTTER_BUILD_NAME="$VERSION_NAME" \
     FLUTTER_BUILD_NUMBER="$BUILD_NUMBER" \
-    DART_DEFINES="$DART_DEFINES_ENCODED" \
     build
 
   verify_macos_app "$app" "$arch"
@@ -1008,8 +921,8 @@ write_manifest() {
     "macos": $(json_string "$PACKAGE_MACOS_BUILD_MODE")
   },
   "publishedAt": $(json_string "$(date -u +%Y-%m-%dT%H:%M:%SZ)"),
-  "backend": {
-    "baseUrl": $(json_string "$AWIKI_BASE_URL")
+  "release": {
+    "baseUrl": $(json_string "$PACKAGE_RELEASE_BASE_URL")
   },
   "platforms": {
 JSON
@@ -1065,14 +978,8 @@ check_source_identity
 log "config:          $CONFIG_PATH"
 log "android mode:    $PACKAGE_ANDROID_BUILD_MODE"
 log "macOS mode:      $PACKAGE_MACOS_BUILD_MODE"
-log "domain:          ${AWIKI_DOMAIN:-$(host_from_url "$AWIKI_BASE_URL")}"
-log "backend base:    $AWIKI_BASE_URL"
-log "SDK base:        $AWIKI_SERVICE_BASE_URL"
-log "user service:    $AWIKI_USER_SERVICE_URL"
-log "message service: $AWIKI_MESSAGE_SERVICE_URL"
-log "mail service:    $AWIKI_MAIL_SERVICE_URL"
-log "DID domain:      $AWIKI_DID_DOMAIN"
-log "ANP service:     $AWIKI_ANP_SERVICE_URL"
+log "release domain:  ${AWIKI_DOMAIN:-$(host_from_url "$PACKAGE_RELEASE_BASE_URL")}"
+log "release base:    $PACKAGE_RELEASE_BASE_URL"
 log "daemon download: $AWIKI_DAEMON_DOWNLOAD_BASE_URL"
 log "update manifest: $AWIKI_UPDATE_MANIFEST_URL"
 log "download page:   $AWIKI_RELEASES_URL"

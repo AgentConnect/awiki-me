@@ -195,6 +195,114 @@ class AppLocalizationsEn extends AppLocalizations {
       'No local credential detected yet. Please rescan first.';
 
   @override
+  String get tenantSwitcherLabel => 'Manage tenants';
+
+  @override
+  String get tenantManagementTitle => 'Tenants';
+
+  @override
+  String get tenantManagementSubtitle =>
+      'Switch the backend and DID host used by this app.';
+
+  @override
+  String get tenantPrimaryAgentNote =>
+      'Agent features are available only on the AWiki tenant.';
+
+  @override
+  String get tenantCreate => 'Create tenant';
+
+  @override
+  String get tenantEdit => 'Edit tenant';
+
+  @override
+  String get tenantUse => 'Use';
+
+  @override
+  String get tenantCurrent => 'Current';
+
+  @override
+  String get tenantName => 'Tenant name';
+
+  @override
+  String get tenantNamePlaceholder => 'Team or service name';
+
+  @override
+  String get tenantBackendBaseUrl => 'Backend base URL';
+
+  @override
+  String get tenantBackendBaseUrlPlaceholder => 'https://example.com';
+
+  @override
+  String get tenantDidHost => 'DID host';
+
+  @override
+  String get tenantDidHostPlaceholder => 'example.com';
+
+  @override
+  String get tenantCreateTitle => 'Create tenant';
+
+  @override
+  String get tenantEditTitle => 'Edit tenant';
+
+  @override
+  String get tenantSaving => 'Saving...';
+
+  @override
+  String get tenantDeleteTitle => 'Delete tenant';
+
+  @override
+  String tenantDeleteContent(Object tenantName) {
+    return 'Delete $tenantName? Local data remains on this device, but this tenant will no longer appear in the switcher.';
+  }
+
+  @override
+  String get tenantCannotEditDefault =>
+      'The default AWiki tenant cannot be edited. Create a new tenant for another backend.';
+
+  @override
+  String get tenantCannotEditWithData =>
+      'This tenant already has local data. Create a new tenant instead of changing its backend or DID host.';
+
+  @override
+  String get tenantCannotDeleteDefault =>
+      'The default AWiki tenant cannot be deleted.';
+
+  @override
+  String get tenantCannotDeleteActive =>
+      'Switch to another tenant before deleting this one.';
+
+  @override
+  String get tenantValidationNameInvalid =>
+      'Use 2-32 characters: letters, numbers, spaces, dots, underscores, or hyphens.';
+
+  @override
+  String get tenantValidationBackendInvalid =>
+      'Enter a valid http or https backend URL without query or fragment.';
+
+  @override
+  String get tenantValidationDidHostInvalid =>
+      'Enter a valid DID host, such as example.com.';
+
+  @override
+  String get tenantValidationNameExists =>
+      'A tenant with this name already exists.';
+
+  @override
+  String get tenantValidationEndpointExists =>
+      'A tenant with this backend and DID host already exists.';
+
+  @override
+  String get tenantValidationHasData =>
+      'This tenant already has local data. Create a new tenant instead.';
+
+  @override
+  String get tenantNotFound => 'Tenant not found.';
+
+  @override
+  String get tenantOperationFailed =>
+      'Tenant operation failed. Please try again.';
+
+  @override
   String get onboardingIncompletePhoneTitle => 'Incomplete phone number';
 
   @override
@@ -1554,6 +1662,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentErrorMessageAgentDisabled => 'Message Agent is not enabled.';
 
   @override
+  String get agentTenantUnsupportedTitle =>
+      'Agents are unavailable for this tenant';
+
+  @override
+  String get agentTenantUnsupportedSubtitle =>
+      'Switch back to the AWiki tenant on the login page to manage Daemons and Agents.';
+
+  @override
+  String get agentErrorTenantUnsupported =>
+      'The current tenant does not support Agent features yet.';
+
+  @override
   String get agentErrorSelectDaemon => 'Select a running daemon.';
 
   @override
@@ -1876,7 +1996,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get messageAgentPermissionSummaryDisabled =>
-      'Enable AWIKI_AGENT_IM_ENABLED to configure Message Agent.';
+      'Switch back to the AWiki tenant to configure Message Agent.';
 
   @override
   String get messageAgentPauseTitle => 'Pause message processing';

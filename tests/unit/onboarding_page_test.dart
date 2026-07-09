@@ -3,13 +3,16 @@ import 'dart:async';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
+import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
+import 'package:awiki_me/src/presentation/shared/awiki_me_feedback.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -39,7 +42,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('AWiki'), findsOneWidget);
+    expect(find.byKey(const Key('onboarding-mac-hero-title')), findsOneWidget);
     expect(find.text('身份凭证'), findsOneWidget);
     expect(find.text('导入身份凭证'), findsOneWidget);
     expect(find.text('安全可靠'), findsOneWidget);
@@ -106,8 +109,7 @@ void main() {
     expect(container.read(onboardingProvider).entryMode, 'login');
   });
 
-  testWidgets('退出登录后等待本地凭证刷新再默认进入切换身份 tab', (tester) async {
-    final logoutCompleter = Completer<void>();
+  testWidgets('退出登录后立即保留本地凭证并进入切换身份 tab', (tester) async {
     const session = SessionIdentity(
       did: 'did:test:123',
       credentialName: 'default',
@@ -115,7 +117,7 @@ void main() {
       handle: 'alice',
       jwtToken: 'token-123',
     );
-    final gateway = FakeAwikiGateway()..logoutCompleter = logoutCompleter;
+    final gateway = FakeAwikiGateway();
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -130,20 +132,18 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(AppShell)),
     );
-    final logoutFuture = container.read(appRuntimeProvider.notifier).logout();
+    await container.read(appRuntimeProvider.notifier).logout();
+    await tester.pump();
     await tester.pump();
 
     expect(find.byType(OnboardingPage), findsOneWidget);
-    expect(container.read(onboardingProvider).entryMode, 'register');
-
-    logoutCompleter.complete();
-    await logoutFuture;
-    await tester.pumpAndSettle();
-
-    expect(gateway.logoutCalls, 1);
+    expect(find.byType(AwikiMeLoadingMask), findsNothing);
+    expect(container.read(appRuntimeProvider).isBusy, isFalse);
     expect(container.read(onboardingProvider).entryMode, 'login');
     expect(find.text('Alice'), findsOneWidget);
     expect(find.text('导入身份凭证'), findsOneWidget);
+    expect(gateway.logoutCalls, 1);
+    expect(container.read(onboardingProvider).entryMode, 'login');
   });
 
   testWidgets('退出并删除当前凭证后等待本地凭证刷新再默认进入登录或注册 tab', (tester) async {
@@ -178,7 +178,7 @@ void main() {
     await tester.pump();
 
     expect(find.byType(OnboardingPage), findsOneWidget);
-    expect(container.read(onboardingProvider).entryMode, 'register');
+    expect(container.read(onboardingProvider).entryMode, 'login');
 
     deleteCompleter.complete();
     await deleteFuture;
@@ -249,6 +249,130 @@ void main() {
     expect(find.textContaining('已有账号'), findsNothing);
     expect(find.text('去登录或注册'), findsNothing);
     expect(find.text('去登录'), findsNothing);
+  });
+
+  testWidgets('登录页右下角展示当前租户入口且不再硬编码 awiki.info', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage()),
+    );
+    await tester.pump();
+
+    expect(find.byTooltip('管理租户'), findsOneWidget);
+    expect(find.text('AWiki'), findsWidgets);
+    expect(find.text('Based on awiki.info'), findsNothing);
+  });
+
+  testWidgets('登录页租户弹窗可创建新租户且不自动切换', (tester) async {
+    late StateSetter refreshTenants;
+    final tenantActions = FakeAppTenantActions();
+    tenantActions.onChanged = () => refreshTenants(() {});
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, setState) {
+          refreshTenants = setState;
+          return buildLocalizedTestApp(
+            home: const OnboardingPage(),
+            providerOverrides: <Override>[
+              appTenantRegistryProvider.overrideWithValue(
+                tenantActions.registry,
+              ),
+              activeAppTenantProvider.overrideWithValue(
+                tenantActions.registry.activeTenant,
+              ),
+              appTenantActionsProvider.overrideWithValue(tenantActions),
+            ],
+          );
+        },
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('管理租户'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tenant-management-create-button')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const Key('tenant-name-field')),
+        matching: find.byType(CupertinoTextField),
+      ),
+      'Dev Team',
+    );
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const Key('tenant-backend-field')),
+        matching: find.byType(CupertinoTextField),
+      ),
+      'https://dev.example.com/',
+    );
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const Key('tenant-did-host-field')),
+        matching: find.byType(CupertinoTextField),
+      ),
+      'dev.example.com',
+    );
+    await tester.tap(find.byKey(const Key('tenant-form-submit-button')));
+    await tester.pumpAndSettle();
+
+    expect(tenantActions.createTenantCalls, 1);
+    expect(tenantActions.useTenantCalls, 0);
+    expect(tenantActions.registry.activeTenantId, defaultTenantId);
+    expect(find.text('Dev Team'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('使用').last);
+    await tester.pumpAndSettle();
+
+    expect(tenantActions.useTenantCalls, 1);
+    expect(tenantActions.registry.activeTenantId, 'dev-team');
+  });
+
+  testWidgets('租户错误提示可选中并展示未知错误详情', (tester) async {
+    final tenantActions = FakeAppTenantActions()
+      ..nextCreateError = StateError('runtime bootstrap failed');
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const OnboardingPage(),
+        providerOverrides: <Override>[
+          appTenantActionsProvider.overrideWithValue(tenantActions),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('管理租户'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tenant-management-create-button')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const Key('tenant-name-field')),
+        matching: find.byType(CupertinoTextField),
+      ),
+      'Test',
+    );
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const Key('tenant-backend-field')),
+        matching: find.byType(CupertinoTextField),
+      ),
+      'https://anpolis.net',
+    );
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const Key('tenant-did-host-field')),
+        matching: find.byType(CupertinoTextField),
+      ),
+      'anpolis.net',
+    );
+    await tester.tap(find.byKey(const Key('tenant-form-submit-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SelectionArea), findsWidgets);
+    expect(find.textContaining('租户操作失败，请稍后重试。'), findsOneWidget);
+    expect(find.textContaining('runtime bootstrap failed'), findsOneWidget);
   });
 
   testWidgets('切换身份 tab 展示导入身份凭证并提示暂未实现', (tester) async {
@@ -342,7 +466,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('AWiki'), findsNothing);
+    expect(find.byKey(const Key('onboarding-mac-hero-title')), findsNothing);
 
     final registerRect = tester.getRect(find.text('登录或注册'));
     final switchRect = tester.getRect(find.text('切换身份'));
