@@ -99,6 +99,68 @@ void main() {
     expect(container.read(uiFeedbackProvider), isNull);
   });
 
+  testWidgets('Mac 嵌入式设置页退出登录后不会关闭根页面', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:123',
+      credentialName: 'default',
+      displayName: 'Alice',
+      handle: 'alice',
+      jwtToken: 'token-123',
+    );
+    gateway.localCredentials = const <SessionIdentity>[session];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(embedded: true),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+
+    expect(find.byType(SettingsPage), findsOneWidget);
+
+    await tester.tap(find.text('退出登录'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('退出登录').last);
+    await tester.pumpAndSettle();
+
+    expect(gateway.logoutCalls, 1);
+    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(find.text('设置'), findsOneWidget);
+  });
+
+  testWidgets('Mac 嵌入式设置页退出并删除凭证后不会关闭根页面', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:123',
+      credentialName: 'default',
+      displayName: 'Alice',
+      handle: 'alice',
+      jwtToken: 'token-123',
+    );
+    gateway.localCredentials = const <SessionIdentity>[session];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(embedded: true),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+
+    expect(find.byType(SettingsPage), findsOneWidget);
+
+    await tester.tap(find.text('退出并删除当前凭证'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('退出并删除'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.deleteLocalCredentialCalls, 1);
+    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(find.text('设置'), findsOneWidget);
+  });
+
   testWidgets('设置页隐藏更新日志下载更新和消息推送入口', (tester) async {
     await tester.pumpWidget(buildLocalizedTestApp(home: const SettingsPage()));
 

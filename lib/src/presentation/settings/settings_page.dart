@@ -245,7 +245,7 @@ class SettingsPage extends ConsumerWidget {
             onPressed: () async {
               Navigator.of(ctx).pop();
               await runtime.logout();
-              if (context.mounted) {
+              if (!embedded && context.mounted) {
                 Navigator.of(context).pop();
               }
             },
@@ -278,7 +278,7 @@ class SettingsPage extends ConsumerWidget {
             onPressed: () async {
               Navigator.of(ctx).pop();
               await runtime.deleteCurrentCredential();
-              if (context.mounted) {
+              if (!embedded && context.mounted) {
                 Navigator.of(context).pop();
               }
             },
