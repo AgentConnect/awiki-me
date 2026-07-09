@@ -5,7 +5,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.onboarding,
     required this.credentials,
     required this.phoneController,
-    required this.otpController,
     required this.emailController,
     required this.handleController,
     required this.onLogin,
@@ -13,7 +12,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.onRefresh,
     required this.onModeChanged,
     required this.onAuthModeChanged,
-    required this.onRequestOtp,
     required this.onRequestEmailActivation,
     required this.onCheckEmailActivation,
     required this.onRegisterStepChanged,
@@ -23,7 +21,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final OnboardingState onboarding;
   final List<SessionIdentity> credentials;
   final TextEditingController phoneController;
-  final TextEditingController otpController;
   final TextEditingController emailController;
   final TextEditingController handleController;
   final Future<void> Function(String credentialName) onLogin;
@@ -31,7 +28,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final VoidCallback? onRefresh;
   final ValueChanged<String> onModeChanged;
   final ValueChanged<String> onAuthModeChanged;
-  final VoidCallback onRequestOtp;
   final VoidCallback onRequestEmailActivation;
   final VoidCallback onCheckEmailActivation;
   final ValueChanged<int> onRegisterStepChanged;
@@ -56,7 +52,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
               onboarding: onboarding,
               credentials: credentials,
               phoneController: phoneController,
-              otpController: otpController,
               emailController: emailController,
               handleController: handleController,
               onLogin: onLogin,
@@ -64,7 +59,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
               onRefresh: onRefresh,
               onModeChanged: onModeChanged,
               onAuthModeChanged: onAuthModeChanged,
-              onRequestOtp: onRequestOtp,
               onRequestEmailActivation: onRequestEmailActivation,
               onCheckEmailActivation: onCheckEmailActivation,
               onRegisterStepChanged: onRegisterStepChanged,
@@ -501,7 +495,6 @@ class _MacAuthCard extends StatelessWidget {
     required this.onboarding,
     required this.credentials,
     required this.phoneController,
-    required this.otpController,
     required this.emailController,
     required this.handleController,
     required this.onLogin,
@@ -509,7 +502,6 @@ class _MacAuthCard extends StatelessWidget {
     required this.onRefresh,
     required this.onModeChanged,
     required this.onAuthModeChanged,
-    required this.onRequestOtp,
     required this.onRequestEmailActivation,
     required this.onCheckEmailActivation,
     required this.onRegisterStepChanged,
@@ -519,7 +511,6 @@ class _MacAuthCard extends StatelessWidget {
   final OnboardingState onboarding;
   final List<SessionIdentity> credentials;
   final TextEditingController phoneController;
-  final TextEditingController otpController;
   final TextEditingController emailController;
   final TextEditingController handleController;
   final Future<void> Function(String credentialName) onLogin;
@@ -527,7 +518,6 @@ class _MacAuthCard extends StatelessWidget {
   final VoidCallback? onRefresh;
   final ValueChanged<String> onModeChanged;
   final ValueChanged<String> onAuthModeChanged;
-  final VoidCallback onRequestOtp;
   final VoidCallback onRequestEmailActivation;
   final VoidCallback onCheckEmailActivation;
   final ValueChanged<int> onRegisterStepChanged;
@@ -578,11 +568,9 @@ class _MacAuthCard extends StatelessWidget {
                               key: const ValueKey<String>('mac-register-form'),
                               onboarding: onboarding,
                               phoneController: phoneController,
-                              otpController: otpController,
                               emailController: emailController,
                               handleController: handleController,
                               onAuthModeChanged: onAuthModeChanged,
-                              onRequestOtp: onRequestOtp,
                               onRequestEmailActivation:
                                   onRequestEmailActivation,
                               onCheckEmailActivation: onCheckEmailActivation,
@@ -870,11 +858,9 @@ class _MacRegisterForm extends StatelessWidget {
     super.key,
     required this.onboarding,
     required this.phoneController,
-    required this.otpController,
     required this.emailController,
     required this.handleController,
     required this.onAuthModeChanged,
-    required this.onRequestOtp,
     required this.onRequestEmailActivation,
     required this.onCheckEmailActivation,
     required this.onRegisterStepChanged,
@@ -883,11 +869,9 @@ class _MacRegisterForm extends StatelessWidget {
 
   final OnboardingState onboarding;
   final TextEditingController phoneController;
-  final TextEditingController otpController;
   final TextEditingController emailController;
   final TextEditingController handleController;
   final ValueChanged<String> onAuthModeChanged;
-  final VoidCallback onRequestOtp;
   final VoidCallback onRequestEmailActivation;
   final VoidCallback onCheckEmailActivation;
   final ValueChanged<int> onRegisterStepChanged;
@@ -946,42 +930,20 @@ class _MacRegisterForm extends StatelessWidget {
             placeholder: context.l10n.onboardingPhonePlaceholder,
             icon: CupertinoIcons.phone,
             keyboardType: TextInputType.phone,
-            suffix: _MacInlineAction(
-              label: onboarding.isOtpResendCoolingDown
-                  ? context.l10n.onboardingResendOtpIn(
-                      onboarding.otpResendCountdown,
-                    )
-                  : context.l10n.onboardingSendOtp,
-              onPressed: onboarding.isBusy || onboarding.isOtpResendCoolingDown
-                  ? null
-                  : onRequestOtp,
-            ),
           ),
           const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: <Widget>[
-              Expanded(
-                child: _MacOutlinedField(
-                  controller: otpController,
-                  label: context.l10n.onboardingOtp,
-                  placeholder: context.l10n.onboardingOtpPlaceholder,
-                  icon: CupertinoIcons.number,
-                  keyboardType: TextInputType.number,
-                ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: SizedBox(
+              key: const Key('onboarding-mac-phone-next-action'),
+              width: 118,
+              child: _MacPrimaryAction(
+                label: context.l10n.commonNext,
+                onPressed: onboarding.isBusy
+                    ? null
+                    : () => onRegisterStepChanged(2),
               ),
-              const SizedBox(width: 12),
-              SizedBox(
-                key: const Key('onboarding-mac-phone-next-action'),
-                width: 118,
-                child: _MacPrimaryAction(
-                  label: context.l10n.commonNext,
-                  onPressed: onboarding.isBusy
-                      ? null
-                      : () => onRegisterStepChanged(2),
-                ),
-              ),
-            ],
+            ),
           ),
         ] else ...<Widget>[
           _MacOutlinedField(

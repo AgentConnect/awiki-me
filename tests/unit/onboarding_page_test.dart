@@ -54,7 +54,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('发送验证码'), findsOneWidget);
+    expect(find.text('下一步'), findsOneWidget);
+    expect(find.text('发送验证码'), findsNothing);
+    expect(find.text('验证码'), findsNothing);
     expect(find.text('导入身份凭证'), findsNothing);
 
     final container = ProviderScope.containerOf(
@@ -186,7 +188,9 @@ void main() {
 
     expect(gateway.deleteLocalCredentialCalls, 1);
     expect(container.read(onboardingProvider).entryMode, 'register');
-    expect(find.text('发送验证码'), findsOneWidget);
+    expect(find.text('下一步'), findsOneWidget);
+    expect(find.text('发送验证码'), findsNothing);
+    expect(find.text('验证码'), findsNothing);
     expect(find.text('导入身份凭证'), findsNothing);
   });
 
@@ -417,7 +421,7 @@ void main() {
     expect(feedback?.danger, isFalse);
   });
 
-  testWidgets('手机号验证码发送成功后进入重新发送倒计时', (tester) async {
+  testWidgets('手机号第一步不显示验证码控件且下一步不请求验证码', (tester) async {
     final gateway = FakeAwikiGateway();
 
     await tester.pumpWidget(
@@ -432,56 +436,19 @@ void main() {
       find.byType(CupertinoTextField).first,
       '13800138000',
     );
-    await tester.tap(find.text('发送验证码'));
-    await tester.pump();
+    expect(find.text('发送验证码'), findsNothing);
+    expect(find.text('验证码'), findsNothing);
 
-    expect(gateway.sendOtpCalls, 1);
-    expect(find.textContaining('重新发送（'), findsOneWidget);
-
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(OnboardingPage)),
-    );
-    final state = container.read(onboardingProvider);
-    expect(state.otpResendCountdown, 60);
-    expect(state.isOtpResendCoolingDown, isTrue);
-
-    final feedback = container.read(uiFeedbackProvider);
-    expect(feedback?.message.id, 'otpSent');
-    expect(feedback?.danger, isFalse);
-  });
-
-  testWidgets('手机号验证码发送失败时保持可重试且不进入倒计时', (tester) async {
-    final gateway = FakeAwikiGateway()..failNextSendOtp = true;
-
-    await tester.pumpWidget(
-      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
-    );
-    await tester.pump();
-
-    await tester.tap(find.text('登录或注册'));
+    await tester.tap(find.text('下一步'));
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byType(CupertinoTextField).first,
-      '13800138000',
-    );
-    await tester.tap(find.text('发送验证码'));
-    await tester.pump();
-    await tester.pump();
-
-    expect(gateway.sendOtpCalls, 1);
-    expect(find.text('发送验证码'), findsOneWidget);
-    expect(find.textContaining('重新发送（'), findsNothing);
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(OnboardingPage)),
     );
     final state = container.read(onboardingProvider);
-    expect(state.isBusy, isFalse);
-    expect(state.otpResendCountdown, 0);
-    final feedback = container.read(uiFeedbackProvider);
-    expect(feedback?.danger, isTrue);
-    expect(feedback?.message.id, 'raw');
-    expect(feedback?.message.detail, 'otp gateway unavailable');
+    expect(state.registerStep, 2);
+    expect(gateway.sendOtpCalls, 0);
+    expect(find.textContaining('重新发送（'), findsNothing);
   });
 
   testWidgets('邮箱验证成功后检查按钮变成下一步', (tester) async {
@@ -525,7 +492,6 @@ void main() {
       find.byType(CupertinoTextField).at(0),
       '13800138000',
     );
-    await tester.enterText(find.byType(CupertinoTextField).at(1), '123456');
     await tester.tap(find.text('下一步'));
     await tester.pumpAndSettle();
 
@@ -550,7 +516,6 @@ void main() {
       find.byType(CupertinoTextField).at(0),
       '13800138000',
     );
-    await tester.enterText(find.byType(CupertinoTextField).at(1), '123456');
     await tester.tap(find.text('下一步'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(CupertinoTextField).at(0), 'alice');
@@ -560,6 +525,8 @@ void main() {
     expect(gateway.lookupHandleRegistrationCalls, 1);
     expect(gateway.registerHandleCalls, 1);
     expect(gateway.recoverHandleCalls, 0);
+    expect(gateway.lastRegisteredPhone, '13800138000');
+    expect(gateway.lastRegisteredOtp, '123456');
     expect(gateway.lastRegisteredNickName, 'alice');
     expect(gateway.lastRegisteredProfileMarkdown, '# alice\n\n');
   });
@@ -579,7 +546,6 @@ void main() {
       find.byType(CupertinoTextField).at(0),
       '13800138000',
     );
-    await tester.enterText(find.byType(CupertinoTextField).at(1), '123456');
     await tester.tap(find.text('下一步'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(CupertinoTextField).at(0), 'alice');
@@ -589,6 +555,8 @@ void main() {
     expect(gateway.lookupHandleRegistrationCalls, 1);
     expect(gateway.recoverHandleCalls, 1);
     expect(gateway.registerHandleCalls, 0);
+    expect(gateway.lastRecoveredPhone, '13800138000');
+    expect(gateway.lastRecoveredOtp, '123456');
   });
 
   testWidgets('邮箱提交遇到已注册 handle 时提示改用手机号登录', (tester) async {

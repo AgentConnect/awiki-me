@@ -552,8 +552,12 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       HandleRegistrationStatus.notRegistered;
   String? lastFollowedDidOrHandle;
   String? lastUnfollowedDidOrHandle;
+  String? lastRegisteredPhone;
+  String? lastRegisteredOtp;
   String? lastRegisteredNickName;
   String? lastRegisteredProfileMarkdown;
+  String? lastRecoveredPhone;
+  String? lastRecoveredOtp;
   String? lastEmailRegisteredNickName;
   String? lastEmailRegisteredProfileMarkdown;
   String? lastCreatedGroupName;
@@ -1073,6 +1077,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     String? profileMarkdown,
   }) async {
     registerHandleCalls += 1;
+    lastRegisteredPhone = phone;
+    lastRegisteredOtp = otp;
     lastRegisteredNickName = nickName;
     lastRegisteredProfileMarkdown = profileMarkdown;
     loginResult = SessionIdentity(
@@ -1113,6 +1119,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     required String handle,
   }) async {
     recoverHandleCalls += 1;
+    lastRecoveredPhone = phone;
+    lastRecoveredOtp = otp;
     loginResult = SessionIdentity(
       did: 'did:wba:awiki.info:$handle:e1_recovered',
       credentialName: handle,

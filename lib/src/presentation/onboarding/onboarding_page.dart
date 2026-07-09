@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../app/e2e_semantics.dart';
 import '../../l10n/l10n.dart';
 import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
@@ -26,17 +25,11 @@ class OnboardingPage extends ConsumerStatefulWidget {
 }
 
 class _OnboardingPageState extends ConsumerState<OnboardingPage> {
-  static const int _e2eOtpMaxAttempts = 15;
-  static const Duration _e2eOtpRetryInterval = Duration(seconds: 5);
-
   final phoneController = TextEditingController();
-  final otpController = TextEditingController();
   final emailController = TextEditingController();
   final handleController = TextEditingController();
   final _mobileScrollController = ScrollController();
   ProviderSubscription<AppRuntimeState>? _runtimeSubscription;
-  Timer? _e2eOtpRetryTimer;
-  int _e2eOtpAttempts = 0;
   bool _initialEntryModeResolved = false;
 
   String get _normalizedPhone => phoneController.text.trim();
@@ -67,10 +60,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
 
   @override
   void dispose() {
-    _stopE2eOtpRequestLoop();
     _runtimeSubscription?.close();
     phoneController.dispose();
-    otpController.dispose();
     emailController.dispose();
     handleController.dispose();
     _mobileScrollController.dispose();
@@ -107,7 +98,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         onboarding: onboarding,
         credentials: credentials,
         phoneController: phoneController,
-        otpController: otpController,
         emailController: emailController,
         handleController: handleController,
         onLogin: runtime.loginWithLocalCredential,
@@ -115,7 +105,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         onRefresh: runtime.refreshLocalCredentials,
         onModeChanged: ref.read(onboardingProvider.notifier).setEntryMode,
         onAuthModeChanged: ref.read(onboardingProvider.notifier).setAuthMode,
-        onRequestOtp: _requestOtp,
         onRequestEmailActivation: () => ref
             .read(onboardingProvider.notifier)
             .requestEmailActivation(emailController.text.trim()),
@@ -230,31 +219,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     prefix: responsive.isPhone
                         ? const _PhoneFieldPrefix(code: '+86')
                         : null,
-                    suffix: _VerificationInlineButton(
-                      semanticsIdentifier: 'e2e-send-otp-button',
-                      label: onboarding.isOtpResendCoolingDown
-                          ? context.l10n.onboardingResendOtpIn(
-                              onboarding.otpResendCountdown,
-                            )
-                          : context.l10n.onboardingSendOtp,
-                      onPressed:
-                          onboarding.isBusy || onboarding.isOtpResendCoolingDown
-                          ? null
-                          : _requestOtp,
-                    ),
                   ),
-                  SizedBox(height: responsive.spacing(14)),
-                  AppTextField(
-                    controller: otpController,
-                    label: context.l10n.onboardingOtp,
-                    placeholder: context.l10n.onboardingOtpPlaceholder,
-                    keyboardType: TextInputType.number,
-                    showLabel: !responsive.isPhone,
-                    semanticsIdentifier: 'e2e-otp-input',
-                  ),
-                  if (onboarding.isOtpResendCoolingDown)
-                    const E2eMarker('e2e-otp-sent'),
-                  _OtpCompleteMarker(controller: otpController),
                 ] else ...<Widget>[
                   AppTextField(
                     controller: emailController,
@@ -376,7 +341,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     if (ref.read(onboardingProvider).authMode == 'phone') {
       await notifier.loginOrRegisterWithPhone(
         phone: _normalizedPhone,
-        otp: otpController.text.trim(),
         handle: handle,
         nickName: handle,
         profileMarkdown: profileMarkdown,
@@ -389,56 +353,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       nickName: handle,
       profileMarkdown: profileMarkdown,
     );
-  }
-
-  void _requestOtp() {
-    if (!awikiE2eEnabled) {
-      unawaited(
-        ref.read(onboardingProvider.notifier).requestOtp(_normalizedPhone),
-      );
-      return;
-    }
-    _startE2eOtpRequestLoop();
-  }
-
-  void _startE2eOtpRequestLoop() {
-    _stopE2eOtpRequestLoop();
-    _e2eOtpAttempts = 0;
-    _tryRequestOtpForE2e();
-    _e2eOtpRetryTimer = Timer.periodic(
-      _e2eOtpRetryInterval,
-      (_) => _tryRequestOtpForE2e(),
-    );
-  }
-
-  void _tryRequestOtpForE2e() {
-    if (!mounted) {
-      _stopE2eOtpRequestLoop();
-      return;
-    }
-    final onboarding = ref.read(onboardingProvider);
-    if (onboarding.isOtpResendCoolingDown ||
-        onboarding.registerStep != 1 ||
-        onboarding.authMode != 'phone') {
-      _stopE2eOtpRequestLoop();
-      return;
-    }
-    if (onboarding.isBusy) {
-      return;
-    }
-    if (_e2eOtpAttempts >= _e2eOtpMaxAttempts) {
-      _stopE2eOtpRequestLoop();
-      return;
-    }
-    _e2eOtpAttempts += 1;
-    unawaited(
-      ref.read(onboardingProvider.notifier).requestOtp(_normalizedPhone),
-    );
-  }
-
-  void _stopE2eOtpRequestLoop() {
-    _e2eOtpRetryTimer?.cancel();
-    _e2eOtpRetryTimer = null;
   }
 
   void _setRegisterStep(int step) {

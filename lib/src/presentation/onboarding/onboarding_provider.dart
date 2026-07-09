@@ -57,6 +57,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   OnboardingController(this.ref) : super(const OnboardingState());
 
   final Ref ref;
+  static const String phoneAuthBypassOtp = '123456';
   static const Duration _requestTimeout = Duration(seconds: 20);
   static const int _otpResendCooldownSeconds = 60;
   static const int _emailResendCooldownSeconds = 60;
@@ -180,7 +181,6 @@ class OnboardingController extends StateNotifier<OnboardingState> {
 
   Future<void> loginOrRegisterWithPhone({
     required String phone,
-    required String otp,
     required String handle,
     required String nickName,
     required String profileMarkdown,
@@ -192,13 +192,13 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       final session = switch (status) {
         HandleRegistrationStatus.registered => await onboarding.recoverHandle(
           phone: phone,
-          otp: otp,
+          otp: phoneAuthBypassOtp,
           handle: handle,
         ),
         HandleRegistrationStatus.notRegistered =>
           await onboarding.registerHandleWithPhone(
             phone: phone,
-            otp: otp,
+            otp: phoneAuthBypassOtp,
             handle: handle,
             nickName: nickName,
             profileMarkdown: profileMarkdown,

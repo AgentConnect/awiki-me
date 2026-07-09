@@ -299,35 +299,11 @@ class _PhoneFieldPrefix extends StatelessWidget {
   }
 }
 
-class _OtpCompleteMarker extends StatelessWidget {
-  const _OtpCompleteMarker({required this.controller});
-
-  final TextEditingController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<TextEditingValue>(
-      valueListenable: controller,
-      builder: (context, value, _) {
-        if (value.text.replaceAll(RegExp(r'\s+'), '').length != 6) {
-          return const SizedBox.shrink();
-        }
-        return const E2eMarker('e2e-otp-complete');
-      },
-    );
-  }
-}
-
 class _VerificationInlineButton extends StatelessWidget {
-  const _VerificationInlineButton({
-    required this.label,
-    this.onPressed,
-    this.semanticsIdentifier,
-  });
+  const _VerificationInlineButton({required this.label, this.onPressed});
 
   final String label;
   final VoidCallback? onPressed;
-  final String? semanticsIdentifier;
 
   @override
   Widget build(BuildContext context) {
@@ -335,7 +311,6 @@ class _VerificationInlineButton extends StatelessWidget {
     return AppPressable(
       onTap: onPressed,
       semanticLabel: label,
-      semanticsIdentifier: semanticsIdentifier,
       enabled: onPressed != null,
       scaleOnPress: true,
       pressedScale: 0.98,
