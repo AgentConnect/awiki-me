@@ -55,14 +55,11 @@ class AwikiOnboardingSupportService implements OnboardingSupportService {
   }) async {
     final normalizedHandle = _normalizeHandle(handle);
     try {
-      final result = await _users.getPublicProfile(
-        didOrHandle: normalizedHandle,
-      );
+      final result = await _users.lookupHandle(handle: normalizedHandle);
       final did = result['did']?.toString() ?? '';
       if (did.isEmpty) {
         throw StateError('Handle lookup response did not include a DID.');
       }
-      _ensureE1Did(did);
       return HandleRegistrationStatus.registered;
     } on AwikiOnboardingUtilityError catch (error) {
       if (_isHandleNotFoundError(error)) {
@@ -130,15 +127,9 @@ String _normalizeHandle(
 bool _isHandleNotFoundError(AwikiOnboardingUtilityError error) {
   final normalized = error.message.toLowerCase();
   return normalized.contains('handle not found') ||
+      normalized.contains('handle_not_found') ||
+      normalized.contains('profile_not_found') ||
       normalized.contains('handle') &&
           (normalized.contains('not found') ||
               normalized.contains('does not exist'));
-}
-
-bool _isE1Did(String did) => did.trim().split(':').last.startsWith('e1_');
-
-void _ensureE1Did(String did) {
-  if (!_isE1Did(did)) {
-    throw StateError('Only e1 DID identities are supported.');
-  }
 }

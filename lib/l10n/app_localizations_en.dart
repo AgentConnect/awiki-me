@@ -176,7 +176,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingLoginRegisterHint =>
-      'Phone automatically logs in to an existing Handle or registers a new one. Email currently only registers new Handles.';
+      'Phone can register a new Handle without SMS verification on Open Server. Existing Handles require an imported identity credential.';
 
   @override
   String get onboardingAuthMethod => 'Verification';
@@ -2064,7 +2064,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emailLoginUnsupportedForRegisteredHandle =>
-      'This handle is already registered. Email currently supports new registration only. Use phone verification or import an identity credential to log in.';
+      'This handle is already registered. Choose another handle or import an identity credential.';
+
+  @override
+  String get handleAlreadyRegisteredImportCredential =>
+      'This handle is already registered. Choose another handle or import an identity credential.';
 
   @override
   String get emailNotActivatedClickLink =>

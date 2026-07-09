@@ -69,25 +69,19 @@ void main() {
     );
   });
 
-  test('rejects non-e1 DID from handle lookup response', () async {
+  test('accepts Open Server DID from handle lookup response', () async {
     final service = AwikiOnboardingSupportService(
       userServiceUrl: 'https://example.test',
       userClient: _FakeUserClient(
         lookupProfile: const <String, Object?>{
-          'did': 'did:wba:awiki.ai:alice:k1_123',
+          'did': 'did:wba:anpolis.net:users:alice',
         },
       ),
     );
 
-    await expectLater(
-      service.lookupHandleRegistration(handle: 'alice'),
-      throwsA(
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          'Only e1 DID identities are supported.',
-        ),
-      ),
+    expect(
+      await service.lookupHandleRegistration(handle: 'alice'),
+      HandleRegistrationStatus.registered,
     );
   });
 
@@ -189,13 +183,12 @@ class _FakeUserClient extends AwikiOnboardingUtilityClient {
   }
 
   @override
-  Future<Map<String, Object?>> getPublicProfile({
-    required String didOrHandle,
-    String? bearerToken,
+  Future<Map<String, Object?>> lookupHandle({
+    required String handle,
   }) async {
-    lookups.add(didOrHandle);
+    lookups.add(handle);
     if (lookupMissing) {
-      throw const AwikiOnboardingUtilityError(message: 'handle not found');
+      throw const AwikiOnboardingUtilityError(message: 'handle_not_found');
     }
     return lookupProfile;
   }

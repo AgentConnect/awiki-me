@@ -190,10 +190,8 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       final onboarding = ref.read(onboardingServiceProvider);
       final status = await support.lookupHandleRegistration(handle: handle);
       final session = switch (status) {
-        HandleRegistrationStatus.registered => await onboarding.recoverHandle(
-          phone: phone,
-          otp: phoneAuthBypassOtp,
-          handle: handle,
+        HandleRegistrationStatus.registered => throw StateError(
+          'handle_already_registered_import_credential',
         ),
         HandleRegistrationStatus.notRegistered =>
           await onboarding.registerHandleWithPhone(

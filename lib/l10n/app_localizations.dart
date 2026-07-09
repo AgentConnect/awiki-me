@@ -419,7 +419,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingLoginRegisterHint.
   ///
   /// In zh, this message translates to:
-  /// **'手机号会自动判断登录已有 Handle 或注册新 Handle；邮箱暂时仅支持注册新 Handle。'**
+  /// **'Open Server 可用手机号直接注册新 Handle，暂不支持用手机号恢复已有 Handle；已有身份请导入本地凭证。'**
   String get onboardingLoginRegisterHint;
 
   /// No description provided for @onboardingAuthMethod.
@@ -3779,8 +3779,14 @@ abstract class AppLocalizations {
   /// No description provided for @emailLoginUnsupportedForRegisteredHandle.
   ///
   /// In zh, this message translates to:
-  /// **'该 handle 已注册。邮箱当前仅支持新注册，请使用手机号验证码登录或导入身份凭证。'**
+  /// **'该 handle 已注册。请选择新的 handle，或导入已有身份凭证。'**
   String get emailLoginUnsupportedForRegisteredHandle;
+
+  /// No description provided for @handleAlreadyRegisteredImportCredential.
+  ///
+  /// In zh, this message translates to:
+  /// **'该 handle 已注册。请选择新的 handle，或导入已有身份凭证。'**
+  String get handleAlreadyRegisteredImportCredential;
 
   /// No description provided for @emailNotActivatedClickLink.
   ///

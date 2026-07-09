@@ -142,6 +142,14 @@ class AwikiOnboardingUtilityClient {
     );
   }
 
+  Future<Map<String, Object?>> lookupHandle({required String handle}) {
+    return _serviceClient.rpcCall(
+      path: handleRpcEndpoint,
+      method: 'lookup',
+      params: <String, Object?>{'handle': handle},
+    );
+  }
+
   Future<Map<String, Object?>> validateHandle({
     required String handle,
     String? domain,
