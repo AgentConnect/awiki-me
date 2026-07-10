@@ -60,6 +60,31 @@ void main() {
     expect(identity.isAgent, isTrue);
     expect(identity.agentKind, isNull);
   });
+
+  test('remote full handle is delegated to user service unchanged', () async {
+    final userClient = _FakeOnboardingUtilityClient(
+      responses: <String, Map<String, Object?>>{
+        'agent.remote.example': <String, Object?>{
+          'is_agent': true,
+          'agent_kind': 'runtime',
+          'handle': 'agent.remote.example',
+          'did': 'did:wba:remote.example:user:agent:e1',
+        },
+      },
+    );
+    final service = UserServicePeerIdentityService(
+      userServiceUrl: 'https://user.example',
+      userClient: userClient,
+    );
+
+    final identity = await service.resolveAgentIdentity(
+      '  agent.remote.example  ',
+    );
+
+    expect(identity.isAgent, isTrue);
+    expect(identity.agentKind, PeerAgentKind.runtime);
+    expect(userClient.requestedIdentities, <String>['agent.remote.example']);
+  });
 }
 
 class _FakeOnboardingUtilityClient extends AwikiOnboardingUtilityClient {
