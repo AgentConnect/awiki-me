@@ -770,23 +770,53 @@ abstract class AppLocalizations {
   /// **'精细化权限，数据更安心'**
   String get onboardingMacFeatureControlSubtitle;
 
-  /// No description provided for @onboardingMacChipFundingAgent.
+  /// No description provided for @onboardingMacChipRequirementsAgent.
   ///
   /// In zh, this message translates to:
-  /// **'融资 Agent'**
-  String get onboardingMacChipFundingAgent;
+  /// **'需求调研 Agent'**
+  String get onboardingMacChipRequirementsAgent;
 
-  /// No description provided for @onboardingMacChipLegalAgent.
+  /// No description provided for @onboardingMacChipRequirementsAgentCompact.
   ///
   /// In zh, this message translates to:
-  /// **'法务 Agent'**
-  String get onboardingMacChipLegalAgent;
+  /// **'需求调研'**
+  String get onboardingMacChipRequirementsAgentCompact;
 
-  /// No description provided for @onboardingMacChipInvestor.
+  /// No description provided for @onboardingMacChipPlanningAgent.
   ///
   /// In zh, this message translates to:
-  /// **'投资机构'**
-  String get onboardingMacChipInvestor;
+  /// **'任务拆分 Agent'**
+  String get onboardingMacChipPlanningAgent;
+
+  /// No description provided for @onboardingMacChipPlanningAgentCompact.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务拆分'**
+  String get onboardingMacChipPlanningAgentCompact;
+
+  /// No description provided for @onboardingMacChipCodingAgent.
+  ///
+  /// In zh, this message translates to:
+  /// **'编码实现 Agent'**
+  String get onboardingMacChipCodingAgent;
+
+  /// No description provided for @onboardingMacChipCodingAgentCompact.
+  ///
+  /// In zh, this message translates to:
+  /// **'编码实现'**
+  String get onboardingMacChipCodingAgentCompact;
+
+  /// No description provided for @onboardingMacChipUiDesignAgent.
+  ///
+  /// In zh, this message translates to:
+  /// **'UI 设计 Agent'**
+  String get onboardingMacChipUiDesignAgent;
+
+  /// No description provided for @onboardingMacChipUiDesignAgentCompact.
+  ///
+  /// In zh, this message translates to:
+  /// **'UI 设计'**
+  String get onboardingMacChipUiDesignAgentCompact;
 
   /// No description provided for @onboardingMacVerified.
   ///

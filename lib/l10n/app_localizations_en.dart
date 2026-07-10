@@ -378,13 +378,28 @@ class AppLocalizationsEn extends AppLocalizations {
       'Fine-grained permissions for safer data';
 
   @override
-  String get onboardingMacChipFundingAgent => 'Funding Agent';
+  String get onboardingMacChipRequirementsAgent => 'Requirements Agent';
 
   @override
-  String get onboardingMacChipLegalAgent => 'Legal Agent';
+  String get onboardingMacChipRequirementsAgentCompact => 'Requirements';
 
   @override
-  String get onboardingMacChipInvestor => 'Investor';
+  String get onboardingMacChipPlanningAgent => 'Planning Agent';
+
+  @override
+  String get onboardingMacChipPlanningAgentCompact => 'Planning';
+
+  @override
+  String get onboardingMacChipCodingAgent => 'Coding Agent';
+
+  @override
+  String get onboardingMacChipCodingAgentCompact => 'Coding';
+
+  @override
+  String get onboardingMacChipUiDesignAgent => 'UI Design Agent';
+
+  @override
+  String get onboardingMacChipUiDesignAgentCompact => 'UI Design';
 
   @override
   String get onboardingMacVerified => 'Verified';

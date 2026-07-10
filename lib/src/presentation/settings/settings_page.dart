@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_locale.dart';
-import '../../app/app_services.dart';
 import '../../app/app_router.dart';
 import '../../app/ui_feedback.dart';
 import '../../l10n/app_message.dart';
@@ -12,6 +11,7 @@ import '../app_shell/providers/app_runtime_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_top_bar.dart';
+import '../shared/app_language_menu.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 
@@ -86,8 +86,8 @@ class SettingsPage extends ConsumerWidget {
                 children: <Widget>[
                   AppListTile(
                     title: l10n.settingsLanguage,
-                    subtitle: _languageLabel(context, localeMode),
-                    onTap: () => _showLanguageSheet(context, ref, localeMode),
+                    subtitle: appLocaleModeLabel(context, localeMode),
+                    onTap: () => showAppLanguageSheet(context, ref, localeMode),
                   ),
                 ],
               ),
@@ -140,18 +140,6 @@ class SettingsPage extends ConsumerWidget {
     );
   }
 
-  String _languageLabel(BuildContext context, AppLocaleMode mode) {
-    final l10n = context.l10n;
-    switch (mode) {
-      case AppLocaleMode.system:
-        return l10n.settingsLanguageSystem;
-      case AppLocaleMode.zhHans:
-        return l10n.settingsLanguageZhHans;
-      case AppLocaleMode.english:
-        return l10n.settingsLanguageEnglish;
-    }
-  }
-
   String _currentVersionLabel(BuildContext context, AppUpdateState state) {
     final l10n = context.l10n;
     final current = state.currentVersion;
@@ -173,57 +161,6 @@ class SettingsPage extends ConsumerWidget {
       return l10n.settingsUpdateStatusFailed;
     }
     return l10n.settingsAlreadyLatestVersion;
-  }
-
-  Future<void> _showLanguageSheet(
-    BuildContext context,
-    WidgetRef ref,
-    AppLocaleMode currentMode,
-  ) {
-    final l10n = context.l10n;
-    return AppNavigator.showSheet<void>(
-      context,
-      (sheetContext) => AppDropMenu(
-        title: l10n.settingsLanguage.toUpperCase(),
-        items: <AppDropMenuItem>[
-          _buildLanguageAction(
-            ref: ref,
-            mode: AppLocaleMode.system,
-            currentMode: currentMode,
-            label: l10n.settingsLanguageSystem,
-          ),
-          _buildLanguageAction(
-            ref: ref,
-            mode: AppLocaleMode.zhHans,
-            currentMode: currentMode,
-            label: l10n.settingsLanguageZhHans,
-          ),
-          _buildLanguageAction(
-            ref: ref,
-            mode: AppLocaleMode.english,
-            currentMode: currentMode,
-            label: l10n.settingsLanguageEnglish,
-          ),
-        ],
-      ),
-    );
-  }
-
-  AppDropMenuItem _buildLanguageAction({
-    required WidgetRef ref,
-    required AppLocaleMode mode,
-    required AppLocaleMode currentMode,
-    required String label,
-  }) {
-    final isSelected = currentMode == mode;
-    return AppDropMenuItem(
-      label: label,
-      highlighted: isSelected,
-      onTap: () async {
-        await ref.read(localePreferenceServiceProvider).saveMode(mode);
-        ref.read(appLocaleModeProvider.notifier).state = mode;
-      },
-    );
   }
 
   void _showLogoutDialog(BuildContext context, AppRuntimeController runtime) {

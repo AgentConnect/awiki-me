@@ -19,6 +19,8 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.onRegisterStepChanged,
     required this.onSubmitRegister,
     required this.activeTenant,
+    required this.localeMode,
+    required this.onLanguagePressed,
     required this.onTenantPressed,
   });
 
@@ -39,6 +41,8 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final ValueChanged<int> onRegisterStepChanged;
   final VoidCallback onSubmitRegister;
   final AppTenantProfile activeTenant;
+  final AppLocaleMode localeMode;
+  final VoidCallback onLanguagePressed;
   final VoidCallback onTenantPressed;
 
   @override
@@ -110,8 +114,10 @@ class _MacOnboardingScaffold extends StatelessWidget {
               bottom: 22,
               child: SafeArea(
                 minimum: EdgeInsets.zero,
-                child: _TenantSwitcherButton(
+                child: _OnboardingUtilityBar(
                   tenant: activeTenant,
+                  localeMode: localeMode,
+                  onLanguagePressed: onLanguagePressed,
                   onPressed: onTenantPressed,
                 ),
               ),
@@ -252,94 +258,123 @@ class _MacAgentOrbit extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: <Widget>[
-        Positioned.fill(child: CustomPaint(painter: _MacOrbitPainter())),
-        Align(
-          alignment: Alignment.center,
-          child: Transform.rotate(
-            angle: -0.5,
-            child: Container(
-              width: 166,
-              height: 94,
-              decoration: BoxDecoration(
-                color: CupertinoColors.white,
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: const <BoxShadow>[
-                  BoxShadow(
-                    color: Color(0x240B65F8),
-                    blurRadius: 36,
-                    offset: Offset(0, 18),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useFullAgentNames = constraints.maxWidth >= 600;
+        final chipWidth = useFullAgentNames ? 214.0 : 180.0;
+        String agentName(String fullName, String compactName) {
+          return useFullAgentNames ? fullName : compactName;
+        }
+
+        return Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            Positioned.fill(child: CustomPaint(painter: _MacOrbitPainter())),
+            Align(
+              alignment: Alignment.center,
+              child: Transform.rotate(
+                angle: -0.5,
+                child: Container(
+                  width: 166,
+                  height: 94,
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: const <BoxShadow>[
+                      BoxShadow(
+                        color: Color(0x240B65F8),
+                        blurRadius: 36,
+                        offset: Offset(0, 18),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: Center(
-                child: Image.asset(
-                  'assets/branding/awiki-me-logo.png',
-                  width: 74,
-                  height: 74,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Text(
-                    'AW',
-                    style: TextStyle(
-                      color: Color(0xFF0B65F8),
-                      fontSize: 38,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0,
+                  child: Center(
+                    child: Image.asset(
+                      'assets/branding/awiki-me-logo.png',
+                      width: 74,
+                      height: 74,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Text(
+                        'AW',
+                        style: TextStyle(
+                          color: Color(0xFF0B65F8),
+                          fontSize: 38,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        ),
-        Positioned(
-          top: 18,
-          left: 170,
-          child: _MacAgentChip(
-            name: context.l10n.onboardingMacChipFundingAgent,
-            seed: 'financing',
-          ),
-        ),
-        Positioned(
-          top: 150,
-          left: 10,
-          child: _MacAgentChip(
-            name: context.l10n.onboardingMacChipLegalAgent,
-            seed: 'legal',
-          ),
-        ),
-        Positioned(
-          right: 30,
-          top: 160,
-          child: _MacAgentChip(
-            name: context.l10n.onboardingMacChipInvestor,
-            seed: 'investor',
-            verified: true,
-          ),
-        ),
-        const Positioned(
-          left: 250,
-          bottom: 24,
-          child: _MacAgentChip(name: 'BP Agent', seed: 'bp'),
-        ),
-        const Positioned(
-          left: 130,
-          bottom: 78,
-          child: _MacFloatingIcon(icon: CupertinoIcons.sparkles),
-        ),
-        const Positioned(
-          right: 138,
-          top: 70,
-          child: _MacFloatingIcon(icon: CupertinoIcons.person),
-        ),
-        const Positioned(
-          left: 122,
-          top: 78,
-          child: _MacFloatingIcon(icon: CupertinoIcons.shield),
-        ),
-      ],
+            Positioned(
+              top: 18,
+              left: 170,
+              child: _MacAgentChip(
+                width: chipWidth,
+                name: agentName(
+                  context.l10n.onboardingMacChipRequirementsAgent,
+                  context.l10n.onboardingMacChipRequirementsAgentCompact,
+                ),
+                seed: 'financing',
+              ),
+            ),
+            Positioned(
+              top: 150,
+              left: 10,
+              child: _MacAgentChip(
+                width: chipWidth,
+                name: agentName(
+                  context.l10n.onboardingMacChipPlanningAgent,
+                  context.l10n.onboardingMacChipPlanningAgentCompact,
+                ),
+                seed: 'legal',
+              ),
+            ),
+            Positioned(
+              right: 30,
+              top: 160,
+              child: _MacAgentChip(
+                width: chipWidth,
+                name: agentName(
+                  context.l10n.onboardingMacChipCodingAgent,
+                  context.l10n.onboardingMacChipCodingAgentCompact,
+                ),
+                seed: 'investor',
+                verified: true,
+              ),
+            ),
+            Positioned(
+              left: 250,
+              bottom: 24,
+              child: _MacAgentChip(
+                width: chipWidth,
+                name: agentName(
+                  context.l10n.onboardingMacChipUiDesignAgent,
+                  context.l10n.onboardingMacChipUiDesignAgentCompact,
+                ),
+                seed: 'bp',
+              ),
+            ),
+            const Positioned(
+              left: 130,
+              bottom: 78,
+              child: _MacFloatingIcon(icon: CupertinoIcons.sparkles),
+            ),
+            const Positioned(
+              right: 138,
+              top: 70,
+              child: _MacFloatingIcon(icon: CupertinoIcons.person),
+            ),
+            const Positioned(
+              left: 122,
+              top: 78,
+              child: _MacFloatingIcon(icon: CupertinoIcons.shield),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -375,11 +410,13 @@ class _MacOrbitPainter extends CustomPainter {
 
 class _MacAgentChip extends StatelessWidget {
   const _MacAgentChip({
+    required this.width,
     required this.name,
     required this.seed,
     this.verified = false,
   });
 
+  final double width;
   final String name;
   final String seed;
   final bool verified;
@@ -387,7 +424,7 @@ class _MacAgentChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 164,
+      width: width,
       padding: const EdgeInsets.fromLTRB(12, 10, 14, 10),
       decoration: BoxDecoration(
         color: CupertinoColors.white,
@@ -410,14 +447,21 @@ class _MacAgentChip extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF17213A),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                SizedBox(
+                  width: double.infinity,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      softWrap: false,
+                      style: const TextStyle(
+                        color: Color(0xFF17213A),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 4),

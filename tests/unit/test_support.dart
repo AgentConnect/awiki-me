@@ -249,16 +249,21 @@ Widget buildLocalizedTestApp({
       appRuntimeProvider.overrideWith((ref) => AppRuntimeController(ref)),
       ...providerOverrides,
     ],
-    child: CupertinoApp(
-      locale: locale,
-      localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-      ],
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: home,
+    child: Consumer(
+      builder: (context, ref, _) {
+        final localeMode = ref.watch(appLocaleModeProvider);
+        return CupertinoApp(
+          locale: localeMode.locale ?? locale,
+          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: home,
+        );
+      },
     ),
   );
 }

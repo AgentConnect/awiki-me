@@ -5,6 +5,7 @@ import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
 
+import '../../app/app_locale.dart';
 import '../../app/e2e_semantics.dart';
 import '../../application/tenant/app_tenant.dart';
 import '../../data/tenant/app_tenant_store.dart';
@@ -13,6 +14,7 @@ import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../shared/app_dialog.dart';
+import '../shared/app_language_menu.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/responsive_layout.dart';
@@ -108,6 +110,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final onboarding = ref.watch(onboardingProvider);
     final credentials = ref.watch(sessionProvider).localCredentials;
     final activeTenant = ref.watch(activeAppTenantProvider);
+    final localeMode = ref.watch(appLocaleModeProvider);
     final runtime = ref.read(appRuntimeProvider.notifier);
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
@@ -136,6 +139,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             .setRegisterStep,
         onSubmitRegister: () => _submitRegister(context),
         activeTenant: activeTenant,
+        localeMode: localeMode,
+        onLanguagePressed: _showLanguageSheet,
         onTenantPressed: _showTenantManagementDialog,
       );
     }
@@ -365,8 +370,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             SizedBox(height: responsive.spacing(56)),
             Align(
               alignment: Alignment.centerRight,
-              child: _TenantSwitcherButton(
+              child: _OnboardingUtilityBar(
                 tenant: activeTenant,
+                localeMode: localeMode,
+                fillAvailableWidth: true,
+                onLanguagePressed: _showLanguageSheet,
                 onPressed: _showTenantManagementDialog,
               ),
             ),
@@ -374,6 +382,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _showLanguageSheet() {
+    return showAppLanguageSheet(context, ref, ref.read(appLocaleModeProvider));
   }
 
   Future<void> _showTenantManagementDialog() async {

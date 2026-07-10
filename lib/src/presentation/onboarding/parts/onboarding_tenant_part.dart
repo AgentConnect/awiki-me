@@ -1,7 +1,123 @@
 part of '../onboarding_page.dart';
 
+class _OnboardingUtilityBar extends StatelessWidget {
+  const _OnboardingUtilityBar({
+    required this.tenant,
+    required this.localeMode,
+    required this.onLanguagePressed,
+    required this.onPressed,
+    this.fillAvailableWidth = false,
+  });
+
+  final AppTenantProfile tenant;
+  final AppLocaleMode localeMode;
+  final VoidCallback onLanguagePressed;
+  final VoidCallback onPressed;
+  final bool fillAvailableWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final languageButton = _LanguageSwitcherButton(
+      localeMode: localeMode,
+      onPressed: onLanguagePressed,
+    );
+    final tenantButton = _TenantSwitcherButton(
+      key: const Key('onboarding-tenant-switcher-button'),
+      tenant: tenant,
+      onPressed: onPressed,
+    );
+    if (!fillAvailableWidth) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          languageButton,
+          SizedBox(width: responsive.spacing(8)),
+          tenantButton,
+        ],
+      );
+    }
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: <Widget>[
+        languageButton,
+        SizedBox(width: responsive.spacing(8)),
+        Flexible(
+          child: Align(alignment: Alignment.centerRight, child: tenantButton),
+        ),
+      ],
+    );
+  }
+}
+
+class _LanguageSwitcherButton extends StatelessWidget {
+  const _LanguageSwitcherButton({
+    required this.localeMode,
+    required this.onPressed,
+  });
+
+  final AppLocaleMode localeMode;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final label = compactAppLocaleModeLabel(context, localeMode);
+    final fullLabel = appLocaleModeLabel(context, localeMode);
+    return AppPressable(
+      key: const Key('onboarding-language-switcher-button'),
+      onTap: onPressed,
+      semanticLabel: '${context.l10n.settingsLanguage}: $fullLabel',
+      tooltip: context.l10n.settingsLanguage,
+      scaleOnPress: true,
+      pressedScale: 0.98,
+      borderRadius: BorderRadius.circular(responsive.radius(10)),
+      child: Container(
+        constraints: BoxConstraints(minWidth: responsive.displayScaled(58)),
+        padding: EdgeInsets.symmetric(
+          horizontal: responsive.spacing(10),
+          vertical: responsive.spacing(7),
+        ),
+        decoration: BoxDecoration(
+          color: CupertinoColors.white.withValues(alpha: 0.70),
+          borderRadius: BorderRadius.circular(responsive.radius(10)),
+          border: Border.all(color: const Color(0xFFDCE5F2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Icon(
+              CupertinoIcons.textformat,
+              size: responsive.displayScaled(15),
+              color: theme.secondaryText,
+            ),
+            SizedBox(width: responsive.spacing(5)),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: theme.secondaryText,
+                fontSize: responsive.metaSm,
+                fontWeight: FontWeight.w700,
+                height: 1.1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _TenantSwitcherButton extends StatelessWidget {
-  const _TenantSwitcherButton({required this.tenant, required this.onPressed});
+  const _TenantSwitcherButton({
+    super.key,
+    required this.tenant,
+    required this.onPressed,
+  });
 
   final AppTenantProfile tenant;
   final VoidCallback onPressed;

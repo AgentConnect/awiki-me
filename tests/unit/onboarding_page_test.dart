@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
+import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
@@ -46,6 +47,36 @@ void main() {
     expect(find.text('身份凭证'), findsOneWidget);
     expect(find.text('导入身份凭证'), findsOneWidget);
     expect(find.text('安全可靠'), findsOneWidget);
+    expect(find.text('需求调研 Agent'), findsOneWidget);
+    expect(find.text('任务拆分 Agent'), findsOneWidget);
+    expect(find.text('编码实现 Agent'), findsOneWidget);
+    expect(find.text('UI 设计 Agent'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 桌面登录页空间偏紧时 Agent 示例使用紧凑名称', (tester) async {
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1120, 820));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage()),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('需求调研'), findsOneWidget);
+    expect(find.text('任务拆分'), findsOneWidget);
+    expect(find.text('编码实现'), findsOneWidget);
+    expect(find.text('UI 设计'), findsOneWidget);
+    expect(find.text('需求调研 Agent'), findsNothing);
+    expect(find.text('任务拆分 Agent'), findsNothing);
+    expect(find.text('编码实现 Agent'), findsNothing);
+    expect(find.text('UI 设计 Agent'), findsNothing);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -260,6 +291,34 @@ void main() {
     expect(find.byTooltip('管理租户'), findsOneWidget);
     expect(find.text('AWiki'), findsWidgets);
     expect(find.text('Based on awiki.info'), findsNothing);
+  });
+
+  testWidgets('登录页可从底部工具栏切换语言', (tester) async {
+    final localePreferenceService = FakeLocalePreferenceService();
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const OnboardingPage(),
+        localePreferenceService: localePreferenceService,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('登录或注册'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const Key('onboarding-language-switcher-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('English'));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    expect(localePreferenceService.saveCalls, 1);
+    expect(container.read(appLocaleModeProvider), AppLocaleMode.english);
+    expect(find.text('EN'), findsOneWidget);
+    expect(find.text('Log in or register'), findsOneWidget);
   });
 
   testWidgets('登录页租户弹窗可添加租户配置且不自动切换', (tester) async {

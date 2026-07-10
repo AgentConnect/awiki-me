@@ -355,13 +355,28 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingMacFeatureControlSubtitle => '精细化权限，数据更安心';
 
   @override
-  String get onboardingMacChipFundingAgent => '融资 Agent';
+  String get onboardingMacChipRequirementsAgent => '需求调研 Agent';
 
   @override
-  String get onboardingMacChipLegalAgent => '法务 Agent';
+  String get onboardingMacChipRequirementsAgentCompact => '需求调研';
 
   @override
-  String get onboardingMacChipInvestor => '投资机构';
+  String get onboardingMacChipPlanningAgent => '任务拆分 Agent';
+
+  @override
+  String get onboardingMacChipPlanningAgentCompact => '任务拆分';
+
+  @override
+  String get onboardingMacChipCodingAgent => '编码实现 Agent';
+
+  @override
+  String get onboardingMacChipCodingAgentCompact => '编码实现';
+
+  @override
+  String get onboardingMacChipUiDesignAgent => 'UI 设计 Agent';
+
+  @override
+  String get onboardingMacChipUiDesignAgentCompact => 'UI 设计';
 
   @override
   String get onboardingMacVerified => '已认证';
