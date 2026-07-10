@@ -66,6 +66,20 @@ ChatMessage requireExactlyOneMessage({
   return message;
 }
 
+/// Confirms that a UI/directory/group resolution points to the exact active
+/// CLI identity. Diagnostics intentionally never include either DID.
+String requireMatchingCliPeerDid({
+  required String canonicalCliDid,
+  required String observedPeerDid,
+}) {
+  final canonical = canonicalCliDid.trim();
+  final observed = observedPeerDid.trim();
+  if (canonical.isEmpty || observed.isEmpty || canonical != observed) {
+    throw StateError('CLI peer identity mismatch.');
+  }
+  return canonical;
+}
+
 /// Requires one target message-content container and one exact text rendering
 /// inside it. Identical text in recents previews or other bubbles is ignored,
 /// while a missing/duplicated container or duplicated in-container text fails.

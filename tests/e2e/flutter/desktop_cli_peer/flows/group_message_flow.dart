@@ -5,6 +5,7 @@ Future<void> _verifyGroupTextRegression({
   required GroupApplicationService groups,
   required MessagingService messaging,
   required String ownerDid,
+  required String canonicalCliDid,
   required _DesktopCliPeerSmokeConfig config,
   required String nonce,
 }) async {
@@ -19,7 +20,10 @@ Future<void> _verifyGroupTextRegression({
     groupDid: groupDid,
     memberRef: config.cliHandle,
   );
-  expect(cliMember.did.trim(), isNotEmpty);
+  final cliMemberDid = requireMatchingCliPeerDid(
+    canonicalCliDid: canonicalCliDid,
+    observedPeerDid: cliMember.did,
+  );
 
   final appGroupText = 'e2e app group ${config.runId} $nonce';
   final cliGroupText = 'e2e cli group ${config.runId} $nonce';
@@ -62,7 +66,7 @@ Future<void> _verifyGroupTextRegression({
     senderDid: ownerDid,
     sendState: MessageSendState.sent,
   );
-  requireSingleMentionTarget(message: appMention, targetDid: cliMember.did);
+  requireSingleMentionTarget(message: appMention, targetDid: cliMemberDid);
   final appMentionId = appMention.remoteId!;
   await robot.expectMessageContentVisible(appMention);
   await _waitForCliGroupMessages(
@@ -79,7 +83,7 @@ Future<void> _verifyGroupTextRegression({
     expectedText: appMentionText,
     expectedMentionSurface: appMentionText.split(' ').first,
     expectedMessageId: appMentionId,
-    expectedTargetDid: cliMember.did,
+    expectedTargetDid: cliMemberDid,
   );
 
   final cliGroupSend = await _runCli(config, <String>[
@@ -108,7 +112,7 @@ Future<void> _verifyGroupTextRegression({
     conversationId: conversation.effectiveConversationId,
     content: cliGroupText,
     messageId: cliGroupMessageId,
-    senderDid: cliMember.did,
+    senderDid: cliMemberDid,
     sendState: MessageSendState.sent,
   );
   await robot.expectMessageContentVisible(cliGroupMessage);
@@ -164,7 +168,7 @@ Future<void> _verifyGroupTextRegression({
     conversationId: conversation.effectiveConversationId,
     content: cliMentionText,
     messageId: cliMentionId,
-    senderDid: cliMember.did,
+    senderDid: cliMemberDid,
     sendState: MessageSendState.sent,
   );
   requireSingleMentionTarget(message: cliMention, targetDid: ownerDid);

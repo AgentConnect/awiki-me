@@ -3,10 +3,13 @@ part of '../desktop_cli_peer_e2e.dart';
 Future<void> _verifyContactRegression({
   required _DesktopAppRobot robot,
   required RelationshipApplicationService relationships,
+  required String canonicalCliDid,
   required _DesktopCliPeerSmokeConfig config,
 }) async {
-  final cliDid = await _currentCliDid(config);
-  expect(cliDid.trim(), isNotEmpty);
+  final cliDid = requireMatchingCliPeerDid(
+    canonicalCliDid: canonicalCliDid,
+    observedPeerDid: canonicalCliDid,
+  );
 
   // Reused remote identities require an explicit baseline. Cleanup is setup,
   // while every relationship transition under test is driven by App UI or CLI.
@@ -27,7 +30,10 @@ Future<void> _verifyContactRegression({
   );
 
   final conversation = await robot.startDirectConversation(config.cliHandle);
-  expect(conversation.targetDid, cliDid);
+  requireMatchingCliPeerDid(
+    canonicalCliDid: cliDid,
+    observedPeerDid: conversation.targetDid ?? '',
+  );
   await robot.followSelectedPeer();
   await _waitForAppRelationshipStatus(
     relationships: relationships,
@@ -119,7 +125,7 @@ Future<String> _currentCliDid(_DesktopCliPeerSmokeConfig config) async {
     'current',
   ]);
   if (current.exitCode != 0) {
-    fail('CLI id current failed: ${_summarizeCliResult(current)}');
+    fail('CLI peer identity mismatch.');
   }
   final did = _jsonStringAt(current.stdout, const <Object>[
     'data',
@@ -127,9 +133,9 @@ Future<String> _currentCliDid(_DesktopCliPeerSmokeConfig config) async {
     'did',
   ]);
   if (did == null || did.trim().isEmpty) {
-    fail('CLI id current did missing: ${_summarizeCliResult(current)}');
+    fail('CLI peer identity mismatch.');
   }
-  return did;
+  return requireMatchingCliPeerDid(canonicalCliDid: did, observedPeerDid: did);
 }
 
 Future<void> _waitForAppRelationshipStatus({

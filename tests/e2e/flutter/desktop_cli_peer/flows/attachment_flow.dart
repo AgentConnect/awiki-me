@@ -6,12 +6,16 @@ Future<void> _verifyAttachmentRegression({
   required _RecordingAttachmentOpenService attachmentOpenRecorder,
   required String ownerDid,
   required AppThreadRef thread,
+  required String canonicalCliDid,
   required _DesktopCliPeerSmokeConfig config,
   required String nonce,
 }) async {
   final conversation = await robot.startDirectConversation(config.cliHandle);
   final conversationId = conversation.effectiveConversationId;
-  final cliDid = conversation.targetDid!.trim();
+  final cliDid = requireMatchingCliPeerDid(
+    canonicalCliDid: canonicalCliDid,
+    observedPeerDid: conversation.targetDid ?? '',
+  );
   final fixtureDir = Directory('${config.cliWorkspace}/fixtures')
     ..createSync(recursive: true);
   final downloadDir = Directory('${config.cliWorkspace}/downloads')

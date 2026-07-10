@@ -200,6 +200,9 @@ void runDesktopCliPeerE2e({
       final messaging = bootstrap.messagingService!;
       final messageNonce = _messageNonce();
       final directThread = AppThreadRef.direct(config.cliHandle);
+      final canonicalCliDid = selectedCase.runsPerformance
+          ? null
+          : await _currentCliDid(config);
 
       if (selectedCase.runsPerformance) {
         await _verifyPerformanceRegression(
@@ -245,6 +248,7 @@ void runDesktopCliPeerE2e({
           session: session,
           bootstrap: bootstrap,
           providerOverrides: appProviderOverrides,
+          canonicalCliDid: canonicalCliDid!,
           config: config,
           nonce: messageNonce,
         );
@@ -269,6 +273,7 @@ void runDesktopCliPeerE2e({
         await _verifyContactRegression(
           robot: robot,
           relationships: relationships,
+          canonicalCliDid: canonicalCliDid!,
           config: config,
         );
         await _attestPassedCases(<String, List<String>>{
@@ -293,6 +298,7 @@ void runDesktopCliPeerE2e({
           groups: groups,
           messaging: faultMessaging!,
           ownerDid: session.did,
+          canonicalCliDid: canonicalCliDid!,
           config: config,
           nonce: messageNonce,
         );
@@ -319,6 +325,7 @@ void runDesktopCliPeerE2e({
           attachmentOpenRecorder: attachmentOpenRecorder,
           ownerDid: session.did,
           thread: directThread,
+          canonicalCliDid: canonicalCliDid!,
           config: config,
           nonce: messageNonce,
         );

@@ -9,6 +9,7 @@ Future<void> _verifyDirectTextRegression({
   required AppSession session,
   required AppBootstrap bootstrap,
   required List<Override> providerOverrides,
+  required String canonicalCliDid,
   required _DesktopCliPeerSmokeConfig config,
   required String nonce,
 }) async {
@@ -19,7 +20,10 @@ Future<void> _verifyDirectTextRegression({
 
   final conversation = await robot.startDirectConversation(config.cliHandle);
   final conversationId = conversation.effectiveConversationId;
-  final cliDid = conversation.targetDid!.trim();
+  final cliDid = requireMatchingCliPeerDid(
+    canonicalCliDid: canonicalCliDid,
+    observedPeerDid: conversation.targetDid ?? '',
+  );
 
   // Opening an empty direct chat may be presentation-only until the first
   // message is persisted. Do not require a conversation-list row before the

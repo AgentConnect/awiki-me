@@ -47,6 +47,45 @@ void main() {
     expect(found.remoteId, 'remote-1');
   });
 
+  test('CLI peer identity oracle is exact and redacts mismatch details', () {
+    expect(
+      requireMatchingCliPeerDid(
+        canonicalCliDid: ' did:test:cli ',
+        observedPeerDid: 'did:test:cli',
+      ),
+      'did:test:cli',
+    );
+
+    final mismatch = throwsA(
+      isA<StateError>().having(
+        (error) => error.message,
+        'message',
+        'CLI peer identity mismatch.',
+      ),
+    );
+    expect(
+      () => requireMatchingCliPeerDid(
+        canonicalCliDid: 'did:test:cli',
+        observedPeerDid: 'did:test:other',
+      ),
+      mismatch,
+    );
+    expect(
+      () => requireMatchingCliPeerDid(
+        canonicalCliDid: '',
+        observedPeerDid: 'did:test:other',
+      ),
+      mismatch,
+    );
+    expect(
+      () => requireMatchingCliPeerDid(
+        canonicalCliDid: 'did:test:cli',
+        observedPeerDid: '',
+      ),
+      mismatch,
+    );
+  });
+
   test('message oracle rejects duplicate content instead of using first', () {
     expect(
       () => requireExactlyOneMessage(
