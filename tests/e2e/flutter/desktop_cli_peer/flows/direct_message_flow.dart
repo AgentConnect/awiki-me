@@ -292,19 +292,15 @@ Future<ChatMessage> _waitForUiMessage({
     timeout: const Duration(seconds: 90),
     condition: () {
       final messages = _uiMessages(robot, conversationId);
-      try {
-        matched = requireExactlyOneMessage(
-          messages: messages,
-          content: content,
-          messageId: messageId,
-          senderDid: senderDid,
-          sendState: sendState,
-          requireCanonicalRemoteId: requireCanonicalRemoteId,
-        );
-        return true;
-      } on StateError {
-        return false;
-      }
+      matched = requireExactlyOneMessage(
+        messages: messages,
+        content: content,
+        messageId: messageId,
+        senderDid: senderDid,
+        sendState: sendState,
+        requireCanonicalRemoteId: requireCanonicalRemoteId,
+      );
+      return true;
     },
   );
   return matched!;
@@ -355,21 +351,17 @@ Future<void> _waitForUiUnreadClosedLoop({
     timeout: const Duration(seconds: 90),
     condition: () {
       final state = robot.container.read(conversationListProvider);
-      try {
-        requireUnreadTotal(
-          actual: state.unreadCount,
-          expected: expectedTotalUnread,
-        );
-        requireExactlyOneConversation(
-          conversations: state.conversations,
-          conversationId: conversationId,
-          unreadCount: expectedConversationUnread,
-          lastMessage: expectedText,
-        );
-        return true;
-      } on StateError {
-        return false;
-      }
+      requireUnreadTotal(
+        actual: state.unreadCount,
+        expected: expectedTotalUnread,
+      );
+      requireExactlyOneConversation(
+        conversations: state.conversations,
+        conversationId: conversationId,
+        unreadCount: expectedConversationUnread,
+        lastMessage: expectedText,
+      );
+      return true;
     },
   );
 }
@@ -386,23 +378,19 @@ Future<void> _waitForUiConversationUnread({
     timeout: const Duration(seconds: 90),
     condition: () {
       final state = robot.container.read(conversationListProvider);
-      try {
-        if (expectedTotalUnread != null) {
-          requireUnreadTotal(
-            actual: state.unreadCount,
-            expected: expectedTotalUnread,
-          );
-        }
-        requireExactlyOneConversation(
-          conversations: state.conversations,
-          conversationId: conversationId,
-          unreadCount: expectedUnread,
-          lastMessage: expectedLastMessage,
+      if (expectedTotalUnread != null) {
+        requireUnreadTotal(
+          actual: state.unreadCount,
+          expected: expectedTotalUnread,
         );
-        return true;
-      } on StateError {
-        return false;
       }
+      requireExactlyOneConversation(
+        conversations: state.conversations,
+        conversationId: conversationId,
+        unreadCount: expectedUnread,
+        lastMessage: expectedLastMessage,
+      );
+      return true;
     },
   );
 }

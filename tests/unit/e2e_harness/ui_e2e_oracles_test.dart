@@ -171,6 +171,21 @@ void main() {
         ),
         throwsStateError,
       );
+      try {
+        requireExactlyOneConversation(
+          conversations: <ConversationSummary>[wrongConversation],
+          conversationId: 'dm:did:test:peer',
+          unreadCount: 1,
+          lastMessage: 'hello',
+        );
+        fail('wrong canonical conversation must fail');
+      } on StateError catch (error) {
+        expect(error.message, contains('canonical_matches=0'));
+        expect(error.message, contains('semantic_matches=1'));
+        expect(error.message, contains('candidate_rows=1'));
+        expect(error.message, isNot(contains('did:test')));
+        expect(error.message, isNot(contains('hello')));
+      }
       expect(
         () => requireExactlyOneConversation(
           conversations: <ConversationSummary>[wrongConversation],

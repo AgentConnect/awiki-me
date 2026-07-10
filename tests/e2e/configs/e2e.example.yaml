@@ -1,4 +1,5 @@
-# Copy this file to e2e.local.yaml and fill in local-only OTP values.
+# Copy this file to an ignored *.local.yaml and fill in remote awiki.info
+# account-pool values. The config is local secret storage; the services are not.
 
 platform: macos
 
@@ -23,6 +24,9 @@ accounts:
 
 cliPeer:
   binary: ../awiki-cli-rs2/target/debug/awiki-cli
+  # Replace with the exact non-zero 40-character commit used to build both
+  # awiki-cli and the sibling awiki_im_core SDK artifacts.
+  sourceRef: "0000000000000000000000000000000000000000"
 
 performance:
   dataset:

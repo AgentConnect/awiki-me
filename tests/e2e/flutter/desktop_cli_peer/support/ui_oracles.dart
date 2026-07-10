@@ -233,23 +233,28 @@ ConversationSummary requireExactlyOneConversation({
       )
       .toList(growable: false);
   if (matches.length != 1) {
+    final semanticMatches = conversations.where((conversation) {
+      final previewMatches =
+          lastMessage == null ||
+          conversation.lastMessagePreview.trim() == lastMessage.trim();
+      return conversation.unreadCount == unreadCount && previewMatches;
+    }).length;
     throw StateError(
-      'Expected exactly one conversation "$normalizedId", '
-      'found ${matches.length}.',
+      'Conversation oracle canonical_matches=${matches.length}, '
+      'semantic_matches=$semanticMatches, '
+      'candidate_rows=${conversations.length}.',
     );
   }
   final conversation = matches.single;
   if (conversation.unreadCount != unreadCount) {
     throw StateError(
-      'Conversation "$normalizedId" unread ${conversation.unreadCount} '
-      '!= $unreadCount.',
+      'Conversation unread ${conversation.unreadCount} != $unreadCount.',
     );
   }
   if (lastMessage != null &&
       conversation.lastMessagePreview.trim() != lastMessage.trim()) {
     throw StateError(
-      'Conversation "$normalizedId" preview '
-      '"${conversation.lastMessagePreview}" != "$lastMessage".',
+      'Conversation preview does not match the exact expected message.',
     );
   }
   return conversation;

@@ -123,6 +123,14 @@ Required local values:
 - `accounts.appUser.handle`: App-side test handle.
 - `accounts.cliPeer.handle`: CLI peer test handle.
 - `cliPeer.binary`: `awiki-cli` binary path.
+- `cliPeer.sourceRef`: exact non-zero 40-character commit SHA used to build both
+  the CLI and sibling `awiki_im_core` SDK artifacts.
+
+All live product cases are pinned by `tests/e2e/suite_manifest.json` to
+`https://awiki.info` / `wss://awiki.info/im/ws`. They reject localhost,
+`awiki.test`, insecure schemes, and other domains before starting Flutter.
+The smoke case has no service dependency. Dry-run only validates orchestration
+and never counts as a real gate.
 
 E2E runtime configuration is read only from the YAML file. Command-line flags do
 not carry backend, account, OTP, platform, or CLI binary values. Use
@@ -180,6 +188,25 @@ not imply those features are covered.
 All E2E runtime state and reports go under `.e2e/` and must remain untracked.
 Local config files named `tests/e2e/configs/*.local.yaml` are also ignored and
 must not be committed because they may contain OTP values.
+
+`tests/e2e/suite_manifest.json` is the checked-in suite source of truth. The
+runner fails on case-ID drift, records tier/owner/required triggers/timeout,
+and uses a killable child-process runner. A timeout terminates the Flutter/CLI
+process tree and records `failure.code=command_timeout`; it cannot leave an
+untracked test child running indefinitely.
+
+Before App launch, the runner creates and activates an isolated CLI tenant whose
+`backend_base_url` and `did_host` match `awiki.info`, then proves that the CLI
+current DID equals directory resolution of the configured CLI handle, that the
+App handle resolves, and that the two identities are distinct. This prevents a
+green result or opaque timeout caused by silently using the CLI default
+`awiki.ai` tenant or a stale fixed-account mapping.
+
+Every run writes `resource_ledger.json` next to `timings.json`. When remote
+product actions may have created messages, groups, relationships, attachments,
+or read state but no public deletion API exists, the ledger says `residual`
+with categories/count knowledge and no raw DID/token/message content. This is
+an explicit retention debt, not a successful-cleanup claim.
 
 ### Identity vault test state
 
@@ -274,9 +301,9 @@ backend credentials, OTP, and CLI peer configuration are prepared.
 
 | Gate | Default trigger | Required environment | Must run | Must not require |
 | --- | --- | --- | --- | --- |
-| PR required | Every pull request and push to main | Flutter, sibling `awiki-cli-rs2`, deterministic local dependencies. | `dart analyze`, `dart run tests/unit/runner.dart`, smoke E2E. | Real OTP, real service accounts, live backend, mobile devices, SSH evidence. |
+| PR required | Every pull request and push to main | Flutter, sibling `awiki-cli-rs2` at an exact SHA, deterministic service-independent dependencies. | `dart analyze`, `dart run tests/unit/runner.dart`, smoke E2E. | Real OTP, real service accounts, live backend, mobile devices, SSH evidence. |
 | Optional desktop | Developer or self-hosted runner with desktop support | macOS or Linux desktop runner. | App shell and native SDK smoke on the available desktop platform. | Non-production account pool or real message service. |
-| Nightly desktop | Prepared runner | Non-production services, OTP, built `awiki-cli`, isolated App and CLI state. | Direct message, contacts, group, attachment basics, report redaction scan. | Scenarios without owner or maintained environment. |
+| Nightly desktop | Prepared runner | Remote `awiki.info`, OTP/account pool, debug `awiki-cli` + SDK built from one exact SHA, isolated App and CLI state. | Direct message, contacts, group, attachment basics, report/redaction/resource ledger. | Local service stacks or scenarios without owner. |
 | Nightly mobile | Prepared device runner | iOS or Android device pair, Maestro, local config from secrets. | Real two-device direct message when device pool is available. | Desktop-only scenarios. |
 | Release | Release candidate validation | Stable nightly environment plus release owner review. | P0/P1 regression subset for desktop smoke, native SDK smoke, App + CLI basics, mobile when available. | New feature cases that have not been promoted. |
 | Manual | Developer or QA runbook | Local or remote environment prepared by the runner. | Any focused case needed for debugging or evidence, with command, runId, platform, endpoints, and report path recorded. | Manual results presented as automatic PR gate evidence. |
@@ -286,6 +313,11 @@ pass/fail/skipped status, skipped reason when applicable, and a redaction scan
 result. Keep `.e2e/`, `*.local.yaml`, OTP values, JWTs, private keys, CLI
 workspaces, App state roots, remote logs, screenshots, and device state out of
 Git.
+
+The checked-in workflow requires `AWIKI_CLI_RS2_REF` to be an exact commit SHA.
+Its `remote-product` job is schedule/manual only, builds debug/incremental Rust
+artifacts, writes a secret-backed ignored config, and targets only `awiki.info`.
+The PR dry-run is orchestration lint and is never substituted for that real job.
 
 ### Case-level attestation and fail-closed reports
 

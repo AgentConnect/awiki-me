@@ -20,7 +20,7 @@
 | `lib/src/data/` | `awiki_im_core` adapters、service clients、local/secure storage 与 platform bridge |
 | `lib/src/presentation/` | Flutter 页面、Riverpod providers、组件、响应式布局和反馈 |
 | `tests/unit/` | 快速确定性 unit/widget/provider/fake-backed tests |
-| `tests/e2e/` | runner、configs、Flutter implementations、真实 App+CLI/backend/device flows |
+| `tests/e2e/` | audited suite manifest、killable runner、configs、Flutter implementations、真实远端 `awiki.info` App+CLI/backend/device flows、脱敏资源台账 |
 | `integration_test/` | Flutter tooling 薄 shim； durable scenario 在 `tests/e2e/flutter/` |
 | `docs/` | 产品、架构、测试、Message Agent、SecretVault、性能和计划文档 |
 | `android/`, `ios/`, `macos/`, `web/` | 平台 runners |

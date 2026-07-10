@@ -179,6 +179,14 @@ cp tests/e2e/configs/e2e.example.yaml tests/e2e/configs/e2e.local.yaml
 dart run tests/e2e/runner.dart --case full
 ```
 
+Live App + CLI cases accept only the audited remote `awiki.info` target. Set
+`cliPeer.sourceRef` in the ignored config to the exact commit that built both
+the debug CLI and `awiki_im_core` artifacts. Suite membership, owners, timeout,
+and cleanup policy live in `tests/e2e/suite_manifest.json`; reports include the
+source ref, isolated `awiki.info` CLI tenant identity preflight, and a redacted
+`resource_ledger.json`. Dry-run
+and prepare-only output remain non-passing orchestration evidence.
+
 For the maintained remote gate, configure `service.baseUrl` as
 `https://awiki.info` and `service.didDomain` as `awiki.info`. The App-side
 actions in `full` must be visible input/tap/drop actions; service calls are
