@@ -970,14 +970,12 @@ class _MessageBubble extends StatelessWidget {
     }
     final responsive = context.awikiResponsive;
     final gap = macStyle ? responsive.displayScaled(7) : responsive.spacing(8);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: <Widget>[
-        _SendingMessageIndicator(macStyle: macStyle),
-        SizedBox(width: gap),
-        Flexible(child: child),
-      ],
+    return _DelayedSendingMessageRow(
+      key: ValueKey<String>('chat-delayed-send:${message.localId}'),
+      messageId: message.localId,
+      macStyle: macStyle,
+      gap: gap,
+      child: child,
     );
   }
 
@@ -1250,8 +1248,84 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
+class _DelayedSendingMessageRow extends StatefulWidget {
+  const _DelayedSendingMessageRow({
+    super.key,
+    required this.messageId,
+    required this.macStyle,
+    required this.gap,
+    required this.child,
+  });
+
+  static const Duration delay = Duration(seconds: 3);
+
+  final String messageId;
+  final bool macStyle;
+  final double gap;
+  final Widget child;
+
+  @override
+  State<_DelayedSendingMessageRow> createState() =>
+      _DelayedSendingMessageRowState();
+}
+
+class _DelayedSendingMessageRowState extends State<_DelayedSendingMessageRow> {
+  Timer? _timer;
+  bool _showIndicator = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleIndicator();
+  }
+
+  @override
+  void didUpdateWidget(covariant _DelayedSendingMessageRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.messageId != widget.messageId) {
+      _scheduleIndicator();
+    }
+  }
+
+  void _scheduleIndicator() {
+    _timer?.cancel();
+    _showIndicator = false;
+    _timer = Timer(_DelayedSendingMessageRow.delay, () {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _showIndicator = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_showIndicator) {
+      return widget.child;
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: <Widget>[
+        _SendingMessageIndicator(
+          key: Key('chat-sending-indicator:${widget.messageId}'),
+          macStyle: widget.macStyle,
+        ),
+        SizedBox(width: widget.gap),
+        Flexible(child: widget.child),
+      ],
+    );
+  }
+}
+
 class _SendingMessageIndicator extends StatelessWidget {
-  const _SendingMessageIndicator({required this.macStyle});
+  const _SendingMessageIndicator({super.key, required this.macStyle});
 
   final bool macStyle;
 

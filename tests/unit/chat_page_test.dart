@@ -2362,6 +2362,83 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('发送中消息等待三秒才显示状态且明确结果后立即隐藏', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
+      threadId: 'dm:delayed-sending-status',
+      displayName: 'Tester',
+      lastMessagePreview: 'pending hello',
+      lastMessageAt: DateTime.now(),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    final sending = ChatMessage(
+      localId: 'delayed-sending-message',
+      remoteId: 'delayed-sending-message',
+      conversationId: conversation.effectiveConversationId,
+      threadId: conversation.effectiveConversationId,
+      senderDid: session.did,
+      receiverDid: conversation.targetDid,
+      content: 'pending hello',
+      createdAt: DateTime.now(),
+      isMine: true,
+      sendState: MessageSendState.sending,
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          chatThreadsProvider.overrideWith(
+            (ref) =>
+                _StaticChatThreadsController(ref, <String, List<ChatMessage>>{
+                  conversation.effectiveConversationId: <ChatMessage>[sending],
+                }),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    final indicator = find.byKey(
+      const Key('chat-sending-indicator:delayed-sending-message'),
+    );
+    expect(find.text('pending hello'), findsOneWidget);
+    expect(indicator, findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 2999));
+    expect(indicator, findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(indicator, findsOneWidget);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    container
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(
+          sending.copyWith(sendState: MessageSendState.sent),
+          threadId: conversation.effectiveConversationId,
+        );
+    await tester.pump();
+
+    expect(indicator, findsNothing);
+    expect(find.text('发送失败'), findsNothing);
+  });
+
   testWidgets('发送给 Runtime Agent 时投递完成后才显示处理中提示', (tester) async {
     final gateway = FakeAwikiGateway()
       ..sendDelay = const Duration(milliseconds: 80);

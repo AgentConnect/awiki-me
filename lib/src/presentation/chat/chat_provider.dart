@@ -2791,13 +2791,18 @@ class ChatThreadsController
                   idempotencyKey: idempotencyKey,
                 )
                 .timeout(_sendTimeout);
+      final deliveredMessage = _settleVisibleSendingMessage(
+        displayThreadId: targetThreadId,
+        submittedLocalMessageId: clientMessageId,
+        result: sent,
+      );
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
         displayThreadId: targetThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
         mentions: validMentionDrafts,
         submittedLocalMessageId: clientMessageId,
-        deliveredMessage: _withThreadId(sent, targetThreadId),
+        deliveredMessage: deliveredMessage,
       );
     } catch (error) {
       _chatProviderTrace(
@@ -2810,6 +2815,10 @@ class ChatThreadsController
           ),
           'error': error.toString(),
         },
+      );
+      _settleVisibleSendingFailure(
+        displayThreadId: targetThreadId,
+        submittedLocalMessageId: clientMessageId,
       );
     }
   }
@@ -3010,13 +3019,18 @@ class ChatThreadsController
                   idempotencyKey: 'retry-$clientMessageId',
                 )
                 .timeout(_sendTimeout);
+      final deliveredMessage = _settleVisibleSendingMessage(
+        displayThreadId: targetThreadId,
+        submittedLocalMessageId: clientMessageId,
+        result: retried,
+      );
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
         displayThreadId: targetThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
         mentions: _messageMentionsToDrafts(message.mentions),
         submittedLocalMessageId: clientMessageId,
-        deliveredMessage: _withThreadId(retried, targetThreadId),
+        deliveredMessage: deliveredMessage,
       );
     } catch (error) {
       _chatProviderTrace(
@@ -3030,7 +3044,57 @@ class ChatThreadsController
           'error': error.toString(),
         },
       );
+      _settleVisibleSendingFailure(
+        displayThreadId: targetThreadId,
+        submittedLocalMessageId: clientMessageId,
+      );
     }
+  }
+
+  ChatMessage _settleVisibleSendingMessage({
+    required String displayThreadId,
+    required String submittedLocalMessageId,
+    required ChatMessage result,
+  }) {
+    final delivered = _withThreadId(result, displayThreadId);
+    if (delivered.sendState == MessageSendState.sending) {
+      return delivered;
+    }
+    final current = thread(displayThreadId).messages;
+    var index = current.indexWhere(
+      (message) =>
+          message.localId == submittedLocalMessageId ||
+          message.remoteId == submittedLocalMessageId,
+    );
+    if (index < 0) {
+      index = _matchingMessageIndex(current, delivered);
+    }
+    if (index < 0 || current[index].sendState == MessageSendState.sent) {
+      return delivered;
+    }
+    return _replaceMessage(displayThreadId, current[index].localId, delivered);
+  }
+
+  void _settleVisibleSendingFailure({
+    required String displayThreadId,
+    required String submittedLocalMessageId,
+  }) {
+    final current = thread(displayThreadId).messages;
+    final index = current.indexWhere(
+      (message) =>
+          message.sendState == MessageSendState.sending &&
+          (message.localId == submittedLocalMessageId ||
+              message.remoteId == submittedLocalMessageId),
+    );
+    if (index < 0) {
+      return;
+    }
+    final pending = current[index];
+    _replaceMessage(
+      displayThreadId,
+      pending.localId,
+      pending.copyWith(sendState: MessageSendState.failed),
+    );
   }
 
   Future<void> retryAttachment({
