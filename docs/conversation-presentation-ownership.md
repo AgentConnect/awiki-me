@@ -162,13 +162,15 @@ Flutter SDK conversation DTO 必须保持 core-only。以下字段不得加入 S
 | 普通 text | `content = body.text`，`originalType = text` 或 `text/plain` | `_MessageTextContent`；incoming bubble 可走 `MarkdownBody`，outgoing bubble 默认 plain text | `content.trim()` |
 | Markdown | `originalType = markdown` 或 `text/markdown` | `_MessageTextContent`；当前 bubble context 决定是否 `renderMarkdown`，incoming / attachment caption 可用 `MarkdownBody` | 原始可见文本 |
 | P9 mention payload | `content = payload.text`，`mentions` 为合法 ranges，`payloadJson` 保留 | `_MessageTextContent` 校验 range 后高亮 mention；有 Markdown 语法且允许 markdown 时走带 mention marker 的 `MarkdownBody`，否则走 `Text.rich` | `payload.text` |
-| attachment | `attachment != null`，caption 可写入 `content` | `_AttachmentContent`；caption 再委托 `_MessageTextContent` 渲染，文件主体显示文件名、类型、大小和下载 / 打开状态 | caption 优先，否则 attachment display name |
+| attachment | `attachment != null`，caption 可写入 `content` | `_AttachmentContent`；caption 再委托 `_MessageTextContent` 渲染；PNG/JPEG/GIF/WebP 在本地路径可用或远端对象已知且不超过 20 MiB 时经 App cache 内联显示，解码/下载失败、未知大小、超限或其它类型回退为文件名、类型、大小和下载 / 打开状态 | caption 优先，否则 attachment display name |
 | Agent / system control payload | `payloadJson` 可被 `AgentControlPayloads` 识别 | 不作为普通聊天气泡渲染；交给 Agent/control projection 或状态组件处理 | 只有显式 `body.text` 可作为 recents 预览；payload-only 隐藏 |
 | unknown payload-only JSON | 通常无 `content` 或无法通过 mention/control 解析 | 默认不可渲染，除非 mapper 能投影出可见文本且不属于 control payload | 按 mapper fallback，避免把 raw JSON 当普通用户文案展示 |
 
 `_MessageTextContent` 当前位于 `awiki-me/lib/src/presentation/chat/parts/chat_message_part.dart`。它不直接解析 SDK DTO，只接收 App `ChatMessage` 已投影出的 `text`、`mentions` 和 `payloadJson`。
 
-附件显示的 SDK 输入和显示投影要分开理解：发送请求可以使用 SDK `MessageBody::Attachment` / `sendConversationAttachment`，但当前 SDK display DTO 不新增 `MessageBodyView::Attachment`。附件消息通过 core 持久化的 redacted attachment manifest、content type、metadata attributes 和 mapper 投影为 `ChatMessage.attachment`；AWiki Me 不能用本地临时文件 preview 替代 core projection 来决定 list/detail/send correctness。
+附件显示的 SDK 输入和显示投影要分开理解：发送请求可以使用 SDK `MessageBody::Attachment` / `sendConversationAttachment`，但当前 SDK display DTO 不新增 `MessageBodyView::Attachment`。附件消息通过 core 持久化的 redacted attachment manifest、content type、metadata attributes 和 mapper 投影为 `ChatMessage.attachment`；AWiki Me 不能用本地临时文件 preview 替代 core projection 来决定 list/detail/send correctness。内联图片只是一层短生命周期 presentation：远端内容仍通过 `AttachmentPreviewService`、core download 和 app-owned cache 获取，不允许 UI 根据 object URI 绕过 core 直接联网；无法安全加载时必须保留文件卡和原下载入口。
+
+Composer 的附件来源仍统一进入 `AttachmentDraft`：文件选择、拖拽、剪贴板图片和 macOS `/usr/sbin/screencapture -i -x` 交互式截图都只负责暂存，用户点击发送后才调用 canonical attachment send API。Emoji 面板只修改当前 `TextEditingValue` 的选区并沿用 draft mention range 转换，不引入新的消息类型。
 
 mention 渲染规则：
 

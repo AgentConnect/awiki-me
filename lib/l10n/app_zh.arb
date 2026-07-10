@@ -456,6 +456,8 @@
   },
   "chatSafeCollaboration": "安全协作中",
   "chatAddAttachment": "添加附件",
+  "chatAddEmoji": "选择表情",
+  "chatCaptureScreenshot": "截图",
   "chatRemoveAttachment": "移除附件",
   "chatViewAttachment": "查看附件",
   "chatAttachmentFileFallback": "文件",

@@ -456,6 +456,8 @@
   },
   "chatSafeCollaboration": "Secure collaboration",
   "chatAddAttachment": "Add attachment",
+  "chatAddEmoji": "Choose emoji",
+  "chatCaptureScreenshot": "Capture screenshot",
   "chatRemoveAttachment": "Remove attachment",
   "chatViewAttachment": "View attachment",
   "chatAttachmentFileFallback": "File",

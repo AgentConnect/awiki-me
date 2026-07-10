@@ -66,6 +66,7 @@ import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/data/services/locale_preference_service.dart';
@@ -215,6 +216,20 @@ Widget buildLocalizedTestApp({
       ),
       attachmentPickerServiceProvider.overrideWithValue(
         FakeAttachmentPickerService(),
+      ),
+      chatImageWidgetBuilderProvider.overrideWithValue(
+        ({
+          String? path,
+          Uint8List? bytes,
+          double? width,
+          double? height,
+          required BoxFit fit,
+          required Widget errorFallback,
+        }) => SizedBox(
+          width: width ?? 120,
+          height: height ?? 80,
+          child: const ColoredBox(color: Color(0xFF0B65F8)),
+        ),
       ),
       ...fakeApplicationServiceOverrides(
         resolvedGateway,
@@ -421,10 +436,12 @@ class FakeUpdateService implements UpdateService {
 
 class FakeAttachmentPickerService implements AttachmentPickerService {
   AttachmentDraft? nextPick;
+  AttachmentDraft? nextScreenshot;
   AttachmentDraft? nextExternalDraft;
   AttachmentDraft? nextClipboardAttachment;
   String? nextSavedPath = '/tmp/attachment';
   int pickCalls = 0;
+  int screenshotCalls = 0;
   int externalSourceCalls = 0;
   int clipboardReadCalls = 0;
   int saveCalls = 0;
@@ -441,6 +458,12 @@ class FakeAttachmentPickerService implements AttachmentPickerService {
   Future<AttachmentDraft?> pickAttachment() async {
     pickCalls += 1;
     return nextPick;
+  }
+
+  @override
+  Future<AttachmentDraft?> captureScreenshot() async {
+    screenshotCalls += 1;
+    return nextScreenshot;
   }
 
   @override
@@ -1727,6 +1750,8 @@ class FakeMessagingService
   String? lastConversationTimelineId;
   int conversationTimelineCalls = 0;
   int sendConversationAttachmentCalls = 0;
+  int downloadAttachmentCalls = 0;
+  AttachmentDownloadResult? nextAttachmentDownloadResult;
   AppConversationReadRef? lastAttachmentConversation;
   String? lastSentAttachmentClientMessageId;
   String? lastSentAttachmentIdempotencyKey;
@@ -1752,6 +1777,11 @@ class FakeMessagingService
     String? attachmentId,
     String? localPath,
   }) async {
+    downloadAttachmentCalls += 1;
+    final configured = nextAttachmentDownloadResult;
+    if (configured != null) {
+      return configured;
+    }
     return AttachmentDownloadResult(
       attachmentId: attachmentId ?? 'attachment-1',
       filename: 'download.txt',

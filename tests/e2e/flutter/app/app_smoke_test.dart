@@ -105,12 +105,16 @@ void main() {
         jwtToken: 'test-jwt',
       );
       final harness = createFakeAwikiMeAppHarness(session: session);
+      final picker = test_support.FakeAttachmentPickerService();
 
       try {
         await tester.pumpWidget(
           AwikiMeApp(
             bootstrap: harness.bootstrap,
-            providerOverrides: harness.providerOverrides,
+            providerOverrides: <Override>[
+              ...harness.providerOverrides,
+              attachmentPickerServiceProvider.overrideWithValue(picker),
+            ],
           ),
         );
         await tester.pumpAndSettle();
@@ -136,6 +140,16 @@ void main() {
             .conversations;
         expect(conversations, hasLength(1));
         expect(conversations.single.lastMessagePreview, isEmpty);
+        expect(find.byKey(const Key('chat-emoji-button')), findsOneWidget);
+        expect(find.byKey(const Key('chat-screenshot-button')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('chat-emoji-button')));
+        await _pumpSmokeFrame(tester);
+        expect(find.byKey(const Key('chat-emoji-picker')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('chat-emoji-option:0')));
+        await _pumpSmokeFrame(tester);
+        await tester.tap(find.byKey(const Key('chat-screenshot-button')));
+        await _pumpSmokeFrame(tester);
+        expect(picker.screenshotCalls, 1);
 
         harness.gateway.conversations = <ConversationSummary>[
           ConversationSummary(

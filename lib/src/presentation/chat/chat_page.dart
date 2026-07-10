@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/cupertino.dart';
@@ -18,6 +19,7 @@ import '../../application/models/attachment_models.dart';
 import '../../core/group_display_name.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_summary.dart';
+import '../../domain/entities/chat_attachment.dart';
 import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_identity.dart';
@@ -61,6 +63,55 @@ part 'parts/chat_composer_part.dart';
 
 const _chatMessageListBottomInset = 12.0;
 const _macChatMessageListBottomInset = 10.0;
+
+typedef ChatImageWidgetBuilder =
+    Widget Function({
+      String? path,
+      Uint8List? bytes,
+      double? width,
+      double? height,
+      required BoxFit fit,
+      required Widget errorFallback,
+    });
+
+final chatImageWidgetBuilderProvider = Provider<ChatImageWidgetBuilder>((ref) {
+  return ({
+    String? path,
+    Uint8List? bytes,
+    double? width,
+    double? height,
+    required BoxFit fit,
+    required Widget errorFallback,
+  }) {
+    final cacheWidth = ((width ?? 480) * 3).ceil().clamp(64, 1440);
+    if (bytes != null) {
+      return Image.memory(
+        bytes,
+        width: width,
+        height: height,
+        cacheWidth: cacheWidth,
+        fit: fit,
+        errorBuilder: (_, _, _) => errorFallback,
+      );
+    }
+    final value = path?.trim();
+    if (value == null || value.isEmpty) {
+      return errorFallback;
+    }
+    final uri = Uri.tryParse(value);
+    if (uri != null && uri.hasScheme && uri.scheme != 'file') {
+      return errorFallback;
+    }
+    return Image.file(
+      uri != null && uri.scheme == 'file' ? File.fromUri(uri) : File(value),
+      width: width,
+      height: height,
+      cacheWidth: cacheWidth,
+      fit: fit,
+      errorBuilder: (_, _, _) => errorFallback,
+    );
+  };
+});
 
 class ChatPage extends StatelessWidget {
   const ChatPage({super.key, required this.conversation});
@@ -767,6 +818,15 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                             message,
                                           )
                                         : null,
+                                    onResolveImagePreview:
+                                        message.attachment != null &&
+                                            message.sendState ==
+                                                MessageSendState.sent
+                                        ? () => _resolveAttachmentPreview(
+                                            currentConversation,
+                                            message,
+                                          )
+                                        : null,
                                     isDownloading:
                                         _downloadingAttachmentMessageIds
                                             .contains(message.localId),
@@ -837,6 +897,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
             onAttach: () async {
               await _pickAndStageAttachment();
             },
+            onScreenshot: _captureAndStageScreenshot,
             onPasteAttachment: _pasteClipboardAttachment,
             onRemoveAttachment: _clearPendingAttachment,
           ),
@@ -1049,6 +1110,26 @@ class _ChatViewState extends ConsumerState<ChatView> {
         return;
       }
       if (!mounted) {
+        return;
+      }
+      _stageAttachmentDraft(conversation, draft);
+    } catch (error) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
+    }
+  }
+
+  Future<void> _captureAndStageScreenshot() async {
+    final conversation = _currentConversationSnapshot();
+    if (!_canAcceptExternalAttachment(conversation)) {
+      return;
+    }
+    try {
+      final draft = await ref
+          .read(attachmentPickerServiceProvider)
+          .captureScreenshot();
+      if (draft == null || !mounted) {
         return;
       }
       _stageAttachmentDraft(conversation, draft);
@@ -1309,6 +1390,20 @@ class _ChatViewState extends ConsumerState<ChatView> {
         });
       }
     }
+  }
+
+  Future<String> _resolveAttachmentPreview(
+    ConversationSummary conversation,
+    ChatMessage message,
+  ) {
+    return ref
+        .read(attachmentPreviewServiceProvider)
+        .previewPathFor(
+          message: message,
+          download: () => ref
+              .read(chatThreadsProvider.notifier)
+              .downloadAttachment(conversation: conversation, message: message),
+        );
   }
 
   AppMessage _attachmentOpenErrorMessage(Object error) {

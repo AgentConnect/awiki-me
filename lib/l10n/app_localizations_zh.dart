@@ -1072,6 +1072,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatAddAttachment => '添加附件';
 
   @override
+  String get chatAddEmoji => '选择表情';
+
+  @override
+  String get chatCaptureScreenshot => '截图';
+
+  @override
   String get chatRemoveAttachment => '移除附件';
 
   @override

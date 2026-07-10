@@ -7,12 +7,32 @@ import 'package:path/path.dart' as p;
 import '../../application/attachment_picker_service.dart';
 import '../../application/models/attachment_models.dart';
 
+typedef AttachmentProcessRunner =
+    Future<ProcessResult> Function(String executable, List<String> arguments);
+typedef AttachmentTemporaryDirectoryProvider = Future<Directory> Function();
+
 class MethodChannelAttachmentPickerService implements AttachmentPickerService {
-  MethodChannelAttachmentPickerService({MethodChannel? channel})
-    : _channel =
-          channel ?? const MethodChannel('ai.awiki.awikime/attachment_picker');
+  MethodChannelAttachmentPickerService({
+    MethodChannel? channel,
+    bool? screenshotSupported,
+    AttachmentProcessRunner? processRunner,
+    AttachmentTemporaryDirectoryProvider? temporaryDirectoryProvider,
+  }) : _channel =
+           channel ?? const MethodChannel('ai.awiki.awikime/attachment_picker'),
+       _screenshotSupported = screenshotSupported ?? Platform.isMacOS,
+       _processRunner =
+           processRunner ??
+           ((executable, arguments) => Process.run(executable, arguments)),
+       _temporaryDirectoryProvider =
+           temporaryDirectoryProvider ??
+           (() async => Directory(
+             p.join(Directory.systemTemp.path, 'awiki-screenshots'),
+           ));
 
   final MethodChannel _channel;
+  final bool _screenshotSupported;
+  final AttachmentProcessRunner _processRunner;
+  final AttachmentTemporaryDirectoryProvider _temporaryDirectoryProvider;
   static const String _fallbackMimeType = 'application/octet-stream';
 
   @override
@@ -47,6 +67,48 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
       throw StateError(
         _friendlyMessage(error, fallback: 'attachment_picker_failed'),
       );
+    }
+  }
+
+  @override
+  Future<AttachmentDraft?> captureScreenshot() async {
+    if (!_screenshotSupported) {
+      return null;
+    }
+    final directory = await _temporaryDirectoryProvider();
+    await directory.create(recursive: true);
+    await _cleanupOldAttachmentTempFiles(directory);
+    final filename = 'screenshot-${DateTime.now().microsecondsSinceEpoch}.png';
+    final source = File(p.join(directory.path, filename));
+    try {
+      final result = await _processRunner('/usr/sbin/screencapture', <String>[
+        '-i',
+        '-x',
+        source.path,
+      ]);
+      if (result.exitCode != 0 || !await source.exists()) {
+        return null;
+      }
+      final sizeBytes = await source.length();
+      if (sizeBytes <= 0) {
+        return null;
+      }
+      return await draftFromExternalSource(
+        path: source.path,
+        filename: filename,
+        mimeType: 'image/png',
+        sizeBytes: sizeBytes,
+      );
+    } on ProcessException catch (error) {
+      throw StateError('screenshot_capture_failed: ${error.errorCode}');
+    } finally {
+      try {
+        if (await source.exists()) {
+          await source.delete();
+        }
+      } catch (_) {
+        // Best-effort source cleanup. The attachment copy has its own TTL.
+      }
     }
   }
 
@@ -202,6 +264,7 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
         '${DateTime.now().microsecondsSinceEpoch}-$safeName',
       ),
     );
+    await destination.parent.create(recursive: true);
     return sourceFile.copy(destination.path).then((file) => file.path);
   }
 

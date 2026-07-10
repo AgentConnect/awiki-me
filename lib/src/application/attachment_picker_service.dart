@@ -5,6 +5,8 @@ import 'models/attachment_models.dart';
 abstract interface class AttachmentPickerService {
   Future<AttachmentDraft?> pickAttachment();
 
+  Future<AttachmentDraft?> captureScreenshot();
+
   Future<AttachmentDraft?> draftFromExternalSource({
     String? path,
     String? filename,
