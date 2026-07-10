@@ -374,7 +374,6 @@ Future<void> showFollowIdentityDialog(
 
   try {
     await ref.read(friendsProvider.notifier).follow(result.profile.did);
-    await ref.read(friendsProvider.notifier).refresh();
     ref
         .read(uiFeedbackProvider.notifier)
         .showInfo(AppMessage.followContactSucceeded());

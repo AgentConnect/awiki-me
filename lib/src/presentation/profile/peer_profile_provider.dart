@@ -114,8 +114,16 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
 
   Future<void> unfollow() async {
     state = state.copyWith(isActionBusy: true);
-    await ref.read(friendsProvider.notifier).unfollow(did);
-    state = state.copyWith(relationship: 'none', isActionBusy: false);
+    try {
+      await ref.read(friendsProvider.notifier).unfollow(did);
+      if (mounted) {
+        state = state.copyWith(relationship: 'none');
+      }
+    } finally {
+      if (mounted) {
+        state = state.copyWith(isActionBusy: false);
+      }
+    }
   }
 
   void showLinkOpenError(Object error) {

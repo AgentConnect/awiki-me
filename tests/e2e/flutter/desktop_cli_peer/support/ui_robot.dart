@@ -203,6 +203,11 @@ class _DesktopAppRobot {
       find.byKey(const Key('chat-unfollow-button')),
       description: 'following state',
     );
+    expect(
+      find.byKey(const Key('chat-relationship-action-progress')),
+      findsNothing,
+      reason: 'follow mutation must release its busy indicator',
+    );
   }
 
   Future<void> unfollowSelectedPeer() async {
@@ -220,6 +225,11 @@ class _DesktopAppRobot {
     await pumpUntilFinder(
       find.byKey(const Key('chat-follow-button')),
       description: 'unfollowed state',
+    );
+    expect(
+      find.byKey(const Key('chat-relationship-action-progress')),
+      findsNothing,
+      reason: 'unfollow mutation must release its busy indicator',
     );
   }
 

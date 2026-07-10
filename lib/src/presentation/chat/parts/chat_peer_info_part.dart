@@ -1062,6 +1062,7 @@ class _ChatFollowButtonState extends State<_ChatFollowButton> {
         ),
         child: _isBusy
             ? CupertinoActivityIndicator(
+                key: const Key('chat-relationship-action-progress'),
                 radius: responsive.displayScaled(7),
                 color: widget.isFollowing ? const Color(0xFF34415C) : null,
               )
