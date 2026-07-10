@@ -57,7 +57,7 @@ Every row is reconciled with `tests/e2e/suite_manifest.json`. The checker requir
 - `performance` is an integration diagnostic because it prepares data through application services; it is not required UI acceptance.
 - Message Agent, Codex and Claude Code remain `optional_nightly`. A missing provider/configuration is reported as skipped/not-run, never passed.
 - `MSGAGENT-E2E-003` is cataloged as planned, not executable: the current real flow has no visible confirmation/draft action. The runnable Message Agent suite attests enable, receive/process and exact revoke convergence.
-- The latest recorded `awiki.info` direct run passed identity/auth preflight but failed before message cases: global unread increased by one while the canonical conversation row count was zero. Therefore `AUTH-E2E-001` passed and the three Direct message cases remained not-run.
+- The latest recorded `awiki.info` direct run passed identity/auth preflight but failed before message cases: global unread increased by one and one semantic candidate row existed, but zero rows matched the expected canonical conversation ID. Therefore `AUTH-E2E-001` passed and the three Direct message cases remained not-run.
 
 ## Validation
 

@@ -246,8 +246,9 @@ class AppTestCatalog {
       ..writeln(
         '- The latest recorded `awiki.info` direct run passed identity/auth '
         'preflight but failed before message cases: global unread increased by '
-        'one while the canonical conversation row count was zero. Therefore '
-        '`AUTH-E2E-001` passed and the three Direct message cases remained not-run.',
+        'one and one semantic candidate row existed, but zero rows matched the '
+        'expected canonical conversation ID. Therefore `AUTH-E2E-001` passed '
+        'and the three Direct message cases remained not-run.',
       )
       ..writeln()
       ..writeln('## Validation')

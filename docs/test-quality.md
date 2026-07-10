@@ -41,11 +41,13 @@ set-collapsed duplicate IDs, weakened exact-one matching and required-skip-as-pa
 
 ## Current remote evidence
 
-The latest real `awiki.info` Direct run is still a product failure, not a test
-failure or pass: identity preflight succeeded and total unread increased by one,
-but the canonical target conversation row count was zero. `AUTH-E2E-001` passed;
-`MSG-E2E-001`, `MSG-E2E-002` and `MSG-REG-001` remained not-run. Remote resources
-remain explicitly `residual` because there is no public delete API.
+The final integrated `awiki.info` Direct run is still a product failure, not a
+test failure or pass: identity preflight succeeded and total unread increased
+by one. The stricter conversation oracle observed `candidate_rows=1` and
+`semantic_matches=1`, but `canonical_matches=0` for the expected conversation
+ID. `AUTH-E2E-001` passed; `MSG-E2E-001`, `MSG-E2E-002` and `MSG-REG-001`
+remained not-run. Remote resources remain explicitly `residual` because there
+is no public delete API.
 
 ## Maintainability
 
