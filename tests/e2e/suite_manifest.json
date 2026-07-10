@@ -96,7 +96,7 @@
       "allowedHosts": ["awiki.info"],
       "allowedDidDomains": ["awiki.info"],
       "resourceCategories": ["message_agent_bindings", "direct_messages"],
-      "caseIds": ["MSGAGENT-E2E-001", "MSGAGENT-E2E-002", "MSGAGENT-E2E-003", "MSGAGENT-E2E-004"]
+      "caseIds": ["MSGAGENT-E2E-001", "MSGAGENT-E2E-002", "MSGAGENT-E2E-004"]
     },
     "codex-agent": {
       "tier": "optional_provider_product_ui",

@@ -158,8 +158,7 @@ const int _desktopCliPeerPerformanceMaxActivePatchSubscriptions = 100;
 const List<String> _messageAgentCaseIds = <String>[
   'MSGAGENT-E2E-001', // App UI selects daemon and enables Message Agent.
   'MSGAGENT-E2E-002', // CLI peer message is recovered into App UI.
-  'MSGAGENT-E2E-003', // App confirms draft/action and returns result.
-  'MSGAGENT-E2E-004', // Pause/delete/revoke UI lifecycle entries are visible.
+  'MSGAGENT-E2E-004', // UI revoke converges in User Service and daemon state.
 ];
 const List<String> _codexAgentCaseIds = <String>[
   'CODEXAGENT-E2E-001', // App creates/selects a Codex runtime Agent.

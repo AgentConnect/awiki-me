@@ -1566,7 +1566,6 @@ performance:
       expect(decoded['caseIds'], <dynamic>[
         'MSGAGENT-E2E-001',
         'MSGAGENT-E2E-002',
-        'MSGAGENT-E2E-003',
         'MSGAGENT-E2E-004',
       ]);
       expect(

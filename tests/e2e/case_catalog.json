@@ -1,0 +1,943 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "2026-07-10.test-quality-catalog-v1",
+  "cases": [
+    {
+      "caseId": "ATTACH-E2E-001",
+      "feature": "App to CLI attachment",
+      "layer": "product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Stage an attachment through desktop drop UI and send it to CLI.",
+      "exactOracles": [
+        "One canonical attachment message reaches terminal sent state.",
+        "CLI verifies filename, MIME, size, digest and downloaded bytes exactly."
+      ],
+      "negativeChecks": [
+        "Service-only staging, metadata mismatch, byte/digest mismatch, or duplicate message fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-attachments+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "ATTACH-E2E-002",
+      "feature": "CLI to App attachment",
+      "layer": "product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Send an attachment from CLI and open/download it through App UI.",
+      "exactOracles": [
+        "App observes one canonical attachment message.",
+        "Filename, MIME, size, digest and downloaded bytes match exactly."
+      ],
+      "negativeChecks": [
+        "Wrong conversation, missing bytes, metadata mismatch, or duplicate render fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-attachments+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "ATTACH-REG-001",
+      "feature": "Attachment integrity regression",
+      "layer": "product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Requery both attachment directions after the stability window.",
+      "exactOracles": [
+        "Canonical IDs remain unique and content digests/bytes remain unchanged."
+      ],
+      "negativeChecks": [
+        "Replay duplicate, digest drift, wrong object ticket, or lost attachment fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-attachments+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "AUTH-E2E-001",
+      "feature": "Remote identity/auth preflight",
+      "layer": "product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Prepare the App identity, activate the authenticated shell, and cross-check App/CLI handle resolution.",
+      "exactOracles": [
+        "App session is authenticated.",
+        "CLI current DID equals directory resolution of its configured handle.",
+        "App and CLI canonical identities are distinct."
+      ],
+      "negativeChecks": [
+        "Stale handle mapping, wrong tenant/domain, or identity equality fails before any message action."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "CLAUDECODEAGENT-E2E-001",
+      "feature": "Claude Code runtime creation",
+      "layer": "optional_provider_product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Create/select a Claude Code runtime Agent and open chat through UI.",
+      "exactOracles": [
+        "One canonical runtime Agent is selected and its chat is visible."
+      ],
+      "negativeChecks": [
+        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-agents",
+      "implementationPath": "tests/e2e/flutter/app/claude_code_agent_full_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "CLAUDECODEAGENT-E2E-002",
+      "feature": "Claude Code prompt send",
+      "layer": "optional_provider_product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Enter and send the deterministic prompt through UI.",
+      "exactOracles": [
+        "Visible send action completes for the exact prompt."
+      ],
+      "negativeChecks": [
+        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-agents",
+      "implementationPath": "tests/e2e/flutter/app/claude_code_agent_full_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "CLAUDECODEAGENT-E2E-003",
+      "feature": "Claude Code runtime completion",
+      "layer": "optional_provider_product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Wait for daemon runtime_run and final outbox.",
+      "exactOracles": [
+        "One run reaches finished and one final outbox record reaches sent."
+      ],
+      "negativeChecks": [
+        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-agents",
+      "implementationPath": "tests/e2e/flutter/app/claude_code_agent_full_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "CLAUDECODEAGENT-E2E-004",
+      "feature": "Claude Code reply visibility",
+      "layer": "optional_provider_product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Sync App history and wait for the visible reply.",
+      "exactOracles": [
+        "Exact expected reply appears once in canonical history and UI."
+      ],
+      "negativeChecks": [
+        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-agents",
+      "implementationPath": "tests/e2e/flutter/app/claude_code_agent_full_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "CODEXAGENT-E2E-001",
+      "feature": "Codex runtime creation",
+      "layer": "optional_provider_product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Create/select a Codex runtime Agent and open its chat through UI.",
+      "exactOracles": [
+        "One canonical runtime Agent is selected and its chat is visible."
+      ],
+      "negativeChecks": [
+        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-agents",
+      "implementationPath": "tests/e2e/flutter/app/codex_agent_full_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "CODEXAGENT-E2E-002",
+      "feature": "Codex prompt send",
+      "layer": "optional_provider_product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Enter and send the deterministic prompt through UI.",
+      "exactOracles": [
+        "Visible send action completes for the exact prompt."
+      ],
+      "negativeChecks": [
+        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-agents",
+      "implementationPath": "tests/e2e/flutter/app/codex_agent_full_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "CODEXAGENT-E2E-003",
+      "feature": "Codex runtime completion",
+      "layer": "optional_provider_product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Wait for daemon runtime_run and final outbox.",
+      "exactOracles": [
+        "One run reaches finished and one final outbox record reaches sent."
+      ],
+      "negativeChecks": [
+        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-agents",
+      "implementationPath": "tests/e2e/flutter/app/codex_agent_full_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "CODEXAGENT-E2E-004",
+      "feature": "Codex reply visibility",
+      "layer": "optional_provider_product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Sync App history and wait for the visible reply.",
+      "exactOracles": [
+        "Exact expected reply appears once in canonical history and UI."
+      ],
+      "negativeChecks": [
+        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-agents",
+      "implementationPath": "tests/e2e/flutter/app/codex_agent_full_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "CONTACT-E2E-001",
+      "feature": "App follow interaction",
+      "layer": "product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Find the canonical peer card and tap the visible follow control.",
+      "exactOracles": [
+        "Button is visible and enabled.",
+        "Backend relationship becomes exactly following."
+      ],
+      "negativeChecks": [
+        "Missing/disabled/inert click, backend error, or broad friend/follower acceptance fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-contacts+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "CONTACT-E2E-002",
+      "feature": "CLI follow and App unfollow interaction",
+      "layer": "product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Let CLI follow the App identity, refresh, then tap App unfollow.",
+      "exactOracles": [
+        "CLI follow completes.",
+        "App observes exact follower/friend convergence and unfollow returns the relation to none."
+      ],
+      "negativeChecks": [
+        "UI-only state, wrong peer, nonconverged backend state, or failed tap fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-contacts+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "CONTACT-REG-001",
+      "feature": "Relationship transition/idempotency regression",
+      "layer": "product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Exercise the canonical relationship lifecycle through refreshes and repeated reads.",
+      "exactOracles": [
+        "The exact sequence none→following→friend→follower→none is observed.",
+        "Refresh does not invent duplicate or stale relations."
+      ],
+      "negativeChecks": [
+        "Any broadened state set, duplicate relation, or stale post-refresh state fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-contacts+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "GROUP-E2E-001",
+      "feature": "App group create/member/send",
+      "layer": "product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Create a group, add the canonical CLI member, and send through visible App UI.",
+      "exactOracles": [
+        "One canonical group and correct member exist.",
+        "App send reaches terminal state and CLI observes exactly one message with exact sender/content/group."
+      ],
+      "negativeChecks": [
+        "Wrong group/member, direct service shortcut, send nonterminal, or duplicate message fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-groups+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "GROUP-E2E-002",
+      "feature": "CLI group to App message",
+      "layer": "product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Send a run-unique group message from CLI and navigate to it in App UI.",
+      "exactOracles": [
+        "App renders exactly one canonical group message with exact content/sender/group.",
+        "Stable history requery does not duplicate it."
+      ],
+      "negativeChecks": [
+        "Wrong row/thread, missing/duplicate bubble, or mismatched content/identity fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-groups+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "GROUP-P9-001",
+      "feature": "App structured P9 mention",
+      "layer": "product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Compose a group mention through App UI and send it.",
+      "exactOracles": [
+        "P9 payload contains exactly the intended member DID and valid range.",
+        "CLI projection preserves canonical ID, exact text and structured mention metadata."
+      ],
+      "negativeChecks": [
+        "Text-only arrival, wrong DID/range/role, malformed JSON, or duplicate message fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-groups+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "GROUP-P9-002",
+      "feature": "CLI structured P9 mention",
+      "layer": "product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Send a structured group mention from CLI to the App.",
+      "exactOracles": [
+        "App canonical projection preserves target DID/range and exact text.",
+        "Mention renders in the correct group message exactly once."
+      ],
+      "negativeChecks": [
+        "Substring-only matching, metadata loss, wrong target, or duplicate render fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-groups+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "GROUP-REG-001",
+      "feature": "Group history stability regression",
+      "layer": "product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Refresh and requery the group history after bidirectional sends and mentions.",
+      "exactOracles": [
+        "Every run-owned canonical message remains exactly once and ordered in the intended group."
+      ],
+      "negativeChecks": [
+        "Cross-group leakage, missing message, replay duplicate, or identity/content drift fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-groups+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "MSG-E2E-001",
+      "feature": "Direct App to CLI message",
+      "layer": "product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Type and send a run-unique direct message through visible App controls.",
+      "exactOracles": [
+        "App send reaches terminal sent state.",
+        "CLI inbox contains exactly one canonical message with exact body, sender, receiver, thread and type."
+      ],
+      "negativeChecks": [
+        "Rejected/final-nonaccepted send, wrong identity/content, zero matches, or duplicates fail."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "MSG-E2E-002",
+      "feature": "Direct CLI to App unread/read",
+      "layer": "product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Send a run-unique direct message from CLI while the App target conversation is not open, then open it through UI.",
+      "exactOracles": [
+        "CLI send is accepted and has a canonical message ID.",
+        "Global and target-conversation unread move from baseline to exactly baseline+1.",
+        "The canonical row and one exact bubble are visible; opening clears list and navigation unread without rebound."
+      ],
+      "negativeChecks": [
+        "Wrong conversation alias, duplicate bubble, incorrect badge delta, premature read, or rebound fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "MSG-REG-001",
+      "feature": "Direct failure/retry/replay regression",
+      "layer": "product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Inject the E2E transport failure, tap the visible retry action, reconnect, rebuild the App shell, and requery.",
+      "exactOracles": [
+        "Failed state is visible before retry.",
+        "Retry reaches terminal sent state.",
+        "Canonical ID/body remain exactly one after reconnect and widget/App-shell rebuild."
+      ],
+      "negativeChecks": [
+        "Silent success, new duplicate on retry/replay, lost message, or stale failed state fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "MSGAGENT-E2E-001",
+      "feature": "Message Agent enable UI",
+      "layer": "optional_provider_product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Select the daemon and enable Message Agent through visible UI.",
+      "exactOracles": [
+        "Daemon selection, active binding and enabled UI agree."
+      ],
+      "negativeChecks": [
+        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-agents",
+      "implementationPath": "tests/e2e/flutter/app/message_agent_full_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "MSGAGENT-E2E-002",
+      "feature": "Message Agent receive/process",
+      "layer": "optional_provider_product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Send from CLI and wait for App/runtime recovery.",
+      "exactOracles": [
+        "Exact source message and one runtime final result are visible in App history."
+      ],
+      "negativeChecks": [
+        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-agents",
+      "implementationPath": "tests/e2e/flutter/app/message_agent_full_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "MSGAGENT-E2E-003",
+      "feature": "Message Agent confirmation/result",
+      "layer": "optional_provider_product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Confirm the visible draft/action and await its result.",
+      "exactOracles": [
+        "Confirmation is attributable to the canonical request and one final result is returned."
+      ],
+      "negativeChecks": [
+        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-agents",
+      "implementationPath": "tests/e2e/flutter/app/message_agent_full_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "planned"
+    },
+    {
+      "caseId": "MSGAGENT-E2E-004",
+      "feature": "Message Agent revoke lifecycle",
+      "layer": "optional_provider_product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Revoke Daemon message authorization through the visible confirmation flow.",
+      "exactOracles": [
+        "User Service binding and daemon binding both converge to revoked after the UI action."
+      ],
+      "negativeChecks": [
+        "UI-only success, one-sided revoke, missing confirmation, or stale active binding fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-agents",
+      "implementationPath": "tests/e2e/flutter/app/message_agent_full_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "NATIVE-E2E-001",
+      "feature": "Native IM Core smoke",
+      "layer": "product_ui",
+      "preconditions": "Flutter desktop and debug native IM Core artifacts are available.",
+      "action": "Open the real native IM Core bridge and validate its configured paths.",
+      "exactOracles": [
+        "Native core opens successfully.",
+        "Path validation returns a structured result."
+      ],
+      "negativeChecks": [
+        "Native load/open failure or invalid path contract fails the case."
+      ],
+      "environment": "no_service",
+      "cleanupPolicy": "none",
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me",
+      "implementationPath": "tests/e2e/flutter/native/im_core_open_smoke_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "PERF-E2E-001",
+      "feature": "Real backend performance flow",
+      "layer": "integration_diagnostic",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Complete the measured App/CLI backend scenario.",
+      "exactOracles": [
+        "All required timing phases complete against the remote product path."
+      ],
+      "negativeChecks": [
+        "Missing metric, wrong canonical sample, schema drift, or incorrect budget classification fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-performance",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "timing_report+case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "PERF-E2E-002",
+      "feature": "Multi-conversation dataset",
+      "layer": "integration_diagnostic",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Prepare the audited remote dataset.",
+      "exactOracles": [
+        "Dataset cardinality and conversation distribution match the plan."
+      ],
+      "negativeChecks": [
+        "Missing metric, wrong canonical sample, schema drift, or incorrect budget classification fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-performance",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "timing_report+case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "PERF-E2E-003",
+      "feature": "Cold shell visibility",
+      "layer": "integration_diagnostic",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Measure cold App shell and conversation-list visibility.",
+      "exactOracles": [
+        "Both cold visibility metrics are present and finite."
+      ],
+      "negativeChecks": [
+        "Missing metric, wrong canonical sample, schema drift, or incorrect budget classification fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-performance",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "timing_report+case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "PERF-E2E-004",
+      "feature": "Snapshot/hydration timing",
+      "layer": "integration_diagnostic",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Measure snapshot, fast-local and full hydration.",
+      "exactOracles": [
+        "All hydration metrics are present in causal order."
+      ],
+      "negativeChecks": [
+        "Missing metric, wrong canonical sample, schema drift, or incorrect budget classification fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-performance",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "timing_report+case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "PERF-E2E-005",
+      "feature": "App→CLI latency",
+      "layer": "integration_diagnostic",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Measure App send to CLI visibility.",
+      "exactOracles": [
+        "Latency uses the run-owned canonical message and is within the hard budget."
+      ],
+      "negativeChecks": [
+        "Missing metric, wrong canonical sample, schema drift, or incorrect budget classification fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-performance",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "timing_report+case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "PERF-E2E-006",
+      "feature": "CLI→App latency",
+      "layer": "integration_diagnostic",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Measure CLI send to App visibility.",
+      "exactOracles": [
+        "Latency uses the run-owned canonical message and is within the hard budget."
+      ],
+      "negativeChecks": [
+        "Missing metric, wrong canonical sample, schema drift, or incorrect budget classification fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-performance",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "timing_report+case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "PERF-E2E-007",
+      "feature": "No full-refresh regression",
+      "layer": "integration_diagnostic",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Observe refresh counters during send/receive.",
+      "exactOracles": [
+        "No forbidden full conversation refresh occurs."
+      ],
+      "negativeChecks": [
+        "Missing metric, wrong canonical sample, schema drift, or incorrect budget classification fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-performance",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "timing_report+case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "PERF-E2E-008",
+      "feature": "Long-thread open timing",
+      "layer": "integration_diagnostic",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Open and hydrate the long audited thread.",
+      "exactOracles": [
+        "Open/load metrics are present and within the hard budget."
+      ],
+      "negativeChecks": [
+        "Missing metric, wrong canonical sample, schema drift, or incorrect budget classification fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-performance",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "timing_report+case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "PERF-E2E-009",
+      "feature": "Timing report schema",
+      "layer": "integration_diagnostic",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Write the product timing report.",
+      "exactOracles": [
+        "Required metrics, units, source and run identity are complete."
+      ],
+      "negativeChecks": [
+        "Missing metric, wrong canonical sample, schema drift, or incorrect budget classification fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-performance",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "timing_report+case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "PERF-E2E-010",
+      "feature": "Hard budget semantics",
+      "layer": "integration_diagnostic",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Evaluate hard performance budgets.",
+      "exactOracles": [
+        "A hard-budget breach makes the suite fail."
+      ],
+      "negativeChecks": [
+        "Missing metric, wrong canonical sample, schema drift, or incorrect budget classification fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-performance",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "timing_report+case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "PERF-E2E-011",
+      "feature": "Soft budget semantics",
+      "layer": "integration_diagnostic",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Evaluate soft performance budgets.",
+      "exactOracles": [
+        "A soft breach is recorded as warning without hiding hard failures."
+      ],
+      "negativeChecks": [
+        "Missing metric, wrong canonical sample, schema drift, or incorrect budget classification fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-performance",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "timing_report+case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "PERF-E2E-012",
+      "feature": "Performance diagnostics",
+      "layer": "integration_diagnostic",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Retain sanitized failure diagnostics.",
+      "exactOracles": [
+        "Diagnostics identify the metric/budget without secrets or local paths."
+      ],
+      "negativeChecks": [
+        "Missing metric, wrong canonical sample, schema drift, or incorrect budget classification fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "optional_nightly"
+      ],
+      "owner": "awiki-me-performance",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "timing_report+case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "SMOKE-E2E-001",
+      "feature": "App shell smoke",
+      "layer": "product_ui",
+      "preconditions": "Flutter desktop and debug native IM Core artifacts are available.",
+      "action": "Launch the real Flutter desktop app shim without backend credentials.",
+      "exactOracles": [
+        "App shell and onboarding are visible exactly once.",
+        "Unauthenticated realtime remains disconnected."
+      ],
+      "negativeChecks": [
+        "A missing shell/onboarding surface or an unexpected realtime connection fails the case."
+      ],
+      "environment": "no_service",
+      "cleanupPolicy": "none",
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me",
+      "implementationPath": "tests/e2e/flutter/app/app_smoke_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    }
+  ]
+}

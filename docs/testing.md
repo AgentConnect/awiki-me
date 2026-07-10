@@ -58,6 +58,22 @@ Run the full local unit/widget/provider suite:
 dart run tests/unit/runner.dart
 ```
 
+Collect the reproducible line + branch baseline and enforce both the overall
+floor and critical chat/conversation/relationship/read-sync file floors:
+
+```bash
+dart run tests/unit/runner.dart --branch-coverage
+dart run tool/test_coverage_gate.dart
+```
+
+The checked-in policy is `tests/quality/coverage_baseline.json`. It was
+established from 972 passing tests on 2026-07-10: overall line coverage
+76.95% (23986/31171) and branch coverage 62.28% (6468/10385). Critical
+baselines are intentionally per-file so a high aggregate cannot hide removed
+dedupe, unread/read, relationship or sync branches. The CI unit invocation
+collects this coverage once; it does not rerun the suite just to enforce the
+policy.
+
 The unit gate must stay deterministic and Mac-friendly. It must not require a
 real backend, real OTP, real CLI peer, Hermes, daemon, or mobile device. Focused
 Flutter arguments can be passed through when debugging:
@@ -194,6 +210,15 @@ runner fails on case-ID drift, records tier/owner/required triggers/timeout,
 and uses a killable child-process runner. A timeout terminates the Flutter/CLI
 process tree and records `failure.code=command_timeout`; it cannot leave an
 untracked test child running indefinitely.
+
+`tests/e2e/case_catalog.json` adds the case-level requirements trace: feature,
+preconditions, UI/action, exact oracle, negative guard, environment, cleanup,
+owner, implementation path and evidence type. Its generated view is
+[test-case-catalog.md](test-case-catalog.md). Run
+`dart run tool/validate_test_catalog.dart`; optionally pass
+`--report <suite-report.json>` to reject unknown, duplicate, missing or
+out-of-order report IDs. The catalog also records planned gaps without adding
+them to an executable suite.
 
 Before App launch, the runner creates and activates an isolated CLI tenant whose
 `backend_base_url` and `did_host` match `awiki.info`, then proves that the CLI
@@ -334,12 +359,14 @@ entry per expected case in `caseResults`. Attestation and workspace paths remain
 redacted; the scenario file stores only case IDs, phase names, status, and
 timestamps.
 
-Message Agent daemon management UI is currently hidden. Therefore its fake
-Widget coverage is not product acceptance, and `--case message-agent` must not
-report `passed` until the real UI scenario can attest all of
-`MSGAGENT-E2E-001..004`. A missing/disabled real-backend config, the hidden UI,
-or an unimplemented action-confirmation/lifecycle phase is an explicit failing
-gate rather than a skipped or successful result.
+Message Agent fake Widget coverage is not product acceptance. The optional real
+`message-agent` suite currently attests only implemented vertical slices:
+`MSGAGENT-E2E-001` enable/binding, `MSGAGENT-E2E-002` CLI message plus runtime
+result, and `MSGAGENT-E2E-004` UI revoke plus exact User Service/daemon
+convergence. `MSGAGENT-E2E-003` (visible action/draft confirmation) is planned
+in the catalog but is not in the executable manifest because the current real
+scenario has no such visible action. Missing provider/configuration or any
+non-attested runnable case remains failed/not-run, never passed.
 
 ## Maintenance Rules
 
@@ -348,6 +375,8 @@ gate rather than a skipped or successful result.
 - Keep root `integration_test/` as shim-only.
 - Do not keep skipped, deferred, historical, or dry-run-only business scenarios
   in the active test tree.
+- Keep `suite_manifest.json`, `case_catalog.json`, generated catalog docs and
+  runner constants in lockstep; planned cases belong only in the catalog.
 - Do not commit local configs, OTPs, tokens, generated workspaces, or E2E
   reports.
 - A failed real E2E must be classified as product regression, test bug,

@@ -187,6 +187,21 @@ source ref, isolated `awiki.info` CLI tenant identity preflight, and a redacted
 `resource_ledger.json`. Dry-run
 and prepare-only output remain non-passing orchestration evidence.
 
+The traceable case source is `tests/e2e/case_catalog.json`; the generated human
+catalog is [docs/test-case-catalog.md](docs/test-case-catalog.md). Validate
+manifest/catalog/implementation/report-ID drift with
+`dart run tool/validate_test_catalog.dart`. Unit quality is guarded by a
+checked-in line + branch baseline:
+
+```bash
+dart run tests/unit/runner.dart --branch-coverage
+dart run tool/test_coverage_gate.dart
+```
+
+The baseline protects the whole suite plus chat, conversation, relationship,
+read/sync state machines individually. Coverage is a regression floor, not a
+claim that every product behavior has E2E coverage.
+
 For the maintained remote gate, configure `service.baseUrl` as
 `https://awiki.info` and `service.didDomain` as `awiki.info`. The App-side
 actions in `full` must be visible input/tap/drop actions; service calls are

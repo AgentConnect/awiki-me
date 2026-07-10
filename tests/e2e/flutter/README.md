@@ -99,9 +99,8 @@ dart run tests/e2e/runner.dart --case full
 
 `--case message-agent` is the durable acceptance entry for Message Agent
 product behavior. It must exercise the App UI path for selecting a daemon,
-enabling the Message Agent, recovering `message.sync` / `runtime_final` /
-`app.action` payloads, confirming or rejecting App actions, and the
-pause/delete/revoke lifecycle entries. Lower-level probes such as
+enabling the Message Agent, recovering the exact source plus `runtime_final`,
+and revoking authorization through the visible confirmation flow. Lower-level probes such as
 `tool/daemon_control_probe.dart` and daemon pytest probes may support payload,
 security, or backend diagnostics, but they do not replace this full UI E2E gate.
 The real-backend branch must also prove the received/returned/content contract:
@@ -109,12 +108,12 @@ the App local history contains the exact CLI source message, the daemon records
 a sent `runtime_final_outbox` row with a non-null message id and sent timestamp,
 and the final text equals the deterministic expected reply.
 
-The Message Agent management surface is currently hidden in the product. The
-real-backend scenario is intentionally fail-closed: fake-backed Widget tests,
-an outer `flutter test` exit code, a missing config, or a partial lifecycle may
-not attest the four Message Agent case IDs. The runner remains red until the
-UI and all required phases are restored; lower-level backend coverage continues
-to be reported separately and must not be relabeled as full UI acceptance.
+The executable case IDs are `MSGAGENT-E2E-001/002/004`. The visible
+action/draft confirmation `MSGAGENT-E2E-003` is cataloged as planned and is not
+in the executable manifest because the current real scenario has no such UI
+action. Fake-backed Widget tests, an outer `flutter test` exit code, a missing
+config, or a partial runnable lifecycle cannot attest a pass. Lower-level
+backend coverage remains separate and must not be relabeled as UI acceptance.
 
 Every runner-owned Flutter invocation receives an ignored local attestation
 path through dart-defines. Durable scenarios call

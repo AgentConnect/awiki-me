@@ -178,6 +178,20 @@ cp tests/e2e/configs/e2e.example.yaml tests/e2e/configs/e2e.local.yaml
 dart run tests/e2e/runner.dart --case full
 ```
 
+case 可追踪目录位于 `tests/e2e/case_catalog.json`，生成的人类可读版本见
+[docs/test-case-catalog.md](docs/test-case-catalog.md)。下列命令会检查
+manifest/catalog/实现/报告 ID 漂移，并守住整体及关键消息状态机的
+line + branch coverage 基线：
+
+```bash
+dart run tool/validate_test_catalog.dart
+dart run tests/unit/runner.dart --branch-coverage
+dart run tool/test_coverage_gate.dart
+```
+
+该 coverage 只是“不得退化”门槛，不代表所有产品功能已有 E2E。所有
+live 产品用例只允许连接 `awiki.info`。
+
 本地 YAML 被 Git 忽略，可能包含 OTP、测试账号、backend URL 与 `awiki-cli` 路径，不能提交。macOS 上运行 awiki-me E2E 时，请选择明确的 macOS 配置（例如 `tests/e2e/configs/e2e.codex-macos-allowed.local.yaml`），不要误用 Linux 本地配置。
 
 仓库已把 `package:sqlite3` 配置为使用系统 SQLite native asset hook。macOS 自带 SQLite；Linux 需要安装 `libsqlite3-dev` 或等价系统包。

@@ -19,8 +19,8 @@
 | `lib/src/application/` | auth/session/messaging/groups/profile/agents/attachments/tenant 等用例编排 |
 | `lib/src/data/` | `awiki_im_core` adapters、service clients、local/secure storage 与 platform bridge |
 | `lib/src/presentation/` | Flutter 页面、Riverpod providers、组件、响应式布局和反馈 |
-| `tests/unit/` | 快速确定性 unit/widget/provider/fake-backed tests |
-| `tests/e2e/` | audited suite manifest、killable runner、configs、Flutter implementations、真实远端 `awiki.info` App+CLI/backend/device flows、脱敏资源台账 |
+| `tests/unit/` | 快速确定性 unit/widget/provider/fake-backed tests；line/branch baseline 由 `tests/quality/coverage_baseline.json` 约束 |
+| `tests/e2e/` | audited suite manifest + case catalog/checker、killable runner、configs、Flutter implementations、真实远端 `awiki.info` App+CLI/backend/device flows、脱敏资源台账 |
 | `integration_test/` | Flutter tooling 薄 shim； durable scenario 在 `tests/e2e/flutter/` |
 | `docs/` | 产品、架构、测试、Message Agent、SecretVault、性能和计划文档 |
 | `android/`, `ios/`, `macos/`, `web/` | 平台 runners |
@@ -29,6 +29,8 @@
 
 - [README.md](README.md)：产品定位、架构、运行、测试、打包与安全边界。
 - [docs/testing.md](docs/testing.md)：unit/smoke/full E2E 分层。
+- [docs/test-case-catalog.md](docs/test-case-catalog.md)：由 catalog 生成的 case→oracle→gate→evidence 追踪表。
+- [docs/test-quality.md](docs/test-quality.md)：line/branch baseline、mutation proof 与大文件治理入口。
 - [docs/conversation-presentation-ownership.md](docs/conversation-presentation-ownership.md)：conversation-first 显示与 overlay 边界。
 - [docs/identity-secret-storage.md](docs/identity-secret-storage.md)：App root key provider 与 SecretVault 边界。
 - [docs/message-agent/message-agent-design.md](docs/message-agent/message-agent-design.md)：Message Agent 产品与 daemon binding。
@@ -38,7 +40,9 @@
 
 ```bash
 dart analyze
-dart run tests/unit/runner.dart
+dart run tests/unit/runner.dart --branch-coverage
+dart run tool/test_coverage_gate.dart
+dart run tool/validate_test_catalog.dart
 dart run tests/e2e/runner.dart --case smoke
 ```
 

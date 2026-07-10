@@ -1817,6 +1817,71 @@ void main() {
     expect(notifications.lastBadgeCount, 0);
   });
 
+  test('lower read watermark replay cannot reopen a covered message', () async {
+    final messageAt = DateTime.utc(2026, 7, 10, 16);
+    final conversation =
+        _conversation(
+          conversationId: 'group:monotonic-watermark',
+          threadId: 'group:monotonic-watermark',
+          displayName: 'Monotonic Watermark Group',
+          unreadCount: 1,
+          lastMessageAt: messageAt,
+          isGroup: true,
+          groupId: 'monotonic-watermark',
+        ).copyWith(
+          lastMessagePreview: 'covered by higher seq',
+          lastMessageSnapshot: ChatMessage(
+            localId: 'local-monotonic',
+            remoteId: 'remote-monotonic',
+            threadId: 'group:monotonic-watermark',
+            senderDid: 'did:agent',
+            groupId: 'monotonic-watermark',
+            content: 'covered by higher seq',
+            createdAt: messageAt,
+            isMine: false,
+            serverSequence: 10,
+            sendState: MessageSendState.sent,
+          ),
+        );
+    final service = _MutableConversationService(
+      conversations: <ConversationSummary>[conversation],
+    );
+    final notifications = FakeNotificationFacade();
+    final container = _conversationContainer(
+      service: service,
+      notifications: notifications,
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(conversationListProvider.notifier);
+    notifier.upsertConversation(conversation);
+    notifier.markConversationReadLocal(
+      conversation,
+      watermark: AppThreadReadWatermark(
+        lastReadMessageId: 'remote-monotonic',
+        lastReadThreadSeq: '10',
+        readAt: messageAt,
+      ),
+    );
+    notifier.markConversationReadLocal(
+      conversation,
+      watermark: AppThreadReadWatermark(
+        lastReadMessageId: 'older-message',
+        lastReadThreadSeq: '5',
+        readAt: messageAt.subtract(const Duration(minutes: 1)),
+      ),
+    );
+
+    await notifier.refresh();
+
+    expect(
+      container.read(conversationListProvider).conversations.single.unreadCount,
+      0,
+    );
+    expect(notifications.lastBadgeCount, 0);
+  });
+
   test(
     'refreshFastLocal shows snapshot before SQLite hydrate finishes',
     () async {

@@ -12,6 +12,15 @@ Root `../integration_test/*.dart` files are Flutter-tooling shims. Keep durable
 Flutter test implementation under `e2e/flutter/`; keep real E2E orchestration,
 configuration, reporting, and scenario contracts under `e2e/`.
 
+`e2e/suite_manifest.json` defines executable suite membership. The separate
+`e2e/case_catalog.json` adds exact oracles, negative guards, ownership and
+implementation paths, and may contain explicit `planned` gaps. Validate both
+plus the generated human catalog with:
+
+```bash
+dart run tool/validate_test_catalog.dart
+```
+
 ## New Feature Rule
 
 Every new feature or behavior change must add or update tests in the same
@@ -39,3 +48,7 @@ conversation. Opening the conversation can mark the message read in the live
 `awiki.info` inbox; the daemon currently consumes the delegated inbox as an
 unread processing queue, so the test must not mark the source message read before
 observing daemon-side processing.
+
+The executable Message Agent IDs are `MSGAGENT-E2E-001`, `002`, and `004`.
+`003` is cataloged as planned until a visible confirmation/draft action exists;
+it must not be synthesized by the outer runner.

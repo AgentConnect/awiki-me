@@ -110,7 +110,13 @@ jobs:
 
       - name: Flutter unit/widget/provider gate
         working-directory: test-awiki-me
-        run: dart run tests/unit/runner.dart
+        run: |
+          dart run tests/unit/runner.dart --branch-coverage
+          dart run tool/test_coverage_gate.dart
+
+      - name: Validate case catalog and generated documentation
+        working-directory: test-awiki-me
+        run: dart run tool/validate_test_catalog.dart
 
       - name: Real desktop smoke (no service dependency)
         working-directory: test-awiki-me

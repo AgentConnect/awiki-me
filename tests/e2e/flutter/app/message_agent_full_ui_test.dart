@@ -505,6 +505,14 @@ void runMessageAgentRealBackendE2e() {
           userDid: session.did,
           daemonDid: install.daemonDid,
         );
+        await E2eCaseAttestationWriter.markPassed(
+          'MSGAGENT-E2E-004',
+          phases: const <String>[
+            'revoke_action_confirmed_in_ui',
+            'user_service_binding_revoked',
+            'daemon_binding_revoked',
+          ],
+        );
       } finally {
         if (daemon != null) {
           _terminateProcess(daemon);

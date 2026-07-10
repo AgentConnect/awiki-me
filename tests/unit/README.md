@@ -16,3 +16,13 @@ Focused Flutter test arguments can be passed through the same entrypoint:
 ```bash
 dart run tests/unit/runner.dart --name mention
 ```
+
+Coverage quality gate:
+
+```bash
+dart run tests/unit/runner.dart --branch-coverage
+dart run tool/test_coverage_gate.dart
+```
+
+The floor in `tests/quality/coverage_baseline.json` includes critical per-file
+line and branch thresholds; lowering it requires an explicit quality review.
