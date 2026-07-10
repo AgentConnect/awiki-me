@@ -101,30 +101,20 @@ join_url() {
   printf '%s/%s\n' "$base" "$path"
 }
 
-derive_base_url_from_domain() {
+derive_release_base_url() {
   local domain="$1"
-  [[ -n "$domain" ]] || fail "AWIKI_DOMAIN must not be empty"
+  [[ -n "$domain" ]] || fail "PACKAGE_RELEASE_DOMAIN must not be empty"
   case "$domain" in
     http://*|https://*)
       trim_trailing_slash "$domain"
       ;;
     */*)
-      fail "AWIKI_DOMAIN must be a hostname or full http(s) URL"
+      fail "PACKAGE_RELEASE_DOMAIN must be a hostname or full http(s) URL"
       ;;
     *)
       printf 'https://%s\n' "$domain"
       ;;
   esac
-}
-
-host_from_url() {
-  python3 - "$1" <<'PY'
-from urllib.parse import urlparse
-import sys
-
-host = urlparse(sys.argv[1]).hostname or ""
-print(host.lower())
-PY
 }
 
 resolve_repo_path() {
@@ -228,24 +218,22 @@ if [[ ! "${PACKAGE_TARGETS+x}" ]]; then
 fi
 
 for required_name in \
+  PACKAGE_RELEASE_DOMAIN \
   PACKAGE_TARGETS \
   PACKAGE_ANDROID_STARTUP_SMOKE_TEST \
   PACKAGE_VERSION_BUMP; do
   require_config_var "$required_name"
 done
 
+require_non_empty_config_var PACKAGE_RELEASE_DOMAIN
 require_non_empty_config_var PACKAGE_TARGETS
 require_non_empty_config_var PACKAGE_ANDROID_STARTUP_SMOKE_TEST
 require_non_empty_config_var PACKAGE_VERSION_BUMP
-if [[ ! "${AWIKI_DOMAIN+x}" ]]; then
-  AWIKI_DOMAIN=""
-fi
 
 for value_name in \
-  AWIKI_DOMAIN \
-  AWIKI_DAEMON_DOWNLOAD_BASE_URL \
-  AWIKI_UPDATE_MANIFEST_URL \
-  AWIKI_RELEASES_URL \
+  PACKAGE_RELEASE_DOMAIN \
+  PACKAGE_UPDATE_MANIFEST_PUBLIC_URL \
+  PACKAGE_DOWNLOAD_PAGE_URL \
   PACKAGE_TARGETS \
   PACKAGE_ANDROID_STARTUP_SMOKE_TEST \
   PACKAGE_VERSION_BUMP; do
@@ -272,25 +260,21 @@ case "$PACKAGE_ANDROID_STARTUP_SMOKE_TEST" in
     ;;
 esac
 
-PACKAGE_RELEASE_BASE_URL="$(derive_base_url_from_domain "$AWIKI_DOMAIN")"
+PACKAGE_RELEASE_BASE_URL="$(derive_release_base_url "$PACKAGE_RELEASE_DOMAIN")"
 PACKAGE_RELEASE_BASE_URL="$(trim_trailing_slash "$PACKAGE_RELEASE_BASE_URL")"
 case "$PACKAGE_RELEASE_BASE_URL" in
   http://*|https://*) ;;
-  *) fail "AWIKI_DOMAIN must derive an http:// or https:// URL" ;;
+  *) fail "PACKAGE_RELEASE_DOMAIN must derive an http:// or https:// URL" ;;
 esac
 
-if [[ -z "${AWIKI_DAEMON_DOWNLOAD_BASE_URL:-}" ]]; then
-  AWIKI_DAEMON_DOWNLOAD_BASE_URL="$(join_url "$PACKAGE_RELEASE_BASE_URL" "daemon")"
+if [[ -z "${PACKAGE_UPDATE_MANIFEST_PUBLIC_URL:-}" ]]; then
+  PACKAGE_UPDATE_MANIFEST_PUBLIC_URL="$(join_url "$PACKAGE_RELEASE_BASE_URL" "downloads/awiki-me/latest.json")"
 fi
-if [[ -z "${AWIKI_UPDATE_MANIFEST_URL:-}" ]]; then
-  AWIKI_UPDATE_MANIFEST_URL="$(join_url "$PACKAGE_RELEASE_BASE_URL" "downloads/awiki-me/latest.json")"
+if [[ -z "${PACKAGE_DOWNLOAD_PAGE_URL:-}" ]]; then
+  PACKAGE_DOWNLOAD_PAGE_URL="$(join_url "$PACKAGE_RELEASE_BASE_URL" "#download")"
 fi
-if [[ -z "${AWIKI_RELEASES_URL:-}" ]]; then
-  AWIKI_RELEASES_URL="$(join_url "$PACKAGE_RELEASE_BASE_URL" "#download")"
-fi
-AWIKI_DAEMON_DOWNLOAD_BASE_URL="$(trim_trailing_slash "$AWIKI_DAEMON_DOWNLOAD_BASE_URL")"
-AWIKI_UPDATE_MANIFEST_URL="$(trim_trailing_slash "$AWIKI_UPDATE_MANIFEST_URL")"
-AWIKI_RELEASES_URL="$(trim_trailing_slash "$AWIKI_RELEASES_URL")"
+PACKAGE_UPDATE_MANIFEST_PUBLIC_URL="$(trim_trailing_slash "$PACKAGE_UPDATE_MANIFEST_PUBLIC_URL")"
+PACKAGE_DOWNLOAD_PAGE_URL="$(trim_trailing_slash "$PACKAGE_DOWNLOAD_PAGE_URL")"
 
 LATEST_MANIFEST="$DIST_ROOT/latest.json"
 SDK_REPO_DIR="$(resolve_repo_path "$PACKAGE_SDK_REPO_DIR")"
@@ -348,13 +332,13 @@ build_number() {
 }
 
 download_base_url() {
-  local manifest_url="$AWIKI_UPDATE_MANIFEST_URL"
+  local manifest_url="$PACKAGE_UPDATE_MANIFEST_PUBLIC_URL"
   case "$manifest_url" in
     */latest.json)
       printf '%s\n' "${manifest_url%/latest.json}"
       ;;
     *)
-      fail "AWIKI_UPDATE_MANIFEST_URL must end with /latest.json"
+      fail "PACKAGE_UPDATE_MANIFEST_PUBLIC_URL must end with /latest.json"
       ;;
   esac
 }
@@ -826,7 +810,7 @@ verify_macos_app() {
 
 prepare_macos_project() {
   if [[ ! -d macos/Runner.xcworkspace ]]; then
-    fail "macos/Runner.xcworkspace is missing; run scripts/bootstrap_macos.sh first"
+    fail "macos/Runner.xcworkspace is missing; run scripts/prepare_macos_build.sh first"
   fi
 }
 
@@ -988,8 +972,8 @@ write_latest_manifest() {
   "version": $(json_string "$VERSION_NAME"),
   "buildNumber": $BUILD_NUMBER,
   "publishedAt": $(json_string "$(date -u +%Y-%m-%dT%H:%M:%SZ)"),
-  "releaseNotesUrl": $(json_string "$AWIKI_RELEASES_URL"),
-  "githubReleaseUrl": $(json_string "$AWIKI_RELEASES_URL"),
+  "releaseNotesUrl": $(json_string "$PACKAGE_DOWNLOAD_PAGE_URL"),
+  "githubReleaseUrl": $(json_string "$PACKAGE_DOWNLOAD_PAGE_URL"),
   "platforms": {
 JSON
     if [[ -n "$android_file" ]]; then
@@ -1034,7 +1018,7 @@ write_manifest() {
   },
   "publishedAt": $(json_string "$(date -u +%Y-%m-%dT%H:%M:%SZ)"),
   "release": {
-    "baseUrl": $(json_string "$PACKAGE_RELEASE_BASE_URL")
+    "downloadBaseUrl": $(json_string "$PACKAGE_RELEASE_BASE_URL")
   },
   "platforms": {
 JSON
@@ -1091,11 +1075,10 @@ check_source_identity
 log "config:          $CONFIG_PATH"
 log "android mode:    $PACKAGE_ANDROID_BUILD_MODE"
 log "macOS mode:      $PACKAGE_MACOS_BUILD_MODE"
-log "release domain:  ${AWIKI_DOMAIN:-$(host_from_url "$PACKAGE_RELEASE_BASE_URL")}"
-log "release base:    $PACKAGE_RELEASE_BASE_URL"
-log "daemon download: $AWIKI_DAEMON_DOWNLOAD_BASE_URL"
-log "update manifest: $AWIKI_UPDATE_MANIFEST_URL"
-log "download page:   $AWIKI_RELEASES_URL"
+log "release domain:  $PACKAGE_RELEASE_DOMAIN"
+log "download base:   $PACKAGE_RELEASE_BASE_URL"
+log "manifest URL:    $PACKAGE_UPDATE_MANIFEST_PUBLIC_URL"
+log "download page:   $PACKAGE_DOWNLOAD_PAGE_URL"
 log "current version: $CURRENT_VERSION"
 log "next version:    $NEXT_VERSION"
 log "dist root:       $DIST_ROOT"

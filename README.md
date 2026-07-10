@@ -191,18 +191,18 @@ Entrypoint:
 scripts/package_app.sh
 ```
 
-Config file: [`scripts/package_app.config`](scripts/package_app.config). For normal packaging, edit `AWIKI_DOMAIN` and, when needed, `PACKAGE_TARGETS`:
+Config file: [`scripts/package_app.config`](scripts/package_app.config). For normal packaging, edit `PACKAGE_RELEASE_DOMAIN` and, when needed, `PACKAGE_TARGETS`:
 
 ```text
-AWIKI_DOMAIN="awiki.ai"    # current checked-in default
-AWIKI_DOMAIN="awiki.info"  # internal mirror / integration package downloads
+PACKAGE_RELEASE_DOMAIN="awiki.ai"    # current checked-in default
+PACKAGE_RELEASE_DOMAIN="awiki.info"  # internal mirror / integration package downloads
 
 PACKAGE_TARGETS="android-arm64,macos-arm64,macos-x64"  # all targets
 PACKAGE_TARGETS="android-arm64"                        # Android only
 PACKAGE_TARGETS="macos-arm64,macos-x64"                # macOS only
 ```
 
-The script uses `AWIKI_DOMAIN` only for release metadata: daemon download URL, update manifest URL, and the download page. It does not inject backend base URL, DID host, or state namespace into the app; those are controlled by the in-app tenant registry after launch.
+The script uses `PACKAGE_RELEASE_DOMAIN` only for release artifact metadata: package download URLs, the generated update manifest location, and the download page. It does not inject backend base URL, DID host, state namespace, or update-check endpoint into the app; those are controlled by the app runtime and in-app tenant registry after launch.
 
 Packaging behavior:
 
@@ -224,7 +224,7 @@ dist/latest.json
 Generate CocoaPods support files before opening Xcode:
 
 ```bash
-scripts/bootstrap_macos.sh
+scripts/prepare_macos_build.sh
 open macos/Runner.xcworkspace
 ```
 
