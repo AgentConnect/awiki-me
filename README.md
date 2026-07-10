@@ -230,7 +230,7 @@ open macos/Runner.xcworkspace
 
 Open `Runner.xcworkspace`, not `Runner.xcodeproj`. If Xcode reports `Unable to load contents of file list: '/Target Support Files/Pods-Runner/...'`, the generated `macos/Pods` support files are missing or CocoaPods is not on `PATH`; rerun the bootstrap script.
 
-macOS debug/profile builds are usually ad-hoc signed. To avoid a successful backend registration surfacing as a registration failure because a local unsigned runner cannot write Keychain, debug/profile account credentials are stored in `awiki_me_credentials.json` under the app support directory. Release builds still use platform secure storage. Identity vault root key and device id use macOS Keychain by default; see [docs/identity-secret-storage.md](docs/identity-secret-storage.md).
+macOS debug/profile builds are usually ad-hoc signed. To avoid a successful backend registration surfacing as a registration failure because a local unsigned runner cannot write Keychain, debug/profile account credentials are stored in `awiki_me_credentials.json` under the app support directory. Release builds still use platform secure storage. The im-core identity vault root key and device id are stored as one namespace-scoped macOS Keychain secret bundle by default; without Developer ID signing, reinstalling the app may require one system authorization prompt for that bundle. See [docs/identity-secret-storage.md](docs/identity-secret-storage.md).
 
 After changing macOS signing, entitlements, or secure-storage options, run:
 

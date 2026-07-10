@@ -7,6 +7,7 @@ import '../services/app_key_value_store.dart';
 import 'awiki_im_core_paths.dart';
 
 const int awikiImCoreVaultRootKeyLength = 32;
+const int _vaultSecretBundleSchema = 1;
 
 class AwikiImCoreVaultSecrets {
   const AwikiImCoreVaultSecrets({
@@ -59,32 +60,55 @@ class StoredAwikiImCoreVaultSecretProvider
   }
 
   Future<AwikiImCoreVaultSecrets> _getOrCreateSecrets(String namespace) async {
-    final rootKeyBytes = await _getOrCreateRootKey(namespace);
-    final deviceId = await _getOrCreateDeviceId(namespace);
+    final key = _bundleKey(namespace);
+    final existing = await _storage.read(key: key);
+    if (existing != null) {
+      return _secretsFromBundle(_decodeBundle(existing));
+    }
+    if (await _strictStoreAlreadyExists()) {
+      throw StateError('identity_vault_secret_bundle_unavailable');
+    }
+    final rootKeyBytes = _generateRootKeyBytes();
+    final deviceId = _generateDeviceId();
+    final bundle = _StoredVaultSecretBundle(
+      schema: _vaultSecretBundleSchema,
+      rootKeyB64: base64Encode(rootKeyBytes),
+      deviceId: deviceId,
+    );
+    await _storage.write(key: key, value: jsonEncode(bundle.toJson()));
     return AwikiImCoreVaultSecrets(
       rootKey: core.DeviceVaultRootKey.fromList(rootKeyBytes),
       deviceId: deviceId,
     );
   }
 
-  Future<List<int>> _getOrCreateRootKey(String namespace) async {
-    final key = '$_keyPrefix.$namespace.root_key_b64';
-    final existing = await _storage.read(key: key);
-    if (existing != null && existing.trim().isNotEmpty) {
-      return _decodeRootKey(existing);
-    }
-    if (await _strictStoreAlreadyExists()) {
-      throw StateError('identity_vault_root_key_unavailable');
-    }
+  String _bundleKey(String namespace) {
+    return '$_keyPrefix.$namespace.secrets_v1';
+  }
+
+  AwikiImCoreVaultSecrets _secretsFromBundle(_StoredVaultSecretBundle bundle) {
+    final rootKeyBytes = _decodeRootKey(bundle.rootKeyB64);
+    return AwikiImCoreVaultSecrets(
+      rootKey: core.DeviceVaultRootKey.fromList(rootKeyBytes),
+      deviceId: bundle.deviceId,
+    );
+  }
+
+  List<int> _generateRootKeyBytes() {
     final generated = _randomBytes(awikiImCoreVaultRootKeyLength);
     if (generated.length != awikiImCoreVaultRootKeyLength) {
       throw StateError(
-        'identity_vault_root_key_generation_failed: expected '
-        '$awikiImCoreVaultRootKeyLength bytes.',
+        'identity_vault_secret_bundle_generation_failed: expected '
+        '$awikiImCoreVaultRootKeyLength bytes of root key material.',
       );
     }
-    await _storage.write(key: key, value: base64Encode(generated));
     return List<int>.from(generated);
+  }
+
+  String _generateDeviceId() {
+    final random = _randomBytes(16);
+    final encoded = base64UrlEncode(random).replaceAll('=', '');
+    return 'app-device-$encoded';
   }
 
   Future<bool> _strictStoreAlreadyExists() async {
@@ -93,20 +117,6 @@ class StoredAwikiImCoreVaultSecretProvider
       return false;
     }
     return storage.storeExists();
-  }
-
-  Future<String> _getOrCreateDeviceId(String namespace) async {
-    final key = '$_keyPrefix.$namespace.device_id';
-    final existing = await _storage.read(key: key);
-    final trimmed = existing?.trim();
-    if (trimmed != null && trimmed.isNotEmpty) {
-      return trimmed;
-    }
-    final random = _randomBytes(16);
-    final encoded = base64UrlEncode(random).replaceAll('=', '');
-    final deviceId = 'app-device-$encoded';
-    await _storage.write(key: key, value: deviceId);
-    return deviceId;
   }
 }
 
@@ -119,9 +129,55 @@ List<int> _decodeRootKey(String encoded) {
     return decoded;
   } catch (_) {
     throw StateError(
-      'identity_vault_root_key_invalid: stored root key must decode to '
+      'identity_vault_secret_bundle_invalid: stored root key must decode to '
       '$awikiImCoreVaultRootKeyLength bytes.',
     );
+  }
+}
+
+_StoredVaultSecretBundle _decodeBundle(String raw) {
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) {
+      throw const FormatException('bundle must be an object');
+    }
+    final schema = decoded['schema'];
+    final rootKeyB64 = decoded['root_key_b64'];
+    final deviceId = decoded['device_id'];
+    if (schema != _vaultSecretBundleSchema ||
+        rootKeyB64 is! String ||
+        rootKeyB64.trim().isEmpty ||
+        deviceId is! String ||
+        deviceId.trim().isEmpty) {
+      throw const FormatException('invalid bundle fields');
+    }
+    return _StoredVaultSecretBundle(
+      schema: schema,
+      rootKeyB64: rootKeyB64,
+      deviceId: deviceId.trim(),
+    );
+  } catch (_) {
+    throw StateError('identity_vault_secret_bundle_invalid');
+  }
+}
+
+class _StoredVaultSecretBundle {
+  const _StoredVaultSecretBundle({
+    required this.schema,
+    required this.rootKeyB64,
+    required this.deviceId,
+  });
+
+  final int schema;
+  final String rootKeyB64;
+  final String deviceId;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'schema': schema,
+      'root_key_b64': rootKeyB64,
+      'device_id': deviceId,
+    };
   }
 }
 

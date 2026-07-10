@@ -229,7 +229,7 @@ open macos/Runner.xcworkspace
 
 请打开 `Runner.xcworkspace`，不要直接打开 `Runner.xcodeproj`。如果 Xcode 报告 `Unable to load contents of file list: '/Target Support Files/Pods-Runner/...'`，通常是 `macos/Pods` 生成文件缺失或 CocoaPods 不在 `PATH`，重新执行 bootstrap 即可。
 
-macOS debug/profile 构建通常是 ad-hoc 签名。为避免本地未签名 runner 因 Keychain 写入失败被误判为注册失败，debug/profile 账号凭证会落到 App support 下的 `awiki_me_credentials.json`；release 构建仍走平台安全存储。身份 vault root key 与 device id 默认走 macOS Keychain，具体边界见 [docs/identity-secret-storage.md](docs/identity-secret-storage.md)。
+macOS debug/profile 构建通常是 ad-hoc 签名。为避免本地未签名 runner 因 Keychain 写入失败被误判为注册失败，debug/profile 账号凭证会落到 App support 下的 `awiki_me_credentials.json`；release 构建仍走平台安全存储。im-core 身份 vault root key 与 device id 默认作为一个 namespace-scoped secret bundle 写入 macOS Keychain；在暂未使用 Developer ID 签名时，重装后首次访问这个 bundle 可能需要一次系统授权。具体边界见 [docs/identity-secret-storage.md](docs/identity-secret-storage.md)。
 
 修改 macOS 签名、entitlements 或 secure-storage 选项后，至少运行：
 

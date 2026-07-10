@@ -232,6 +232,6 @@ class _FailingVaultSecretProvider implements AwikiImCoreVaultSecretProvider {
   Future<AwikiImCoreVaultSecrets> getOrCreateSecrets({
     required String stateNamespace,
   }) async {
-    throw StateError('identity_vault_root_key_unavailable');
+    throw StateError('identity_vault_secret_bundle_unavailable');
   }
 }
