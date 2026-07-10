@@ -10,8 +10,10 @@ Current groups:
 - `app/`: App shell smoke with fake bootstrap, onboarding/authenticated shell,
   basic profile/settings navigation, Message Agent full-UI harness, Codex
   Agent, and Claude Code Agent user-visible reply acceptance.
-- `desktop_cli_peer/`: real desktop App + `awiki-cli-rs2` peer integration
-  implementations for direct, group, attachment, and follow/contact flows.
+- `desktop_cli_peer/`: real desktop App + `awiki-cli-rs2` product E2E for
+  UI-driven direct/unread/read/retry, group/mention, attachment, and
+  follow/contact flows, plus strict read-only App/CLI oracles. The maintained
+  remote gate targets `awiki.info`.
 - `native/`: native SDK/plugin smoke such as `AwikiImCore.open` and macOS
   secure storage Keychain access.
 - `support/`: integration-only helpers.
@@ -84,9 +86,11 @@ budget overrun, or any full conversation refresh counted during the App
 send/receive window. Soft budget overruns remain warnings so local real-backend
 variance can be tracked before thresholds are tightened.
 
-`--case full` is still the AWiki Me full E2E entry for the real backend App +
-CLI peer message exchange. Use `--case performance` for the performance/cache
-gate and `--case full` for the broader product E2E flow:
+`--case full` is the AWiki Me UI-driven product E2E entry for the real backend
+App + CLI peer exchange. It must not replace App user actions with direct
+application-service calls. `--case performance` is intentionally a
+service-driven timing/backend integration diagnostic and does not count as UI
+acceptance. Use the two gates for their distinct purposes:
 
 ```bash
 dart run tests/e2e/runner.dart --case performance

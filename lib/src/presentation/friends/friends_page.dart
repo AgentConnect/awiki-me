@@ -308,6 +308,7 @@ class _FriendRow extends StatelessWidget {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     return Container(
+      key: isGroup ? const Key('friends-groups-row') : null,
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: theme.border)),
@@ -753,6 +754,7 @@ Future<void> confirmAndUnfollow(
           child: Text(context.l10n.commonCancel),
         ),
         CupertinoDialogAction(
+          key: const Key('confirm-unfollow-button'),
           isDestructiveAction: true,
           onPressed: () => Navigator.of(ctx).pop(true),
           child: Text(context.l10n.friendsUnfollow),

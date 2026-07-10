@@ -101,7 +101,8 @@ native IM Core smoke. It is the default high-frequency E2E gate for a Mac with a
 normal Flutter desktop setup. It does not require test accounts, OTP, a backend,
 or `awiki-cli`.
 
-Run real App + CLI peer flows when a test backend and test OTP are configured:
+Run real App + CLI peer flows when the `awiki.info` remote test account pool,
+test OTP, and CLI peer are configured:
 
 ```bash
 dart run tests/e2e/runner.dart --case full
@@ -116,8 +117,8 @@ cp tests/e2e/configs/e2e.example.yaml tests/e2e/configs/e2e.local.yaml
 
 Required local values:
 
-- `service.baseUrl`: backend root, for example `https://anpclaw.com`.
-- `service.didDomain`: DID domain, for example `anpclaw.com`.
+- `service.baseUrl`: remote test backend root, `https://awiki.info`.
+- `service.didDomain`: remote DID domain, `awiki.info`.
 - `otp.phone` and `otp.code`: the test OTP credential.
 - `accounts.appUser.handle`: App-side test handle.
 - `accounts.cliPeer.handle`: CLI peer test handle.
@@ -140,6 +141,39 @@ Supported E2E cases:
 - `attachment`: App and CLI peer attachment flow.
 - `contacts`: App and CLI peer follow/contact flow.
 - `full`: all App + CLI peer flows.
+
+### UI-driven full acceptance
+
+The required `direct`, `group`, `attachment`, `contacts`, and `full` cases are
+product E2E, not service-client scripts. App-side sends, retry, navigation,
+follow/unfollow, group creation/member invitation, structured mention, and
+attachment staging are performed through `WidgetTester` against visible
+controls and E2E semantics. Read-only service and CLI probes may verify the
+result, but they must not perform the App user action under test.
+
+The product oracle is fail-closed:
+
+- message checks require one canonical message id, terminal send state, exact
+  body, sender and conversation, and remain exact-one after reconnect and App
+  restart;
+- incoming direct messages require an exact unread baseline increment, matching
+  navigation badge and conversation count, read-clear on open, no rebound, and
+  a second-message increment;
+- the failure/retry slice uses an E2E-only transport fault that emits a failed
+  timeline patch, then the visible retry action delegates to the real remote
+  messaging service; it does not add a production mock or fallback;
+- relationship checks require the exact `none -> following -> friend ->
+  follower -> none` state sequence;
+- group mentions require one valid structured target DID; attachment checks
+  require exact ids, filename, MIME type, size, digest, and downloaded bytes.
+
+`performance` remains a service-driven backend/integration diagnostic because
+it directly prepares a large dataset and calls application services to measure
+specific timing boundaries. Its results must not be relabeled as required UI
+acceptance. Profile editing, directory-wide search, identity switch,
+onboarding, group role/remove/leave flows, and secure-trust UI remain roadmap
+cases until they receive their own case IDs and vertical slices; `full` does
+not imply those features are covered.
 
 All E2E runtime state and reports go under `.e2e/` and must remain untracked.
 Local config files named `tests/e2e/configs/*.local.yaml` are also ignored and

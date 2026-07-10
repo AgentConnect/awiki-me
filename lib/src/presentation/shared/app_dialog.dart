@@ -100,6 +100,7 @@ class AppDialogHeader extends StatelessWidget {
     this.leading,
     this.onClose,
     this.closeLabel,
+    this.closeButtonKey,
     this.isCloseEnabled = true,
   });
 
@@ -108,6 +109,7 @@ class AppDialogHeader extends StatelessWidget {
   final Widget? leading;
   final VoidCallback? onClose;
   final String? closeLabel;
+  final Key? closeButtonKey;
   final bool isCloseEnabled;
 
   @override
@@ -157,6 +159,7 @@ class AppDialogHeader extends StatelessWidget {
         ),
         SizedBox(width: responsive.spacing(10)),
         AppIconButton(
+          key: closeButtonKey,
           onPressed: isCloseEnabled ? onClose : null,
           semanticLabel: effectiveCloseLabel,
           tooltip: effectiveCloseLabel,

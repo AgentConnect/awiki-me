@@ -262,22 +262,12 @@ String _messageNonce() {
   return micros.toRadixString(36);
 }
 
-String _groupSlug(String runId, String nonce) {
-  final raw = 'awiki-e2e-$runId-$nonce'.toLowerCase();
-  final slug = raw
-      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-      .replaceAll(RegExp(r'-+'), '-')
-      .replaceAll(RegExp(r'^-|-$'), '');
-  if (slug.length <= 48) {
-    return slug;
-  }
-  return slug.substring(0, 48).replaceAll(RegExp(r'-$'), '');
-}
-
 String _normalizeIdentityRef(String value) {
   final normalized = value.trim().toLowerCase();
-  if (normalized.endsWith('.awiki.ai')) {
-    return normalized.substring(0, normalized.length - '.awiki.ai'.length);
+  for (final domain in const <String>['.awiki.info', '.awiki.ai']) {
+    if (normalized.endsWith(domain)) {
+      return normalized.substring(0, normalized.length - domain.length);
+    }
   }
   return normalized;
 }

@@ -115,6 +115,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('群组'), findsOneWidget);
+    expect(find.byKey(const Key('friends-groups-row')), findsOneWidget);
     expect(find.text('我关注的'), findsOneWidget);
     expect(find.text('关注我的'), findsOneWidget);
     expect(find.text('Alice'), findsOneWidget);

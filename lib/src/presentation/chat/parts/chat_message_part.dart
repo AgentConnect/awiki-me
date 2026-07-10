@@ -1050,6 +1050,7 @@ class _MessageBubble extends StatelessWidget {
               if (onRetry != null) ...<Widget>[
                 SizedBox(width: responsive.displayScaled(10)),
                 AppPressableText(
+                  key: Key('chat-retry-message:${message.localId}'),
                   onTap: onRetry,
                   semanticLabel: context.l10n.chatRetrySend,
                   child: Text(
@@ -1222,6 +1223,7 @@ class _MessageBubble extends StatelessWidget {
                           if (onRetry != null) ...<Widget>[
                             SizedBox(width: responsive.spacing(10)),
                             AppPressableText(
+                              key: Key('chat-retry-message:${message.localId}'),
                               onTap: onRetry,
                               semanticLabel: context.l10n.chatRetrySend,
                               child: Text(
@@ -1417,6 +1419,7 @@ class _AttachmentContent extends StatelessWidget {
                       : responsive.spacing(10),
                 ),
                 _AttachmentActionButton(
+                  key: Key('chat-open-attachment:${message.localId}'),
                   macStyle: macStyle,
                   isLoading: isDownloading,
                   onTap: onDownload!,
@@ -1768,6 +1771,7 @@ class _AttachmentCaptionDivider extends StatelessWidget {
 
 class _AttachmentActionButton extends StatelessWidget {
   const _AttachmentActionButton({
+    super.key,
     required this.macStyle,
     required this.isLoading,
     required this.onTap,

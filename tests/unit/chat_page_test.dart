@@ -747,11 +747,14 @@ void main() {
 
     await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('关注'));
+    expect(find.byKey(const Key('peer-info-close-button')), findsOneWidget);
+    expect(find.byKey(const Key('chat-follow-button')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('chat-follow-button')));
     await tester.pumpAndSettle();
 
     expect(gateway.lastFollowedDidOrHandle, 'did:test:peer');
     expect(find.text('已关注'), findsOneWidget);
+    expect(find.byKey(const Key('chat-unfollow-button')), findsOneWidget);
   });
 
   testWidgets('聊天头部关注失败时保持未关注并提示错误', (tester) async {
@@ -793,7 +796,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('关注'));
+    await tester.tap(find.byKey(const Key('chat-follow-button')));
     await tester.pumpAndSettle();
 
     expect(find.text('关注'), findsOneWidget);
@@ -956,13 +959,14 @@ void main() {
 
     await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('已关注'));
+    await tester.tap(find.byKey(const Key('chat-unfollow-button')));
     await tester.pump();
 
     expect(find.byType(CupertinoAlertDialog), findsOneWidget);
     expect(gateway.lastUnfollowedDidOrHandle, isNull);
 
-    await tester.tap(find.text('取消关注').last);
+    expect(find.byKey(const Key('confirm-unfollow-button')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('confirm-unfollow-button')));
     await tester.pump();
 
     expect(gateway.lastUnfollowedDidOrHandle, 'did:test:peer');
@@ -4848,7 +4852,11 @@ void main() {
         .openConversation(conversation);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.bySemanticsLabel('查看附件'));
+    final openAttachment = find.byKey(
+      const Key('chat-open-attachment:native-open-attachment'),
+    );
+    expect(openAttachment, findsOneWidget);
+    await tester.tap(openAttachment);
     await tester.pumpAndSettle();
 
     expect(picker.saveCalls, 0);

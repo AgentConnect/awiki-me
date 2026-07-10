@@ -5,29 +5,41 @@ Future<void> _waitForCliHistory({
   required String peerHandle,
   required String expectedText,
   String? expectedMessageId,
+  String? expectedSenderDid,
+  String? expectedReceiverDid,
+  String? expectedGroupDid,
+  String? expectedContentType,
 }) async {
+  Future<bool> probe() async {
+    final result = await _runCli(config, <String>[
+      '--format',
+      'json',
+      'msg',
+      'history',
+      '--with',
+      peerHandle,
+      '--limit',
+      '20',
+    ]);
+    return result.exitCode == 0 &&
+        _cliExactMessageMatches(
+          result.stdout,
+          expectedText: expectedText,
+          expectedMessageId: expectedMessageId,
+          expectedSenderDid: expectedSenderDid,
+          expectedReceiverDid: expectedReceiverDid,
+          expectedGroupDid: expectedGroupDid,
+          expectedContentType: expectedContentType,
+        );
+  }
+
   await _poll(
     description: 'CLI history contains exact message "$expectedText"',
-    action: () async {
-      final result = await _runCli(config, <String>[
-        '--format',
-        'json',
-        'msg',
-        'history',
-        '--with',
-        peerHandle,
-        '--limit',
-        '20',
-      ]);
-      if (result.exitCode != 0) {
-        return false;
-      }
-      return _cliMessagesWithExactText(
-        result.stdout,
-        expectedText,
-        expectedMessageId: expectedMessageId,
-      ).isNotEmpty;
-    },
+    action: probe,
+  );
+  await _assertStableCliProbe(
+    description: 'CLI history exact message "$expectedText"',
+    probe: probe,
   );
 }
 
@@ -36,29 +48,38 @@ Future<void> _waitForCliGroupMessages({
   required String groupDid,
   required String expectedText,
   String? expectedMessageId,
+  String? expectedSenderDid,
+  String? expectedContentType,
 }) async {
+  Future<bool> probe() async {
+    final result = await _runCli(config, <String>[
+      '--format',
+      'json',
+      'group',
+      'messages',
+      '--group',
+      groupDid,
+      '--limit',
+      '20',
+    ]);
+    return result.exitCode == 0 &&
+        _cliExactMessageMatches(
+          result.stdout,
+          expectedText: expectedText,
+          expectedMessageId: expectedMessageId,
+          expectedSenderDid: expectedSenderDid,
+          expectedGroupDid: groupDid,
+          expectedContentType: expectedContentType,
+        );
+  }
+
   await _poll(
     description: 'CLI group messages contain exact message "$expectedText"',
-    action: () async {
-      final result = await _runCli(config, <String>[
-        '--format',
-        'json',
-        'group',
-        'messages',
-        '--group',
-        groupDid,
-        '--limit',
-        '20',
-      ]);
-      if (result.exitCode != 0) {
-        return false;
-      }
-      return _cliMessagesWithExactText(
-        result.stdout,
-        expectedText,
-        expectedMessageId: expectedMessageId,
-      ).isNotEmpty;
-    },
+    action: probe,
+  );
+  await _assertStableCliProbe(
+    description: 'CLI group exact message "$expectedText"',
+    probe: probe,
   );
 }
 
@@ -66,28 +87,75 @@ Future<void> _waitForCliInbox({
   required _DesktopCliPeerSmokeConfig config,
   required String expectedText,
   String? expectedMessageId,
+  String? expectedSenderDid,
+  String? expectedReceiverDid,
+  String? expectedContentType,
 }) async {
+  Future<bool> probe() async {
+    final result = await _runCli(config, const <String>[
+      '--format',
+      'json',
+      'msg',
+      'inbox',
+      '--limit',
+      '20',
+    ]);
+    return result.exitCode == 0 &&
+        _cliExactMessageMatches(
+          result.stdout,
+          expectedText: expectedText,
+          expectedMessageId: expectedMessageId,
+          expectedSenderDid: expectedSenderDid,
+          expectedReceiverDid: expectedReceiverDid,
+          expectedContentType: expectedContentType,
+        );
+  }
+
   await _poll(
     description: 'CLI inbox contains exact message "$expectedText"',
-    action: () async {
-      final result = await _runCli(config, const <String>[
-        '--format',
-        'json',
-        'msg',
-        'inbox',
-        '--limit',
-        '20',
-      ]);
-      if (result.exitCode != 0) {
-        return false;
-      }
-      return _cliMessagesWithExactText(
-        result.stdout,
-        expectedText,
-        expectedMessageId: expectedMessageId,
-      ).isNotEmpty;
-    },
+    action: probe,
   );
+  await _assertStableCliProbe(
+    description: 'CLI inbox exact message "$expectedText"',
+    probe: probe,
+  );
+}
+
+Future<void> _assertStableCliProbe({
+  required String description,
+  required Future<bool> Function() probe,
+}) async {
+  await Future<void>.delayed(const Duration(seconds: 2));
+  if (!await probe()) {
+    fail('$description was not stable after the duplicate observation window.');
+  }
+}
+
+bool _cliExactMessageMatches(
+  String output, {
+  required String expectedText,
+  String? expectedMessageId,
+  String? expectedSenderDid,
+  String? expectedReceiverDid,
+  String? expectedGroupDid,
+  String? expectedContentType,
+}) {
+  final matches = _cliMessagesWithExactText(
+    output,
+    expectedText,
+    expectedMessageId: expectedMessageId,
+  );
+  if (matches.length != 1) {
+    return false;
+  }
+  final message = matches.single;
+  bool exact(String key, String? expected) =>
+      expected == null ||
+      _nonEmptyCliString(message[key])?.trim() == expected.trim();
+  return exact('sender_did', expectedSenderDid) &&
+      exact('receiver_did', expectedReceiverDid) &&
+      exact('group_did', expectedGroupDid) &&
+      exact('content_type', expectedContentType);
 }
 
 Future<_CliAttachmentMessage> _waitForCliAttachmentMessage({
@@ -97,6 +165,8 @@ Future<_CliAttachmentMessage> _waitForCliAttachmentMessage({
   required String expectedMessageId,
   required String expectedAttachmentId,
   required String expectedFilename,
+  String? expectedSenderDid,
+  String? expectedReceiverDid,
 }) async {
   _CliAttachmentMessage? matched;
   await _poll(
@@ -123,9 +193,47 @@ Future<_CliAttachmentMessage> _waitForCliAttachmentMessage({
         expectedAttachmentId: expectedAttachmentId,
         expectedFilename: expectedFilename,
       );
-      return matched != null;
+      if (matched == null) {
+        return false;
+      }
+      final message = matched!.message;
+      return (expectedSenderDid == null ||
+              _nonEmptyCliString(message['sender_did']) == expectedSenderDid) &&
+          (expectedReceiverDid == null ||
+              _nonEmptyCliString(message['receiver_did']) ==
+                  expectedReceiverDid);
     },
   );
+  await Future<void>.delayed(const Duration(seconds: 2));
+  final stable = await _runCli(config, <String>[
+    '--format',
+    'json',
+    'msg',
+    'history',
+    '--with',
+    peerHandle,
+    '--limit',
+    '20',
+  ]);
+  final stableMatched = stable.exitCode == 0
+      ? _cliAttachmentMessage(
+          stable.stdout,
+          expectedText: expectedText,
+          expectedMessageId: expectedMessageId,
+          expectedAttachmentId: expectedAttachmentId,
+          expectedFilename: expectedFilename,
+        )
+      : null;
+  final stableMessage = stableMatched?.message;
+  if (stableMessage == null ||
+      (expectedSenderDid != null &&
+          _nonEmptyCliString(stableMessage['sender_did']) !=
+              expectedSenderDid) ||
+      (expectedReceiverDid != null &&
+          _nonEmptyCliString(stableMessage['receiver_did']) !=
+              expectedReceiverDid)) {
+    fail('CLI attachment exact-one result was not stable.');
+  }
   return matched!;
 }
 
@@ -274,14 +382,35 @@ bool _cliMessageContentMatches(
   Map<String, Object?> message,
   String expectedText,
 ) {
-  final content = message['content'];
-  if (content is String) {
-    return content == expectedText;
-  }
-  if (content is Map) {
-    final map = _cliStringKeyMap(content);
-    return _nonEmptyCliString(map['text']) == expectedText ||
-        _nonEmptyCliString(map['caption']) == expectedText;
+  for (final content in <Object?>[
+    message['content'],
+    message['payload'],
+    message['body'],
+  ]) {
+    if (content is String) {
+      if (content == expectedText) {
+        return true;
+      }
+      try {
+        final decoded = jsonDecode(content);
+        if (decoded is Map) {
+          final map = _cliStringKeyMap(decoded);
+          if (_nonEmptyCliString(map['text']) == expectedText ||
+              _nonEmptyCliString(map['caption']) == expectedText) {
+            return true;
+          }
+        }
+      } on FormatException {
+        // Plain text is already compared above.
+      }
+    }
+    if (content is Map) {
+      final map = _cliStringKeyMap(content);
+      if (_nonEmptyCliString(map['text']) == expectedText ||
+          _nonEmptyCliString(map['caption']) == expectedText) {
+        return true;
+      }
+    }
   }
   return false;
 }
@@ -298,6 +427,9 @@ _CliAttachmentMessage? _cliAttachmentMessage(
     expectedText,
     expectedMessageId: expectedMessageId,
   );
+  if (matches.length != 1) {
+    return null;
+  }
   for (final message in matches) {
     final attachment = _cliAttachmentFromMessage(
       message,
