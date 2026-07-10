@@ -20,12 +20,10 @@ Future<void> _verifyDirectTextRegression({
   final conversation = await robot.startDirectConversation(config.cliHandle);
   final conversationId = conversation.effectiveConversationId;
   final cliDid = conversation.targetDid!.trim();
-  await _waitForUiConversationUnread(
-    robot: robot,
-    conversationId: conversationId,
-    expectedUnread: 0,
-  );
 
+  // Opening an empty direct chat may be presentation-only until the first
+  // message is persisted. Do not require a conversation-list row before the
+  // product has created one through the outbound send.
   await robot.sendText(appToCliText);
   final appMessage = await _waitForUiMessage(
     robot: robot,
@@ -36,6 +34,12 @@ Future<void> _verifyDirectTextRegression({
   );
   final appMessageId = appMessage.remoteId!;
   expect(find.text(appToCliText), findsOneWidget);
+  await _waitForUiConversationUnread(
+    robot: robot,
+    conversationId: conversationId,
+    expectedUnread: 0,
+    expectedLastMessage: appToCliText,
+  );
   await _waitForCliInbox(
     config: config,
     expectedText: appToCliText,
@@ -368,6 +372,7 @@ Future<void> _waitForUiConversationUnread({
   required String conversationId,
   required int expectedUnread,
   int? expectedTotalUnread,
+  String? expectedLastMessage,
 }) {
   return robot.pumpUntil(
     description: 'conversation $conversationId unread=$expectedUnread',
@@ -385,6 +390,7 @@ Future<void> _waitForUiConversationUnread({
           conversations: state.conversations,
           conversationId: conversationId,
           unreadCount: expectedUnread,
+          lastMessage: expectedLastMessage,
         );
         return true;
       } on StateError {

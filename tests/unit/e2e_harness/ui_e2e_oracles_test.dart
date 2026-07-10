@@ -90,34 +90,83 @@ void main() {
     );
   });
 
-  test('conversation oracle rejects duplicate ids and wrong unread math', () {
-    final conversation = ConversationSummary(
-      conversationId: 'dm:did:test:peer',
-      threadId: 'dm:did:test:peer',
-      displayName: 'Peer',
-      lastMessagePreview: 'hello',
-      lastMessageAt: DateTime(2026, 7, 10),
-      unreadCount: 1,
-      isGroup: false,
-      targetDid: 'did:test:peer',
-    );
-    expect(
-      () => requireExactlyOneConversation(
-        conversations: <ConversationSummary>[conversation],
+  test(
+    'incoming conversation oracle rejects missing duplicate or wrong row',
+    () {
+      final conversation = ConversationSummary(
         conversationId: 'dm:did:test:peer',
-        unreadCount: 0,
-      ),
-      throwsStateError,
-    );
-    expect(
-      () => requireExactlyOneConversation(
-        conversations: <ConversationSummary>[conversation, conversation],
-        conversationId: 'dm:did:test:peer',
+        threadId: 'dm:did:test:peer',
+        displayName: 'Peer',
+        lastMessagePreview: 'hello',
+        lastMessageAt: DateTime(2026, 7, 10),
         unreadCount: 1,
-      ),
-      throwsStateError,
-    );
-  });
+        isGroup: false,
+        targetDid: 'did:test:peer',
+      );
+      final wrongConversation = ConversationSummary(
+        conversationId: 'dm:did:test:other',
+        threadId: 'dm:did:test:other',
+        displayName: 'Other',
+        lastMessagePreview: 'hello',
+        lastMessageAt: DateTime(2026, 7, 10),
+        unreadCount: 1,
+        isGroup: false,
+        targetDid: 'did:test:other',
+      );
+      expect(
+        requireExactlyOneConversation(
+          conversations: <ConversationSummary>[conversation],
+          conversationId: 'dm:did:test:peer',
+          unreadCount: 1,
+          lastMessage: 'hello',
+        ),
+        same(conversation),
+      );
+      expect(
+        () => requireExactlyOneConversation(
+          conversations: const <ConversationSummary>[],
+          conversationId: 'dm:did:test:peer',
+          unreadCount: 1,
+          lastMessage: 'hello',
+        ),
+        throwsStateError,
+      );
+      expect(
+        () => requireExactlyOneConversation(
+          conversations: <ConversationSummary>[wrongConversation],
+          conversationId: 'dm:did:test:peer',
+          unreadCount: 1,
+          lastMessage: 'hello',
+        ),
+        throwsStateError,
+      );
+      expect(
+        () => requireExactlyOneConversation(
+          conversations: <ConversationSummary>[conversation],
+          conversationId: 'dm:did:test:peer',
+          unreadCount: 0,
+        ),
+        throwsStateError,
+      );
+      expect(
+        () => requireExactlyOneConversation(
+          conversations: <ConversationSummary>[conversation],
+          conversationId: 'dm:did:test:peer',
+          unreadCount: 1,
+          lastMessage: 'wrong body',
+        ),
+        throwsStateError,
+      );
+      expect(
+        () => requireExactlyOneConversation(
+          conversations: <ConversationSummary>[conversation, conversation],
+          conversationId: 'dm:did:test:peer',
+          unreadCount: 1,
+        ),
+        throwsStateError,
+      );
+    },
+  );
 
   test('mention oracle verifies one valid structured target', () {
     const content = '@peer hello';
