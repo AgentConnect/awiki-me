@@ -2615,6 +2615,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(SelectionArea), findsWidgets);
+    expect(
+      find.byKey(const Key('chat-message-content:selectable-text-message')),
+      findsOneWidget,
+    );
     expect(find.text('这是一条可以复制的消息'), findsOneWidget);
   });
 

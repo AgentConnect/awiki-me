@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../e2e/flutter/desktop_cli_peer/support/ui_oracles.dart';
@@ -284,4 +285,106 @@ void main() {
     expect(matches(cliMention(targetKind: 'agent')), isFalse);
     expect(matches(cliMention(role: 'cc')), isFalse);
   });
+
+  testWidgets(
+    'scoped visible-message oracle ignores an identical recents preview',
+    (tester) async {
+      const body = 'same preview and bubble';
+      await tester.pumpWidget(
+        const Directionality(
+          textDirection: TextDirection.ltr,
+          child: Column(
+            children: <Widget>[
+              Text(body, key: Key('conversation-preview')),
+              KeyedSubtree(
+                key: Key('chat-message-content:target-message'),
+                child: Text(body),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      expect(find.text(body), findsNWidgets(2));
+      expect(
+        () => expectExactlyOneVisibleMessageContent(
+          localId: 'target-message',
+          expectedText: body,
+        ),
+        returnsNormally,
+      );
+    },
+  );
+
+  testWidgets(
+    'scoped visible-message oracle rejects wrong or duplicate bubbles',
+    (tester) async {
+      const body = 'target body';
+      void expectOracleFailure() {
+        expect(
+          () => expectExactlyOneVisibleMessageContent(
+            localId: 'target-message',
+            expectedText: body,
+          ),
+          throwsA(isA<TestFailure>()),
+        );
+      }
+
+      await tester.pumpWidget(
+        const Directionality(
+          textDirection: TextDirection.ltr,
+          child: KeyedSubtree(
+            key: Key('chat-message-content:wrong-message'),
+            child: Text(body),
+          ),
+        ),
+      );
+      expectOracleFailure();
+
+      await tester.pumpWidget(
+        const Directionality(
+          textDirection: TextDirection.ltr,
+          child: KeyedSubtree(
+            key: Key('chat-message-content:target-message'),
+            child: Text('wrong body'),
+          ),
+        ),
+      );
+      expectOracleFailure();
+
+      await tester.pumpWidget(
+        const Directionality(
+          textDirection: TextDirection.ltr,
+          child: Column(
+            children: <Widget>[
+              SizedBox(
+                child: KeyedSubtree(
+                  key: Key('chat-message-content:target-message'),
+                  child: Text(body),
+                ),
+              ),
+              SizedBox(
+                child: KeyedSubtree(
+                  key: Key('chat-message-content:target-message'),
+                  child: Text(body),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      expectOracleFailure();
+
+      await tester.pumpWidget(
+        const Directionality(
+          textDirection: TextDirection.ltr,
+          child: KeyedSubtree(
+            key: Key('chat-message-content:target-message'),
+            child: Column(children: <Widget>[Text(body), Text(body)]),
+          ),
+        ),
+      );
+      expectOracleFailure();
+    },
+  );
 }

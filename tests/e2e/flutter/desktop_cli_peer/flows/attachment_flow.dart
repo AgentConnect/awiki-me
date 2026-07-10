@@ -29,7 +29,17 @@ Future<void> _verifyAttachmentRegression({
     mimeType: 'text/plain',
     bytes: appAttachmentBytes,
   );
-  expect(find.text(appAttachmentFilename), findsOneWidget);
+  final pendingAttachment = find.byKey(
+    const Key('chat-pending-attachment-preview'),
+  );
+  expect(pendingAttachment, findsOneWidget);
+  expect(
+    find.descendant(
+      of: pendingAttachment,
+      matching: find.text(appAttachmentFilename),
+    ),
+    findsOneWidget,
+  );
   await robot.sendStagedAttachment(caption: appAttachmentCaption);
   final appAttachmentMessage = await _waitForUiMessage(
     robot: robot,
@@ -43,6 +53,10 @@ Future<void> _verifyAttachmentRegression({
   expect(appAttachment!.filename, appAttachmentFilename);
   expect(appAttachment.mimeType, 'text/plain');
   expect(appAttachment.sizeBytes, appAttachmentBytes.length);
+  await robot.expectMessageContentVisible(
+    appAttachmentMessage,
+    expectedText: appAttachmentFilename,
+  );
   final appAttachmentMessageId = appAttachmentMessage.remoteId!;
 
   final cliAppAttachment = await _waitForCliAttachmentMessage(
@@ -153,6 +167,10 @@ Future<void> _verifyAttachmentRegression({
   expect(receivedAttachment.filename, cliAttachmentFilename);
   expect(receivedAttachment.mimeType, 'text/plain');
   expect(receivedAttachment.sizeBytes, cliAttachmentBytes.length);
+  await robot.expectMessageContentVisible(
+    cliAttachmentMessage,
+    expectedText: cliAttachmentFilename,
+  );
 
   final openButton = find.byKey(
     Key('chat-open-attachment:${cliAttachmentMessage.localId}'),

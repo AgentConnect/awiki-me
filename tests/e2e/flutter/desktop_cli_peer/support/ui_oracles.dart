@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:flutter/widgets.dart' show Key;
+import 'package:flutter_test/flutter_test.dart';
 
 /// Strict, reusable product oracles for the UI-driven App + CLI E2E flows.
 ///
@@ -62,6 +64,31 @@ ChatMessage requireExactlyOneMessage({
     );
   }
   return message;
+}
+
+/// Requires one target message-content container and one exact text rendering
+/// inside it. Identical text in recents previews or other bubbles is ignored,
+/// while a missing/duplicated container or duplicated in-container text fails.
+void expectExactlyOneVisibleMessageContent({
+  required String localId,
+  required String expectedText,
+}) {
+  final content = find.byKey(Key('chat-message-content:$localId'));
+  expect(
+    content,
+    findsOneWidget,
+    reason: 'Expected exactly one content container for message $localId.',
+  );
+  expect(
+    find.descendant(
+      of: content,
+      matching: find.text(expectedText, findRichText: true),
+    ),
+    findsOneWidget,
+    reason:
+        'Expected exactly one "$expectedText" rendering inside message '
+        '$localId.',
+  );
 }
 
 /// Parses CLI message output without allowing an expected id to hide a second

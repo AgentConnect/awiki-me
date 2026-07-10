@@ -35,7 +35,7 @@ Future<void> _verifyGroupTextRegression({
   );
   final appGroupMessageId = appGroupMessage.remoteId!;
   expect(appGroupMessage.groupId, groupDid);
-  expect(find.text(appGroupText), findsOneWidget);
+  await robot.expectMessageContentVisible(appGroupMessage);
   await _waitForGroupMessages(
     groups: groups,
     groupDid: groupDid,
@@ -64,7 +64,7 @@ Future<void> _verifyGroupTextRegression({
   );
   requireSingleMentionTarget(message: appMention, targetDid: cliMember.did);
   final appMentionId = appMention.remoteId!;
-  expect(find.text(appMentionText, findRichText: true), findsOneWidget);
+  await robot.expectMessageContentVisible(appMention);
   await _waitForCliGroupMessages(
     config: config,
     groupDid: groupDid,
@@ -103,7 +103,7 @@ Future<void> _verifyGroupTextRegression({
   if (cliGroupMessageId == null) {
     fail('CLI group send did not return canonical message id.');
   }
-  await _waitForUiMessage(
+  final cliGroupMessage = await _waitForUiMessage(
     robot: robot,
     conversationId: conversation.effectiveConversationId,
     content: cliGroupText,
@@ -111,7 +111,7 @@ Future<void> _verifyGroupTextRegression({
     senderDid: cliMember.did,
     sendState: MessageSendState.sent,
   );
-  expect(find.text(cliGroupText), findsOneWidget);
+  await robot.expectMessageContentVisible(cliGroupMessage);
 
   final cliMentionSurface = '@${config.appHandle}';
   final cliMentionText =
@@ -168,7 +168,7 @@ Future<void> _verifyGroupTextRegression({
     sendState: MessageSendState.sent,
   );
   requireSingleMentionTarget(message: cliMention, targetDid: ownerDid);
-  expect(find.text(cliMentionText, findRichText: true), findsOneWidget);
+  await robot.expectMessageContentVisible(cliMention);
 
   await _expectAppHistoryContainsExactlyOnce(
     messaging: messaging,

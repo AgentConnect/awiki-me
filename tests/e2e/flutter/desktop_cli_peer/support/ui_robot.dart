@@ -89,6 +89,29 @@ class _DesktopAppRobot {
     await tapOne(retry, description: 'failed message retry action');
   }
 
+  Future<void> expectMessageContentVisible(
+    ChatMessage message, {
+    String? expectedText,
+  }) async {
+    final text = expectedText ?? message.content;
+    final content = find.byKey(Key('chat-message-content:${message.localId}'));
+    await pumpUntilFinder(
+      content,
+      description: 'message content container ${message.localId}',
+    );
+    await pumpUntilFinder(
+      find.descendant(
+        of: content,
+        matching: find.text(text, findRichText: true),
+      ),
+      description: 'message ${message.localId} exact visible text "$text"',
+    );
+    expectExactlyOneVisibleMessageContent(
+      localId: message.localId,
+      expectedText: text,
+    );
+  }
+
   Future<String> sendMention({
     required String handle,
     required String suffix,

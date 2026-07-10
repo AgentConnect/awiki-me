@@ -33,7 +33,7 @@ Future<void> _verifyDirectTextRegression({
     sendState: MessageSendState.sent,
   );
   final appMessageId = appMessage.remoteId!;
-  expect(find.text(appToCliText), findsOneWidget);
+  await robot.expectMessageContentVisible(appMessage);
   await _waitForUiConversationUnread(
     robot: robot,
     conversationId: conversationId,
@@ -105,7 +105,7 @@ Future<void> _verifyDirectTextRegression({
     sendState: MessageSendState.sent,
   );
   expect(received.remoteId, cliSentMessageId);
-  expect(find.text(cliToAppText), findsOneWidget);
+  await robot.expectMessageContentVisible(received);
   await _waitForUiConversationUnread(
     robot: robot,
     conversationId: conversationId,
@@ -137,7 +137,7 @@ Future<void> _verifyDirectTextRegression({
     unreadCount: 1,
   );
   await robot.openConversationRow(conversationId);
-  await _waitForUiMessage(
+  final nextReceived = await _waitForUiMessage(
     robot: robot,
     conversationId: conversationId,
     content: cliToAppNextText,
@@ -145,6 +145,7 @@ Future<void> _verifyDirectTextRegression({
     senderDid: cliDid,
     sendState: MessageSendState.sent,
   );
+  await robot.expectMessageContentVisible(nextReceived);
   await _waitForUiConversationUnread(
     robot: robot,
     conversationId: conversationId,
@@ -165,6 +166,7 @@ Future<void> _verifyDirectTextRegression({
     requireCanonicalRemoteId: false,
   );
   expect(failed.remoteId, isNull);
+  await robot.expectMessageContentVisible(failed);
   await robot.retryFailedText();
   final retried = await _waitForUiMessage(
     robot: robot,
@@ -173,6 +175,7 @@ Future<void> _verifyDirectTextRegression({
     senderDid: ownerDid,
     sendState: MessageSendState.sent,
   );
+  await robot.expectMessageContentVisible(retried);
   final retryMessageId = retried.remoteId!;
   await _waitForCliInbox(
     config: config,
@@ -406,13 +409,14 @@ Future<void> _assertUiMessagesExactlyOnce({
   required Map<String, String> expected,
 }) async {
   for (final entry in expected.entries) {
-    await _waitForUiMessage(
+    final message = await _waitForUiMessage(
       robot: robot,
       conversationId: conversationId,
       content: entry.key,
       messageId: entry.value,
       sendState: MessageSendState.sent,
     );
+    await robot.expectMessageContentVisible(message);
   }
   await robot.tester.pump(const Duration(seconds: 2));
   final stable = _uiMessages(robot, conversationId);
