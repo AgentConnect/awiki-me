@@ -258,10 +258,7 @@ Future<void> openDirectConversationForDid(
           avatarSeed: avatarSeed ?? peer,
         );
 
-  ref
-      .read(conversationListProvider.notifier)
-      .restoreConversationBestEffort(conversation);
-  ref.read(conversationListProvider.notifier).upsertConversation(conversation);
+  ref.read(conversationListProvider.notifier).startConversation(conversation);
   await ref.read(chatThreadsProvider.notifier).openConversation(conversation);
   if (!context.mounted) {
     return;

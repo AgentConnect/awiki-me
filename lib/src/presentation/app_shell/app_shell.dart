@@ -391,6 +391,7 @@ class _MacDesktopRail extends StatelessWidget {
                         activeIcon: CupertinoIcons.chat_bubble_2_fill,
                         inactiveIcon: CupertinoIcons.chat_bubble_2,
                         label: context.l10n.shellNavMessages,
+                        semanticsIdentifier: 'e2e-messages-tab',
                         selected: currentIndex == 0,
                         badge: _formatUnreadBadge(unreadCount),
                         compact: compact,
@@ -411,6 +412,7 @@ class _MacDesktopRail extends StatelessWidget {
                         activeIcon: CupertinoIcons.person_2_fill,
                         inactiveIcon: CupertinoIcons.person_2,
                         label: context.l10n.shellNavContacts,
+                        semanticsIdentifier: 'e2e-contacts-tab',
                         selected: currentIndex == 2,
                         compact: compact,
                         onTap: () => onTap(2),
@@ -616,6 +618,7 @@ class _MacDesktopRailItem extends StatelessWidget {
                 right: responsive.displayScaled(5),
                 top: responsive.displayScaled(4),
                 child: Container(
+                  key: const Key('mac-messages-unread-badge'),
                   padding: EdgeInsets.symmetric(
                     horizontal: responsive.displayScaled(5),
                     vertical: responsive.displayScaled(2),

@@ -4,10 +4,14 @@ import 'dart:io';
 
 import 'package:yaml/yaml.dart';
 
+import 'case_attestation.dart';
+
 const String _defaultDesktopE2eConfigPath = 'tests/e2e/configs/e2e.local.yaml';
+const String _desktopE2eSuiteManifestPath = 'tests/e2e/suite_manifest.json';
 const String _desktopCliPeerRunConfigPath =
     '.e2e/desktop-cli-peer/current/run_config.json';
 const String _desktopCliPeerProductTimingsFileName = 'product_timings.json';
+const String _caseAttestationFileName = 'case_attestation.json';
 const String _messageAgentRunConfigPath =
     '.e2e/message-agent/current/run_config.json';
 const String _codexAgentRunConfigPath =
@@ -216,11 +220,27 @@ class DesktopE2eRunner {
   late final Directory appStateRootDir;
   late final File runConfigFile;
   late final File productTimingsFile;
+  late final File caseAttestationFile;
+  late final File resourceLedgerFile;
+  late final DesktopE2eSuiteManifest suiteManifest;
+  late final DesktopE2eSuiteDefinition suiteDefinition;
   final List<DesktopTimingEntry> _timings = <DesktopTimingEntry>[];
+  final Map<String, E2eCaseAttestationResult> _attestedCases =
+      <String, E2eCaseAttestationResult>{};
+  String? _caseAttestationError;
   DesktopProductTimingReport? _productTimingReport;
   DesktopPerformanceBudgetResult? _performanceBudgetResult;
+  Map<String, Object?> _identityPreflight = const <String, Object?>{
+    'status': 'not_run',
+  };
+  String? _failureCode;
+  String? _failureSummary;
+  bool _resourceSideEffectsPossible = false;
 
   Future<void> run() async {
+    suiteManifest = DesktopE2eSuiteManifest.load(root);
+    suiteDefinition = suiteManifest.definitionFor(options.e2eCase);
+    suiteDefinition.validateCodeCaseIds(options.e2eCase.caseIds);
     fileConfig = DesktopE2eFileConfig.load(
       root: root,
       path: options.configPath,
@@ -246,6 +266,8 @@ class DesktopE2eRunner {
     productTimingsFile = File(
       '${reportDir.path}/$_desktopCliPeerProductTimingsFileName',
     );
+    caseAttestationFile = File('${reportDir.path}/$_caseAttestationFileName');
+    resourceLedgerFile = File('${reportDir.path}/resource_ledger.json');
     _addRuntimeSecret(reportDir.path);
     _addRuntimeSecret(cliWorkspaceDir.path);
     _addRuntimeSecret(cliHomeDir.path);
@@ -254,6 +276,17 @@ class DesktopE2eRunner {
     _addRuntimeSecret(appStateRootDir.path);
     _addRuntimeSecret(runConfigFile.path);
     _addRuntimeSecret(productTimingsFile.path);
+    _addRuntimeSecret(caseAttestationFile.path);
+    _addRuntimeSecret(resourceLedgerFile.path);
+    if (!options.dryRun && !options.prepareOnly) {
+      if (caseAttestationFile.existsSync()) {
+        caseAttestationFile.deleteSync();
+      }
+      final temporary = File('${caseAttestationFile.path}.tmp');
+      if (temporary.existsSync()) {
+        temporary.deleteSync();
+      }
+    }
     if (!options.dryRun && options.e2eCase.requiresCliPeer) {
       cliWorkspaceDir.createSync(recursive: true);
       cliHomeDir.createSync(recursive: true);
@@ -263,22 +296,48 @@ class DesktopE2eRunner {
     }
 
     final totalStopwatch = Stopwatch()..start();
-    var succeeded = false;
+    var orchestrationSucceeded = false;
     try {
       if (options.e2eCase == DesktopE2eCase.smoke) {
         await _runLocalSmoke();
       } else {
         await _runAppCliPeer();
       }
-      succeeded = true;
+      orchestrationSucceeded = true;
+      if (!options.dryRun && !options.prepareOnly) {
+        _loadCaseAttestation(requireComplete: true);
+      }
+    } on DesktopCommandTimeout catch (error) {
+      _failureCode = 'command_timeout';
+      _failureSummary = error.safeSummary;
+      if (!options.dryRun && !options.prepareOnly) {
+        _loadCaseAttestation(requireComplete: false);
+      }
+      rethrow;
+    } on E2eFailure catch (error) {
+      final failure = _classifyFailure(error);
+      _failureCode = failure.code;
+      _failureSummary = failure.summary;
+      if (!options.dryRun && !options.prepareOnly) {
+        _loadCaseAttestation(requireComplete: false);
+      }
+      rethrow;
+    } on Object catch (error) {
+      _failureCode = 'unexpected_error';
+      _failureSummary = 'Unexpected ${error.runtimeType}.';
+      if (!options.dryRun && !options.prepareOnly) {
+        _loadCaseAttestation(requireComplete: false);
+      }
+      rethrow;
     } finally {
       totalStopwatch.stop();
+      _writeResourceLedger();
       _writeTimingReport(
-        succeeded: succeeded,
+        orchestrationSucceeded: orchestrationSucceeded,
         totalElapsed: totalStopwatch.elapsed,
       );
       _printTimingSummary(
-        succeeded: succeeded,
+        orchestrationSucceeded: orchestrationSucceeded,
         totalElapsed: totalStopwatch.elapsed,
       );
     }
@@ -297,18 +356,28 @@ class DesktopE2eRunner {
       }
     });
     await _timed('Flutter App smoke', () {
-      return _runFlutterTest('integration_test/app_smoke_test.dart');
+      return _runFlutterTest(
+        'integration_test/app_smoke_test.dart',
+        caseIds: const <String>['SMOKE-E2E-001'],
+      );
     });
     await _timed('Flutter native IM Core smoke', () {
-      return _runFlutterTest('integration_test/im_core_open_smoke_test.dart');
+      return _runFlutterTest(
+        'integration_test/im_core_open_smoke_test.dart',
+        caseIds: const <String>['NATIVE-E2E-001'],
+      );
     });
   }
 
   Future<void> _runAppCliPeer() async {
     final peerConfig = DesktopCliPeerConfig.from(options, fileConfig);
     config = peerConfig;
+    if (!options.dryRun && !commands.dryRun) {
+      suiteDefinition.validateRemoteTarget(peerConfig);
+    }
     _addRuntimeSecret(peerConfig.otpPhone);
     _addRuntimeSecret(peerConfig.otpCode);
+    _addRuntimeSecret(peerConfig.cliBin);
     _addRuntimeSecret(peerConfig.daemonStateRoot ?? '');
     _addRuntimeSecret(peerConfig.daemonReadyFile ?? '');
     _addRuntimeSecret(peerConfig.daemonEnvFile ?? '');
@@ -402,23 +471,63 @@ class DesktopE2eRunner {
 
   Future<void> _prepareCliWorkspace() async {
     await _cli(const <String>['--format', 'json', 'init']);
+    await _prepareCliTenant(workspaceDir: cliWorkspaceDir, homeDir: cliHomeDir);
     await _writeCliConfig(cliWorkspaceDir);
     await _cli(const <String>['--format', 'json', 'config', 'show']);
   }
 
+  Future<void> _prepareCliTenant({
+    required Directory workspaceDir,
+    required Directory homeDir,
+  }) async {
+    final peerConfig = _requireConfig();
+    final tenantName = _tenantName;
+    await _cliForWorkspace(
+      workspaceDir: workspaceDir,
+      homeDir: homeDir,
+      args: <String>[
+        '--format',
+        'json',
+        'tenant',
+        'create',
+        tenantName,
+        '--backend-base-url',
+        peerConfig.serviceBaseUrl,
+        '--did-host',
+        peerConfig.didDomain,
+        '--display-name',
+        'AWiki E2E $runId',
+      ],
+    );
+    await _cliForWorkspace(
+      workspaceDir: workspaceDir,
+      homeDir: homeDir,
+      args: <String>['--format', 'json', 'tenant', 'use', tenantName],
+    );
+    await _cliForWorkspace(
+      workspaceDir: workspaceDir,
+      homeDir: homeDir,
+      args: const <String>['--format', 'json', 'tenant', 'current'],
+    );
+  }
+
+  String get _tenantName {
+    final suffix = runId
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
+    final bounded = suffix.length <= 40 ? suffix : suffix.substring(0, 40);
+    return 'e2e-${bounded.isEmpty ? 'run' : bounded}';
+  }
+
   Future<void> _writeCliConfig(Directory workspaceDir) async {
     final peerConfig = _requireConfig();
-    final file = File('${workspaceDir.path}/config.yaml');
+    final file = File('${workspaceDir.path}/tenants/$_tenantName/config.yaml');
     final configMap = file.existsSync()
         ? _toStringKeyMap(loadYaml(file.readAsStringSync()), path: 'config')
         : <String, Object?>{};
     final services = _mapAt(configMap, 'services', optional: true);
-    services['service_base_url'] = peerConfig.serviceBaseUrl;
-    services['user_service_endpoint'] =
-        peerConfig.userServiceUrl ?? peerConfig.serviceBaseUrl;
-    services['message_service_endpoint'] =
-        peerConfig.messageServiceUrl ?? peerConfig.serviceBaseUrl;
-    services['did_domain'] = peerConfig.didDomain;
     services['anp_service_endpoint'] =
         peerConfig.anpServiceUrl ?? '${peerConfig.serviceBaseUrl}/anp-im/rpc';
     services['anp_service_did'] =
@@ -431,17 +540,16 @@ class DesktopE2eRunner {
     if (options.dryRun) {
       _line(
         'would write CLI config: ${redactor.redact(file.path)} '
-        '(service_base_url=${peerConfig.serviceBaseUrl}, '
-        'user_service_endpoint=${peerConfig.userServiceUrl ?? peerConfig.serviceBaseUrl}, '
-        'message_service_endpoint=${peerConfig.messageServiceUrl ?? peerConfig.serviceBaseUrl}, '
-        'did_domain=${peerConfig.didDomain}, '
+        '(tenant_backend=${peerConfig.serviceBaseUrl}, '
+        'tenant_did_host=${peerConfig.didDomain}, '
         'anp_service_endpoint=${services['anp_service_endpoint']}, '
         'anp_service_did=${services['anp_service_did']}, '
         'mail_service_url=${services['mail_service_url']})',
       );
-      return;
+    } else {
+      workspaceDir.createSync(recursive: true);
     }
-    workspaceDir.createSync(recursive: true);
+    file.parent.createSync(recursive: true);
     file.writeAsStringSync(_renderYamlMap(configMap));
   }
 
@@ -485,10 +593,17 @@ class DesktopE2eRunner {
         'CLI peer register failed: ${redactor.redact(register.output)}',
       );
     }
+    _resourceSideEffectsPossible = true;
   }
 
   Future<void> _checkCliReady() async {
-    await _cli(const <String>['--format', 'json', 'id', 'current']);
+    final peerConfig = _requireConfig();
+    final current = await _cli(const <String>[
+      '--format',
+      'json',
+      'id',
+      'current',
+    ]);
     await _cli(const <String>['--format', 'json', 'id', 'status']);
     await _cli(const <String>[
       '--format',
@@ -498,6 +613,54 @@ class DesktopE2eRunner {
       '--limit',
       '1',
     ]);
+    if (options.dryRun || commands.dryRun) {
+      _identityPreflight = <String, Object?>{
+        'status': options.dryRun ? 'dry_run' : 'not_executed_command_stub',
+        'cliHandleMatchesCurrent': false,
+        'appHandleResolvable': false,
+        'identitiesDistinct': false,
+      };
+      return;
+    }
+    if (!isAuditableGitSha(peerConfig.cliSourceRef)) {
+      throw E2eFailure(
+        'cliPeer.sourceRef must be the exact non-zero 40-character commit SHA used to build the CLI/SDK.',
+      );
+    }
+    final cliResolved = await _cli(<String>[
+      '--format',
+      'json',
+      'id',
+      'resolve',
+      '--handle',
+      peerConfig.cliHandle,
+    ]);
+    final appResolved = await _cli(<String>[
+      '--format',
+      'json',
+      'id',
+      'resolve',
+      '--handle',
+      peerConfig.appHandle,
+    ]);
+    final currentDid = _cliDidFromJson(current.output, current: true);
+    final cliDid = _cliDidFromJson(cliResolved.output);
+    final appDid = _cliDidFromJson(appResolved.output);
+    final cliMatches = currentDid == cliDid;
+    final identitiesDistinct = currentDid != appDid;
+    _identityPreflight = <String, Object?>{
+      'status': cliMatches && identitiesDistinct ? 'passed' : 'failed',
+      'cliHandleMatchesCurrent': cliMatches,
+      'appHandleResolvable': true,
+      'identitiesDistinct': identitiesDistinct,
+      'containsRawDids': false,
+    };
+    if (!cliMatches) {
+      throw E2eFailure('CLI peer identity mismatch.');
+    }
+    if (!identitiesDistinct) {
+      throw E2eFailure('App and CLI peer identities must be distinct.');
+    }
   }
 
   Future<void> _preparePerformanceAppIdentity() async {
@@ -506,6 +669,10 @@ class DesktopE2eRunner {
       workspaceDir: appIdentityWorkspaceDir,
       homeDir: appIdentityHomeDir,
       args: const <String>['--format', 'json', 'init'],
+    );
+    await _prepareCliTenant(
+      workspaceDir: appIdentityWorkspaceDir,
+      homeDir: appIdentityHomeDir,
     );
     await _writeCliConfig(appIdentityWorkspaceDir);
     await _cliForWorkspace(
@@ -573,11 +740,13 @@ class DesktopE2eRunner {
       peerConfig.e2eCase.testFile,
       '-d',
       peerConfig.platform.name,
+      ..._caseAttestationDartDefines(suiteDefinition.caseIds),
     ];
+    _resourceSideEffectsPossible = true;
     await _runFlutterArgs(
       flutterArgs,
       platform: peerConfig.platform,
-      timeout: peerConfig.flutterTimeout,
+      timeout: _effectiveFlutterTimeout(peerConfig),
     );
   }
 
@@ -607,8 +776,14 @@ class DesktopE2eRunner {
       },
       'cliPeer': <String, Object?>{
         'binary': peerConfig.cliBin,
+        'sourceRef': peerConfig.cliSourceRef,
         'workspace': cliWorkspaceDir.path,
         'home': cliHomeDir.path,
+      },
+      'suite': <String, Object?>{
+        'manifestRevision': suiteManifest.sourceRevision,
+        'tier': suiteDefinition.tier,
+        'cleanupPolicy': suiteDefinition.cleanupPolicy,
       },
       'app': <String, Object?>{'stateRoot': appStateRootDir.path},
       'performance': <String, Object?>{
@@ -666,7 +841,10 @@ class DesktopE2eRunner {
     );
   }
 
-  Future<void> _runFlutterTest(String testFile) {
+  Future<void> _runFlutterTest(
+    String testFile, {
+    required List<String> caseIds,
+  }) {
     return _runFlutterArgs(
       <String>[
         'test',
@@ -675,11 +853,19 @@ class DesktopE2eRunner {
         testFile,
         '-d',
         platform.name,
+        ..._caseAttestationDartDefines(caseIds),
       ],
       platform: platform,
-      timeout: options.e2eCase.flutterTimeout,
+      timeout: suiteDefinition.timeout,
     );
   }
+
+  List<String> _caseAttestationDartDefines(List<String> caseIds) => <String>[
+    '--dart-define=$e2eCaseAttestationPathDefine=${caseAttestationFile.path}',
+    '--dart-define=$e2eCaseScenarioDefine=${options.e2eCase.scenario}',
+    '--dart-define=$e2eCaseRunIdDefine=$runId',
+    '--dart-define=$e2eCaseIdsDefine=${caseIds.join(',')}',
+  ];
 
   Future<void> _runFlutterArgs(
     List<String> flutterArgs, {
@@ -776,8 +962,68 @@ class DesktopE2eRunner {
     });
   }
 
+  void _loadCaseAttestation({required bool requireComplete}) {
+    try {
+      final attestation = E2eCaseAttestation.read(caseAttestationFile);
+      final validation = E2eCaseAttestationValidation.validate(
+        attestation: attestation,
+        expectedScenario: options.e2eCase.scenario,
+        expectedRunId: runId,
+        expectedCaseIds: suiteDefinition.caseIds,
+      );
+      _attestedCases
+        ..clear()
+        ..addEntries(
+          validation.caseById.entries.where(
+            (entry) => suiteDefinition.caseIds.contains(entry.key),
+          ),
+        );
+      _caseAttestationError = validation.passed
+          ? null
+          : validation.errors.join('; ');
+      if (!requireComplete) {
+        return;
+      }
+      if (!validation.passed) {
+        throw FormatException(validation.errors.join('; '));
+      }
+    } on Object catch (error) {
+      final message = redactor.redact(error.toString());
+      _caseAttestationError = message;
+      if (requireComplete) {
+        throw E2eFailure('E2E case attestation failed closed: $message');
+      }
+    }
+  }
+
+  String _caseStatus(String caseId) {
+    if (options.dryRun) {
+      return 'dry_run';
+    }
+    if (options.prepareOnly) {
+      return 'prepared';
+    }
+    return _attestedCases[caseId]?.status ?? 'not_run';
+  }
+
+  String _suiteStatus({required bool orchestrationSucceeded}) {
+    if (!orchestrationSucceeded) {
+      return 'failed';
+    }
+    if (options.dryRun) {
+      return 'dry_run';
+    }
+    if (options.prepareOnly) {
+      return 'prepared';
+    }
+    final allPassed = suiteDefinition.caseIds.every(
+      (caseId) => _caseStatus(caseId) == 'passed',
+    );
+    return orchestrationSucceeded && allPassed ? 'passed' : 'failed';
+  }
+
   void _writeTimingReport({
-    required bool succeeded,
+    required bool orchestrationSucceeded,
     required Duration totalElapsed,
   }) {
     final productTimingReport = _productTimingReport;
@@ -789,12 +1035,60 @@ class DesktopE2eRunner {
     }
     file.writeAsStringSync(
       encoder.convert(<String, Object?>{
-        'status': succeeded ? 'success' : 'failed',
+        'schemaVersion': 2,
+        'status': _suiteStatus(orchestrationSucceeded: orchestrationSucceeded),
+        'mode': options.dryRun
+            ? 'dry_run'
+            : options.prepareOnly
+            ? 'prepared'
+            : 'real',
         'scenario': (config?.e2eCase ?? options.e2eCase).scenario,
-        'caseIds': (config?.e2eCase ?? options.e2eCase).caseIds,
+        'caseIds': suiteDefinition.caseIds,
+        'passedCaseIds': <String>[
+          for (final caseId in suiteDefinition.caseIds)
+            if (_caseStatus(caseId) == 'passed') caseId,
+        ],
+        'caseResults': <Map<String, Object?>>[
+          for (final caseId in suiteDefinition.caseIds)
+            <String, Object?>{
+              'caseId': caseId,
+              'status': _caseStatus(caseId),
+              'mode': options.dryRun
+                  ? 'dry_run'
+                  : options.prepareOnly
+                  ? 'prepared'
+                  : 'real',
+              if (_attestedCases[caseId] != null)
+                'startedAt': _attestedCases[caseId]!.startedAt,
+              if (_attestedCases[caseId] != null)
+                'finishedAt': _attestedCases[caseId]!.finishedAt,
+              'phases': _attestedCases[caseId]?.phases ?? const <String>[],
+            },
+        ],
+        'attestation': <String, Object?>{
+          'schemaVersion': e2eCaseAttestationSchemaVersion,
+          'path': '<redacted-attestation-path>',
+          'status': options.dryRun
+              ? 'not_expected_dry_run'
+              : options.prepareOnly
+              ? 'not_expected_prepared'
+              : _caseAttestationError == null &&
+                    suiteDefinition.caseIds.every(
+                      (caseId) => _caseStatus(caseId) == 'passed',
+                    )
+              ? 'verified'
+              : 'invalid',
+          if (_caseAttestationError != null) 'error': _caseAttestationError,
+        },
         'runId': runId,
         'platform': platform.name,
         'case': (config?.e2eCase ?? options.e2eCase).caseName,
+        'suiteManifest': <String, Object?>{
+          'schemaVersion': suiteManifest.schemaVersion,
+          'sourceRevision': suiteManifest.sourceRevision,
+          'path': _desktopE2eSuiteManifestPath,
+        },
+        'suitePolicy': suiteDefinition.toReportJson(),
         'dryRun': options.dryRun,
         'prepareOnly': options.prepareOnly,
         'configPath': fileConfig.path == null ? null : '<redacted-config-path>',
@@ -807,10 +1101,27 @@ class DesktopE2eRunner {
         if (config != null) 'messageServiceWsUrl': config!.messageServiceWsUrl,
         if (config != null) 'mailServiceUrl': config!.mailServiceUrl,
         if (config != null) 'anpServiceUrl': config!.anpServiceUrl,
-        if (config != null) 'anpServiceDid': config!.anpServiceDid,
+        if (config != null)
+          'anpServiceDid': config!.anpServiceDid == null
+              ? null
+              : '<redacted-service-did>',
         if (config != null) 'didDomain': config!.didDomain,
         if (config != null) 'appHandle': config!.appHandle,
         if (config != null) 'cliHandle': config!.cliHandle,
+        if (config != null) 'cliSourceRef': config!.cliSourceRef,
+        if (config != null) 'sdkSourceRef': config!.cliSourceRef,
+        'identityPreflight': _identityPreflight,
+        'resourceLifecycle': <String, Object?>{
+          'cleanupPolicy': suiteDefinition.cleanupPolicy,
+          'cleanupStatus': _resourceCleanupStatus,
+          'reasonCode': _resourceCleanupReasonCode,
+          'ledgerPath': '<redacted-resource-ledger-path>',
+        },
+        if (_failureCode != null)
+          'failure': <String, Object?>{
+            'code': _failureCode,
+            'summary': _failureSummary ?? 'E2E failed.',
+          },
         if (config != null)
           'daemonRustRepo': config!.daemonRustRepo == null
               ? null
@@ -884,12 +1195,145 @@ class DesktopE2eRunner {
     );
   }
 
+  Duration _effectiveFlutterTimeout(DesktopCliPeerConfig peerConfig) {
+    if (peerConfig.e2eCase != DesktopE2eCase.performance) {
+      return suiteDefinition.timeout;
+    }
+    final performanceTimeout = peerConfig.flutterTimeout;
+    return performanceTimeout > suiteDefinition.timeout
+        ? performanceTimeout
+        : suiteDefinition.timeout;
+  }
+
+  String _cliDidFromJson(String output, {bool current = false}) {
+    Object? decoded;
+    try {
+      decoded = jsonDecode(output);
+    } on Object {
+      throw E2eFailure('CLI identity preflight returned invalid JSON.');
+    }
+    if (decoded is! Map) {
+      throw E2eFailure('CLI identity preflight returned an invalid object.');
+    }
+    final data = decoded['data'];
+    if (data is! Map) {
+      throw E2eFailure('CLI identity preflight omitted data.');
+    }
+    if (current) {
+      final identity = data['identity'];
+      final did = identity is Map ? identity['did'] : null;
+      if (did is String && did.trim().isNotEmpty) {
+        return did.trim();
+      }
+    } else {
+      for (final key in const <String>['lookup', 'resolve']) {
+        final value = data[key];
+        final did = value is Map ? value['did'] : null;
+        if (did is String && did.trim().isNotEmpty) {
+          return did.trim();
+        }
+      }
+    }
+    throw E2eFailure('CLI identity preflight omitted a canonical DID.');
+  }
+
+  String get _resourceCleanupStatus {
+    if (options.dryRun) {
+      return 'not_applicable_dry_run';
+    }
+    if (options.prepareOnly || !_resourceSideEffectsPossible) {
+      return 'not_needed';
+    }
+    return suiteDefinition.cleanupPolicy == 'none' ? 'not_needed' : 'residual';
+  }
+
+  String get _resourceCleanupReasonCode {
+    if (_resourceCleanupStatus != 'residual') {
+      return 'none';
+    }
+    return 'remote_public_delete_api_unavailable';
+  }
+
+  void _writeResourceLedger() {
+    reportDir.createSync(recursive: true);
+    final targetHost = config == null
+        ? null
+        : Uri.tryParse(config!.serviceBaseUrl)?.host;
+    resourceLedgerFile.writeAsStringSync(
+      const JsonEncoder.withIndent('  ').convert(<String, Object?>{
+        'schemaVersion': 1,
+        'runId': runId,
+        'scenario': options.e2eCase.scenario,
+        'suite': options.e2eCase.caseName,
+        'namespace': runId,
+        'targetHost': targetHost,
+        'cleanupPolicy': suiteDefinition.cleanupPolicy,
+        'cleanupStatus': _resourceCleanupStatus,
+        'reasonCode': _resourceCleanupReasonCode,
+        'resourceCategories': suiteDefinition.resourceCategories,
+        'resourceCounts': <String, Object?>{
+          'fixedIdentityPool': config == null ? 0 : 2,
+          'createdIdentities': _resourceSideEffectsPossible ? 'unknown' : 0,
+          'messages': _resourceSideEffectsPossible ? 'unknown' : 0,
+          'groups': _resourceSideEffectsPossible ? 'unknown' : 0,
+          'attachments': _resourceSideEffectsPossible ? 'unknown' : 0,
+        },
+        'identityPreflightStatus': _identityPreflight['status'],
+        'containsRawDids': false,
+        'containsSecrets': false,
+        if (config != null) 'cliSourceRef': config!.cliSourceRef,
+      }),
+    );
+  }
+
+  ({String code, String summary}) _classifyFailure(E2eFailure error) {
+    final message = redactor.redact(error.message);
+    if (message.contains('CLI peer identity mismatch') ||
+        message.contains('id resolve') ||
+        message.contains('identity preflight')) {
+      return (
+        code: 'identity_preflight_failed',
+        summary:
+            'Remote account-pool identity preflight failed; inspect the redacted runner log.',
+      );
+    }
+    if (message.contains('cliPeer.sourceRef')) {
+      return (
+        code: 'source_ref_unverified',
+        summary: 'CLI/SDK source ref is missing or not an exact commit SHA.',
+      );
+    }
+    if (message.contains('audited remote')) {
+      return (
+        code: 'target_policy_failed',
+        summary:
+            'The product E2E target does not match the audited remote policy.',
+      );
+    }
+    if (message.startsWith('flutter ') || message.startsWith('xvfb-run ')) {
+      return (
+        code: 'flutter_product_failed',
+        summary:
+            'Flutter product E2E failed; inspect case attestation and the redacted runner log.',
+      );
+    }
+    final firstLine = message.split('\n').first.trim();
+    return (
+      code: 'e2e_failure',
+      summary: firstLine.length <= 240
+          ? firstLine
+          : '${firstLine.substring(0, 237)}...',
+    );
+  }
+
   void _printTimingSummary({
-    required bool succeeded,
+    required bool orchestrationSucceeded,
     required Duration totalElapsed,
   }) {
     _section('Timing summary');
-    _line('status: ${succeeded ? 'success' : 'failed'}');
+    _line(
+      'status: ${_suiteStatus(orchestrationSucceeded: orchestrationSucceeded)}',
+    );
     _line('total: ${_formatDuration(totalElapsed)}');
     for (final entry in _timings) {
       _line(
@@ -913,6 +1357,223 @@ class DesktopE2eRunner {
     redactor.addSecret(value);
     commands.redactor.addSecret(value);
   }
+}
+
+class DesktopE2eSuiteManifest {
+  DesktopE2eSuiteManifest({
+    required this.schemaVersion,
+    required this.sourceRevision,
+    required this.definitions,
+  });
+
+  final int schemaVersion;
+  final String sourceRevision;
+  final Map<String, DesktopE2eSuiteDefinition> definitions;
+
+  static DesktopE2eSuiteManifest load(Directory root) {
+    final scopedFile = File('${root.path}/$_desktopE2eSuiteManifestPath');
+    final repositoryFile = File(_desktopE2eSuiteManifestPath);
+    final file = scopedFile.existsSync() ? scopedFile : repositoryFile;
+    if (!file.existsSync()) {
+      throw E2eFailure('E2E suite manifest was not found.');
+    }
+    Object? decoded;
+    try {
+      decoded = jsonDecode(file.readAsStringSync());
+    } on Object {
+      throw E2eFailure('E2E suite manifest is not valid JSON.');
+    }
+    if (decoded is! Map || decoded['schemaVersion'] != 1) {
+      throw E2eFailure('E2E suite manifest must use schemaVersion 1.');
+    }
+    final sourceRevision = decoded['sourceRevision'];
+    final suites = decoded['suites'];
+    if (sourceRevision is! String || sourceRevision.trim().isEmpty) {
+      throw E2eFailure('E2E suite manifest has no sourceRevision.');
+    }
+    if (suites is! Map) {
+      throw E2eFailure('E2E suite manifest has no suites object.');
+    }
+    final definitions = <String, DesktopE2eSuiteDefinition>{};
+    for (final entry in suites.entries) {
+      final name = entry.key.toString();
+      final raw = entry.value;
+      if (raw is! Map) {
+        throw E2eFailure('E2E suite "$name" must be an object.');
+      }
+      definitions[name] = DesktopE2eSuiteDefinition.fromJson(name, raw);
+    }
+    return DesktopE2eSuiteManifest(
+      schemaVersion: 1,
+      sourceRevision: sourceRevision.trim(),
+      definitions: definitions,
+    );
+  }
+
+  DesktopE2eSuiteDefinition definitionFor(DesktopE2eCase e2eCase) {
+    final definition = definitions[e2eCase.caseName];
+    if (definition == null) {
+      throw E2eFailure(
+        'E2E suite manifest does not define ${e2eCase.caseName}.',
+      );
+    }
+    return definition;
+  }
+}
+
+class DesktopE2eSuiteDefinition {
+  DesktopE2eSuiteDefinition({
+    required this.name,
+    required this.tier,
+    required this.requiredFor,
+    required this.owner,
+    required this.estimatedMinutes,
+    required this.timeout,
+    required this.cleanupPolicy,
+    required this.allowedHosts,
+    required this.allowedDidDomains,
+    required this.resourceCategories,
+    required this.caseIds,
+  });
+
+  final String name;
+  final String tier;
+  final List<String> requiredFor;
+  final String owner;
+  final int estimatedMinutes;
+  final Duration timeout;
+  final String cleanupPolicy;
+  final List<String> allowedHosts;
+  final List<String> allowedDidDomains;
+  final List<String> resourceCategories;
+  final List<String> caseIds;
+
+  static DesktopE2eSuiteDefinition fromJson(String name, Map raw) {
+    List<String> stringList(String key) {
+      final value = raw[key];
+      if (value is! List || value.any((item) => item is! String)) {
+        throw E2eFailure('E2E suite "$name" has invalid $key.');
+      }
+      return value.cast<String>();
+    }
+
+    final tier = raw['tier'];
+    final owner = raw['owner'];
+    final estimatedMinutes = raw['estimatedMinutes'];
+    final timeoutMinutes = raw['timeoutMinutes'];
+    final cleanupPolicy = raw['cleanupPolicy'];
+    if (tier is! String || tier.trim().isEmpty) {
+      throw E2eFailure('E2E suite "$name" has no tier.');
+    }
+    if (owner is! String || owner.trim().isEmpty) {
+      throw E2eFailure('E2E suite "$name" has no owner.');
+    }
+    if (estimatedMinutes is! int || estimatedMinutes <= 0) {
+      throw E2eFailure('E2E suite "$name" has invalid estimatedMinutes.');
+    }
+    if (timeoutMinutes is! int || timeoutMinutes <= 0) {
+      throw E2eFailure('E2E suite "$name" has invalid timeoutMinutes.');
+    }
+    if (cleanupPolicy is! String || cleanupPolicy.trim().isEmpty) {
+      throw E2eFailure('E2E suite "$name" has no cleanupPolicy.');
+    }
+    final caseIds = stringList('caseIds');
+    if (caseIds.isEmpty || caseIds.toSet().length != caseIds.length) {
+      throw E2eFailure('E2E suite "$name" has missing or duplicate caseIds.');
+    }
+    return DesktopE2eSuiteDefinition(
+      name: name,
+      tier: tier.trim(),
+      requiredFor: stringList('requiredFor'),
+      owner: owner.trim(),
+      estimatedMinutes: estimatedMinutes,
+      timeout: Duration(minutes: timeoutMinutes),
+      cleanupPolicy: cleanupPolicy.trim(),
+      allowedHosts: stringList('allowedHosts'),
+      allowedDidDomains: stringList('allowedDidDomains'),
+      resourceCategories: stringList('resourceCategories'),
+      caseIds: caseIds,
+    );
+  }
+
+  void validateCodeCaseIds(List<String> codeCaseIds) {
+    if (!_sameOrderedStrings(caseIds, codeCaseIds)) {
+      throw E2eFailure(
+        'E2E suite manifest drift for "$name"; caseIds do not match the Flutter scenario contract.',
+      );
+    }
+  }
+
+  void validateRemoteTarget(DesktopCliPeerConfig config) {
+    if (allowedHosts.isEmpty && allowedDidDomains.isEmpty) {
+      return;
+    }
+    if (!allowedDidDomains.contains(config.didDomain)) {
+      throw E2eFailure(
+        'E2E suite "$name" must target an audited remote DID domain.',
+      );
+    }
+    final urls = <String>[
+      config.serviceBaseUrl,
+      config.userServiceUrl ?? config.serviceBaseUrl,
+      config.messageServiceUrl ?? config.serviceBaseUrl,
+    ];
+    for (final value in urls) {
+      final uri = Uri.tryParse(value);
+      if (uri == null || !allowedHosts.contains(uri.host)) {
+        throw E2eFailure(
+          'E2E suite "$name" must target an audited remote host.',
+        );
+      }
+      if (uri.scheme != 'https') {
+        throw E2eFailure(
+          'E2E suite "$name" requires secure remote service URLs.',
+        );
+      }
+    }
+    final ws = config.messageServiceWsUrl;
+    final wsUri = ws == null ? null : Uri.tryParse(ws);
+    if (wsUri == null ||
+        wsUri.scheme != 'wss' ||
+        !allowedHosts.contains(wsUri.host) ||
+        wsUri.path != '/im/ws') {
+      throw E2eFailure(
+        'E2E suite "$name" requires the audited remote WebSocket endpoint.',
+      );
+    }
+  }
+
+  Map<String, Object?> toReportJson() => <String, Object?>{
+    'tier': tier,
+    'requiredFor': requiredFor,
+    'owner': owner,
+    'estimatedMinutes': estimatedMinutes,
+    'timeoutMinutes': timeout.inMinutes,
+    'cleanupPolicy': cleanupPolicy,
+    'unexpectedSkipBudget': 0,
+  };
+}
+
+bool _sameOrderedStrings(List<String> left, List<String> right) {
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var index = 0; index < left.length; index += 1) {
+    if (left[index] != right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool isAuditableGitSha(String value) {
+  final normalized = value.trim();
+  return RegExp(r'^[0-9a-fA-F]{40}$').hasMatch(normalized) &&
+      !RegExp(r'^0{40}$').hasMatch(normalized);
+}
+
+String _basename(String path) {
+  return path.replaceAll('\\', '/').split('/').last;
 }
 
 class DesktopCommandRunner {
@@ -984,27 +1645,98 @@ class DesktopCommandRunner {
     if (dryRun) {
       return const DesktopCommandResult(exitCode: 0, output: '');
     }
-    final result = await Process.run(
+    final process = await Process.start(
       executable,
       args,
       workingDirectory: (workingDirectory ?? root).path,
       environment: environment,
       includeParentEnvironment: includeParentEnvironment,
       runInShell: false,
-    ).timeout(timeout);
-    final out = (result.stdout as String?) ?? '';
-    final err = (result.stderr as String?) ?? '';
+    );
+    final stdoutFuture = process.stdout.transform(utf8.decoder).join();
+    final stderrFuture = process.stderr.transform(utf8.decoder).join();
+    final exitFuture = process.exitCode;
+    int processExitCode;
+    try {
+      processExitCode = await exitFuture.timeout(timeout);
+    } on TimeoutException {
+      final terminated = await _terminateProcessTree(process);
+      try {
+        await exitFuture.timeout(const Duration(seconds: 2));
+      } on Object {
+        // The tree has already received a hard-kill fallback below.
+      }
+      throw DesktopCommandTimeout(
+        executable: executable,
+        timeout: timeout,
+        terminated: terminated,
+      );
+    }
+    final out = await stdoutFuture;
+    final err = await stderrFuture;
     final output = out.isNotEmpty ? out : err;
-    if (result.exitCode != 0 && !allowFailure) {
+    if (processExitCode != 0 && !allowFailure) {
       throw E2eFailure(
         redactor.redact(
-          '$executable ${args.join(' ')} failed with code ${result.exitCode}.\n'
+          '$executable ${args.join(' ')} failed with code $processExitCode.\n'
           'stdout:\n$out\n'
           'stderr:\n$err',
         ),
       );
     }
-    return DesktopCommandResult(exitCode: result.exitCode, output: output);
+    return DesktopCommandResult(exitCode: processExitCode, output: output);
+  }
+
+  Future<bool> _terminateProcessTree(Process process) async {
+    if (Platform.isWindows) {
+      final result = await Process.run('taskkill', <String>[
+        '/PID',
+        '${process.pid}',
+        '/T',
+        '/F',
+      ]);
+      return result.exitCode == 0;
+    }
+    final descendants = await _descendantPids(process.pid);
+    var signalled = false;
+    for (final pid in descendants.reversed) {
+      signalled = Process.killPid(pid, ProcessSignal.sigterm) || signalled;
+    }
+    signalled = process.kill(ProcessSignal.sigterm) || signalled;
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    for (final pid in descendants.reversed) {
+      Process.killPid(pid, ProcessSignal.sigkill);
+    }
+    process.kill(ProcessSignal.sigkill);
+    return signalled;
+  }
+
+  Future<List<int>> _descendantPids(int parentPid) async {
+    final descendants = <int>[];
+    final queue = <int>[parentPid];
+    while (queue.isNotEmpty) {
+      final parent = queue.removeLast();
+      ProcessResult result;
+      try {
+        result = await Process.run('pgrep', <String>[
+          '-P',
+          '$parent',
+        ]).timeout(const Duration(seconds: 1));
+      } on Object {
+        continue;
+      }
+      if (result.exitCode != 0) {
+        continue;
+      }
+      final children = (result.stdout as String)
+          .split(RegExp(r'\s+'))
+          .map(int.tryParse)
+          .whereType<int>()
+          .toList();
+      descendants.addAll(children);
+      queue.addAll(children);
+    }
+    return descendants;
   }
 
   void _command(String executable, List<String> args) {
@@ -1021,6 +1753,25 @@ class DesktopCommandResult {
 
   final int exitCode;
   final String output;
+}
+
+class DesktopCommandTimeout extends E2eFailure {
+  DesktopCommandTimeout({
+    required this.executable,
+    required this.timeout,
+    required this.terminated,
+  }) : super(
+         '$executable timed out after ${timeout.inMilliseconds}ms; '
+         'child process tree termination ${terminated ? 'was requested' : 'could not be confirmed'}.',
+       );
+
+  final String executable;
+  final Duration timeout;
+  final bool terminated;
+
+  String get safeSummary =>
+      'Command ${_basename(executable)} timed out after '
+      '${timeout.inMilliseconds}ms; child process tree terminated=$terminated.';
 }
 
 class DesktopE2eOptions {
@@ -1127,6 +1878,7 @@ class DesktopCliPeerConfig {
     required this.appHandle,
     required this.cliHandle,
     required this.cliBin,
+    required this.cliSourceRef,
     required this.e2eCase,
     required this.performance,
     this.userServiceUrl,
@@ -1164,6 +1916,7 @@ class DesktopCliPeerConfig {
   final String appHandle;
   final String cliHandle;
   final String cliBin;
+  final String cliSourceRef;
   final DesktopE2eCase e2eCase;
   final DesktopPerformanceConfig performance;
   final String? userServiceUrl;
@@ -1251,6 +2004,7 @@ class DesktopCliPeerConfig {
       appHandle: appHandle,
       cliHandle: cliHandle,
       cliBin: cliBin,
+      cliSourceRef: fileConfig.cliSourceRef ?? 'unrecorded',
       e2eCase: options.e2eCase,
       performance: fileConfig.performance ?? DesktopPerformanceConfig.defaults,
       userServiceUrl: fileConfig.userServiceUrl,
@@ -1435,6 +2189,7 @@ class DesktopE2eFileConfig {
     this.appHandle,
     this.cliHandle,
     this.cliBin,
+    this.cliSourceRef,
     this.performance,
   });
 
@@ -1473,6 +2228,7 @@ class DesktopE2eFileConfig {
       appHandle = null,
       cliHandle = null,
       cliBin = null,
+      cliSourceRef = null,
       performance = null;
 
   final String? path;
@@ -1509,6 +2265,7 @@ class DesktopE2eFileConfig {
   final String? appHandle;
   final String? cliHandle;
   final String? cliBin;
+  final String? cliSourceRef;
   final DesktopPerformanceConfig? performance;
 
   static DesktopE2eFileConfig load({
@@ -1587,6 +2344,7 @@ class DesktopE2eFileConfig {
       appHandle: appHandle,
       cliHandle: cliHandle,
       cliBin: cliBin == null ? null : _resolvePath(root, cliBin),
+      cliSourceRef: _stringAt(cliPeer, 'sourceRef'),
       performance: DesktopPerformanceConfig.fromYaml(performance),
     );
   }
@@ -2100,6 +2858,10 @@ class DesktopSecretRedactor {
     output = output.replaceAllMapped(
       RegExp(r'(--otp|--phone)\s+([^\s]+)', caseSensitive: false),
       (match) => '${match.group(1)} <redacted>',
+    );
+    output = output.replaceAll(
+      RegExp(r'did:[A-Za-z0-9._%~/-]+(?::[A-Za-z0-9._%~/-]+)+'),
+      '<redacted-did>',
     );
     return output;
   }

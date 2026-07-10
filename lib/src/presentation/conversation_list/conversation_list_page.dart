@@ -398,6 +398,9 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                           widget.composerDrafts,
                         );
                         return _MacConversationRow(
+                          key: Key(
+                            'conversation-row:${item.effectiveConversationId}',
+                          ),
                           title: DidDisplayFormatter.conversationTitle(
                             item,
                             context.l10n,
@@ -688,6 +691,7 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
                   composerDrafts,
                 );
                 return _ConversationRow(
+                  key: Key('conversation-row:${item.effectiveConversationId}'),
                   title: DidDisplayFormatter.conversationTitle(
                     item,
                     context.l10n,
@@ -811,6 +815,7 @@ class _MacListIconButton extends StatelessWidget {
 
 class _MacConversationRow extends StatelessWidget {
   const _MacConversationRow({
+    super.key,
     required this.title,
     required this.avatarUri,
     required this.preview,
@@ -989,6 +994,7 @@ class _MacConversationEmptyState extends StatelessWidget {
 
 class _ConversationRow extends StatelessWidget {
   const _ConversationRow({
+    super.key,
     required this.title,
     required this.avatarUri,
     required this.preview,
@@ -1462,7 +1468,7 @@ class _ConversationPreviewTagBadge extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final palette = _conversationPreviewTagPalette(tag.tone);
     return Container(
-      key: Key('conversation-preview-tag:${tag.text}'),
+      key: Key('conversation-preview-tag-${tag.tone.name}'),
       padding: EdgeInsets.symmetric(
         horizontal: compact
             ? responsive.displayScaled(4.5)

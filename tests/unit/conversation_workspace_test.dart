@@ -1784,6 +1784,25 @@ void main() {
     expect(find.text('最近会话'), findsOneWidget);
     expect(find.text('智能体'), findsOneWidget);
     expect(find.text('Agents'), findsNothing);
+    expect(find.byKey(const Key('mac-messages-unread-badge')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('mac-messages-unread-badge')),
+        matching: find.text('3'),
+      ),
+      findsOneWidget,
+    );
+    final conversationRow = find.byKey(
+      Key('conversation-row:${conversation.effectiveConversationId}'),
+    );
+    expect(conversationRow, findsOneWidget);
+    expect(
+      find.descendant(
+        of: conversationRow,
+        matching: find.byKey(const Key('conversation-preview-tag-unread')),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('任务'));
     await tester.pumpAndSettle();

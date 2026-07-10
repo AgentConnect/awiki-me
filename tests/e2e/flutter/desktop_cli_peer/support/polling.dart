@@ -10,12 +10,15 @@ Future<void> _waitForGroupMessages({
     description: 'App group messages contain exact message "$expectedText"',
     action: () async {
       final messages = await groups.listMessages(groupDid, limit: 20);
-      return messages.any(
-        (message) => message._matchesText(
-          expectedText,
-          expectedMessageId: expectedMessageId,
-        ),
-      );
+      return messages
+              .where(
+                (message) => message._matchesText(
+                  expectedText,
+                  expectedMessageId: expectedMessageId,
+                ),
+              )
+              .length ==
+          1;
     },
   );
 }
@@ -30,49 +33,17 @@ Future<void> _waitForAppHistory({
     description: 'App history contains exact message "$expectedText"',
     action: () async {
       final messages = await messaging.loadHistory(thread, limit: 20);
-      return messages.any(
-        (message) => message._matchesText(
-          expectedText,
-          expectedMessageId: expectedMessageId,
-        ),
-      );
+      return messages
+              .where(
+                (message) => message._matchesText(
+                  expectedText,
+                  expectedMessageId: expectedMessageId,
+                ),
+              )
+              .length ==
+          1;
     },
   );
-}
-
-Future<ChatMessage> _waitForAppAttachment({
-  required MessagingService messaging,
-  required AppThreadRef thread,
-  required String expectedCaption,
-  required String expectedFilename,
-  String? expectedMessageId,
-  String? expectedAttachmentId,
-}) async {
-  ChatMessage? matched;
-  await _poll(
-    description:
-        'App history contains attachment "$expectedFilename" with caption "$expectedCaption"',
-    action: () async {
-      final messages = await messaging.loadHistory(thread, limit: 50);
-      for (final message in messages) {
-        final attachment = message.attachment;
-        if (attachment == null) {
-          continue;
-        }
-        final messageId = message.remoteId ?? message.localId;
-        if (message.content == expectedCaption &&
-            attachment.filename == expectedFilename &&
-            (expectedMessageId == null || messageId == expectedMessageId) &&
-            (expectedAttachmentId == null ||
-                attachment.attachmentId == expectedAttachmentId)) {
-          matched = message;
-          return true;
-        }
-      }
-      return false;
-    },
-  );
-  return matched!;
 }
 
 Future<void> _expectAppHistoryContainsExactlyOnce({
@@ -81,6 +52,7 @@ Future<void> _expectAppHistoryContainsExactlyOnce({
   required List<String> expectedTexts,
 }) async {
   final first = await messaging.loadHistory(thread, limit: 50);
+  await Future<void>.delayed(const Duration(seconds: 2));
   final second = await messaging.loadHistory(thread, limit: 50);
   for (final text in expectedTexts) {
     final firstMatches = first.where((message) => message._matchesText(text));
@@ -102,6 +74,7 @@ Future<ConversationSummary> _waitForAppConversationRefresh({
   required ConversationService conversations,
   required String ownerDid,
   required String expectedText,
+  required String expectedConversationId,
 }) async {
   ConversationSummary? matched;
   await _poll(
@@ -111,13 +84,18 @@ Future<ConversationSummary> _waitForAppConversationRefresh({
         ownerDid: ownerDid,
         limit: 20,
       );
-      for (final conversation in items) {
-        if (conversation.lastMessagePreview.contains(expectedText)) {
-          matched = conversation;
-          return true;
-        }
+      final exact = items
+          .where(
+            (conversation) =>
+                conversation.effectiveConversationId == expectedConversationId,
+          )
+          .toList(growable: false);
+      if (exact.length != 1 ||
+          exact.single.lastMessagePreview != expectedText) {
+        return false;
       }
-      return false;
+      matched = exact.single;
+      return true;
     },
   );
   return matched!;
@@ -161,11 +139,13 @@ Future<void> _waitForAppConversationLatestInTimeline({
         return false;
       }
       if (latestSnapshotId == null || latestSnapshotId.isEmpty) {
-        return true;
+        return false;
       }
-      return messages.any(
-        (message) => (message.remoteId ?? message.localId) == latestSnapshotId,
-      );
+      if (expectedMessageId != null && latestSnapshotId != expectedMessageId) {
+        return false;
+      }
+      return textMatches.single.remoteId == latestSnapshotId &&
+          latestSnapshot?.content == expectedText;
     },
   );
 }

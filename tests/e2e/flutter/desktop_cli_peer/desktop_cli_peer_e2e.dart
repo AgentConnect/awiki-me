@@ -1,13 +1,14 @@
 library desktop_cli_peer_e2e;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/attachment_open_service.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/group_application_service.dart';
 import 'package:awiki_me/src/application/message_sync_service.dart';
@@ -18,6 +19,7 @@ import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
+import 'package:awiki_me/src/application/models/thread_message_patch.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
 import 'package:awiki_me/src/application/relationship_application_service.dart';
@@ -25,15 +27,22 @@ import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
-import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
+import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:crypto/crypto.dart';
+import 'package:flutter/cupertino.dart' show CupertinoTextField;
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleState, Key, SizedBox;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
+
+import '../../case_attestation.dart';
+import 'support/ui_oracles.dart';
 
 part 'flows/attachment_flow.dart';
 part 'flows/contact_flow.dart';
@@ -43,6 +52,7 @@ part 'flows/performance_flow.dart';
 part 'support/cli_peer_process.dart';
 part 'support/config.dart';
 part 'support/polling.dart';
+part 'support/ui_robot.dart';
 
 const String _desktopCliPeerRunConfigPath =
     '.e2e/desktop-cli-peer/current/run_config.json';
@@ -132,9 +142,26 @@ void runDesktopCliPeerE2e({
         appStateRoot: config.appStateRoot,
       );
       appCreateWatch.stop();
+      final preparedSession = selectedCase.runsPerformance
+          ? null
+          : await _prepareAppIdentity(bootstrap.onboardingService!, config);
       final countingConversations = config.e2eCase.runsPerformance
           ? _CountingConversationService(bootstrap.conversationService!)
           : null;
+      final faultMessaging = preparedSession == null
+          ? null
+          : _FailOnceMessagingService(
+              delegate: bootstrap.messagingService!,
+              ownerDid: preparedSession.did,
+            );
+      final attachmentOpenRecorder = _RecordingAttachmentOpenService();
+      final appProviderOverrides = <Override>[
+        if (countingConversations != null)
+          conversationServiceProvider.overrideWithValue(countingConversations),
+        if (faultMessaging != null)
+          messagingServiceProvider.overrideWithValue(faultMessaging),
+        attachmentOpenServiceProvider.overrideWithValue(attachmentOpenRecorder),
+      ];
       addTearDown(() async {
         await bootstrap.appSessionService?.logout();
       });
@@ -143,12 +170,7 @@ void runDesktopCliPeerE2e({
       await tester.pumpWidget(
         AwikiMeApp(
           bootstrap: bootstrap,
-          providerOverrides: <Override>[
-            if (countingConversations != null)
-              conversationServiceProvider.overrideWithValue(
-                countingConversations,
-              ),
-          ],
+          providerOverrides: appProviderOverrides,
         ),
       );
       await tester.pumpAndSettle();
@@ -161,22 +183,26 @@ void runDesktopCliPeerE2e({
               config: config,
               warmup: performanceWarmup!,
             )
-          : await _prepareAppIdentity(bootstrap.onboardingService!, config);
+          : preparedSession!;
       expect(session.authenticated, isTrue);
-
-      if (selectedCase.runsPerformance) {
-        final container = ProviderScope.containerOf(
-          tester.element(find.byType(AppShell)),
+      final robot = _DesktopAppRobot(tester);
+      await robot.activate(session);
+      if (!selectedCase.runsPerformance) {
+        await E2eCaseAttestationWriter.markPassed(
+          'AUTH-E2E-001',
+          phases: const <String>[
+            'app_identity_prepared',
+            'authenticated_app_shell_visible',
+          ],
         );
-        await container
-            .read(appRuntimeProvider.notifier)
-            .activateSession(session.toLegacySessionIdentity());
       }
-      await tester.pumpAndSettle();
 
       final messaging = bootstrap.messagingService!;
       final messageNonce = _messageNonce();
       final directThread = AppThreadRef.direct(config.cliHandle);
+      final canonicalCliDid = selectedCase.runsPerformance
+          ? null
+          : await _currentCliDid(config);
 
       if (selectedCase.runsPerformance) {
         await _verifyPerformanceRegression(
@@ -192,51 +218,141 @@ void runDesktopCliPeerE2e({
           config: config,
           nonce: messageNonce,
         );
+        await _attestPassedCases(<String, List<String>>{
+          'PERF-E2E-001': const <String>['real_backend_flow_completed'],
+          'PERF-E2E-002': const <String>['multi_conversation_dataset_verified'],
+          'PERF-E2E-003': const <String>['cold_shell_visibility_measured'],
+          'PERF-E2E-004': const <String>[
+            'snapshot_and_hydration_timings_verified',
+          ],
+          'PERF-E2E-005': const <String>['app_to_cli_latency_measured'],
+          'PERF-E2E-006': const <String>['cli_to_app_latency_measured'],
+          'PERF-E2E-007': const <String>['full_refresh_regression_checked'],
+          'PERF-E2E-008': const <String>['long_thread_open_timing_measured'],
+          'PERF-E2E-009': const <String>['product_timing_schema_written'],
+          'PERF-E2E-010': const <String>['hard_budget_semantics_checked'],
+          'PERF-E2E-011': const <String>['soft_budget_semantics_checked'],
+          'PERF-E2E-012': const <String>['failure_diagnostics_retained'],
+        });
         return;
       }
 
       if (selectedCase.runsDirectText) {
         final conversations = bootstrap.conversationService!;
         await _verifyDirectTextRegression(
-          messaging: messaging,
+          robot: robot,
+          messaging: faultMessaging!,
           conversations: conversations,
           thread: directThread,
           ownerDid: session.did,
+          session: session,
+          bootstrap: bootstrap,
+          providerOverrides: appProviderOverrides,
+          canonicalCliDid: canonicalCliDid!,
           config: config,
           nonce: messageNonce,
         );
+        await _attestPassedCases(<String, List<String>>{
+          'MSG-E2E-001': const <String>[
+            'app_ui_send_terminal_sent',
+            'cli_inbox_canonical_exact_one_verified',
+          ],
+          'MSG-E2E-002': const <String>[
+            'cli_send_accepted',
+            'app_ui_unread_exact_increment_and_read_clear',
+          ],
+          'MSG-REG-001': const <String>[
+            'failure_retry_ui_verified',
+            'lifecycle_and_widget_restart_exact_one_verified',
+          ],
+        });
       }
 
       if (selectedCase.runsContacts) {
         final relationships = bootstrap.relationshipApplicationService!;
         await _verifyContactRegression(
+          robot: robot,
           relationships: relationships,
+          canonicalCliDid: canonicalCliDid!,
           config: config,
         );
+        await _attestPassedCases(<String, List<String>>{
+          'CONTACT-E2E-001': const <String>[
+            'app_ui_follow_clicked',
+            'exact_following_state_observed',
+          ],
+          'CONTACT-E2E-002': const <String>[
+            'cli_follow_completed',
+            'app_ui_unfollow_confirmed',
+          ],
+          'CONTACT-REG-001': const <String>[
+            'exact_friend_follower_none_transitions_checked',
+          ],
+        });
       }
 
       if (selectedCase.runsGroup) {
         final groups = bootstrap.groupApplicationService!;
         await _verifyGroupTextRegression(
+          robot: robot,
           groups: groups,
-          messaging: messaging,
+          messaging: faultMessaging!,
+          ownerDid: session.did,
+          canonicalCliDid: canonicalCliDid!,
           config: config,
           nonce: messageNonce,
         );
+        await _attestPassedCases(<String, List<String>>{
+          'GROUP-E2E-001': const <String>[
+            'group_created_and_member_added_through_ui',
+            'app_group_ui_send_exact_one_verified',
+          ],
+          'GROUP-E2E-002': const <String>['cli_group_send_verified_in_app_ui'],
+          'GROUP-P9-001': const <String>[
+            'app_ui_structured_group_mention_verified',
+          ],
+          'GROUP-P9-002': const <String>[
+            'cli_structured_group_mention_verified_in_app_ui',
+          ],
+          'GROUP-REG-001': const <String>['group_history_regression_checked'],
+        });
       }
 
       if (selectedCase.runsAttachment) {
         await _verifyAttachmentRegression(
-          messaging: messaging,
+          robot: robot,
+          messaging: faultMessaging!,
+          attachmentOpenRecorder: attachmentOpenRecorder,
+          ownerDid: session.did,
           thread: directThread,
+          canonicalCliDid: canonicalCliDid!,
           config: config,
           nonce: messageNonce,
         );
+        await _attestPassedCases(<String, List<String>>{
+          'ATTACH-E2E-001': const <String>[
+            'app_attachment_staged_and_sent_through_drop_ui',
+            'cli_attachment_bytes_verified',
+          ],
+          'ATTACH-E2E-002': const <String>[
+            'cli_attachment_sent',
+            'app_attachment_bytes_verified',
+          ],
+          'ATTACH-REG-001': const <String>[
+            'attachment_digest_regression_checked',
+          ],
+        });
       }
     },
     skip: !_DesktopCliPeerSmokeConfig.exists(),
     timeout: const Timeout(Duration(minutes: 12)),
   );
+}
+
+Future<void> _attestPassedCases(Map<String, List<String>> cases) async {
+  for (final entry in cases.entries) {
+    await E2eCaseAttestationWriter.markPassed(entry.key, phases: entry.value);
+  }
 }
 
 Future<AppSession> _prepareAppIdentity(

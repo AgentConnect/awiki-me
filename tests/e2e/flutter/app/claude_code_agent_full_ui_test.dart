@@ -24,6 +24,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import '../../case_attestation.dart';
+
 const String _claudeCodeAgentRunConfigPath =
     '.e2e/claude-code-agent/current/run_config.json';
 const Duration _claudeCodeRuntimeFinalTimeout = Duration(minutes: 12);
@@ -37,7 +39,10 @@ void main() {
     (tester) async {
       final config = _ClaudeCodeAgentRealBackendConfig.tryLoad();
       if (config == null || !config.enabled || !config.realBackend) {
-        return;
+        fail(
+          'Claude Code Agent full UI acceptance requires an enabled '
+          'real-backend runner config and cannot pass as a skipped/no-op test.',
+        );
       }
       if (!File(config.daemonBinary).existsSync()) {
         fail('daemon binary was not found: ${config.daemonBinary}');
@@ -138,13 +143,35 @@ void main() {
         await _tapFirstFound(tester, <Finder>[find.text('打开聊天')]);
         await _pumpFrame(tester);
         expect(find.text('Claude Code E2E'), findsWidgets);
+        await E2eCaseAttestationWriter.markPassed(
+          'CLAUDECODEAGENT-E2E-001',
+          phases: const <String>[
+            'daemon_selected',
+            'runtime_agent_created',
+            'runtime_chat_opened',
+          ],
+        );
 
         await _sendPromptThroughUi(tester, config.prompt);
+        await E2eCaseAttestationWriter.markPassed(
+          'CLAUDECODEAGENT-E2E-002',
+          phases: const <String>[
+            'prompt_entered_through_ui',
+            'send_action_completed',
+          ],
+        );
         await _waitForDaemonClaudeCodeFinalSent(
           daemonStateRoot: config.daemonStateRoot,
           runtimeAgentDid: runtime.agentDid,
           prompt: config.prompt,
           expectedReply: config.expectedReply,
+        );
+        await E2eCaseAttestationWriter.markPassed(
+          'CLAUDECODEAGENT-E2E-003',
+          phases: const <String>[
+            'runtime_run_finished',
+            'runtime_final_outbox_sent',
+          ],
         );
         await _waitForAppIncomingClaudeCodeReply(
           messaging: bootstrap.messagingService!,
@@ -155,6 +182,13 @@ void main() {
           tester: tester,
           expectedReply: config.expectedReply,
         );
+        await E2eCaseAttestationWriter.markPassed(
+          'CLAUDECODEAGENT-E2E-004',
+          phases: const <String>[
+            'app_history_exact_reply_verified',
+            'visible_reply_verified',
+          ],
+        );
       } finally {
         if (daemon != null) {
           _terminateProcess(daemon);
@@ -164,7 +198,6 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       }
     },
-    skip: !_ClaudeCodeAgentRealBackendConfig.shouldRun,
     timeout: const Timeout(Duration(minutes: 15)),
   );
 }
@@ -870,11 +903,6 @@ class _ClaudeCodeAgentRealBackendConfig {
     required this.prompt,
     required this.expectedReply,
   });
-
-  static bool get shouldRun {
-    final config = tryLoad();
-    return config != null && config.enabled && config.realBackend;
-  }
 
   static _ClaudeCodeAgentRealBackendConfig? tryLoad() {
     final file = File(_claudeCodeAgentRunConfigPath);

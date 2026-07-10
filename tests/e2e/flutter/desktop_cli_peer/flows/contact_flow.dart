@@ -1,12 +1,18 @@
 part of '../desktop_cli_peer_e2e.dart';
 
 Future<void> _verifyContactRegression({
+  required _DesktopAppRobot robot,
   required RelationshipApplicationService relationships,
+  required String canonicalCliDid,
   required _DesktopCliPeerSmokeConfig config,
 }) async {
-  final cliDid = await _currentCliDid(config);
-  expect(cliDid.trim(), isNotEmpty);
+  final cliDid = requireMatchingCliPeerDid(
+    canonicalCliDid: canonicalCliDid,
+    observedPeerDid: canonicalCliDid,
+  );
 
+  // Reused remote identities require an explicit baseline. Cleanup is setup,
+  // while every relationship transition under test is driven by App UI or CLI.
   await _tryIgnore(() => relationships.unfollow(cliDid));
   await _tryIgnore(
     () => _runCli(config, <String>[
@@ -17,27 +23,37 @@ Future<void> _verifyContactRegression({
       config.appHandle,
     ]),
   );
-
-  await relationships.follow(cliDid);
   await _waitForAppRelationshipStatus(
     relationships: relationships,
     peer: cliDid,
-    expectedAny: const <String>{'following', 'friend'},
+    expected: 'none',
+  );
+
+  final conversation = await robot.startDirectConversation(config.cliHandle);
+  requireMatchingCliPeerDid(
+    canonicalCliDid: cliDid,
+    observedPeerDid: conversation.targetDid ?? '',
+  );
+  await robot.followSelectedPeer();
+  await _waitForAppRelationshipStatus(
+    relationships: relationships,
+    peer: cliDid,
+    expected: 'following',
   );
   await _waitForAppRelationshipList(
-    description: 'App following contains CLI DID',
+    description: 'App following contains exact CLI DID',
     load: () => relationships.listFollowing(limit: 50),
-    expectedRef: cliDid,
+    expectedDid: cliDid,
   );
   await _waitForCliRelationshipList(
     config: config,
     command: 'followers',
-    expectedRef: config.appHandle,
+    expectedDidOrHandle: config.appHandle,
   );
   await _waitForCliRelationshipStatus(
     config: config,
     peer: config.appHandle,
-    expectedRef: config.appHandle,
+    expectedRelationship: 'follower',
   );
 
   final cliFollow = await _runCli(config, <String>[
@@ -50,33 +66,32 @@ Future<void> _verifyContactRegression({
   if (cliFollow.exitCode != 0) {
     fail('CLI people follow failed: ${_summarizeCliResult(cliFollow)}');
   }
-
+  await _waitForAppRelationshipStatus(
+    relationships: relationships,
+    peer: cliDid,
+    expected: 'friend',
+  );
   await _waitForAppRelationshipList(
-    description: 'App followers contain CLI handle',
+    description: 'App followers contain exact CLI DID',
     load: () => relationships.listFollowers(limit: 50),
-    expectedRef: cliDid,
+    expectedDid: cliDid,
   );
   await _waitForCliRelationshipList(
     config: config,
     command: 'following',
-    expectedRef: config.appHandle,
-  );
-  await _waitForAppRelationshipStatus(
-    relationships: relationships,
-    peer: cliDid,
-    expectedAny: const <String>{'friend', 'follower', 'following'},
+    expectedDidOrHandle: config.appHandle,
   );
 
-  await relationships.unfollow(cliDid);
+  await robot.unfollowSelectedPeer();
   await _waitForAppRelationshipStatus(
     relationships: relationships,
     peer: cliDid,
-    expectedAny: const <String>{'follower', 'none'},
+    expected: 'follower',
   );
   await _waitForAppRelationshipListAbsent(
-    description: 'App following no longer contains CLI DID',
+    description: 'App following excludes exact CLI DID',
     load: () => relationships.listFollowing(limit: 50),
-    unexpectedRef: cliDid,
+    unexpectedDid: cliDid,
   );
 
   final cliUnfollow = await _runCli(config, <String>[
@@ -89,6 +104,17 @@ Future<void> _verifyContactRegression({
   if (cliUnfollow.exitCode != 0) {
     fail('CLI people unfollow failed: ${_summarizeCliResult(cliUnfollow)}');
   }
+  await _waitForAppRelationshipStatus(
+    relationships: relationships,
+    peer: cliDid,
+    expected: 'none',
+  );
+  await _waitForCliRelationshipStatus(
+    config: config,
+    peer: config.appHandle,
+    expectedRelationship: 'none',
+  );
+  await robot.closePeerInfo();
 }
 
 Future<String> _currentCliDid(_DesktopCliPeerSmokeConfig config) async {
@@ -99,7 +125,7 @@ Future<String> _currentCliDid(_DesktopCliPeerSmokeConfig config) async {
     'current',
   ]);
   if (current.exitCode != 0) {
-    fail('CLI id current failed: ${_summarizeCliResult(current)}');
+    fail('CLI peer identity mismatch.');
   }
   final did = _jsonStringAt(current.stdout, const <Object>[
     'data',
@@ -107,21 +133,21 @@ Future<String> _currentCliDid(_DesktopCliPeerSmokeConfig config) async {
     'did',
   ]);
   if (did == null || did.trim().isEmpty) {
-    fail('CLI id current did missing: ${_summarizeCliResult(current)}');
+    fail('CLI peer identity mismatch.');
   }
-  return did;
+  return requireMatchingCliPeerDid(canonicalCliDid: did, observedPeerDid: did);
 }
 
 Future<void> _waitForAppRelationshipStatus({
   required RelationshipApplicationService relationships,
   required String peer,
-  required Set<String> expectedAny,
+  required String expected,
 }) async {
   await _poll(
-    description: 'App relationship status for "$peer" is one of $expectedAny',
+    description: 'App relationship status for "$peer" equals $expected',
     action: () async {
       final status = await relationships.status(peer);
-      return expectedAny.contains(status.relationship.trim().toLowerCase());
+      return status.relationship.trim().toLowerCase() == expected;
     },
   );
 }
@@ -129,15 +155,16 @@ Future<void> _waitForAppRelationshipStatus({
 Future<void> _waitForAppRelationshipList({
   required String description,
   required Future<CoreRelationshipPage> Function() load,
-  required String expectedRef,
+  required String expectedDid,
 }) async {
   await _poll(
     description: description,
     action: () async {
       final page = await load();
-      return page.items.any(
-        (item) => _relationshipMatchesRef(item, expectedRef),
-      );
+      return page.items
+              .where((item) => item.did.trim() == expectedDid)
+              .length ==
+          1;
     },
   );
 }
@@ -145,15 +172,13 @@ Future<void> _waitForAppRelationshipList({
 Future<void> _waitForAppRelationshipListAbsent({
   required String description,
   required Future<CoreRelationshipPage> Function() load,
-  required String unexpectedRef,
+  required String unexpectedDid,
 }) async {
   await _poll(
     description: description,
     action: () async {
       final page = await load();
-      return !page.items.any(
-        (item) => _relationshipMatchesRef(item, unexpectedRef),
-      );
+      return page.items.every((item) => item.did.trim() != unexpectedDid);
     },
   );
 }
@@ -161,10 +186,10 @@ Future<void> _waitForAppRelationshipListAbsent({
 Future<void> _waitForCliRelationshipList({
   required _DesktopCliPeerSmokeConfig config,
   required String command,
-  required String expectedRef,
+  required String expectedDidOrHandle,
 }) async {
   await _poll(
-    description: 'CLI people $command contains "$expectedRef"',
+    description: 'CLI people $command contains exact "$expectedDidOrHandle"',
     action: () async {
       final result = await _runCli(config, <String>[
         '--format',
@@ -178,7 +203,11 @@ Future<void> _waitForCliRelationshipList({
       if (result.exitCode != 0) {
         return false;
       }
-      return _cliRelationshipListContainsRef(result.stdout, expectedRef);
+      return _cliRelationshipListExactCount(
+            result.stdout,
+            expectedDidOrHandle,
+          ) ==
+          1;
     },
   );
 }
@@ -186,10 +215,10 @@ Future<void> _waitForCliRelationshipList({
 Future<void> _waitForCliRelationshipStatus({
   required _DesktopCliPeerSmokeConfig config,
   required String peer,
-  required String expectedRef,
+  required String expectedRelationship,
 }) async {
   await _poll(
-    description: 'CLI people status for "$peer" contains "$expectedRef"',
+    description: 'CLI people status for "$peer" equals $expectedRelationship',
     action: () async {
       final result = await _runCli(config, <String>[
         '--format',
@@ -201,66 +230,27 @@ Future<void> _waitForCliRelationshipStatus({
       if (result.exitCode != 0) {
         return false;
       }
-      return _cliRelationshipStatusMatchesRef(result.stdout, expectedRef);
+      return cliRelationshipState(result.stdout) ==
+          expectedRelationship.trim().toLowerCase();
     },
   );
 }
 
-bool _relationshipMatchesRef(RelationshipSummary item, String ref) {
-  final expected = _normalizeIdentityRef(ref);
-  if (expected.isEmpty) {
-    return false;
-  }
-  final fields = <String>[
-    item.did,
-    item.handle ?? '',
-    item.displayName,
-  ].map(_normalizeIdentityRef).where((field) => field.isNotEmpty);
-  return fields.any(
-    (field) =>
-        field == expected ||
-        field.contains(expected) ||
-        expected.contains(field),
-  );
-}
-
-bool _cliRelationshipListContainsRef(String output, String expectedRef) {
+int _cliRelationshipListExactCount(String output, String expectedRef) {
   final expected = _normalizeIdentityRef(expectedRef);
   if (expected.isEmpty) {
-    return false;
+    return 0;
   }
   final items = _jsonValueAt(output, const <Object>['data', 'items']);
   if (items is! List) {
-    return false;
+    return 0;
   }
-  return items.whereType<Map>().any((item) {
+  return items.whereType<Map>().where((item) {
     final map = _cliStringKeyMap(item);
-    return _cliIdentityMapMatchesRef(map, expected);
-  });
-}
-
-bool _cliRelationshipStatusMatchesRef(String output, String expectedRef) {
-  final expected = _normalizeIdentityRef(expectedRef);
-  if (expected.isEmpty) {
-    return false;
-  }
-  final status = _jsonValueAt(output, const <Object>['data']);
-  if (status is! Map) {
-    return false;
-  }
-  return _cliIdentityMapMatchesRef(_cliStringKeyMap(status), expected);
-}
-
-bool _cliIdentityMapMatchesRef(Map<String, Object?> map, String expected) {
-  final fields = <Object?>[map['did'], map['handle']]
-      .map((value) => _normalizeIdentityRef(value?.toString() ?? ''))
-      .where((field) => field.isNotEmpty);
-  return fields.any(
-    (field) =>
-        field == expected ||
-        field.contains(expected) ||
-        expected.contains(field),
-  );
+    final did = _normalizeIdentityRef(map['did']?.toString() ?? '');
+    final handle = _normalizeIdentityRef(map['handle']?.toString() ?? '');
+    return did == expected || handle == expected;
+  }).length;
 }
 
 Future<void> _tryIgnore(Future<Object?> Function() action) async {

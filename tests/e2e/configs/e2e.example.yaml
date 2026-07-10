@@ -1,15 +1,16 @@
-# Copy this file to e2e.local.yaml and fill in local-only OTP values.
+# Copy this file to an ignored *.local.yaml and fill in remote awiki.info
+# account-pool values. The config is local secret storage; the services are not.
 
 platform: macos
 
 service:
-  baseUrl: https://anpclaw.com
-  userServiceUrl: https://anpclaw.com
-  messageServiceUrl: https://anpclaw.com
-  messageServiceWsUrl: wss://anpclaw.com/im/ws
-  didDomain: anpclaw.com
-  anpServiceUrl: https://anpclaw.com/anp-im/rpc
-  anpServiceDid: did:wba:anpclaw.com
+  baseUrl: https://awiki.info
+  userServiceUrl: https://awiki.info
+  messageServiceUrl: https://awiki.info
+  messageServiceWsUrl: wss://awiki.info/im/ws
+  didDomain: awiki.info
+  anpServiceUrl: https://awiki.info/anp-im/rpc
+  anpServiceDid: did:wba:awiki.info
 
 otp:
   phone: "+8610000000000"
@@ -22,7 +23,10 @@ accounts:
     handle: awiki-e2e-cli
 
 cliPeer:
-  binary: ../awiki-cli-rs2/target/release/awiki-cli
+  binary: ../awiki-cli-rs2/target/debug/awiki-cli
+  # Replace with the exact non-zero 40-character commit used to build both
+  # awiki-cli and the sibling awiki_im_core SDK artifacts.
+  sourceRef: "0000000000000000000000000000000000000000"
 
 performance:
   dataset:

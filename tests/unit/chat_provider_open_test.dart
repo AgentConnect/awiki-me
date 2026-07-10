@@ -828,6 +828,100 @@ void main() {
     expect(messages.single.serverSequence, 2);
   });
 
+  test(
+    'send result settles a pending patch without waiting for final patch',
+    () async {
+      final patchMessaging = _PatchMessagingService(
+        localHistory: <ChatMessage>[],
+        emitPendingBeforeTextResult: true,
+      );
+      final patchContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          ...fakeApplicationServiceOverrides(gateway),
+          messagingServiceProvider.overrideWithValue(patchMessaging),
+          sessionProvider.overrideWith((ref) {
+            final controller = SessionController();
+            controller.setSession(
+              const SessionIdentity(
+                did: 'did:me',
+                credentialName: 'me.json',
+                displayName: 'Me',
+              ),
+            );
+            return controller;
+          }),
+        ],
+      );
+      addTearDown(patchContainer.dispose);
+
+      await patchContainer
+          .read(chatThreadsProvider.notifier)
+          .openConversation(conversation);
+      await pumpEventQueue();
+      final repairCallsBeforeSend = patchMessaging.repairConversationCalls;
+      await patchContainer
+          .read(chatThreadsProvider.notifier)
+          .sendMessage(conversation: conversation, content: 'settle result');
+      await pumpEventQueue();
+
+      final messages = patchContainer
+          .read(chatThreadProvider(_timelineThreadId(conversation)))
+          .messages;
+      expect(messages, hasLength(1));
+      expect(messages.single.content, 'settle result');
+      expect(messages.single.sendState, MessageSendState.sent);
+      expect(patchMessaging.repairConversationCalls, repairCallsBeforeSend);
+    },
+  );
+
+  test('send error settles a pending patch as failed', () async {
+    final patchMessaging = _PatchMessagingService(
+      localHistory: <ChatMessage>[],
+      emitPendingBeforeTextResult: true,
+      textSendError: StateError('send failed'),
+    );
+    final patchContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        messagingServiceProvider.overrideWithValue(patchMessaging),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(patchContainer.dispose);
+
+    await patchContainer
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await pumpEventQueue();
+    final repairCallsBeforeSend = patchMessaging.repairConversationCalls;
+    await patchContainer
+        .read(chatThreadsProvider.notifier)
+        .sendMessage(conversation: conversation, content: 'failed result');
+    await pumpEventQueue();
+
+    final messages = patchContainer
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
+        .messages;
+    expect(messages, hasLength(1));
+    expect(messages.single.content, 'failed result');
+    expect(messages.single.sendState, MessageSendState.failed);
+    expect(patchMessaging.repairConversationCalls, repairCallsBeforeSend);
+  });
+
   test('群聊回执先于本地失败 echo 到达时只展示已发送消息', () async {
     const groupDid = 'did:example:groups:xlgs';
     final groupConversation = ConversationSummary(
@@ -5126,6 +5220,10 @@ void main() {
         .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     expect(messages.map((item) => item.content), contains('重试文本'));
+    expect(
+      messages.singleWhere((item) => item.content == '重试文本').sendState,
+      MessageSendState.sent,
+    );
     expect(messages.map((item) => item.content), isNot(contains('远端补拉消息')));
     expect(gateway.listConversationsCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);
@@ -5941,6 +6039,8 @@ class _PatchMessagingService
   _PatchMessagingService({
     required this.localHistory,
     ThreadMessagePatch? repairPatch,
+    this.emitPendingBeforeTextResult = false,
+    this.textSendError,
   }) : repairPatch =
            repairPatch ??
            const ThreadMessagePatch(
@@ -5952,6 +6052,8 @@ class _PatchMessagingService
            );
 
   final List<ChatMessage> localHistory;
+  final bool emitPendingBeforeTextResult;
+  final Object? textSendError;
   ThreadMessagePatch repairPatch;
   final Map<String, List<ChatMessage>> projectionByConversationId =
       <String, List<ChatMessage>>{};
@@ -6237,11 +6339,30 @@ class _PatchMessagingService
     lastSendMentions = const <ChatMentionDraft>[];
     lastClientMessageId = clientMessageId;
     lastIdempotencyKey = idempotencyKey;
-    return _sentConversationMessage(
+    final sent = _sentConversationMessage(
       conversation: conversation,
       content: content,
       clientMessageId: clientMessageId,
     );
+    if (emitPendingBeforeTextResult) {
+      emitPatch(
+        ThreadMessagePatch(
+          kind: ThreadMessagePatchKind.upsert,
+          ownerDid: 'did:me',
+          version: 2,
+          threadKind: 'conversation',
+          threadId: conversation.conversationId,
+          conversationId: conversation.conversationId,
+          message: sent.copyWith(sendState: MessageSendState.sending),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+    }
+    final error = textSendError;
+    if (error != null) {
+      throw error;
+    }
+    return sent;
   }
 
   @override

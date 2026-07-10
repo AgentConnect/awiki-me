@@ -170,7 +170,7 @@ See [docs/testing.md](docs/testing.md) for the full testing strategy.
 | --- | --- | --- | --- |
 | Unit / Widget / Provider | `dart run tests/unit/runner.dart` | Dart logic, mappers, providers, widgets, fake services, E2E runner planning/redaction | Real backend, OTP, CLI, devices |
 | Desktop smoke E2E | `dart run tests/e2e/runner.dart --case smoke` | App shell, Flutter platform shims, native im-core open smoke | Real accounts, OTP, CLI peer |
-| Real backend App + CLI E2E | `dart run tests/e2e/runner.dart --case full` | direct, group, attachment, contacts, real App + CLI peer flows | Unconfigured account pools or committed local credentials |
+| Remote App + CLI product E2E | `dart run tests/e2e/runner.dart --case full` | UI-driven direct/unread/read/retry, contacts, group/mention, attachment and exact-one App + CLI checks against `awiki.info` | Unconfigured account pools or committed local credentials |
 
 Prepare real-backend E2E config locally:
 
@@ -178,6 +178,20 @@ Prepare real-backend E2E config locally:
 cp tests/e2e/configs/e2e.example.yaml tests/e2e/configs/e2e.local.yaml
 dart run tests/e2e/runner.dart --case full
 ```
+
+Live App + CLI cases accept only the audited remote `awiki.info` target. Set
+`cliPeer.sourceRef` in the ignored config to the exact commit that built both
+the debug CLI and `awiki_im_core` artifacts. Suite membership, owners, timeout,
+and cleanup policy live in `tests/e2e/suite_manifest.json`; reports include the
+source ref, isolated `awiki.info` CLI tenant identity preflight, and a redacted
+`resource_ledger.json`. Dry-run
+and prepare-only output remain non-passing orchestration evidence.
+
+For the maintained remote gate, configure `service.baseUrl` as
+`https://awiki.info` and `service.didDomain` as `awiki.info`. The App-side
+actions in `full` must be visible input/tap/drop actions; service calls are
+read-only result oracles. See [docs/testing.md](docs/testing.md) for the exact
+message, unread/read, retry, relationship, mention, and attachment contracts.
 
 Local YAML config is ignored by Git and may contain OTP, test accounts, backend URLs, and `awiki-cli` paths. Do not commit it. On macOS, choose an explicit macOS config such as `tests/e2e/configs/e2e.codex-macos-allowed.local.yaml`; do not accidentally use a Linux local config.
 

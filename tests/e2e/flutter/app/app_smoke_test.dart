@@ -8,6 +8,7 @@ import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
@@ -19,6 +20,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 import '../../../unit/test_support.dart' as test_support;
+import '../../case_attestation.dart';
 import '../support/fake_app_bootstrap.dart';
 
 class _StaticConversationListController extends ConversationListController {
@@ -58,6 +60,14 @@ void main() {
     expect(find.text('登录或注册'), findsWidgets);
     expect(harness.gateway.listLocalCredentialsCalls, greaterThanOrEqualTo(1));
     expect(harness.realtimeGateway.isConnected, isFalse);
+    await E2eCaseAttestationWriter.markPassed(
+      'SMOKE-E2E-001',
+      phases: const <String>[
+        'app_shell_visible',
+        'onboarding_visible',
+        'unauthenticated_realtime_disconnected',
+      ],
+    );
   });
 
   testWidgets('AwikiMeApp starts authenticated shell', (tester) async {
@@ -81,6 +91,99 @@ void main() {
     expect(find.byType(AppShell), findsOneWidget);
     expect(find.byType(OnboardingPage), findsNothing);
   });
+
+  testWidgets(
+    'AwikiMeApp start conversation stays in recents before first send',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      await tester.binding.setSurfaceSize(const Size(1280, 820));
+      const session = SessionIdentity(
+        did: 'did:test:me',
+        credentialName: 'default',
+        handle: 'me',
+        displayName: 'Me',
+        jwtToken: 'test-jwt',
+      );
+      final harness = createFakeAwikiMeAppHarness(session: session);
+
+      try {
+        await tester.pumpWidget(
+          AwikiMeApp(
+            bootstrap: harness.bootstrap,
+            providerOverrides: harness.providerOverrides,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('start-conversation-button')));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('identity-lookup-input')),
+          '@smoke-peer.awiki.ai',
+        );
+        await tester.tap(
+          find.byKey(const Key('identity-lookup-search-button')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('identity-start-chat-button')));
+        await tester.pumpAndSettle();
+
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(AppShell)),
+        );
+        var conversations = container
+            .read(conversationListProvider)
+            .conversations;
+        expect(conversations, hasLength(1));
+        expect(conversations.single.lastMessagePreview, isEmpty);
+
+        harness.gateway.conversations = <ConversationSummary>[
+          ConversationSummary(
+            conversationId: 'dm:peer-scope:v1:smoke-peer',
+            threadId: 'dm:peer-scope:v1:smoke-peer',
+            displayName: 'smoke-peer.awiki.ai',
+            lastMessagePreview: '',
+            lastMessageAt: DateTime.utc(2026, 7, 10, 15),
+            unreadCount: 0,
+            isGroup: false,
+            targetDid: 'did:test:smoke-peer:previous',
+            targetPeer: 'smoke-peer.awiki.ai',
+          ),
+        ];
+        await container.read(conversationListProvider.notifier).refresh();
+        await _pumpSmokeFrame(tester);
+
+        conversations = container.read(conversationListProvider).conversations;
+        expect(conversations, hasLength(1));
+        final started = conversations.single;
+        expect(started.conversationId, 'dm:peer-scope:v1:smoke-peer');
+        expect(
+          container.read(selectedConversationProvider)?.effectiveConversationId,
+          'dm:peer-scope:v1:smoke-peer',
+        );
+        expect(
+          find.byKey(
+            Key('conversation-row:${started.effectiveConversationId}'),
+          ),
+          findsOneWidget,
+        );
+
+        harness.gateway.conversations = const <ConversationSummary>[];
+        await container.read(conversationListProvider.notifier).refresh();
+        await _pumpSmokeFrame(tester);
+
+        conversations = container.read(conversationListProvider).conversations;
+        expect(conversations, hasLength(1));
+        expect(
+          conversations.single.conversationId,
+          'dm:peer-scope:v1:smoke-peer',
+        );
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+        await tester.binding.setSurfaceSize(null);
+      }
+    },
+  );
 
   testWidgets('AwikiMeApp authenticated smoke opens profile and settings', (
     tester,

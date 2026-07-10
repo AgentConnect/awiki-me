@@ -610,6 +610,125 @@ cliHandle: legacy-cli
     });
   });
 
+  group('Desktop E2E gate governance', () {
+    test('checked-in manifest matches every runner case contract', () {
+      final manifest = DesktopE2eSuiteManifest.load(Directory.current);
+
+      expect(manifest.schemaVersion, 1);
+      expect(manifest.sourceRevision, isNotEmpty);
+      for (final e2eCase in DesktopE2eCase.values) {
+        final definition = manifest.definitionFor(e2eCase);
+        expect(
+          () => definition.validateCodeCaseIds(e2eCase.caseIds),
+          returnsNormally,
+        );
+        expect(definition.owner, isNotEmpty);
+        expect(definition.timeout, isNot(Duration.zero));
+      }
+    });
+
+    test('remote product suites reject local or non-audited targets', () {
+      final definition = DesktopE2eSuiteManifest.load(
+        Directory.current,
+      ).definitionFor(DesktopE2eCase.full);
+      final config = DesktopCliPeerConfig(
+        platform: DesktopE2ePlatform.macos,
+        serviceBaseUrl: 'http://127.0.0.1:9800',
+        didDomain: 'awiki.test',
+        otpPhone: 'redacted',
+        otpCode: 'redacted',
+        appHandle: 'app',
+        cliHandle: 'cli',
+        cliBin: '/tmp/awiki-cli',
+        cliSourceRef: '1111111111111111111111111111111111111111',
+        e2eCase: DesktopE2eCase.full,
+        performance: DesktopPerformanceConfig.defaults,
+      );
+
+      expect(
+        () => definition.validateRemoteTarget(config),
+        throwsA(isA<E2eFailure>()),
+      );
+    });
+
+    test('real source ref requires an exact non-zero commit SHA', () {
+      expect(
+        isAuditableGitSha('1111111111111111111111111111111111111111'),
+        isTrue,
+      );
+      expect(
+        isAuditableGitSha('0000000000000000000000000000000000000000'),
+        isFalse,
+      );
+      expect(isAuditableGitSha('release/0710'), isFalse);
+    });
+
+    test('redactor removes full DIDs from diagnostics', () {
+      final redactor = DesktopSecretRedactor(const <String>[]);
+
+      final output = redactor.redact(
+        'sender=did:wba:awiki.info:user:alice:e1_sensitive failed',
+      );
+
+      expect(output, contains('<redacted-did>'));
+      expect(output, isNot(contains('e1_sensitive')));
+    });
+
+    test('command timeout terminates the spawned process tree', () async {
+      if (Platform.isWindows) {
+        return;
+      }
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_e2e_timeout_test_',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final pidFile = File('${root.path}/pids.txt');
+      final runner = DesktopCommandRunner(
+        root: root,
+        dryRun: false,
+        redactor: DesktopSecretRedactor(<String>[root.path]),
+      );
+
+      await expectLater(
+        runner.captureResult('/bin/sh', <String>[
+          '-c',
+          'sleep 30 & child=\$!; echo "\$\$ \$child" > "${pidFile.path}"; wait',
+        ], timeout: const Duration(milliseconds: 200)),
+        throwsA(
+          isA<DesktopCommandTimeout>()
+              .having((error) => error.terminated, 'terminated', isTrue)
+              .having(
+                (error) => error.safeSummary,
+                'safeSummary',
+                isNot(contains(root.path)),
+              ),
+        ),
+      );
+
+      final pids = pidFile
+          .readAsStringSync()
+          .trim()
+          .split(RegExp(r'\s+'))
+          .map(int.parse)
+          .toList();
+      for (final pid in pids) {
+        var alive = true;
+        for (var attempt = 0; attempt < 20 && alive; attempt += 1) {
+          final probe = await Process.run('/bin/kill', <String>['-0', '$pid']);
+          alive = probe.exitCode == 0;
+          if (alive) {
+            await Future<void>.delayed(const Duration(milliseconds: 50));
+          }
+        }
+        expect(alive, isFalse, reason: 'timed-out pid $pid must not survive');
+      }
+    });
+  });
+
   group('DesktopE2eRunner dry-run', () {
     test('loads full E2E settings from default local config', () async {
       final root = await Directory.systemTemp.createTemp(
@@ -663,11 +782,11 @@ cliPeer:
       expect(log, contains('app handle: app-from-file'));
       expect(log, contains('cli handle: cli-from-file'));
       expect(log, contains('service base: https://service.example.test'));
-      expect(log, contains('check file: /tmp/file-awiki-cli'));
+      expect(log, contains('check file: <redacted>'));
       expect(
         log,
         contains(
-          r'$ /tmp/file-awiki-cli --format json id recover --handle cli-from-file --phone <redacted> --otp <redacted>',
+          r'$ <redacted> --format json id recover --handle cli-from-file --phone <redacted> --otp <redacted>',
         ),
       );
       expect(
@@ -811,13 +930,13 @@ cliPeer:
           'flutter: dry-run',
           r'$ which xvfb-run',
           'xvfb-run: dry-run',
-          'check file: /tmp/fake-awiki-cli',
-          r'$ /tmp/fake-awiki-cli --format json init',
-          r'$ /tmp/fake-awiki-cli --format json config show',
-          r'$ /tmp/fake-awiki-cli --format json id recover --handle e2e-cli --phone <redacted> --otp <redacted>',
-          r'$ /tmp/fake-awiki-cli --format json id current',
-          r'$ /tmp/fake-awiki-cli --format json id status',
-          r'$ /tmp/fake-awiki-cli --format json msg inbox --limit 1',
+          'check file: <redacted>',
+          r'$ <redacted> --format json init',
+          r'$ <redacted> --format json config show',
+          r'$ <redacted> --format json id recover --handle e2e-cli --phone <redacted> --otp <redacted>',
+          r'$ <redacted> --format json id current',
+          r'$ <redacted> --format json id status',
+          r'$ <redacted> --format json msg inbox --limit 1',
         ]),
       );
       expect(
@@ -827,10 +946,7 @@ cliPeer:
         ),
       );
       expect(log, contains('would write Flutter E2E run config: <redacted>'));
-      expect(
-        log,
-        contains('message_service_endpoint=https://messages.example.test'),
-      );
+      expect(log, contains('tenant_backend=https://service.example.test'));
       expect(log, isNot(contains('test-phone-secret')));
       expect(log, isNot(contains('test-otp-secret')));
       expect(log, isNot(contains(root.path)));
@@ -846,7 +962,9 @@ cliPeer:
       expect(timingText, isNot(contains('test-otp-secret')));
       expect(timingText, isNot(contains(root.path)));
       final decoded = jsonDecode(timingText) as Map<String, dynamic>;
-      expect(decoded['status'], 'success');
+      expect(decoded['schemaVersion'], 2);
+      expect(decoded['status'], 'dry_run');
+      expect(decoded['mode'], 'dry_run');
       expect(decoded['scenario'], 'desktop-app-cli-peer');
       expect(decoded['case'], 'full');
       expect(decoded['caseIds'], <dynamic>[
@@ -870,6 +988,21 @@ cliPeer:
       expect(decoded['platform'], 'linux');
       expect(decoded['dryRun'], isTrue);
       expect(decoded['prepareOnly'], isFalse);
+      final caseResults = decoded['caseResults'] as List<dynamic>;
+      expect(caseResults, hasLength(15));
+      expect(
+        caseResults.every(
+          (value) =>
+              (value as Map<String, dynamic>)['status'] == 'dry_run' &&
+              value['mode'] == 'dry_run',
+        ),
+        isTrue,
+      );
+      expect(decoded['passedCaseIds'], isEmpty);
+      expect(
+        (decoded['attestation'] as Map<String, dynamic>)['status'],
+        'not_expected_dry_run',
+      );
       expect(decoded['appHandle'], 'e2e-app');
       expect(decoded['cliHandle'], 'e2e-cli');
       expect(decoded['serviceBaseUrl'], 'https://service.example.test');
@@ -906,6 +1039,7 @@ cliPeer:
           options: DesktopE2eOptions.parse(const <String>[
             '--case',
             'full',
+            '--dry-run',
             '--run-id',
             'run-config',
           ]),
@@ -955,6 +1089,67 @@ cliPeer:
         final log = lines.join('\n');
         expect(log, isNot(contains('test-phone-secret')));
         expect(log, isNot(contains('test-otp-secret')));
+      },
+    );
+
+    test(
+      'fails closed when Flutter exits successfully without case attestation',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'awiki_desktop_missing_attestation_test_',
+        );
+        addTearDown(() async {
+          if (await root.exists()) {
+            await root.delete(recursive: true);
+          }
+        });
+        _writeLocalConfig(root, platform: 'macos');
+        final runner = DesktopE2eRunner(
+          root: root,
+          options: DesktopE2eOptions.parse(const <String>[
+            '--case',
+            'direct',
+            '--run-id',
+            'run-missing-attestation',
+          ]),
+          commands: DesktopCommandRunner(
+            root: root,
+            dryRun: true,
+            redactor: DesktopSecretRedactor(const <String>[]),
+          ),
+        );
+
+        await expectLater(
+          runner.run(),
+          throwsA(
+            isA<E2eFailure>().having(
+              (error) => error.message,
+              'message',
+              contains('case attestation failed closed'),
+            ),
+          ),
+        );
+
+        final report = File(
+          '${root.path}/.e2e/desktop-cli-peer/'
+          'run-missing-attestation/reports/timings.json',
+        );
+        final decoded =
+            jsonDecode(await report.readAsString()) as Map<String, dynamic>;
+        expect(decoded['schemaVersion'], 2);
+        expect(decoded['status'], 'failed');
+        expect(decoded['mode'], 'real');
+        expect(decoded['passedCaseIds'], isEmpty);
+        expect(
+          (decoded['caseResults'] as List<dynamic>).every(
+            (value) => (value as Map<String, dynamic>)['status'] == 'not_run',
+          ),
+          isTrue,
+        );
+        expect(
+          (decoded['attestation'] as Map<String, dynamic>)['status'],
+          'invalid',
+        );
       },
     );
 
@@ -1125,7 +1320,7 @@ performance:
         expect(
           log,
           contains(
-            r'$ /tmp/fake-awiki-cli --format json id recover --handle e2e-app --phone <redacted> --otp <redacted>',
+            r'$ <redacted> --format json id recover --handle e2e-app --phone <redacted> --otp <redacted>',
           ),
         );
         expect(log, isNot(contains('Preparing performance dataset')));
@@ -1333,6 +1528,7 @@ performance:
         options: DesktopE2eOptions.parse(const <String>[
           '--case',
           'message-agent',
+          '--dry-run',
           '--run-id',
           'run-message-agent',
         ]),
@@ -1442,6 +1638,7 @@ performance:
           options: DesktopE2eOptions.parse(const <String>[
             '--case',
             'message-agent',
+            '--dry-run',
             '--run-id',
             'run-message-agent-default',
           ]),
@@ -1514,6 +1711,7 @@ performance:
           options: DesktopE2eOptions.parse(const <String>[
             '--case',
             'codex-agent',
+            '--dry-run',
             '--run-id',
             'run-codex-agent',
           ]),
@@ -1620,6 +1818,7 @@ performance:
           options: DesktopE2eOptions.parse(const <String>[
             '--case',
             'claude-code-agent',
+            '--dry-run',
             '--run-id',
             'run-claude-code-agent',
           ]),
@@ -1755,7 +1954,6 @@ performance:
       final runner = DesktopE2eRunner(
         root: root,
         options: DesktopE2eOptions.parse(const <String>[
-          '--dry-run',
           '--case',
           'full',
           '--prepare-only',
@@ -1779,6 +1977,21 @@ performance:
       expect(log, isNot(contains(r'$ which cargo')));
       expect(log, contains('Prepare-only completed'));
       expect(log, isNot(contains('desktop_cli_peer_smoke_test.dart')));
+      final timings = File(
+        '${root.path}/.e2e/desktop-cli-peer/run-prepare/reports/timings.json',
+      );
+      final decoded =
+          jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
+      expect(decoded['schemaVersion'], 2);
+      expect(decoded['status'], 'prepared');
+      expect(decoded['mode'], 'prepared');
+      expect(decoded['passedCaseIds'], isEmpty);
+      expect(
+        (decoded['caseResults'] as List<dynamic>).every(
+          (value) => (value as Map<String, dynamic>)['status'] == 'prepared',
+        ),
+        isTrue,
+      );
     });
   });
 
@@ -2151,6 +2364,7 @@ void _writeLocalConfig(
   String appHandle = 'e2e-app',
   String cliHandle = 'e2e-cli',
   String cliBin = '/tmp/fake-awiki-cli',
+  String cliSourceRef = '1111111111111111111111111111111111111111',
   String? messageServiceUrl,
   String? messageServiceWsUrl,
   String? daemonRustRepo,
@@ -2251,5 +2465,6 @@ accounts:
     handle: $cliHandle
 cliPeer:
   binary: $cliBin
+  sourceRef: $cliSourceRef
 ''');
 }

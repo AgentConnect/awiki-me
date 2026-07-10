@@ -747,11 +747,14 @@ void main() {
 
     await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('关注'));
+    expect(find.byKey(const Key('peer-info-close-button')), findsOneWidget);
+    expect(find.byKey(const Key('chat-follow-button')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('chat-follow-button')));
     await tester.pumpAndSettle();
 
     expect(gateway.lastFollowedDidOrHandle, 'did:test:peer');
     expect(find.text('已关注'), findsOneWidget);
+    expect(find.byKey(const Key('chat-unfollow-button')), findsOneWidget);
   });
 
   testWidgets('聊天头部关注失败时保持未关注并提示错误', (tester) async {
@@ -793,7 +796,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('关注'));
+    await tester.tap(find.byKey(const Key('chat-follow-button')));
     await tester.pumpAndSettle();
 
     expect(find.text('关注'), findsOneWidget);
@@ -956,13 +959,14 @@ void main() {
 
     await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('已关注'));
+    await tester.tap(find.byKey(const Key('chat-unfollow-button')));
     await tester.pump();
 
     expect(find.byType(CupertinoAlertDialog), findsOneWidget);
     expect(gateway.lastUnfollowedDidOrHandle, isNull);
 
-    await tester.tap(find.text('取消关注').last);
+    expect(find.byKey(const Key('confirm-unfollow-button')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('confirm-unfollow-button')));
     await tester.pump();
 
     expect(gateway.lastUnfollowedDidOrHandle, 'did:test:peer');
@@ -2358,6 +2362,83 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('发送中消息等待三秒才显示状态且明确结果后立即隐藏', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
+      threadId: 'dm:delayed-sending-status',
+      displayName: 'Tester',
+      lastMessagePreview: 'pending hello',
+      lastMessageAt: DateTime.now(),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    final sending = ChatMessage(
+      localId: 'delayed-sending-message',
+      remoteId: 'delayed-sending-message',
+      conversationId: conversation.effectiveConversationId,
+      threadId: conversation.effectiveConversationId,
+      senderDid: session.did,
+      receiverDid: conversation.targetDid,
+      content: 'pending hello',
+      createdAt: DateTime.now(),
+      isMine: true,
+      sendState: MessageSendState.sending,
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          chatThreadsProvider.overrideWith(
+            (ref) =>
+                _StaticChatThreadsController(ref, <String, List<ChatMessage>>{
+                  conversation.effectiveConversationId: <ChatMessage>[sending],
+                }),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    final indicator = find.byKey(
+      const Key('chat-sending-indicator:delayed-sending-message'),
+    );
+    expect(find.text('pending hello'), findsOneWidget);
+    expect(indicator, findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 2999));
+    expect(indicator, findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(indicator, findsOneWidget);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    container
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(
+          sending.copyWith(sendState: MessageSendState.sent),
+          threadId: conversation.effectiveConversationId,
+        );
+    await tester.pump();
+
+    expect(indicator, findsNothing);
+    expect(find.text('发送失败'), findsNothing);
+  });
+
   testWidgets('发送给 Runtime Agent 时投递完成后才显示处理中提示', (tester) async {
     final gateway = FakeAwikiGateway()
       ..sendDelay = const Duration(milliseconds: 80);
@@ -2611,6 +2692,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(SelectionArea), findsWidgets);
+    expect(
+      find.byKey(const Key('chat-message-content:selectable-text-message')),
+      findsOneWidget,
+    );
     expect(find.text('这是一条可以复制的消息'), findsOneWidget);
   });
 
@@ -4848,7 +4933,11 @@ void main() {
         .openConversation(conversation);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.bySemanticsLabel('查看附件'));
+    final openAttachment = find.byKey(
+      const Key('chat-open-attachment:native-open-attachment'),
+    );
+    expect(openAttachment, findsOneWidget);
+    await tester.tap(openAttachment);
     await tester.pumpAndSettle();
 
     expect(picker.saveCalls, 0);

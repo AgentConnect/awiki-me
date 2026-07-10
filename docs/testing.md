@@ -101,7 +101,8 @@ native IM Core smoke. It is the default high-frequency E2E gate for a Mac with a
 normal Flutter desktop setup. It does not require test accounts, OTP, a backend,
 or `awiki-cli`.
 
-Run real App + CLI peer flows when a test backend and test OTP are configured:
+Run real App + CLI peer flows when the `awiki.info` remote test account pool,
+test OTP, and CLI peer are configured:
 
 ```bash
 dart run tests/e2e/runner.dart --case full
@@ -116,12 +117,20 @@ cp tests/e2e/configs/e2e.example.yaml tests/e2e/configs/e2e.local.yaml
 
 Required local values:
 
-- `service.baseUrl`: backend root, for example `https://anpclaw.com`.
-- `service.didDomain`: DID domain, for example `anpclaw.com`.
+- `service.baseUrl`: remote test backend root, `https://awiki.info`.
+- `service.didDomain`: remote DID domain, `awiki.info`.
 - `otp.phone` and `otp.code`: the test OTP credential.
 - `accounts.appUser.handle`: App-side test handle.
 - `accounts.cliPeer.handle`: CLI peer test handle.
 - `cliPeer.binary`: `awiki-cli` binary path.
+- `cliPeer.sourceRef`: exact non-zero 40-character commit SHA used to build both
+  the CLI and sibling `awiki_im_core` SDK artifacts.
+
+All live product cases are pinned by `tests/e2e/suite_manifest.json` to
+`https://awiki.info` / `wss://awiki.info/im/ws`. They reject localhost,
+`awiki.test`, insecure schemes, and other domains before starting Flutter.
+The smoke case has no service dependency. Dry-run only validates orchestration
+and never counts as a real gate.
 
 E2E runtime configuration is read only from the YAML file. Command-line flags do
 not carry backend, account, OTP, platform, or CLI binary values. Use
@@ -141,9 +150,63 @@ Supported E2E cases:
 - `contacts`: App and CLI peer follow/contact flow.
 - `full`: all App + CLI peer flows.
 
+### UI-driven full acceptance
+
+The required `direct`, `group`, `attachment`, `contacts`, and `full` cases are
+product E2E, not service-client scripts. App-side sends, retry, navigation,
+follow/unfollow, group creation/member invitation, structured mention, and
+attachment staging are performed through `WidgetTester` against visible
+controls and E2E semantics. Read-only service and CLI probes may verify the
+result, but they must not perform the App user action under test.
+
+The product oracle is fail-closed:
+
+- all message checks require one canonical message id, terminal send state,
+  exact body, sender and conversation; the direct-message slice additionally
+  remains exact-one after a lifecycle reconnect and a Widget/App-shell rebuild,
+  while group and attachment slices use a later history stability window (not
+  an OS process restart);
+- incoming direct messages require an exact unread baseline increment, matching
+  navigation badge and conversation count, read-clear on open, no rebound, and
+  a second-message increment;
+- the failure/retry slice uses an E2E-only transport fault that emits a failed
+  timeline patch, then the visible retry action delegates to the real remote
+  messaging service; it does not add a production mock or fallback;
+- relationship checks require the exact `none -> following -> friend ->
+  follower -> none` state sequence;
+- group mentions require one valid structured target DID; attachment checks
+  require exact ids, filename, MIME type, size, digest, and downloaded bytes.
+
+`performance` remains a service-driven backend/integration diagnostic because
+it directly prepares a large dataset and calls application services to measure
+specific timing boundaries. Its results must not be relabeled as required UI
+acceptance. Profile editing, directory-wide search, identity switch,
+onboarding, group role/remove/leave flows, and secure-trust UI remain roadmap
+cases until they receive their own case IDs and vertical slices; `full` does
+not imply those features are covered.
+
 All E2E runtime state and reports go under `.e2e/` and must remain untracked.
 Local config files named `tests/e2e/configs/*.local.yaml` are also ignored and
 must not be committed because they may contain OTP values.
+
+`tests/e2e/suite_manifest.json` is the checked-in suite source of truth. The
+runner fails on case-ID drift, records tier/owner/required triggers/timeout,
+and uses a killable child-process runner. A timeout terminates the Flutter/CLI
+process tree and records `failure.code=command_timeout`; it cannot leave an
+untracked test child running indefinitely.
+
+Before App launch, the runner creates and activates an isolated CLI tenant whose
+`backend_base_url` and `did_host` match `awiki.info`, then proves that the CLI
+current DID equals directory resolution of the configured CLI handle, that the
+App handle resolves, and that the two identities are distinct. This prevents a
+green result or opaque timeout caused by silently using the CLI default
+`awiki.ai` tenant or a stale fixed-account mapping.
+
+Every run writes `resource_ledger.json` next to `timings.json`. When remote
+product actions may have created messages, groups, relationships, attachments,
+or read state but no public deletion API exists, the ledger says `residual`
+with categories/count knowledge and no raw DID/token/message content. This is
+an explicit retention debt, not a successful-cleanup claim.
 
 ### Identity vault test state
 
@@ -238,9 +301,9 @@ backend credentials, OTP, and CLI peer configuration are prepared.
 
 | Gate | Default trigger | Required environment | Must run | Must not require |
 | --- | --- | --- | --- | --- |
-| PR required | Every pull request and push to main | Flutter, sibling `awiki-cli-rs2`, deterministic local dependencies. | `dart analyze`, `dart run tests/unit/runner.dart`, smoke E2E. | Real OTP, real service accounts, live backend, mobile devices, SSH evidence. |
+| PR required | Every pull request and push to main | Flutter, sibling `awiki-cli-rs2` at an exact SHA, deterministic service-independent dependencies. | `dart analyze`, `dart run tests/unit/runner.dart`, smoke E2E. | Real OTP, real service accounts, live backend, mobile devices, SSH evidence. |
 | Optional desktop | Developer or self-hosted runner with desktop support | macOS or Linux desktop runner. | App shell and native SDK smoke on the available desktop platform. | Non-production account pool or real message service. |
-| Nightly desktop | Prepared runner | Non-production services, OTP, built `awiki-cli`, isolated App and CLI state. | Direct message, contacts, group, attachment basics, report redaction scan. | Scenarios without owner or maintained environment. |
+| Nightly desktop | Prepared runner | Remote `awiki.info`, OTP/account pool, debug `awiki-cli` + SDK built from one exact SHA, isolated App and CLI state. | Direct message, contacts, group, attachment basics, report/redaction/resource ledger. | Local service stacks or scenarios without owner. |
 | Nightly mobile | Prepared device runner | iOS or Android device pair, Maestro, local config from secrets. | Real two-device direct message when device pool is available. | Desktop-only scenarios. |
 | Release | Release candidate validation | Stable nightly environment plus release owner review. | P0/P1 regression subset for desktop smoke, native SDK smoke, App + CLI basics, mobile when available. | New feature cases that have not been promoted. |
 | Manual | Developer or QA runbook | Local or remote environment prepared by the runner. | Any focused case needed for debugging or evidence, with command, runId, platform, endpoints, and report path recorded. | Manual results presented as automatic PR gate evidence. |
@@ -250,6 +313,33 @@ pass/fail/skipped status, skipped reason when applicable, and a redaction scan
 result. Keep `.e2e/`, `*.local.yaml`, OTP values, JWTs, private keys, CLI
 workspaces, App state roots, remote logs, screenshots, and device state out of
 Git.
+
+The checked-in workflow requires `AWIKI_CLI_RS2_REF` to be an exact commit SHA.
+Its `remote-product` job is schedule/manual only, builds debug/incremental Rust
+artifacts, writes a secret-backed ignored config, and targets only `awiki.info`.
+The PR dry-run is orchestration lint and is never substituted for that real job.
+
+### Case-level attestation and fail-closed reports
+
+Runner reports use schema v2. `status=passed` is valid only when the Flutter
+scenario itself writes a schema-v1 `case_attestation.json` and every expected
+case ID has one unique `status=passed` result with non-empty phases and
+timestamps. The outer Flutter process exit code is necessary but is not enough.
+
+The runner reports `dry_run` and `prepared` as distinct non-passing suite and
+case states. Missing, duplicate, unknown, skipped, failed, corrupt, wrong-run,
+or wrong-scenario attestation results make a real run `failed`. The report keeps
+the expected IDs in `caseIds`, actual successful IDs in `passedCaseIds`, and one
+entry per expected case in `caseResults`. Attestation and workspace paths remain
+redacted; the scenario file stores only case IDs, phase names, status, and
+timestamps.
+
+Message Agent daemon management UI is currently hidden. Therefore its fake
+Widget coverage is not product acceptance, and `--case message-agent` must not
+report `passed` until the real UI scenario can attest all of
+`MSGAGENT-E2E-001..004`. A missing/disabled real-backend config, the hidden UI,
+or an unimplemented action-confirmation/lifecycle phase is an explicit failing
+gate rather than a skipped or successful result.
 
 ## Maintenance Rules
 

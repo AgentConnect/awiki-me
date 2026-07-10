@@ -5,6 +5,8 @@ import 'package:awiki_me/src/data/im_core/awiki_im_core_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
+import '../../case_attestation.dart';
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -59,6 +61,13 @@ void main() {
       expect(environment.serviceBaseUrl, isNotEmpty);
       expect(environment.didDomain, isNotEmpty);
       expect(await imCore.validatePaths(), isA<List<String>>());
+      await E2eCaseAttestationWriter.markPassed(
+        'NATIVE-E2E-001',
+        phases: const <String>[
+          'native_im_core_opened',
+          'native_paths_validated',
+        ],
+      );
     },
     // Desktop native smoke is intentionally limited to desktop targets. Linux
     // is allowed to execute here once the Flutter Linux runner exists; until

@@ -468,6 +468,7 @@ class _PeerInfoHeader extends StatelessWidget {
             0,
           ),
           child: AppDialogHeader(
+            closeButtonKey: const Key('peer-info-close-button'),
             title: title,
             closeLabel: context.l10n.chatPeerInfoClose,
             onClose: () => Navigator.of(context).pop(),
@@ -1012,6 +1013,9 @@ class _ChatFollowButtonState extends State<_ChatFollowButton> {
         ? CupertinoColors.white
         : theme.primary;
     return AppPressable(
+      key: Key(
+        widget.isFollowing ? 'chat-unfollow-button' : 'chat-follow-button',
+      ),
       onTap: _isBusy
           ? null
           : () async {
