@@ -19,6 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 import '../../../unit/test_support.dart' as test_support;
+import '../../case_attestation.dart';
 import '../support/fake_app_bootstrap.dart';
 
 class _StaticConversationListController extends ConversationListController {
@@ -58,6 +59,14 @@ void main() {
     expect(find.text('登录或注册'), findsWidgets);
     expect(harness.gateway.listLocalCredentialsCalls, greaterThanOrEqualTo(1));
     expect(harness.realtimeGateway.isConnected, isFalse);
+    await E2eCaseAttestationWriter.markPassed(
+      'SMOKE-E2E-001',
+      phases: const <String>[
+        'app_shell_visible',
+        'onboarding_visible',
+        'unauthenticated_realtime_disconnected',
+      ],
+    );
   });
 
   testWidgets('AwikiMeApp starts authenticated shell', (tester) async {

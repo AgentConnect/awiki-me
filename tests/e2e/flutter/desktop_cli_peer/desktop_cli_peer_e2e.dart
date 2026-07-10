@@ -35,6 +35,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
 
+import '../../case_attestation.dart';
+
 part 'flows/attachment_flow.dart';
 part 'flows/contact_flow.dart';
 part 'flows/direct_message_flow.dart';
@@ -163,6 +165,15 @@ void runDesktopCliPeerE2e({
             )
           : await _prepareAppIdentity(bootstrap.onboardingService!, config);
       expect(session.authenticated, isTrue);
+      if (!selectedCase.runsPerformance) {
+        await E2eCaseAttestationWriter.markPassed(
+          'AUTH-E2E-001',
+          phases: const <String>[
+            'app_identity_prepared',
+            'authenticated_session_confirmed',
+          ],
+        );
+      }
 
       if (selectedCase.runsPerformance) {
         final container = ProviderScope.containerOf(
@@ -192,6 +203,22 @@ void runDesktopCliPeerE2e({
           config: config,
           nonce: messageNonce,
         );
+        await _attestPassedCases(<String, List<String>>{
+          'PERF-E2E-001': const <String>['real_backend_flow_completed'],
+          'PERF-E2E-002': const <String>['multi_conversation_dataset_verified'],
+          'PERF-E2E-003': const <String>['cold_shell_visibility_measured'],
+          'PERF-E2E-004': const <String>[
+            'snapshot_and_hydration_timings_verified',
+          ],
+          'PERF-E2E-005': const <String>['app_to_cli_latency_measured'],
+          'PERF-E2E-006': const <String>['cli_to_app_latency_measured'],
+          'PERF-E2E-007': const <String>['full_refresh_regression_checked'],
+          'PERF-E2E-008': const <String>['long_thread_open_timing_measured'],
+          'PERF-E2E-009': const <String>['product_timing_schema_written'],
+          'PERF-E2E-010': const <String>['hard_budget_semantics_checked'],
+          'PERF-E2E-011': const <String>['soft_budget_semantics_checked'],
+          'PERF-E2E-012': const <String>['failure_diagnostics_retained'],
+        });
         return;
       }
 
@@ -205,6 +232,20 @@ void runDesktopCliPeerE2e({
           config: config,
           nonce: messageNonce,
         );
+        await _attestPassedCases(<String, List<String>>{
+          'MSG-E2E-001': const <String>[
+            'app_send_accepted',
+            'cli_inbox_exact_message_verified',
+          ],
+          'MSG-E2E-002': const <String>[
+            'cli_send_accepted',
+            'app_history_exact_message_verified',
+          ],
+          'MSG-REG-001': const <String>[
+            'history_replay_verified',
+            'duplicate_regression_checked',
+          ],
+        });
       }
 
       if (selectedCase.runsContacts) {
@@ -213,6 +254,19 @@ void runDesktopCliPeerE2e({
           relationships: relationships,
           config: config,
         );
+        await _attestPassedCases(<String, List<String>>{
+          'CONTACT-E2E-001': const <String>[
+            'app_follow_completed',
+            'cli_relationship_observed',
+          ],
+          'CONTACT-E2E-002': const <String>[
+            'cli_follow_completed',
+            'app_relationship_observed',
+          ],
+          'CONTACT-REG-001': const <String>[
+            'follow_unfollow_regression_checked',
+          ],
+        });
       }
 
       if (selectedCase.runsGroup) {
@@ -223,6 +277,16 @@ void runDesktopCliPeerE2e({
           config: config,
           nonce: messageNonce,
         );
+        await _attestPassedCases(<String, List<String>>{
+          'GROUP-E2E-001': const <String>[
+            'group_created_and_member_added',
+            'app_group_send_verified',
+          ],
+          'GROUP-E2E-002': const <String>['cli_group_send_verified_in_app'],
+          'GROUP-P9-001': const <String>['app_group_mention_verified'],
+          'GROUP-P9-002': const <String>['cli_group_mention_verified'],
+          'GROUP-REG-001': const <String>['group_history_regression_checked'],
+        });
       }
 
       if (selectedCase.runsAttachment) {
@@ -232,11 +296,30 @@ void runDesktopCliPeerE2e({
           config: config,
           nonce: messageNonce,
         );
+        await _attestPassedCases(<String, List<String>>{
+          'ATTACH-E2E-001': const <String>[
+            'app_attachment_sent',
+            'cli_attachment_bytes_verified',
+          ],
+          'ATTACH-E2E-002': const <String>[
+            'cli_attachment_sent',
+            'app_attachment_bytes_verified',
+          ],
+          'ATTACH-REG-001': const <String>[
+            'attachment_digest_regression_checked',
+          ],
+        });
       }
     },
     skip: !_DesktopCliPeerSmokeConfig.exists(),
     timeout: const Timeout(Duration(minutes: 12)),
   );
+}
+
+Future<void> _attestPassedCases(Map<String, List<String>> cases) async {
+  for (final entry in cases.entries) {
+    await E2eCaseAttestationWriter.markPassed(entry.key, phases: entry.value);
+  }
 }
 
 Future<AppSession> _prepareAppIdentity(

@@ -4,10 +4,13 @@ import 'dart:io';
 
 import 'package:yaml/yaml.dart';
 
+import 'case_attestation.dart';
+
 const String _defaultDesktopE2eConfigPath = 'tests/e2e/configs/e2e.local.yaml';
 const String _desktopCliPeerRunConfigPath =
     '.e2e/desktop-cli-peer/current/run_config.json';
 const String _desktopCliPeerProductTimingsFileName = 'product_timings.json';
+const String _caseAttestationFileName = 'case_attestation.json';
 const String _messageAgentRunConfigPath =
     '.e2e/message-agent/current/run_config.json';
 const String _codexAgentRunConfigPath =
@@ -216,7 +219,11 @@ class DesktopE2eRunner {
   late final Directory appStateRootDir;
   late final File runConfigFile;
   late final File productTimingsFile;
+  late final File caseAttestationFile;
   final List<DesktopTimingEntry> _timings = <DesktopTimingEntry>[];
+  final Map<String, E2eCaseAttestationResult> _attestedCases =
+      <String, E2eCaseAttestationResult>{};
+  String? _caseAttestationError;
   DesktopProductTimingReport? _productTimingReport;
   DesktopPerformanceBudgetResult? _performanceBudgetResult;
 
@@ -246,6 +253,7 @@ class DesktopE2eRunner {
     productTimingsFile = File(
       '${reportDir.path}/$_desktopCliPeerProductTimingsFileName',
     );
+    caseAttestationFile = File('${reportDir.path}/$_caseAttestationFileName');
     _addRuntimeSecret(reportDir.path);
     _addRuntimeSecret(cliWorkspaceDir.path);
     _addRuntimeSecret(cliHomeDir.path);
@@ -254,6 +262,16 @@ class DesktopE2eRunner {
     _addRuntimeSecret(appStateRootDir.path);
     _addRuntimeSecret(runConfigFile.path);
     _addRuntimeSecret(productTimingsFile.path);
+    _addRuntimeSecret(caseAttestationFile.path);
+    if (!options.dryRun && !options.prepareOnly) {
+      if (caseAttestationFile.existsSync()) {
+        caseAttestationFile.deleteSync();
+      }
+      final temporary = File('${caseAttestationFile.path}.tmp');
+      if (temporary.existsSync()) {
+        temporary.deleteSync();
+      }
+    }
     if (!options.dryRun && options.e2eCase.requiresCliPeer) {
       cliWorkspaceDir.createSync(recursive: true);
       cliHomeDir.createSync(recursive: true);
@@ -263,22 +281,30 @@ class DesktopE2eRunner {
     }
 
     final totalStopwatch = Stopwatch()..start();
-    var succeeded = false;
+    var orchestrationSucceeded = false;
     try {
       if (options.e2eCase == DesktopE2eCase.smoke) {
         await _runLocalSmoke();
       } else {
         await _runAppCliPeer();
       }
-      succeeded = true;
+      orchestrationSucceeded = true;
+      if (!options.dryRun && !options.prepareOnly) {
+        _loadCaseAttestation(requireComplete: true);
+      }
+    } on Object {
+      if (!options.dryRun && !options.prepareOnly) {
+        _loadCaseAttestation(requireComplete: false);
+      }
+      rethrow;
     } finally {
       totalStopwatch.stop();
       _writeTimingReport(
-        succeeded: succeeded,
+        orchestrationSucceeded: orchestrationSucceeded,
         totalElapsed: totalStopwatch.elapsed,
       );
       _printTimingSummary(
-        succeeded: succeeded,
+        orchestrationSucceeded: orchestrationSucceeded,
         totalElapsed: totalStopwatch.elapsed,
       );
     }
@@ -297,10 +323,16 @@ class DesktopE2eRunner {
       }
     });
     await _timed('Flutter App smoke', () {
-      return _runFlutterTest('integration_test/app_smoke_test.dart');
+      return _runFlutterTest(
+        'integration_test/app_smoke_test.dart',
+        caseIds: const <String>['SMOKE-E2E-001'],
+      );
     });
     await _timed('Flutter native IM Core smoke', () {
-      return _runFlutterTest('integration_test/im_core_open_smoke_test.dart');
+      return _runFlutterTest(
+        'integration_test/im_core_open_smoke_test.dart',
+        caseIds: const <String>['NATIVE-E2E-001'],
+      );
     });
   }
 
@@ -573,6 +605,7 @@ class DesktopE2eRunner {
       peerConfig.e2eCase.testFile,
       '-d',
       peerConfig.platform.name,
+      ..._caseAttestationDartDefines(peerConfig.e2eCase.caseIds),
     ];
     await _runFlutterArgs(
       flutterArgs,
@@ -666,7 +699,10 @@ class DesktopE2eRunner {
     );
   }
 
-  Future<void> _runFlutterTest(String testFile) {
+  Future<void> _runFlutterTest(
+    String testFile, {
+    required List<String> caseIds,
+  }) {
     return _runFlutterArgs(
       <String>[
         'test',
@@ -675,11 +711,19 @@ class DesktopE2eRunner {
         testFile,
         '-d',
         platform.name,
+        ..._caseAttestationDartDefines(caseIds),
       ],
       platform: platform,
       timeout: options.e2eCase.flutterTimeout,
     );
   }
+
+  List<String> _caseAttestationDartDefines(List<String> caseIds) => <String>[
+    '--dart-define=$e2eCaseAttestationPathDefine=${caseAttestationFile.path}',
+    '--dart-define=$e2eCaseScenarioDefine=${options.e2eCase.scenario}',
+    '--dart-define=$e2eCaseRunIdDefine=$runId',
+    '--dart-define=$e2eCaseIdsDefine=${caseIds.join(',')}',
+  ];
 
   Future<void> _runFlutterArgs(
     List<String> flutterArgs, {
@@ -776,8 +820,68 @@ class DesktopE2eRunner {
     });
   }
 
+  void _loadCaseAttestation({required bool requireComplete}) {
+    try {
+      final attestation = E2eCaseAttestation.read(caseAttestationFile);
+      final validation = E2eCaseAttestationValidation.validate(
+        attestation: attestation,
+        expectedScenario: options.e2eCase.scenario,
+        expectedRunId: runId,
+        expectedCaseIds: options.e2eCase.caseIds,
+      );
+      _attestedCases
+        ..clear()
+        ..addEntries(
+          validation.caseById.entries.where(
+            (entry) => options.e2eCase.caseIds.contains(entry.key),
+          ),
+        );
+      _caseAttestationError = validation.passed
+          ? null
+          : validation.errors.join('; ');
+      if (!requireComplete) {
+        return;
+      }
+      if (!validation.passed) {
+        throw FormatException(validation.errors.join('; '));
+      }
+    } on Object catch (error) {
+      final message = redactor.redact(error.toString());
+      _caseAttestationError = message;
+      if (requireComplete) {
+        throw E2eFailure('E2E case attestation failed closed: $message');
+      }
+    }
+  }
+
+  String _caseStatus(String caseId) {
+    if (options.dryRun) {
+      return 'dry_run';
+    }
+    if (options.prepareOnly) {
+      return 'prepared';
+    }
+    return _attestedCases[caseId]?.status ?? 'not_run';
+  }
+
+  String _suiteStatus({required bool orchestrationSucceeded}) {
+    if (!orchestrationSucceeded) {
+      return 'failed';
+    }
+    if (options.dryRun) {
+      return 'dry_run';
+    }
+    if (options.prepareOnly) {
+      return 'prepared';
+    }
+    final allPassed = options.e2eCase.caseIds.every(
+      (caseId) => _caseStatus(caseId) == 'passed',
+    );
+    return orchestrationSucceeded && allPassed ? 'passed' : 'failed';
+  }
+
   void _writeTimingReport({
-    required bool succeeded,
+    required bool orchestrationSucceeded,
     required Duration totalElapsed,
   }) {
     final productTimingReport = _productTimingReport;
@@ -789,9 +893,51 @@ class DesktopE2eRunner {
     }
     file.writeAsStringSync(
       encoder.convert(<String, Object?>{
-        'status': succeeded ? 'success' : 'failed',
+        'schemaVersion': 2,
+        'status': _suiteStatus(orchestrationSucceeded: orchestrationSucceeded),
+        'mode': options.dryRun
+            ? 'dry_run'
+            : options.prepareOnly
+            ? 'prepared'
+            : 'real',
         'scenario': (config?.e2eCase ?? options.e2eCase).scenario,
         'caseIds': (config?.e2eCase ?? options.e2eCase).caseIds,
+        'passedCaseIds': <String>[
+          for (final caseId in options.e2eCase.caseIds)
+            if (_caseStatus(caseId) == 'passed') caseId,
+        ],
+        'caseResults': <Map<String, Object?>>[
+          for (final caseId in options.e2eCase.caseIds)
+            <String, Object?>{
+              'caseId': caseId,
+              'status': _caseStatus(caseId),
+              'mode': options.dryRun
+                  ? 'dry_run'
+                  : options.prepareOnly
+                  ? 'prepared'
+                  : 'real',
+              if (_attestedCases[caseId] != null)
+                'startedAt': _attestedCases[caseId]!.startedAt,
+              if (_attestedCases[caseId] != null)
+                'finishedAt': _attestedCases[caseId]!.finishedAt,
+              'phases': _attestedCases[caseId]?.phases ?? const <String>[],
+            },
+        ],
+        'attestation': <String, Object?>{
+          'schemaVersion': e2eCaseAttestationSchemaVersion,
+          'path': '<redacted-attestation-path>',
+          'status': options.dryRun
+              ? 'not_expected_dry_run'
+              : options.prepareOnly
+              ? 'not_expected_prepared'
+              : _caseAttestationError == null &&
+                    options.e2eCase.caseIds.every(
+                      (caseId) => _caseStatus(caseId) == 'passed',
+                    )
+              ? 'verified'
+              : 'invalid',
+          if (_caseAttestationError != null) 'error': _caseAttestationError,
+        },
         'runId': runId,
         'platform': platform.name,
         'case': (config?.e2eCase ?? options.e2eCase).caseName,
@@ -885,11 +1031,13 @@ class DesktopE2eRunner {
   }
 
   void _printTimingSummary({
-    required bool succeeded,
+    required bool orchestrationSucceeded,
     required Duration totalElapsed,
   }) {
     _section('Timing summary');
-    _line('status: ${succeeded ? 'success' : 'failed'}');
+    _line(
+      'status: ${_suiteStatus(orchestrationSucceeded: orchestrationSucceeded)}',
+    );
     _line('total: ${_formatDuration(totalElapsed)}');
     for (final entry in _timings) {
       _line(

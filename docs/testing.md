@@ -251,6 +251,28 @@ result. Keep `.e2e/`, `*.local.yaml`, OTP values, JWTs, private keys, CLI
 workspaces, App state roots, remote logs, screenshots, and device state out of
 Git.
 
+### Case-level attestation and fail-closed reports
+
+Runner reports use schema v2. `status=passed` is valid only when the Flutter
+scenario itself writes a schema-v1 `case_attestation.json` and every expected
+case ID has one unique `status=passed` result with non-empty phases and
+timestamps. The outer Flutter process exit code is necessary but is not enough.
+
+The runner reports `dry_run` and `prepared` as distinct non-passing suite and
+case states. Missing, duplicate, unknown, skipped, failed, corrupt, wrong-run,
+or wrong-scenario attestation results make a real run `failed`. The report keeps
+the expected IDs in `caseIds`, actual successful IDs in `passedCaseIds`, and one
+entry per expected case in `caseResults`. Attestation and workspace paths remain
+redacted; the scenario file stores only case IDs, phase names, status, and
+timestamps.
+
+Message Agent daemon management UI is currently hidden. Therefore its fake
+Widget coverage is not product acceptance, and `--case message-agent` must not
+report `passed` until the real UI scenario can attest all of
+`MSGAGENT-E2E-001..004`. A missing/disabled real-backend config, the hidden UI,
+or an unimplemented action-confirmation/lifecycle phase is an explicit failing
+gate rather than a skipped or successful result.
+
 ## Maintenance Rules
 
 - Add ordinary logic, provider, and widget coverage to `tests/unit/`.

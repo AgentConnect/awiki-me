@@ -846,7 +846,9 @@ cliPeer:
       expect(timingText, isNot(contains('test-otp-secret')));
       expect(timingText, isNot(contains(root.path)));
       final decoded = jsonDecode(timingText) as Map<String, dynamic>;
-      expect(decoded['status'], 'success');
+      expect(decoded['schemaVersion'], 2);
+      expect(decoded['status'], 'dry_run');
+      expect(decoded['mode'], 'dry_run');
       expect(decoded['scenario'], 'desktop-app-cli-peer');
       expect(decoded['case'], 'full');
       expect(decoded['caseIds'], <dynamic>[
@@ -870,6 +872,21 @@ cliPeer:
       expect(decoded['platform'], 'linux');
       expect(decoded['dryRun'], isTrue);
       expect(decoded['prepareOnly'], isFalse);
+      final caseResults = decoded['caseResults'] as List<dynamic>;
+      expect(caseResults, hasLength(15));
+      expect(
+        caseResults.every(
+          (value) =>
+              (value as Map<String, dynamic>)['status'] == 'dry_run' &&
+              value['mode'] == 'dry_run',
+        ),
+        isTrue,
+      );
+      expect(decoded['passedCaseIds'], isEmpty);
+      expect(
+        (decoded['attestation'] as Map<String, dynamic>)['status'],
+        'not_expected_dry_run',
+      );
       expect(decoded['appHandle'], 'e2e-app');
       expect(decoded['cliHandle'], 'e2e-cli');
       expect(decoded['serviceBaseUrl'], 'https://service.example.test');
@@ -906,6 +923,7 @@ cliPeer:
           options: DesktopE2eOptions.parse(const <String>[
             '--case',
             'full',
+            '--dry-run',
             '--run-id',
             'run-config',
           ]),
@@ -955,6 +973,67 @@ cliPeer:
         final log = lines.join('\n');
         expect(log, isNot(contains('test-phone-secret')));
         expect(log, isNot(contains('test-otp-secret')));
+      },
+    );
+
+    test(
+      'fails closed when Flutter exits successfully without case attestation',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'awiki_desktop_missing_attestation_test_',
+        );
+        addTearDown(() async {
+          if (await root.exists()) {
+            await root.delete(recursive: true);
+          }
+        });
+        _writeLocalConfig(root, platform: 'macos');
+        final runner = DesktopE2eRunner(
+          root: root,
+          options: DesktopE2eOptions.parse(const <String>[
+            '--case',
+            'direct',
+            '--run-id',
+            'run-missing-attestation',
+          ]),
+          commands: DesktopCommandRunner(
+            root: root,
+            dryRun: true,
+            redactor: DesktopSecretRedactor(const <String>[]),
+          ),
+        );
+
+        await expectLater(
+          runner.run(),
+          throwsA(
+            isA<E2eFailure>().having(
+              (error) => error.message,
+              'message',
+              contains('case attestation failed closed'),
+            ),
+          ),
+        );
+
+        final report = File(
+          '${root.path}/.e2e/desktop-cli-peer/'
+          'run-missing-attestation/reports/timings.json',
+        );
+        final decoded =
+            jsonDecode(await report.readAsString()) as Map<String, dynamic>;
+        expect(decoded['schemaVersion'], 2);
+        expect(decoded['status'], 'failed');
+        expect(decoded['mode'], 'real');
+        expect(decoded['passedCaseIds'], isEmpty);
+        expect(
+          (decoded['caseResults'] as List<dynamic>).every(
+            (value) => (value as Map<String, dynamic>)['status'] == 'not_run',
+          ),
+          isTrue,
+        );
+        expect(
+          (decoded['attestation'] as Map<String, dynamic>)['status'],
+          'invalid',
+        );
       },
     );
 
@@ -1333,6 +1412,7 @@ performance:
         options: DesktopE2eOptions.parse(const <String>[
           '--case',
           'message-agent',
+          '--dry-run',
           '--run-id',
           'run-message-agent',
         ]),
@@ -1442,6 +1522,7 @@ performance:
           options: DesktopE2eOptions.parse(const <String>[
             '--case',
             'message-agent',
+            '--dry-run',
             '--run-id',
             'run-message-agent-default',
           ]),
@@ -1514,6 +1595,7 @@ performance:
           options: DesktopE2eOptions.parse(const <String>[
             '--case',
             'codex-agent',
+            '--dry-run',
             '--run-id',
             'run-codex-agent',
           ]),
@@ -1620,6 +1702,7 @@ performance:
           options: DesktopE2eOptions.parse(const <String>[
             '--case',
             'claude-code-agent',
+            '--dry-run',
             '--run-id',
             'run-claude-code-agent',
           ]),
@@ -1755,7 +1838,6 @@ performance:
       final runner = DesktopE2eRunner(
         root: root,
         options: DesktopE2eOptions.parse(const <String>[
-          '--dry-run',
           '--case',
           'full',
           '--prepare-only',
@@ -1779,6 +1861,21 @@ performance:
       expect(log, isNot(contains(r'$ which cargo')));
       expect(log, contains('Prepare-only completed'));
       expect(log, isNot(contains('desktop_cli_peer_smoke_test.dart')));
+      final timings = File(
+        '${root.path}/.e2e/desktop-cli-peer/run-prepare/reports/timings.json',
+      );
+      final decoded =
+          jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
+      expect(decoded['schemaVersion'], 2);
+      expect(decoded['status'], 'prepared');
+      expect(decoded['mode'], 'prepared');
+      expect(decoded['passedCaseIds'], isEmpty);
+      expect(
+        (decoded['caseResults'] as List<dynamic>).every(
+          (value) => (value as Map<String, dynamic>)['status'] == 'prepared',
+        ),
+        isTrue,
+      );
     });
   });
 

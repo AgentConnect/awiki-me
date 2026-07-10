@@ -105,6 +105,20 @@ the App local history contains the exact CLI source message, the daemon records
 a sent `runtime_final_outbox` row with a non-null message id and sent timestamp,
 and the final text equals the deterministic expected reply.
 
+The Message Agent management surface is currently hidden in the product. The
+real-backend scenario is intentionally fail-closed: fake-backed Widget tests,
+an outer `flutter test` exit code, a missing config, or a partial lifecycle may
+not attest the four Message Agent case IDs. The runner remains red until the
+UI and all required phases are restored; lower-level backend coverage continues
+to be reported separately and must not be relabeled as full UI acceptance.
+
+Every runner-owned Flutter invocation receives an ignored local attestation
+path through dart-defines. Durable scenarios call
+`E2eCaseAttestationWriter.markPassed` only after the case's business assertions
+complete. Schema-v2 `timings.json` is derived from that scenario-owned evidence:
+`dry_run`, `prepared`, missing, duplicate, skipped, or incomplete case results
+are never converted to `passed`.
+
 `--case codex-agent` is the durable acceptance entry for Codex Agent direct-chat
 behavior. It must create/select a Codex runtime Agent, send a deterministic
 prompt through the App chat UI, require `runtime_run.status = finished` and
