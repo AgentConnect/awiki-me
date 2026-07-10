@@ -140,9 +140,9 @@ bool _cliExactMessageMatches(
   String? expectedGroupDid,
   String? expectedContentType,
 }) {
-  final matches = _cliMessagesWithExactText(
+  final matches = cliMessagesWithExactText(
     output,
-    expectedText,
+    expectedText: expectedText,
     expectedMessageId: expectedMessageId,
   );
   if (matches.length != 1) {
@@ -353,68 +353,6 @@ Object? _jsonValueAtDecoded(Object? value, List<Object> path) {
   return value;
 }
 
-List<Map<String, Object?>> _cliMessagesWithExactText(
-  String output,
-  String expectedText, {
-  String? expectedMessageId,
-}) {
-  final messages = _jsonValueAt(output, const <Object>['data', 'messages']);
-  if (messages is! List) {
-    return const <Map<String, Object?>>[];
-  }
-  return messages
-      .whereType<Map>()
-      .map((message) => _cliStringKeyMap(message))
-      .where((message) {
-        if (!_cliMessageContentMatches(message, expectedText)) {
-          return false;
-        }
-        final id =
-            _nonEmptyCliString(message['message_id']) ??
-            _nonEmptyCliString(message['msg_id']) ??
-            _nonEmptyCliString(message['id']);
-        return expectedMessageId == null || id == expectedMessageId;
-      })
-      .toList(growable: false);
-}
-
-bool _cliMessageContentMatches(
-  Map<String, Object?> message,
-  String expectedText,
-) {
-  for (final content in <Object?>[
-    message['content'],
-    message['payload'],
-    message['body'],
-  ]) {
-    if (content is String) {
-      if (content == expectedText) {
-        return true;
-      }
-      try {
-        final decoded = jsonDecode(content);
-        if (decoded is Map) {
-          final map = _cliStringKeyMap(decoded);
-          if (_nonEmptyCliString(map['text']) == expectedText ||
-              _nonEmptyCliString(map['caption']) == expectedText) {
-            return true;
-          }
-        }
-      } on FormatException {
-        // Plain text is already compared above.
-      }
-    }
-    if (content is Map) {
-      final map = _cliStringKeyMap(content);
-      if (_nonEmptyCliString(map['text']) == expectedText ||
-          _nonEmptyCliString(map['caption']) == expectedText) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 _CliAttachmentMessage? _cliAttachmentMessage(
   String output, {
   required String expectedText,
@@ -422,9 +360,9 @@ _CliAttachmentMessage? _cliAttachmentMessage(
   required String expectedAttachmentId,
   required String expectedFilename,
 }) {
-  final matches = _cliMessagesWithExactText(
+  final matches = cliMessagesWithExactText(
     output,
-    expectedText,
+    expectedText: expectedText,
     expectedMessageId: expectedMessageId,
   );
   if (matches.length != 1) {

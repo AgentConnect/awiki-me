@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
@@ -54,6 +56,37 @@ void main() {
         content: 'exact body',
       ),
       throwsStateError,
+    );
+  });
+
+  test('expected message id cannot hide duplicate body with another id', () {
+    expect(
+      () => requireExactlyOneMessage(
+        messages: <ChatMessage>[
+          message(localId: 'local-1', remoteId: 'remote-1'),
+          message(localId: 'local-2', remoteId: 'remote-2'),
+        ],
+        content: 'exact body',
+        messageId: 'remote-1',
+      ),
+      throwsStateError,
+    );
+
+    final output = jsonEncode(<String, Object?>{
+      'data': <String, Object?>{
+        'messages': <Map<String, Object?>>[
+          <String, Object?>{'message_id': 'remote-1', 'content': 'exact body'},
+          <String, Object?>{'message_id': 'remote-2', 'content': 'exact body'},
+        ],
+      },
+    });
+    expect(
+      cliMessagesWithExactText(
+        output,
+        expectedText: 'exact body',
+        expectedMessageId: 'remote-1',
+      ),
+      hasLength(2),
     );
   });
 
@@ -120,5 +153,86 @@ void main() {
       ),
       throwsStateError,
     );
+  });
+
+  test('CLI relationship state rejects a missing or malformed field', () {
+    expect(
+      cliRelationshipState(
+        jsonEncode(<String, Object?>{
+          'data': <String, Object?>{
+            'did': 'did:test:peer',
+            'is_following': false,
+          },
+        }),
+      ),
+      isNull,
+    );
+    expect(
+      cliRelationshipState(
+        jsonEncode(<String, Object?>{
+          'data': <String, Object?>{'relationship': 'none'},
+        }),
+      ),
+      'none',
+    );
+    expect(
+      cliRelationshipState(
+        jsonEncode(<String, Object?>{
+          'data': <String, Object?>{'relationship': 'unexpected'},
+        }),
+      ),
+      isNull,
+    );
+  });
+
+  test('CLI mention oracle validates full text, range, target, and role', () {
+    Map<String, Object?> cliMention({
+      String text = '@peer hello',
+      int start = 0,
+      int end = 5,
+      String unit = 'unicode_code_point',
+      String targetDid = 'did:test:peer',
+      String targetKind = 'human',
+      String role = 'addressee',
+    }) {
+      return <String, Object?>{
+        'message_id': 'remote-mention',
+        'payload': jsonEncode(<String, Object?>{
+          'text': text,
+          'mentions': <Map<String, Object?>>[
+            <String, Object?>{
+              'id': 'mention-1',
+              'range': <String, Object?>{
+                'start': start,
+                'end': end,
+                'unit': unit,
+              },
+              'target': <String, Object?>{'kind': targetKind, 'did': targetDid},
+              'mention_role': role,
+            },
+          ],
+        }),
+      };
+    }
+
+    bool matches(Map<String, Object?> value) {
+      return cliMessageHasExactSingleMention(
+        message: value,
+        expectedText: '@peer hello',
+        expectedMentionSurface: '@peer',
+        expectedTargetDid: 'did:test:peer',
+        expectedTargetKind: 'human',
+        expectedMentionRole: 'addressee',
+      );
+    }
+
+    expect(matches(cliMention()), isTrue);
+    expect(matches(cliMention(text: '@peer wrong')), isFalse);
+    expect(matches(cliMention(start: 1)), isFalse);
+    expect(matches(cliMention(end: 4)), isFalse);
+    expect(matches(cliMention(unit: 'utf16_code_unit')), isFalse);
+    expect(matches(cliMention(targetDid: 'did:test:other')), isFalse);
+    expect(matches(cliMention(targetKind: 'agent')), isFalse);
+    expect(matches(cliMention(role: 'cc')), isFalse);
   });
 }

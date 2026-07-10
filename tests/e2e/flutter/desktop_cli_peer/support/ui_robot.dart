@@ -351,6 +351,8 @@ class _DesktopAppRobot {
     );
   }
 
+  /// Rebuilds the Widget tree and App shell in this integration-test process.
+  /// This is intentionally not evidence of a native OS process restart.
   Future<void> restart({
     required AppBootstrap bootstrap,
     required List<Override> providerOverrides,

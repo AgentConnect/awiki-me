@@ -153,9 +153,11 @@ result, but they must not perform the App user action under test.
 
 The product oracle is fail-closed:
 
-- message checks require one canonical message id, terminal send state, exact
-  body, sender and conversation, and remain exact-one after reconnect and App
-  restart;
+- all message checks require one canonical message id, terminal send state,
+  exact body, sender and conversation; the direct-message slice additionally
+  remains exact-one after a lifecycle reconnect and a Widget/App-shell rebuild,
+  while group and attachment slices use a later history stability window (not
+  an OS process restart);
 - incoming direct messages require an exact unread baseline increment, matching
   navigation badge and conversation count, read-clear on open, no rebound, and
   a second-message increment;

@@ -224,16 +224,8 @@ Future<void> _waitForCliRelationshipStatus({
       if (result.exitCode != 0) {
         return false;
       }
-      final data = _jsonValueAt(result.stdout, const <Object>['data']);
-      if (data is! Map) {
-        return false;
-      }
-      final map = _cliStringKeyMap(data);
-      final relationship =
-          _nonEmptyCliString(map['relationship']) ??
-          _nonEmptyCliString(map['status']) ??
-          'none';
-      return relationship.toLowerCase() == expectedRelationship;
+      return cliRelationshipState(result.stdout) ==
+          expectedRelationship.trim().toLowerCase();
     },
   );
 }

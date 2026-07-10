@@ -77,6 +77,7 @@ Future<void> _verifyGroupTextRegression({
     config: config,
     groupDid: groupDid,
     expectedText: appMentionText,
+    expectedMentionSurface: appMentionText.split(' ').first,
     expectedMessageId: appMentionId,
     expectedTargetDid: cliMember.did,
   );
@@ -213,6 +214,7 @@ Future<void> _waitForCliMentionMetadata({
   required _DesktopCliPeerSmokeConfig config,
   required String groupDid,
   required String expectedText,
+  required String expectedMentionSurface,
   required String expectedMessageId,
   required String expectedTargetDid,
 }) async {
@@ -233,54 +235,23 @@ Future<void> _waitForCliMentionMetadata({
       if (result.exitCode != 0) {
         return false;
       }
-      final matches = _cliMessagesWithExactText(
+      final matches = cliMessagesWithExactText(
         result.stdout,
-        expectedText,
+        expectedText: expectedText,
         expectedMessageId: expectedMessageId,
       );
       if (matches.length != 1) {
         return false;
       }
-      final payload = _cliMessagePayload(matches.single);
-      final mentions = payload?['mentions'];
-      if (mentions is! List || mentions.length != 1) {
-        return false;
-      }
-      final mention = mentions.single;
-      if (mention is! Map) {
-        return false;
-      }
-      final target = mention['target'];
-      return target is Map && target['did'] == expectedTargetDid;
+      return cliMessageHasExactSingleMention(
+        message: matches.single,
+        expectedText: expectedText,
+        expectedMentionSurface: expectedMentionSurface,
+        expectedTargetDid: expectedTargetDid,
+        expectedTargetKind: 'human',
+        expectedMentionRole: 'addressee',
+        expectedRangeUnit: 'unicode_code_point',
+      );
     },
   );
-}
-
-Map<String, Object?>? _cliMessagePayload(Map<String, Object?> message) {
-  for (final value in <Object?>[
-    message['payload'],
-    message['content'],
-    message['body'],
-  ]) {
-    if (value is Map) {
-      final map = _cliStringKeyMap(value);
-      if (map['text'] is String && map['mentions'] is List) {
-        return map;
-      }
-    }
-    if (value is String) {
-      try {
-        final decoded = jsonDecode(value);
-        if (decoded is Map) {
-          final map = _cliStringKeyMap(decoded);
-          if (map['text'] is String && map['mentions'] is List) {
-            return map;
-          }
-        }
-      } on FormatException {
-        // Continue through alternate wire fields.
-      }
-    }
-  }
-  return null;
 }

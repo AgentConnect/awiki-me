@@ -273,6 +273,9 @@ Future<ChatMessage> _waitForUiMessage({
   bool requireCanonicalRemoteId = true,
 }) async {
   ChatMessage? matched;
+  // Fail immediately if the oracle was accidentally pointed at a different
+  // selected conversation; polling must never turn that into a fallback.
+  _uiMessages(robot, conversationId);
   await robot.pumpUntil(
     description: 'UI timeline exact message "$content"',
     timeout: const Duration(seconds: 90),
@@ -298,13 +301,31 @@ Future<ChatMessage> _waitForUiMessage({
 
 List<ChatMessage> _uiMessages(_DesktopAppRobot robot, String conversationId) {
   final notifier = robot.container.read(chatThreadsProvider.notifier);
-  final canonical = notifier.thread(conversationId).messages;
+  final requestedId = conversationId.trim();
+  final selected = robot.container.read(selectedConversationProvider);
+  if (selected == null) {
+    throw StateError(
+      'Cannot inspect UI messages for "$requestedId" without a selected '
+      'conversation.',
+    );
+  }
+  final selectedConversationId = selected.effectiveConversationId.trim();
+  final selectedThreadId = selected.threadId.trim();
+  if (requestedId.isEmpty ||
+      (selectedConversationId != requestedId &&
+          selectedThreadId != requestedId)) {
+    throw StateError(
+      'Requested UI conversation "$requestedId" does not match selected '
+      'conversation "$selectedConversationId" / thread '
+      '"$selectedThreadId".',
+    );
+  }
+  final canonical = notifier.thread(requestedId).messages;
   if (canonical.isNotEmpty) {
     return canonical;
   }
-  final selected = robot.container.read(selectedConversationProvider);
-  if (selected != null && selected.threadId != conversationId) {
-    return notifier.thread(selected.threadId).messages;
+  if (selectedThreadId.isNotEmpty && selectedThreadId != requestedId) {
+    return notifier.thread(selectedThreadId).messages;
   }
   return canonical;
 }

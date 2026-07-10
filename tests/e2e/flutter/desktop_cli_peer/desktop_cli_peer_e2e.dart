@@ -259,7 +259,7 @@ void runDesktopCliPeerE2e({
           ],
           'MSG-REG-001': const <String>[
             'failure_retry_ui_verified',
-            'reconnect_restart_exact_one_verified',
+            'lifecycle_and_widget_restart_exact_one_verified',
           ],
         });
       }
