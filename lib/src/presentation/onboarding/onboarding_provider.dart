@@ -5,10 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../application/models/app_session.dart';
+import '../../application/models/onboarding_server_info.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../domain/repositories/awiki_account_gateway.dart';
 import '../../l10n/app_message.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
+
+const Object _unset = Object();
+
+enum OnboardingServerInfoStatus { loading, ready, failed }
 
 class OnboardingState {
   const OnboardingState({
@@ -19,6 +24,9 @@ class OnboardingState {
     this.otpResendCountdown = 0,
     this.emailResendCountdown = 0,
     this.isBusy = false,
+    this.serverInfoStatus = OnboardingServerInfoStatus.loading,
+    this.serverInfo,
+    this.serverInfoError,
   });
 
   final String entryMode;
@@ -28,9 +36,59 @@ class OnboardingState {
   final int otpResendCountdown;
   final int emailResendCountdown;
   final bool isBusy;
+  final OnboardingServerInfoStatus serverInfoStatus;
+  final OnboardingServerInfo? serverInfo;
+  final String? serverInfoError;
 
   bool get isOtpResendCoolingDown => otpResendCountdown > 0;
   bool get isEmailResendCoolingDown => emailResendCountdown > 0;
+  bool get isServerInfoLoading =>
+      serverInfoStatus == OnboardingServerInfoStatus.loading;
+  bool get isServerInfoReady =>
+      serverInfoStatus == OnboardingServerInfoStatus.ready;
+  bool get isServerInfoFailed =>
+      serverInfoStatus == OnboardingServerInfoStatus.failed;
+  bool get hasRegistrationMethods => registrationMethods.isNotEmpty;
+
+  List<OnboardingIdentityMethod> get registrationMethods {
+    return serverInfo?.registrationMethods ??
+        const <OnboardingIdentityMethod>[];
+  }
+
+  OnboardingIdentityMethodId? get selectedMethodId {
+    return OnboardingIdentityMethodId.parse(authMode);
+  }
+
+  OnboardingIdentityMethod? get selectedRegistrationMethod {
+    final id = selectedMethodId;
+    if (id == null) {
+      return null;
+    }
+    return serverInfo?.registrationMethod(id);
+  }
+
+  bool get supportsEmailRegistration {
+    return serverInfo?.supportsEmailActivationRegistration ?? false;
+  }
+
+  bool get supportsPhoneOtpRegistration {
+    return serverInfo?.supportsPhoneOtpRegistration ?? false;
+  }
+
+  bool get supportsPhoneNoVerificationRegistration {
+    return serverInfo?.supportsPhoneNoVerificationRegistration ?? false;
+  }
+
+  bool get supportsPhoneOtpRecovery {
+    return serverInfo?.supportsPhoneOtpRecovery ?? false;
+  }
+
+  bool get usesNoVerificationRegistration {
+    final method = selectedRegistrationMethod;
+    return method != null &&
+        method.verification.type == OnboardingVerificationType.none &&
+        !method.verification.required;
+  }
 
   OnboardingState copyWith({
     String? entryMode,
@@ -40,6 +98,9 @@ class OnboardingState {
     int? otpResendCountdown,
     int? emailResendCountdown,
     bool? isBusy,
+    OnboardingServerInfoStatus? serverInfoStatus,
+    Object? serverInfo = _unset,
+    Object? serverInfoError = _unset,
   }) {
     return OnboardingState(
       entryMode: entryMode ?? this.entryMode,
@@ -49,6 +110,13 @@ class OnboardingState {
       otpResendCountdown: otpResendCountdown ?? this.otpResendCountdown,
       emailResendCountdown: emailResendCountdown ?? this.emailResendCountdown,
       isBusy: isBusy ?? this.isBusy,
+      serverInfoStatus: serverInfoStatus ?? this.serverInfoStatus,
+      serverInfo: identical(serverInfo, _unset)
+          ? this.serverInfo
+          : serverInfo as OnboardingServerInfo?,
+      serverInfoError: identical(serverInfoError, _unset)
+          ? this.serverInfoError
+          : serverInfoError as String?,
     );
   }
 }
@@ -97,8 +165,13 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   }
 
   void setAuthMode(String value) {
+    final method = _registrationMethodForAuthMode(value);
+    if (state.isServerInfoReady && method == null) {
+      return;
+    }
     state = state.copyWith(
       authMode: value,
+      registerStep: 1,
       emailVerified: false,
       otpResendCountdown: 0,
       emailResendCountdown: 0,
@@ -108,10 +181,48 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   }
 
   void setRegisterStep(int step) {
+    if (state.usesNoVerificationRegistration && step != 1) {
+      return;
+    }
     state = state.copyWith(registerStep: step);
   }
 
+  Future<void> loadServerInfo({bool force = false}) async {
+    if (!force &&
+        (state.isServerInfoReady ||
+            state.isServerInfoLoading && state.serverInfo != null)) {
+      return;
+    }
+    state = state.copyWith(
+      serverInfoStatus: OnboardingServerInfoStatus.loading,
+      serverInfoError: null,
+    );
+    try {
+      final info = await ref
+          .read(onboardingSupportServiceProvider)
+          .loadServerInfo()
+          .timeout(_requestTimeout);
+      _applyServerInfo(info);
+    } on TimeoutException {
+      state = state.copyWith(
+        serverInfoStatus: OnboardingServerInfoStatus.failed,
+        serverInfoError: 'request_timeout_retry',
+      );
+    } catch (error) {
+      state = state.copyWith(
+        serverInfoStatus: OnboardingServerInfoStatus.failed,
+        serverInfoError: error.toString(),
+      );
+    }
+  }
+
   Future<void> requestOtp(String phone) async {
+    if (!state.supportsPhoneOtpRegistration) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.registrationMethodUnavailable());
+      return;
+    }
     var success = false;
     await _runBusy(() async {
       await ref.read(onboardingSupportServiceProvider).sendOtp(phone: phone);
@@ -124,6 +235,12 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   }
 
   Future<void> requestEmailActivation(String email) async {
+    if (!state.supportsEmailRegistration) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.registrationMethodUnavailable());
+      return;
+    }
     var success = false;
     await _runBusy(() async {
       await ref
@@ -140,6 +257,12 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   }
 
   Future<bool> checkEmailActivation(String email) async {
+    if (!state.supportsEmailRegistration) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.registrationMethodUnavailable());
+      return false;
+    }
     var verified = false;
     await _runBusy(() async {
       verified = await ref
@@ -162,6 +285,12 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String nickName,
     required String profileMarkdown,
   }) async {
+    if (!state.supportsPhoneOtpRegistration) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.registrationMethodUnavailable());
+      return;
+    }
     await _runBusy(() async {
       final session = await ref
           .read(onboardingServiceProvider)
@@ -185,16 +314,25 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String nickName,
     required String profileMarkdown,
   }) async {
+    if (!state.supportsPhoneOtpRegistration) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.registrationMethodUnavailable());
+      return;
+    }
     await _runBusy(() async {
       final support = ref.read(onboardingSupportServiceProvider);
       final onboarding = ref.read(onboardingServiceProvider);
       final status = await support.lookupHandleRegistration(handle: handle);
       final session = switch (status) {
-        HandleRegistrationStatus.registered => await onboarding.recoverHandle(
-          phone: phone,
-          otp: otp,
-          handle: handle,
-        ),
+        HandleRegistrationStatus.registered =>
+          state.supportsPhoneOtpRecovery
+              ? await onboarding.recoverHandle(
+                  phone: phone,
+                  otp: otp,
+                  handle: handle,
+                )
+              : throw StateError('handle_recovery_unsupported'),
         HandleRegistrationStatus.notRegistered =>
           await onboarding.registerHandleWithPhone(
             phone: phone,
@@ -215,6 +353,12 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String otp,
     required String handle,
   }) async {
+    if (!state.supportsPhoneOtpRecovery) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.registrationMethodUnavailable());
+      return;
+    }
     await _runBusy(() async {
       final session = await ref
           .read(onboardingServiceProvider)
@@ -231,6 +375,12 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     required String nickName,
     required String profileMarkdown,
   }) async {
+    if (!state.supportsEmailRegistration) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.registrationMethodUnavailable());
+      return;
+    }
     await _runBusy(() async {
       final support = ref.read(onboardingSupportServiceProvider);
       final status = await support.lookupHandleRegistration(handle: handle);
@@ -245,6 +395,38 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           .read(onboardingServiceProvider)
           .registerHandleWithEmail(
             email: email,
+            handle: handle,
+            nickName: nickName,
+            profileMarkdown: profileMarkdown,
+          );
+      await ref
+          .read(appRuntimeProvider.notifier)
+          .activateSession(_legacySessionFromAppSession(session));
+    });
+  }
+
+  Future<void> registerWithoutContactVerification({
+    required String phone,
+    required String handle,
+    required String nickName,
+    required String profileMarkdown,
+  }) async {
+    if (!state.supportsPhoneNoVerificationRegistration) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.registrationMethodUnavailable());
+      return;
+    }
+    await _runBusy(() async {
+      final support = ref.read(onboardingSupportServiceProvider);
+      final status = await support.lookupHandleRegistration(handle: handle);
+      if (status == HandleRegistrationStatus.registered) {
+        throw StateError('handle_already_registered_import_credential');
+      }
+      final session = await ref
+          .read(onboardingServiceProvider)
+          .registerHandleWithoutContactVerification(
+            phone: phone,
             handle: handle,
             nickName: nickName,
             profileMarkdown: profileMarkdown,
@@ -308,6 +490,52 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   void _cancelOtpResendCountdown() {
     _otpResendTimer?.cancel();
     _otpResendTimer = null;
+  }
+
+  void _applyServerInfo(OnboardingServerInfo info) {
+    final nextAuthMode = _nextAuthMode(info);
+    final method = nextAuthMode == null
+        ? null
+        : info.registrationMethod(
+            OnboardingIdentityMethodId.parse(nextAuthMode)!,
+          );
+    final authChanged = nextAuthMode != null && nextAuthMode != state.authMode;
+    if (authChanged || method == null) {
+      _cancelOtpResendCountdown();
+      _cancelEmailResendCountdown();
+    }
+    state = state.copyWith(
+      authMode: nextAuthMode ?? state.authMode,
+      registerStep: method?.verification.type == OnboardingVerificationType.none
+          ? 1
+          : state.registerStep,
+      emailVerified: authChanged ? false : state.emailVerified,
+      otpResendCountdown: authChanged || method == null
+          ? 0
+          : state.otpResendCountdown,
+      emailResendCountdown: authChanged || method == null
+          ? 0
+          : state.emailResendCountdown,
+      serverInfoStatus: OnboardingServerInfoStatus.ready,
+      serverInfo: info,
+      serverInfoError: null,
+    );
+  }
+
+  String? _nextAuthMode(OnboardingServerInfo info) {
+    final currentId = OnboardingIdentityMethodId.parse(state.authMode);
+    if (currentId != null && info.registrationMethod(currentId) != null) {
+      return currentId.wireName;
+    }
+    return info.defaultRegistrationMethod?.id.wireName;
+  }
+
+  OnboardingIdentityMethod? _registrationMethodForAuthMode(String authMode) {
+    final id = OnboardingIdentityMethodId.parse(authMode);
+    if (id == null) {
+      return null;
+    }
+    return state.serverInfo?.registrationMethod(id);
   }
 }
 

@@ -4,6 +4,7 @@ import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
+import 'package:awiki_me/src/application/models/onboarding_server_info.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
@@ -248,6 +249,25 @@ void main() {
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('移动端邮箱激活检查按钮使用整行宽度避免换行', (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage()),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('auth-mode-email')));
+    await tester.pumpAndSettle();
+
+    final actionRect = tester.getRect(
+      find.byKey(const Key('onboarding-email-action')),
+    );
+    expect(find.text('我已激活，检查状态'), findsOneWidget);
+    expect(actionRect.width, greaterThan(300));
   });
 
   testWidgets('入口 tab 按登录或注册、切换身份的顺序展示', (tester) async {
@@ -772,6 +792,86 @@ void main() {
     expect(gateway.lookupHandleRegistrationCalls, 1);
     expect(gateway.recoverHandleCalls, 1);
     expect(gateway.registerHandleCalls, 0);
+  });
+
+  testWidgets('OpenServer 注册页只展示手机号和 handle 并走无验证码注册', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..serverInfo = OnboardingServerInfo.openServerDefault(
+        didDomain: 'anpolis.net',
+      )
+      ..handleRegistrationStatus = HandleRegistrationStatus.notRegistered;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('发送验证码'), findsNothing);
+    expect(find.byKey(const Key('auth-mode-email')), findsNothing);
+    expect(find.text('当前服务器不需要短信或邮箱验证码，可直接创建新身份。'), findsOneWidget);
+
+    await tester.enterText(
+      find.byType(CupertinoTextField).at(0),
+      '13800138000',
+    );
+    await tester.enterText(find.byType(CupertinoTextField).at(1), 'alice');
+    await tester.tap(find.text('完成'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lookupHandleRegistrationCalls, 1);
+    expect(gateway.registerHandleWithoutContactVerificationCalls, 1);
+    expect(gateway.registerHandleCalls, 0);
+    expect(gateway.recoverHandleCalls, 0);
+  });
+
+  testWidgets('OpenServer 无验证码注册遇到已有 handle 时提示导入凭证', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..serverInfo = OnboardingServerInfo.openServerDefault()
+      ..handleRegistrationStatus = HandleRegistrationStatus.registered;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byType(CupertinoTextField).at(0),
+      '13800138000',
+    );
+    await tester.enterText(find.byType(CupertinoTextField).at(1), 'alice');
+    await tester.tap(find.text('完成'));
+    await tester.pump();
+
+    expect(gateway.lookupHandleRegistrationCalls, 1);
+    expect(gateway.registerHandleWithoutContactVerificationCalls, 0);
+    expect(gateway.recoverHandleCalls, 0);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    final feedback = container.read(uiFeedbackProvider);
+    expect(feedback?.message.id, 'handleAlreadyRegisteredImportCredential');
+    expect(feedback?.danger, isTrue);
+  });
+
+  testWidgets('server-info 加载失败时注册区展示重试入口', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..serverInfoError = StateError('server-info unavailable');
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('无法读取当前服务器支持的登录方式。请检查租户地址后重试。'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+    expect(find.text('发送验证码'), findsNothing);
+
+    gateway.serverInfoError = null;
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.loadServerInfoCalls, greaterThanOrEqualTo(2));
+    expect(find.text('发送验证码'), findsOneWidget);
   });
 
   testWidgets('邮箱提交遇到已注册 handle 时提示改用手机号登录', (tester) async {

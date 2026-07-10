@@ -7,6 +7,7 @@ import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../../app/app_locale.dart';
 import '../../app/e2e_semantics.dart';
+import '../../application/models/onboarding_server_info.dart';
 import '../../application/tenant/app_tenant.dart';
 import '../../data/tenant/app_tenant_store.dart';
 import '../../l10n/l10n.dart';
@@ -44,6 +45,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   final _mobileScrollController = ScrollController();
   ProviderSubscription<AppRuntimeState>? _runtimeSubscription;
   ProviderSubscription<SessionState>? _sessionSubscription;
+  ProviderSubscription<AppTenantProfile>? _tenantSubscription;
   Timer? _e2eOtpRetryTimer;
   int _e2eOtpAttempts = 0;
   bool _autoEntryModeEnabled = true;
@@ -65,10 +67,22 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     ) {
       _resolveEntryModeFromLocalCredentials();
     });
+    _tenantSubscription = ref.listenManual<AppTenantProfile>(
+      activeAppTenantProvider,
+      (previous, next) {
+        if (previous?.id == next.id) {
+          return;
+        }
+        unawaited(
+          ref.read(onboardingProvider.notifier).loadServerInfo(force: true),
+        );
+      },
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
+      unawaited(ref.read(onboardingProvider.notifier).loadServerInfo());
       _resolveEntryModeFromLocalCredentials();
     });
   }
@@ -78,6 +92,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     _stopE2eOtpRequestLoop();
     _runtimeSubscription?.close();
     _sessionSubscription?.close();
+    _tenantSubscription?.close();
     phoneController.dispose();
     otpController.dispose();
     emailController.dispose();
@@ -218,154 +233,12 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 onRefresh: runtime.refreshLocalCredentials,
               ),
             ] else ...<Widget>[
-              if (onboarding.registerStep == 1) ...<Widget>[
-                _AuthModeToggle(
-                  value: onboarding.authMode,
-                  onChanged: ref.read(onboardingProvider.notifier).setAuthMode,
-                ),
-                SizedBox(
-                  height: responsive.spacing(responsive.isPhone ? 32 : 24),
-                ),
-                Text(
-                  context.l10n.onboardingLoginRegisterHint,
-                  style: TextStyle(
-                    color: theme.secondaryText,
-                    fontSize: responsive.bodySm,
-                    height: 1.35,
-                  ),
-                ),
-                SizedBox(height: responsive.spacing(16)),
-                if (onboarding.authMode == 'phone') ...<Widget>[
-                  AppTextField(
-                    controller: phoneController,
-                    label: context.l10n.onboardingPhone,
-                    placeholder: context.l10n.onboardingPhonePlaceholder,
-                    keyboardType: TextInputType.phone,
-                    showLabel: !responsive.isPhone,
-                    semanticsIdentifier: 'e2e-phone-input',
-                    prefix: responsive.isPhone
-                        ? const _PhoneFieldPrefix(code: '+86')
-                        : null,
-                    suffix: _VerificationInlineButton(
-                      semanticsIdentifier: 'e2e-send-otp-button',
-                      label: onboarding.isOtpResendCoolingDown
-                          ? context.l10n.onboardingResendOtpIn(
-                              onboarding.otpResendCountdown,
-                            )
-                          : context.l10n.onboardingSendOtp,
-                      onPressed:
-                          onboarding.isBusy || onboarding.isOtpResendCoolingDown
-                          ? null
-                          : _requestOtp,
-                    ),
-                  ),
-                  SizedBox(height: responsive.spacing(14)),
-                  AppTextField(
-                    controller: otpController,
-                    label: context.l10n.onboardingOtp,
-                    placeholder: context.l10n.onboardingOtpPlaceholder,
-                    keyboardType: TextInputType.number,
-                    showLabel: !responsive.isPhone,
-                    semanticsIdentifier: 'e2e-otp-input',
-                  ),
-                  if (onboarding.isOtpResendCoolingDown)
-                    const E2eMarker('e2e-otp-sent'),
-                  _OtpCompleteMarker(controller: otpController),
-                ] else ...<Widget>[
-                  AppTextField(
-                    controller: emailController,
-                    label: context.l10n.onboardingEmail,
-                    placeholder: context.l10n.onboardingEmailPlaceholder,
-                    keyboardType: TextInputType.emailAddress,
-                    showLabel: !responsive.isPhone,
-                    suffix: _VerificationInlineButton(
-                      label: onboarding.isEmailResendCoolingDown
-                          ? context.l10n.onboardingResendActivationEmailIn(
-                              onboarding.emailResendCountdown,
-                            )
-                          : context.l10n.onboardingSendActivationEmail,
-                      onPressed:
-                          onboarding.isBusy ||
-                              onboarding.isEmailResendCoolingDown
-                          ? null
-                          : () => ref
-                                .read(onboardingProvider.notifier)
-                                .requestEmailActivation(
-                                  emailController.text.trim(),
-                                ),
-                    ),
-                  ),
-                  SizedBox(height: responsive.spacing(14)),
-                  _OnboardingAlignedAction(
-                    key: const Key('onboarding-email-action'),
-                    width: onboarding.emailVerified
-                        ? responsive.displayScaled(122)
-                        : responsive.displayScaled(174),
-                    child: onboarding.emailVerified
-                        ? AppPrimaryButton(
-                            label: context.l10n.commonNext,
-                            onPressed: onboarding.isBusy
-                                ? null
-                                : () => ref
-                                      .read(onboardingProvider.notifier)
-                                      .setRegisterStep(2),
-                          )
-                        : AppSecondaryButton(
-                            label: context.l10n.onboardingCheckActivationStatus,
-                            onPressed: onboarding.isBusy
-                                ? null
-                                : () => ref
-                                      .read(onboardingProvider.notifier)
-                                      .checkEmailActivation(
-                                        emailController.text.trim(),
-                                      ),
-                          ),
-                  ),
-                ],
-                SizedBox(height: responsive.spacing(16)),
-                if (onboarding.authMode == 'phone')
-                  _OnboardingAlignedAction(
-                    key: const Key('onboarding-phone-next-action'),
-                    width: responsive.displayScaled(122),
-                    child: AppPrimaryButton(
-                      label: context.l10n.commonNext,
-                      semanticsIdentifier: 'e2e-login-next-button',
-                      onPressed: onboarding.isBusy
-                          ? null
-                          : () => _setRegisterStep(2),
-                    ),
-                  ),
-              ] else ...<Widget>[
-                AppTextField(
-                  controller: handleController,
-                  label: context.l10n.onboardingHandle,
-                  placeholder: context.l10n.onboardingHandlePlaceholder,
-                  semanticsIdentifier: 'e2e-handle-input',
-                ),
-                SizedBox(height: responsive.spacing(20)),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: AppSecondaryButton(
-                        label: context.l10n.commonPrevious,
-                        onPressed: () => _setRegisterStep(1),
-                      ),
-                    ),
-                    SizedBox(width: responsive.spacing(12)),
-                    Expanded(
-                      child: AppPrimaryButton(
-                        label: onboarding.authMode == 'phone'
-                            ? context.l10n.onboardingCompleteRegister
-                            : context.l10n.onboardingCompleteEmailRegister,
-                        semanticsIdentifier: 'e2e-complete-login-button',
-                        onPressed: onboarding.isBusy
-                            ? null
-                            : () => _submitRegister(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              ..._buildMobileRegisterWidgets(
+                context: context,
+                onboarding: onboarding,
+                responsive: responsive,
+                theme: theme,
+              ),
             ],
             SizedBox(height: responsive.spacing(56)),
             Align(
@@ -384,6 +257,245 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     );
   }
 
+  List<Widget> _buildMobileRegisterWidgets({
+    required BuildContext context,
+    required OnboardingState onboarding,
+    required AwikiResponsiveInfo responsive,
+    required AwikiMeThemeTokens theme,
+  }) {
+    if (onboarding.isServerInfoLoading) {
+      return <Widget>[
+        _OnboardingCapabilityPanel(
+          loading: true,
+          message: context.l10n.onboardingLoadingServerInfo,
+        ),
+      ];
+    }
+    if (onboarding.isServerInfoFailed) {
+      return <Widget>[
+        _OnboardingCapabilityPanel(
+          icon: CupertinoIcons.exclamationmark_triangle,
+          message: context.l10n.onboardingServerInfoLoadFailed,
+          detail: onboarding.serverInfoError,
+          actionLabel: context.l10n.commonRetry,
+          onAction: () =>
+              ref.read(onboardingProvider.notifier).loadServerInfo(force: true),
+        ),
+      ];
+    }
+    if (!onboarding.hasRegistrationMethods) {
+      return <Widget>[
+        _OnboardingCapabilityPanel(
+          icon: CupertinoIcons.lock,
+          message: context.l10n.onboardingRegistrationUnavailable,
+          actionLabel: context.l10n.commonRetry,
+          onAction: () =>
+              ref.read(onboardingProvider.notifier).loadServerInfo(force: true),
+        ),
+      ];
+    }
+    if (onboarding.usesNoVerificationRegistration) {
+      return <Widget>[
+        if (onboarding.registrationMethods.length > 1) ...<Widget>[
+          _AuthModeToggle(
+            value: onboarding.authMode,
+            methods: onboarding.registrationMethods,
+            onChanged: ref.read(onboardingProvider.notifier).setAuthMode,
+          ),
+          SizedBox(height: responsive.spacing(18)),
+        ],
+        Text(
+          context.l10n.onboardingNoVerificationHint,
+          style: TextStyle(
+            color: theme.secondaryText,
+            fontSize: responsive.bodySm,
+            height: 1.35,
+          ),
+        ),
+        SizedBox(height: responsive.spacing(16)),
+        AppTextField(
+          controller: phoneController,
+          label: context.l10n.onboardingPhone,
+          placeholder: context.l10n.onboardingPhonePlaceholder,
+          keyboardType: TextInputType.phone,
+          showLabel: !responsive.isPhone,
+          semanticsIdentifier: 'e2e-phone-input',
+          prefix: responsive.isPhone
+              ? const _PhoneFieldPrefix(code: '+86')
+              : null,
+        ),
+        SizedBox(height: responsive.spacing(14)),
+        AppTextField(
+          controller: handleController,
+          label: context.l10n.onboardingHandle,
+          placeholder: context.l10n.onboardingHandlePlaceholder,
+          semanticsIdentifier: 'e2e-handle-input',
+        ),
+        SizedBox(height: responsive.spacing(20)),
+        _OnboardingAlignedAction(
+          key: const Key('onboarding-no-verification-complete-action'),
+          width: responsive.displayScaled(148),
+          child: AppPrimaryButton(
+            label: context.l10n.onboardingCompleteRegister,
+            semanticsIdentifier: 'e2e-complete-login-button',
+            onPressed: onboarding.isBusy
+                ? null
+                : () => _submitRegister(context),
+          ),
+        ),
+      ];
+    }
+
+    if (onboarding.registerStep == 1) {
+      return <Widget>[
+        if (onboarding.registrationMethods.length > 1) ...<Widget>[
+          _AuthModeToggle(
+            value: onboarding.authMode,
+            methods: onboarding.registrationMethods,
+            onChanged: ref.read(onboardingProvider.notifier).setAuthMode,
+          ),
+          SizedBox(height: responsive.spacing(responsive.isPhone ? 32 : 24)),
+        ],
+        Text(
+          context.l10n.onboardingLoginRegisterHint,
+          style: TextStyle(
+            color: theme.secondaryText,
+            fontSize: responsive.bodySm,
+            height: 1.35,
+          ),
+        ),
+        SizedBox(height: responsive.spacing(16)),
+        if (onboarding.authMode == 'phone') ...<Widget>[
+          AppTextField(
+            controller: phoneController,
+            label: context.l10n.onboardingPhone,
+            placeholder: context.l10n.onboardingPhonePlaceholder,
+            keyboardType: TextInputType.phone,
+            showLabel: !responsive.isPhone,
+            semanticsIdentifier: 'e2e-phone-input',
+            prefix: responsive.isPhone
+                ? const _PhoneFieldPrefix(code: '+86')
+                : null,
+            suffix: _VerificationInlineButton(
+              semanticsIdentifier: 'e2e-send-otp-button',
+              label: onboarding.isOtpResendCoolingDown
+                  ? context.l10n.onboardingResendOtpIn(
+                      onboarding.otpResendCountdown,
+                    )
+                  : context.l10n.onboardingSendOtp,
+              onPressed: onboarding.isBusy || onboarding.isOtpResendCoolingDown
+                  ? null
+                  : _requestOtp,
+            ),
+          ),
+          SizedBox(height: responsive.spacing(14)),
+          AppTextField(
+            controller: otpController,
+            label: context.l10n.onboardingOtp,
+            placeholder: context.l10n.onboardingOtpPlaceholder,
+            keyboardType: TextInputType.number,
+            showLabel: !responsive.isPhone,
+            semanticsIdentifier: 'e2e-otp-input',
+          ),
+          if (onboarding.isOtpResendCoolingDown)
+            const E2eMarker('e2e-otp-sent'),
+          _OtpCompleteMarker(controller: otpController),
+        ] else ...<Widget>[
+          AppTextField(
+            controller: emailController,
+            label: context.l10n.onboardingEmail,
+            placeholder: context.l10n.onboardingEmailPlaceholder,
+            keyboardType: TextInputType.emailAddress,
+            showLabel: !responsive.isPhone,
+            suffix: _VerificationInlineButton(
+              label: onboarding.isEmailResendCoolingDown
+                  ? context.l10n.onboardingResendActivationEmailIn(
+                      onboarding.emailResendCountdown,
+                    )
+                  : context.l10n.onboardingSendActivationEmail,
+              onPressed:
+                  onboarding.isBusy || onboarding.isEmailResendCoolingDown
+                  ? null
+                  : () => ref
+                        .read(onboardingProvider.notifier)
+                        .requestEmailActivation(emailController.text.trim()),
+            ),
+          ),
+          SizedBox(height: responsive.spacing(14)),
+          _OnboardingAlignedAction(
+            key: const Key('onboarding-email-action'),
+            width: onboarding.emailVerified
+                ? responsive.displayScaled(122)
+                : responsive.displayScaled(174),
+            fillAvailableWidth: responsive.isPhone && !onboarding.emailVerified,
+            child: onboarding.emailVerified
+                ? AppPrimaryButton(
+                    label: context.l10n.commonNext,
+                    onPressed: onboarding.isBusy
+                        ? null
+                        : () => ref
+                              .read(onboardingProvider.notifier)
+                              .setRegisterStep(2),
+                  )
+                : AppSecondaryButton(
+                    label: context.l10n.onboardingCheckActivationStatus,
+                    onPressed: onboarding.isBusy
+                        ? null
+                        : () => ref
+                              .read(onboardingProvider.notifier)
+                              .checkEmailActivation(
+                                emailController.text.trim(),
+                              ),
+                  ),
+          ),
+        ],
+        SizedBox(height: responsive.spacing(16)),
+        if (onboarding.authMode == 'phone')
+          _OnboardingAlignedAction(
+            key: const Key('onboarding-phone-next-action'),
+            width: responsive.displayScaled(122),
+            child: AppPrimaryButton(
+              label: context.l10n.commonNext,
+              semanticsIdentifier: 'e2e-login-next-button',
+              onPressed: onboarding.isBusy ? null : () => _setRegisterStep(2),
+            ),
+          ),
+      ];
+    }
+
+    return <Widget>[
+      AppTextField(
+        controller: handleController,
+        label: context.l10n.onboardingHandle,
+        placeholder: context.l10n.onboardingHandlePlaceholder,
+        semanticsIdentifier: 'e2e-handle-input',
+      ),
+      SizedBox(height: responsive.spacing(20)),
+      Row(
+        children: <Widget>[
+          Expanded(
+            child: AppSecondaryButton(
+              label: context.l10n.commonPrevious,
+              onPressed: () => _setRegisterStep(1),
+            ),
+          ),
+          SizedBox(width: responsive.spacing(12)),
+          Expanded(
+            child: AppPrimaryButton(
+              label: onboarding.authMode == 'phone'
+                  ? context.l10n.onboardingCompleteRegister
+                  : context.l10n.onboardingCompleteEmailRegister,
+              semanticsIdentifier: 'e2e-complete-login-button',
+              onPressed: onboarding.isBusy
+                  ? null
+                  : () => _submitRegister(context),
+            ),
+          ),
+        ],
+      ),
+    ];
+  }
+
   Future<void> _showLanguageSheet() {
     return showAppLanguageSheet(context, ref, ref.read(appLocaleModeProvider));
   }
@@ -400,7 +512,17 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final notifier = ref.read(onboardingProvider.notifier);
     final handle = handleController.text.trim();
     final profileMarkdown = '# $handle\n\n';
-    if (ref.read(onboardingProvider).authMode == 'phone') {
+    final onboarding = ref.read(onboardingProvider);
+    if (onboarding.usesNoVerificationRegistration) {
+      await notifier.registerWithoutContactVerification(
+        phone: _normalizedPhone,
+        handle: handle,
+        nickName: handle,
+        profileMarkdown: profileMarkdown,
+      );
+      return;
+    }
+    if (onboarding.authMode == 'phone') {
       await notifier.loginOrRegisterWithPhone(
         phone: _normalizedPhone,
         otp: otpController.text.trim(),

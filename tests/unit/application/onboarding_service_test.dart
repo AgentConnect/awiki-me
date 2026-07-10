@@ -64,6 +64,32 @@ void main() {
       expect(profiles.patches, isEmpty);
     },
   );
+
+  test(
+    'registerHandleWithoutContactVerification validates phone and patches markdown',
+    () async {
+      final identities = _FakeIdentities();
+      final sessions = _FakeSessions();
+      final profiles = _FakeProfiles();
+      final service = ImCoreOnboardingService(
+        identities: identities,
+        sessions: sessions,
+        profiles: profiles,
+      );
+
+      final session = await service.registerHandleWithoutContactVerification(
+        phone: '13800138000',
+        handle: ' OpenAlice ',
+        nickName: 'Open Alice',
+        profileMarkdown: '# Open Alice',
+      );
+
+      expect(session.identityId, 'open-id');
+      expect(identities.lastHandle, 'openalice');
+      expect(sessions.activated.map((item) => item.identityId), ['open-id']);
+      expect(profiles.patches.single.profileMarkdown, '# Open Alice');
+    },
+  );
 }
 
 AppSession _session(String id, {String handle = 'alice'}) {
@@ -119,6 +145,16 @@ class _FakeIdentities implements IdentityCorePort {
     lastOtp = otp;
     lastHandle = handle;
     return _session('phone-id', handle: handle);
+  }
+
+  @override
+  Future<AppSession> registerHandleWithoutContactVerification({
+    required String handle,
+    String? inviteCode,
+    String? displayName,
+  }) async {
+    lastHandle = handle;
+    return _session('open-id', handle: handle);
   }
 
   @override

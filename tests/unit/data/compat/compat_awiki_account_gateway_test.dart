@@ -163,4 +163,13 @@ class _FakeOnboarding implements OnboardingService {
     String? nickName,
     String? profileMarkdown,
   }) async => _session('phone-id', jwtToken: 'jwt-phone-id');
+
+  @override
+  Future<AppSession> registerHandleWithoutContactVerification({
+    required String phone,
+    required String handle,
+    String? inviteCode,
+    String? nickName,
+    String? profileMarkdown,
+  }) async => _session('open-id', jwtToken: 'jwt-open-id');
 }

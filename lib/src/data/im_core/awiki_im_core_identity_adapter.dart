@@ -162,6 +162,27 @@ class AwikiImCoreIdentityAdapter implements IdentityCorePort {
   }
 
   @override
+  Future<AppSession> registerHandleWithoutContactVerification({
+    required String handle,
+    String? inviteCode,
+    String? displayName,
+  }) async {
+    final coreInstance = await _runtime.coreInstance();
+    final result = await coreInstance.registerHandleWithoutContactVerification(
+      localAlias: handle,
+      requestedHandle: handle,
+      inviteCode: inviteCode,
+      profile: core.InitialProfile(displayName: displayName),
+      makeDefault: true,
+    );
+    final identity = result.identity ?? result.defaultIdentityChange?.next;
+    if (identity == null) {
+      throw StateError('IM Core registration did not return an identity.');
+    }
+    return _mappers.appSessionFromIdentity(identity);
+  }
+
+  @override
   Future<AppSession> recoverHandle({
     required String phone,
     required String otp,

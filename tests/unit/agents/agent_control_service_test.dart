@@ -1283,6 +1283,15 @@ class _IdentityCoreStub implements IdentityCorePort {
   }
 
   @override
+  Future<AppSession> registerHandleWithoutContactVerification({
+    required String handle,
+    String? inviteCode,
+    String? displayName,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<AppSession> resolveIdentity(String identityIdOrAlias) {
     throw UnimplementedError();
   }

@@ -22,6 +22,14 @@ abstract interface class OnboardingService {
     String? profileMarkdown,
   });
 
+  Future<AppSession> registerHandleWithoutContactVerification({
+    required String phone,
+    required String handle,
+    String? inviteCode,
+    String? nickName,
+    String? profileMarkdown,
+  });
+
   Future<AppSession> recoverHandle({
     required String phone,
     required String otp,
@@ -98,6 +106,27 @@ class ImCoreOnboardingService implements OnboardingService {
       handle: _normalizeHandle(handle),
     );
     return _sessions.activateIdentity(identity);
+  }
+
+  @override
+  Future<AppSession> registerHandleWithoutContactVerification({
+    required String phone,
+    required String handle,
+    String? inviteCode,
+    String? nickName,
+    String? profileMarkdown,
+  }) async {
+    _normalizePhone(phone);
+    final identity = await _identities.registerHandleWithoutContactVerification(
+      handle: _normalizeHandle(handle),
+      inviteCode: _nonEmpty(inviteCode),
+      displayName: _nonEmpty(nickName),
+    );
+    return _activateAndPatchProfile(
+      identity,
+      nickName: nickName,
+      profileMarkdown: profileMarkdown,
+    );
   }
 
   Future<AppSession> _activateAndPatchProfile(

@@ -452,6 +452,42 @@ abstract class AppLocalizations {
   /// **'暂未识别到本地凭证，请先重新识别。'**
   String get onboardingMissingLocalCredential;
 
+  /// No description provided for @onboardingLoadingServerInfo.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在读取当前服务器支持的登录方式...'**
+  String get onboardingLoadingServerInfo;
+
+  /// No description provided for @onboardingServerInfoLoadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法读取当前服务器支持的登录方式。请检查租户地址后重试。'**
+  String get onboardingServerInfoLoadFailed;
+
+  /// No description provided for @onboardingRegistrationUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前服务器暂不支持在 APP 内注册身份。'**
+  String get onboardingRegistrationUnavailable;
+
+  /// No description provided for @onboardingNoVerificationHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前服务器不需要短信或邮箱验证码，可直接创建新身份。'**
+  String get onboardingNoVerificationHint;
+
+  /// No description provided for @handleAlreadyRegisteredImportCredential.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个 handle 已经存在。当前服务器不支持无验证码恢复，请导入已有身份凭证或联系服务器管理员。'**
+  String get handleAlreadyRegisteredImportCredential;
+
+  /// No description provided for @registrationMethodUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前服务器不支持所选注册方式，请刷新后重试。'**
+  String get registrationMethodUnavailable;
+
   /// No description provided for @tenantSwitcherLabel.
   ///
   /// In zh, this message translates to:

@@ -195,6 +195,30 @@ class AppLocalizationsEn extends AppLocalizations {
       'No local credential detected yet. Please rescan first.';
 
   @override
+  String get onboardingLoadingServerInfo =>
+      'Reading the sign-in methods supported by this server...';
+
+  @override
+  String get onboardingServerInfoLoadFailed =>
+      'Could not read the sign-in methods supported by this server. Check the tenant address and try again.';
+
+  @override
+  String get onboardingRegistrationUnavailable =>
+      'This server does not currently support in-app identity registration.';
+
+  @override
+  String get onboardingNoVerificationHint =>
+      'This server does not require SMS or email verification. You can create a new identity directly.';
+
+  @override
+  String get handleAlreadyRegisteredImportCredential =>
+      'This handle already exists. This server cannot recover it without verification. Import its identity credential or contact the server administrator.';
+
+  @override
+  String get registrationMethodUnavailable =>
+      'This server does not support the selected registration method. Refresh and try again.';
+
+  @override
   String get tenantSwitcherLabel => 'Manage tenants';
 
   @override

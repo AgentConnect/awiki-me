@@ -34,6 +34,12 @@ abstract interface class IdentityCorePort {
     String? displayName,
   });
 
+  Future<AppSession> registerHandleWithoutContactVerification({
+    required String handle,
+    String? inviteCode,
+    String? displayName,
+  });
+
   Future<AppSession> recoverHandle({
     required String phone,
     required String otp,

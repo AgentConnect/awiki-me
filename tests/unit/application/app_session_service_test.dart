@@ -477,6 +477,13 @@ class _FakeIdentities implements IdentityCorePort {
   }) async => _session('phone');
 
   @override
+  Future<AppSession> registerHandleWithoutContactVerification({
+    required String handle,
+    String? inviteCode,
+    String? displayName,
+  }) async => _session('open');
+
+  @override
   Future<AppSession> resolveIdentity(String identityIdOrAlias) async {
     resolvedSelectors.add(identityIdOrAlias);
     return _resolvedIdentity ?? _session(identityIdOrAlias);

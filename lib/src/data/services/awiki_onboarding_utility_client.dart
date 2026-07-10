@@ -117,12 +117,34 @@ class AwikiOnboardingUtilityClient {
 
   static const String handleRpcEndpoint = '/user-service/handle/rpc';
   static const String profileRpcEndpoint = '/user-service/did/profile/rpc';
+  static const String serverInfoEndpoint = '/user-service/server-info';
   static const String emailSendEndpoint = '/user-service/auth/email-send';
   static const String emailStatusEndpoint = '/user-service/auth/email-status';
 
   final AwikiOnboardingUtilityHttpClient _serviceClient;
   final http.Client _httpClient;
   final Duration timeout;
+
+  Future<Map<String, Object?>> loadServerInfo() async {
+    final response = await _httpClient
+        .get(Uri.parse(_serviceClient.baseUrl).resolve(serverInfoEndpoint))
+        .timeout(timeout);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AwikiOnboardingUtilityError(
+        statusCode: response.statusCode,
+        message: response.body,
+      );
+    }
+    final payload = jsonDecode(response.body);
+    if (payload is! Map) {
+      throw const AwikiOnboardingUtilityError(
+        message: 'Server-info response must be an object.',
+      );
+    }
+    return payload.map<String, Object?>(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+  }
 
   Future<void> sendOtp({required String phone}) async {
     await _serviceClient.rpcCall(

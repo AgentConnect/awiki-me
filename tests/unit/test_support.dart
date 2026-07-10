@@ -7,6 +7,7 @@ import 'package:awiki_me/src/application/attachment_cache_service.dart';
 import 'package:awiki_me/src/application/attachment_picker_service.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/daemon_subkey_authorization_revoke_result.dart';
+import 'package:awiki_me/src/application/models/onboarding_server_info.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
@@ -545,6 +546,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   UserProfile? updatedProfile;
   SessionIdentity? loginResult;
   bool emailVerificationResult = false;
+  OnboardingServerInfo serverInfo = OnboardingServerInfo.userServiceDefault();
+  Object? serverInfoError;
   String? lastLoginCredentialName;
   ProfilePatch? lastProfilePatch;
   RealtimeUpdate? nextRealtimeUpdate;
@@ -614,6 +617,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   String? lastMarkConversationReadConversationId;
   AppThreadReadWatermark? lastMarkConversationReadWatermark;
   int listConversationsCalls = 0;
+  int loadServerInfoCalls = 0;
   int sendOtpCalls = 0;
   int sendEmailVerificationCalls = 0;
   int checkEmailVerifiedCalls = 0;
@@ -621,6 +625,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int validateHandleCalls = 0;
   int registerHandleCalls = 0;
   int registerHandleWithEmailCalls = 0;
+  int registerHandleWithoutContactVerificationCalls = 0;
   int recoverHandleCalls = 0;
   int logoutCalls = 0;
   int deleteLocalThreadCalls = 0;
@@ -1014,6 +1019,15 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return following;
   }
 
+  Future<OnboardingServerInfo> loadServerInfo() async {
+    loadServerInfoCalls += 1;
+    final error = serverInfoError;
+    if (error != null) {
+      throw error;
+    }
+    return serverInfo;
+  }
+
   @override
   Future<UserProfile> loadMyProfile() async {
     if (myProfile != null) {
@@ -1115,6 +1129,26 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       displayName: nickName?.isNotEmpty == true ? nickName! : handle,
       handle: handle,
       jwtToken: 'email-registered-token',
+    );
+    return loginResult!;
+  }
+
+  Future<SessionIdentity> registerHandleWithoutContactVerification({
+    required String phone,
+    required String handle,
+    String? inviteCode,
+    String? nickName,
+    String? profileMarkdown,
+  }) async {
+    registerHandleWithoutContactVerificationCalls += 1;
+    lastRegisteredNickName = nickName;
+    lastRegisteredProfileMarkdown = profileMarkdown;
+    loginResult = SessionIdentity(
+      did: 'did:wba:awiki.info:$handle:e1_open_registered',
+      credentialName: handle,
+      displayName: nickName?.isNotEmpty == true ? nickName! : handle,
+      handle: handle,
+      jwtToken: 'open-registered-token',
     );
     return loginResult!;
   }
@@ -3249,12 +3283,36 @@ class FakeOnboardingService implements OnboardingService {
       ),
     );
   }
+
+  @override
+  Future<AppSession> registerHandleWithoutContactVerification({
+    required String phone,
+    required String handle,
+    String? inviteCode,
+    String? nickName,
+    String? profileMarkdown,
+  }) async {
+    return _appSessionFromLegacy(
+      await gateway.registerHandleWithoutContactVerification(
+        phone: phone,
+        handle: handle,
+        inviteCode: inviteCode,
+        nickName: nickName,
+        profileMarkdown: profileMarkdown,
+      ),
+    );
+  }
 }
 
 class FakeOnboardingSupportService implements OnboardingSupportService {
   const FakeOnboardingSupportService(this.gateway);
 
   final FakeAwikiGateway gateway;
+
+  @override
+  Future<OnboardingServerInfo> loadServerInfo() {
+    return gateway.loadServerInfo();
+  }
 
   @override
   Future<bool> checkEmailVerified({required String email}) {
@@ -3369,6 +3427,13 @@ class FakeIdentityCorePort implements IdentityCorePort {
   Future<AppSession> registerHandleWithPhone({
     required String phone,
     required String otp,
+    required String handle,
+    String? inviteCode,
+    String? displayName,
+  }) async => defaultSession;
+
+  @override
+  Future<AppSession> registerHandleWithoutContactVerification({
     required String handle,
     String? inviteCode,
     String? displayName,

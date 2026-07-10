@@ -1,4 +1,5 @@
 import '../../application/config/awiki_environment_config.dart';
+import '../../application/models/onboarding_server_info.dart';
 import '../../application/onboarding_support_service.dart';
 import '../../domain/repositories/awiki_account_gateway.dart';
 import 'awiki_onboarding_utility_client.dart';
@@ -26,6 +27,12 @@ class AwikiOnboardingSupportService implements OnboardingSupportService {
             baseUrl: userServiceUrl,
           ),
         ));
+  }
+
+  @override
+  Future<OnboardingServerInfo> loadServerInfo() async {
+    final payload = await _users.loadServerInfo();
+    return OnboardingServerInfo.fromJson(payload);
   }
 
   @override

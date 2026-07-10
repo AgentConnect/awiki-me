@@ -13,6 +13,7 @@ void main() {
 
     await service.sendOtp(phone: '13800138000');
     await service.sendEmailVerification(email: ' Alice@Example.Test ');
+    final serverInfo = await service.loadServerInfo();
     final verified = await service.checkEmailVerified(
       email: ' Alice@Example.Test ',
     );
@@ -21,6 +22,8 @@ void main() {
     expect(userClient.sentOtpPhones, ['+8613800138000']);
     expect(userClient.sentEmailBaseUrls, ['https://example.test']);
     expect(userClient.sentEmails, ['alice@example.test']);
+    expect(serverInfo.service.kind, 'user-service');
+    expect(userClient.loadServerInfoCalls, 1);
     expect(verified, isTrue);
     expect(userClient.checkedEmails, ['alice@example.test']);
     expect(userClient.lookups, ['alice']);
@@ -164,6 +167,48 @@ class _FakeUserClient extends AwikiOnboardingUtilityClient {
   final List<String> checkedEmails = <String>[];
   final List<String> lookups = <String>[];
   final List<String> validateHandleCalls = <String>[];
+  int loadServerInfoCalls = 0;
+
+  @override
+  Future<Map<String, Object?>> loadServerInfo() async {
+    loadServerInfoCalls += 1;
+    return <String, Object?>{
+      'schema_version': 1,
+      'service': <String, Object?>{
+        'kind': 'user-service',
+        'name': 'AWiki User Service',
+      },
+      'identity': <String, Object?>{
+        'handle_registration': <String, Object?>{
+          'enabled': true,
+          'default_method': 'phone',
+          'availability': 'open',
+          'methods': <Object?>[
+            <String, Object?>{
+              'id': 'phone',
+              'enabled': true,
+              'verification': <String, Object?>{
+                'required': true,
+                'type': 'sms_otp',
+              },
+            },
+          ],
+        },
+        'handle_recovery': <String, Object?>{
+          'methods': <Object?>[
+            <String, Object?>{
+              'id': 'phone',
+              'enabled': true,
+              'verification': <String, Object?>{
+                'required': true,
+                'type': 'sms_otp',
+              },
+            },
+          ],
+        },
+      },
+    };
+  }
 
   @override
   Future<void> sendOtp({required String phone}) async {

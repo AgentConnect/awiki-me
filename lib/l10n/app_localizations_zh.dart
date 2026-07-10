@@ -191,6 +191,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingMissingLocalCredential => '暂未识别到本地凭证，请先重新识别。';
 
   @override
+  String get onboardingLoadingServerInfo => '正在读取当前服务器支持的登录方式...';
+
+  @override
+  String get onboardingServerInfoLoadFailed => '无法读取当前服务器支持的登录方式。请检查租户地址后重试。';
+
+  @override
+  String get onboardingRegistrationUnavailable => '当前服务器暂不支持在 APP 内注册身份。';
+
+  @override
+  String get onboardingNoVerificationHint => '当前服务器不需要短信或邮箱验证码，可直接创建新身份。';
+
+  @override
+  String get handleAlreadyRegisteredImportCredential =>
+      '这个 handle 已经存在。当前服务器不支持无验证码恢复，请导入已有身份凭证或联系服务器管理员。';
+
+  @override
+  String get registrationMethodUnavailable => '当前服务器不支持所选注册方式，请刷新后重试。';
+
+  @override
   String get tenantSwitcherLabel => '管理租户';
 
   @override

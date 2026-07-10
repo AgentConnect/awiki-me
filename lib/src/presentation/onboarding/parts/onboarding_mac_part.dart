@@ -964,6 +964,79 @@ class _MacRegisterForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (onboarding.isServerInfoLoading) {
+      return _OnboardingCapabilityPanel(
+        loading: true,
+        message: context.l10n.onboardingLoadingServerInfo,
+      );
+    }
+    if (onboarding.isServerInfoFailed) {
+      return Consumer(
+        builder: (context, ref, _) => _OnboardingCapabilityPanel(
+          icon: CupertinoIcons.exclamationmark_triangle,
+          message: context.l10n.onboardingServerInfoLoadFailed,
+          detail: onboarding.serverInfoError,
+          actionLabel: context.l10n.commonRetry,
+          onAction: () =>
+              ref.read(onboardingProvider.notifier).loadServerInfo(force: true),
+        ),
+      );
+    }
+    if (!onboarding.hasRegistrationMethods) {
+      return Consumer(
+        builder: (context, ref, _) => _OnboardingCapabilityPanel(
+          icon: CupertinoIcons.lock,
+          message: context.l10n.onboardingRegistrationUnavailable,
+          actionLabel: context.l10n.commonRetry,
+          onAction: () =>
+              ref.read(onboardingProvider.notifier).loadServerInfo(force: true),
+        ),
+      );
+    }
+    if (onboarding.usesNoVerificationRegistration) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          if (onboarding.registrationMethods.length > 1) ...<Widget>[
+            _MacAuthModeRow(
+              value: onboarding.authMode,
+              methods: onboarding.registrationMethods,
+              onChanged: onAuthModeChanged,
+            ),
+            const SizedBox(height: 14),
+          ],
+          _MacAuthHint(text: context.l10n.onboardingNoVerificationHint),
+          const SizedBox(height: 20),
+          _MacOutlinedField(
+            controller: phoneController,
+            label: context.l10n.onboardingPhone,
+            placeholder: context.l10n.onboardingPhonePlaceholder,
+            icon: CupertinoIcons.phone,
+            keyboardType: TextInputType.phone,
+          ),
+          const SizedBox(height: 16),
+          _MacOutlinedField(
+            controller: handleController,
+            label: context.l10n.onboardingHandle,
+            placeholder: context.l10n.onboardingHandlePlaceholder,
+            icon: CupertinoIcons.at,
+          ),
+          const SizedBox(height: 22),
+          Align(
+            alignment: Alignment.centerRight,
+            child: SizedBox(
+              key: const Key('onboarding-mac-no-verification-complete-action'),
+              width: 132,
+              child: _MacPrimaryAction(
+                label: context.l10n.onboardingCompleteRegister,
+                onPressed: onboarding.isBusy ? null : onSubmitRegister,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     if (onboarding.registerStep == 2) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1001,11 +1074,14 @@ class _MacRegisterForm extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        _MacAuthModeRow(
-          value: onboarding.authMode,
-          onChanged: onAuthModeChanged,
-        ),
-        const SizedBox(height: 14),
+        if (onboarding.registrationMethods.length > 1) ...<Widget>[
+          _MacAuthModeRow(
+            value: onboarding.authMode,
+            methods: onboarding.registrationMethods,
+            onChanged: onAuthModeChanged,
+          ),
+          const SizedBox(height: 14),
+        ],
         _MacAuthHint(text: context.l10n.onboardingLoginRegisterHint),
         const SizedBox(height: 20),
         if (onboarding.authMode == 'phone') ...<Widget>[
@@ -1099,9 +1175,14 @@ class _MacRegisterForm extends StatelessWidget {
 }
 
 class _MacAuthModeRow extends StatelessWidget {
-  const _MacAuthModeRow({required this.value, required this.onChanged});
+  const _MacAuthModeRow({
+    required this.value,
+    required this.methods,
+    required this.onChanged,
+  });
 
   final String value;
+  final List<OnboardingIdentityMethod> methods;
   final ValueChanged<String> onChanged;
 
   @override
@@ -1118,27 +1199,34 @@ class _MacAuthModeRow extends StatelessWidget {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            _MacAuthModeButton(
-              key: const Key('auth-mode-phone'),
-              label: context.l10n.onboardingPhone,
-              icon: CupertinoIcons.phone,
-              selected: value == 'phone',
-              onTap: () => onChanged('phone'),
-            ),
-            const SizedBox(width: 4),
-            _MacAuthModeButton(
-              key: const Key('auth-mode-email'),
-              label: context.l10n.onboardingEmail,
-              icon: CupertinoIcons.mail,
-              selected: value == 'email',
-              onTap: () => onChanged('email'),
-            ),
-          ],
+          children: methods
+              .map(
+                (method) => Padding(
+                  padding: EdgeInsets.only(
+                    right: method == methods.last ? 0 : 4,
+                  ),
+                  child: _MacAuthModeButton(
+                    key: Key('auth-mode-${method.id.wireName}'),
+                    label: _authModeLabel(context, method.id),
+                    icon: _macAuthModeIcon(method.id),
+                    selected: value == method.id.wireName,
+                    onTap: () => onChanged(method.id.wireName),
+                  ),
+                ),
+              )
+              .toList(),
         ),
       ),
     );
   }
+}
+
+IconData _macAuthModeIcon(OnboardingIdentityMethodId id) {
+  return switch (id) {
+    OnboardingIdentityMethodId.phone => CupertinoIcons.phone,
+    OnboardingIdentityMethodId.email => CupertinoIcons.mail,
+    OnboardingIdentityMethodId.handleOnly => CupertinoIcons.at,
+  };
 }
 
 class _MacAuthModeButton extends StatelessWidget {
