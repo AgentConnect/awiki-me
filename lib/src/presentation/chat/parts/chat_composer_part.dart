@@ -7,6 +7,7 @@ class _Composer extends ConsumerStatefulWidget {
     required this.macStyle,
     required this.controller,
     required this.pendingAttachment,
+    required this.focusRequestId,
     this.enabled = true,
     this.disabledReason,
     required this.onSend,
@@ -20,6 +21,7 @@ class _Composer extends ConsumerStatefulWidget {
   final bool macStyle;
   final TextEditingController controller;
   final AttachmentDraft? pendingAttachment;
+  final int focusRequestId;
   final bool enabled;
   final String? disabledReason;
   final Future<void> Function() onSend;
@@ -46,6 +48,7 @@ class _ComposerState extends ConsumerState<_Composer> {
   void initState() {
     super.initState();
     widget.controller.addListener(_handleTextChanged);
+    _scheduleInputFocusForRequest(widget.focusRequestId);
   }
 
   @override
@@ -54,6 +57,9 @@ class _ComposerState extends ConsumerState<_Composer> {
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_handleTextChanged);
       widget.controller.addListener(_handleTextChanged);
+    }
+    if (oldWidget.focusRequestId != widget.focusRequestId) {
+      _scheduleInputFocusForRequest(widget.focusRequestId);
     }
     if (!sameConversationThread(oldWidget.conversation, widget.conversation)) {
       _clearMentionTrigger();
@@ -67,6 +73,18 @@ class _ComposerState extends ConsumerState<_Composer> {
     widget.controller.removeListener(_handleTextChanged);
     _inputFocusNode.dispose();
     super.dispose();
+  }
+
+  void _scheduleInputFocusForRequest(int requestId) {
+    if (requestId <= 0 || !widget.enabled) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || widget.focusRequestId != requestId || !widget.enabled) {
+        return;
+      }
+      FocusScope.of(context).requestFocus(_inputFocusNode);
+    });
   }
 
   void _handleTextChanged() {

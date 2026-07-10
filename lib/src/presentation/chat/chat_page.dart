@@ -270,6 +270,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   bool _scrollToBottomScheduled = false;
   int _scrollRequestToken = 0;
   int _visibleReadAckToken = 0;
+  int _composerFocusRequestId = 0;
   bool _pendingScrollAnimated = false;
   int _pendingScrollSettleFrames = 1;
   _ChatScrollAnchorPhase _scrollAnchorPhase = _ChatScrollAnchorPhase.opening;
@@ -321,6 +322,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   void didUpdateWidget(covariant ChatView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!sameConversationThread(oldWidget.conversation, widget.conversation)) {
+      _composerFocusRequestId += 1;
       _visibleReadAckToken += 1;
       _markConversationHidden(
         oldWidget.conversation,
@@ -822,6 +824,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
             macStyle: macStyle,
             controller: textController,
             pendingAttachment: _pendingAttachment,
+            focusRequestId: _composerFocusRequestId,
             enabled:
                 !isDeletedAgentConversation && groupSendDisabledReason == null,
             disabledReason: isDeletedAgentConversation
@@ -1699,6 +1702,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return false;
     }
     final previousThreadId = _displayThreadId;
+    _composerFocusRequestId += 1;
     _visibleReadAckToken += 1;
     _markConversationHidden(current, displayThreadId: previousThreadId);
     setState(() {
