@@ -2,6 +2,7 @@ import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
+import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_page.dart';
 import 'package:awiki_me/src/presentation/shared/identity_flow.dart';
@@ -81,6 +82,14 @@ void main() {
     final fakeMessaging = messaging as FakeMessagingService;
     expect(fakeMessaging.conversationTimelineCalls, greaterThan(0));
     expect(fakeMessaging.lastConversationTimelineId, 'dm:did:test:peer');
+    await container.read(conversationListProvider.notifier).refresh();
+    await tester.pump();
+    final recentConversations = container
+        .read(conversationListProvider)
+        .conversations;
+    expect(recentConversations, hasLength(1));
+    expect(recentConversations.single.targetDid, peerProfile.did);
+    expect(recentConversations.single.lastMessagePreview, isEmpty);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

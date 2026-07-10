@@ -2113,6 +2113,127 @@ void main() {
   });
 
   test(
+    'locally started empty conversation survives refresh and reset until materialized',
+    () async {
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      await notifier.refreshFastLocal();
+      final started = _conversation(
+        conversationId: 'dm:did:bob',
+        threadId: 'dm:did:bob',
+        displayName: 'Bob',
+        targetDid: 'did:bob',
+        targetPeer: 'bob.awiki.example',
+        lastMessageAt: DateTime.utc(2026, 7, 10, 14),
+      ).copyWith(lastMessagePreview: '');
+
+      notifier.startConversation(started);
+      await notifier.refresh();
+      expect(
+        container.read(conversationListProvider).conversations,
+        hasLength(1),
+      );
+
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      var rows = container.read(conversationListProvider).conversations;
+      expect(rows, hasLength(1));
+      expect(rows.single.conversationId, started.conversationId);
+      expect(rows.single.lastMessagePreview, isEmpty);
+
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerDid: 'did:alice',
+          version: 2,
+          unreadTotal: 0,
+          item: _conversation(
+            conversationId: 'dm:peer-scope:v1:bob',
+            threadId: 'dm:peer-scope:v1:bob',
+            displayName: 'Bob',
+            targetDid: 'did:bob',
+            targetPeer: 'bob.awiki.example',
+            lastMessageAt: DateTime.utc(2026, 7, 10, 14, 1),
+          ).copyWith(lastMessagePreview: 'hello from core'),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      rows = container.read(conversationListProvider).conversations;
+      expect(rows, hasLength(1));
+      expect(rows.single.threadId, 'dm:peer-scope:v1:bob');
+      expect(rows.single.lastMessagePreview, 'hello from core');
+
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerDid: 'did:alice',
+          version: 3,
+          unreadTotal: 0,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(container.read(conversationListProvider).conversations, isEmpty);
+    },
+  );
+
+  test(
+    'deleting a locally started empty conversation releases retention',
+    () async {
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      await notifier.refreshFastLocal();
+      final started = _conversation(
+        conversationId: 'dm:did:bob',
+        threadId: 'dm:did:bob',
+        displayName: 'Bob',
+        targetDid: 'did:bob',
+      ).copyWith(lastMessagePreview: '');
+      notifier.startConversation(started);
+
+      await notifier.deleteFromRecents(started);
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(container.read(conversationListProvider).conversations, isEmpty);
+    },
+  );
+
+  test(
     'conversation patch reorder resolves canonical conversation id',
     () async {
       final service = _PatchConversationService(

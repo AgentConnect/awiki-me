@@ -73,8 +73,12 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   Future<void>? _patchRepairOperation;
   final Map<String, DateTime> _locallyHiddenConversationKeys =
       <String, DateTime>{};
+  final List<ConversationSummary> _locallyStartedConversations =
+      <ConversationSummary>[];
   final _ConversationReadPresentationStore _readPresentation =
       _ConversationReadPresentationStore();
+
+  static const int _maxLocallyStartedConversations = 64;
 
   NotificationFacade get _notification => ref.read(notificationFacadeProvider);
 
@@ -527,6 +531,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           local: currentConversations,
           ownerDid: patch.ownerDid,
           keepLocalOnly: false,
+          retainLocalOnly: _isLocallyStartedConversation,
         ),
         ownerDid: patch.ownerDid,
       ),
@@ -583,22 +588,23 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final conversationKey = patch.conversationKey?.trim();
     final next = state.conversations
         .where((item) {
+          var matchesRemoval = false;
           if (hasConversationId &&
               _conversationIdentityKey(item) == conversationId) {
-            return false;
+            matchesRemoval = true;
           }
           if (threadId != null &&
               threadId.isNotEmpty &&
               !hasConversationId &&
               item.threadId == threadId) {
-            return false;
+            matchesRemoval = true;
           }
           if (conversationKey != null &&
               conversationKey.isNotEmpty &&
               item.visibilityKeys.contains(conversationKey)) {
-            return false;
+            matchesRemoval = true;
           }
-          return true;
+          return !matchesRemoval || _isLocallyStartedConversation(item);
         })
         .toList(growable: false);
     if (next.length == state.conversations.length) {
@@ -788,6 +794,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
             local: currentConversations,
             ownerDid: _currentOwnerDid,
             keepLocalOnly: keepLocalOnly,
+            retainLocalOnly: _isLocallyStartedConversation,
           ),
           ownerDid: _currentOwnerDid,
         ),
@@ -837,6 +844,37 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     return true;
   }
 
+  void startConversation(ConversationSummary conversation) {
+    _removeHiddenKeysFor(conversation);
+    _rememberLocallyStartedConversation(conversation);
+    if (_canUpsertConversationImmediately(conversation)) {
+      _upsertConversation(
+        conversation,
+        preferLocalTitle: true,
+        source: 'start_conversation',
+      );
+    }
+    unawaited(
+      _restoreAndNormalizeStartedConversation(conversation).catchError((_) {}),
+    );
+  }
+
+  Future<void> _restoreAndNormalizeStartedConversation(
+    ConversationSummary conversation,
+  ) async {
+    try {
+      await restoreConversation(conversation);
+    } catch (_) {
+      // The foreground row is still useful when the presentation overlay
+      // store is temporarily unavailable.
+    }
+    await _normalizeAndUpsertConversation(
+      conversation,
+      preferLocalTitle: true,
+      source: 'start_conversation_normalized',
+    );
+  }
+
   void upsertConversation(ConversationSummary conversation) {
     if (_isLocallyHidden(conversation)) {
       return;
@@ -862,10 +900,14 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     bool preferLocalTitle = false,
     String source = 'upsert_normalized',
   }) async {
+    final locallyStarted = _isLocallyStartedConversation(conversation);
     final normalized = await _normalizeConversationForRecents(conversation);
     if (normalized == null) {
       _removeConversationLocally(conversation);
       return;
+    }
+    if (locallyStarted) {
+      _rememberLocallyStartedConversation(normalized);
     }
     if (_isLocallyHidden(normalized)) {
       return;
@@ -950,6 +992,9 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       ),
       ownerDid: _currentOwnerDid,
     );
+    if (_conversationHasMaterializedMessage(mergedConversation)) {
+      _forgetLocallyStartedConversation(mergedConversation);
+    }
     final merged = _replaceConversationInPresentationList(
       current: state.conversations,
       incoming: mergedConversation,
@@ -1026,6 +1071,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       throw StateError('No active awiki session. Please sign in first.');
     }
     final hiddenAt = DateTime.now().toUtc();
+    final wasLocallyStarted = _isLocallyStartedConversation(conversation);
+    _forgetLocallyStartedConversation(conversation);
     _addHiddenKeysFor(conversation, hiddenAt: hiddenAt);
     _removeConversationLocally(conversation);
     try {
@@ -1038,6 +1085,9 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           );
     } catch (_) {
       _removeHiddenKeysFor(conversation);
+      if (wasLocallyStarted) {
+        _rememberLocallyStartedConversation(conversation);
+      }
       _upsertConversation(
         conversation,
         preferLocalTitle: true,
@@ -1178,6 +1228,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     _snapshotBootstrapActive = false;
     _snapshotBootstrapAllowedGeneration = null;
     _locallyHiddenConversationKeys.clear();
+    _locallyStartedConversations.clear();
     _readPresentation.clear();
     state = const ConversationListState();
   }
@@ -1230,6 +1281,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   }
 
   void _removeConversationLocally(ConversationSummary conversation) {
+    _forgetLocallyStartedConversation(conversation);
     final current = state.conversations;
     final next = current
         .where((item) => !_sameConversationIdentity(item, conversation))
@@ -1317,6 +1369,58 @@ class ConversationListController extends StateNotifier<ConversationListState> {
 
   String? get _currentOwnerDid => ref.read(sessionProvider).session?.did;
 
+  void _rememberLocallyStartedConversation(ConversationSummary conversation) {
+    _locallyStartedConversations.removeWhere(
+      (current) => _sameLocallyStartedConversation(current, conversation),
+    );
+    _locallyStartedConversations.add(conversation);
+    if (_locallyStartedConversations.length > _maxLocallyStartedConversations) {
+      _locallyStartedConversations.removeRange(
+        0,
+        _locallyStartedConversations.length - _maxLocallyStartedConversations,
+      );
+    }
+  }
+
+  void _forgetLocallyStartedConversation(ConversationSummary conversation) {
+    _locallyStartedConversations.removeWhere(
+      (current) => _sameLocallyStartedConversation(current, conversation),
+    );
+  }
+
+  bool _isLocallyStartedConversation(ConversationSummary conversation) {
+    return _locallyStartedConversations.any(
+      (current) => _sameLocallyStartedConversation(current, conversation),
+    );
+  }
+
+  bool _sameLocallyStartedConversation(
+    ConversationSummary first,
+    ConversationSummary second,
+  ) {
+    return _sameConversationIdentity(first, second) ||
+        _shouldCollapsePresentationAlias(
+          first,
+          second,
+          ownerDid: _currentOwnerDid,
+        ) ||
+        _shouldCollapsePresentationAlias(
+          second,
+          first,
+          ownerDid: _currentOwnerDid,
+        );
+  }
+
+  void _forgetMaterializedLocallyStartedConversations(
+    Iterable<ConversationSummary> conversations,
+  ) {
+    for (final conversation in conversations) {
+      if (_conversationHasMaterializedMessage(conversation)) {
+        _forgetLocallyStartedConversation(conversation);
+      }
+    }
+  }
+
   ConversationSummary _applyReadPresentation(
     ConversationSummary conversation, {
     required String? ownerDid,
@@ -1357,6 +1461,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       nextState.conversations,
       ownerDid: _currentOwnerDid,
     );
+    _forgetMaterializedLocallyStartedConversations(nextConversations);
     final appliedState = nextConversations == nextState.conversations
         ? nextState
         : nextState.copyWith(conversations: nextConversations);
@@ -1544,6 +1649,11 @@ bool _sameLastMessageSnapshot(ChatMessage? first, ChatMessage? second) {
       first.payloadJson == second.payloadJson &&
       _sameAttachmentSnapshot(first.attachment, second.attachment) &&
       _sameMentions(first.mentions, second.mentions);
+}
+
+bool _conversationHasMaterializedMessage(ConversationSummary conversation) {
+  return conversation.lastMessageSnapshot != null ||
+      conversation.lastMessagePreview.trim().isNotEmpty;
 }
 
 bool _sameAttachmentSnapshot(ChatAttachment? first, ChatAttachment? second) {
@@ -2305,6 +2415,7 @@ List<ConversationSummary> _mergeConversationRefresh({
   required List<ConversationSummary> local,
   required String? ownerDid,
   bool keepLocalOnly = true,
+  bool Function(ConversationSummary conversation)? retainLocalOnly,
 }) {
   final localIndex = _ConversationMergeIndex(local, ownerDid: ownerDid);
   final consumedLocalIdentityKeys = <String>{};
@@ -2356,24 +2467,22 @@ List<ConversationSummary> _mergeConversationRefresh({
     for (final conversation in refreshed)
       _conversationIdentityKey(conversation),
   };
-  final localOnly = keepLocalOnly
-      ? local
-            .where(
-              (conversation) =>
-                  !consumedLocalIdentityKeys.contains(
-                    _conversationIdentityKey(conversation),
-                  ) &&
-                  !consumedLocalPresentationAliases.contains(
-                    conversation.threadId,
-                  ) &&
-                  !refreshedIdentityKeys.contains(
-                    _conversationIdentityKey(conversation),
-                  ) &&
-                  !refreshedThreadIds.contains(conversation.threadId) &&
-                  conversation.lastMessagePreview.trim().isNotEmpty,
-            )
-            .toList()
-      : const <ConversationSummary>[];
+  final localOnly = local
+      .where(
+        (conversation) =>
+            !consumedLocalIdentityKeys.contains(
+              _conversationIdentityKey(conversation),
+            ) &&
+            !consumedLocalPresentationAliases.contains(conversation.threadId) &&
+            !refreshedIdentityKeys.contains(
+              _conversationIdentityKey(conversation),
+            ) &&
+            !refreshedThreadIds.contains(conversation.threadId) &&
+            ((keepLocalOnly &&
+                    conversation.lastMessagePreview.trim().isNotEmpty) ||
+                (retainLocalOnly?.call(conversation) ?? false)),
+      )
+      .toList();
   return sortConversationsForPresentation(
     localOnly.isEmpty
         ? mergedRefreshed

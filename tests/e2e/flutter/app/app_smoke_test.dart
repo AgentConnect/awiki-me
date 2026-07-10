@@ -91,6 +91,71 @@ void main() {
     expect(find.byType(OnboardingPage), findsNothing);
   });
 
+  testWidgets(
+    'AwikiMeApp start conversation stays in recents before first send',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      await tester.binding.setSurfaceSize(const Size(1280, 820));
+      const session = SessionIdentity(
+        did: 'did:test:me',
+        credentialName: 'default',
+        handle: 'me',
+        displayName: 'Me',
+        jwtToken: 'test-jwt',
+      );
+      final harness = createFakeAwikiMeAppHarness(session: session);
+
+      try {
+        await tester.pumpWidget(
+          AwikiMeApp(
+            bootstrap: harness.bootstrap,
+            providerOverrides: harness.providerOverrides,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('start-conversation-button')));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('identity-lookup-input')),
+          '@smoke-peer.awiki.ai',
+        );
+        await tester.tap(
+          find.byKey(const Key('identity-lookup-search-button')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('identity-start-chat-button')));
+        await tester.pumpAndSettle();
+
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(AppShell)),
+        );
+        var conversations = container
+            .read(conversationListProvider)
+            .conversations;
+        expect(conversations, hasLength(1));
+        expect(conversations.single.lastMessagePreview, isEmpty);
+
+        await container.read(conversationListProvider.notifier).refresh();
+        await _pumpSmokeFrame(tester);
+
+        conversations = container.read(conversationListProvider).conversations;
+        expect(conversations, hasLength(1));
+        final started = conversations.single;
+        expect(started.targetDid, 'did:test:smoke-peer.awiki.ai');
+        expect(
+          find.byKey(
+            Key('conversation-row:${started.effectiveConversationId}'),
+          ),
+          findsOneWidget,
+        );
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+        await tester.binding.setSurfaceSize(null);
+      }
+    },
+  );
+
   testWidgets('AwikiMeApp authenticated smoke opens profile and settings', (
     tester,
   ) async {
