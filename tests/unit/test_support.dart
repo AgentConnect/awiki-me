@@ -2685,21 +2685,22 @@ class FakeAppTenantActions implements AppTenantActions {
       throw error;
     }
     final name = input.name.trim();
-    final id = name
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9._-]+'), '-')
-        .replaceAll(RegExp(r'-+'), '-')
-        .replaceAll(RegExp(r'^[-.]+|[-.]+$'), '');
+    final id = _fakeTenantIdFor(
+      registry,
+      name: name,
+      backendBaseUrl: input.backendBaseUrl,
+      didHost: input.didHost,
+    );
     final now = DateTime.utc(2026, 7, 1).toIso8601String();
     final tenant = AppTenantProfile(
-      id: id.isEmpty ? 'tenant' : id,
+      id: id,
       name: name,
       backendBaseUrl: input.backendBaseUrl.trim().replaceAll(
         RegExp(r'/+$'),
         '',
       ),
       didHost: input.didHost.trim().toLowerCase(),
-      stateNamespace: 'tenant-${id.isEmpty ? 'tenant' : id}',
+      stateNamespace: 'tenant-$id',
       createdAt: now,
       updatedAt: now,
     );
@@ -2758,6 +2759,46 @@ class FakeAppTenantActions implements AppTenantActions {
   @override
   Future<bool> tenantHasData(String tenantId) async {
     return tenantsWithData.contains(tenantId);
+  }
+
+  String _fakeTenantIdFor(
+    AppTenantRegistry registry, {
+    required String name,
+    required String backendBaseUrl,
+    required String didHost,
+  }) {
+    final backendHost = Uri.tryParse(backendBaseUrl)?.host ?? '';
+    final base =
+        _fakeSafeTenantSegment(name) ??
+        _fakeSafeTenantSegment(didHost) ??
+        _fakeSafeTenantSegment(backendHost) ??
+        'tenant';
+    final used = registry.tenants.map((tenant) => tenant.id).toSet();
+    if (!used.contains(base)) {
+      return base;
+    }
+    var suffix = 2;
+    while (used.contains('$base-$suffix')) {
+      suffix += 1;
+    }
+    return '$base-$suffix';
+  }
+
+  String? _fakeSafeTenantSegment(String raw) {
+    final safe = raw
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9_-]+'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^[-_]+|[-_]+$'), '');
+    if (safe.isEmpty) {
+      return null;
+    }
+    if (safe.length <= 48) {
+      return safe;
+    }
+    final capped = safe.substring(0, 48).replaceAll(RegExp(r'[-_]+$'), '');
+    return capped.isEmpty ? null : capped;
   }
 }
 

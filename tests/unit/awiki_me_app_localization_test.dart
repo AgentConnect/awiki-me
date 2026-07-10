@@ -321,7 +321,6 @@ void main() {
       final realtimeGateway = FakeRealtimeGateway();
       final environment = AwikiEnvironmentConfig(
         baseUrl: 'https://awiki.ai',
-        agentImEnabled: false,
       );
       final inventory = FakeAgentInventoryPort();
       final messaging = FakeMessagingService(gateway);
@@ -371,7 +370,7 @@ void main() {
             clientPlatform: 'linux',
           );
 
-      expect(container.read(agentImEnabledProvider), isFalse);
+      expect(container.read(agentImEnabledProvider), isTrue);
       expect(
         command.command,
         "curl -fsSL 'https://awiki.ai/daemon/install.sh' | "

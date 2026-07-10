@@ -715,7 +715,7 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
                 controller: _nameController,
                 label: context.l10n.tenantName,
                 placeholder: context.l10n.tenantNamePlaceholder,
-                enabled: !_submitting && !_hasData,
+                enabled: !_submitting,
               ),
               SizedBox(height: responsive.spacing(12)),
               AppTextField(
@@ -762,7 +762,7 @@ class _TenantFormDialogState extends ConsumerState<_TenantFormDialog> {
                           : (_editing
                                 ? context.l10n.commonSave
                                 : context.l10n.tenantCreate),
-                      onPressed: _submitting || _hasData ? null : _submit,
+                      onPressed: _submitting ? null : _submit,
                     ),
                   ),
                 ],

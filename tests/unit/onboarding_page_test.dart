@@ -356,7 +356,7 @@ void main() {
         of: find.byKey(const Key('tenant-name-field')),
         matching: find.byType(CupertinoTextField),
       ),
-      'Dev Team',
+      '杭州测试',
     );
     await tester.enterText(
       find.descendant(
@@ -378,13 +378,13 @@ void main() {
     expect(tenantActions.createTenantCalls, 1);
     expect(tenantActions.useTenantCalls, 0);
     expect(tenantActions.registry.activeTenantId, defaultTenantId);
-    expect(find.text('Dev Team'), findsOneWidget);
+    expect(find.text('杭州测试'), findsOneWidget);
 
     await tester.tap(find.byTooltip('使用').last);
     await tester.pumpAndSettle();
 
     expect(tenantActions.useTenantCalls, 1);
-    expect(tenantActions.registry.activeTenantId, 'dev-team');
+    expect(tenantActions.registry.activeTenantId, 'dev-example-com');
   });
 
   testWidgets('租户错误提示可选中并展示未知错误详情', (tester) async {

@@ -54,6 +54,66 @@ void main() {
     expect(switched.activeTenant.id, tenant.id);
   });
 
+  test(
+    'creates unicode display names with safe internal identifiers',
+    () async {
+      final created = await store.createTenant(
+        const AppTenantCreateInput(
+          name: ' 测试环境 ',
+          backendBaseUrl: 'https://tenant.example.com/',
+          didHost: 'Tenant.Example.com.',
+        ),
+      );
+
+      final tenant = created.visibleTenants.singleWhere(
+        (item) => item.name == '测试环境',
+      );
+
+      expect(tenant.id, 'tenant-example-com');
+      expect(tenant.stateNamespace, 'tenant-tenant-example-com');
+      expect(tenant.backendBaseUrl, 'https://tenant.example.com');
+      expect(tenant.didHost, 'tenant.example.com');
+    },
+  );
+
+  test('accepts one-character and punctuated local tenant display names', () {
+    expect(normalizeTenantName('测'), '测');
+    expect(normalizeTenantName('杭州测试 · Dev 🚀'), '杭州测试 · Dev 🚀');
+  });
+
+  test('rejects empty, too long, and invisible tenant display names', () {
+    expect(
+      () => normalizeTenantName(' '),
+      throwsA(
+        isA<AppTenantValidationException>().having(
+          (error) => error.code,
+          'code',
+          'tenant_name_invalid',
+        ),
+      ),
+    );
+    expect(
+      () => normalizeTenantName('${List.filled(20, '租户').join()}x'),
+      throwsA(
+        isA<AppTenantValidationException>().having(
+          (error) => error.code,
+          'code',
+          'tenant_name_invalid',
+        ),
+      ),
+    );
+    expect(
+      () => normalizeTenantName('测试\u200B环境'),
+      throwsA(
+        isA<AppTenantValidationException>().having(
+          (error) => error.code,
+          'code',
+          'tenant_name_invalid',
+        ),
+      ),
+    );
+  });
+
   test('prepareUseTenant does not persist the active tenant', () async {
     final created = await store.createTenant(
       const AppTenantCreateInput(
@@ -199,6 +259,43 @@ void main() {
         ),
       ),
     );
+  });
+
+  test('allows renaming a custom tenant after local data exists', () async {
+    final created = await store.createTenant(
+      const AppTenantCreateInput(
+        name: 'Customer One',
+        backendBaseUrl: 'https://one.example.com',
+        didHost: 'one.example.com',
+      ),
+    );
+    final tenant = created.visibleTenants.singleWhere(
+      (item) => item.name == 'Customer One',
+    );
+    final layout = AwikiImCorePathLayout.fromRoots(
+      appSupportRoot: p.join(root.path, 'support'),
+      cacheRoot: p.join(root.path, 'cache'),
+      tempRoot: p.join(root.path, 'tmp'),
+      stateNamespace: tenant.stateNamespace,
+    );
+    await File(layout.registryPath).parent.create(recursive: true);
+    await File(layout.registryPath).writeAsString('{"identities":[]}');
+
+    final updated = await store.updateTenant(
+      AppTenantUpdateInput(
+        id: tenant.id,
+        name: '客户一号',
+        backendBaseUrl: tenant.backendBaseUrl,
+        didHost: tenant.didHost,
+      ),
+    );
+    final renamed = updated.visibleTenants.singleWhere(
+      (item) => item.id == tenant.id,
+    );
+
+    expect(renamed.name, '客户一号');
+    expect(renamed.id, tenant.id);
+    expect(renamed.stateNamespace, tenant.stateNamespace);
   });
 
   test('soft deletes inactive custom tenants only', () async {

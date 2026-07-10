@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:characters/characters.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -23,6 +24,8 @@ class AppTenantStore {
   final String? appStateRoot;
 
   static const String registryFileName = 'registry.json';
+  static const int _maxTenantNameLength = 40;
+  static const int _maxTenantIdBaseLength = 48;
 
   Future<AppTenantRegistry> loadRegistry() async {
     final file = await _registryFile();
@@ -86,7 +89,12 @@ class AppTenantStore {
     final didHost = normalizeTenantDidHost(input.didHost);
     _assertUniqueName(registry, name);
     _assertUniqueEndpoint(registry, backendBaseUrl, didHost);
-    final id = _uniqueTenantId(registry, name);
+    final id = _uniqueTenantId(
+      registry,
+      name: name,
+      backendBaseUrl: backendBaseUrl,
+      didHost: didHost,
+    );
     final tenant = AppTenantProfile(
       id: id,
       name: name,
@@ -129,12 +137,18 @@ class AppTenantStore {
     if (existing.id == defaultTenantId || existing.isPrimaryTenant) {
       throw const AppTenantValidationException('tenant_default_edit_forbidden');
     }
-    if (await tenantHasData(existing.id)) {
-      throw const AppTenantValidationException('tenant_has_data');
-    }
     final name = normalizeTenantName(input.name);
     final backendBaseUrl = normalizeTenantBackendBaseUrl(input.backendBaseUrl);
     final didHost = normalizeTenantDidHost(input.didHost);
+    if (await tenantHasData(existing.id)) {
+      final backendChanged =
+          backendBaseUrl.toLowerCase() != existing.backendBaseUrl.toLowerCase();
+      final didHostChanged =
+          didHost.toLowerCase() != existing.didHost.toLowerCase();
+      if (backendChanged || didHostChanged) {
+        throw const AppTenantValidationException('tenant_has_data');
+      }
+    }
     _assertUniqueName(registry, name, exceptId: existing.id);
     _assertUniqueEndpoint(
       registry,
@@ -278,8 +292,18 @@ class AppTenantStore {
     )).parent.create(recursive: true);
   }
 
-  String _uniqueTenantId(AppTenantRegistry registry, String name) {
-    final base = _safeSegment(name);
+  String _uniqueTenantId(
+    AppTenantRegistry registry, {
+    required String name,
+    required String backendBaseUrl,
+    required String didHost,
+  }) {
+    final backendHost = Uri.tryParse(backendBaseUrl)?.host ?? '';
+    final base =
+        _safeSegmentCandidate(name) ??
+        _safeSegmentCandidate(didHost) ??
+        _safeSegmentCandidate(backendHost) ??
+        'tenant';
     final used = registry.tenants.map((tenant) => tenant.id).toSet();
     if (!used.contains(base)) {
       return base;
@@ -322,7 +346,7 @@ AppTenantProfile _normalizeProfile(AppTenantProfile tenant) {
       : normalizeAwikiStateNamespace(tenant.stateNamespace);
   return AppTenantProfile(
     id: id,
-    name: tenant.name.trim().isEmpty ? fallback.name : tenant.name.trim(),
+    name: _normalizeTenantNameOrFallback(tenant.name, fallback.name),
     backendBaseUrl: normalizeTenantBackendBaseUrl(
       tenant.backendBaseUrl.trim().isEmpty
           ? fallback.backendBaseUrl
@@ -343,14 +367,23 @@ AppTenantProfile _normalizeProfile(AppTenantProfile tenant) {
 }
 
 String normalizeTenantName(String raw) {
-  final name = raw.trim().replaceAll(RegExp(r'\s+'), ' ');
-  if (name.length < 2 || name.length > 32) {
+  final name = raw.trim().replaceAll(RegExp(r'\s+', unicode: true), ' ');
+  final length = name.characters.length;
+  if (length < 1 || length > AppTenantStore._maxTenantNameLength) {
     throw const AppTenantValidationException('tenant_name_invalid');
   }
-  if (!RegExp(r'^[A-Za-z0-9][A-Za-z0-9 ._-]*$').hasMatch(name)) {
+  if (_containsUnsupportedTenantNameCharacter(name)) {
     throw const AppTenantValidationException('tenant_name_invalid');
   }
   return name;
+}
+
+String _normalizeTenantNameOrFallback(String raw, String fallback) {
+  try {
+    return normalizeTenantName(raw);
+  } on AppTenantValidationException {
+    return normalizeTenantName(fallback);
+  }
 }
 
 String normalizeTenantBackendBaseUrl(String raw) {
@@ -384,12 +417,12 @@ void _assertUniqueName(
   String name, {
   String? exceptId,
 }) {
-  final normalized = name.toLowerCase();
+  final normalized = _tenantNameKey(name);
   final exists = registry.tenants.any(
     (tenant) =>
         tenant.id != exceptId &&
         !tenant.isArchived &&
-        tenant.name.trim().toLowerCase() == normalized,
+        _tenantNameKey(tenant.name) == normalized,
   );
   if (exists) {
     throw const AppTenantValidationException('tenant_name_exists');
@@ -463,14 +496,49 @@ Future<bool> _directoryHasAnyFile(Directory directory) async {
   return false;
 }
 
+bool _containsUnsupportedTenantNameCharacter(String value) {
+  for (final rune in value.runes) {
+    if (rune <= 0x1F || (rune >= 0x7F && rune <= 0x9F)) {
+      return true;
+    }
+    if ((rune >= 0x200B && rune <= 0x200F) ||
+        (rune >= 0x202A && rune <= 0x202E) ||
+        (rune >= 0x2060 && rune <= 0x206F) ||
+        rune == 0xFEFF) {
+      return true;
+    }
+  }
+  return false;
+}
+
+String _tenantNameKey(String value) {
+  return value
+      .trim()
+      .replaceAll(RegExp(r'\s+', unicode: true), ' ')
+      .toLowerCase();
+}
+
 String _safeSegment(String raw) {
+  return _safeSegmentCandidate(raw) ?? 'tenant';
+}
+
+String? _safeSegmentCandidate(String raw) {
   final safe = raw
       .trim()
       .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9._-]+'), '-')
+      .replaceAll(RegExp(r'[^a-z0-9_-]+'), '-')
       .replaceAll(RegExp(r'-+'), '-')
-      .replaceAll(RegExp(r'^[-.]+|[-.]+$'), '');
-  return safe.isEmpty ? 'tenant' : safe;
+      .replaceAll(RegExp(r'^[-_]+|[-_]+$'), '');
+  if (safe.isEmpty) {
+    return null;
+  }
+  if (safe.length <= AppTenantStore._maxTenantIdBaseLength) {
+    return safe;
+  }
+  final capped = safe
+      .substring(0, AppTenantStore._maxTenantIdBaseLength)
+      .replaceAll(RegExp(r'[-_]+$'), '');
+  return capped.isEmpty ? null : capped;
 }
 
 String? _firstNonEmpty(String? first, String? second) {

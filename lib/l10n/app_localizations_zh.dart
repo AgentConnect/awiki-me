@@ -254,7 +254,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get tenantCannotEditWithData =>
-      '这个租户已经有本地数据。请添加租户配置，不要修改它的后端或 DID Host。';
+      '这个租户已经有本地数据，只能修改名称，不能修改后端地址或 DID Host。';
 
   @override
   String get tenantCannotDeleteDefault => '默认 AWiki 租户不能删除。';
@@ -263,7 +263,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get tenantCannotDeleteActive => '请先切换到其他租户，再删除当前租户。';
 
   @override
-  String get tenantValidationNameInvalid => '请使用 2-32 个字符：字母、数字、空格、点、下划线或中划线。';
+  String get tenantValidationNameInvalid =>
+      '请输入 1-40 个可见字符作为本地显示名称，不能包含不可见控制字符。';
 
   @override
   String get tenantValidationBackendInvalid =>
@@ -280,7 +281,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get tenantValidationEndpointExists => '已经存在相同后端和 DID Host 的租户。';
 
   @override
-  String get tenantValidationHasData => '这个租户已经有本地数据，请添加租户配置。';
+  String get tenantValidationHasData =>
+      '这个租户已经有本地数据，只能修改名称；如需更换后端或 DID Host，请添加租户配置。';
 
   @override
   String get tenantNotFound => '租户不存在。';

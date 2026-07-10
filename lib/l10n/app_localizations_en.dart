@@ -261,7 +261,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tenantCannotEditWithData =>
-      'This tenant already has local data. Add a tenant configuration instead of changing its backend or DID host.';
+      'This tenant already has local data. You can rename it, but the backend URL and DID host cannot be changed.';
 
   @override
   String get tenantCannotDeleteDefault =>
@@ -273,7 +273,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tenantValidationNameInvalid =>
-      'Use 2-32 characters: letters, numbers, spaces, dots, underscores, or hyphens.';
+      'Enter 1-40 visible characters for the local display name. Invisible control characters are not allowed.';
 
   @override
   String get tenantValidationBackendInvalid =>
@@ -293,7 +293,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tenantValidationHasData =>
-      'This tenant already has local data. Add a tenant configuration instead.';
+      'This tenant already has local data. Only the name can be changed; add a tenant configuration for a different backend or DID host.';
 
   @override
   String get tenantNotFound => 'Tenant not found.';

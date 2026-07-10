@@ -143,7 +143,7 @@ dart run tests/e2e/runner.dart --case smoke
 
 租户配置在 App 内管理，不再通过 Flutter `--dart-define` 传入服务地址。登录页右下角有一个低强调的租户切换入口。每个租户保存：
 
-- 租户名称
+- 本地显示名称（1-40 个可见字符）
 - 后端地址
 - DID Host
 - 隔离的本地状态命名空间
@@ -155,7 +155,7 @@ dart run tests/e2e/runner.dart --case smoke
 DID Host：awiki.ai
 ```
 
-切换租户会重建 App runtime，并使用独立的 im-core / 产品本地状态命名空间，身份、会话、群组和本地缓存会被隔离。已经产生本地数据的租户不能再修改后端地址或 DID Host；需要接入新环境时请添加租户配置。
+切换租户会重建 App runtime，并使用独立的 im-core / 产品本地状态命名空间，身份、会话、群组和本地缓存会被隔离。租户名称只是本地显示标签，后续可以改名。已经产生本地数据的租户不能再修改后端地址或 DID Host；需要接入新环境时请添加租户配置。
 
 Agent 和 Daemon 功能目前只支持默认 AWiki 主租户。其他租户进入智能体页面时会显示友好的暂不支持状态，并且不会调用 Agent 后端接口。
 

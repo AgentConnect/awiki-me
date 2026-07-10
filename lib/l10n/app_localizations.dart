@@ -575,7 +575,7 @@ abstract class AppLocalizations {
   /// No description provided for @tenantCannotEditWithData.
   ///
   /// In zh, this message translates to:
-  /// **'这个租户已经有本地数据。请添加租户配置，不要修改它的后端或 DID Host。'**
+  /// **'这个租户已经有本地数据，只能修改名称，不能修改后端地址或 DID Host。'**
   String get tenantCannotEditWithData;
 
   /// No description provided for @tenantCannotDeleteDefault.
@@ -593,7 +593,7 @@ abstract class AppLocalizations {
   /// No description provided for @tenantValidationNameInvalid.
   ///
   /// In zh, this message translates to:
-  /// **'请使用 2-32 个字符：字母、数字、空格、点、下划线或中划线。'**
+  /// **'请输入 1-40 个可见字符作为本地显示名称，不能包含不可见控制字符。'**
   String get tenantValidationNameInvalid;
 
   /// No description provided for @tenantValidationBackendInvalid.
@@ -623,7 +623,7 @@ abstract class AppLocalizations {
   /// No description provided for @tenantValidationHasData.
   ///
   /// In zh, this message translates to:
-  /// **'这个租户已经有本地数据，请添加租户配置。'**
+  /// **'这个租户已经有本地数据，只能修改名称；如需更换后端或 DID Host，请添加租户配置。'**
   String get tenantValidationHasData;
 
   /// No description provided for @tenantNotFound.

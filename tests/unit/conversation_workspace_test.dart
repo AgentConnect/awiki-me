@@ -1333,9 +1333,11 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('融资协作群').first);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(
       find.byKey(const Key('group-info-dialog-add-member-button')),
@@ -1564,9 +1566,11 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('融资协作群').first);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('暂无成员快照，先执行一次刷新群详情与成员。'), findsOneWidget);
 
@@ -1584,7 +1588,8 @@ void main() {
     await tester.tap(
       find.byKey(const Key('group-info-dialog-refresh-members-button')),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(tester.takeException(), isNull);
     expect(feedback, isNull);

@@ -16,9 +16,9 @@ void main() {
   test('default update URLs follow the default AWiki environment', () {
     expect(
       kDefaultUpdateManifestUrl,
-      'https://awiki.info/downloads/awiki-me/latest.json',
+      'https://awiki.ai/downloads/awiki-me/latest.json',
     );
-    expect(kDefaultReleasesUrl, 'https://awiki.info/#download');
+    expect(kDefaultReleasesUrl, 'https://awiki.ai/#download');
   });
 
   test('checkForUpdates fetches manifest and caches it', () async {
