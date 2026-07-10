@@ -32,14 +32,23 @@ class PeerProfilePage extends ConsumerWidget {
     final state = ref.watch(peerProfileProvider(did));
     final theme = context.awikiTheme;
     final profile = state.profile;
-    final profileContent = profile == null
+    final rawProfileContent = profile == null
         ? ''
         : (profile.profileMarkdown.trim().isNotEmpty
               ? profile.profileMarkdown.trim()
               : profile.bio.trim());
+    final profileContent = DidDisplayFormatter.withoutRedundantIdentityMetadata(
+      rawProfileContent,
+    );
     final displayName = profile == null
         ? ''
         : DidDisplayFormatter.profileName(profile);
+    final handleLabel = profile == null
+        ? ''
+        : DidDisplayFormatter.profileHandleLabel(profile);
+    final secondaryName = profile == null
+        ? ''
+        : DidDisplayFormatter.secondaryProfileName(profile);
     final homepageUrl = profile == null
         ? ''
         : ref.watch(profileHomepageResolverProvider).homepageUrl(profile);
@@ -93,16 +102,33 @@ class PeerProfilePage extends ConsumerWidget {
                                         CrossAxisAlignment.start,
                                     children: <Widget>[
                                       Text(
-                                        displayName,
+                                        handleLabel,
+                                        key: const Key(
+                                          'peer-profile-handle-value',
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
                                           fontSize:
                                               context.awikiResponsive.isPhone
-                                              ? 22
-                                              : 20,
-                                          fontWeight: FontWeight.w500,
+                                              ? 24
+                                              : 22,
+                                          fontWeight: FontWeight.w700,
                                           color: theme.title,
                                         ),
                                       ),
+                                      if (secondaryName.isNotEmpty) ...<Widget>[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          secondaryName,
+                                          key: const Key(
+                                            'peer-profile-display-name',
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: AwikiMeTextStyles.cardSubtitle,
+                                        ),
+                                      ],
                                       const SizedBox(height: 6),
                                       CopyableDidLine(
                                         value: profile.did,
@@ -140,11 +166,6 @@ class PeerProfilePage extends ConsumerWidget {
                                   ),
                                   tone: SemanticPillTone.relationship,
                                 ),
-                                if (profile.handle?.isNotEmpty == true)
-                                  SemanticPill(
-                                    label: '@${profile.handle}',
-                                    tone: SemanticPillTone.metadata,
-                                  ),
                               ],
                             ),
                             const SizedBox(height: 16),

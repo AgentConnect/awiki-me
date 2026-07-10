@@ -691,21 +691,36 @@ void main() {
     expect(find.text('正在加载资料…'), findsOneWidget);
     expect(find.text('profile 加载完成后的介绍'), findsNothing);
 
+    const resolvedDid =
+        'did:wba:awiki.ai:profile-agent:e1_abcdefghijklmnopqrstuvwxyz0123456789';
     profileCompleter.complete(
       const UserProfile(
-        did: 'did:test:slow-agent',
+        did: resolvedDid,
         nickName: 'Profile Agent',
         bio: 'profile 加载完成后的介绍',
         tags: <String>['agent'],
-        profileMarkdown: '',
+        profileMarkdown:
+            '我的短号(handle)：profile-agent.awiki.ai\n\nDID: $resolvedDid\n\nprofile 加载完成后的介绍',
         handle: 'profile-agent',
+        fullHandle: 'profile-agent.awiki.ai',
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Profile Agent'), findsOneWidget);
     expect(find.text('profile 加载完成后的介绍'), findsOneWidget);
-    expect(find.text('@profile-agent'), findsOneWidget);
+    expect(find.text('@profile-agent.awiki.ai'), findsOneWidget);
+    final didText = tester.widget<Text>(
+      find.byKey(const Key('peer-info-dialog-did-value')),
+    );
+    expect(didText.data, contains('…'));
+    expect(didText.data, isNot(resolvedDid));
+    expect(
+      find.byKey(const Key('peer-info-dialog-copy-did-button')),
+      findsOneWidget,
+    );
+    expect(find.text('我的短号(handle)：profile-agent.awiki.ai'), findsNothing);
+    expect(find.text('DID: $resolvedDid'), findsNothing);
     expect(find.text('资料加载中'), findsNothing);
   });
 

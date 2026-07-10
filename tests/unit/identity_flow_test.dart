@@ -62,7 +62,18 @@ void main() {
     await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('CGW Agent'), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('identity-preview-handle-value')))
+          .data,
+      '@cgw.awiki.ai',
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('identity-preview-display-name')))
+          .data,
+      'CGW Agent',
+    );
     await tester.tap(find.byKey(const Key('identity-start-chat-button')));
     await tester.pumpAndSettle();
 

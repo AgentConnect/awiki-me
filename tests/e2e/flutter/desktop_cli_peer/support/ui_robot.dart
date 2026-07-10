@@ -192,6 +192,10 @@ class _DesktopAppRobot {
       description: 'peer info button',
     );
     await pumpUntilFinder(
+      find.byKey(const Key('peer-info-dialog-handle-value')),
+      description: 'handle-first peer identity header',
+    );
+    await pumpUntilFinder(
       find.byKey(const Key('chat-follow-button')),
       description: 'follow button',
     );

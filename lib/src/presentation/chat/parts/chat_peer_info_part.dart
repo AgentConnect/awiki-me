@@ -71,13 +71,24 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     final profileName = profile == null
         ? ''
         : DidDisplayFormatter.profileName(profile);
-    final handle = profile?.handle?.trim();
+    final handleLabel = profile == null
+        ? ''
+        : DidDisplayFormatter.profileHandleLabel(profile);
     final avatarUri = profile?.avatarUri ?? widget.conversation.avatarUri;
-    final profileContent = profile == null
+    final rawProfileContent = profile == null
         ? ''
         : (profile.profileMarkdown.trim().isNotEmpty
               ? profile.profileMarkdown.trim()
               : profile.bio.trim());
+    final profileContent = DidDisplayFormatter.withoutRedundantIdentityMetadata(
+      rawProfileContent,
+    );
+    final primaryIdentity = handleLabel.isEmpty ? displayName : handleLabel;
+    final secondaryIdentity = _secondaryIdentityLabel(
+      primary: primaryIdentity,
+      displayName: displayName,
+      profileName: profileName,
+    );
     final homepageUrl = profile == null
         ? ''
         : ref.watch(profileHomepageResolverProvider).homepageUrl(profile);
@@ -120,7 +131,10 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                             children: <Widget>[
                               Expanded(
                                 child: Text(
-                                  displayName,
+                                  primaryIdentity,
+                                  key: const Key(
+                                    'peer-info-dialog-handle-value',
+                                  ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
@@ -139,12 +153,11 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                               ],
                             ],
                           ),
-                          if (runtimeAgent != null &&
-                              profileName.isNotEmpty &&
-                              profileName != displayName) ...<Widget>[
+                          if (secondaryIdentity.isNotEmpty) ...<Widget>[
                             const SizedBox(height: 4),
                             Text(
-                              profileName,
+                              secondaryIdentity,
+                              key: const Key('peer-info-dialog-display-name'),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -226,11 +239,6 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                           runtimeStatus,
                         ),
                         tone: SemanticPillTone.status,
-                      ),
-                    if (handle != null && handle.isNotEmpty)
-                      SemanticPill(
-                        label: '@$handle',
-                        tone: SemanticPillTone.metadata,
                       ),
                   ],
                 ),
@@ -338,6 +346,25 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
       return did;
     }
     return fallbackDid.trim();
+  }
+
+  String _secondaryIdentityLabel({
+    required String primary,
+    required String displayName,
+    required String profileName,
+  }) {
+    final normalizedPrimary = primary
+        .replaceFirst(RegExp(r'^@'), '')
+        .toLowerCase();
+    for (final candidate in <String>[profileName, displayName]) {
+      final value = candidate.trim();
+      if (value.isNotEmpty &&
+          value.replaceFirst(RegExp(r'^@'), '').toLowerCase() !=
+              normalizedPrimary) {
+        return value;
+      }
+    }
+    return '';
   }
 
   Widget _profilePlaceholder(PeerProfileState state) {
