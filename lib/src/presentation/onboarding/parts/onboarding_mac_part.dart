@@ -1037,7 +1037,7 @@ class _MacRegisterForm extends StatelessWidget {
       );
     }
 
-    if (onboarding.registerStep == 2) {
+    if (onboarding.registerStep == 2 && onboarding.authMode == 'phone') {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -1130,6 +1130,13 @@ class _MacRegisterForm extends StatelessWidget {
           ),
         ] else ...<Widget>[
           _MacOutlinedField(
+            controller: handleController,
+            label: context.l10n.onboardingHandle,
+            placeholder: context.l10n.onboardingHandlePlaceholder,
+            icon: CupertinoIcons.at,
+          ),
+          const SizedBox(height: 16),
+          _MacOutlinedField(
             controller: emailController,
             label: context.l10n.onboardingEmail,
             placeholder: context.l10n.onboardingEmailPlaceholder,
@@ -1152,13 +1159,11 @@ class _MacRegisterForm extends StatelessWidget {
             alignment: Alignment.centerRight,
             child: SizedBox(
               key: const Key('onboarding-mac-email-action'),
-              width: onboarding.emailVerified ? 118 : 168,
+              width: onboarding.emailVerified ? 132 : 168,
               child: onboarding.emailVerified
                   ? _MacPrimaryAction(
-                      label: context.l10n.commonNext,
-                      onPressed: onboarding.isBusy
-                          ? null
-                          : () => onRegisterStepChanged(2),
+                      label: context.l10n.onboardingCompleteEmailRegister,
+                      onPressed: onboarding.isBusy ? null : onSubmitRegister,
                     )
                   : _MacSecondaryAction(
                       label: context.l10n.onboardingCheckActivationStatus,

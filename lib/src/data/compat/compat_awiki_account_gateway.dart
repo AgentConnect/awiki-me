@@ -95,7 +95,10 @@ class CompatAwikiAccountGateway implements AwikiAccountGateway {
   }
 
   @override
-  Future<void> sendEmailVerification({required String email}) {
+  Future<void> sendEmailVerification({
+    required String email,
+    required String handle,
+  }) {
     final support = _onboardingSupport;
     if (support == null) {
       // TODO(im-core): route email verification request through SDK once exposed.
@@ -103,17 +106,20 @@ class CompatAwikiAccountGateway implements AwikiAccountGateway {
         'IM Core sendEmailVerification is not available yet',
       );
     }
-    return support.sendEmailVerification(email: email);
+    return support.sendEmailVerification(email: email, handle: handle);
   }
 
   @override
-  Future<bool> checkEmailVerified({required String email}) {
+  Future<bool> checkEmailVerified({
+    required String email,
+    required String handle,
+  }) {
     final support = _onboardingSupport;
     if (support == null) {
       // TODO(im-core): route email verification polling through SDK once exposed.
       throw UnsupportedError('IM Core checkEmailVerified is not available yet');
     }
-    return support.checkEmailVerified(email: email);
+    return support.checkEmailVerified(email: email, handle: handle);
   }
 
   @override

@@ -6,9 +6,15 @@ abstract interface class OnboardingSupportService {
 
   Future<void> sendOtp({required String phone});
 
-  Future<void> sendEmailVerification({required String email});
+  Future<void> sendEmailVerification({
+    required String email,
+    required String handle,
+  });
 
-  Future<bool> checkEmailVerified({required String email});
+  Future<bool> checkEmailVerified({
+    required String email,
+    required String handle,
+  });
 
   Future<HandleRegistrationStatus> lookupHandleRegistration({
     required String handle,

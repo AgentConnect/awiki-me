@@ -241,11 +241,14 @@ void main() {
     await tester.tap(find.byKey(const Key('auth-mode-email')));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(CupertinoTextField).first, 'a@b.com');
+    await tester.enterText(find.byType(CupertinoTextField).at(0), 'alice');
+    await tester.enterText(find.byType(CupertinoTextField).at(1), 'a@b.com');
     await tester.tap(find.text('发送激活邮件'));
     await tester.pump();
 
     expect(gateway.sendEmailVerificationCalls, 1);
+    expect(gateway.lookupHandleRegistrationCalls, 1);
+    expect(gateway.lastEmailVerificationHandle, 'alice');
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -606,11 +609,14 @@ void main() {
     await tester.tap(find.byKey(const Key('auth-mode-email')));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(CupertinoTextField).first, 'a@b.com');
+    await tester.enterText(find.byType(CupertinoTextField).at(0), 'alice');
+    await tester.enterText(find.byType(CupertinoTextField).at(1), 'a@b.com');
     await tester.tap(find.text('发送激活邮件'));
     await tester.pump();
 
     expect(gateway.sendEmailVerificationCalls, 1);
+    expect(gateway.lookupHandleRegistrationCalls, 1);
+    expect(gateway.lastEmailVerificationHandle, 'alice');
     expect(find.textContaining('重新发送（'), findsOneWidget);
     final container = ProviderScope.containerOf(
       tester.element(find.byType(OnboardingPage)),
@@ -687,7 +693,7 @@ void main() {
     expect(feedback?.message.detail, 'otp gateway unavailable');
   });
 
-  testWidgets('邮箱验证成功后检查按钮变成下一步', (tester) async {
+  testWidgets('邮箱验证成功后可以直接完成注册', (tester) async {
     final gateway = FakeAwikiGateway()..emailVerificationResult = true;
 
     await tester.pumpWidget(
@@ -700,20 +706,23 @@ void main() {
     await tester.tap(find.byKey(const Key('auth-mode-email')));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(CupertinoTextField).first, 'a@b.com');
+    await tester.enterText(find.byType(CupertinoTextField).at(0), 'alice');
+    await tester.enterText(find.byType(CupertinoTextField).at(1), 'a@b.com');
     await tester.tap(find.text('我已激活，检查状态'));
     await tester.pump();
 
     expect(gateway.checkEmailVerifiedCalls, 1);
-    expect(find.text('下一步'), findsOneWidget);
+    expect(gateway.lastCheckedEmailVerificationHandle, 'alice');
+    expect(find.text('完成注册'), findsOneWidget);
 
-    await tester.tap(find.text('下一步'));
+    await tester.tap(find.text('完成注册'));
     await tester.pumpAndSettle();
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(OnboardingPage)),
     );
-    expect(container.read(onboardingProvider).registerStep, 2);
+    expect(container.read(onboardingProvider).registerStep, 1);
+    expect(gateway.registerHandleWithEmailCalls, 1);
   });
 
   testWidgets('进入 handle 步骤时用户名输入框没有默认值', (tester) async {
@@ -888,16 +897,15 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('auth-mode-email')));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(CupertinoTextField).at(0), 'a@b.com');
+    await tester.enterText(find.byType(CupertinoTextField).at(0), 'alice');
+    await tester.enterText(find.byType(CupertinoTextField).at(1), 'a@b.com');
     await tester.tap(find.text('我已激活，检查状态'));
     await tester.pump();
-    await tester.tap(find.text('下一步'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(CupertinoTextField).at(0), 'alice');
     await tester.tap(find.text('完成注册'));
     await tester.pump();
 
     expect(gateway.lookupHandleRegistrationCalls, 1);
+    expect(gateway.lastCheckedEmailVerificationHandle, 'alice');
     expect(gateway.registerHandleWithEmailCalls, 0);
     final container = ProviderScope.containerOf(
       tester.element(find.byType(OnboardingPage)),
@@ -921,16 +929,15 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('auth-mode-email')));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(CupertinoTextField).at(0), 'a@b.com');
+    await tester.enterText(find.byType(CupertinoTextField).at(0), 'alice');
+    await tester.enterText(find.byType(CupertinoTextField).at(1), 'a@b.com');
     await tester.tap(find.text('我已激活，检查状态'));
     await tester.pump();
-    await tester.tap(find.text('下一步'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(CupertinoTextField).at(0), 'alice');
     await tester.tap(find.text('完成注册'));
     await tester.pumpAndSettle();
 
     expect(gateway.lookupHandleRegistrationCalls, 1);
+    expect(gateway.lastCheckedEmailVerificationHandle, 'alice');
     expect(gateway.registerHandleWithEmailCalls, 1);
     expect(gateway.lastEmailRegisteredNickName, 'alice');
     expect(gateway.lastEmailRegisteredProfileMarkdown, '# alice\n\n');

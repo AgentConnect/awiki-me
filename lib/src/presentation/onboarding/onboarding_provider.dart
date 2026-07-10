@@ -234,7 +234,10 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     }
   }
 
-  Future<void> requestEmailActivation(String email) async {
+  Future<void> requestEmailActivation({
+    required String email,
+    required String handle,
+  }) async {
     if (!state.supportsEmailRegistration) {
       ref
           .read(uiFeedbackProvider.notifier)
@@ -243,9 +246,12 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     }
     var success = false;
     await _runBusy(() async {
-      await ref
-          .read(onboardingSupportServiceProvider)
-          .sendEmailVerification(email: email);
+      final support = ref.read(onboardingSupportServiceProvider);
+      final status = await support.lookupHandleRegistration(handle: handle);
+      if (status == HandleRegistrationStatus.registered) {
+        throw StateError('email_login_unsupported_for_registered_handle');
+      }
+      await support.sendEmailVerification(email: email, handle: handle);
       success = true;
     });
     if (success) {
@@ -256,7 +262,10 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     }
   }
 
-  Future<bool> checkEmailActivation(String email) async {
+  Future<bool> checkEmailActivation({
+    required String email,
+    required String handle,
+  }) async {
     if (!state.supportsEmailRegistration) {
       ref
           .read(uiFeedbackProvider.notifier)
@@ -267,7 +276,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     await _runBusy(() async {
       verified = await ref
           .read(onboardingSupportServiceProvider)
-          .checkEmailVerified(email: email);
+          .checkEmailVerified(email: email, handle: handle);
       if (!verified) {
         ref
             .read(uiFeedbackProvider.notifier)
@@ -276,6 +285,14 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     });
     state = state.copyWith(emailVerified: verified);
     return verified;
+  }
+
+  void resetEmailActivation() {
+    if (!state.emailVerified && state.emailResendCountdown == 0) {
+      return;
+    }
+    _cancelEmailResendCountdown();
+    state = state.copyWith(emailVerified: false, emailResendCountdown: 0);
   }
 
   Future<void> registerWithPhone({
@@ -387,7 +404,10 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       if (status == HandleRegistrationStatus.registered) {
         throw StateError('email_login_unsupported_for_registered_handle');
       }
-      final verified = await support.checkEmailVerified(email: email);
+      final verified = await support.checkEmailVerified(
+        email: email,
+        handle: handle,
+      );
       if (!verified) {
         throw StateError('email_not_activated');
       }

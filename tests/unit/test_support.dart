@@ -570,6 +570,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   String? lastUnfollowedDidOrHandle;
   String? lastRegisteredNickName;
   String? lastRegisteredProfileMarkdown;
+  String? lastEmailVerificationHandle;
+  String? lastCheckedEmailVerificationHandle;
   String? lastEmailRegisteredNickName;
   String? lastEmailRegisteredProfileMarkdown;
   String? lastCreatedGroupName;
@@ -964,8 +966,12 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   }
 
   @override
-  Future<bool> checkEmailVerified({required String email}) async {
+  Future<bool> checkEmailVerified({
+    required String email,
+    required String handle,
+  }) async {
     checkEmailVerifiedCalls += 1;
+    lastCheckedEmailVerificationHandle = handle;
     return emailVerificationResult;
   }
 
@@ -1238,8 +1244,12 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   }
 
   @override
-  Future<void> sendEmailVerification({required String email}) async {
+  Future<void> sendEmailVerification({
+    required String email,
+    required String handle,
+  }) async {
     sendEmailVerificationCalls += 1;
+    lastEmailVerificationHandle = handle;
   }
 
   @override
@@ -3315,8 +3325,11 @@ class FakeOnboardingSupportService implements OnboardingSupportService {
   }
 
   @override
-  Future<bool> checkEmailVerified({required String email}) {
-    return gateway.checkEmailVerified(email: email);
+  Future<bool> checkEmailVerified({
+    required String email,
+    required String handle,
+  }) {
+    return gateway.checkEmailVerified(email: email, handle: handle);
   }
 
   @override
@@ -3335,8 +3348,11 @@ class FakeOnboardingSupportService implements OnboardingSupportService {
   }
 
   @override
-  Future<void> sendEmailVerification({required String email}) {
-    return gateway.sendEmailVerification(email: email);
+  Future<void> sendEmailVerification({
+    required String email,
+    required String handle,
+  }) {
+    return gateway.sendEmailVerification(email: email, handle: handle);
   }
 
   @override

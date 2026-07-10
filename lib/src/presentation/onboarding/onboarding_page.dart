@@ -51,10 +51,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   bool _autoEntryModeEnabled = true;
 
   String get _normalizedPhone => phoneController.text.trim();
+  String get _normalizedHandle => handleController.text.trim();
 
   @override
   void initState() {
     super.initState();
+    emailController.addListener(_resetEmailActivationTarget);
+    handleController.addListener(_resetEmailActivationTarget);
     _runtimeSubscription = ref.listenManual<AppRuntimeState>(
       appRuntimeProvider,
       (_, next) {
@@ -93,6 +96,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     _runtimeSubscription?.close();
     _sessionSubscription?.close();
     _tenantSubscription?.close();
+    emailController.removeListener(_resetEmailActivationTarget);
+    handleController.removeListener(_resetEmailActivationTarget);
     phoneController.dispose();
     otpController.dispose();
     emailController.dispose();
@@ -143,12 +148,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         onModeChanged: _setEntryModeManually,
         onAuthModeChanged: ref.read(onboardingProvider.notifier).setAuthMode,
         onRequestOtp: _requestOtp,
-        onRequestEmailActivation: () => ref
-            .read(onboardingProvider.notifier)
-            .requestEmailActivation(emailController.text.trim()),
-        onCheckEmailActivation: () => ref
-            .read(onboardingProvider.notifier)
-            .checkEmailActivation(emailController.text.trim()),
+        onRequestEmailActivation: _requestEmailActivation,
+        onCheckEmailActivation: _checkEmailActivation,
         onRegisterStepChanged: ref
             .read(onboardingProvider.notifier)
             .setRegisterStep,
@@ -346,7 +347,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       ];
     }
 
-    if (onboarding.registerStep == 1) {
+    if (onboarding.registerStep == 1 || onboarding.authMode == 'email') {
       return <Widget>[
         if (onboarding.registrationMethods.length > 1) ...<Widget>[
           _AuthModeToggle(
@@ -402,6 +403,14 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           _OtpCompleteMarker(controller: otpController),
         ] else ...<Widget>[
           AppTextField(
+            controller: handleController,
+            label: context.l10n.onboardingHandle,
+            placeholder: context.l10n.onboardingHandlePlaceholder,
+            showLabel: !responsive.isPhone,
+            semanticsIdentifier: 'e2e-handle-input',
+          ),
+          SizedBox(height: responsive.spacing(14)),
+          AppTextField(
             controller: emailController,
             label: context.l10n.onboardingEmail,
             placeholder: context.l10n.onboardingEmailPlaceholder,
@@ -416,36 +425,27 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               onPressed:
                   onboarding.isBusy || onboarding.isEmailResendCoolingDown
                   ? null
-                  : () => ref
-                        .read(onboardingProvider.notifier)
-                        .requestEmailActivation(emailController.text.trim()),
+                  : _requestEmailActivation,
             ),
           ),
           SizedBox(height: responsive.spacing(14)),
           _OnboardingAlignedAction(
             key: const Key('onboarding-email-action'),
             width: onboarding.emailVerified
-                ? responsive.displayScaled(122)
+                ? responsive.displayScaled(148)
                 : responsive.displayScaled(174),
             fillAvailableWidth: responsive.isPhone && !onboarding.emailVerified,
             child: onboarding.emailVerified
                 ? AppPrimaryButton(
-                    label: context.l10n.commonNext,
+                    label: context.l10n.onboardingCompleteEmailRegister,
+                    semanticsIdentifier: 'e2e-complete-login-button',
                     onPressed: onboarding.isBusy
                         ? null
-                        : () => ref
-                              .read(onboardingProvider.notifier)
-                              .setRegisterStep(2),
+                        : () => _submitRegister(context),
                   )
                 : AppSecondaryButton(
                     label: context.l10n.onboardingCheckActivationStatus,
-                    onPressed: onboarding.isBusy
-                        ? null
-                        : () => ref
-                              .read(onboardingProvider.notifier)
-                              .checkEmailActivation(
-                                emailController.text.trim(),
-                              ),
+                    onPressed: onboarding.isBusy ? null : _checkEmailActivation,
                   ),
           ),
         ],
@@ -548,6 +548,38 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       return;
     }
     _startE2eOtpRequestLoop();
+  }
+
+  void _requestEmailActivation() {
+    unawaited(
+      ref
+          .read(onboardingProvider.notifier)
+          .requestEmailActivation(
+            email: emailController.text.trim(),
+            handle: _normalizedHandle,
+          ),
+    );
+  }
+
+  void _checkEmailActivation() {
+    unawaited(
+      ref
+          .read(onboardingProvider.notifier)
+          .checkEmailActivation(
+            email: emailController.text.trim(),
+            handle: _normalizedHandle,
+          ),
+    );
+  }
+
+  void _resetEmailActivationTarget() {
+    if (!mounted) {
+      return;
+    }
+    if (ref.read(onboardingProvider).authMode != 'email') {
+      return;
+    }
+    ref.read(onboardingProvider.notifier).resetEmailActivation();
   }
 
   void _startE2eOtpRequestLoop() {

@@ -182,13 +182,16 @@ class AwikiOnboardingUtilityClient {
   Future<void> sendEmailVerification({
     required String baseUrl,
     required String email,
+    required String handle,
   }) async {
+    final normalizedHandle = handle.trim().toLowerCase();
     final response = await _httpClient
         .post(
           Uri.parse(baseUrl).resolve(emailSendEndpoint),
           headers: const <String, String>{'Content-Type': 'application/json'},
           body: jsonEncode(<String, Object?>{
             'email': email.trim().toLowerCase(),
+            'handle': normalizedHandle,
           }),
         )
         .timeout(timeout);
@@ -203,7 +206,9 @@ class AwikiOnboardingUtilityClient {
   Future<bool> checkEmailVerified({
     required String baseUrl,
     required String email,
+    required String handle,
   }) async {
+    final normalizedHandle = handle.trim().toLowerCase();
     final response = await _httpClient
         .get(
           Uri.parse(baseUrl)
@@ -211,6 +216,7 @@ class AwikiOnboardingUtilityClient {
               .replace(
                 queryParameters: <String, String>{
                   'email': email.trim().toLowerCase(),
+                  'handle': normalizedHandle,
                 },
               ),
         )

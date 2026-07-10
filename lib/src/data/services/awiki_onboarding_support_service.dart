@@ -41,18 +41,26 @@ class AwikiOnboardingSupportService implements OnboardingSupportService {
   }
 
   @override
-  Future<void> sendEmailVerification({required String email}) {
+  Future<void> sendEmailVerification({
+    required String email,
+    required String handle,
+  }) {
     return _users.sendEmailVerification(
       baseUrl: userServiceUrl,
       email: email.trim().toLowerCase(),
+      handle: _normalizeHandle(handle),
     );
   }
 
   @override
-  Future<bool> checkEmailVerified({required String email}) {
+  Future<bool> checkEmailVerified({
+    required String email,
+    required String handle,
+  }) {
     return _users.checkEmailVerified(
       baseUrl: userServiceUrl,
       email: email.trim().toLowerCase(),
+      handle: _normalizeHandle(handle),
     );
   }
 
@@ -135,11 +143,17 @@ String _normalizeHandle(
 }
 
 bool _isHandleNotFoundError(AwikiOnboardingUtilityError error) {
-  final normalized = error.message.toLowerCase();
-  return normalized.contains('handle not found') ||
-      normalized.contains('handle') &&
-          (normalized.contains('not found') ||
-              normalized.contains('does not exist'));
+  if (_machineCode(error.data) == 'handle_not_found') {
+    return true;
+  }
+  return _machineCode(error.message) == 'handle_not_found';
+}
+
+String _machineCode(Object? value) {
+  if (value is Map) {
+    return _machineCode(value['code']);
+  }
+  return value?.toString().trim().toLowerCase().replaceAll('-', '_') ?? '';
 }
 
 bool _isE1Did(String did) => did.trim().split(':').last.startsWith('e1_');
