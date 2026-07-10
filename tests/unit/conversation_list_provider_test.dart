@@ -2196,6 +2196,258 @@ void main() {
   );
 
   test(
+    'verified handle start collapses a delayed canonical row after DID rotation',
+    () async {
+      final service = _MutableConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      await notifier.refreshFastLocal();
+      final started = _conversation(
+        conversationId: 'dm:did:lzc:current',
+        threadId: 'dm:did:lzc:current',
+        displayName: 'lzc.awiki.ai',
+        targetDid: 'did:lzc:current',
+        targetPeer: 'lzc.awiki.ai',
+        lastMessageAt: DateTime.utc(2026, 7, 10, 15),
+      ).copyWith(lastMessagePreview: '');
+      notifier.startConversation(started);
+      container
+          .read(selectedConversationProvider.notifier)
+          .selectConversation(started);
+      await pumpEventQueue();
+
+      service.currentConversations = <ConversationSummary>[
+        _conversation(
+          conversationId: 'dm:peer-scope:v1:lzc',
+          threadId: 'dm:peer-scope:v1:lzc',
+          displayName: 'lzc.awiki.ai',
+          targetDid: 'did:lzc:previous',
+          targetPeer: 'lzc.awiki.ai',
+          lastMessageAt: DateTime.utc(2026, 7, 10, 14),
+        ).copyWith(lastMessagePreview: ''),
+      ];
+
+      await notifier.refresh();
+
+      final rows = container.read(conversationListProvider).conversations;
+      expect(rows, hasLength(1));
+      expect(rows.single.conversationId, 'dm:peer-scope:v1:lzc');
+      expect(rows.single.threadId, 'dm:peer-scope:v1:lzc');
+      expect(rows.single.lastMessagePreview, isEmpty);
+      expect(
+        container.read(selectedConversationProvider)?.effectiveConversationId,
+        'dm:peer-scope:v1:lzc',
+      );
+
+      service.currentConversations = const <ConversationSummary>[];
+      await notifier.refresh();
+
+      final retained = container.read(conversationListProvider).conversations;
+      expect(retained, hasLength(1));
+      expect(retained.single.conversationId, 'dm:peer-scope:v1:lzc');
+
+      service.currentConversations = <ConversationSummary>[
+        retained.single.copyWith(
+          lastMessagePreview: 'hello',
+          lastMessageAt: DateTime.utc(2026, 7, 10, 15, 1),
+        ),
+      ];
+      await notifier.refresh();
+      expect(
+        container
+            .read(conversationListProvider)
+            .conversations
+            .single
+            .lastMessagePreview,
+        'hello',
+      );
+    },
+  );
+
+  test('locally started alias bridge rejects a bare handle', () async {
+    final service = _MutableConversationService(
+      conversations: const <ConversationSummary>[],
+    );
+    final container = _conversationContainer(
+      service: service,
+      notifications: FakeNotificationFacade(),
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(conversationListProvider.notifier);
+    await notifier.refreshFastLocal();
+    notifier.startConversation(
+      _conversation(
+        conversationId: 'dm:did:lzc:current',
+        threadId: 'dm:did:lzc:current',
+        displayName: 'lzc',
+        targetDid: 'did:lzc:current',
+        targetPeer: 'lzc',
+      ).copyWith(lastMessagePreview: ''),
+    );
+    await pumpEventQueue();
+
+    service.currentConversations = <ConversationSummary>[
+      _conversation(
+        conversationId: 'dm:peer-scope:v1:lzc',
+        threadId: 'dm:peer-scope:v1:lzc',
+        displayName: 'lzc',
+        targetDid: 'did:lzc:previous',
+        targetPeer: 'lzc',
+      ).copyWith(lastMessagePreview: ''),
+    ];
+    await notifier.refresh();
+
+    expect(
+      container.read(conversationListProvider).conversations,
+      hasLength(2),
+    );
+  });
+
+  test(
+    'verified handle start collapses a delayed canonical patch reset',
+    () async {
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      await notifier.refreshFastLocal();
+      notifier.startConversation(
+        _conversation(
+          conversationId: 'dm:did:lzc:current',
+          threadId: 'dm:did:lzc:current',
+          displayName: 'lzc.awiki.ai',
+          targetDid: 'did:lzc:current',
+          targetPeer: 'lzc.awiki.ai',
+        ).copyWith(lastMessagePreview: ''),
+      );
+      await pumpEventQueue();
+
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+          items: <ConversationSummary>[
+            _conversation(
+              conversationId: 'dm:peer-scope:v1:lzc',
+              threadId: 'dm:peer-scope:v1:lzc',
+              displayName: 'lzc.awiki.ai',
+              targetDid: 'did:lzc:previous',
+              targetPeer: 'lzc.awiki.ai',
+            ).copyWith(lastMessagePreview: ''),
+          ],
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final rows = container.read(conversationListProvider).conversations;
+      expect(rows, hasLength(1));
+      expect(rows.single.conversationId, 'dm:peer-scope:v1:lzc');
+
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerDid: 'did:alice',
+          version: 2,
+          unreadTotal: 0,
+          item: rows.single.copyWith(
+            lastMessagePreview: 'hello',
+            lastMessageAt: DateTime.utc(2026, 7, 10, 15, 1),
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerDid: 'did:alice',
+          version: 3,
+          unreadTotal: 0,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(container.read(conversationListProvider).conversations, isEmpty);
+    },
+  );
+
+  test(
+    'locally started alias bridge does not collapse a second peer-scoped row',
+    () async {
+      final service = _MutableConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      await notifier.refreshFastLocal();
+      notifier.startConversation(
+        _conversation(
+          conversationId: 'dm:did:lzc:current',
+          threadId: 'dm:did:lzc:current',
+          displayName: 'lzc.awiki.ai',
+          targetDid: 'did:lzc:current',
+          targetPeer: 'lzc.awiki.ai',
+        ).copyWith(lastMessagePreview: ''),
+      );
+      await pumpEventQueue();
+
+      final firstCanonical = _conversation(
+        conversationId: 'dm:peer-scope:v1:lzc-first',
+        threadId: 'dm:peer-scope:v1:lzc-first',
+        displayName: 'lzc.awiki.ai',
+        targetDid: 'did:lzc:previous',
+        targetPeer: 'lzc.awiki.ai',
+      ).copyWith(lastMessagePreview: '');
+      service.currentConversations = <ConversationSummary>[firstCanonical];
+      await notifier.refresh();
+      expect(
+        container.read(conversationListProvider).conversations,
+        hasLength(1),
+      );
+
+      notifier.upsertConversation(
+        _conversation(
+          conversationId: 'dm:peer-scope:v1:lzc-second',
+          threadId: 'dm:peer-scope:v1:lzc-second',
+          displayName: 'lzc.awiki.ai',
+          targetDid: 'did:lzc:other-scope',
+          targetPeer: 'lzc.awiki.ai',
+        ).copyWith(lastMessagePreview: ''),
+      );
+      await pumpEventQueue();
+
+      expect(
+        container.read(conversationListProvider).conversations,
+        hasLength(2),
+      );
+    },
+  );
+
+  test(
     'deleting a locally started empty conversation releases retention',
     () async {
       final service = _PatchConversationService(

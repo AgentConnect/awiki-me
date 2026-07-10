@@ -532,6 +532,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           ownerDid: patch.ownerDid,
           keepLocalOnly: false,
           retainLocalOnly: _isLocallyStartedConversation,
+          additionalAliasMatch: _canBridgeLocallyStartedConversation,
         ),
         ownerDid: patch.ownerDid,
       ),
@@ -795,6 +796,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
             ownerDid: _currentOwnerDid,
             keepLocalOnly: keepLocalOnly,
             retainLocalOnly: _isLocallyStartedConversation,
+            additionalAliasMatch: _canBridgeLocallyStartedConversation,
           ),
           ownerDid: _currentOwnerDid,
         ),
@@ -969,6 +971,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       state.conversations,
       conversation,
       ownerDid: _currentOwnerDid,
+      additionalAliasMatch: _canBridgeLocallyStartedConversation,
     );
     final titledConversation = _mergeConversationTitle(
       refreshed: conversation,
@@ -1384,7 +1387,9 @@ class ConversationListController extends StateNotifier<ConversationListState> {
 
   void _forgetLocallyStartedConversation(ConversationSummary conversation) {
     _locallyStartedConversations.removeWhere(
-      (current) => _sameLocallyStartedConversation(current, conversation),
+      (current) =>
+          _sameLocallyStartedConversation(current, conversation) ||
+          _canBridgeStoredLocallyStartedConversation(current, conversation),
     );
   }
 
@@ -1408,6 +1413,95 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           second,
           first,
           ownerDid: _currentOwnerDid,
+        );
+  }
+
+  bool _canBridgeLocallyStartedConversation(
+    ConversationSummary candidate,
+    ConversationSummary incoming,
+  ) {
+    if (!_isLocallyStartedConversation(candidate)) {
+      return false;
+    }
+    return _canBridgeStoredLocallyStartedConversation(candidate, incoming);
+  }
+
+  bool _canBridgeStoredLocallyStartedConversation(
+    ConversationSummary started,
+    ConversationSummary incoming,
+  ) {
+    // This is intentionally narrower than the normal alias rules. The start
+    // flow has just resolved a full handle, so it may bridge a stale DID row
+    // once while the canonical core projection catches up. Bare handles and
+    // peer-scoped-to-peer-scoped rows must remain ambiguous.
+    if (started.isGroup ||
+        incoming.isGroup ||
+        !isReplaceableLegacyDirectConversation(
+          started,
+          ownerDid: _currentOwnerDid,
+        )) {
+      return false;
+    }
+    final startedHandle = _domainQualifiedDirectHandle(started);
+    return startedHandle != null &&
+        startedHandle == _domainQualifiedDirectHandle(incoming);
+  }
+
+  void _reconcileLocallyStartedConversations(
+    Iterable<ConversationSummary> conversations,
+  ) {
+    if (_locallyStartedConversations.isEmpty) {
+      return;
+    }
+    final rows = conversations.toList(growable: false);
+    for (
+      var index = 0;
+      index < _locallyStartedConversations.length;
+      index += 1
+    ) {
+      final started = _locallyStartedConversations[index];
+      final identityMatches = rows
+          .where((row) => _sameLocallyStartedConversation(started, row))
+          .toList(growable: false);
+      if (identityMatches.length == 1) {
+        _locallyStartedConversations[index] = identityMatches.single;
+        continue;
+      }
+      final bridgeMatches = rows
+          .where(
+            (row) => _canBridgeStoredLocallyStartedConversation(started, row),
+          )
+          .toList(growable: false);
+      if (bridgeMatches.length == 1) {
+        _locallyStartedConversations[index] = bridgeMatches.single;
+      }
+    }
+  }
+
+  void _syncSelectedLocallyStartedConversation(
+    Iterable<ConversationSummary> conversations,
+  ) {
+    final selected = ref.read(selectedConversationProvider);
+    if (selected == null || !_isLocallyStartedConversation(selected)) {
+      return;
+    }
+    final matches = conversations
+        .where(
+          (conversation) =>
+              _sameLocallyStartedConversation(selected, conversation) ||
+              _canBridgeLocallyStartedConversation(selected, conversation),
+        )
+        .toList(growable: false);
+    if (matches.length != 1) {
+      return;
+    }
+    ref
+        .read(selectedConversationProvider.notifier)
+        .selectConversation(
+          _mergeSelectedConversation(
+            selected: selected,
+            incoming: matches.single,
+          ),
         );
   }
 
@@ -1461,6 +1555,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       nextState.conversations,
       ownerDid: _currentOwnerDid,
     );
+    _syncSelectedLocallyStartedConversation(nextConversations);
+    _reconcileLocallyStartedConversations(nextConversations);
     _forgetMaterializedLocallyStartedConversations(nextConversations);
     final appliedState = nextConversations == nextState.conversations
         ? nextState
@@ -1654,6 +1750,18 @@ bool _sameLastMessageSnapshot(ChatMessage? first, ChatMessage? second) {
 bool _conversationHasMaterializedMessage(ConversationSummary conversation) {
   return conversation.lastMessageSnapshot != null ||
       conversation.lastMessagePreview.trim().isNotEmpty;
+}
+
+String? _domainQualifiedDirectHandle(ConversationSummary conversation) {
+  final peer = normalizedDirectPeer(conversation.targetPeer);
+  if (peer == null || peer.startsWith('did:')) {
+    return null;
+  }
+  final separator = peer.indexOf('.');
+  if (separator <= 0 || separator == peer.length - 1) {
+    return null;
+  }
+  return peer;
 }
 
 bool _sameAttachmentSnapshot(ChatAttachment? first, ChatAttachment? second) {
@@ -2416,8 +2524,14 @@ List<ConversationSummary> _mergeConversationRefresh({
   required String? ownerDid,
   bool keepLocalOnly = true,
   bool Function(ConversationSummary conversation)? retainLocalOnly,
+  bool Function(ConversationSummary candidate, ConversationSummary incoming)?
+  additionalAliasMatch,
 }) {
-  final localIndex = _ConversationMergeIndex(local, ownerDid: ownerDid);
+  final localIndex = _ConversationMergeIndex(
+    local,
+    ownerDid: ownerDid,
+    additionalAliasMatch: additionalAliasMatch,
+  );
   final consumedLocalIdentityKeys = <String>{};
   final consumedLocalPresentationAliases = <String>{};
   final mergedRefreshed = refreshed.map((conversation) {
@@ -2526,6 +2640,7 @@ class _ConversationMergeIndex {
   _ConversationMergeIndex(
     List<ConversationSummary> conversations, {
     required this.ownerDid,
+    this.additionalAliasMatch,
   }) {
     for (final conversation in conversations) {
       final identity = _nonEmptyKey(_conversationIdentityKey(conversation));
@@ -2559,6 +2674,11 @@ class _ConversationMergeIndex {
   final Map<String, int> _directTargetPeerScopedCounts = <String, int>{};
   final Set<String> _ambiguousDirectTargetKeys = <String>{};
   final String? ownerDid;
+  final bool Function(
+    ConversationSummary candidate,
+    ConversationSummary incoming,
+  )?
+  additionalAliasMatch;
 
   ConversationSummary? match(
     ConversationSummary incoming, {
@@ -2572,7 +2692,8 @@ class _ConversationMergeIndex {
       return candidate;
     }
     if (_hasExplicitConversationId(incoming) &&
-        !isPeerScopedDirectConversation(incoming)) {
+        !isPeerScopedDirectConversation(incoming) &&
+        additionalAliasMatch == null) {
       return null;
     }
     candidate = _candidateIfAvailable(
@@ -2657,7 +2778,7 @@ class _ConversationMergeIndex {
     return candidate;
   }
 
-  static ConversationSummary? _aliasCandidateIfAvailable(
+  ConversationSummary? _aliasCandidateIfAvailable(
     ConversationSummary? candidate,
     ConversationSummary incoming,
     Set<String> consumedIdentityKeys,
@@ -2671,7 +2792,7 @@ class _ConversationMergeIndex {
     return candidate;
   }
 
-  static bool _canAliasMatch(
+  bool _canAliasMatch(
     ConversationSummary candidate,
     ConversationSummary incoming, {
     required String? ownerDid,
@@ -2685,15 +2806,18 @@ class _ConversationMergeIndex {
     }
     if (_isPeerScopedDirectThread(candidate) ||
         _isPeerScopedDirectThread(incoming)) {
-      return _shouldCollapsePresentationAlias(
+      final matches = _shouldCollapsePresentationAlias(
         incoming,
         candidate,
         ownerDid: ownerDid,
       );
+      return matches ||
+          (additionalAliasMatch?.call(candidate, incoming) ?? false);
     }
     if (_hasExplicitConversationId(candidate) ||
         _hasExplicitConversationId(incoming)) {
-      return _sameConversationIdentity(candidate, incoming);
+      return _sameConversationIdentity(candidate, incoming) ||
+          (additionalAliasMatch?.call(candidate, incoming) ?? false);
     }
     return true;
   }
@@ -2867,10 +2991,13 @@ ConversationSummary? _matchingConversationForUpsert(
   Iterable<ConversationSummary> conversations,
   ConversationSummary incoming, {
   required String? ownerDid,
+  bool Function(ConversationSummary candidate, ConversationSummary incoming)?
+  additionalAliasMatch,
 }) {
   return _ConversationMergeIndex(
     conversations.toList(),
     ownerDid: ownerDid,
+    additionalAliasMatch: additionalAliasMatch,
   ).match(incoming);
 }
 

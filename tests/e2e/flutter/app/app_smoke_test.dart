@@ -8,6 +8,7 @@ import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
@@ -136,18 +137,46 @@ void main() {
         expect(conversations, hasLength(1));
         expect(conversations.single.lastMessagePreview, isEmpty);
 
+        harness.gateway.conversations = <ConversationSummary>[
+          ConversationSummary(
+            conversationId: 'dm:peer-scope:v1:smoke-peer',
+            threadId: 'dm:peer-scope:v1:smoke-peer',
+            displayName: 'smoke-peer.awiki.ai',
+            lastMessagePreview: '',
+            lastMessageAt: DateTime.utc(2026, 7, 10, 15),
+            unreadCount: 0,
+            isGroup: false,
+            targetDid: 'did:test:smoke-peer:previous',
+            targetPeer: 'smoke-peer.awiki.ai',
+          ),
+        ];
         await container.read(conversationListProvider.notifier).refresh();
         await _pumpSmokeFrame(tester);
 
         conversations = container.read(conversationListProvider).conversations;
         expect(conversations, hasLength(1));
         final started = conversations.single;
-        expect(started.targetDid, 'did:test:smoke-peer.awiki.ai');
+        expect(started.conversationId, 'dm:peer-scope:v1:smoke-peer');
+        expect(
+          container.read(selectedConversationProvider)?.effectiveConversationId,
+          'dm:peer-scope:v1:smoke-peer',
+        );
         expect(
           find.byKey(
             Key('conversation-row:${started.effectiveConversationId}'),
           ),
           findsOneWidget,
+        );
+
+        harness.gateway.conversations = const <ConversationSummary>[];
+        await container.read(conversationListProvider.notifier).refresh();
+        await _pumpSmokeFrame(tester);
+
+        conversations = container.read(conversationListProvider).conversations;
+        expect(conversations, hasLength(1));
+        expect(
+          conversations.single.conversationId,
+          'dm:peer-scope:v1:smoke-peer',
         );
       } finally {
         debugDefaultTargetPlatformOverride = null;
