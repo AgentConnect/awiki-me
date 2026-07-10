@@ -203,7 +203,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get tenantPrimaryAgentNote => '智能体功能目前只支持 AWiki 主租户。';
 
   @override
-  String get tenantCreate => '创建租户';
+  String get tenantCreate => '添加租户配置';
 
   @override
   String get tenantEdit => '编辑租户';
@@ -233,7 +233,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get tenantDidHostPlaceholder => 'example.com';
 
   @override
-  String get tenantCreateTitle => '创建租户';
+  String get tenantCreateTitle => '添加租户配置';
 
   @override
   String get tenantEditTitle => '编辑租户';
@@ -250,11 +250,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get tenantCannotEditDefault => '默认 AWiki 租户不能编辑。接入其他后端请创建新租户。';
+  String get tenantCannotEditDefault => '默认 AWiki 租户不能编辑。接入其他后端请添加租户配置。';
 
   @override
   String get tenantCannotEditWithData =>
-      '这个租户已经有本地数据。请创建新租户，不要修改它的后端或 DID Host。';
+      '这个租户已经有本地数据。请添加租户配置，不要修改它的后端或 DID Host。';
 
   @override
   String get tenantCannotDeleteDefault => '默认 AWiki 租户不能删除。';
@@ -280,7 +280,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get tenantValidationEndpointExists => '已经存在相同后端和 DID Host 的租户。';
 
   @override
-  String get tenantValidationHasData => '这个租户已经有本地数据，请创建新租户。';
+  String get tenantValidationHasData => '这个租户已经有本地数据，请添加租户配置。';
 
   @override
   String get tenantNotFound => '租户不存在。';

@@ -262,7 +262,7 @@ void main() {
     expect(find.text('Based on awiki.info'), findsNothing);
   });
 
-  testWidgets('登录页租户弹窗可创建新租户且不自动切换', (tester) async {
+  testWidgets('登录页租户弹窗可添加租户配置且不自动切换', (tester) async {
     late StateSetter refreshTenants;
     final tenantActions = FakeAppTenantActions();
     tenantActions.onChanged = () => refreshTenants(() {});

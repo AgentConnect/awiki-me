@@ -209,7 +209,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Agent features are available only on the AWiki tenant.';
 
   @override
-  String get tenantCreate => 'Create tenant';
+  String get tenantCreate => 'Add tenant configuration';
 
   @override
   String get tenantEdit => 'Edit tenant';
@@ -239,7 +239,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tenantDidHostPlaceholder => 'example.com';
 
   @override
-  String get tenantCreateTitle => 'Create tenant';
+  String get tenantCreateTitle => 'Add tenant configuration';
 
   @override
   String get tenantEditTitle => 'Edit tenant';
@@ -257,11 +257,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tenantCannotEditDefault =>
-      'The default AWiki tenant cannot be edited. Create a new tenant for another backend.';
+      'The default AWiki tenant cannot be edited. Add a tenant configuration for another backend.';
 
   @override
   String get tenantCannotEditWithData =>
-      'This tenant already has local data. Create a new tenant instead of changing its backend or DID host.';
+      'This tenant already has local data. Add a tenant configuration instead of changing its backend or DID host.';
 
   @override
   String get tenantCannotDeleteDefault =>
@@ -293,7 +293,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tenantValidationHasData =>
-      'This tenant already has local data. Create a new tenant instead.';
+      'This tenant already has local data. Add a tenant configuration instead.';
 
   @override
   String get tenantNotFound => 'Tenant not found.';

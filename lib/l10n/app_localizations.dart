@@ -479,7 +479,7 @@ abstract class AppLocalizations {
   /// No description provided for @tenantCreate.
   ///
   /// In zh, this message translates to:
-  /// **'创建租户'**
+  /// **'添加租户配置'**
   String get tenantCreate;
 
   /// No description provided for @tenantEdit.
@@ -539,7 +539,7 @@ abstract class AppLocalizations {
   /// No description provided for @tenantCreateTitle.
   ///
   /// In zh, this message translates to:
-  /// **'创建租户'**
+  /// **'添加租户配置'**
   String get tenantCreateTitle;
 
   /// No description provided for @tenantEditTitle.
@@ -569,13 +569,13 @@ abstract class AppLocalizations {
   /// No description provided for @tenantCannotEditDefault.
   ///
   /// In zh, this message translates to:
-  /// **'默认 AWiki 租户不能编辑。接入其他后端请创建新租户。'**
+  /// **'默认 AWiki 租户不能编辑。接入其他后端请添加租户配置。'**
   String get tenantCannotEditDefault;
 
   /// No description provided for @tenantCannotEditWithData.
   ///
   /// In zh, this message translates to:
-  /// **'这个租户已经有本地数据。请创建新租户，不要修改它的后端或 DID Host。'**
+  /// **'这个租户已经有本地数据。请添加租户配置，不要修改它的后端或 DID Host。'**
   String get tenantCannotEditWithData;
 
   /// No description provided for @tenantCannotDeleteDefault.
@@ -623,7 +623,7 @@ abstract class AppLocalizations {
   /// No description provided for @tenantValidationHasData.
   ///
   /// In zh, this message translates to:
-  /// **'这个租户已经有本地数据，请创建新租户。'**
+  /// **'这个租户已经有本地数据，请添加租户配置。'**
   String get tenantValidationHasData;
 
   /// No description provided for @tenantNotFound.

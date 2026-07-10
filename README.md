@@ -156,7 +156,7 @@ backend base URL: https://awiki.ai
 DID host: awiki.ai
 ```
 
-Switching tenants rebuilds the app runtime and uses a separate im-core / product local-state namespace, so identities, conversations, groups, and local caches stay separated. Tenants with local data cannot have their backend URL or DID host edited; create a new tenant instead.
+Switching tenants rebuilds the app runtime and uses a separate im-core / product local-state namespace, so identities, conversations, groups, and local caches stay separated. Tenants with local data cannot have their backend URL or DID host edited; add a tenant configuration instead.
 
 Agent and Daemon features are currently supported only on the default AWiki tenant. Other tenants show a friendly unsupported state on the Agents page and do not call Agent backend APIs.
 
