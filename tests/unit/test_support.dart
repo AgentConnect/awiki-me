@@ -421,9 +421,18 @@ class FakeUpdateService implements UpdateService {
 
 class FakeAttachmentPickerService implements AttachmentPickerService {
   AttachmentDraft? nextPick;
+  AttachmentDraft? nextExternalDraft;
+  AttachmentDraft? nextClipboardAttachment;
   String? nextSavedPath = '/tmp/attachment';
   int pickCalls = 0;
+  int externalSourceCalls = 0;
+  int clipboardReadCalls = 0;
   int saveCalls = 0;
+  String? lastExternalPath;
+  String? lastExternalFilename;
+  String? lastExternalMimeType;
+  int? lastExternalSizeBytes;
+  Uint8List? lastExternalBytes;
   String? lastSavedFilename;
   String? lastSavedMimeType;
   Uint8List? lastSavedBytes;
@@ -432,6 +441,29 @@ class FakeAttachmentPickerService implements AttachmentPickerService {
   Future<AttachmentDraft?> pickAttachment() async {
     pickCalls += 1;
     return nextPick;
+  }
+
+  @override
+  Future<AttachmentDraft?> draftFromExternalSource({
+    String? path,
+    String? filename,
+    String? mimeType,
+    int? sizeBytes,
+    Uint8List? bytes,
+  }) async {
+    externalSourceCalls += 1;
+    lastExternalPath = path;
+    lastExternalFilename = filename;
+    lastExternalMimeType = mimeType;
+    lastExternalSizeBytes = sizeBytes;
+    lastExternalBytes = bytes;
+    return nextExternalDraft;
+  }
+
+  @override
+  Future<AttachmentDraft?> readClipboardAttachment() async {
+    clipboardReadCalls += 1;
+    return nextClipboardAttachment;
   }
 
   @override

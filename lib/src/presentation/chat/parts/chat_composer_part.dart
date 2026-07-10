@@ -11,6 +11,7 @@ class _Composer extends ConsumerStatefulWidget {
     this.disabledReason,
     required this.onSend,
     required this.onAttach,
+    required this.onPasteAttachment,
     required this.onRemoveAttachment,
   });
 
@@ -23,6 +24,7 @@ class _Composer extends ConsumerStatefulWidget {
   final String? disabledReason;
   final Future<void> Function() onSend;
   final Future<void> Function() onAttach;
+  final Future<bool> Function() onPasteAttachment;
   final VoidCallback onRemoveAttachment;
 
   @override
@@ -32,6 +34,7 @@ class _Composer extends ConsumerStatefulWidget {
 class _ComposerState extends ConsumerState<_Composer> {
   final FocusNode _inputFocusNode = FocusNode();
   bool _isSending = false;
+  bool _isPastingFromClipboard = false;
   ChatMentionTrigger? _activeMentionTrigger;
   List<ChatMentionCandidate> _mentionCandidates =
       const <ChatMentionCandidate>[];
@@ -288,6 +291,32 @@ class _ComposerState extends ConsumerState<_Composer> {
     });
   }
 
+  Future<void> _pasteFromClipboard() async {
+    if (!widget.enabled || _isPastingFromClipboard) {
+      return;
+    }
+    _isPastingFromClipboard = true;
+    try {
+      final stagedAttachment = await widget.onPasteAttachment();
+      if (!mounted || !widget.enabled) {
+        return;
+      }
+      if (stagedAttachment) {
+        _inputFocusNode.requestFocus();
+        return;
+      }
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      final text = data?.text;
+      if (text == null || text.isEmpty || !mounted || !widget.enabled) {
+        return;
+      }
+      _insertTextAtSelection(text);
+      _inputFocusNode.requestFocus();
+    } finally {
+      _isPastingFromClipboard = false;
+    }
+  }
+
   KeyEventResult _handleInputKeyEvent(FocusNode node, KeyEvent event) {
     if (!widget.enabled) {
       return KeyEventResult.handled;
@@ -296,6 +325,13 @@ class _ComposerState extends ConsumerState<_Composer> {
       return KeyEventResult.ignored;
     }
     final key = event.logicalKey;
+    if (event is KeyDownEvent &&
+        key == LogicalKeyboardKey.keyV &&
+        (HardwareKeyboard.instance.isMetaPressed ||
+            HardwareKeyboard.instance.isControlPressed)) {
+      unawaited(_pasteFromClipboard());
+      return KeyEventResult.handled;
+    }
     if (_hasMentionPanel) {
       if (key == LogicalKeyboardKey.arrowDown) {
         _moveMentionSelection(1);
@@ -345,10 +381,35 @@ class _ComposerState extends ConsumerState<_Composer> {
     }
     final start = selection.start.clamp(0, text.length);
     final end = selection.end.clamp(0, text.length);
-    final nextText = text.replaceRange(start, end, '\n');
+    _replaceSelectedText(value, start, end, '\n');
+  }
+
+  void _insertTextAtSelection(String insertion) {
+    final value = widget.controller.value;
+    final text = value.text;
+    final selection = value.selection;
+    if (!selection.isValid) {
+      widget.controller.text = '$text$insertion';
+      widget.controller.selection = TextSelection.collapsed(
+        offset: widget.controller.text.length,
+      );
+      return;
+    }
+    final start = selection.start.clamp(0, text.length);
+    final end = selection.end.clamp(0, text.length);
+    _replaceSelectedText(value, start, end, insertion);
+  }
+
+  void _replaceSelectedText(
+    TextEditingValue value,
+    int start,
+    int end,
+    String insertion,
+  ) {
+    final nextText = value.text.replaceRange(start, end, insertion);
     widget.controller.value = value.copyWith(
       text: nextText,
-      selection: TextSelection.collapsed(offset: start + 1),
+      selection: TextSelection.collapsed(offset: start + insertion.length),
       composing: TextRange.empty,
     );
   }
@@ -359,6 +420,7 @@ class _ComposerState extends ConsumerState<_Composer> {
     final responsive = context.awikiResponsive;
     final canSubmit = _canSubmit;
     final canUseSendButton = canSubmit && !_isSending && !_isComposingInput;
+    final highlightSendButton = canSubmit && !_isSending;
     final disabledReason =
         widget.disabledReason ?? context.l10n.chatCurrentConversationCannotSend;
     if (widget.macStyle) {
@@ -495,7 +557,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                               width: responsive.displayScaled(36),
                               height: responsive.displayScaled(36),
                               decoration: BoxDecoration(
-                                color: canUseSendButton
+                                color: highlightSendButton
                                     ? const Color(0xFF0B65F8)
                                     : const Color(0xFFE5EAF2),
                                 borderRadius: BorderRadius.circular(
@@ -504,7 +566,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                               ),
                               child: Icon(
                                 CupertinoIcons.paperplane_fill,
-                                color: canUseSendButton
+                                color: highlightSendButton
                                     ? CupertinoColors.white
                                     : const Color(0xFF8A96AA),
                                 size: responsive.displayScaled(18),
@@ -635,7 +697,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                           padding: EdgeInsets.all(responsive.spacing(6)),
                           child: AwikiAssetIcon(
                             assetName: 'assets/icons/icon_send.svg',
-                            color: canUseSendButton
+                            color: highlightSendButton
                                 ? theme.primary
                                 : theme.secondaryText,
                             size: responsive.iconMd,

@@ -44,7 +44,7 @@ The ANP 1.1 release line organizes protocol capabilities around identity, naming
 | `did:wba` identity and DID-WBA authentication | Account onboarding, identity activation, User Service calls, and Message Service calls go through Dart service clients and `awiki_im_core`; new identities follow the e1 DID-only direction. | `lib/src/application/auth/`, `lib/src/data/im_core/` |
 | `ANPMessageService` endpoint | The app derives the ANP message endpoint `/anp-im/rpc` and service DID `did:wba:<domain>` from the active in-app tenant. The default tenant is AWiki (`https://awiki.ai` + `awiki.ai`). | `lib/src/application/config/awiki_environment_config.dart`, `lib/src/application/tenant/` |
 | ANP instant messaging P1/P2/P3/P4 direction | Direct/group conversations, send, history, local projections, unread state, read ack, realtime patch, and reliable sync. | `lib/src/application/messaging_service.dart`, `lib/src/application/message_sync_service.dart` |
-| ANP attachments / Object Transfer (P7 direction) | Attachment send, download, save, and native open. Display correctness comes from im-core persisted redacted attachment manifests, not UI memory alone. | `lib/src/application/attachment_*`, `lib/src/presentation/chat/` |
+| ANP attachments / Object Transfer (P7 direction) | Attachment picking, desktop drag-and-drop staging, clipboard image/file paste staging, send, download, save, and native open. Display correctness comes from im-core persisted redacted attachment manifests, not UI memory alone. | `lib/src/application/attachment_*`, `lib/src/presentation/chat/` |
 | ANP message mentions (P9 direction) | Group `@` composer, P9 JSON payload sending, valid-range highlighting, and safe fallback for invalid mentions. | `lib/src/domain/entities/chat_mention.dart`, `docs/message-mention-extension-implementation-plan/` |
 | Agent / Daemon / Message Agent collaboration | Agents page, daemon status, runtime conversation, and Message Agent binding/recovery flows provide the App entry for Agent collaboration. | `lib/src/presentation/agents/`, `docs/message-agent/message-agent-design.md` |
 | E2EE and secret vault | The app does not directly own DID private keys, JWTs, Direct E2EE session/prekey material, or daemon subkey package persistence; these are owned by the im-core identity SecretVault. | `docs/identity-secret-storage.md` |
@@ -55,9 +55,9 @@ The ANP 1.1 release line organizes protocol capabilities around identity, naming
 
 - **Account and identity**: registration/login, DID identity initialization, active identity vault checks, profile display and editing.
 - **Trusted IM**: direct chat, group chat, conversation list, local-first first paint, realtime patches, reliable sync, unread waterlines, retry, and failure states.
-- **Group collaboration**: group creation, member summaries, group messages, group system events, group mentions, and Agent group collaboration entry points.
-- **Contacts and profiles**: friends/relationship state, peer profile, handle / DID display, copy actions, and identity cards.
-- **Attachments**: attachment picking, upload/send, download, save, native open, and App + CLI E2E interoperability.
+- **Group collaboration**: group creation, member summaries hydrated from public profile Display Name, group messages, group system events, group mentions, and Agent group collaboration entry points.
+- **Contacts and profiles**: friends/relationship state, peer profile, Display Name-first identity labels with handle / DID fallback, copy actions, identity cards, and optimistic follow/unfollow UI state so optional relationship-list refresh failures do not make successful taps appear inert.
+- **Attachments**: attachment picking plus desktop drag-and-drop or clipboard image/file paste into the chat composer, upload/send, download, save, native open, and App + CLI E2E interoperability.
 - **Agent console**: Agent inventory, local-first refresh, daemon install command rendering, runtime status, Agent inbox, and control payload projection.
 - **Local security**: platform secure storage, native macOS Keychain bridge, E2E private file provider, and secret redaction.
 - **Packaging and updates**: Android arm64 APK, macOS arm64/x64 DMG, versioned dist output, latest manifest, and Sparkle feed placeholder.

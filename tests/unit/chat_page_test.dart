@@ -28,6 +28,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_provide
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'
@@ -167,6 +168,20 @@ double _messageContentBottomGap(WidgetTester tester, String localId) {
 double _expectedMessageContentBottomGap(WidgetTester tester) {
   final width = tester.view.physicalSize.width / tester.view.devicePixelRatio;
   return width < 720 ? 12 : 12 * 0.74;
+}
+
+Future<void> _sendDesktopDropMethod(String method, Object? arguments) async {
+  unawaited(
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .handlePlatformMessage(
+          'desktop_drop',
+          const StandardMethodCodec().encodeMethodCall(
+            MethodCall(method, arguments),
+          ),
+          (_) {},
+        ),
+  );
+  await Future<void>.value();
 }
 
 List<ChatMessage> _scrollMessages({
@@ -3646,6 +3661,213 @@ void main() {
     expect(input.focusNode?.hasFocus, isTrue);
   });
 
+  testWidgets('拖拽文件到聊天窗口会暂存为附件草稿', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final picker = FakeAttachmentPickerService()
+      ..nextExternalDraft = AttachmentDraft(
+        filename: 'drop-image.png',
+        mimeType: 'image/png',
+        bytes: Uint8List.fromList(<int>[1, 2, 3]),
+        sizeBytes: 3,
+      );
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:drop-peer',
+      threadId: 'dm:drop-attachment',
+      displayName: 'Drop Tester',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 7, 9, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:drop-peer',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          attachmentPickerServiceProvider.overrideWithValue(picker),
+        ],
+      ),
+    );
+
+    final dropTarget = find.byKey(
+      Key(
+        'chat-attachment-drop-target:${conversation.effectiveConversationId}',
+      ),
+    );
+    final center = tester.getCenter(dropTarget);
+    await _sendDesktopDropMethod('entered', <double>[center.dx, center.dy]);
+    await _sendDesktopDropMethod('updated', <double>[center.dx, center.dy]);
+    await tester.pump();
+
+    expect(
+      find.byKey(const Key('chat-attachment-drop-overlay')),
+      findsOneWidget,
+    );
+
+    await _sendDesktopDropMethod('performOperation_web', <Map<String, Object?>>[
+      <String, Object?>{
+        'uri': '',
+        'children': <Map<String, Object?>>[],
+        'data': Uint8List.fromList(<int>[1, 2, 3]),
+        'name': 'drop-image.png',
+        'type': 'image/png',
+        'size': 3,
+        'relativePath': null,
+        'lastModified': DateTime(2026, 7, 9).millisecondsSinceEpoch,
+      },
+    ]);
+    await tester.pump();
+
+    expect(picker.externalSourceCalls, 1);
+    expect(picker.lastExternalPath, isNull);
+    expect(picker.lastExternalFilename, isNull);
+    expect(picker.lastExternalMimeType, 'image/png');
+    expect(picker.lastExternalBytes, Uint8List.fromList(<int>[1, 2, 3]));
+    expect(find.text('drop-image.png'), findsOneWidget);
+    expect(
+      find.byKey(const Key('chat-pending-attachment-preview')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('chat-attachment-drop-overlay')), findsNothing);
+    expect(gateway.lastSentAttachment, isNull);
+  });
+
+  testWidgets('输入框 Cmd/Ctrl+V 可把剪贴板图片暂存为附件', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final picker = FakeAttachmentPickerService()
+      ..nextClipboardAttachment = AttachmentDraft(
+        filename: 'pasted-image.png',
+        mimeType: 'image/png',
+        bytes: Uint8List.fromList(<int>[9, 8, 7]),
+        sizeBytes: 3,
+      );
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:paste-peer',
+      threadId: 'dm:paste-attachment',
+      displayName: 'Paste Tester',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 7, 9, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:paste-peer',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          attachmentPickerServiceProvider.overrideWithValue(picker),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byType(CupertinoTextField));
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyV);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.keyV);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pumpAndSettle();
+
+    expect(picker.clipboardReadCalls, 1);
+    expect(find.text('pasted-image.png'), findsOneWidget);
+    expect(
+      find.byKey(const Key('chat-pending-attachment-preview')),
+      findsOneWidget,
+    );
+
+    await tester.enterText(find.byType(CupertinoTextField), '图片说明');
+    await tester.tap(find.byKey(const Key('chat-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastSentAttachment?.filename, 'pasted-image.png');
+    expect(gateway.lastSentAttachmentCaption, '图片说明');
+  });
+
+  testWidgets('输入框粘贴纯文本时不被附件粘贴逻辑吞掉', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final picker = FakeAttachmentPickerService();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.getData') {
+            return <String, Object?>{'text': 'plain text'};
+          }
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:text-paste-peer',
+      threadId: 'dm:text-paste',
+      displayName: 'Text Paste Tester',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 7, 9, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:text-paste-peer',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          attachmentPickerServiceProvider.overrideWithValue(picker),
+        ],
+      ),
+    );
+
+    await tester.tap(find.byType(CupertinoTextField));
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyV);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.keyV);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+
+    final input = tester.widget<CupertinoTextField>(
+      find.byType(CupertinoTextField),
+    );
+    expect(picker.clipboardReadCalls, 1);
+    expect(input.controller?.text, 'plain text');
+    expect(
+      find.byKey(const Key('chat-pending-attachment-preview')),
+      findsNothing,
+    );
+  });
+
   testWidgets('macOS 选择附件后输入框保持焦点', (tester) async {
     final gateway = FakeAwikiGateway();
     final picker = FakeAttachmentPickerService()
@@ -4153,6 +4375,76 @@ void main() {
       composing: const TextRange(start: 0, end: 2),
     );
     await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastSentContent, isNull);
+    expect(input.controller?.text, 'ni');
+  });
+
+  testWidgets('输入法组合输入时发送按钮保持高亮但不会发送', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:ime-composing-send-button',
+      displayName: 'Tester',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+
+    await tester.tap(find.byType(CupertinoTextField));
+    await tester.enterText(find.byType(CupertinoTextField), 'ni');
+    await tester.pump();
+    var sendIcon = tester.widget<AwikiAssetIcon>(
+      find.descendant(
+        of: find.byKey(const Key('chat-send-button')),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is AwikiAssetIcon &&
+              widget.assetName == 'assets/icons/icon_send.svg',
+        ),
+      ),
+    );
+    expect(sendIcon.color, const Color(0xFF0B65F8));
+
+    final input = tester.widget<CupertinoTextField>(
+      find.byType(CupertinoTextField),
+    );
+    input.controller!.value = input.controller!.value.copyWith(
+      composing: const TextRange(start: 0, end: 2),
+    );
+    await tester.pump();
+
+    sendIcon = tester.widget<AwikiAssetIcon>(
+      find.descendant(
+        of: find.byKey(const Key('chat-send-button')),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is AwikiAssetIcon &&
+              widget.assetName == 'assets/icons/icon_send.svg',
+        ),
+      ),
+    );
+    expect(sendIcon.color, const Color(0xFF0B65F8));
 
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();

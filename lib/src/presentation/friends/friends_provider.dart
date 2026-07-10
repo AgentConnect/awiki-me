@@ -64,19 +64,19 @@ class FriendsController extends StateNotifier<FriendsState> {
       // list APIs land in the SDK. For now, don't let optional contacts data
       // block profile/conversation/group refresh on macOS.
       state = state.copyWith(isLoading: false);
+    } catch (_) {
+      // Relationship previews are optional sidebar data. A transient list
+      // refresh failure must not leave the contacts page stuck in a loading
+      // state or roll back a successful follow/unfollow action.
+      state = state.copyWith(isLoading: false);
     }
   }
 
   Future<void> follow(String didOrHandle) async {
     final relationships = ref.read(relationshipApplicationServiceProvider);
     await relationships.follow(didOrHandle);
+    _markFollowing(didOrHandle);
     await refresh();
-    final alias = _normalizeIdentity(didOrHandle);
-    state = state.copyWith(
-      followingAliases: alias.isEmpty
-          ? state.followingAliases
-          : <String>{...state.followingAliases, alias},
-    );
     _invalidateRelationshipLists();
   }
 
@@ -84,14 +84,48 @@ class FriendsController extends StateNotifier<FriendsState> {
     await ref
         .read(relationshipApplicationServiceProvider)
         .unfollow(didOrHandle);
+    _markNotFollowing(didOrHandle);
     await refresh();
+    _invalidateRelationshipLists();
+  }
+
+  void _markFollowing(String didOrHandle) {
     final alias = _normalizeIdentity(didOrHandle);
+    if (alias.isEmpty) {
+      return;
+    }
+    final following =
+        state.following.any((item) => _normalizeIdentity(item.did) == alias)
+        ? state.following
+        : alias.startsWith('did:')
+        ? <RelationshipSummary>[
+            ...state.following,
+            RelationshipSummary(
+              did: didOrHandle.trim(),
+              displayName: didOrHandle.trim(),
+              relationship: 'following',
+            ),
+          ]
+        : state.following;
     state = state.copyWith(
+      following: following,
+      followingAliases: <String>{...state.followingAliases, alias},
+    );
+  }
+
+  void _markNotFollowing(String didOrHandle) {
+    final alias = _normalizeIdentity(didOrHandle);
+    if (alias.isEmpty) {
+      return;
+    }
+    state = state.copyWith(
+      following: state.following
+          .where((item) => _normalizeIdentity(item.did) != alias)
+          .toList(),
       followingAliases: state.followingAliases
           .where((item) => item != alias)
           .toSet(),
     );
-    _invalidateRelationshipLists();
   }
 
   Future<RelationshipSummary?> checkRelationship(String didOrHandle) async {

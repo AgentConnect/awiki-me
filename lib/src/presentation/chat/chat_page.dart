@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -76,6 +77,85 @@ class ChatPage extends StatelessWidget {
         conversation: conversation,
         embedded: false,
         onBack: () => Navigator.of(context).pop(),
+      ),
+    );
+  }
+}
+
+class _AttachmentDropOverlay extends StatelessWidget {
+  const _AttachmentDropOverlay({required this.macStyle});
+
+  final bool macStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final radius = macStyle
+        ? responsive.displayScaled(18)
+        : responsive.radius(24);
+    return IgnorePointer(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0x330B65F8),
+          border: Border.all(
+            color: const Color(0xFF0B65F8),
+            width: macStyle ? 1.4 : 1.8,
+          ),
+          borderRadius: BorderRadius.circular(radius),
+        ),
+        child: Center(
+          child: Container(
+            key: const Key('chat-attachment-drop-overlay'),
+            padding: EdgeInsets.symmetric(
+              horizontal: macStyle
+                  ? responsive.displayScaled(18)
+                  : responsive.spacing(18),
+              vertical: macStyle
+                  ? responsive.displayScaled(12)
+                  : responsive.spacing(12),
+            ),
+            decoration: BoxDecoration(
+              color: CupertinoColors.white,
+              borderRadius: BorderRadius.circular(
+                macStyle ? responsive.displayScaled(14) : responsive.radius(18),
+              ),
+              boxShadow: const <BoxShadow>[
+                BoxShadow(
+                  color: Color(0x240B1F3A),
+                  blurRadius: 28,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(
+                  CupertinoIcons.paperclip,
+                  color: const Color(0xFF0B65F8),
+                  size: macStyle
+                      ? responsive.displayScaled(20)
+                      : responsive.iconMd,
+                ),
+                SizedBox(
+                  width: macStyle
+                      ? responsive.displayScaled(8)
+                      : responsive.spacing(8),
+                ),
+                Text(
+                  context.l10n.chatAddAttachment,
+                  style: TextStyle(
+                    color: const Color(0xFF17213A),
+                    fontWeight: FontWeight.w700,
+                    fontSize: macStyle
+                        ? responsive.displayScaled(14)
+                        : responsive.bodyMd,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -196,6 +276,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   bool _openingAnchorObservedContent = false;
   int _openingAnchorToken = 0;
   bool _isOpeningGroupInvite = false;
+  bool _isDraggingExternalAttachment = false;
   final Set<String> _requestedGroupRoleIds = <String>{};
   final Set<String> _downloadingAttachmentMessageIds = <String>{};
   static const double _nearBottomExtent = 96;
@@ -405,6 +486,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final groupSendDisabledReason = _groupSendDisabledReason(
       currentConversation,
     );
+    final canAcceptExternalAttachment =
+        !isDeletedAgentConversation && groupSendDisabledReason == null;
     final inviteTarget = _groupInviteTarget(
       currentConversation,
       ref.watch(groupProvider).groups,
@@ -751,18 +834,55 @@ class _ChatViewState extends ConsumerState<ChatView> {
             onAttach: () async {
               await _pickAndStageAttachment();
             },
+            onPasteAttachment: _pasteClipboardAttachment,
             onRemoveAttachment: _clearPendingAttachment,
           ),
         ],
       ),
     );
+    final pageWithDropTarget = _buildAttachmentDropTarget(
+      page,
+      enabled: canAcceptExternalAttachment,
+      macStyle: macStyle,
+    );
     if (macStyle) {
       return DecoratedBox(
         decoration: const BoxDecoration(color: CupertinoColors.white),
-        child: page,
+        child: pageWithDropTarget,
       );
     }
-    return AwikiMeWidgets.pageBackground(child: page);
+    return AwikiMeWidgets.pageBackground(child: pageWithDropTarget);
+  }
+
+  Widget _buildAttachmentDropTarget(
+    Widget child, {
+    required bool enabled,
+    required bool macStyle,
+  }) {
+    return DropTarget(
+      key: Key('chat-attachment-drop-target:$_displayThreadId'),
+      enable: enabled,
+      onDragEntered: (_) {
+        if (!mounted || !enabled || _isDraggingExternalAttachment) {
+          return;
+        }
+        setState(() => _isDraggingExternalAttachment = true);
+      },
+      onDragExited: (_) {
+        if (!mounted || !_isDraggingExternalAttachment) {
+          return;
+        }
+        setState(() => _isDraggingExternalAttachment = false);
+      },
+      onDragDone: (details) => unawaited(_handleDroppedAttachments(details)),
+      child: Stack(
+        children: <Widget>[
+          child,
+          if (_isDraggingExternalAttachment && enabled)
+            Positioned.fill(child: _AttachmentDropOverlay(macStyle: macStyle)),
+        ],
+      ),
+    );
   }
 
   bool _canRetryMessage(ChatMessage message) {
@@ -915,8 +1035,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   Future<void> _pickAndStageAttachment() async {
     final conversation = _currentConversationSnapshot();
-    if (conversation.isDeletedAgentConversation ||
-        _groupSendDisabledReason(conversation) != null) {
+    if (!_canAcceptExternalAttachment(conversation)) {
       return;
     }
     try {
@@ -929,17 +1048,148 @@ class _ChatViewState extends ConsumerState<ChatView> {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _pendingAttachment = draft;
-      });
-      ref
-          .read(chatComposerDraftsProvider.notifier)
-          .setAttachment(conversation, draft);
+      _stageAttachmentDraft(conversation, draft);
     } catch (error) {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.fromError(error));
     }
+  }
+
+  Future<bool> _pasteClipboardAttachment() async {
+    final conversation = _currentConversationSnapshot();
+    if (!_canAcceptExternalAttachment(conversation)) {
+      return false;
+    }
+    try {
+      final draft = await ref
+          .read(attachmentPickerServiceProvider)
+          .readClipboardAttachment();
+      if (draft == null) {
+        return false;
+      }
+      if (!mounted ||
+          !sameConversationThread(
+            conversation,
+            _currentConversationSnapshot(),
+          )) {
+        return true;
+      }
+      _stageAttachmentDraft(conversation, draft);
+      return true;
+    } catch (error) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
+      return true;
+    }
+  }
+
+  Future<void> _handleDroppedAttachments(DropDoneDetails details) async {
+    if (mounted && _isDraggingExternalAttachment) {
+      setState(() => _isDraggingExternalAttachment = false);
+    }
+    final conversation = _currentConversationSnapshot();
+    if (!_canAcceptExternalAttachment(conversation)) {
+      return;
+    }
+    final item = _firstDroppedFile(details.files);
+    if (item == null) {
+      return;
+    }
+    try {
+      final draft = await _draftFromDroppedItem(item);
+      if (draft == null ||
+          !mounted ||
+          !sameConversationThread(
+            conversation,
+            _currentConversationSnapshot(),
+          )) {
+        return;
+      }
+      _stageAttachmentDraft(conversation, draft);
+    } catch (error) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
+    }
+  }
+
+  DropItem? _firstDroppedFile(List<DropItem> items) {
+    for (final item in items) {
+      if (item is DropItemDirectory) {
+        continue;
+      }
+      return item;
+    }
+    return null;
+  }
+
+  Future<AttachmentDraft?> _draftFromDroppedItem(DropItem item) async {
+    final bookmark = item.extraAppleBookmark;
+    var didAccessSecurityScopedResource = false;
+    try {
+      if (bookmark != null && bookmark.isNotEmpty) {
+        didAccessSecurityScopedResource = await DesktopDrop.instance
+            .startAccessingSecurityScopedResource(bookmark: bookmark);
+      }
+      final path = item.path.trim();
+      Uint8List? bytes;
+      if (path.isEmpty) {
+        bytes = await item.readAsBytes();
+      }
+      final filename = item.name.trim();
+      final sizeBytes = await _dropItemSizeBytes(item, bytes);
+      return ref
+          .read(attachmentPickerServiceProvider)
+          .draftFromExternalSource(
+            path: path.isEmpty ? null : path,
+            filename: filename.isEmpty ? null : filename,
+            mimeType: item.mimeType,
+            sizeBytes: sizeBytes,
+            bytes: bytes,
+          );
+    } finally {
+      if (didAccessSecurityScopedResource && bookmark != null) {
+        await DesktopDrop.instance.stopAccessingSecurityScopedResource(
+          bookmark: bookmark,
+        );
+      }
+    }
+  }
+
+  Future<int?> _dropItemSizeBytes(DropItem item, Uint8List? bytes) async {
+    if (bytes != null) {
+      return bytes.length;
+    }
+    try {
+      return await item.length();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _canAcceptExternalAttachment(ConversationSummary conversation) {
+    return !conversation.isDeletedAgentConversation &&
+        _groupSendDisabledReason(conversation) == null;
+  }
+
+  void _stageAttachmentDraft(
+    ConversationSummary conversation,
+    AttachmentDraft draft,
+  ) {
+    if (!mounted ||
+        !_canAcceptExternalAttachment(conversation) ||
+        !sameConversationThread(conversation, _currentConversationSnapshot())) {
+      return;
+    }
+    setState(() {
+      _pendingAttachment = draft;
+      _isDraggingExternalAttachment = false;
+    });
+    ref
+        .read(chatComposerDraftsProvider.notifier)
+        .setAttachment(conversation, draft);
   }
 
   void _clearPendingAttachment() {

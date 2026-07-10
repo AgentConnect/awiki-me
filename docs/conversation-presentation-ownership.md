@@ -227,6 +227,8 @@ Chat presentation 是单向的：
 7. remote history / thread legacy adapter 只作为迁移兜底；返回消息必须先持久化到 core projection，再通过 conversation timeline load/patch 成为 UI 事实。
 8. 如果 patch key 与当前 window 不一致，应触发 repair/diagnostic，不得用易漂移的 summary 或 alias 规则静默 drop core 已返回的消息。
 
+Timeline merge 必须把“同一条本机发送消息的 durable server row”和“迟到的本地 echo/pending/failed row”视为同一展示实体：如果 mine、thread、sender、可见文本和时间窗口匹配，且其中一条已经是 `sent`，UI window 保留已发送的 server row，不再把迟到的本地失败 echo 渲染成第二个气泡。这个规则只属于 presentation 去重防线，不改变 `im-core` 作为 send/outbox/local projection 事实源的职责。
+
 特殊边界：`dm:peer-scope:*`、legacy DID direct、old Flutter direct alias、handle 切换和 DID rotation 都必须在 `im-core` identity resolver / migration 中收敛到 canonical `conversationId`。AWiki Me 可以展示 alias/handle/DID，但不能用这些字段决定消息归属、read ack key 或 timeline patch key。旧 `ThreadRef` / raw thread history 能力只作为 compatibility adapter；App 主路径不得把 `unsupported_capability: thread-history` 暴露为可见错误。
 
 实时消息路径：

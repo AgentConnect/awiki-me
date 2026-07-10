@@ -828,6 +828,112 @@ void main() {
     expect(messages.single.serverSequence, 2);
   });
 
+  test('群聊回执先于本地失败 echo 到达时只展示已发送消息', () async {
+    const groupDid = 'did:example:groups:xlgs';
+    final groupConversation = ConversationSummary(
+      conversationId: 'group:$groupDid',
+      threadId: 'group:$groupDid',
+      displayName: 'xlgs',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 7, 8, 19, 49),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: groupDid,
+    );
+    final patchMessaging = _PatchMessagingService(
+      localHistory: <ChatMessage>[],
+    );
+    final patchContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        messagingServiceProvider.overrideWithValue(patchMessaging),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(patchContainer.dispose);
+
+    await patchContainer
+        .read(chatThreadsProvider.notifier)
+        .openConversation(groupConversation);
+    await pumpEventQueue();
+
+    final sentAt = DateTime(2026, 7, 8, 19, 49);
+    patchMessaging.emitPatch(
+      ThreadMessagePatch(
+        kind: ThreadMessagePatchKind.upsert,
+        ownerDid: 'did:me',
+        version: 2,
+        threadKind: 'conversation',
+        threadId: groupConversation.effectiveConversationId,
+        conversationId: groupConversation.effectiveConversationId,
+        message: ChatMessage(
+          localId: '$groupDid:42',
+          remoteId: '$groupDid:42',
+          conversationId: groupConversation.effectiveConversationId,
+          threadId: groupConversation.threadId,
+          senderDid: 'did:me',
+          groupId: groupDid,
+          content: '后面我们在这里多发发消息',
+          createdAt: sentAt,
+          isMine: true,
+          sendState: MessageSendState.sent,
+          serverSequence: 42,
+        ),
+      ),
+    );
+    await pumpEventQueue();
+
+    patchMessaging.emitPatch(
+      ThreadMessagePatch(
+        kind: ThreadMessagePatchKind.upsert,
+        ownerDid: 'did:me',
+        version: 3,
+        threadKind: 'conversation',
+        threadId: groupConversation.effectiveConversationId,
+        conversationId: groupConversation.effectiveConversationId,
+        message: ChatMessage(
+          localId: 'msg-local-timeout',
+          remoteId: 'msg-local-timeout',
+          conversationId: groupConversation.effectiveConversationId,
+          threadId: groupConversation.threadId,
+          senderDid: 'did:me',
+          groupId: groupDid,
+          content: '后面我们在这里多发发消息',
+          createdAt: sentAt.add(const Duration(seconds: 20)),
+          isMine: true,
+          sendState: MessageSendState.failed,
+        ),
+      ),
+    );
+    await pumpEventQueue();
+
+    final messages = patchContainer
+        .read(chatThreadProvider(groupConversation.effectiveConversationId))
+        .messages;
+    expect(
+      messages.where((item) => item.content == '后面我们在这里多发发消息'),
+      hasLength(1),
+    );
+    final displayed = messages.singleWhere(
+      (item) => item.content == '后面我们在这里多发发消息',
+    );
+    expect(displayed.localId, '$groupDid:42');
+    expect(displayed.sendState, MessageSendState.sent);
+    expect(displayed.serverSequence, 42);
+  });
+
   test('可见会话摘要领先时补齐当前线程消息', () async {
     final oldMessage = ChatMessage(
       localId: 'msg-old',

@@ -77,6 +77,11 @@ dart run tests/unit/runner.dart tests/unit/chat_page_test.dart
 dart run tests/unit/runner.dart tests/unit/onboarding_page_test.dart
 ```
 
+聊天附件入口需要同时覆盖按钮、桌面拖拽和剪贴板粘贴。拖拽/粘贴入口的
+deterministic 覆盖放在 `tests/unit/chat_page_test.dart`，附件来源解析覆盖放在
+`tests/unit/attachment_picker_service_test.dart`；真实 App + CLI 附件互通仍由
+`dart run tests/e2e/runner.dart --case attachment` 或 `--case full` 验证。
+
 The repository configures `package:sqlite3` to use the system SQLite library
 through `hooks.user_defines.sqlite3.source: system`. This keeps the test gates
 from downloading a prebuilt SQLite dylib from GitHub during native asset build
