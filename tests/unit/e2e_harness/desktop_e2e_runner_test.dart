@@ -186,6 +186,38 @@ void main() {
     });
   });
 
+  group('CLI build provenance', () {
+    const commit = 'abcdefabcdefabcdefabcdefabcdefabcdefabcd';
+
+    test('reads the embedded commit from version JSON', () {
+      expect(
+        cliBuildCommitFromVersionJson(
+          jsonEncode(<String, Object?>{
+            'ok': true,
+            'data': <String, Object?>{'commit': commit},
+          }),
+        ),
+        commit,
+      );
+    });
+
+    test('rejects unknown or malformed embedded commits', () {
+      expect(
+        () => cliBuildCommitFromVersionJson(
+          jsonEncode(<String, Object?>{
+            'ok': true,
+            'data': <String, Object?>{'commit': 'unknown'},
+          }),
+        ),
+        throwsA(isA<E2eFailure>()),
+      );
+      expect(
+        () => cliBuildCommitFromVersionJson('not-json'),
+        throwsA(isA<E2eFailure>()),
+      );
+    });
+  });
+
   group('DesktopE2eFileConfig', () {
     test('loads minimal local YAML config', () async {
       final root = await Directory.systemTemp.createTemp(

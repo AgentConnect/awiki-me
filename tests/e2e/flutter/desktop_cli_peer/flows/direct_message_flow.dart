@@ -20,6 +20,12 @@ Future<void> _verifyDirectTextRegression({
 
   final conversation = await robot.startDirectConversation(config.cliHandle);
   final conversationId = conversation.effectiveConversationId;
+  expect(
+    conversationId.startsWith('dm:peer-scope:v1:'),
+    isTrue,
+    reason:
+        'A handle-resolved Direct conversation must be canonical before the first message arrives.',
+  );
   final cliDid = requireMatchingCliPeerDid(
     canonicalCliDid: canonicalCliDid,
     observedPeerDid: conversation.targetDid ?? '',

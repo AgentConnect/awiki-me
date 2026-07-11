@@ -144,6 +144,11 @@ Required local values:
 - `cliPeer.sourceRef`: exact non-zero 40-character commit SHA used to build both
   the CLI and sibling `awiki_im_core` SDK artifacts.
 
+Before identity or message assertions, the runner executes `awiki-cli version`
+and requires `data.commit` to equal `cliPeer.sourceRef`. `unknown`, all-zero,
+malformed, or mismatched build metadata is a failed provenance preflight rather
+than auditable product evidence.
+
 All live product cases are pinned by `tests/e2e/suite_manifest.json` to
 `https://awiki.info` / `wss://awiki.info/im/ws`. They reject localhost,
 `awiki.test`, insecure schemes, and other domains before starting Flutter.

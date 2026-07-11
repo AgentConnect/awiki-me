@@ -30,9 +30,10 @@ import 'widgets/app_widgets.dart';
 enum IdentityFlowMode { startConversation, followContact }
 
 class IdentityFlowResult {
-  const IdentityFlowResult({required this.profile});
+  const IdentityFlowResult({required this.profile, this.conversationId});
 
   final UserProfile profile;
+  final String? conversationId;
 }
 
 typedef IdentityConfirmAction = Future<void> Function(UserProfile profile);
@@ -141,6 +142,13 @@ Future<UserProfile> resolveIdentityProfile(
   WidgetRef ref,
   String rawQuery,
 ) async {
+  return (await _resolveIdentityProfile(ref, rawQuery)).profile;
+}
+
+Future<_ResolvedIdentity> _resolveIdentityProfile(
+  WidgetRef ref,
+  String rawQuery,
+) async {
   final query = normalizeDidOrHandleInput(rawQuery);
   if (query.isEmpty) {
     throw ArgumentError('identity_query_required');
@@ -149,9 +157,16 @@ Future<UserProfile> resolveIdentityProfile(
     final resolution = await ref
         .read(directoryApplicationServiceProvider)
         .resolvePeer(query);
-    return resolution.profile ?? identityProfileFromResolution(resolution);
+    return _ResolvedIdentity(
+      profile: resolution.profile ?? identityProfileFromResolution(resolution),
+      conversationId: resolution.conversationId,
+    );
   } catch (_) {
-    return ref.read(profileApplicationServiceProvider).loadPublicProfile(query);
+    return _ResolvedIdentity(
+      profile: await ref
+          .read(profileApplicationServiceProvider)
+          .loadPublicProfile(query),
+    );
   }
 }
 
@@ -178,8 +193,9 @@ UserProfile identityProfileFromResolution(DirectoryPeerResolution resolution) {
 Future<void> openDirectConversationForProfile(
   BuildContext context,
   WidgetRef ref,
-  UserProfile profile,
-) async {
+  UserProfile profile, {
+  String? conversationId,
+}) async {
   await openDirectConversationForDid(
     context,
     ref,
@@ -188,6 +204,7 @@ Future<void> openDirectConversationForProfile(
     peerName: DidDisplayFormatter.profileName(profile),
     avatarUri: profile.avatarUri,
     avatarSeed: profile.handle ?? profile.did,
+    conversationId: conversationId,
   );
 }
 
@@ -199,6 +216,7 @@ Future<void> openDirectConversationForDid(
   String? peerHandle,
   String? avatarUri,
   String? avatarSeed,
+  String? conversationId,
 }) async {
   final session = ref.read(sessionProvider).session;
   if (session == null) {
@@ -219,14 +237,17 @@ Future<void> openDirectConversationForDid(
   }
 
   final peerTarget = _directPeerTarget(peerDid: peer, peerHandle: peerHandle);
-  final conversationId = _directConversationIdForDid(peer);
+  final canonicalConversationId = _directConversationId(
+    peerDid: peer,
+    resolvedConversationId: conversationId,
+  );
   final existing = ref
       .read(conversationListProvider)
       .conversations
       .where(
         (item) =>
-            item.conversationId?.trim() == conversationId ||
-            item.threadId == conversationId ||
+            item.conversationId?.trim() == canonicalConversationId ||
+            item.threadId == canonicalConversationId ||
             item.targetPeer?.trim() == peerTarget ||
             item.targetDid?.trim() == peer,
       )
@@ -242,11 +263,11 @@ Future<void> openDirectConversationForDid(
           peerName: peerName,
           avatarUri: avatarUri,
           avatarSeed: avatarSeed,
-          fallbackConversationId: conversationId,
+          fallbackConversationId: canonicalConversationId,
         )
       : ConversationSummary(
-          conversationId: conversationId,
-          threadId: conversationId,
+          conversationId: canonicalConversationId,
+          threadId: canonicalConversationId,
           displayName: _directConversationName(peerName, peer),
           lastMessagePreview: '',
           lastMessageAt: DateTime.now(),
@@ -284,8 +305,14 @@ ConversationSummary _directConversationForPeer(
   required String fallbackConversationId,
 }) {
   final existingConversationId = existing.conversationId?.trim();
-  final conversationId =
-      existingConversationId != null && existingConversationId.isNotEmpty
+  final fallbackIsPeerScoped = fallbackConversationId.startsWith(
+    'dm:peer-scope:',
+  );
+  final existingIsPeerScoped =
+      existingConversationId?.startsWith('dm:peer-scope:') ?? false;
+  final conversationId = fallbackIsPeerScoped && !existingIsPeerScoped
+      ? fallbackConversationId
+      : existingConversationId != null && existingConversationId.isNotEmpty
       ? existingConversationId
       : fallbackConversationId;
   final existingTarget = existing.targetDid?.trim() ?? '';
@@ -318,6 +345,17 @@ ConversationSummary _directConversationForPeer(
 
 String _directConversationIdForDid(String peerDid) {
   return 'dm:${peerDid.trim()}';
+}
+
+String _directConversationId({
+  required String peerDid,
+  String? resolvedConversationId,
+}) {
+  final resolved = resolvedConversationId?.trim();
+  if (resolved != null && resolved.startsWith('dm:') && resolved.length > 3) {
+    return resolved;
+  }
+  return _directConversationIdForDid(peerDid);
 }
 
 ConversationSummary _preferAuthoritativeDirectConversation(
@@ -357,7 +395,12 @@ Future<void> showStartConversationDialog(
   if (result == null || !context.mounted) {
     return;
   }
-  await openDirectConversationForProfile(context, ref, result.profile);
+  await openDirectConversationForProfile(
+    context,
+    ref,
+    result.profile,
+    conversationId: result.conversationId,
+  );
 }
 
 Future<void> showFollowIdentityDialog(
@@ -406,6 +449,7 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
   bool _isResolving = false;
   bool _isSubmitting = false;
   UserProfile? _profile;
+  String? _conversationId;
   RelationshipSummary? _relationship;
   String? _errorText;
 
@@ -429,6 +473,7 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
       _isResolving = true;
       _errorText = null;
       _profile = null;
+      _conversationId = null;
       _relationship = null;
     });
     try {
@@ -449,6 +494,7 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
       }
       setState(() {
         _profile = profile;
+        _conversationId = resolved.conversationId;
         _relationship = relationship;
         _isResolving = false;
       });
@@ -464,8 +510,7 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
   }
 
   Future<_ResolvedIdentity> _resolveIdentity(String query) async {
-    final profile = await resolveIdentityProfile(ref, query);
-    return _ResolvedIdentity(profile: profile);
+    return _resolveIdentityProfile(ref, query);
   }
 
   Future<void> _submit() async {
@@ -485,7 +530,9 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
     }
     final confirm = widget.onConfirm;
     if (confirm == null) {
-      Navigator.of(context).pop(IdentityFlowResult(profile: profile));
+      Navigator.of(context).pop(
+        IdentityFlowResult(profile: profile, conversationId: _conversationId),
+      );
       return;
     }
     setState(() {
@@ -497,7 +544,9 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pop(IdentityFlowResult(profile: profile));
+      Navigator.of(context).pop(
+        IdentityFlowResult(profile: profile, conversationId: _conversationId),
+      );
     } catch (error) {
       if (!mounted) {
         return;
@@ -612,9 +661,10 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
 }
 
 class _ResolvedIdentity {
-  const _ResolvedIdentity({required this.profile});
+  const _ResolvedIdentity({required this.profile, this.conversationId});
 
   final UserProfile profile;
+  final String? conversationId;
 }
 
 class _IdentitySearchInput extends StatelessWidget {
