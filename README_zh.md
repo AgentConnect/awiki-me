@@ -205,18 +205,18 @@ live 产品用例只允许连接 `awiki.info`。
 scripts/package_app.sh
 ```
 
-配置文件：[`scripts/package_app.config`](scripts/package_app.config)。日常打包主要改 `AWIKI_DOMAIN`，需要选择平台时改 `PACKAGE_TARGETS`：
+配置文件：[`scripts/package_app.config`](scripts/package_app.config)。日常打包主要改 `PACKAGE_RELEASE_DOMAIN`，需要选择平台时改 `PACKAGE_TARGETS`：
 
 ```text
-AWIKI_DOMAIN="awiki.ai"    # 当前提交默认
-AWIKI_DOMAIN="awiki.info"  # 内部镜像 / 联调包下载
+PACKAGE_RELEASE_DOMAIN="awiki.ai"    # 当前提交默认
+PACKAGE_RELEASE_DOMAIN="awiki.info"  # 内部镜像 / 联调包下载
 
 PACKAGE_TARGETS="android-arm64,macos-arm64,macos-x64"  # 全平台
 PACKAGE_TARGETS="android-arm64"                        # 只打 Android
 PACKAGE_TARGETS="macos-arm64,macos-x64"                # 只打 macOS
 ```
 
-脚本只用 `AWIKI_DOMAIN` 生成发布元数据：Daemon 下载地址、更新清单地址和下载页。它不会把后端地址、DID Host 或本地状态命名空间注入到 App；这些由 App 启动后的租户注册表控制。
+脚本只用 `PACKAGE_RELEASE_DOMAIN` 生成发布产物元数据：安装包下载地址、生成后的更新清单地址和下载页。它不会把后端地址、DID Host、本地状态命名空间或更新检查地址注入到 App；这些由 App runtime 和启动后的租户注册表控制。
 
 打包行为：
 
@@ -238,7 +238,7 @@ dist/latest.json
 打开 Xcode 前先生成 CocoaPods 支持文件：
 
 ```bash
-scripts/bootstrap_macos.sh
+scripts/prepare_macos_build.sh
 open macos/Runner.xcworkspace
 ```
 
