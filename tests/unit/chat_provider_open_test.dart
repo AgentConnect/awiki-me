@@ -755,12 +755,12 @@ void main() {
       conversation.effectiveConversationId,
     );
     expect(patchMessaging.lastClientMessageId, isNotEmpty);
-    expect(
-      patchContainer
-          .read(chatThreadProvider(_timelineThreadId(conversation)))
-          .messages,
-      isEmpty,
-    );
+    var messages = patchContainer
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
+        .messages;
+    expect(messages, hasLength(1));
+    expect(messages.single.content, 'hello patch');
+    expect(messages.single.sendState, MessageSendState.sent);
 
     final clientMessageId = patchMessaging.lastClientMessageId!;
     patchMessaging.emitPatch(
@@ -787,12 +787,12 @@ void main() {
     );
     await pumpEventQueue();
 
-    var messages = patchContainer
+    messages = patchContainer
         .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     expect(messages, hasLength(1));
     expect(messages.single.localId, clientMessageId);
-    expect(messages.single.sendState, MessageSendState.sending);
+    expect(messages.single.sendState, MessageSendState.sent);
 
     patchMessaging.emitPatch(
       ThreadMessagePatch(

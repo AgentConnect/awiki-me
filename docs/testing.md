@@ -149,6 +149,11 @@ and requires `data.commit` to equal `cliPeer.sourceRef`. `unknown`, all-zero,
 malformed, or mismatched build metadata is a failed provenance preflight rather
 than auditable product evidence.
 
+Direct-message coverage also requires the App to project a successful send
+result into the selected canonical timeline immediately. Realtime pending/final
+patches may merge or upgrade that row, but their timing is not allowed to leave
+the sender timeline empty or create a duplicate.
+
 All live product cases are pinned by `tests/e2e/suite_manifest.json` to
 `https://awiki.info` / `wss://awiki.info/im/ws`. They reject localhost,
 `awiki.test`, insecure schemes, and other domains before starting Flutter.

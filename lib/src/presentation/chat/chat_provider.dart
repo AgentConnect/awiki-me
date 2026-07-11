@@ -1,3 +1,6 @@
+// [INPUT]: Conversation projections, messaging/timeline services, session state, and user chat actions.
+// [OUTPUT]: Canonical chat thread state, including immediate authoritative settlement of successful sends.
+// [POS]: Riverpod presentation controller for chat history, sending, realtime patches, read state, and retries.
 import 'dart:async';
 import 'dart:convert';
 
@@ -3069,7 +3072,17 @@ class ChatThreadsController
     if (index < 0) {
       index = _matchingMessageIndex(current, delivered);
     }
-    if (index < 0 || current[index].sendState == MessageSendState.sent) {
+    if (index < 0) {
+      // A successful send result is authoritative even when the realtime
+      // pending patch has not arrived. Persist it immediately so the sender's
+      // timeline cannot remain empty because of patch timing or delivery loss.
+      return _replaceMessage(
+        displayThreadId,
+        submittedLocalMessageId,
+        delivered,
+      );
+    }
+    if (current[index].sendState == MessageSendState.sent) {
       return delivered;
     }
     return _replaceMessage(displayThreadId, current[index].localId, delivered);
