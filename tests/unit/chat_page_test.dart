@@ -4251,12 +4251,21 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(picker.screenshotCalls, 1);
+    expect(picker.lastScreenshotHideApp, isFalse);
     expect(find.text('screenshot-test.png'), findsOneWidget);
     expect(find.byKey(const Key('chat-pending-image-preview')), findsOneWidget);
     expect(
       find.byKey(const Key('chat-pending-attachment-preview')),
       findsOneWidget,
     );
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.tap(find.byKey(const Key('chat-screenshot-button')));
+    await tester.pumpAndSettle();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+
+    expect(picker.screenshotCalls, 2);
+    expect(picker.lastScreenshotHideApp, isTrue);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

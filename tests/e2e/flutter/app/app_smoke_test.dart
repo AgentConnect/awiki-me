@@ -14,6 +14,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_provide
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter/widgets.dart' show Key, ListView, Size;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -164,6 +165,13 @@ void main() {
         await tester.tap(find.byKey(const Key('chat-screenshot-button')));
         await _pumpSmokeFrame(tester);
         expect(picker.screenshotCalls, 1);
+        expect(picker.lastScreenshotHideApp, isFalse);
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+        await tester.tap(find.byKey(const Key('chat-screenshot-button')));
+        await _pumpSmokeFrame(tester);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+        expect(picker.screenshotCalls, 2);
+        expect(picker.lastScreenshotHideApp, isTrue);
 
         harness.gateway.conversations = <ConversationSummary>[
           ConversationSummary(

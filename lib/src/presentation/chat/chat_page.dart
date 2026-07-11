@@ -1120,7 +1120,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
   }
 
-  Future<void> _captureAndStageScreenshot() async {
+  Future<void> _captureAndStageScreenshot({required bool hideApp}) async {
     final conversation = _currentConversationSnapshot();
     if (!_canAcceptExternalAttachment(conversation)) {
       return;
@@ -1128,7 +1128,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     try {
       final draft = await ref
           .read(attachmentPickerServiceProvider)
-          .captureScreenshot();
+          .captureScreenshot(hideApp: hideApp);
       if (draft == null || !mounted) {
         return;
       }

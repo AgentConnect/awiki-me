@@ -27,7 +27,7 @@ class _Composer extends ConsumerStatefulWidget {
   final String? disabledReason;
   final Future<void> Function() onSend;
   final Future<void> Function() onAttach;
-  final Future<void> Function() onScreenshot;
+  final Future<void> Function({required bool hideApp}) onScreenshot;
   final Future<bool> Function() onPasteAttachment;
   final VoidCallback onRemoveAttachment;
 
@@ -320,7 +320,9 @@ class _ComposerState extends ConsumerState<_Composer> {
     if (_showEmojiPicker) {
       setState(() => _showEmojiPicker = false);
     }
-    await widget.onScreenshot();
+    await widget.onScreenshot(
+      hideApp: HardwareKeyboard.instance.isShiftPressed,
+    );
     if (!mounted || !widget.enabled) {
       return;
     }

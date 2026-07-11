@@ -442,6 +442,7 @@ class FakeAttachmentPickerService implements AttachmentPickerService {
   String? nextSavedPath = '/tmp/attachment';
   int pickCalls = 0;
   int screenshotCalls = 0;
+  bool? lastScreenshotHideApp;
   int externalSourceCalls = 0;
   int clipboardReadCalls = 0;
   int saveCalls = 0;
@@ -461,8 +462,9 @@ class FakeAttachmentPickerService implements AttachmentPickerService {
   }
 
   @override
-  Future<AttachmentDraft?> captureScreenshot() async {
+  Future<AttachmentDraft?> captureScreenshot({bool hideApp = false}) async {
     screenshotCalls += 1;
+    lastScreenshotHideApp = hideApp;
     return nextScreenshot;
   }
 
