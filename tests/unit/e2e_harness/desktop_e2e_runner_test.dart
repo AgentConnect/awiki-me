@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../e2e/case_attestation.dart';
 import '../../e2e/runner.dart';
 
 void main() {
@@ -704,6 +705,73 @@ cliHandle: legacy-cli
 
       expect(output, contains('<redacted-did>'));
       expect(output, isNot(contains('e1_sensitive')));
+    });
+
+    test('detects competing Flutter integration tests from ps output', () {
+      final pids = competingFlutterIntegrationTestPidsFromPs('''
+  101 dart flutter_tools.snapshot test integration_test/app_smoke_test.dart -d macos
+  102 dart flutter_tools.snapshot build macos
+  103 dart flutter_tools.snapshot test tests/unit/example_test.dart
+''');
+
+      expect(pids, <int>[101]);
+    });
+
+    test('scenario progress is colocated with strict attestation', () {
+      final progress = e2eScenarioProgressFileForAttestation(
+        File('/tmp/e2e/reports/case_attestation.json'),
+      );
+
+      expect(progress.path, '/tmp/e2e/reports/scenario_progress.json');
+    });
+
+    test('failed command writes redacted durable diagnostics', () async {
+      if (Platform.isWindows) {
+        return;
+      }
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_e2e_diagnostics_test_',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final reports = Directory('${root.path}/reports');
+      final runner = DesktopCommandRunner(
+        root: root,
+        dryRun: false,
+        redactor: DesktopSecretRedactor(const <String>['super-secret']),
+      )..diagnosticDirectory = reports;
+
+      await expectLater(
+        runner.captureResult('/bin/sh', const <String>[
+          '-c',
+          'echo super-secret; echo failed >&2; exit 79',
+        ]),
+        throwsA(isA<E2eFailure>()),
+      );
+
+      final metadata =
+          jsonDecode(
+                File(
+                  '${reports.path}/command-failure-001.json',
+                ).readAsStringSync(),
+              )
+              as Map<String, Object?>;
+      expect(metadata['exitCode'], 79);
+      expect(
+        File(
+          '${reports.path}/command-failure-001.stdout.log',
+        ).readAsStringSync(),
+        contains('<redacted>'),
+      );
+      expect(
+        File(
+          '${reports.path}/command-failure-001.stdout.log',
+        ).readAsStringSync(),
+        isNot(contains('super-secret')),
+      );
     });
 
     test('command timeout terminates the spawned process tree', () async {

@@ -220,6 +220,7 @@ class DesktopE2eRunner {
   late final File runConfigFile;
   late final File productTimingsFile;
   late final File caseAttestationFile;
+  late final File scenarioProgressFile;
   late final File resourceLedgerFile;
   late final DesktopE2eSuiteManifest suiteManifest;
   late final DesktopE2eSuiteDefinition suiteDefinition;
@@ -252,6 +253,7 @@ class DesktopE2eRunner {
     final runScope = options.e2eCase.reportScope;
     reportDir = Directory('${root.path}/.e2e/$runScope/$runId/reports')
       ..createSync(recursive: true);
+    commands.diagnosticDirectory = reportDir;
     cliWorkspaceDir = Directory('${root.path}/.e2e/$runScope/$runId/cli-peer');
     cliHomeDir = Directory('${root.path}/.e2e/$runScope/$runId/cli-home');
     appIdentityWorkspaceDir = Directory(
@@ -266,6 +268,9 @@ class DesktopE2eRunner {
       '${reportDir.path}/$_desktopCliPeerProductTimingsFileName',
     );
     caseAttestationFile = File('${reportDir.path}/$_caseAttestationFileName');
+    scenarioProgressFile = e2eScenarioProgressFileForAttestation(
+      caseAttestationFile,
+    );
     resourceLedgerFile = File('${reportDir.path}/resource_ledger.json');
     _addRuntimeSecret(reportDir.path);
     _addRuntimeSecret(cliWorkspaceDir.path);
@@ -276,6 +281,7 @@ class DesktopE2eRunner {
     _addRuntimeSecret(runConfigFile.path);
     _addRuntimeSecret(productTimingsFile.path);
     _addRuntimeSecret(caseAttestationFile.path);
+    _addRuntimeSecret(scenarioProgressFile.path);
     _addRuntimeSecret(resourceLedgerFile.path);
     if (!options.dryRun && !options.prepareOnly) {
       if (caseAttestationFile.existsSync()) {
@@ -284,6 +290,13 @@ class DesktopE2eRunner {
       final temporary = File('${caseAttestationFile.path}.tmp');
       if (temporary.existsSync()) {
         temporary.deleteSync();
+      }
+      if (scenarioProgressFile.existsSync()) {
+        scenarioProgressFile.deleteSync();
+      }
+      final progressTemporary = File('${scenarioProgressFile.path}.tmp');
+      if (progressTemporary.existsSync()) {
+        progressTemporary.deleteSync();
       }
     }
     if (!options.dryRun && options.e2eCase.requiresCliPeer) {
@@ -878,15 +891,42 @@ class DesktopE2eRunner {
     required DesktopE2ePlatform platform,
     Duration timeout = const Duration(minutes: 5),
   }) async {
-    if (platform == DesktopE2ePlatform.linux) {
-      await commands.run('xvfb-run', <String>[
-        '-a',
+    await _withFlutterExecutionLease(platform, runId, () async {
+      final competingPids = await competingFlutterIntegrationTestPids();
+      if (competingPids.isNotEmpty) {
+        throw E2eFailure(
+          'Another Flutter integration test is already running '
+          '(pids=${competingPids.join(',')}); refusing to share the desktop '
+          'device and application bundle.',
+        );
+      }
+      final locale = Platform.environment['LANG']?.trim().isNotEmpty == true
+          ? Platform.environment['LANG']!
+          : platform == DesktopE2ePlatform.macos
+          ? 'en_US.UTF-8'
+          : 'C.UTF-8';
+      final environment = <String, String>{
+        'LANG': locale,
+        'LC_ALL': Platform.environment['LC_ALL']?.trim().isNotEmpty == true
+            ? Platform.environment['LC_ALL']!
+            : locale,
+      };
+      if (platform == DesktopE2ePlatform.linux) {
+        await commands.run(
+          'xvfb-run',
+          <String>['-a', 'flutter', ...flutterArgs],
+          timeout: timeout,
+          environment: environment,
+        );
+        return;
+      }
+      await commands.run(
         'flutter',
-        ...flutterArgs,
-      ], timeout: timeout);
-      return;
-    }
-    await commands.run('flutter', flutterArgs, timeout: timeout);
+        flutterArgs,
+        timeout: timeout,
+        environment: environment,
+      );
+    });
   }
 
   Future<DesktopCommandResult> _cli(
@@ -942,6 +982,36 @@ class DesktopE2eRunner {
   }
 
   String get _timingsPath => '${reportDir.path}/timings.json';
+
+  Map<String, Object?> _readScenarioProgressSummary() {
+    if (!scenarioProgressFile.existsSync()) {
+      return const <String, Object?>{
+        'status': 'missing',
+        'lastPhase': null,
+        'phaseCount': 0,
+      };
+    }
+    try {
+      final decoded = jsonDecode(scenarioProgressFile.readAsStringSync());
+      final phases = decoded is Map && decoded['phases'] is List
+          ? decoded['phases'] as List
+          : const <Object?>[];
+      final last = phases.isEmpty ? null : phases.last;
+      final lastPhase = last is Map ? last['phase'] : null;
+      return <String, Object?>{
+        'status': 'available',
+        'lastPhase': lastPhase is String ? lastPhase : null,
+        'phaseCount': phases.length,
+        'path': '<redacted-scenario-progress-path>',
+      };
+    } on Object {
+      return const <String, Object?>{
+        'status': 'invalid',
+        'lastPhase': null,
+        'phaseCount': 0,
+      };
+    }
+  }
 
   DesktopProductTimingReport _readProductTimingReport() {
     if (!productTimingsFile.existsSync()) {
@@ -1127,6 +1197,7 @@ class DesktopE2eRunner {
           'failure': <String, Object?>{
             'code': _failureCode,
             'summary': _failureSummary ?? 'E2E failed.',
+            'scenarioProgress': _readScenarioProgressSummary(),
           },
         if (config != null)
           'daemonRustRepo': config!.daemonRustRepo == null
@@ -1611,6 +1682,8 @@ class DesktopCommandRunner {
   final bool dryRun;
   final DesktopSecretRedactor redactor;
   final void Function(String line) logLine;
+  Directory? diagnosticDirectory;
+  int _diagnosticSequence = 0;
 
   Future<void> requireExecutable(String executable) async {
     final command = Platform.isWindows ? 'where' : 'which';
@@ -1679,6 +1752,7 @@ class DesktopCommandRunner {
     final stdoutFuture = process.stdout.transform(utf8.decoder).join();
     final stderrFuture = process.stderr.transform(utf8.decoder).join();
     final exitFuture = process.exitCode;
+    final startedAt = DateTime.now().toUtc();
     int processExitCode;
     try {
       processExitCode = await exitFuture.timeout(timeout);
@@ -1689,6 +1763,17 @@ class DesktopCommandRunner {
       } on Object {
         // The tree has already received a hard-kill fallback below.
       }
+      final out = await stdoutFuture;
+      final err = await stderrFuture;
+      await _writeFailureDiagnostics(
+        executable: executable,
+        args: args,
+        exitCode: null,
+        timedOut: true,
+        startedAt: startedAt,
+        stdoutText: out,
+        stderrText: err,
+      );
       throw DesktopCommandTimeout(
         executable: executable,
         timeout: timeout,
@@ -1699,6 +1784,15 @@ class DesktopCommandRunner {
     final err = await stderrFuture;
     final output = out.isNotEmpty ? out : err;
     if (processExitCode != 0 && !allowFailure) {
+      await _writeFailureDiagnostics(
+        executable: executable,
+        args: args,
+        exitCode: processExitCode,
+        timedOut: false,
+        startedAt: startedAt,
+        stdoutText: out,
+        stderrText: err,
+      );
       throw E2eFailure(
         redactor.redact(
           '$executable ${args.join(' ')} failed with code $processExitCode.\n'
@@ -1708,6 +1802,44 @@ class DesktopCommandRunner {
       );
     }
     return DesktopCommandResult(exitCode: processExitCode, output: output);
+  }
+
+  Future<void> _writeFailureDiagnostics({
+    required String executable,
+    required List<String> args,
+    required int? exitCode,
+    required bool timedOut,
+    required DateTime startedAt,
+    required String stdoutText,
+    required String stderrText,
+  }) async {
+    final directory = diagnosticDirectory;
+    if (directory == null) {
+      return;
+    }
+    await directory.create(recursive: true);
+    _diagnosticSequence += 1;
+    final stem =
+        'command-failure-${_diagnosticSequence.toString().padLeft(3, '0')}';
+    final stdoutFile = File('${directory.path}/$stem.stdout.log');
+    final stderrFile = File('${directory.path}/$stem.stderr.log');
+    final metadataFile = File('${directory.path}/$stem.json');
+    await stdoutFile.writeAsString(redactor.redact(stdoutText), flush: true);
+    await stderrFile.writeAsString(redactor.redact(stderrText), flush: true);
+    await metadataFile.writeAsString(
+      const JsonEncoder.withIndent(' ').convert(<String, Object?>{
+        'schemaVersion': 1,
+        'executable': _basename(executable),
+        'arguments': args.map(redactor.redact).toList(growable: false),
+        'exitCode': exitCode,
+        'timedOut': timedOut,
+        'startedAt': startedAt.toIso8601String(),
+        'finishedAt': DateTime.now().toUtc().toIso8601String(),
+        'stdoutFile': stdoutFile.uri.pathSegments.last,
+        'stderrFile': stderrFile.uri.pathSegments.last,
+      }),
+      flush: true,
+    );
   }
 
   Future<bool> _terminateProcessTree(Process process) async {
@@ -1776,6 +1908,85 @@ class DesktopCommandResult {
 
   final int exitCode;
   final String output;
+}
+
+Future<List<int>> competingFlutterIntegrationTestPids() async {
+  if (Platform.isWindows) {
+    return const <int>[];
+  }
+  final result = await Process.run('ps', const <String>[
+    '-axo',
+    'pid=,command=',
+  ]);
+  if (result.exitCode != 0) {
+    return const <int>[];
+  }
+  return competingFlutterIntegrationTestPidsFromPs(result.stdout.toString());
+}
+
+List<int> competingFlutterIntegrationTestPidsFromPs(String output) {
+  final pids = <int>[];
+  for (final line in const LineSplitter().convert(output)) {
+    final match = RegExp(r'^\s*(\d+)\s+(.+)$').firstMatch(line);
+    if (match == null) {
+      continue;
+    }
+    final command = match.group(2)!;
+    if (!command.contains('flutter_tools.snapshot') ||
+        !command.contains(' test ') ||
+        !command.contains('integration_test/')) {
+      continue;
+    }
+    final candidatePid = int.tryParse(match.group(1)!);
+    if (candidatePid != null && candidatePid != pid) {
+      pids.add(candidatePid);
+    }
+  }
+  return pids;
+}
+
+Future<T> _withFlutterExecutionLease<T>(
+  DesktopE2ePlatform platform,
+  String runId,
+  Future<T> Function() action,
+) async {
+  final lockFile = File(
+    '${Directory.systemTemp.path}/awiki-me-e2e-${platform.name}.lock',
+  );
+  await lockFile.parent.create(recursive: true);
+  final handle = await lockFile.open(mode: FileMode.append);
+  final deadline = DateTime.now().add(const Duration(minutes: 2));
+  var acquired = false;
+  try {
+    while (!acquired && DateTime.now().isBefore(deadline)) {
+      try {
+        await handle.lock(FileLock.exclusive);
+        acquired = true;
+      } on FileSystemException {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      }
+    }
+    if (!acquired) {
+      throw E2eFailure(
+        'Timed out waiting for the exclusive Flutter desktop E2E lease '
+        'for ${platform.name}.',
+      );
+    }
+    await handle.setPosition(0);
+    await handle.truncate(0);
+    await handle.writeFrom(
+      utf8.encode(
+        'pid=$pid\nrunId=$runId\nstartedAt=${DateTime.now().toUtc().toIso8601String()}\n',
+      ),
+    );
+    await handle.flush();
+    return await action();
+  } finally {
+    if (acquired) {
+      await handle.unlock();
+    }
+    await handle.close();
+  }
 }
 
 class DesktopCommandTimeout extends E2eFailure {

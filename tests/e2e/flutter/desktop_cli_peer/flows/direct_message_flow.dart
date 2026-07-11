@@ -18,6 +18,7 @@ Future<void> _verifyDirectTextRegression({
   final cliToAppNextText = 'e2e cli to app next ${config.runId} $nonce';
   final retryText = 'e2e app retry ${config.runId} $nonce';
 
+  await E2eScenarioProgressWriter.record('direct_start_conversation');
   final conversation = await robot.startDirectConversation(config.cliHandle);
   final conversationId = conversation.effectiveConversationId;
   expect(
@@ -30,11 +31,13 @@ Future<void> _verifyDirectTextRegression({
     canonicalCliDid: canonicalCliDid,
     observedPeerDid: conversation.targetDid ?? '',
   );
+  await E2eScenarioProgressWriter.record('direct_canonical_conversation_open');
 
   // Opening an empty direct chat may be presentation-only until the first
   // message is persisted. Do not require a conversation-list row before the
   // product has created one through the outbound send.
   await robot.sendText(appToCliText);
+  await E2eScenarioProgressWriter.record('direct_app_send_submitted');
   final appMessage = await _waitForUiMessage(
     robot: robot,
     conversationId: conversationId,
@@ -44,6 +47,7 @@ Future<void> _verifyDirectTextRegression({
   );
   final appMessageId = appMessage.remoteId!;
   await robot.expectMessageContentVisible(appMessage);
+  await E2eScenarioProgressWriter.record('direct_app_send_visible');
   await _waitForUiConversationUnread(
     robot: robot,
     conversationId: conversationId,
@@ -67,6 +71,7 @@ Future<void> _verifyDirectTextRegression({
     expectedReceiverDid: cliDid,
     expectedContentType: 'text/plain',
   );
+  await E2eScenarioProgressWriter.record('direct_app_send_cli_verified');
 
   await robot.navigateToContacts();
   final unreadBaseline = robot.container.read(
@@ -76,6 +81,7 @@ Future<void> _verifyDirectTextRegression({
     config: config,
     text: cliToAppText,
   );
+  await E2eScenarioProgressWriter.record('direct_cli_send_accepted');
   await _waitForUiUnreadClosedLoop(
     robot: robot,
     conversationId: conversationId,
@@ -92,6 +98,7 @@ Future<void> _verifyDirectTextRegression({
     ),
     findsOneWidget,
   );
+  await E2eScenarioProgressWriter.record('direct_unread_increment_verified');
 
   // Restart before opening the conversation so the list itself must restore
   // the exact unread state from the real remote backend. Then open the row
@@ -101,6 +108,7 @@ Future<void> _verifyDirectTextRegression({
     providerOverrides: providerOverrides,
     session: session,
   );
+  await E2eScenarioProgressWriter.record('direct_widget_restart_completed');
   await robot.expectConversationUnreadBadge(
     conversationId: conversationId,
     unreadCount: 1,

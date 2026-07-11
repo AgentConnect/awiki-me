@@ -228,6 +228,19 @@ and uses a killable child-process runner. A timeout terminates the Flutter/CLI
 process tree and records `failure.code=command_timeout`; it cannot leave an
 untracked test child running indefinitely.
 
+Desktop Flutter execution is protected by a host-wide per-platform file lock
+and a preflight scan for already-running `flutter test integration_test/...`
+processes. This prevents separate worktrees from launching the same App bundle
+on the same desktop device concurrently. The runner supplies a UTF-8 locale
+when the parent shell omits one, so CocoaPods does not depend on interactive
+shell initialization.
+
+On any non-zero child exit or timeout, redacted `command-failure-*.json`,
+`*.stdout.log`, and `*.stderr.log` artifacts are retained in the run report
+directory. The Flutter scenario also writes `scenario_progress.json` after
+major Direct phases. Progress is diagnostic only and can never replace the
+strict case attestation required for a passing result.
+
 `tests/e2e/case_catalog.json` adds the case-level requirements trace: feature,
 preconditions, UI/action, exact oracle, negative guard, environment, cleanup,
 owner, implementation path and evidence type. Its generated view is

@@ -6,6 +6,10 @@ const String e2eCaseAttestationPathDefine = 'AWIKI_E2E_ATTESTATION_PATH';
 const String e2eCaseScenarioDefine = 'AWIKI_E2E_SCENARIO';
 const String e2eCaseRunIdDefine = 'AWIKI_E2E_RUN_ID';
 const String e2eCaseIdsDefine = 'AWIKI_E2E_CASE_IDS';
+const String e2eScenarioProgressFileName = 'scenario_progress.json';
+
+File e2eScenarioProgressFileForAttestation(File attestationFile) =>
+    File('${attestationFile.parent.path}/$e2eScenarioProgressFileName');
 
 /// One scenario-owned case result written from inside the Flutter test body.
 class E2eCaseAttestationResult {
@@ -292,6 +296,59 @@ class E2eCaseAttestationWriter {
     if (Platform.isWindows && file.existsSync()) {
       file.deleteSync();
     }
+    await temporary.rename(file.path);
+  }
+}
+
+/// Writes non-acceptance breadcrumbs that survive an App/test-process exit.
+///
+/// Progress never converts a case to passed; it only identifies the last
+/// completed scenario phase when the strict attestation is incomplete.
+class E2eScenarioProgressWriter {
+  E2eScenarioProgressWriter._();
+
+  static Future<void> record(String phase) async {
+    const attestationPath = String.fromEnvironment(
+      e2eCaseAttestationPathDefine,
+    );
+    const scenario = String.fromEnvironment(e2eCaseScenarioDefine);
+    const runId = String.fromEnvironment(e2eCaseRunIdDefine);
+    final normalized = phase.trim();
+    if (attestationPath.trim().isEmpty ||
+        scenario.trim().isEmpty ||
+        runId.trim().isEmpty ||
+        normalized.isEmpty) {
+      return;
+    }
+    final file = e2eScenarioProgressFileForAttestation(File(attestationPath));
+    final phases = <Map<String, Object?>>[];
+    if (file.existsSync()) {
+      final decoded = jsonDecode(await file.readAsString());
+      if (decoded is Map && decoded['phases'] is List) {
+        for (final entry in decoded['phases'] as List) {
+          if (entry is Map) {
+            phases.add(<String, Object?>{
+              for (final item in entry.entries) item.key.toString(): item.value,
+            });
+          }
+        }
+      }
+    }
+    phases.add(<String, Object?>{
+      'phase': normalized,
+      'at': DateTime.now().toUtc().toIso8601String(),
+    });
+    await file.parent.create(recursive: true);
+    final temporary = File('${file.path}.tmp');
+    await temporary.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(<String, Object?>{
+        'schemaVersion': 1,
+        'scenario': scenario,
+        'runId': runId,
+        'phases': phases,
+      }),
+      flush: true,
+    );
     await temporary.rename(file.path);
   }
 }
