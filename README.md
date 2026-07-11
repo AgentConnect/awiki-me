@@ -154,9 +154,10 @@ The default tenant is `AWiki`:
 ```text
 backend base URL: https://awiki.ai
 DID host: awiki.ai
+state namespace: awiki.ai
 ```
 
-Switching tenants rebuilds the app runtime and uses a separate im-core / product local-state namespace, so identities, conversations, groups, and local caches stay separated. Tenant names are local display labels and can be renamed later. Tenants with local data cannot have their backend URL or DID host edited; add a tenant configuration instead.
+The built-in AWiki tenant deliberately keeps the legacy `awiki.ai` namespace so upgrades retain existing identities, contacts, conversations, and local caches. Custom tenants use their own `tenant-<id>` namespace. Switching tenants rebuilds the app runtime, keeping each custom environment isolated. Tenant names are local display labels and can be renamed later. Tenants with local data cannot have their backend URL or DID host edited; add a tenant configuration instead.
 
 Agent and Daemon features are currently supported only on the default AWiki tenant. Other tenants show a friendly unsupported state on the Agents page and do not call Agent backend APIs.
 

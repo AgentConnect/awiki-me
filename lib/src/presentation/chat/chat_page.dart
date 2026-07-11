@@ -62,7 +62,7 @@ part 'parts/chat_message_part.dart';
 part 'parts/chat_composer_part.dart';
 
 const _chatMessageListBottomInset = 12.0;
-const _macChatMessageListBottomInset = 10.0;
+const _macChatMessageListBottomInset = 4.0;
 
 typedef ChatImageWidgetBuilder =
     Widget Function({
@@ -528,6 +528,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final displayThreadId = _displayThreadId;
     final thread = ref.watch(chatThreadProvider(displayThreadId));
     final currentConversation = _currentConversationForTitle();
+    final headerNickname = _headerNickname(currentConversation);
     _requestAgentsIfNeeded(currentConversation);
     final agents = ref.watch(agentsProvider).agents;
     final isDeletedAgentConversation =
@@ -611,6 +612,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
         children: <Widget>[
           _ChatHeader(
             conversation: currentConversation,
+            nickname: headerNickname,
             embedded: widget.embedded,
             macStyle: macStyle,
             classification: peerClassification,
@@ -1120,7 +1122,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
   }
 
-  Future<void> _captureAndStageScreenshot() async {
+  Future<void> _captureAndStageScreenshot({required bool hideApp}) async {
     final conversation = _currentConversationSnapshot();
     if (!_canAcceptExternalAttachment(conversation)) {
       return;
@@ -1128,7 +1130,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     try {
       final draft = await ref
           .read(attachmentPickerServiceProvider)
-          .captureScreenshot();
+          .captureScreenshot(hideApp: hideApp);
       if (draft == null || !mounted) {
         return;
       }
@@ -1883,6 +1885,21 @@ class _ChatViewState extends ConsumerState<ChatView> {
       displayName: groupName ?? base.displayName,
       avatarUri: groupAvatarUri ?? base.avatarUri,
     );
+  }
+
+  String? _headerNickname(ConversationSummary conversation) {
+    if (conversation.isGroup) {
+      return null;
+    }
+    final targetDid = conversation.targetDid?.trim();
+    if (targetDid == null || targetDid.isEmpty) {
+      return null;
+    }
+    final profile = ref
+        .watch(peerPublicProfileProvider(targetDid))
+        .maybeWhen(data: (value) => value, orElse: () => null);
+    final nickname = profile?.displayName.trim() ?? '';
+    return nickname.isEmpty ? null : nickname;
   }
 
   ConversationSummary _currentConversationSnapshot() {

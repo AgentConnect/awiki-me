@@ -4,7 +4,10 @@ const String primaryTenantName = 'AWiki';
 const String primaryTenantBackendBaseUrl = 'https://awiki.ai';
 const String primaryTenantDidHost = 'awiki.ai';
 const String defaultTenantId = 'default';
-const String defaultTenantStateNamespace = 'tenant-default';
+// Keep the built-in AWiki tenant on the pre-multi-tenant namespace so existing
+// identities, contacts and conversations remain visible after the registry is
+// introduced. Custom tenants continue to use `tenant-<id>` namespaces.
+const String defaultTenantStateNamespace = 'awiki.ai';
 
 class AppTenantProfile {
   const AppTenantProfile({

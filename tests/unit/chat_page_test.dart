@@ -650,6 +650,102 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
+  testWidgets('单聊页头在 profile 返回后用昵称替换 handle', (tester) async {
+    final profileCompleter = Completer<UserProfile>();
+    final profileService = _DelayedProfileApplicationService(profileCompleter);
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:nickname-header',
+      displayName: 'zsy.awiki.ai',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:zsy',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          profileApplicationServiceProvider.overrideWithValue(profileService),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    Text headerTitle() =>
+        tester.widget<Text>(find.byKey(const Key('chat-header-title')));
+    expect(headerTitle().data, 'zsy.awiki.ai');
+    expect(profileService.loadPublicProfileCalls, 1);
+
+    profileCompleter.complete(
+      const UserProfile(
+        did: 'did:test:zsy',
+        nickName: '张盛毅',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+        handle: 'zsy',
+        fullHandle: 'zsy.awiki.ai',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(headerTitle().data, '张盛毅');
+    expect(profileService.loadPublicProfileCalls, 1);
+  });
+
+  testWidgets('群聊页头不查询个人 profile 并保留群名', (tester) async {
+    final profileCompleter = Completer<UserProfile>();
+    final profileService = _DelayedProfileApplicationService(profileCompleter);
+    final conversation = ConversationSummary(
+      threadId: 'group:header',
+      displayName: '产品讨论群',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:test:group',
+      targetDid: 'did:test:group',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: FakeAwikiGateway(),
+        session: const SessionIdentity(
+          did: 'did:test:me',
+          handle: 'me',
+          displayName: 'Me',
+          credentialName: 'default',
+        ),
+        providerOverrides: <Override>[
+          profileApplicationServiceProvider.overrideWithValue(profileService),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    final title = tester.widget<Text>(
+      find.byKey(const Key('chat-header-title')),
+    );
+    expect(title.data, '产品讨论群');
+    expect(profileService.loadPublicProfileCalls, 0);
+  });
+
   testWidgets('聊天头像信息弹窗先展示基础信息，profile 返回后补齐资料', (tester) async {
     final profileCompleter = Completer<UserProfile>();
     final profileService = _DelayedProfileApplicationService(profileCompleter);
@@ -727,7 +823,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Profile Agent'), findsOneWidget);
+    expect(find.text('Profile Agent'), findsWidgets);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('chat-header-title')))
+          .data,
+      'Profile Agent',
+    );
     expect(find.text('profile 加载完成后的介绍'), findsOneWidget);
     expect(find.text('@profile-agent.awiki.ai'), findsOneWidget);
     final didText = tester.widget<Text>(
@@ -3768,6 +3870,14 @@ void main() {
     await tester.tap(find.byKey(const Key('chat-emoji-button')));
     await tester.pump();
     expect(find.byKey(const Key('chat-emoji-picker')), findsOneWidget);
+
+    await tester.tap(_chatMessagesListFinder());
+    await tester.pump();
+    expect(find.byKey(const Key('chat-emoji-picker')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('chat-emoji-button')));
+    await tester.pump();
+    expect(find.byKey(const Key('chat-emoji-picker')), findsOneWidget);
     await tester.tap(find.byKey(const Key('chat-emoji-option:0')));
     await tester.pump();
 
@@ -4243,12 +4353,78 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(picker.screenshotCalls, 1);
+    expect(picker.lastScreenshotHideApp, isFalse);
     expect(find.text('screenshot-test.png'), findsOneWidget);
     expect(find.byKey(const Key('chat-pending-image-preview')), findsOneWidget);
     expect(
       find.byKey(const Key('chat-pending-attachment-preview')),
       findsOneWidget,
     );
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.tap(find.byKey(const Key('chat-screenshot-button')));
+    await tester.pumpAndSettle();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+
+    expect(picker.screenshotCalls, 2);
+    expect(picker.lastScreenshotHideApp, isTrue);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 输入框使用上层文字和下层紧凑工具栏', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:mac-composer-layout',
+      displayName: 'Tester',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1100, 760));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(
+            conversation: conversation,
+            embedded: true,
+            macStyle: true,
+          ),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+
+    final textRect = tester.getRect(find.byType(CupertinoTextField));
+    final toolRowRect = tester.getRect(
+      find.byKey(const Key('chat-composer-tool-row')),
+    );
+    expect(toolRowRect.top, greaterThanOrEqualTo(textRect.bottom));
+    for (final key in const <String>[
+      'chat-attachment-button',
+      'chat-emoji-button',
+      'chat-screenshot-button',
+    ]) {
+      final size = tester.getSize(find.byKey(Key(key)));
+      expect(size.width, lessThan(30));
+      expect(size.height, lessThan(30));
+    }
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

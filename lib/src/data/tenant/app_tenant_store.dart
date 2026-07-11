@@ -341,7 +341,9 @@ AppTenantRegistry normalizeTenantRegistry(AppTenantRegistry registry) {
 AppTenantProfile _normalizeProfile(AppTenantProfile tenant) {
   final fallback = defaultTenantProfile();
   final id = tenant.id.trim().isEmpty ? _safeSegment(tenant.name) : tenant.id;
-  final stateNamespace = tenant.stateNamespace.trim().isEmpty
+  final stateNamespace = id == defaultTenantId
+      ? defaultTenantStateNamespace
+      : tenant.stateNamespace.trim().isEmpty
       ? 'tenant-$id'
       : normalizeAwikiStateNamespace(tenant.stateNamespace);
   return AppTenantProfile(

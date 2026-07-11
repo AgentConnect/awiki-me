@@ -9,6 +9,14 @@ import '../friends/friends_provider.dart';
 import 'profile_provider.dart';
 import '../../domain/entities/user_profile.dart';
 
+final peerPublicProfileProvider = FutureProvider.autoDispose
+    .family<UserProfile, String>((ref, did) {
+      return ref
+          .watch(profileApplicationServiceProvider)
+          .loadPublicProfile(did)
+          .timeout(const Duration(seconds: 12));
+    });
+
 class PeerProfileState {
   const PeerProfileState({
     this.profile,
@@ -56,9 +64,7 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
     state = state.copyWith(isLoading: true, clearError: true);
     final UserProfile profile;
     try {
-      profile = await ref
-          .read(profileApplicationServiceProvider)
-          .loadPublicProfile(did);
+      profile = await ref.read(peerPublicProfileProvider(did).future);
     } catch (error) {
       if (!mounted) {
         return;

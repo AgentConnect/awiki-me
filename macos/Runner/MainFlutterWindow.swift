@@ -414,10 +414,31 @@ class MainFlutterWindow: NSWindow {
         self.pickAttachment(result: result)
       case "saveAttachment":
         self.saveAttachment(arguments: call.arguments, result: result)
+      case "setMainWindowVisible":
+        self.setMainWindowVisible(arguments: call.arguments, result: result)
+      case "isShiftPressed":
+        result(NSEvent.modifierFlags.contains(.shift))
       default:
         result(FlutterMethodNotImplemented)
       }
     }
+  }
+
+  private func setMainWindowVisible(arguments: Any?, result: @escaping FlutterResult) {
+    guard
+      let args = arguments as? [String: Any],
+      let visible = args["visible"] as? Bool
+    else {
+      result(FlutterError(code: "bad_args", message: "visible is required", details: nil))
+      return
+    }
+    if visible {
+      makeKeyAndOrderFront(nil)
+      NSApp.activate(ignoringOtherApps: true)
+    } else {
+      orderOut(nil)
+    }
+    result(nil)
   }
 
   private func pickAttachment(result: @escaping FlutterResult) {

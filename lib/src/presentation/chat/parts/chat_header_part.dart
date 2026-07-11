@@ -3,6 +3,7 @@ part of '../chat_page.dart';
 class _ChatHeader extends StatelessWidget {
   const _ChatHeader({
     required this.conversation,
+    required this.nickname,
     required this.embedded,
     required this.macStyle,
     required this.classification,
@@ -14,6 +15,7 @@ class _ChatHeader extends StatelessWidget {
   });
 
   final ConversationSummary conversation;
+  final String? nickname;
   final bool embedded;
   final VoidCallback? onBack;
   final bool macStyle;
@@ -25,10 +27,10 @@ class _ChatHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final compactName = DidDisplayFormatter.conversationTitle(
-      conversation,
-      context.l10n,
-    );
+    final profileNickname = nickname?.trim() ?? '';
+    final compactName = profileNickname.isNotEmpty
+        ? profileNickname
+        : DidDisplayFormatter.conversationTitle(conversation, context.l10n);
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     final agentBadgeLabel = isDeletedAgentConversation
@@ -154,6 +156,7 @@ class _ChatHeader extends StatelessWidget {
                         onTap: onPeerInfoTap,
                         child: Text(
                           compactName,
+                          key: const Key('chat-header-title'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -301,6 +304,7 @@ class _MacHeaderIdentityText extends StatelessWidget {
             onTap: onNameTap,
             child: Text(
               compactName,
+              key: const Key('chat-header-title'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
