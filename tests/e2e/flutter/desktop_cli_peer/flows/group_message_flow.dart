@@ -160,8 +160,19 @@ Future<void> _verifyGroupTextRegression({
     'message',
     'id',
   ]);
+  final cliMentionType = _jsonStringAt(cliMentionSend.stdout, const <Object>[
+    'data',
+    'message',
+    'type',
+  ]);
   if (cliMentionId == null) {
     fail('CLI structured group mention returned no canonical message id.');
+  }
+  if (cliMentionType != 'application/json') {
+    fail(
+      'CLI structured group mention did not return the exact '
+      'application/json message type.',
+    );
   }
   final cliMention = await _waitForUiMessage(
     robot: robot,

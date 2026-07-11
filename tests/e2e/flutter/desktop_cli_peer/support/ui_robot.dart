@@ -72,11 +72,25 @@ class _DesktopAppRobot {
   Future<void> sendText(String content) async {
     final input = find.bySemanticsIdentifier('e2e-chat-input');
     await pumpUntilFinder(input, description: 'chat input');
-    await tester.enterText(input, content);
+    final inputField = find.descendant(
+      of: input,
+      matching: find.byType(CupertinoTextField),
+    );
+    await pumpUntilFinder(
+      inputField,
+      description: 'enabled chat input',
+      enabled: true,
+    );
+    await _enterExactComposerText(
+      inputField,
+      content,
+      description: 'chat message input',
+    );
     await tapOne(
       find.bySemanticsIdentifier('e2e-chat-send-button'),
       description: 'chat send button',
     );
+    await _waitForComposerClear(input, description: 'text send completion');
   }
 
   Future<void> retryFailedText() async {
@@ -117,10 +131,78 @@ class _DesktopAppRobot {
     required String suffix,
   }) async {
     final input = find.bySemanticsIdentifier('e2e-chat-input');
-    await tester.enterText(input, '@$handle');
+    final inputField = find.descendant(
+      of: input,
+      matching: find.byType(CupertinoTextField),
+    );
+    await pumpUntilFinder(
+      inputField,
+      description: 'enabled mention composer field',
+      enabled: true,
+    );
+    await _enterExactComposerText(
+      inputField,
+      '@',
+      description: 'mention trigger input',
+    );
+    try {
+      await pumpUntilFinder(
+        find.byKey(const Key('chat-mention-candidate-panel')),
+        description: 'mention candidate panel for typed @ trigger',
+      );
+    } on Object catch (error) {
+      final selected = selectedConversation;
+      final groupDid = selected.groupId?.trim();
+      if (groupDid == null || groupDid.isEmpty) {
+        fail('Mention panel failed without a canonical selected group: $error');
+      }
+      final field = tester.widget<CupertinoTextField>(inputField);
+      final value = field.controller?.value ?? const TextEditingValue();
+      final trigger = ChatMentionTrigger.detect(
+        text: value.text,
+        selectionBaseOffset: value.selection.baseOffset,
+        selectionExtentOffset: value.selection.extentOffset,
+        composingStart: value.composing.start,
+        composingEnd: value.composing.end,
+        isGroup: selected.isGroup,
+      );
+      final members = await container
+          .read(groupApplicationServiceProvider)
+          .listMembers(groupDid, limit: 100);
+      final session = container.read(sessionProvider).session;
+      final candidates = ChatMentionCandidate.forGroupMembers(
+        members,
+        query: handle,
+        currentUserDid: session?.did,
+        currentUserHandle: session?.handle,
+      );
+      final matchingMembers = members
+          .where((member) {
+            return normalizeDidOrHandleInput(member.handle).toLowerCase() ==
+                normalizeDidOrHandleInput(handle).toLowerCase();
+          })
+          .toList(growable: false);
+      fail(
+        'Mention candidate panel was not visible; member_count='
+        '${members.length} matching_member_count=${matchingMembers.length} '
+        'candidate_count=${candidates.length} target_active_count='
+        '${matchingMembers.where((member) => member.membershipStatus == GroupMemberMembershipStatus.active).length} '
+        'target_human_count='
+        '${matchingMembers.where((member) => member.subjectType == GroupMemberSubjectType.human).length} '
+        'selected_is_group=${selected.isGroup} input_exact_at='
+        '${value.text == '@'} selection_collapsed_at_end='
+        '${value.selection.isCollapsed && value.selection.end == value.text.length} '
+        'trigger_detected=${trigger != null}.',
+      );
+    }
+    await _enterExactComposerText(
+      inputField,
+      '@$handle',
+      description: 'mention filter input',
+    );
     await pumpUntilFinder(
       find.byKey(const Key('chat-mention-candidate-panel')),
-      description: 'mention candidate panel',
+      description: 'filtered mention candidate panel',
     );
     final candidate = find.byWidgetPredicate(
       (widget) =>
@@ -139,12 +221,72 @@ class _DesktopAppRobot {
     if (!selectedSurface.startsWith('@') || selectedSurface.trim().isEmpty) {
       fail('Mention candidate did not update the composer.');
     }
-    await tester.enterText(input, '$selectedSurface $suffix');
+    await _enterExactComposerText(
+      inputField,
+      '$selectedSurface $suffix',
+      description: 'mention message input',
+    );
     await tapOne(
       find.bySemanticsIdentifier('e2e-chat-send-button'),
       description: 'mention send button',
     );
+    await _waitForComposerClear(input, description: 'mention send completion');
     return '$selectedSurface $suffix';
+  }
+
+  Future<void> _waitForComposerClear(
+    Finder input, {
+    required String description,
+  }) async {
+    final field = find.descendant(
+      of: input,
+      matching: find.byType(CupertinoTextField),
+    );
+    await pumpUntil(
+      description: description,
+      condition: () {
+        final elements = field.evaluate().toList(growable: false);
+        if (elements.length != 1 ||
+            elements.single.widget is! CupertinoTextField) {
+          return false;
+        }
+        final widget = elements.single.widget as CupertinoTextField;
+        return widget.controller?.text.isEmpty ?? false;
+      },
+    );
+  }
+
+  Future<void> _enterExactComposerText(
+    Finder field,
+    String value, {
+    required String description,
+  }) async {
+    for (var attempt = 0; attempt < 3; attempt += 1) {
+      await pumpUntilFinder(
+        field,
+        description: 'enabled $description',
+        enabled: true,
+      );
+      await tester.tap(field);
+      await tester.pump();
+      await tester.showKeyboard(field);
+      tester.testTextInput.enterText(value);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      final widget = tester.widget<CupertinoTextField>(field);
+      if (widget.controller?.text == value) {
+        return;
+      }
+      await tester.pump(Duration(milliseconds: 150 * (attempt + 1)));
+    }
+    final widget = tester.widget<CupertinoTextField>(field);
+    final observed = widget.controller?.value ?? const TextEditingValue();
+    fail(
+      'Composer did not retain exact $description after three bounded visible '
+      'input attempts; expected_length=${value.length} observed_length='
+      '${observed.text.length} selection_collapsed_at_end='
+      '${observed.selection.isCollapsed && observed.selection.end == observed.text.length}.',
+    );
   }
 
   Future<void> navigateToContacts() => tapOne(
@@ -307,10 +449,33 @@ class _DesktopAppRobot {
     if (!selected.isGroup || (selected.groupId?.trim().isEmpty ?? true)) {
       fail('UI group creation did not select a canonical group: $selected');
     }
-    return selected;
+    final groupDid = selected.groupId!.trim();
+    await pumpUntil(
+      description: 'canonical group conversation projection',
+      timeout: const Duration(seconds: 90),
+      condition: () {
+        final current = selectedConversation;
+        return current.isGroup &&
+            current.groupId?.trim() == groupDid &&
+            current.threadId.trim() == 'group:$groupDid' &&
+            current.effectiveConversationId == 'group:$groupDid';
+      },
+    );
+    return selectedConversation;
   }
 
   Future<void> addGroupMember(String handle) async {
+    final preflight = await container
+        .read(directoryApplicationServiceProvider)
+        .resolvePeer(handle);
+    if (preflight.did.trim().isEmpty) {
+      fail('Read-only group member preflight returned no DID.');
+    }
+    final expectedHandles = <String>{
+      normalizeDidOrHandleInput(handle).toLowerCase(),
+      if (preflight.handle?.trim().isNotEmpty ?? false)
+        normalizeDidOrHandleInput(preflight.handle!).toLowerCase(),
+    };
     await tapOne(
       find.byKey(const Key('chat-header-add-group-member-button')),
       description: 'add group member button',
@@ -323,19 +488,98 @@ class _DesktopAppRobot {
       find.byKey(const Key('identity-lookup-input')),
       handle,
     );
-    await tapOne(
-      find.byKey(const Key('identity-lookup-search-button')),
-      description: 'group member search button',
+    final search = find.byKey(const Key('identity-lookup-search-button'));
+    final addMember = find.byKey(const Key('identity-add-group-member-button'));
+    final dialog = find.ancestor(
+      of: addMember,
+      matching: find.byType(AppDialogScaffold),
     );
+    final candidateLabel = find.byWidgetPredicate((widget) {
+      if (widget is! Text || widget.data == null) {
+        return false;
+      }
+      return expectedHandles.contains(
+        normalizeDidOrHandleInput(widget.data!).toLowerCase(),
+      );
+    });
+    final candidateTile = find.descendant(
+      of: dialog,
+      matching: find.byType(AppPressableTile),
+    );
+    final exactCandidateLabel = find.descendant(
+      of: candidateTile,
+      matching: candidateLabel,
+    );
+    Object? lastResolutionError;
+    for (var attempt = 0; attempt < 3; attempt += 1) {
+      await pumpUntilFinder(
+        search,
+        description: 'group member search action',
+        enabled: true,
+      );
+      await tapOne(search, description: 'group member search action');
+      try {
+        await pumpUntilFinder(
+          candidateTile,
+          description: 'exact resolved group member candidate',
+          enabled: true,
+          timeout: const Duration(seconds: 20),
+        );
+        if (exactCandidateLabel.evaluate().isEmpty) {
+          fail(
+            'Resolved group member candidate did not render an exact handle.',
+          );
+        }
+        lastResolutionError = null;
+        break;
+      } on Object catch (error) {
+        lastResolutionError = error;
+        if (attempt < 2) {
+          await pumpUntilFinder(
+            search,
+            description: 'group member search retry action',
+            enabled: true,
+          );
+        }
+      }
+    }
+    if (lastResolutionError != null) {
+      String resolverDiagnostic;
+      try {
+        await container
+            .read(directoryApplicationServiceProvider)
+            .resolvePeer(handle);
+        resolverDiagnostic = 'application_resolver_succeeded';
+      } on Object catch (error) {
+        resolverDiagnostic = error is core.AwikiImCoreException
+            ? error.code
+            : error.runtimeType.toString();
+      }
+      final actionElements = addMember.evaluate().toList(growable: false);
+      final actionEnabled = actionElements.length == 1
+          ? actionElements.single.widget is AppPrimaryButton &&
+                (actionElements.single.widget as AppPrimaryButton).onPressed !=
+                    null
+          : false;
+      final input = tester.widget<CupertinoTextField>(
+        find.byType(CupertinoTextField).last,
+      );
+      final candidateCount = candidateTile.evaluate().length;
+      fail(
+        'Group member resolution did not expose one exact enabled candidate '
+        'after three bounded visible search attempts; resolver='
+        '$resolverDiagnostic action_count=${actionElements.length} '
+        'action_enabled=$actionEnabled input_exact='
+        '${input.controller?.text == handle} candidate_count=$candidateCount.',
+      );
+    }
+    await tapOne(candidateTile, description: 'exact resolved group member');
     await pumpUntilFinder(
-      find.byKey(const Key('identity-add-group-member-button')),
-      description: 'resolved add-member action',
+      addMember,
+      description: 'selected add-member action',
       enabled: true,
     );
-    await tapOne(
-      find.byKey(const Key('identity-add-group-member-button')),
-      description: 'add resolved group member',
-    );
+    await tapOne(addMember, description: 'add resolved group member');
     await pumpUntil(
       description: 'group member dialog closes',
       condition: () => find
@@ -463,14 +707,29 @@ class _DesktopAppRobot {
 
   Future<void> tapOne(Finder finder, {required String description}) async {
     await pumpUntilFinder(finder, description: description, enabled: true);
-    if (finder.evaluate().length != 1) {
+    final elements = finder.evaluate().toList(growable: false);
+    if (elements.length != 1) {
       fail(
         'Expected exactly one $description before tap, found '
-        '${finder.evaluate().length}.',
+        '${elements.length}.',
       );
     }
     await tester.ensureVisible(finder);
-    await tester.tap(finder);
+    final widget = elements.single.widget;
+    final tapTarget =
+        widget is AppPrimaryButton ||
+            widget is AppSecondaryButton ||
+            widget is AppIconButton ||
+            widget is AppPressableTile
+        ? find.descendant(of: finder, matching: find.byType(AppPressable))
+        : finder;
+    if (tapTarget.evaluate().length != 1) {
+      fail(
+        'Expected exactly one interactive target for $description, found '
+        '${tapTarget.evaluate().length}.',
+      );
+    }
+    await tester.tap(tapTarget);
     await tester.pump();
   }
 
@@ -491,6 +750,15 @@ class _DesktopAppRobot {
         if (enabled) {
           final widget = elements.single.widget;
           if (widget is AppPrimaryButton && widget.onPressed == null) {
+            return false;
+          }
+          if (widget is AppSecondaryButton && widget.onPressed == null) {
+            return false;
+          }
+          if (widget is AppPressableTile && widget.onTap == null) {
+            return false;
+          }
+          if (widget is CupertinoTextField && widget.enabled == false) {
             return false;
           }
           if (widget is AppPressable &&

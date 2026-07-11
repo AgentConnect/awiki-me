@@ -353,6 +353,8 @@
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Create a group, add the canonical CLI member, and send through visible App UI.",
       "exactOracles": [
+        "A read-only resolver preflight yields a non-empty DID; the member action itself still performs at most three visible search submissions, selects the one exact enabled candidate, and then requires the selected add-member action to be enabled before tapping it.",
+        "The selected group converges to its canonical conversation id before messaging.",
         "One canonical group and correct member exist.",
         "App send reaches terminal state and CLI observes exactly one message with exact sender/content/group."
       ],
@@ -401,6 +403,7 @@
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Compose a group mention through App UI and send it.",
       "exactOracles": [
+        "The real composer retains exact typed input, exposes the candidate panel from an explicit @ trigger, filters to one exact enabled member, and clears only after send submission.",
         "P9 payload contains exactly the intended member DID and valid range.",
         "CLI projection preserves canonical ID, exact text and structured mention metadata."
       ],
@@ -425,6 +428,7 @@
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Send a structured group mention from CLI to the App.",
       "exactOracles": [
+        "CLI send succeeds with a canonical message id and exact application/json result type.",
         "App canonical projection preserves target DID/range and exact text.",
         "Mention renders in the correct group message exactly once."
       ],

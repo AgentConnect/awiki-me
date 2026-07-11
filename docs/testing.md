@@ -218,8 +218,20 @@ The product oracle is fail-closed:
   remains the caller's outbound `following|none` projection; reused identities
   may enter the scenario only after both remote perspectives report `none` and
   the App `friendsProvider` projection has been refreshed to that baseline;
-- group mentions require one valid structured target DID; attachment checks
+- group-member setup may perform one read-only resolver preflight and retry at
+  most three visible search submissions, but the member action itself stays in the
+  product dialog, selects one exact enabled candidate, and requires the selected
+  add-member action to be enabled; the group conversation must also converge to
+  its canonical id before messaging;
+- group mention composition uses explicit focused text input, proves the exact
+  text survives a settled frame, opens from a visible `@` trigger, selects one
+  exact candidate, and proves the composer clears after submission; CLI payload
+  sends must return both a canonical id and `application/json` result type;
+  group mentions require one valid structured target DID; attachment checks
   require exact ids, filename, MIME type, size, digest, and downloaded bytes.
+- Robot taps on wrapper controls resolve to exactly one enabled interactive
+  `AppPressable` descendant before dispatch, so a wrapper-center hit-test miss
+  cannot be mistaken for a successful product click.
 
 `performance` remains a service-driven backend/integration diagnostic because
 it directly prepares a large dataset and calls application services to measure
