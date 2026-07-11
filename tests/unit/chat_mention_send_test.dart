@@ -97,10 +97,13 @@ void main() {
     expect(projected.single.content, text);
     expect(projected.single.payloadJson, isNotNull);
     expect(projected.single.mentions.single.surface, '@alice');
-    expect(
-      container.read(chatThreadProvider(_timelineId(conversation))).messages,
-      isEmpty,
-    );
+    final visibleMessages = container
+        .read(chatThreadProvider(_timelineId(conversation)))
+        .messages;
+    expect(visibleMessages, hasLength(1));
+    expect(visibleMessages.single.content, text);
+    expect(visibleMessages.single.sendState, MessageSendState.sent);
+    expect(visibleMessages.single.mentions, hasLength(1));
   });
 
   test(

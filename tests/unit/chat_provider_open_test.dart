@@ -3340,7 +3340,7 @@ void main() {
     );
   });
 
-  test('发送后不触发 full refresh 或 force history 补拉', () async {
+  test('发送成功后精确展示一条已发送消息且不触发 full refresh 或 history 补拉', () async {
     final reply = ChatMessage(
       localId: 'reply-1',
       remoteId: 'reply-1',
@@ -3396,13 +3396,15 @@ void main() {
     final messages = sendContainer
         .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
-    expect(messages, isEmpty);
+    expect(messages, hasLength(1));
+    expect(messages.single.content, '你好');
+    expect(messages.single.sendState, MessageSendState.sent);
     expect(messages.map((item) => item.content), isNot(contains('你好。欢迎')));
     expect(gateway.listConversationsCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);
   });
 
-  test('发送后不会直接覆盖最近会话预览，等待 core summary patch', () async {
+  test('发送成功后立即用权威发送结果更新最近会话预览', () async {
     gateway.conversations = const <ConversationSummary>[];
     final sendContainer = ProviderContainer(
       overrides: <Override>[
@@ -3438,10 +3440,7 @@ void main() {
         .conversations;
     expect(conversations, hasLength(1));
     expect(conversations.single.threadId, conversation.threadId);
-    expect(
-      conversations.single.lastMessagePreview,
-      conversation.lastMessagePreview,
-    );
+    expect(conversations.single.lastMessagePreview, '你好');
     expect(conversations.single.targetDid, conversation.targetDid);
     expect(gateway.listConversationsCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);
@@ -3516,17 +3515,16 @@ void main() {
     final refreshedThread = sendContainer.read(
       chatThreadProvider(refreshedConversation.threadId),
     );
-    expect(openedThread.messages, isEmpty);
+    expect(openedThread.messages, hasLength(1));
+    expect(openedThread.messages.single.content, '你好');
+    expect(openedThread.messages.single.sendState, MessageSendState.sent);
     expect(refreshedThread.messages, isEmpty);
     expect(openedThread.isAgentProcessing, isTrue);
     expect(refreshedThread.isAgentProcessing, isFalse);
-    expect(
-      gateway.lastSentThreadId,
-      refreshedConversation.effectiveConversationId,
-    );
+    expect(gateway.lastSentThreadId, 'dm:$agentDid');
     expect(
       sendContainer.read(selectedConversationProvider)?.threadId,
-      openedConversation.threadId,
+      refreshedConversation.threadId,
     );
     expect(
       sendContainer
@@ -3534,11 +3532,11 @@ void main() {
           .conversations
           .single
           .lastMessagePreview,
-      '旧预览',
+      '你好',
     );
   });
 
-  test('发送后不会用本地 pending 预览覆盖 core 会话摘要', () async {
+  test('发送成功后用权威发送结果更新会话摘要且不触发远端刷新', () async {
     final staleConversation = ConversationSummary(
       threadId: conversation.threadId,
       displayName: conversation.displayName,
@@ -3586,8 +3584,8 @@ void main() {
         .read(conversationListProvider)
         .conversations
         .single;
-    expect(latest.lastMessagePreview, conversation.lastMessagePreview);
-    expect(latest.lastMessageAt, conversation.lastMessageAt);
+    expect(latest.lastMessagePreview, '正在处理的问题');
+    expect(latest.lastMessageAt.isAfter(conversation.lastMessageAt), isTrue);
     expect(gateway.listConversationsCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);
   });
@@ -3667,7 +3665,9 @@ void main() {
     thread = sendContainer.read(
       chatThreadProvider(_timelineThreadId(conversation)),
     );
-    expect(thread.messages, isEmpty);
+    expect(thread.messages, hasLength(1));
+    expect(thread.messages.single.content, '总结一下');
+    expect(thread.messages.single.sendState, MessageSendState.sent);
     expect(thread.isAgentProcessing, isTrue);
     expect(thread.pendingAgentReplyCount, 1);
   });
@@ -4014,7 +4014,7 @@ void main() {
     expect(thread.agentPendingTurns, isEmpty);
   });
 
-  test('连续发送不会用旧快照覆盖后续 pending', () async {
+  test('并发发送精确保留每条权威发送结果且不残留 pending', () async {
     gateway.sendDelay = const Duration(milliseconds: 10);
     final sendContainer = ProviderContainer(
       overrides: <Override>[
@@ -4053,7 +4053,16 @@ void main() {
     final messages = sendContainer
         .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
-    expect(messages, isEmpty);
+    expect(messages, hasLength(3));
+    expect(messages.map((item) => item.content).toSet(), <String>{
+      '5',
+      '6',
+      '7',
+    });
+    expect(
+      messages.where((item) => item.sendState == MessageSendState.sent),
+      hasLength(3),
+    );
     expect(
       messages.where((item) => item.sendState == MessageSendState.sending),
       isEmpty,
@@ -4181,7 +4190,11 @@ void main() {
     final messages = sendContainer
         .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
-    expect(messages.where((item) => item.content == '1'), isEmpty);
+    expect(messages.where((item) => item.content == '1'), hasLength(1));
+    expect(
+      messages.singleWhere((item) => item.content == '1').sendState,
+      MessageSendState.sent,
+    );
     expect(gateway.fetchDmHistoryCalls, 0);
   });
 
@@ -5066,7 +5079,7 @@ void main() {
     expect(flakyGateway.fetchDmHistoryCalls, 0);
   });
 
-  test('发送群聊附件使用 conversation id 且不手动更新会话预览', () async {
+  test('发送群聊附件使用 conversation id 并用权威发送结果更新预览', () async {
     const groupId = 'did:test:group:send-attachment';
     final groupConversation = ConversationSummary(
       threadId: 'group:$groupId',
@@ -5125,7 +5138,7 @@ void main() {
     final conversations = sendContainer
         .read(conversationListProvider)
         .conversations;
-    expect(conversations.single.lastMessagePreview, '');
+    expect(conversations.single.lastMessagePreview, 'diagram.png');
     expect(gateway.listConversationsCalls, listConversationsCallsBeforeSend);
   });
 
@@ -6033,7 +6046,12 @@ void main() {
         .messages;
     expect(gateway.listConversationsCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);
-    expect(messages, isEmpty);
+    expect(messages, hasLength(2));
+    expect(messages.map((item) => item.content), <String>['第一条', '第二条']);
+    expect(
+      messages.every((item) => item.sendState == MessageSendState.sent),
+      isTrue,
+    );
     expect(messages.map((item) => item.content), isNot(contains('批量回复')));
   });
 }

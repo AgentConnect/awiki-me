@@ -4748,7 +4748,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gateway.lastSentContent, '第一行\n第二行');
-    expect(find.text('第一行\n第二行'), findsNothing);
+    input = tester.widget<CupertinoTextField>(find.byType(CupertinoTextField));
+    expect(input.controller?.text, isEmpty);
+    expect(find.text('第一行\n第二行'), findsOneWidget);
   });
 
   testWidgets('离开长会话时延迟裁剪缓存且不重建已销毁页面', (tester) async {
