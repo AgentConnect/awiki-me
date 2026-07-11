@@ -289,6 +289,7 @@ AWiki Me must follow these constraints:
 | [docs/testing.md](docs/testing.md) | Unit, desktop smoke, and real-backend E2E domains and gate policy |
 | [docs/identity-secret-storage.md](docs/identity-secret-storage.md) | App-side identity vault, root key provider, E2E file provider, and security red lines |
 | [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md) | First-release UUID Storage Scope, stable Keychain locator, provision/open, and lifecycle contract |
+| [docs/scope-secret-platform.md](docs/scope-secret-platform.md) | Typed scope envelope, platform provider isolation, and native/E2E security gates |
 | [docs/conversation-presentation-ownership.md](docs/conversation-presentation-ownership.md) | Conversation display, local-first path, timeline, read waterline, attachment / mention / control payload rendering boundaries |
 | [docs/performance-tracing.md](docs/performance-tracing.md) | Startup, list, chat-open, sync/realtime performance trace keys and diagnosis |
 | [docs/message-agent/message-agent-design.md](docs/message-agent/message-agent-design.md) | Message Agent MVP, daemon binding, delegated key, secure bootstrap, disable/delete behavior |

@@ -18,7 +18,7 @@
 | `lib/src/domain/` | Domain entities、ports 和纯业务约束 |
 | `lib/src/application/` | auth/session/messaging/groups/profile/agents/attachments/tenant 等用例编排 |
 | `lib/src/data/` | `awiki_im_core` adapters、service clients、local/secure storage 与 platform bridge |
-| `lib/src/data/storage/` | UUID Storage Scope registry/manifest/layout、provision/recovery 状态机与 secure-store port；平台实现和 runtime cutover 分阶段接入 |
+| `lib/src/data/storage/` | UUID Storage Scope registry/manifest/layout、provision/recovery、strict envelope、platform/E2E secret provider；runtime cutover 分阶段接入 |
 | `lib/src/presentation/` | Flutter 页面、Riverpod providers、组件、响应式布局和反馈 |
 | `tests/unit/` | 快速确定性 unit/widget/provider/fake-backed tests；line/branch baseline 由 `tests/quality/coverage_baseline.json` 约束 |
 | `tests/e2e/` | audited suite manifest + case catalog/checker、killable runner、configs、Flutter implementations、真实远端 `awiki.info` App+CLI/backend/device flows、脱敏资源台账 |
@@ -35,6 +35,7 @@
 - [docs/conversation-presentation-ownership.md](docs/conversation-presentation-ownership.md)：conversation-first 显示与 overlay 边界。
 - [docs/identity-secret-storage.md](docs/identity-secret-storage.md)：App root key provider 与 SecretVault 边界。
 - [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md)：首发 UUID Storage Scope、稳定 Keychain locator 与 lifecycle 权威契约。
+- [docs/scope-secret-platform.md](docs/scope-secret-platform.md)：typed envelope、平台 provider、channel 隔离与 native/E2E gate。
 - [docs/message-agent/message-agent-design.md](docs/message-agent/message-agent-design.md)：Message Agent 产品与 daemon binding。
 - [../awiki-cli-rs2/docs/flutter-sdk/awiki-im-core-flutter-sdk.md](../awiki-cli-rs2/docs/flutter-sdk/awiki-im-core-flutter-sdk.md)：Dart/Flutter SDK 权威。
 

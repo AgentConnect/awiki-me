@@ -1,6 +1,7 @@
 # AWiki Me Storage Scope / Keychain / Identity Vault Contract
 
-Status: approved target contract; implementation tracked by the storage-scope cutover
+Status: approved contract; scope control plane and typed platform secret provider implemented,
+runtime cutover tracked separately
 Authority: authoritative for AWiki Me tenant-local storage identity and host vault context
 
 本文档冻结 AWiki Me 首个正式版本的本地 tenant、Storage Scope、平台
@@ -192,6 +193,9 @@ delete(scopeId)
 禁止production `getOrCreate`和unconditional upsert。`createExclusive`遇到已有item必须
 返回`already_exists`，不得覆盖。plugin missing、ACL denied、decode error不得切换到
 另一backend或生成新key。
+
+平台实现、安全选项和测试边界见
+[Scope Secret Platform Provider](scope-secret-platform.md)。
 
 ## 6. Vault context v1
 

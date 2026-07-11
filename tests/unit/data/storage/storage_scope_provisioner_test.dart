@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/data/storage/awiki_storage_scope_layout.dart';
 import 'package:awiki_me/src/data/storage/scope_manifest.dart';
+import 'package:awiki_me/src/data/storage/scope_secret_envelope.dart';
 import 'package:awiki_me/src/data/storage/scope_secret_repository.dart';
 import 'package:awiki_me/src/data/storage/storage_scope_provisioner.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -219,7 +220,7 @@ StorageScopeProvisioner _provisioner(
   secrets: secrets,
   manifests: manifests,
   secretFactory: (scope) =>
-      ScopeSecretRecord(scopeId: scope, opaqueValue: Object()),
+      ScopeSecretRecord(envelope: ScopeSecretEnvelope.create(scopeId: scope)),
   faultInjector: failAt == null
       ? null
       : (point) async {

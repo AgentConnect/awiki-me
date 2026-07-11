@@ -9,6 +9,7 @@ import '../../application/tenant/app_tenant.dart';
 import '../im_core/awiki_im_core_paths.dart' show awikiE2eAppStateRoot;
 import '../storage/awiki_storage_scope_layout.dart';
 import '../storage/scope_manifest.dart';
+import '../storage/scope_secret_envelope.dart';
 import '../storage/scope_secret_repository.dart';
 import '../storage/storage_scope_provisioner.dart';
 
@@ -244,8 +245,9 @@ class AppTenantStore {
   StorageScopeProvisioner get _provisioner => StorageScopeProvisioner(
     secrets: _secretRepository,
     manifests: _manifestStore,
-    secretFactory: (scopeId) =>
-        ScopeSecretRecord(scopeId: scopeId, opaqueValue: Object()),
+    secretFactory: (scopeId) => ScopeSecretRecord(
+      envelope: ScopeSecretEnvelope.create(scopeId: scopeId),
+    ),
     faultInjector: _faultInjector,
   );
 

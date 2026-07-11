@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 class MainFlutterWindow: NSWindow {
   private let awikiErrAuthorizationDenied = OSStatus(-60008)
+  private let scopeSecretQueue = DispatchQueue(label: "ai.awiki.awikime.scope-secret-keychain")
 
   private enum TrafficLightLayout {
     // Keep this aligned with the Flutter macOS rail width in app_shell.dart.
@@ -30,6 +31,7 @@ class MainFlutterWindow: NSWindow {
     registerMenuBarStatusChannel(flutterViewController: flutterViewController)
     registerAttachmentChannel(flutterViewController: flutterViewController)
     registerKeychainAccessChannel(flutterViewController: flutterViewController)
+    registerScopeSecretChannel(flutterViewController: flutterViewController)
     MenuBarStatusController.shared.configure(mainWindow: self)
 
     super.awakeFromNib()
@@ -175,6 +177,13 @@ class MainFlutterWindow: NSWindow {
     let value: String?
   }
 
+  private struct ScopeSecretRequest {
+    let service: String
+    let account: String
+    let value: String?
+    let expectedRevision: Int?
+  }
+
   private func registerKeychainAccessChannel(flutterViewController: FlutterViewController) {
     let channel = FlutterMethodChannel(
       name: "ai.awiki.awikime/keychain_access",
@@ -192,6 +201,315 @@ class MainFlutterWindow: NSWindow {
         result(FlutterMethodNotImplemented)
       }
     }
+  }
+
+  private func registerScopeSecretChannel(flutterViewController: FlutterViewController) {
+    let channel = FlutterMethodChannel(
+      name: "ai.awiki.awikime/scope_secret",
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else { return }
+      switch call.method {
+      case "readScopeSecret":
+        self.readScopeSecret(arguments: call.arguments, result: result)
+      case "createScopeSecretExclusive":
+        self.createScopeSecretExclusive(arguments: call.arguments, result: result)
+      case "compareAndReplaceScopeSecret":
+        self.compareAndReplaceScopeSecret(arguments: call.arguments, result: result)
+      case "deleteScopeSecret":
+        self.deleteScopeSecret(arguments: call.arguments, result: result)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private func parseScopeSecretRequest(
+    arguments: Any?,
+    requireValue: Bool,
+    requireExpectedRevision: Bool,
+    result: FlutterResult
+  ) -> ScopeSecretRequest? {
+    guard
+      let args = arguments as? [String: Any],
+      let service = args["service"] as? String,
+      isScopeServiceAllowedForCurrentApplication(service),
+      let account = args["account"] as? String,
+      isCanonicalScopeAccount(account)
+    else {
+      result(scopeSecretFlutterError(code: "scope_secret_bad_request", status: errSecParam))
+      return nil
+    }
+    let value = args["value"] as? String
+    if requireValue && value == nil {
+      result(scopeSecretFlutterError(code: "scope_secret_bad_request", status: errSecParam))
+      return nil
+    }
+    let revision = strictJsonInteger(args["expected_revision"])
+    if requireExpectedRevision && (revision == nil || revision! < 1) {
+      result(scopeSecretFlutterError(code: "scope_secret_bad_request", status: errSecParam))
+      return nil
+    }
+    return ScopeSecretRequest(
+      service: service,
+      account: account,
+      value: value,
+      expectedRevision: revision
+    )
+  }
+
+  private func isScopeServiceAllowedForCurrentApplication(_ service: String) -> Bool {
+    switch Bundle.main.bundleIdentifier {
+    case "ai.awiki.awikime":
+      return service == "ai.awiki.awikime.scope-secrets"
+    case "ai.awiki.awikime.dev":
+      return service == "ai.awiki.awikime.dev.scope-secrets"
+    default:
+      return false
+    }
+  }
+
+  private func isCanonicalScopeAccount(_ account: String) -> Bool {
+    let pattern = #"^scope/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"#
+    return account.range(of: pattern, options: .regularExpression) != nil
+  }
+
+  private func readScopeSecret(arguments: Any?, result: @escaping FlutterResult) {
+    guard let request = parseScopeSecretRequest(
+      arguments: arguments,
+      requireValue: false,
+      requireExpectedRevision: false,
+      result: result
+    ) else { return }
+    scopeSecretQueue.async {
+      let response = self.readGenericPassword(service: request.service, account: request.account)
+      DispatchQueue.main.async {
+        switch response.status {
+        case errSecSuccess:
+          result(response.value)
+        case errSecItemNotFound:
+          result(nil)
+        default:
+          result(self.scopeSecretFlutterError(status: response.status))
+        }
+      }
+    }
+  }
+
+  private func createScopeSecretExclusive(arguments: Any?, result: @escaping FlutterResult) {
+    guard let request = parseScopeSecretRequest(
+      arguments: arguments,
+      requireValue: true,
+      requireExpectedRevision: false,
+      result: result
+    ), let value = request.value else { return }
+    scopeSecretQueue.async {
+      guard self.validateScopeEnvelope(value, account: request.account, requiredRevision: 1) else {
+        DispatchQueue.main.async {
+          result(self.scopeSecretFlutterError(code: "scope_secret_corrupt", status: errSecDecode))
+        }
+        return
+      }
+      let status = self.addScopeSecretExclusive(
+        service: request.service,
+        account: request.account,
+        value: value
+      )
+      DispatchQueue.main.async {
+        if status == errSecSuccess {
+          result(nil)
+        } else if status == errSecDuplicateItem {
+          result(self.scopeSecretFlutterError(code: "scope_secret_already_exists", status: status))
+        } else {
+          result(self.scopeSecretFlutterError(status: status))
+        }
+      }
+    }
+  }
+
+  private func compareAndReplaceScopeSecret(arguments: Any?, result: @escaping FlutterResult) {
+    guard let request = parseScopeSecretRequest(
+      arguments: arguments,
+      requireValue: true,
+      requireExpectedRevision: true,
+      result: result
+    ), let value = request.value, let expectedRevision = request.expectedRevision else { return }
+    scopeSecretQueue.async {
+      let current = self.readGenericPassword(service: request.service, account: request.account)
+      guard current.status == errSecSuccess, let currentValue = current.value else {
+        DispatchQueue.main.async {
+          if current.status == errSecItemNotFound {
+            result(self.scopeSecretFlutterError(code: "scope_secret_revision_conflict", status: current.status))
+          } else {
+            result(self.scopeSecretFlutterError(status: current.status))
+          }
+        }
+        return
+      }
+      guard self.validateScopeEnvelope(
+        currentValue,
+        account: request.account,
+        requiredRevision: nil
+      ) else {
+        DispatchQueue.main.async {
+          result(self.scopeSecretFlutterError(code: "scope_secret_corrupt", status: errSecDecode))
+        }
+        return
+      }
+      guard self.validateScopeEnvelope(
+        value,
+        account: request.account,
+        requiredRevision: nil
+      ) else {
+        DispatchQueue.main.async {
+          result(self.scopeSecretFlutterError(code: "scope_secret_corrupt", status: errSecDecode))
+        }
+        return
+      }
+      guard self.scopeEnvelopeRevision(currentValue) == expectedRevision else {
+        DispatchQueue.main.async {
+          result(self.scopeSecretFlutterError(code: "scope_secret_revision_conflict", status: errSecDuplicateItem))
+        }
+        return
+      }
+      guard self.scopeEnvelopeRevision(value) == expectedRevision + 1 else {
+        DispatchQueue.main.async {
+          result(self.scopeSecretFlutterError(code: "scope_secret_revision_conflict", status: errSecParam))
+        }
+        return
+      }
+      guard let data = value.data(using: .utf8) else {
+        DispatchQueue.main.async {
+          result(self.scopeSecretFlutterError(code: "scope_secret_corrupt", status: errSecDecode))
+        }
+        return
+      }
+      let query = self.baseGenericPasswordQuery(service: request.service, account: request.account)
+      let status = SecItemUpdate(query as CFDictionary, [kSecValueData: data] as CFDictionary)
+      DispatchQueue.main.async {
+        if status == errSecSuccess {
+          result(nil)
+        } else if status == errSecItemNotFound {
+          result(self.scopeSecretFlutterError(code: "scope_secret_revision_conflict", status: status))
+        } else {
+          result(self.scopeSecretFlutterError(status: status))
+        }
+      }
+    }
+  }
+
+  private func deleteScopeSecret(arguments: Any?, result: @escaping FlutterResult) {
+    guard let request = parseScopeSecretRequest(
+      arguments: arguments,
+      requireValue: false,
+      requireExpectedRevision: false,
+      result: result
+    ) else { return }
+    scopeSecretQueue.async {
+      let status = self.deleteGenericPassword(service: request.service, account: request.account)
+      DispatchQueue.main.async {
+        if status == errSecSuccess || status == errSecItemNotFound {
+          result(nil)
+        } else {
+          result(self.scopeSecretFlutterError(status: status))
+        }
+      }
+    }
+  }
+
+  private func addScopeSecretExclusive(service: String, account: String, value: String) -> OSStatus {
+    guard let data = value.data(using: .utf8) else { return errSecParam }
+    var add = baseGenericPasswordQuery(service: service, account: account)
+    add[kSecValueData] = data
+    if service == "ai.awiki.awikime.scope-secrets" {
+      let accessResult = createCurrentBundleKeychainAccess()
+      guard accessResult.status == errSecSuccess, let access = accessResult.access else {
+        return accessResult.status
+      }
+      add[kSecAttrAccess] = access
+    }
+    // Development has an intentionally separate service and uses the standard
+    // current-app ACL. Production never falls back when its explicit ACL fails.
+    return SecItemAdd(add as CFDictionary, nil)
+  }
+
+  private func validateScopeEnvelope(
+    _ value: String,
+    account: String,
+    requiredRevision: Int?
+  ) -> Bool {
+    guard
+      let data = value.data(using: .utf8),
+      let object = try? JSONSerialization.jsonObject(with: data),
+      let envelope = object as? [String: Any],
+      Set(envelope.keys) == Set(["schema_version", "scope_id", "revision", "active_secrets"]),
+      strictJsonInteger(envelope["schema_version"]) == 1,
+      envelope["scope_id"] as? String == String(account.dropFirst("scope/".count)),
+      let revision = strictJsonInteger(envelope["revision"]),
+      revision >= 1,
+      let activeSecrets = envelope["active_secrets"] as? [String: Any],
+      Set(activeSecrets.keys) == Set(["identity_vault_root"]),
+      let root = activeSecrets["identity_vault_root"] as? [String: Any],
+      Set(root.keys) == Set(["key_id", "key_version", "algorithm", "material_b64"]),
+      let keyId = root["key_id"] as? String,
+      isCanonicalUuidV4(keyId),
+      strictJsonInteger(root["key_version"]) == 1,
+      root["algorithm"] as? String == "raw-256",
+      let materialBase64 = root["material_b64"] as? String,
+      let material = Data(base64Encoded: materialBase64),
+      material.count == 32,
+      material.base64EncodedString() == materialBase64
+    else { return false }
+    return requiredRevision == nil || revision == requiredRevision
+  }
+
+  private func strictJsonInteger(_ value: Any?) -> Int? {
+    guard let number = value as? NSNumber else { return nil }
+    if CFGetTypeID(number) == CFBooleanGetTypeID() { return nil }
+    let integer = number.intValue
+    guard number.doubleValue == Double(integer) else { return nil }
+    return integer
+  }
+
+  private func isCanonicalUuidV4(_ value: String) -> Bool {
+    let pattern = #"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"#
+    return value.range(of: pattern, options: .regularExpression) != nil
+  }
+
+  private func scopeEnvelopeRevision(_ value: String) -> Int? {
+    guard
+      let data = value.data(using: .utf8),
+      let object = try? JSONSerialization.jsonObject(with: data),
+      let envelope = object as? [String: Any]
+    else { return nil }
+    return strictJsonInteger(envelope["revision"])
+  }
+
+  private func scopeSecretFlutterError(
+    code: String? = nil,
+    status: OSStatus
+  ) -> FlutterError {
+    let stableCode: String
+    if let code {
+      stableCode = code
+    } else {
+      switch status {
+      case errSecAuthFailed, errSecInteractionNotAllowed, errSecUserCanceled, awikiErrAuthorizationDenied:
+        stableCode = "scope_secret_access_denied"
+      case errSecDecode:
+        stableCode = "scope_secret_corrupt"
+      case errSecNotAvailable:
+        stableCode = "scope_secret_provider_unavailable"
+      default:
+        stableCode = "scope_secret_operation_failed"
+      }
+    }
+    return FlutterError(
+      code: stableCode,
+      message: "Scope secret operation failed",
+      details: status
+    )
   }
 
   private func parseKeychainRequest(

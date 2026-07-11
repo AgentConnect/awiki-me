@@ -36,8 +36,11 @@ the direct native smoke:
 flutter test --no-pub integration_test/secure_storage_smoke_test.dart -d macos
 ```
 
-This test exercises `flutter_secure_storage` through the signed macOS runner and
-guards against Keychain authorization failures such as OSStatus `-34018`.
+This test exercises the dedicated development scope-secret channel through the
+macOS runner. It validates tamper rejection, exclusive create, read, CAS, stale
+CAS, and delete. A local Debug pass is not production-signing or process-restart
+evidence; the release gate must repeat persistence/ACL checks with the stable
+Team-signed application.
 
 `--case performance` is the startup/conversation performance acceptance gate for
 the real desktop App + CLI peer + backend flow. It writes product-level metrics

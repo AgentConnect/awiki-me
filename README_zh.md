@@ -273,6 +273,7 @@ AWiki Me 必须遵守以下约束：
 | [docs/testing.md](docs/testing.md) | 单元、desktop smoke、真实后端 E2E 的测试域与门禁策略 |
 | [docs/identity-secret-storage.md](docs/identity-secret-storage.md) | App-side identity vault、root key provider、E2E file provider 与安全红线 |
 | [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md) | 首发 UUID Storage Scope、稳定 Keychain locator、provision/open 与 lifecycle 契约 |
+| [docs/scope-secret-platform.md](docs/scope-secret-platform.md) | Typed scope envelope、平台 provider 隔离与 native/E2E 安全门禁 |
 | [docs/conversation-presentation-ownership.md](docs/conversation-presentation-ownership.md) | 会话展示、local-first、timeline、read waterline、attachment / mention / control payload 渲染边界 |
 | [docs/performance-tracing.md](docs/performance-tracing.md) | 启动、列表、打开会话、sync/realtime 的性能 trace key 与诊断方式 |
 | [docs/message-agent/message-agent-design.md](docs/message-agent/message-agent-design.md) | Message Agent MVP、daemon binding、delegated key、安全 bootstrap 与停用/删除 |
