@@ -7,6 +7,8 @@ Authority: authoritative for AWiki Me App-side identity vault integration
 SecretVault，以及 App 代码必须遵守的本地 secret 边界。SDK、CLI 和 daemon 的完整端侧方案见
 `awiki-cli-rs2/docs/architecture/identity-secret-storage.md`。
 
+> **首发契约说明**：当前分支仍是 namespace-scoped 预发布实现；已批准但尚未完成代码 cutover 的长期契约见 [Storage Scope / Keychain / Vault Contract](storage-scope-vault-contract.md)。在对应实现步骤完成前，本文件后续“当前”章节仍描述实际代码，不得把目标契约误当作已落地行为。
+
 ## 1. 当前结论
 
 AWiki Me 不直接读写 DID 私钥、JWT 文件、vault record 或 daemon subkey package

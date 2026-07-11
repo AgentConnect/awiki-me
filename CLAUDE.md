@@ -33,6 +33,7 @@
 - [docs/test-quality.md](docs/test-quality.md)：line/branch baseline、mutation proof 与大文件治理入口。
 - [docs/conversation-presentation-ownership.md](docs/conversation-presentation-ownership.md)：conversation-first 显示与 overlay 边界。
 - [docs/identity-secret-storage.md](docs/identity-secret-storage.md)：App root key provider 与 SecretVault 边界。
+- [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md)：首发 UUID Storage Scope、稳定 Keychain locator 与 lifecycle 权威契约。
 - [docs/message-agent/message-agent-design.md](docs/message-agent/message-agent-design.md)：Message Agent 产品与 daemon binding。
 - [../awiki-cli-rs2/docs/flutter-sdk/awiki-im-core-flutter-sdk.md](../awiki-cli-rs2/docs/flutter-sdk/awiki-im-core-flutter-sdk.md)：Dart/Flutter SDK 权威。
 

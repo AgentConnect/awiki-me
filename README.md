@@ -163,6 +163,8 @@ Agent and Daemon features are currently supported only on the default AWiki tena
 
 The app still supports non-tenant build flags such as `AWIKI_E2E` and `AWIKI_E2E_APP_STATE_ROOT` for test harnesses.
 
+> **Pre-release storage decision:** `release/0707` and `release/0710` have not been shipped. The first production storage generation will replace domain-derived `state namespace` locators with immutable UUID Storage Scopes. The approved contract is [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md). Until the implementation cutover lands, the text above continues to describe the current branch behavior.
+
 ## Testing
 
 See [docs/testing.md](docs/testing.md) for the full testing strategy.
@@ -286,6 +288,7 @@ AWiki Me must follow these constraints:
 | --- | --- |
 | [docs/testing.md](docs/testing.md) | Unit, desktop smoke, and real-backend E2E domains and gate policy |
 | [docs/identity-secret-storage.md](docs/identity-secret-storage.md) | App-side identity vault, root key provider, E2E file provider, and security red lines |
+| [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md) | First-release UUID Storage Scope, stable Keychain locator, provision/open, and lifecycle contract |
 | [docs/conversation-presentation-ownership.md](docs/conversation-presentation-ownership.md) | Conversation display, local-first path, timeline, read waterline, attachment / mention / control payload rendering boundaries |
 | [docs/performance-tracing.md](docs/performance-tracing.md) | Startup, list, chat-open, sync/realtime performance trace keys and diagnosis |
 | [docs/message-agent/message-agent-design.md](docs/message-agent/message-agent-design.md) | Message Agent MVP, daemon binding, delegated key, secure bootstrap, disable/delete behavior |
