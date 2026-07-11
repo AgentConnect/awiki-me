@@ -123,6 +123,55 @@ void main() {
     expect(service.listFollowersCalls, 0);
     expect(service.listFollowingCalls, 0);
   });
+
+  test('unsupported relationship lists release loading state', () async {
+    final service = _RelationshipService()
+      ..followersResult = Future<CoreRelationshipPage>.error(
+        UnsupportedError('relationship list unavailable'),
+      );
+    final container = _container(service);
+    addTearDown(container.dispose);
+
+    await container.read(friendsProvider.notifier).refresh();
+
+    expect(container.read(friendsProvider).isLoading, isFalse);
+    expect(service.listFollowersCalls, 1);
+    expect(service.listFollowingCalls, 1);
+  });
+
+  test(
+    'handle follow uses overlay without inventing a DID relationship row',
+    () async {
+      const handle = 'alice.awiki.ai';
+      final service = _RelationshipService();
+      final container = _container(service);
+      addTearDown(container.dispose);
+
+      await container.read(friendsProvider.notifier).follow(handle);
+
+      final state = container.read(friendsProvider);
+      expect(state.following, isEmpty);
+      expect(state.isFollowing(handle), isTrue);
+    },
+  );
+
+  test(
+    'blank relationship aliases do not mutate presentation overlays',
+    () async {
+      final service = _RelationshipService();
+      final container = _container(service);
+      addTearDown(container.dispose);
+      final controller = container.read(friendsProvider.notifier);
+
+      await controller.follow('   ');
+      await controller.unfollow('');
+
+      final state = container.read(friendsProvider);
+      expect(state.following, isEmpty);
+      expect(state.followingAliases, isEmpty);
+      expect(state.notFollowingAliases, isEmpty);
+    },
+  );
 }
 
 ProviderContainer _container(
