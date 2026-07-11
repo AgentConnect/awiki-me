@@ -213,7 +213,11 @@ The product oracle is fail-closed:
   the later reconnect uses the legal desktop inactive -> hidden -> inactive ->
   resumed lifecycle path and does not add a production mock or fallback;
 - relationship checks require the exact `none -> following -> friend ->
-  follower -> none` state sequence;
+  follower -> none` state sequence; CLI status derives this combined state from
+  all five directional booleans and separately validates that `relationship`
+  remains the caller's outbound `following|none` projection; reused identities
+  may enter the scenario only after both remote perspectives report `none` and
+  the App `friendsProvider` projection has been refreshed to that baseline;
 - group mentions require one valid structured target DID; attachment checks
   require exact ids, filename, MIME type, size, digest, and downloaded bytes.
 

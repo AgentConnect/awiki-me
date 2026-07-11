@@ -461,10 +461,27 @@ class AwikiImCoreMappers {
   }
 
   RelationshipSummary relationshipFromCore(core.RelationStatus status) {
+    final mutual = status.isFollowing && status.isFollower;
+    if (status.isFriend != mutual) {
+      throw StateError(
+        'IM Core relationship status has contradictory directional flags.',
+      );
+    }
+    final relationship = status.isBlocked
+        ? 'blocked'
+        : status.isBlockedBy
+        ? 'blocked_by'
+        : status.isFriend
+        ? 'friend'
+        : status.isFollowing
+        ? 'following'
+        : status.isFollower
+        ? 'follower'
+        : 'none';
     return RelationshipSummary(
-      did: status.peer,
-      displayName: status.displayName ?? _compactDid(status.peer),
-      relationship: status.relationship ?? 'none',
+      did: status.did,
+      displayName: status.displayName ?? _compactDid(status.did),
+      relationship: relationship,
       avatarUri: null,
     );
   }

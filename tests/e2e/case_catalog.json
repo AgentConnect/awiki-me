@@ -330,7 +330,7 @@
       "action": "Exercise the canonical relationship lifecycle through refreshes and repeated reads.",
       "exactOracles": [
         "The exact sequence none→following→friend→follower→none is observed.",
-        "Refresh does not invent duplicate or stale relations."
+        "CLI status derives the combined state from all directional booleans while independently checking the outbound relationship field; refresh does not invent duplicate or stale relations."
       ],
       "negativeChecks": [
         "Any broadened state set, duplicate relation, or stale post-refresh state fails."

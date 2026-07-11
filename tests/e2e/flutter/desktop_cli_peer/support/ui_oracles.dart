@@ -137,42 +137,78 @@ List<Map<String, Object?>> cliMessagesWithExactText(
       : const <Map<String, Object?>>[];
 }
 
-/// Returns a normalized, explicitly reported CLI relationship state.
+/// Returns the combined relationship state from the CLI's directional flags.
 ///
-/// Missing, empty, conflicting, or unknown fields are malformed and return
-/// null. In particular, an absent field is never inferred to mean `none`.
+/// `relationship` is the CLI identity's outbound local projection
+/// (`following` or `none`), not the combined state: an inbound-only relation
+/// therefore legitimately reports `relationship=none` and
+/// `is_follower=true`. Missing or contradictory flags fail closed.
 String? cliRelationshipState(String output) {
   final data = _jsonValueAt(output, const <Object>['data']);
   if (data is! Map) {
     return null;
   }
   final map = _stringKeyMap(data);
-  final states = <String>[];
-  for (final key in const <String>['relationship', 'status']) {
-    if (!map.containsKey(key)) {
-      continue;
-    }
+  bool? flag(String key) {
     final value = map[key];
-    if (value is! String || value.trim().isEmpty) {
-      return null;
-    }
-    final normalized = value.trim().toLowerCase();
-    if (!const <String>{
-      'none',
-      'following',
-      'follower',
-      'friend',
-      'blocked',
-      'blocked_by',
-    }.contains(normalized)) {
-      return null;
-    }
-    states.add(normalized);
+    return value is bool ? value : null;
   }
-  if (states.isEmpty || states.any((state) => state != states.first)) {
+
+  final isFollowing = flag('is_following');
+  final isFollower = flag('is_follower');
+  final isFriend = flag('is_friend');
+  final isBlocked = flag('is_blocked');
+  final isBlockedBy = flag('is_blocked_by');
+  if (<bool?>[
+    isFollowing,
+    isFollower,
+    isFriend,
+    isBlocked,
+    isBlockedBy,
+  ].any((value) => value == null)) {
     return null;
   }
-  return states.first;
+  final following = isFollowing!;
+  final follower = isFollower!;
+  final friend = isFriend!;
+  final blocked = isBlocked!;
+  final blockedBy = isBlockedBy!;
+  if (friend != (following && follower)) {
+    return null;
+  }
+  final combined = blocked
+      ? 'blocked'
+      : blockedBy
+      ? 'blocked_by'
+      : friend
+      ? 'friend'
+      : following
+      ? 'following'
+      : follower
+      ? 'follower'
+      : 'none';
+
+  final relationship = map['relationship'];
+  if (relationship is! String || relationship.trim().isEmpty) {
+    return null;
+  }
+  final outbound = relationship.trim().toLowerCase();
+  if (!const <String>{'none', 'following'}.contains(outbound)) {
+    return null;
+  }
+  if (!blocked && !blockedBy) {
+    final expectedOutbound = following ? 'following' : 'none';
+    if (outbound != expectedOutbound) {
+      return null;
+    }
+  }
+  final reportedCombined = map['status'];
+  if (reportedCombined != null &&
+      (reportedCombined is! String ||
+          reportedCombined.trim().toLowerCase() != combined)) {
+    return null;
+  }
+  return combined;
 }
 
 /// Verifies the complete P9 contract for one CLI-observed mention.

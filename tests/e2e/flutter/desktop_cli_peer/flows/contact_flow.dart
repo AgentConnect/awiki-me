@@ -28,6 +28,15 @@ Future<void> _verifyContactRegression({
     peer: cliDid,
     expected: 'none',
   );
+  await _waitForCliRelationshipStatus(
+    config: config,
+    peer: config.appHandle,
+    expectedRelationship: 'none',
+  );
+  await robot.refreshRelationshipProjection(
+    peerDid: cliDid,
+    expectedFollowing: false,
+  );
 
   final conversation = await robot.startDirectConversation(config.cliHandle);
   requireMatchingCliPeerDid(

@@ -157,6 +157,20 @@ class _DesktopAppRobot {
     description: 'Messages tab',
   );
 
+  Future<void> refreshRelationshipProjection({
+    required String peerDid,
+    required bool expectedFollowing,
+  }) async {
+    await container.read(friendsProvider.notifier).refresh();
+    final actual = container.read(friendsProvider).isFollowing(peerDid);
+    if (actual != expectedFollowing) {
+      fail(
+        'Refreshed UI relationship projection for the exact peer did not '
+        'match expected following=$expectedFollowing.',
+      );
+    }
+  }
+
   Future<void> expectConversationUnreadBadge({
     required String conversationId,
     required int unreadCount,

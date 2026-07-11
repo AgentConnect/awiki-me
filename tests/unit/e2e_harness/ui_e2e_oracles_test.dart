@@ -259,7 +259,23 @@ void main() {
     );
   });
 
-  test('CLI relationship state rejects a missing or malformed field', () {
+  test('CLI relationship state derives exact directional combinations', () {
+    Map<String, Object?> status({
+      bool following = false,
+      bool follower = false,
+      bool friend = false,
+      String relationship = 'none',
+      Object? combined,
+    }) => <String, Object?>{
+      'relationship': relationship,
+      'is_following': following,
+      'is_follower': follower,
+      'is_friend': friend,
+      'is_blocked': false,
+      'is_blocked_by': false,
+      if (combined != null) 'status': combined,
+    };
+
     expect(
       cliRelationshipState(
         jsonEncode(<String, Object?>{
@@ -272,17 +288,49 @@ void main() {
       isNull,
     );
     expect(
-      cliRelationshipState(
-        jsonEncode(<String, Object?>{
-          'data': <String, Object?>{'relationship': 'none'},
-        }),
-      ),
+      cliRelationshipState(jsonEncode(<String, Object?>{'data': status()})),
       'none',
     );
     expect(
       cliRelationshipState(
+        jsonEncode(<String, Object?>{'data': status(follower: true)}),
+      ),
+      'follower',
+    );
+    expect(
+      cliRelationshipState(
         jsonEncode(<String, Object?>{
-          'data': <String, Object?>{'relationship': 'unexpected'},
+          'data': status(following: true, relationship: 'following'),
+        }),
+      ),
+      'following',
+    );
+    expect(
+      cliRelationshipState(
+        jsonEncode(<String, Object?>{
+          'data': status(
+            following: true,
+            follower: true,
+            friend: true,
+            relationship: 'following',
+            combined: 'friend',
+          ),
+        }),
+      ),
+      'friend',
+    );
+    expect(
+      cliRelationshipState(
+        jsonEncode(<String, Object?>{
+          'data': status(follower: true, friend: true),
+        }),
+      ),
+      isNull,
+    );
+    expect(
+      cliRelationshipState(
+        jsonEncode(<String, Object?>{
+          'data': status(follower: true, relationship: 'unexpected'),
         }),
       ),
       isNull,

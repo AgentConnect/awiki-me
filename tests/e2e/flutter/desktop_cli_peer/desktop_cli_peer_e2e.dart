@@ -33,6 +33,7 @@ import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provid
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
+import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:crypto/crypto.dart';
