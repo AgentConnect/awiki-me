@@ -33,6 +33,24 @@ void main() {
     expect(registry.activeTenant.stateNamespace, defaultTenantStateNamespace);
   });
 
+  test(
+    'normalizes migrated default tenant back to legacy AWiki data',
+    () async {
+      await store.saveRegistry(
+        AppTenantRegistry(
+          activeTenantId: defaultTenantId,
+          tenants: <AppTenantProfile>[
+            defaultTenantProfile().copyWith(stateNamespace: 'tenant-default'),
+          ],
+        ),
+      );
+
+      final registry = await store.loadRegistry();
+
+      expect(registry.activeTenant.stateNamespace, 'awiki.ai');
+    },
+  );
+
   test('creates and switches tenants with normalized endpoints', () async {
     final created = await store.createTenant(
       const AppTenantCreateInput(

@@ -153,9 +153,10 @@ dart run tests/e2e/runner.dart --case smoke
 ```text
 后端地址：https://awiki.ai
 DID Host：awiki.ai
+状态命名空间：awiki.ai
 ```
 
-切换租户会重建 App runtime，并使用独立的 im-core / 产品本地状态命名空间，身份、会话、群组和本地缓存会被隔离。租户名称只是本地显示标签，后续可以改名。已经产生本地数据的租户不能再修改后端地址或 DID Host；需要接入新环境时请添加租户配置。
+内置 AWiki 租户固定沿用历史 `awiki.ai` 命名空间，保证升级后原有身份、联系人、会话和本地缓存继续可见；自定义租户使用独立的 `tenant-<id>` 命名空间。切换租户会重建 App runtime，并保持不同自定义环境的数据隔离。租户名称只是本地显示标签，后续可以改名。已经产生本地数据的租户不能再修改后端地址或 DID Host；需要接入新环境时请添加租户配置。
 
 Agent 和 Daemon 功能目前只支持默认 AWiki 主租户。其他租户进入智能体页面时会显示友好的暂不支持状态，并且不会调用 Agent 后端接口。
 

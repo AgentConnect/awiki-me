@@ -416,6 +416,8 @@ class MainFlutterWindow: NSWindow {
         self.saveAttachment(arguments: call.arguments, result: result)
       case "setMainWindowVisible":
         self.setMainWindowVisible(arguments: call.arguments, result: result)
+      case "isShiftPressed":
+        result(NSEvent.modifierFlags.contains(.shift))
       default:
         result(FlutterMethodNotImplemented)
       }

@@ -109,6 +109,9 @@ void main() {
       final visibility = <bool>[];
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
+            if (call.method == 'isShiftPressed') {
+              return true;
+            }
             if (call.method == 'setMainWindowVisible') {
               visibility.add(
                 (call.arguments as Map<Object?, Object?>)['visible']! as bool,
@@ -146,6 +149,9 @@ void main() {
     final visibility = <bool>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'isShiftPressed') {
+            return true;
+          }
           visibility.add(
             (call.arguments as Map<Object?, Object?>)['visible']! as bool,
           );
@@ -169,6 +175,58 @@ void main() {
     );
     expect(visibility, <bool>[false, true]);
   });
+
+  test(
+    'native modifier state prevents stale Shift from hiding the app',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'awiki-screenshot-modifier-test-',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+      const channel = MethodChannel('test.awiki/attachment-picker-modifier');
+      final visibility = <bool>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            if (call.method == 'isShiftPressed') {
+              return false;
+            }
+            if (call.method == 'setMainWindowVisible') {
+              visibility.add(
+                (call.arguments as Map<Object?, Object?>)['visible']! as bool,
+              );
+            }
+            return null;
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+      final service = MethodChannelAttachmentPickerService(
+        channel: channel,
+        screenshotSupported: true,
+        temporaryDirectoryProvider: () async => tempDir,
+        processRunner: (_, arguments) async {
+          await File(arguments.last).writeAsBytes(<int>[137, 80, 78, 71]);
+          return ProcessResult(1, 0, '', '');
+        },
+      );
+
+      final draft = await service.captureScreenshot(hideApp: true);
+
+      expect(draft, isNotNull);
+      expect(visibility, isEmpty);
+      addTearDown(() async {
+        final staged = File(draft!.localPath!);
+        if (await staged.exists()) {
+          await staged.delete();
+        }
+      });
+    },
+  );
 
   test(
     'macOS clipboard prefers a copied image file over its Finder icon',

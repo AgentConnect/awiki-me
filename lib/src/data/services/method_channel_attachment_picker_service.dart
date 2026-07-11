@@ -93,7 +93,8 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     final source = File(p.join(directory.path, filename));
     var appHidden = false;
     try {
-      if (hideApp) {
+      final shouldHideApp = await _isNativeShiftPressed(fallback: hideApp);
+      if (shouldHideApp) {
         await _setMainWindowVisible(false);
         appHidden = true;
         await Future<void>.delayed(const Duration(milliseconds: 120));
@@ -225,6 +226,16 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     return _channel.invokeMethod<void>('setMainWindowVisible', <String, Object>{
       'visible': visible,
     });
+  }
+
+  Future<bool> _isNativeShiftPressed({required bool fallback}) async {
+    try {
+      return await _channel.invokeMethod<bool>('isShiftPressed') ?? fallback;
+    } on MissingPluginException {
+      return fallback;
+    } on PlatformException {
+      return fallback;
+    }
   }
 
   @override
