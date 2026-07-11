@@ -1,150 +1,261 @@
+import 'dart:math';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 const String primaryTenantName = 'AWiki';
 const String primaryTenantBackendBaseUrl = 'https://awiki.ai';
 const String primaryTenantDidHost = 'awiki.ai';
+
+// Transitional UI compatibility only. Registry v1 never persists this value as
+// an identifier; Step 04 removes callers that still compare against it.
 const String defaultTenantId = 'default';
-// Keep the built-in AWiki tenant on the pre-multi-tenant namespace so existing
-// identities, contacts and conversations remain visible after the registry is
-// introduced. Custom tenants continue to use `tenant-<id>` namespaces.
-const String defaultTenantStateNamespace = 'awiki.ai';
+
+final RegExp _canonicalUuidV4 = RegExp(
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+);
+
+abstract base class CanonicalUuidV4 {
+  const CanonicalUuidV4._(this.value);
+
+  final String value;
+
+  @override
+  bool operator ==(Object other) =>
+      other.runtimeType == runtimeType &&
+      other is CanonicalUuidV4 &&
+      other.value == value;
+
+  @override
+  int get hashCode => Object.hash(runtimeType, value);
+
+  @override
+  String toString() => value;
+}
+
+final class TenantProfileId extends CanonicalUuidV4 {
+  TenantProfileId.parse(String value) : super._(_validateUuid(value));
+
+  factory TenantProfileId.generate({Random? random}) =>
+      TenantProfileId.parse(_generateUuidV4(random ?? Random.secure()));
+}
+
+final class StorageScopeId extends CanonicalUuidV4 {
+  StorageScopeId.parse(String value) : super._(_validateUuid(value));
+
+  factory StorageScopeId.generate({Random? random}) =>
+      StorageScopeId.parse(_generateUuidV4(random ?? Random.secure()));
+}
+
+enum AppTenantKind {
+  builtInAwiki('built_in_awiki'),
+  custom('custom');
+
+  const AppTenantKind(this.wireName);
+  final String wireName;
+
+  static AppTenantKind parse(Object? value) => values.firstWhere(
+    (item) => item.wireName == value,
+    orElse: () => throw const FormatException('tenant_kind_invalid'),
+  );
+}
+
+enum AppTenantLifecycle {
+  active('active'),
+  archived('archived');
+
+  const AppTenantLifecycle(this.wireName);
+  final String wireName;
+
+  static AppTenantLifecycle parse(Object? value) => values.firstWhere(
+    (item) => item.wireName == value,
+    orElse: () => throw const FormatException('tenant_lifecycle_invalid'),
+  );
+}
 
 class AppTenantProfile {
   const AppTenantProfile({
-    required this.id,
+    required this.tenantProfileId,
+    required this.storageScopeId,
+    required this.kind,
     required this.name,
     required this.backendBaseUrl,
     required this.didHost,
-    required this.stateNamespace,
+    required this.lifecycle,
     required this.createdAt,
     required this.updatedAt,
-    this.archivedAt,
+    this.remoteRealmId,
   });
 
   factory AppTenantProfile.fromJson(Map<String, Object?> json) {
     return AppTenantProfile(
-      id: json['id']?.toString() ?? '',
-      name: json['name']?.toString() ?? '',
-      backendBaseUrl: json['backend_base_url']?.toString() ?? '',
-      didHost: json['did_host']?.toString() ?? '',
-      stateNamespace: json['state_namespace']?.toString() ?? '',
-      createdAt: json['created_at']?.toString() ?? '',
-      updatedAt: json['updated_at']?.toString() ?? '',
-      archivedAt: _optionalString(json['archived_at']),
+      tenantProfileId: TenantProfileId.parse(
+        _requiredString(json, 'tenant_profile_id'),
+      ),
+      storageScopeId: StorageScopeId.parse(
+        _requiredString(json, 'storage_scope_id'),
+      ),
+      kind: AppTenantKind.parse(json['kind']),
+      name: _requiredString(json, 'display_name'),
+      backendBaseUrl: _requiredString(json, 'backend_base_url'),
+      didHost: _requiredString(json, 'did_host'),
+      remoteRealmId: _optionalString(json['remote_realm_id']),
+      lifecycle: AppTenantLifecycle.parse(json['lifecycle']),
+      createdAt: _requiredTimestamp(json, 'created_at'),
+      updatedAt: _requiredTimestamp(json, 'updated_at'),
     );
   }
 
-  final String id;
+  final TenantProfileId tenantProfileId;
+  final StorageScopeId storageScopeId;
+  final AppTenantKind kind;
   final String name;
   final String backendBaseUrl;
   final String didHost;
-  final String stateNamespace;
+  final String? remoteRealmId;
+  final AppTenantLifecycle lifecycle;
   final String createdAt;
   final String updatedAt;
-  final String? archivedAt;
 
-  bool get isArchived => archivedAt != null && archivedAt!.trim().isNotEmpty;
+  // Compatibility accessors are not serialized and are removed in Step 04.
+  String get id => tenantProfileId.value;
+  @Deprecated('Use storageScopeId; runtime cutover is Step 04')
+  String get stateNamespace => storageScopeId.value;
 
-  bool get isPrimaryTenant =>
-      _normalizeUrl(backendBaseUrl) == primaryTenantBackendBaseUrl &&
-      _normalizeHost(didHost) == primaryTenantDidHost;
+  bool get isArchived => lifecycle == AppTenantLifecycle.archived;
+  bool get isPrimaryTenant => kind == AppTenantKind.builtInAwiki;
 
-  Map<String, Object?> toJson() {
-    return <String, Object?>{
-      'id': id,
-      'name': name,
-      'backend_base_url': backendBaseUrl,
-      'did_host': didHost,
-      'state_namespace': stateNamespace,
-      'created_at': createdAt,
-      'updated_at': updatedAt,
-      if (archivedAt != null) 'archived_at': archivedAt,
-    };
-  }
+  Map<String, Object?> toJson() => <String, Object?>{
+    'tenant_profile_id': tenantProfileId.value,
+    'storage_scope_id': storageScopeId.value,
+    'kind': kind.wireName,
+    'display_name': name,
+    'backend_base_url': backendBaseUrl,
+    'did_host': didHost,
+    'remote_realm_id': remoteRealmId,
+    'lifecycle': lifecycle.wireName,
+    'created_at': createdAt,
+    'updated_at': updatedAt,
+  };
 
   AppTenantProfile copyWith({
     String? name,
     String? backendBaseUrl,
     String? didHost,
-    String? stateNamespace,
+    String? remoteRealmId,
+    AppTenantLifecycle? lifecycle,
     String? updatedAt,
-    String? archivedAt,
-    bool clearArchivedAt = false,
-  }) {
-    return AppTenantProfile(
-      id: id,
-      name: name ?? this.name,
-      backendBaseUrl: backendBaseUrl ?? this.backendBaseUrl,
-      didHost: didHost ?? this.didHost,
-      stateNamespace: stateNamespace ?? this.stateNamespace,
-      createdAt: createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      archivedAt: clearArchivedAt ? null : archivedAt ?? this.archivedAt,
-    );
-  }
+  }) => AppTenantProfile(
+    tenantProfileId: tenantProfileId,
+    storageScopeId: storageScopeId,
+    kind: kind,
+    name: name ?? this.name,
+    backendBaseUrl: backendBaseUrl ?? this.backendBaseUrl,
+    didHost: didHost ?? this.didHost,
+    remoteRealmId: remoteRealmId ?? this.remoteRealmId,
+    lifecycle: lifecycle ?? this.lifecycle,
+    createdAt: createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
 }
 
 class AppTenantRegistry {
   const AppTenantRegistry({
-    required this.activeTenantId,
+    required this.revision,
+    required this.activeTenantProfileId,
     required this.tenants,
   });
 
   factory AppTenantRegistry.fromJson(Map<String, Object?> json) {
+    if (json['schema_version'] != 1) {
+      throw const FormatException('tenant_registry_schema_unsupported');
+    }
+    final revision = json['revision'];
     final rawTenants = json['tenants'];
-    return AppTenantRegistry(
-      activeTenantId: json['active_tenant_id']?.toString() ?? defaultTenantId,
-      tenants: rawTenants is Iterable
-          ? rawTenants
-                .whereType<Map>()
-                .map(
-                  (item) => AppTenantProfile.fromJson(
-                    item.map<String, Object?>(
-                      (key, value) => MapEntry(key.toString(), value),
-                    ),
-                  ),
-                )
-                .where((tenant) => tenant.id.trim().isNotEmpty)
-                .toList()
-          : const <AppTenantProfile>[],
+    if (revision is! int || revision < 1 || rawTenants is! List) {
+      throw const FormatException('tenant_registry_invalid');
+    }
+    final registry = AppTenantRegistry(
+      revision: revision,
+      activeTenantProfileId: TenantProfileId.parse(
+        _requiredString(json, 'active_tenant_profile_id'),
+      ),
+      tenants: rawTenants
+          .map((item) {
+            if (item is! Map) {
+              throw const FormatException('tenant_registry_invalid');
+            }
+            return AppTenantProfile.fromJson(
+              item.map((key, value) => MapEntry(key.toString(), value)),
+            );
+          })
+          .toList(growable: false),
     );
+    registry.validate();
+    return registry;
   }
 
-  final String activeTenantId;
+  final int revision;
+  final TenantProfileId activeTenantProfileId;
   final List<AppTenantProfile> tenants;
 
+  @Deprecated('Use activeTenantProfileId')
+  String get activeTenantId => activeTenantProfileId.value;
   List<AppTenantProfile> get visibleTenants =>
-      tenants.where((tenant) => !tenant.isArchived).toList();
+      tenants.where((tenant) => !tenant.isArchived).toList(growable: false);
+  AppTenantProfile get activeTenant => tenants.singleWhere(
+    (tenant) =>
+        tenant.tenantProfileId == activeTenantProfileId && !tenant.isArchived,
+    orElse: () => throw StateError('active_tenant_missing'),
+  );
 
-  AppTenantProfile get activeTenant {
+  void validate() {
+    final profiles = <TenantProfileId>{};
+    final scopes = <StorageScopeId>{};
     for (final tenant in tenants) {
-      if (tenant.id == activeTenantId && !tenant.isArchived) {
-        return tenant;
+      if (!profiles.add(tenant.tenantProfileId)) {
+        throw const FormatException('tenant_profile_duplicate');
+      }
+      if (!scopes.add(tenant.storageScopeId)) {
+        throw const FormatException('storage_scope_duplicate');
       }
     }
-    for (final tenant in tenants) {
-      if (tenant.id == defaultTenantId && !tenant.isArchived) {
-        return tenant;
-      }
+    if (!tenants.any(
+      (tenant) =>
+          tenant.tenantProfileId == activeTenantProfileId && !tenant.isArchived,
+    )) {
+      throw const FormatException('active_tenant_missing');
     }
-    return defaultTenantProfile();
   }
 
-  Map<String, Object?> toJson() {
-    return <String, Object?>{
-      'schema_version': 1,
-      'active_tenant_id': activeTenantId,
-      'tenants': tenants.map((tenant) => tenant.toJson()).toList(),
-    };
-  }
+  Map<String, Object?> toJson() => <String, Object?>{
+    'schema_version': 1,
+    'revision': revision,
+    'active_tenant_profile_id': activeTenantProfileId.value,
+    'tenants': tenants.map((tenant) => tenant.toJson()).toList(),
+  };
 
   AppTenantRegistry copyWith({
+    int? revision,
+    TenantProfileId? activeTenantProfileId,
     String? activeTenantId,
     List<AppTenantProfile>? tenants,
   }) {
+    final nextTenants = tenants ?? this.tenants;
+    TenantProfileId? compatibilityActiveId;
+    if (activeTenantId == defaultTenantId) {
+      compatibilityActiveId = nextTenants
+          .singleWhere((tenant) => tenant.isPrimaryTenant)
+          .tenantProfileId;
+    } else if (activeTenantId != null) {
+      compatibilityActiveId = TenantProfileId.parse(activeTenantId);
+    }
     return AppTenantRegistry(
-      activeTenantId: activeTenantId ?? this.activeTenantId,
-      tenants: tenants ?? this.tenants,
+      revision: revision ?? this.revision,
+      activeTenantProfileId:
+          activeTenantProfileId ??
+          compatibilityActiveId ??
+          this.activeTenantProfileId,
+      tenants: nextTenants,
     );
   }
 }
@@ -155,7 +266,6 @@ class AppTenantCreateInput {
     required this.backendBaseUrl,
     required this.didHost,
   });
-
   final String name;
   final String backendBaseUrl;
   final String didHost;
@@ -168,7 +278,6 @@ class AppTenantUpdateInput {
     required this.backendBaseUrl,
     required this.didHost,
   });
-
   final String id;
   final String name;
   final String backendBaseUrl;
@@ -177,13 +286,9 @@ class AppTenantUpdateInput {
 
 abstract interface class AppTenantActions {
   Future<AppTenantRegistry> createTenant(AppTenantCreateInput input);
-
   Future<AppTenantRegistry> useTenant(String tenantId);
-
   Future<AppTenantRegistry> updateTenant(AppTenantUpdateInput input);
-
   Future<AppTenantRegistry> deleteTenant(String tenantId);
-
   Future<bool> tenantHasData(String tenantId);
 }
 
@@ -214,49 +319,77 @@ class DisabledAppTenantActions implements AppTenantActions {
   Future<bool> tenantHasData(String tenantId) async => false;
 }
 
-final appTenantRegistryProvider = Provider<AppTenantRegistry>(
-  (ref) => AppTenantRegistry(
-    activeTenantId: defaultTenantId,
-    tenants: <AppTenantProfile>[defaultTenantProfile()],
-  ),
-);
-
+final appTenantRegistryProvider = Provider<AppTenantRegistry>((ref) {
+  final tenant = defaultTenantProfile();
+  return AppTenantRegistry(
+    revision: 1,
+    activeTenantProfileId: tenant.tenantProfileId,
+    tenants: <AppTenantProfile>[tenant],
+  );
+});
 final activeAppTenantProvider = Provider<AppTenantProfile>(
   (ref) => ref.watch(appTenantRegistryProvider).activeTenant,
 );
-
 final appTenantActionsProvider = Provider<AppTenantActions>(
   (ref) => const DisabledAppTenantActions(),
 );
 
 AppTenantProfile defaultTenantProfile({DateTime? now}) {
-  final timestamp = _timestamp(now ?? DateTime.now().toUtc());
+  final timestamp = (now ?? DateTime.now()).toUtc().toIso8601String();
   return AppTenantProfile(
-    id: defaultTenantId,
+    tenantProfileId: TenantProfileId.generate(),
+    storageScopeId: StorageScopeId.generate(),
+    kind: AppTenantKind.builtInAwiki,
     name: primaryTenantName,
     backendBaseUrl: primaryTenantBackendBaseUrl,
     didHost: primaryTenantDidHost,
-    stateNamespace: defaultTenantStateNamespace,
+    lifecycle: AppTenantLifecycle.active,
     createdAt: timestamp,
     updatedAt: timestamp,
   );
 }
 
-String appTenantFeatureUnsupportedCode(String feature) {
-  return 'tenant_feature_unsupported:$feature';
+String appTenantFeatureUnsupportedCode(String feature) =>
+    'tenant_feature_unsupported:$feature';
+
+String _validateUuid(String value) {
+  if (!_canonicalUuidV4.hasMatch(value)) {
+    throw const FormatException('uuid_v4_invalid');
+  }
+  return value;
 }
 
-String _timestamp(DateTime value) => value.toUtc().toIso8601String();
+String _generateUuidV4(Random random) {
+  final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  final hex = bytes
+      .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+      .join();
+  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+      '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+}
+
+String _requiredString(Map<String, Object?> json, String key) {
+  final value = json[key];
+  if (value is! String || value.trim().isEmpty) {
+    throw FormatException('${key}_invalid');
+  }
+  return value;
+}
+
+String _requiredTimestamp(Map<String, Object?> json, String key) {
+  final value = _requiredString(json, key);
+  if (DateTime.tryParse(value) == null) {
+    throw FormatException('${key}_invalid');
+  }
+  return value;
+}
 
 String? _optionalString(Object? value) {
-  final text = value?.toString().trim();
-  return text == null || text.isEmpty ? null : text;
-}
-
-String _normalizeUrl(String value) {
-  return value.trim().replaceAll(RegExp(r'/+$'), '').toLowerCase();
-}
-
-String _normalizeHost(String value) {
-  return value.trim().replaceAll(RegExp(r'\.+$'), '').toLowerCase();
+  if (value == null) return null;
+  if (value is! String || value.trim().isEmpty) {
+    throw const FormatException('optional_string_invalid');
+  }
+  return value;
 }

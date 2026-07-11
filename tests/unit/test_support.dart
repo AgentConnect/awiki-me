@@ -237,12 +237,7 @@ Widget buildLocalizedTestApp({
         attachmentCacheService: attachmentCacheService,
       ),
       appLocaleModeProvider.overrideWith((ref) => localeMode),
-      appTenantRegistryProvider.overrideWithValue(
-        AppTenantRegistry(
-          activeTenantId: defaultTenantId,
-          tenants: <AppTenantProfile>[defaultTenantProfile()],
-        ),
-      ),
+      appTenantRegistryProvider.overrideWithValue(_defaultTestTenantRegistry()),
       activeAppTenantProvider.overrideWithValue(defaultTenantProfile()),
       appTenantActionsProvider.overrideWithValue(FakeAppTenantActions()),
       sessionProvider.overrideWith((ref) {
@@ -2771,12 +2766,7 @@ class FakeAgentControlService implements AgentControlService {
 
 class FakeAppTenantActions implements AppTenantActions {
   FakeAppTenantActions({AppTenantRegistry? initialRegistry, this.onChanged})
-    : registry =
-          initialRegistry ??
-          AppTenantRegistry(
-            activeTenantId: defaultTenantId,
-            tenants: <AppTenantProfile>[defaultTenantProfile()],
-          );
+    : registry = initialRegistry ?? _defaultTestTenantRegistry();
 
   AppTenantRegistry registry;
   VoidCallback? onChanged;
@@ -2805,14 +2795,16 @@ class FakeAppTenantActions implements AppTenantActions {
     );
     final now = DateTime.utc(2026, 7, 1).toIso8601String();
     final tenant = AppTenantProfile(
-      id: id,
+      tenantProfileId: TenantProfileId.generate(),
+      storageScopeId: StorageScopeId.generate(),
+      kind: AppTenantKind.custom,
       name: name,
       backendBaseUrl: input.backendBaseUrl.trim().replaceAll(
         RegExp(r'/+$'),
         '',
       ),
       didHost: input.didHost.trim().toLowerCase(),
-      stateNamespace: 'tenant-$id',
+      lifecycle: AppTenantLifecycle.active,
       createdAt: now,
       updatedAt: now,
     );
@@ -2912,6 +2904,15 @@ class FakeAppTenantActions implements AppTenantActions {
     final capped = safe.substring(0, 48).replaceAll(RegExp(r'[-_]+$'), '');
     return capped.isEmpty ? null : capped;
   }
+}
+
+AppTenantRegistry _defaultTestTenantRegistry() {
+  final tenant = defaultTenantProfile(now: DateTime.utc(2026, 7, 1));
+  return AppTenantRegistry(
+    revision: 1,
+    activeTenantProfileId: tenant.tenantProfileId,
+    tenants: <AppTenantProfile>[tenant],
+  );
 }
 
 class FakeProductLocalStore implements ProductLocalStore {

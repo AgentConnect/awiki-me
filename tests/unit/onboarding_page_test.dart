@@ -400,14 +400,14 @@ void main() {
 
     expect(tenantActions.createTenantCalls, 1);
     expect(tenantActions.useTenantCalls, 0);
-    expect(tenantActions.registry.activeTenantId, defaultTenantId);
+    expect(tenantActions.registry.activeTenant.isPrimaryTenant, isTrue);
     expect(find.text('杭州测试'), findsOneWidget);
 
     await tester.tap(find.byTooltip('使用').last);
     await tester.pumpAndSettle();
 
     expect(tenantActions.useTenantCalls, 1);
-    expect(tenantActions.registry.activeTenantId, 'dev-example-com');
+    expect(tenantActions.registry.activeTenant.name, '杭州测试');
   });
 
   testWidgets('租户错误提示可选中并展示未知错误详情', (tester) async {

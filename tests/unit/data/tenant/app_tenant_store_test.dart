@@ -1,8 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
-import 'package:awiki_me/src/data/im_core/awiki_im_core_paths.dart';
-import 'package:awiki_me/src/data/local/awiki_product_local_store_sqlite.dart';
+import 'package:awiki_me/src/data/storage/scope_secret_repository.dart';
+import 'package:awiki_me/src/data/storage/scope_manifest.dart';
 import 'package:awiki_me/src/data/tenant/app_tenant_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -12,189 +13,69 @@ void main() {
   late AppTenantStore store;
 
   setUp(() async {
-    root = await Directory.systemTemp.createTemp('awiki_tenant_store_test_');
-    store = AppTenantStore(appStateRoot: root.path);
+    root = await Directory.systemTemp.createTemp('awiki_scope_registry_test_');
+    store = AppTenantStore(
+      appStateRoot: root.path,
+      secretRepository: FakeScopeSecretRepository(),
+    );
   });
 
   tearDown(() async {
-    if (await root.exists()) {
-      await root.delete(recursive: true);
-    }
+    if (await root.exists()) await root.delete(recursive: true);
   });
 
-  test('loadRegistry creates the default AWiki tenant', () async {
+  test('creates strict registry v1 and immutable UUID scope layout', () async {
     final registry = await store.loadRegistry();
+    final tenant = registry.activeTenant;
+    final layout = await store.layoutForScope(tenant.storageScopeId);
 
-    expect(registry.activeTenantId, defaultTenantId);
-    expect(registry.visibleTenants, hasLength(1));
-    expect(registry.activeTenant.name, primaryTenantName);
-    expect(registry.activeTenant.backendBaseUrl, primaryTenantBackendBaseUrl);
-    expect(registry.activeTenant.didHost, primaryTenantDidHost);
-    expect(registry.activeTenant.stateNamespace, defaultTenantStateNamespace);
+    expect(registry.revision, 1);
+    expect(tenant.tenantProfileId.value, isNot(tenant.storageScopeId.value));
+    expect(
+      layout.scopeRoot,
+      contains('storage-scopes/${tenant.storageScopeId}'),
+    );
+    expect(await File(layout.manifestPath).exists(), isTrue);
+    expect(await Directory(layout.identityVaultRoot).exists(), isTrue);
+    final raw = await File(
+      p.join(
+        root.path,
+        'support',
+        'awiki-me',
+        'control',
+        'tenant-registry.json',
+      ),
+    ).readAsString();
+    expect(raw, isNot(contains('state_namespace')));
+    expect(raw, isNot(contains('tenant-default')));
   });
 
-  test(
-    'normalizes migrated default tenant back to legacy AWiki data',
-    () async {
-      await store.saveRegistry(
-        AppTenantRegistry(
-          activeTenantId: defaultTenantId,
-          tenants: <AppTenantProfile>[
-            defaultTenantProfile().copyWith(stateNamespace: 'tenant-default'),
-          ],
-        ),
-      );
-
-      final registry = await store.loadRegistry();
-
-      expect(registry.activeTenant.stateNamespace, 'awiki.ai');
-    },
-  );
-
-  test('creates and switches tenants with normalized endpoints', () async {
-    final created = await store.createTenant(
+  test('two tenants have distinct profile IDs scopes and paths', () async {
+    final first = await store.loadRegistry();
+    final second = await store.createTenant(
       const AppTenantCreateInput(
-        name: ' Customer One ',
+        name: 'Customer One',
         backendBaseUrl: 'https://tenant.example.com/',
         didHost: 'Tenant.Example.com.',
       ),
     );
-
-    final tenant = created.visibleTenants.singleWhere(
-      (item) => item.name == 'Customer One',
+    final custom = second.visibleTenants.singleWhere(
+      (item) => !item.isPrimaryTenant,
     );
-    expect(tenant.backendBaseUrl, 'https://tenant.example.com');
-    expect(tenant.didHost, 'tenant.example.com');
-    expect(tenant.stateNamespace, 'tenant-customer-one');
 
-    final switched = await store.useTenant(tenant.id);
-
-    expect(switched.activeTenant.id, tenant.id);
-  });
-
-  test(
-    'creates unicode display names with safe internal identifiers',
-    () async {
-      final created = await store.createTenant(
-        const AppTenantCreateInput(
-          name: ' 测试环境 ',
-          backendBaseUrl: 'https://tenant.example.com/',
-          didHost: 'Tenant.Example.com.',
-        ),
-      );
-
-      final tenant = created.visibleTenants.singleWhere(
-        (item) => item.name == '测试环境',
-      );
-
-      expect(tenant.id, 'tenant-example-com');
-      expect(tenant.stateNamespace, 'tenant-tenant-example-com');
-      expect(tenant.backendBaseUrl, 'https://tenant.example.com');
-      expect(tenant.didHost, 'tenant.example.com');
-    },
-  );
-
-  test('accepts one-character and punctuated local tenant display names', () {
-    expect(normalizeTenantName('测'), '测');
-    expect(normalizeTenantName('杭州测试 · Dev 🚀'), '杭州测试 · Dev 🚀');
-  });
-
-  test('rejects empty, too long, and invisible tenant display names', () {
+    expect(custom.tenantProfileId, isNot(first.activeTenant.tenantProfileId));
+    expect(custom.storageScopeId, isNot(first.activeTenant.storageScopeId));
     expect(
-      () => normalizeTenantName(' '),
-      throwsA(
-        isA<AppTenantValidationException>().having(
-          (error) => error.code,
-          'code',
-          'tenant_name_invalid',
-        ),
-      ),
-    );
-    expect(
-      () => normalizeTenantName('${List.filled(20, '租户').join()}x'),
-      throwsA(
-        isA<AppTenantValidationException>().having(
-          (error) => error.code,
-          'code',
-          'tenant_name_invalid',
-        ),
-      ),
-    );
-    expect(
-      () => normalizeTenantName('测试\u200B环境'),
-      throwsA(
-        isA<AppTenantValidationException>().having(
-          (error) => error.code,
-          'code',
-          'tenant_name_invalid',
-        ),
+      (await store.layoutForScope(custom.storageScopeId)).scopeRoot,
+      isNot(
+        (await store.layoutForScope(
+          first.activeTenant.storageScopeId,
+        )).scopeRoot,
       ),
     );
   });
 
-  test('prepareUseTenant does not persist the active tenant', () async {
-    final created = await store.createTenant(
-      const AppTenantCreateInput(
-        name: 'Customer One',
-        backendBaseUrl: 'https://tenant.example.com',
-        didHost: 'tenant.example.com',
-      ),
-    );
-    final tenant = created.visibleTenants.singleWhere(
-      (item) => item.name == 'Customer One',
-    );
-
-    final prepared = await store.prepareUseTenant(tenant.id);
-
-    expect(prepared.activeTenant.id, tenant.id);
-    expect((await store.loadRegistry()).activeTenant.id, defaultTenantId);
-  });
-
-  test('rejects duplicate names and endpoint pairs', () async {
-    await store.createTenant(
-      const AppTenantCreateInput(
-        name: 'Customer One',
-        backendBaseUrl: 'https://one.example.com',
-        didHost: 'one.example.com',
-      ),
-    );
-
-    await expectLater(
-      store.createTenant(
-        const AppTenantCreateInput(
-          name: 'customer one',
-          backendBaseUrl: 'https://two.example.com',
-          didHost: 'two.example.com',
-        ),
-      ),
-      throwsA(
-        isA<AppTenantValidationException>().having(
-          (error) => error.code,
-          'code',
-          'tenant_name_exists',
-        ),
-      ),
-    );
-
-    await expectLater(
-      store.createTenant(
-        const AppTenantCreateInput(
-          name: 'Customer Two',
-          backendBaseUrl: 'https://one.example.com/',
-          didHost: 'ONE.EXAMPLE.COM',
-        ),
-      ),
-      throwsA(
-        isA<AppTenantValidationException>().having(
-          (error) => error.code,
-          'code',
-          'tenant_endpoint_exists',
-        ),
-      ),
-    );
-  });
-
-  test('updates empty custom tenant and blocks default tenant edits', () async {
+  test('rename never changes storage scope or layout', () async {
     final created = await store.createTenant(
       const AppTenantCreateInput(
         name: 'Customer One',
@@ -203,102 +84,11 @@ void main() {
       ),
     );
     final tenant = created.visibleTenants.singleWhere(
-      (item) => item.name == 'Customer One',
+      (item) => !item.isPrimaryTenant,
     );
-
-    final updated = await store.updateTenant(
-      AppTenantUpdateInput(
-        id: tenant.id,
-        name: 'Customer Renamed',
-        backendBaseUrl: 'https://renamed.example.com',
-        didHost: 'renamed.example.com',
-      ),
-    );
-
-    expect(
-      updated.visibleTenants.singleWhere((item) => item.id == tenant.id).name,
-      'Customer Renamed',
-    );
-
-    await expectLater(
-      store.updateTenant(
-        const AppTenantUpdateInput(
-          id: defaultTenantId,
-          name: 'Default Renamed',
-          backendBaseUrl: 'https://default.example.com',
-          didHost: 'default.example.com',
-        ),
-      ),
-      throwsA(
-        isA<AppTenantValidationException>().having(
-          (error) => error.code,
-          'code',
-          'tenant_default_edit_forbidden',
-        ),
-      ),
-    );
-  });
-
-  test('blocks tenant endpoint edits once local data exists', () async {
-    final created = await store.createTenant(
-      const AppTenantCreateInput(
-        name: 'Customer One',
-        backendBaseUrl: 'https://one.example.com',
-        didHost: 'one.example.com',
-      ),
-    );
-    final tenant = created.visibleTenants.singleWhere(
-      (item) => item.name == 'Customer One',
-    );
-    final layout = AwikiImCorePathLayout.fromRoots(
-      appSupportRoot: p.join(root.path, 'support'),
-      cacheRoot: p.join(root.path, 'cache'),
-      tempRoot: p.join(root.path, 'tmp'),
-      stateNamespace: tenant.stateNamespace,
-    );
-    await File(layout.registryPath).parent.create(recursive: true);
-    await File(layout.registryPath).writeAsString('{"identities":[]}');
-
-    expect(await store.tenantHasData(tenant.id), isTrue);
-    await expectLater(
-      store.updateTenant(
-        AppTenantUpdateInput(
-          id: tenant.id,
-          name: tenant.name,
-          backendBaseUrl: 'https://changed.example.com',
-          didHost: 'changed.example.com',
-        ),
-      ),
-      throwsA(
-        isA<AppTenantValidationException>().having(
-          (error) => error.code,
-          'code',
-          'tenant_has_data',
-        ),
-      ),
-    );
-  });
-
-  test('allows renaming a custom tenant after local data exists', () async {
-    final created = await store.createTenant(
-      const AppTenantCreateInput(
-        name: 'Customer One',
-        backendBaseUrl: 'https://one.example.com',
-        didHost: 'one.example.com',
-      ),
-    );
-    final tenant = created.visibleTenants.singleWhere(
-      (item) => item.name == 'Customer One',
-    );
-    final layout = AwikiImCorePathLayout.fromRoots(
-      appSupportRoot: p.join(root.path, 'support'),
-      cacheRoot: p.join(root.path, 'cache'),
-      tempRoot: p.join(root.path, 'tmp'),
-      stateNamespace: tenant.stateNamespace,
-    );
-    await File(layout.registryPath).parent.create(recursive: true);
-    await File(layout.registryPath).writeAsString('{"identities":[]}');
-
+    final before = (await store.layoutForScope(
+      tenant.storageScopeId,
+    )).scopeRoot;
     final updated = await store.updateTenant(
       AppTenantUpdateInput(
         id: tenant.id,
@@ -307,70 +97,112 @@ void main() {
         didHost: tenant.didHost,
       ),
     );
-    final renamed = updated.visibleTenants.singleWhere(
-      (item) => item.id == tenant.id,
-    );
+    final renamed = updated.tenants.singleWhere((item) => item.id == tenant.id);
 
-    expect(renamed.name, '客户一号');
-    expect(renamed.id, tenant.id);
-    expect(renamed.stateNamespace, tenant.stateNamespace);
+    expect(renamed.storageScopeId, tenant.storageScopeId);
+    expect(
+      (await store.layoutForScope(renamed.storageScopeId)).scopeRoot,
+      before,
+    );
   });
 
-  test('soft deletes inactive custom tenants only', () async {
-    final created = await store.createTenant(
-      const AppTenantCreateInput(
-        name: 'Customer One',
-        backendBaseUrl: 'https://one.example.com',
-        didHost: 'one.example.com',
+  test('rejects unknown schema duplicate scope and stale revision', () async {
+    final registry = await store.loadRegistry();
+    final registryFile = File(
+      p.join(
+        root.path,
+        'support',
+        'awiki-me',
+        'control',
+        'tenant-registry.json',
       ),
     );
-    final tenant = created.visibleTenants.singleWhere(
-      (item) => item.name == 'Customer One',
-    );
-    final deleted = await store.deleteTenant(tenant.id);
+    final unknown = registry.toJson()..['schema_version'] = 2;
+    await registryFile.writeAsString(jsonEncode(unknown));
+    await expectLater(store.loadRegistry(), throwsFormatException);
 
+    await registryFile.writeAsString(jsonEncode(registry.toJson()));
+    final duplicate = AppTenantProfile(
+      tenantProfileId: TenantProfileId.generate(),
+      storageScopeId: registry.activeTenant.storageScopeId,
+      kind: AppTenantKind.custom,
+      name: 'Duplicate',
+      backendBaseUrl: 'https://duplicate.example.com',
+      didHost: 'duplicate.example.com',
+      lifecycle: AppTenantLifecycle.active,
+      createdAt: DateTime.utc(2026).toIso8601String(),
+      updatedAt: DateTime.utc(2026).toIso8601String(),
+    );
     expect(
-      deleted.visibleTenants.map((item) => item.id),
-      isNot(contains(tenant.id)),
+      () => AppTenantRegistry(
+        revision: 2,
+        activeTenantProfileId: registry.activeTenantProfileId,
+        tenants: <AppTenantProfile>[registry.activeTenant, duplicate],
+      ).validate(),
+      throwsFormatException,
     );
-
     await expectLater(
-      store.deleteTenant(defaultTenantId),
+      store.saveRegistry(registry.copyWith(revision: 3), expectedRevision: 2),
       throwsA(
         isA<AppTenantValidationException>().having(
           (error) => error.code,
           'code',
-          'tenant_default_delete_forbidden',
+          'tenant_registry_stale_revision',
         ),
       ),
     );
   });
 
-  test('product database marker also counts as tenant data', () async {
+  test('strict UUID rejects labels traversal and non-v4 values', () {
+    for (final value in <String>[
+      'tenant-default',
+      '../scope',
+      '00000000-0000-1000-8000-000000000000',
+      'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA',
+    ]) {
+      expect(() => StorageScopeId.parse(value), throwsFormatException);
+    }
+  });
+
+  test('registry and manifest binding mismatch fails closed', () async {
+    final registry = await store.loadRegistry();
+    final layout = await store.layoutForScope(
+      registry.activeTenant.storageScopeId,
+    );
+    final manifestFile = File(layout.manifestPath);
+    final manifest = jsonDecode(await manifestFile.readAsString()) as Map;
+    manifest['owner_tenant_profile_id'] = TenantProfileId.generate().value;
+    await manifestFile.writeAsString(jsonEncode(manifest));
+
+    await expectLater(store.loadRegistry(), throwsFormatException);
+  });
+
+  test('archiving tenant preserves ready scope and secret', () async {
+    final secrets = FakeScopeSecretRepository();
+    store = AppTenantStore(appStateRoot: root.path, secretRepository: secrets);
     final created = await store.createTenant(
       const AppTenantCreateInput(
-        name: 'Customer One',
-        backendBaseUrl: 'https://one.example.com',
-        didHost: 'one.example.com',
+        name: 'Archived Tenant',
+        backendBaseUrl: 'https://archive.example.com',
+        didHost: 'archive.example.com',
       ),
     );
-    final tenant = created.visibleTenants.singleWhere(
-      (item) => item.name == 'Customer One',
-    );
-    final productDb = File(
-      p.join(
-        root.path,
-        'support',
-        'awiki-me',
-        'environments',
-        tenant.stateNamespace,
-        'product',
-        AwikiProductLocalStoreSqlite.databaseName,
-      ),
-    );
-    await productDb.parent.create(recursive: true);
-    await productDb.writeAsString('data');
+    final tenant = created.tenants.singleWhere((item) => !item.isPrimaryTenant);
 
-    expect(await store.tenantHasData(tenant.id), isTrue);
+    final archived = await store.deleteTenant(tenant.id);
+    final layout = await store.layoutForScope(tenant.storageScopeId);
+    final manifest = await const StorageScopeManifestStore().readExisting(
+      layout.manifestPath,
+    );
+
+    expect(
+      archived.tenants.singleWhere((item) => item.id == tenant.id).isArchived,
+      isTrue,
+    );
+    expect(manifest.lifecycle, StorageScopeLifecycle.ready);
+    expect(
+      (await secrets.readExisting(tenant.storageScopeId)).status,
+      ScopeSecretReadStatus.present,
+    );
   });
 }
