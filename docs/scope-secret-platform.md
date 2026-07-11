@@ -71,4 +71,5 @@ CAS 在文件锁内验证 revision 后 atomic replace。
 
 Debug native smoke 覆盖 tamper rejection、exclusive create、跨 repository instance read、CAS、
 stale CAS 和 delete；它不是 App process restart 或 production signing 证据。正式发布仍必须在
-稳定 Team/signing 环境验证 production ACL、重启后读取和升级后的 designated requirement。
+稳定 Team/signing 环境运行 `scripts/run_macos_production_scope_restart_gate.sh`，验证production
+bundle三次签名/rebuild/process launch后仍读取同一item，并拒绝dev service和duplicate create。

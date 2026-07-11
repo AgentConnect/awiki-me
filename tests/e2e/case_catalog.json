@@ -653,6 +653,30 @@
       "catalogStatus": "active"
     },
     {
+      "caseId": "NATIVE-E2E-002",
+      "feature": "Signed production Keychain process restart",
+      "layer": "native_release_security",
+      "preconditions": "A stable signed macOS Release build uses bundle id ai.awiki.awikime and the production scope-secret service.",
+      "action": "Provision one unique production scope item, terminate the test App process, launch a separately built process to reopen it, reject duplicate create, then delete it in a third process.",
+      "exactOracles": [
+        "The provision process creates revision 1 only in the production service.",
+        "The independent reopen process reads the same revision and createExclusive reports already-exists.",
+        "The cleanup process deletes the unique item and confirms missing."
+      ],
+      "negativeChecks": [
+        "Ad-hoc identity, dev-service access, restart read failure, silent replacement, or cleanup failure fails the release gate."
+      ],
+      "environment": "no_service",
+      "cleanupPolicy": "unique_scope_item_delete",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "scripts/run_macos_production_scope_restart_gate.sh",
+      "evidenceType": "signed_process_command_log",
+      "catalogStatus": "active"
+    },
+    {
       "caseId": "PERF-E2E-001",
       "feature": "Real backend performance flow",
       "layer": "integration_diagnostic",

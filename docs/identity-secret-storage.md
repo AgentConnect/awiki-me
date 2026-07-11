@@ -75,7 +75,9 @@ runtime 已释放且 candidate runtime 已成功打开后，才用 revision CAS 
 
 Native smoke 覆盖显式 provision、native `VaultRequired` open、同一进程重新创建 runtime 后读取同一
 root，以及删除 key 后 openExisting 不重建。Debug smoke 不是 production Team-signing 或真实 App
-进程重启证据；正式签名 ACL、跨进程 restart 和 upgrade persistence 属于 release Gate。
+进程重启证据；`scripts/run_macos_production_scope_restart_gate.sh` 是独立 release Gate：每个阶段重新
+构建并用同一稳定 identity签名production bundle，分别启动 provision/reopen/cleanup App进程，校验
+Team/bundle identity、dev/prod service隔离、revision 1持续存在和duplicate create拒绝。
 
 相关测试：
 
@@ -86,6 +88,7 @@ root，以及删除 key 后 openExisting 不重建。Debug smoke 不是 producti
 - `tests/unit/tenant_runtime_transition_test.dart`
 - `tests/e2e/flutter/native/im_core_open_smoke_test.dart`
 - `tests/e2e/flutter/native/secure_storage_smoke_test.dart`
+- `tests/e2e/flutter/native/production_scope_restart_probe.dart`
 
 ## 7. 安全红线
 

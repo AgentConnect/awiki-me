@@ -175,6 +175,7 @@ See [docs/testing.md](docs/testing.md) for the full testing strategy.
 | --- | --- | --- | --- |
 | Unit / Widget / Provider | `dart run tests/unit/runner.dart` | Dart logic, mappers, providers, widgets, fake services, E2E runner planning/redaction | Real backend, OTP, CLI, devices |
 | Desktop smoke E2E | `dart run tests/e2e/runner.dart --case smoke` | App shell, Flutter platform shims, native im-core open smoke | Real accounts, OTP, CLI peer |
+| Signed production Keychain | `scripts/run_macos_production_scope_restart_gate.sh` | Release rebuild/process restart, production service isolation, exclusive create | Local AWiki services, secret output, ad-hoc signing |
 | Remote App + CLI product E2E | `dart run tests/e2e/runner.dart --case full` | UI-driven direct/unread/read/retry, contacts, group/mention, attachment and exact-one App + CLI checks against `awiki.info` | Unconfigured account pools or committed local credentials |
 
 Prepare real-backend E2E config locally:

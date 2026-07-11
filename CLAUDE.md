@@ -23,6 +23,7 @@
 | `tests/unit/` | 快速确定性 unit/widget/provider/fake-backed tests；line/branch baseline 由 `tests/quality/coverage_baseline.json` 约束 |
 | `tests/e2e/` | audited suite manifest + case catalog/checker、killable runner、configs、Flutter implementations、真实远端 `awiki.info` App+CLI/backend/device flows、脱敏资源台账 |
 | `integration_test/` | Flutter tooling 薄 shim； durable scenario 在 `tests/e2e/flutter/` |
+| `scripts/` | packaging/build helper与显式developer/release gate；cleanup默认dry-run，不进入production startup |
 | `docs/` | 产品、架构、测试、Message Agent、SecretVault、性能和计划文档 |
 | `android/`, `ios/`, `macos/`, `web/` | 平台 runners |
 

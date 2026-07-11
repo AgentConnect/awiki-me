@@ -14,6 +14,18 @@
       "resourceCategories": [],
       "caseIds": ["SMOKE-E2E-001", "NATIVE-E2E-001"]
     },
+    "production-keychain": {
+      "tier": "native_release_security",
+      "requiredFor": ["release"],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 12,
+      "timeoutMinutes": 15,
+      "cleanupPolicy": "unique_scope_item_delete",
+      "allowedHosts": [],
+      "allowedDidDomains": [],
+      "resourceCategories": ["production_keychain_item"],
+      "caseIds": ["NATIVE-E2E-002"]
+    },
     "full": {
       "tier": "product_ui",
       "requiredFor": ["nightly", "release"],

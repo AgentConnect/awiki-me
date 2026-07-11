@@ -277,7 +277,20 @@ Keychain item.
 The native im-core smoke now follows the production lifecycle: explicit scope
 provision, runtime `openExisting`, native `VaultRequired` open, same-process
 runtime reopen with the same root, and missing-key fail-closed without recreate.
-Production signing and real process-restart persistence remain release gates.
+The release-only `NATIVE-E2E-002` gate builds and signs the production bundle
+three times, launches three independent App processes for provision/reopen/cleanup,
+rejects the development service, proves `createExclusive` cannot replace the item,
+and verifies the signing Team/bundle identity before every launch:
+
+```bash
+AWIKI_MACOS_SIGNING_IDENTITY="<stable identity>" \
+AWIKI_MACOS_DEVELOPMENT_TEAM="<matching team id>" \
+scripts/run_macos_production_scope_restart_gate.sh
+```
+
+The script never prints the Keychain value and deletes its run-unique production
+item on success or best-effort failure cleanup. An ad-hoc signature or mismatched
+Team ID fails the gate.
 
 Unit coverage lives in:
 
