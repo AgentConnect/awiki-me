@@ -10,7 +10,10 @@ final class MenuBarStatusController: NSObject {
   }
 
   private var statusItem: NSStatusItem?
-  private weak var mainWindow: NSWindow?
+  // Keep the Flutter window alive after the user closes it. The app remains
+  // running for its menu-bar status item, so a weak reference can disappear
+  // before applicationShouldHandleReopen tries to restore the window.
+  private var mainWindow: NSWindow?
   private var unreadCount = 0
 
   private override init() {
