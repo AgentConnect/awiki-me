@@ -9,6 +9,7 @@
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Stage an attachment through desktop drop UI and send it to CLI.",
       "exactOracles": [
+        "The desktop drop uses a real temporary filesystem source and both the staged draft model and visible preview preserve the exact filename.",
         "One canonical attachment message reaches terminal sent state.",
         "CLI verifies filename, MIME, size, digest and downloaded bytes exactly."
       ],

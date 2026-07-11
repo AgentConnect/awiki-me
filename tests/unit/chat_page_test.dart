@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/attachment_open_service.dart';
+import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
@@ -825,9 +826,7 @@ void main() {
 
     expect(find.text('Profile Agent'), findsWidgets);
     expect(
-      tester
-          .widget<Text>(find.byKey(const Key('chat-header-title')))
-          .data,
+      tester.widget<Text>(find.byKey(const Key('chat-header-title'))).data,
       'Profile Agent',
     );
     expect(find.text('profile 加载完成后的介绍'), findsOneWidget);
@@ -3888,7 +3887,7 @@ void main() {
     expect(gateway.lastSentContent, 'hello 😀');
   });
 
-  testWidgets('收到的小图片自动下载并在消息气泡内直接显示', (tester) async {
+  testWidgets('peer-scoped 会话用 direct peer 下载收到的小图片', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -3898,13 +3897,14 @@ void main() {
     );
     final conversation = ConversationSummary(
       conversationId: 'dm:did:test:peer',
-      threadId: 'dm:inline-image',
+      threadId: 'dm:peer-scope:v1:inline-image',
       displayName: 'Tester',
       lastMessagePreview: '[图片]',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
       unreadCount: 0,
       isGroup: false,
       targetDid: 'did:test:peer',
+      targetPeer: 'peer@awiki.info',
     );
     final message = _messageWithConversation(
       ChatMessage(
@@ -3964,6 +3964,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(messagingService.downloadAttachmentCalls, 1);
+    expect(
+      messagingService.lastDownloadedAttachmentThread,
+      isA<AppDirectThreadRef>().having(
+        (thread) => thread.peerDidOrHandle,
+        'peerDidOrHandle',
+        'peer@awiki.info',
+      ),
+    );
     expect(
       find.byKey(const Key('chat-inline-image:inline-image')),
       findsOneWidget,

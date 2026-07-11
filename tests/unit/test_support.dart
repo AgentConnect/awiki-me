@@ -1752,6 +1752,7 @@ class FakeMessagingService
   int conversationTimelineCalls = 0;
   int sendConversationAttachmentCalls = 0;
   int downloadAttachmentCalls = 0;
+  AppThreadRef? lastDownloadedAttachmentThread;
   AttachmentDownloadResult? nextAttachmentDownloadResult;
   AppConversationReadRef? lastAttachmentConversation;
   String? lastSentAttachmentClientMessageId;
@@ -1779,6 +1780,7 @@ class FakeMessagingService
     String? localPath,
   }) async {
     downloadAttachmentCalls += 1;
+    lastDownloadedAttachmentThread = thread;
     final configured = nextAttachmentDownloadResult;
     if (configured != null) {
       return configured;

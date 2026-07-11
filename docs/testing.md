@@ -161,6 +161,10 @@ silently falling back to a legacy `dm:<DID>` conversation identity.
 The same successful send result must update the canonical conversation preview
 immediately; preview lookup is not allowed to downgrade a peer-scoped
 conversation to a stale legacy alias while waiting for a realtime patch.
+Attachment preview keeps the canonical peer-scoped conversation id for local
+timeline ownership, but downloads through the direct peer reference required by
+the remote attachment lookup. A raw `dm:peer-scope:*` storage thread must never
+be sent to the core `thread-attachment-download` capability.
 
 All live product cases are pinned by `tests/e2e/suite_manifest.json` to
 `https://awiki.info` / `wss://awiki.info/im/ws`. They reject localhost,
@@ -228,7 +232,9 @@ The product oracle is fail-closed:
   exact candidate, and proves the composer clears after submission; CLI payload
   sends must return both a canonical id and `application/json` result type;
   group mentions require one valid structured target DID; attachment checks
-  require exact ids, filename, MIME type, size, digest, and downloaded bytes.
+  use a real temporary filesystem drop source, require the draft model and
+  visible preview to preserve the exact filename, and then require exact ids,
+  MIME type, size, digest, and downloaded bytes.
 - Robot taps on wrapper controls resolve to exactly one enabled interactive
   `AppPressable` descendant before dispatch, so a wrapper-center hit-test miss
   cannot be mistaken for a successful product click.

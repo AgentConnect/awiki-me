@@ -2961,7 +2961,7 @@ class ChatThreadsController
     return ref
         .read(messagingServiceProvider)
         .downloadAttachment(
-          thread: _historyThreadRefFor(conversation),
+          thread: _attachmentThreadRefFor(conversation),
           messageId: messageId,
           attachmentId: attachment.attachmentId,
         );
@@ -6546,6 +6546,25 @@ AppThreadRef _localHistoryThreadRefFor(ConversationSummary conversation) {
   // same direct target. History, patch repair, and thread-after must therefore
   // address the exact thread id to avoid mixing agent controller/runtime rows.
   return _historyThreadRefFor(conversation);
+}
+
+AppThreadRef _attachmentThreadRefFor(ConversationSummary conversation) {
+  // Peer-scoped ids identify local timeline ownership and are intentionally
+  // not reversible. Remote attachment lookup instead requires a direct peer
+  // (or group) network address.
+  final groupId = conversation.groupId?.trim();
+  if (conversation.isGroup && groupId != null && groupId.isNotEmpty) {
+    return AppThreadRef.group(groupId);
+  }
+  final peer = conversation.targetPeer?.trim();
+  if (!conversation.isGroup && peer != null && peer.isNotEmpty) {
+    return AppThreadRef.direct(peer);
+  }
+  final peerDid = conversation.targetDid?.trim();
+  if (!conversation.isGroup && peerDid != null && peerDid.isNotEmpty) {
+    return AppThreadRef.direct(peerDid);
+  }
+  return AppThreadRef.thread(conversation.threadId);
 }
 
 ({String kind, String id}) _threadPatchKeyFor(AppThreadRef thread) {

@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(41));
+      expect(catalog.cases, hasLength(42));
       expect(
         catalog.suiteCaseIds.keys,
         containsAll(<String>['smoke', 'full', 'direct']),

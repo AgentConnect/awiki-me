@@ -608,21 +608,54 @@ class _DesktopAppRobot {
       find.byKey(const Key('chat-attachment-drop-overlay')),
       description: 'attachment drop overlay',
     );
-    await _sendDesktopDropMethod('performOperation_web', <Map<String, Object?>>[
-      <String, Object?>{
-        'uri': '',
-        'children': <Map<String, Object?>>[],
-        'data': bytes,
-        'name': filename,
-        'type': mimeType,
-        'size': bytes.length,
-        'relativePath': null,
-        'lastModified': DateTime.now().millisecondsSinceEpoch,
-      },
-    ]);
+    final sourceDirectory = await Directory.systemTemp.createTemp(
+      'awiki-e2e-drop-',
+    );
+    final source = File('${sourceDirectory.path}/$filename');
+    await source.writeAsBytes(bytes, flush: true);
+    try {
+      if (Platform.isMacOS) {
+        await _sendDesktopDropMethod(
+          'performOperation_macos',
+          <Map<String, Object?>>[
+            <String, Object?>{
+              'path': source.path,
+              'isDirectory': false,
+              'fromPromise': false,
+            },
+          ],
+        );
+      } else {
+        await _sendDesktopDropMethod('performOperation', <String>[source.path]);
+      }
+      await pumpUntilFinder(
+        find.byKey(const Key('chat-pending-attachment-preview')),
+        description: 'pending attachment preview',
+      );
+    } finally {
+      if (await sourceDirectory.exists()) {
+        await sourceDirectory.delete(recursive: true);
+      }
+    }
+  }
+
+  Future<void> expectPendingAttachmentFilename(String expectedFilename) async {
+    final preview = find.byKey(const Key('chat-pending-attachment-preview'));
+    await pumpUntilFinder(preview, description: 'pending attachment preview');
+    final draft = container
+        .read(chatComposerDraftsProvider.notifier)
+        .draftFor(selectedConversation)
+        .pendingAttachment;
+    if (draft == null || draft.filename != expectedFilename) {
+      fail(
+        'Pending attachment model did not preserve the exact dropped '
+        'filename; draft_present=${draft != null} exact_filename='
+        '${draft?.filename == expectedFilename}.',
+      );
+    }
     await pumpUntilFinder(
-      find.byKey(const Key('chat-pending-attachment-preview')),
-      description: 'pending attachment preview',
+      find.descendant(of: preview, matching: find.text(expectedFilename)),
+      description: 'exact pending attachment filename',
     );
   }
 
@@ -716,19 +749,23 @@ class _DesktopAppRobot {
     }
     await tester.ensureVisible(finder);
     final widget = elements.single.widget;
-    final tapTarget =
+    final pressableDescendant = find.descendant(
+      of: finder,
+      matching: find.byType(AppPressable),
+    );
+    final pressableCount = pressableDescendant.evaluate().length;
+    final requiresPressableDescendant =
         widget is AppPrimaryButton ||
-            widget is AppSecondaryButton ||
-            widget is AppIconButton ||
-            widget is AppPressableTile
-        ? find.descendant(of: finder, matching: find.byType(AppPressable))
-        : finder;
-    if (tapTarget.evaluate().length != 1) {
+        widget is AppSecondaryButton ||
+        widget is AppIconButton ||
+        widget is AppPressableTile;
+    if (requiresPressableDescendant && pressableCount != 1) {
       fail(
         'Expected exactly one interactive target for $description, found '
-        '${tapTarget.evaluate().length}.',
+        '$pressableCount.',
       );
     }
+    final tapTarget = pressableCount == 1 ? pressableDescendant : finder;
     await tester.tap(tapTarget);
     await tester.pump();
   }

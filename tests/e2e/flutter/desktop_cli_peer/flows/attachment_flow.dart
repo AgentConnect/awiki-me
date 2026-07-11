@@ -33,17 +33,7 @@ Future<void> _verifyAttachmentRegression({
     mimeType: 'text/plain',
     bytes: appAttachmentBytes,
   );
-  final pendingAttachment = find.byKey(
-    const Key('chat-pending-attachment-preview'),
-  );
-  expect(pendingAttachment, findsOneWidget);
-  expect(
-    find.descendant(
-      of: pendingAttachment,
-      matching: find.text(appAttachmentFilename),
-    ),
-    findsOneWidget,
-  );
+  await robot.expectPendingAttachmentFilename(appAttachmentFilename);
   await robot.sendStagedAttachment(caption: appAttachmentCaption);
   final appAttachmentMessage = await _waitForUiMessage(
     robot: robot,
@@ -179,16 +169,49 @@ Future<void> _verifyAttachmentRegression({
   final openButton = find.byKey(
     Key('chat-open-attachment:${cliAttachmentMessage.localId}'),
   );
+  final feedbackBefore = robot.container.read(uiFeedbackProvider)?.id;
   await robot.tapOne(
     openButton,
     description: 'received attachment open button',
   );
   await robot.pumpUntil(
-    description: 'received attachment is downloaded for preview',
+    description: 'received attachment open success or typed failure',
     timeout: const Duration(minutes: 2),
-    condition: () =>
-        (attachmentOpenRecorder.lastOpenedPath?.trim().isNotEmpty ?? false),
+    condition: () {
+      if (attachmentOpenRecorder.lastOpenedPath?.trim().isNotEmpty ?? false) {
+        return true;
+      }
+      final feedback = robot.container.read(uiFeedbackProvider);
+      return feedback != null &&
+          feedback.danger &&
+          feedback.id != feedbackBefore;
+    },
   );
+  if (attachmentOpenRecorder.lastOpenedPath?.trim().isEmpty ?? true) {
+    final feedback = robot.container.read(uiFeedbackProvider);
+    final detail = feedback?.detail?.toLowerCase() ?? '';
+    final coreCode = RegExp(
+      r'awikiimcoreexception\(([a-z0-9_]+)\)',
+    ).firstMatch(detail)?.group(1);
+    final detailKind = detail.contains('not committed')
+        ? 'object_not_committed'
+        : detail.contains('expired')
+        ? 'object_expired'
+        : detail.contains('not available')
+        ? 'object_not_available'
+        : detail.contains('message not found')
+        ? 'message_not_found'
+        : detail.contains('awikiimcoreexception')
+        ? 'typed_core_error'
+        : detail.isEmpty
+        ? 'no_detail'
+        : 'other';
+    fail(
+      'Received attachment open failed through the UI; message_id='
+      '${feedback?.message.id ?? 'missing'} detail_kind=$detailKind '
+      'core_code=${coreCode ?? 'unavailable'}.',
+    );
+  }
   final openedFile = File(attachmentOpenRecorder.lastOpenedPath!);
   expect(await openedFile.exists(), isTrue);
   expect(await openedFile.readAsString(), cliAttachmentText);
