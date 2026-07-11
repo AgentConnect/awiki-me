@@ -650,6 +650,102 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
+  testWidgets('单聊页头在 profile 返回后用昵称替换 handle', (tester) async {
+    final profileCompleter = Completer<UserProfile>();
+    final profileService = _DelayedProfileApplicationService(profileCompleter);
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:nickname-header',
+      displayName: 'zsy.awiki.ai',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:zsy',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          profileApplicationServiceProvider.overrideWithValue(profileService),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    Text headerTitle() =>
+        tester.widget<Text>(find.byKey(const Key('chat-header-title')));
+    expect(headerTitle().data, 'zsy.awiki.ai');
+    expect(profileService.loadPublicProfileCalls, 1);
+
+    profileCompleter.complete(
+      const UserProfile(
+        did: 'did:test:zsy',
+        nickName: '张盛毅',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+        handle: 'zsy',
+        fullHandle: 'zsy.awiki.ai',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(headerTitle().data, '张盛毅');
+    expect(profileService.loadPublicProfileCalls, 1);
+  });
+
+  testWidgets('群聊页头不查询个人 profile 并保留群名', (tester) async {
+    final profileCompleter = Completer<UserProfile>();
+    final profileService = _DelayedProfileApplicationService(profileCompleter);
+    final conversation = ConversationSummary(
+      threadId: 'group:header',
+      displayName: '产品讨论群',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:test:group',
+      targetDid: 'did:test:group',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: FakeAwikiGateway(),
+        session: const SessionIdentity(
+          did: 'did:test:me',
+          handle: 'me',
+          displayName: 'Me',
+          credentialName: 'default',
+        ),
+        providerOverrides: <Override>[
+          profileApplicationServiceProvider.overrideWithValue(profileService),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    final title = tester.widget<Text>(
+      find.byKey(const Key('chat-header-title')),
+    );
+    expect(title.data, '产品讨论群');
+    expect(profileService.loadPublicProfileCalls, 0);
+  });
+
   testWidgets('聊天头像信息弹窗先展示基础信息，profile 返回后补齐资料', (tester) async {
     final profileCompleter = Completer<UserProfile>();
     final profileService = _DelayedProfileApplicationService(profileCompleter);
@@ -727,7 +823,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Profile Agent'), findsOneWidget);
+    expect(find.text('Profile Agent'), findsWidgets);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('chat-header-title')))
+          .data,
+      'Profile Agent',
+    );
     expect(find.text('profile 加载完成后的介绍'), findsOneWidget);
     expect(find.text('@profile-agent.awiki.ai'), findsOneWidget);
     final didText = tester.widget<Text>(

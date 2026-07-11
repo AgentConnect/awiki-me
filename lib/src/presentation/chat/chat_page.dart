@@ -528,6 +528,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final displayThreadId = _displayThreadId;
     final thread = ref.watch(chatThreadProvider(displayThreadId));
     final currentConversation = _currentConversationForTitle();
+    final headerNickname = _headerNickname(currentConversation);
     _requestAgentsIfNeeded(currentConversation);
     final agents = ref.watch(agentsProvider).agents;
     final isDeletedAgentConversation =
@@ -611,6 +612,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
         children: <Widget>[
           _ChatHeader(
             conversation: currentConversation,
+            nickname: headerNickname,
             embedded: widget.embedded,
             macStyle: macStyle,
             classification: peerClassification,
@@ -1883,6 +1885,21 @@ class _ChatViewState extends ConsumerState<ChatView> {
       displayName: groupName ?? base.displayName,
       avatarUri: groupAvatarUri ?? base.avatarUri,
     );
+  }
+
+  String? _headerNickname(ConversationSummary conversation) {
+    if (conversation.isGroup) {
+      return null;
+    }
+    final targetDid = conversation.targetDid?.trim();
+    if (targetDid == null || targetDid.isEmpty) {
+      return null;
+    }
+    final profile = ref
+        .watch(peerPublicProfileProvider(targetDid))
+        .maybeWhen(data: (value) => value, orElse: () => null);
+    final nickname = profile?.displayName.trim() ?? '';
+    return nickname.isEmpty ? null : nickname;
   }
 
   ConversationSummary _currentConversationSnapshot() {

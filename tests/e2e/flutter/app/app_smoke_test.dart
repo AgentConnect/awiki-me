@@ -15,7 +15,7 @@ import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
-import 'package:flutter/widgets.dart' show Key, ListView, Size;
+import 'package:flutter/widgets.dart' show Key, ListView, Size, Text;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -106,6 +106,16 @@ void main() {
         jwtToken: 'test-jwt',
       );
       final harness = createFakeAwikiMeAppHarness(session: session);
+      harness.gateway.publicProfilesByQuery['did:test:smoke-peer.awiki.ai'] =
+          const UserProfile(
+            did: 'did:test:smoke-peer.awiki.ai',
+            nickName: 'Smoke Peer Nickname',
+            bio: '',
+            tags: <String>[],
+            profileMarkdown: '',
+            handle: 'smoke-peer',
+            fullHandle: 'smoke-peer.awiki.ai',
+          );
       final picker = test_support.FakeAttachmentPickerService();
 
       try {
@@ -141,6 +151,10 @@ void main() {
             .conversations;
         expect(conversations, hasLength(1));
         expect(conversations.single.lastMessagePreview, isEmpty);
+        final headerTitle = tester.widget<Text>(
+          find.byKey(const Key('chat-header-title')),
+        );
+        expect(headerTitle.data, 'Smoke Peer Nickname');
         expect(find.byKey(const Key('chat-emoji-button')), findsOneWidget);
         expect(find.byKey(const Key('chat-screenshot-button')), findsOneWidget);
         await tester.tap(find.byKey(const Key('chat-emoji-button')));
