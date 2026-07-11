@@ -3768,6 +3768,14 @@ void main() {
     await tester.tap(find.byKey(const Key('chat-emoji-button')));
     await tester.pump();
     expect(find.byKey(const Key('chat-emoji-picker')), findsOneWidget);
+
+    await tester.tap(_chatMessagesListFinder());
+    await tester.pump();
+    expect(find.byKey(const Key('chat-emoji-picker')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('chat-emoji-button')));
+    await tester.pump();
+    expect(find.byKey(const Key('chat-emoji-picker')), findsOneWidget);
     await tester.tap(find.byKey(const Key('chat-emoji-option:0')));
     await tester.pump();
 
@@ -4249,6 +4257,63 @@ void main() {
       find.byKey(const Key('chat-pending-attachment-preview')),
       findsOneWidget,
     );
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 输入框使用上层文字和下层紧凑工具栏', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:mac-composer-layout',
+      displayName: 'Tester',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1100, 760));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(
+            conversation: conversation,
+            embedded: true,
+            macStyle: true,
+          ),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+
+    final textRect = tester.getRect(find.byType(CupertinoTextField));
+    final toolRowRect = tester.getRect(
+      find.byKey(const Key('chat-composer-tool-row')),
+    );
+    expect(toolRowRect.top, greaterThanOrEqualTo(textRect.bottom));
+    for (final key in const <String>[
+      'chat-attachment-button',
+      'chat-emoji-button',
+      'chat-screenshot-button',
+    ]) {
+      final size = tester.getSize(find.byKey(Key(key)));
+      expect(size.width, lessThan(30));
+      expect(size.height, lessThan(30));
+    }
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

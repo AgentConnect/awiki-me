@@ -14,7 +14,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_provide
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart' show Key, Size;
+import 'package:flutter/widgets.dart' show Key, ListView, Size;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -145,6 +145,20 @@ void main() {
         await tester.tap(find.byKey(const Key('chat-emoji-button')));
         await _pumpSmokeFrame(tester);
         expect(find.byKey(const Key('chat-emoji-picker')), findsOneWidget);
+        await tester.tap(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is ListView &&
+                widget.key is ValueKey<String> &&
+                (widget.key! as ValueKey<String>).value.startsWith(
+                  'chat-messages:',
+                ),
+          ),
+        );
+        await _pumpSmokeFrame(tester);
+        expect(find.byKey(const Key('chat-emoji-picker')), findsNothing);
+        await tester.tap(find.byKey(const Key('chat-emoji-button')));
+        await _pumpSmokeFrame(tester);
         await tester.tap(find.byKey(const Key('chat-emoji-option:0')));
         await _pumpSmokeFrame(tester);
         await tester.tap(find.byKey(const Key('chat-screenshot-button')));

@@ -62,7 +62,7 @@ part 'parts/chat_message_part.dart';
 part 'parts/chat_composer_part.dart';
 
 const _chatMessageListBottomInset = 12.0;
-const _macChatMessageListBottomInset = 10.0;
+const _macChatMessageListBottomInset = 4.0;
 
 typedef ChatImageWidgetBuilder =
     Widget Function({
