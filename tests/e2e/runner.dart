@@ -626,6 +626,13 @@ class DesktopE2eRunner {
         'cliPeer.sourceRef must be the exact non-zero 40-character commit SHA used to build the CLI/SDK.',
       );
     }
+    final version = await _cli(const <String>['--format', 'json', 'version']);
+    final binaryCommit = cliBuildCommitFromVersionJson(version.output);
+    if (binaryCommit != peerConfig.cliSourceRef.toLowerCase()) {
+      throw E2eFailure(
+        'cliPeer.sourceRef does not match the commit embedded in the CLI binary.',
+      );
+    }
     final cliResolved = await _cli(<String>[
       '--format',
       'json',
@@ -1569,6 +1576,23 @@ bool isAuditableGitSha(String value) {
   final normalized = value.trim();
   return RegExp(r'^[0-9a-fA-F]{40}$').hasMatch(normalized) &&
       !RegExp(r'^0{40}$').hasMatch(normalized);
+}
+
+String cliBuildCommitFromVersionJson(String output) {
+  Object? decoded;
+  try {
+    decoded = jsonDecode(output);
+  } on Object {
+    throw E2eFailure('CLI version preflight returned invalid JSON.');
+  }
+  final data = decoded is Map ? decoded['data'] : null;
+  final commit = data is Map ? data['commit'] : null;
+  if (commit is! String || !isAuditableGitSha(commit)) {
+    throw E2eFailure(
+      'CLI version preflight did not report an auditable embedded commit.',
+    );
+  }
+  return commit.trim().toLowerCase();
 }
 
 String _basename(String path) {
