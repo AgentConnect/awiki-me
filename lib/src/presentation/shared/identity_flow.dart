@@ -1,3 +1,6 @@
+// [INPUT]: DID/handle queries, directory/profile services, relationship state, and conversation projections.
+// [OUTPUT]: Resolved identity UI state and canonical direct-conversation navigation.
+// [POS]: Shared identity lookup and Direct chat entry flow for contacts and conversation surfaces.
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
@@ -153,21 +156,37 @@ Future<_ResolvedIdentity> _resolveIdentityProfile(
   if (query.isEmpty) {
     throw ArgumentError('identity_query_required');
   }
-  try {
-    final resolution = await ref
-        .read(directoryApplicationServiceProvider)
-        .resolvePeer(query);
-    return _ResolvedIdentity(
-      profile: resolution.profile ?? identityProfileFromResolution(resolution),
-      conversationId: resolution.conversationId,
-    );
-  } catch (_) {
-    return _ResolvedIdentity(
-      profile: await ref
-          .read(profileApplicationServiceProvider)
-          .loadPublicProfile(query),
+  Object? directoryError;
+  for (var attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      final resolution = await ref
+          .read(directoryApplicationServiceProvider)
+          .resolvePeer(query);
+      return _ResolvedIdentity(
+        profile:
+            resolution.profile ?? identityProfileFromResolution(resolution),
+        conversationId: resolution.conversationId,
+      );
+    } catch (error) {
+      directoryError = error;
+      if (attempt < 2) {
+        await Future<void>.delayed(Duration(milliseconds: 150 * (attempt + 1)));
+      }
+    }
+  }
+  if (!query.startsWith('did:')) {
+    // A handle lookup owns the user-id/full-handle peer scope. Falling back to
+    // a public profile here would silently reopen the legacy dm:<DID> alias.
+    Error.throwWithStackTrace(
+      directoryError ?? StateError('directory_resolution_failed'),
+      StackTrace.current,
     );
   }
+  return _ResolvedIdentity(
+    profile: await ref
+        .read(profileApplicationServiceProvider)
+        .loadPublicProfile(query),
+  );
 }
 
 UserProfile identityProfileFromResolution(DirectoryPeerResolution resolution) {

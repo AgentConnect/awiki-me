@@ -156,6 +156,8 @@ the sender timeline empty or create a duplicate.
 For a new peer-scoped conversation, the write request uses the already resolved
 peer DID alias because the canonical peer-scope hash is intentionally not
 reversible; returned rows and every read/timeline assertion remain canonical.
+Handle lookup retries transient directory failures and fails closed rather than
+silently falling back to a legacy `dm:<DID>` conversation identity.
 
 All live product cases are pinned by `tests/e2e/suite_manifest.json` to
 `https://awiki.info` / `wss://awiki.info/im/ws`. They reject localhost,
