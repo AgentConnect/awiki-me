@@ -89,6 +89,13 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
       displayName: displayName,
       profileName: profileName,
     );
+    final agentAlias = runtimeAgent?.displayName.trim() ?? '';
+    final showAgentAlias =
+        agentAlias.isNotEmpty &&
+        _normalizedIdentityLabel(agentAlias) !=
+            _normalizedIdentityLabel(primaryIdentity) &&
+        _normalizedIdentityLabel(agentAlias) !=
+            _normalizedIdentityLabel(secondaryIdentity);
     final homepageUrl = profile == null
         ? ''
         : ref.watch(profileHomepageResolverProvider).homepageUrl(profile);
@@ -167,10 +174,28 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                               ),
                             ),
                           ],
+                          if (showAgentAlias) ...<Widget>[
+                            const SizedBox(height: 3),
+                            Text(
+                              agentAlias,
+                              key: const Key('peer-info-dialog-agent-alias'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFF8A96AA),
+                                fontSize: 11.5,
+                                height: 1.25,
+                              ),
+                            ),
+                          ],
                           if (profileDid.isNotEmpty) ...<Widget>[
                             const SizedBox(height: 8),
                             CopyableDidLine(
                               value: profileDid,
+                              displayValue: DidDisplayFormatter.compactDidPath(
+                                profileDid,
+                              ),
+                              maxLines: 2,
                               copySemanticLabel:
                                   context.l10n.chatPeerInfoCopyDid,
                               copiedMessage: context.l10n.chatPeerInfoDidCopied,
@@ -353,19 +378,19 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     required String displayName,
     required String profileName,
   }) {
-    final normalizedPrimary = primary
-        .replaceFirst(RegExp(r'^@'), '')
-        .toLowerCase();
+    final normalizedPrimary = _normalizedIdentityLabel(primary);
     for (final candidate in <String>[profileName, displayName]) {
       final value = candidate.trim();
       if (value.isNotEmpty &&
-          value.replaceFirst(RegExp(r'^@'), '').toLowerCase() !=
-              normalizedPrimary) {
+          _normalizedIdentityLabel(value) != normalizedPrimary) {
         return value;
       }
     }
     return '';
   }
+
+  String _normalizedIdentityLabel(String value) =>
+      value.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
 
   Widget _profilePlaceholder(PeerProfileState state) {
     const textStyle = TextStyle(

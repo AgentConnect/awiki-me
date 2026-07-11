@@ -132,6 +132,11 @@ class PeerProfilePage extends ConsumerWidget {
                                       const SizedBox(height: 6),
                                       CopyableDidLine(
                                         value: profile.did,
+                                        displayValue:
+                                            DidDisplayFormatter.compactDidPath(
+                                              profile.did,
+                                            ),
+                                        maxLines: 2,
                                         copySemanticLabel:
                                             context.l10n.chatPeerInfoCopyDid,
                                         copiedMessage:

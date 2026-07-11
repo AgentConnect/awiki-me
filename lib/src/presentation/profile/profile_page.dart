@@ -149,6 +149,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                         SizedBox(height: responsive.spacing(6)),
                         CopyableDidLine(
                           value: profile.did,
+                          displayValue: DidDisplayFormatter.compactDidPath(
+                            profile.did,
+                          ),
+                          maxLines: 2,
                           copySemanticLabel: context.l10n.chatPeerInfoCopyDid,
                           copiedMessage: context.l10n.chatPeerInfoDidCopied,
                           textKey: const Key('profile-did-value'),
