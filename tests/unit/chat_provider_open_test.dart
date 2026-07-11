@@ -716,6 +716,11 @@ void main() {
   });
 
   test('thread patch upsert updates sent result without duplicating', () async {
+    final canonicalConversation = conversation.copyWith(
+      conversationId: 'dm:peer-scope:v1:canonical-peer',
+      threadId: 'dm:peer-scope:v1:canonical-peer',
+      lastMessagePreview: '',
+    );
     final patchMessaging = _PatchMessagingService(
       localHistory: <ChatMessage>[],
     );
@@ -742,25 +747,41 @@ void main() {
 
     await patchContainer
         .read(chatThreadsProvider.notifier)
-        .openConversation(conversation);
+        .openConversation(canonicalConversation);
     await pumpEventQueue();
     await patchContainer
         .read(chatThreadsProvider.notifier)
-        .sendMessage(conversation: conversation, content: 'hello patch');
+        .sendMessage(
+          conversation: canonicalConversation,
+          content: 'hello patch',
+        );
     await pumpEventQueue();
 
     expect(patchMessaging.sendConversationTextCalls, 1);
-    expect(
-      patchMessaging.lastSendConversation?.conversationId,
-      conversation.effectiveConversationId,
-    );
+    expect(patchMessaging.lastSendConversation?.conversationId, 'dm:did:peer');
     expect(patchMessaging.lastClientMessageId, isNotEmpty);
     var messages = patchContainer
-        .read(chatThreadProvider(_timelineThreadId(conversation)))
+        .read(chatThreadProvider(_timelineThreadId(canonicalConversation)))
         .messages;
     expect(messages, hasLength(1));
     expect(messages.single.content, 'hello patch');
     expect(messages.single.sendState, MessageSendState.sent);
+    final canonicalPreview = patchContainer
+        .read(conversationListProvider)
+        .conversations
+        .singleWhere(
+          (item) =>
+              item.effectiveConversationId ==
+              canonicalConversation.effectiveConversationId,
+        );
+    expect(canonicalPreview.lastMessagePreview, 'hello patch');
+    expect(
+      patchContainer
+          .read(conversationListProvider)
+          .conversations
+          .where((item) => item.effectiveConversationId == 'dm:did:peer'),
+      isEmpty,
+    );
 
     final clientMessageId = patchMessaging.lastClientMessageId!;
     patchMessaging.emitPatch(
@@ -769,13 +790,13 @@ void main() {
         ownerDid: 'did:me',
         version: 2,
         threadKind: 'conversation',
-        threadId: conversation.effectiveConversationId,
-        conversationId: conversation.effectiveConversationId,
+        threadId: canonicalConversation.effectiveConversationId,
+        conversationId: canonicalConversation.effectiveConversationId,
         message: ChatMessage(
           localId: clientMessageId,
           remoteId: clientMessageId,
-          conversationId: conversation.effectiveConversationId,
-          threadId: conversation.threadId,
+          conversationId: canonicalConversation.effectiveConversationId,
+          threadId: canonicalConversation.threadId,
           senderDid: 'did:me',
           receiverDid: 'did:peer',
           content: 'hello patch',
@@ -788,7 +809,7 @@ void main() {
     await pumpEventQueue();
 
     messages = patchContainer
-        .read(chatThreadProvider(_timelineThreadId(conversation)))
+        .read(chatThreadProvider(_timelineThreadId(canonicalConversation)))
         .messages;
     expect(messages, hasLength(1));
     expect(messages.single.localId, clientMessageId);
@@ -800,13 +821,13 @@ void main() {
         ownerDid: 'did:me',
         version: 3,
         threadKind: 'conversation',
-        threadId: conversation.effectiveConversationId,
-        conversationId: conversation.effectiveConversationId,
+        threadId: canonicalConversation.effectiveConversationId,
+        conversationId: canonicalConversation.effectiveConversationId,
         message: ChatMessage(
           localId: clientMessageId,
           remoteId: 'sent-patched',
-          conversationId: conversation.effectiveConversationId,
-          threadId: conversation.threadId,
+          conversationId: canonicalConversation.effectiveConversationId,
+          threadId: canonicalConversation.threadId,
           senderDid: 'did:me',
           receiverDid: 'did:peer',
           content: 'hello patch',
@@ -820,7 +841,7 @@ void main() {
     await pumpEventQueue();
 
     messages = patchContainer
-        .read(chatThreadProvider(_timelineThreadId(conversation)))
+        .read(chatThreadProvider(_timelineThreadId(canonicalConversation)))
         .messages;
     expect(messages, hasLength(1));
     expect(messages.single.remoteId, 'sent-patched');

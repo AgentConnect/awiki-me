@@ -2799,6 +2799,9 @@ class ChatThreadsController
         submittedLocalMessageId: clientMessageId,
         result: sent,
       );
+      _updateConversationPreviewFromMessages(conversation, <ChatMessage>[
+        deliveredMessage,
+      ]);
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
         displayThreadId: targetThreadId,
@@ -2918,6 +2921,9 @@ class ChatThreadsController
         pending.localId,
         sentInThread,
       );
+      _updateConversationPreviewFromMessages(conversation, <ChatMessage>[
+        deliveredMessage,
+      ]);
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
         displayThreadId: targetThreadId,
@@ -3027,6 +3033,9 @@ class ChatThreadsController
         submittedLocalMessageId: clientMessageId,
         result: retried,
       );
+      _updateConversationPreviewFromMessages(conversation, <ChatMessage>[
+        deliveredMessage,
+      ]);
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
         displayThreadId: targetThreadId,
@@ -3185,6 +3194,9 @@ class ChatThreadsController
         message.localId,
         retriedInThread,
       );
+      _updateConversationPreviewFromMessages(conversation, <ChatMessage>[
+        deliveredMessage,
+      ]);
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
         displayThreadId: targetThreadId,
@@ -6172,8 +6184,10 @@ class ChatThreadsController
     if (!sameConversationTarget(candidate, fallback)) {
       return false;
     }
-    return !(isPeerScopedDirectConversation(candidate) &&
-        isPeerScopedDirectConversation(fallback));
+    // Once the caller holds a canonical peer-scoped identity, state lookup
+    // must never downgrade it to a legacy dm:<DID> row. The canonical preview
+    // upsert will replace that stale alias in the conversation list.
+    return !isPeerScopedDirectConversation(fallback);
   }
 
   ConversationSummary _conversationIdentityForThread(

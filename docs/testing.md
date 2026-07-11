@@ -158,6 +158,9 @@ peer DID alias because the canonical peer-scope hash is intentionally not
 reversible; returned rows and every read/timeline assertion remain canonical.
 Handle lookup retries transient directory failures and fails closed rather than
 silently falling back to a legacy `dm:<DID>` conversation identity.
+The same successful send result must update the canonical conversation preview
+immediately; preview lookup is not allowed to downgrade a peer-scoped
+conversation to a stale legacy alias while waiting for a realtime patch.
 
 All live product cases are pinned by `tests/e2e/suite_manifest.json` to
 `https://awiki.info` / `wss://awiki.info/im/ws`. They reject localhost,
