@@ -206,13 +206,14 @@ void main() {
     expect(find.text('关注'), findsOneWidget);
   });
 
-  testWidgets('个人资料页主体支持选中复制完整身份信息', (tester) async {
+  testWidgets('个人资料页以完整 handle 为主并只保留一个 DID 复制入口', (tester) async {
     const profile = UserProfile(
       did: 'did:wba:anpclaw.com:user:elena:e1_full_identity_key',
       nickName: 'Elena',
       bio: 'Bio',
       tags: <String>['copyable'],
       handle: 'elena',
+      fullHandle: 'elena.anpclaw.com',
       profileMarkdown: '# Elena\n\nCopyable body',
     );
     final gateway = FakeAwikiGateway()..myProfile = profile;
@@ -228,8 +229,54 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.byType(SelectionArea), findsOneWidget);
-    expect(find.text(profile.did), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('profile-handle-value'))).data,
+      '@elena.anpclaw.com',
+    );
+    expect(
+      tester.widget<Text>(find.byKey(const Key('profile-display-name'))).data,
+      'Elena',
+    );
+    final didText = tester.widget<Text>(
+      find.byKey(const Key('profile-did-value')),
+    );
+    expect(didText.data, startsWith('did:wba:anpclaw.com:user:elena:e1_'));
+    expect(find.byKey(const Key('profile-copy-did-button')), findsOneWidget);
     expect(find.text('Copyable body'), findsOneWidget);
     expect(find.text('copyable'), findsOneWidget);
+  });
+
+  testWidgets('窄屏长 handle 与 DID 不溢出并保留尾指纹', (tester) async {
+    const profile = UserProfile(
+      did:
+          'did:wba:very-long-tenant.example:user:alice:e1_abcdefghijklmnopqrstuvwxyz0123456789',
+      nickName: 'Alice With A Secondary Display Name',
+      bio: '',
+      tags: <String>[],
+      handle: 'alice',
+      fullHandle: 'alice.very-long-tenant.example',
+      profileMarkdown: '',
+    );
+    final gateway = FakeAwikiGateway()..myProfile = profile;
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(360, 720));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: ProfilePage(homepageMarkdownLoader: (_) async => null),
+        gateway: gateway,
+        profile: profile,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    final didText = tester.widget<Text>(
+      find.byKey(const Key('profile-did-value')),
+    );
+    expect(didText.data, contains('…'));
+    expect(didText.data, endsWith('yz0123456789'));
+    expect(didText.maxLines, 2);
+    expect(find.byKey(const Key('profile-copy-did-button')), findsOneWidget);
   });
 }

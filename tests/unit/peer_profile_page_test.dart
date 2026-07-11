@@ -9,7 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 void main() {
-  testWidgets('私聊资料页完整显示 DID 并支持一键复制', (tester) async {
+  testWidgets('私聊资料页以 handle 为主并紧凑显示 DID，复制保留全值', (tester) async {
     const longDid =
         'did:awiki:user:cgw-agent-lab:e1_abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789';
     const profile = UserProfile(
@@ -51,8 +51,24 @@ void main() {
     final didFinder = find.byKey(const Key('peer-profile-did-value'));
     expect(didFinder, findsOneWidget);
     final didText = tester.widget<Text>(didFinder);
-    expect(didText.data, longDid);
-    expect(didText.maxLines, isNull);
+    expect(didText.data, isNot(longDid));
+    expect(didText.data, startsWith('did:awiki:user:cgw-agent-lab:e1_'));
+    expect(didText.data, contains('…'));
+    expect(didText.data, endsWith('yz0123456789'));
+    expect(didText.maxLines, 2);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('peer-profile-handle-value')))
+          .data,
+      '@cgw.awiki.ai',
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('peer-profile-display-name')))
+          .data,
+      'CGW Agent',
+    );
+    expect(find.text('@cgw.awiki.ai'), findsOneWidget);
     expect(
       find.byKey(const Key('peer-profile-copy-did-button')),
       findsOneWidget,

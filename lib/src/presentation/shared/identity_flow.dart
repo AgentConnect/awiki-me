@@ -374,7 +374,6 @@ Future<void> showFollowIdentityDialog(
 
   try {
     await ref.read(friendsProvider.notifier).follow(result.profile.did);
-    await ref.read(friendsProvider.notifier).refresh();
     ref
         .read(uiFeedbackProvider.notifier)
         .showInfo(AppMessage.followContactSucceeded());
@@ -697,7 +696,8 @@ class _IdentityPreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final displayName = DidDisplayFormatter.profileName(profile);
-    final handle = profile.handle?.trim();
+    final handleLabel = DidDisplayFormatter.profileHandleLabel(profile);
+    final secondaryName = DidDisplayFormatter.secondaryProfileName(profile);
     final relationshipLabel = relationship?.relationship.trim();
     return Container(
       width: double.infinity,
@@ -723,7 +723,8 @@ class _IdentityPreviewCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      displayName,
+                      handleLabel,
+                      key: const Key('identity-preview-handle-value'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -732,18 +733,19 @@ class _IdentityPreviewCard extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 5),
-                    Text(
-                      handle == null || handle.isEmpty
-                          ? profile.did
-                          : '@$handle',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF66728A),
-                        fontSize: 12,
+                    if (secondaryName.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 5),
+                      Text(
+                        secondaryName,
+                        key: const Key('identity-preview-display-name'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF66728A),
+                          fontSize: 12,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -751,7 +753,10 @@ class _IdentityPreviewCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          _IdentityMetaLine(label: 'DID', value: profile.did),
+          _IdentityMetaLine(
+            label: 'DID',
+            value: DidDisplayFormatter.compactDidPath(profile.did),
+          ),
           _IdentityMetaLine(
             label: context.l10n.identityTypeLabel,
             value: _inferIdentityType(context.l10n, profile),

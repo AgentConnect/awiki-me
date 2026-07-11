@@ -192,6 +192,10 @@ class _DesktopAppRobot {
       description: 'peer info button',
     );
     await pumpUntilFinder(
+      find.byKey(const Key('peer-info-dialog-handle-value')),
+      description: 'handle-first peer identity header',
+    );
+    await pumpUntilFinder(
       find.byKey(const Key('chat-follow-button')),
       description: 'follow button',
     );
@@ -202,6 +206,11 @@ class _DesktopAppRobot {
     await pumpUntilFinder(
       find.byKey(const Key('chat-unfollow-button')),
       description: 'following state',
+    );
+    expect(
+      find.byKey(const Key('chat-relationship-action-progress')),
+      findsNothing,
+      reason: 'follow mutation must release its busy indicator',
     );
   }
 
@@ -220,6 +229,11 @@ class _DesktopAppRobot {
     await pumpUntilFinder(
       find.byKey(const Key('chat-follow-button')),
       description: 'unfollowed state',
+    );
+    expect(
+      find.byKey(const Key('chat-relationship-action-progress')),
+      findsNothing,
+      reason: 'unfollow mutation must release its busy indicator',
     );
   }
 

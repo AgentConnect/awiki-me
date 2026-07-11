@@ -42,6 +42,49 @@ void main() {
     );
   });
 
+  test('compactDidPath preserves DID path and fingerprint tail', () {
+    const did =
+        'did:wba:awiki.ai:user:alice:e1_abcdefghijklmnopqrstuvwxyz0123456789';
+
+    final compact = DidDisplayFormatter.compactDidPath(did);
+
+    expect(compact, startsWith('did:wba:awiki.ai:user:alice:e1_'));
+    expect(compact, contains('…'));
+    expect(compact, endsWith('yz0123456789'));
+    expect(compact.length, lessThan(did.length));
+  });
+
+  test('profile handle label prefers fullHandle and name stays secondary', () {
+    const profile = UserProfile(
+      did: 'did:wba:awiki.ai:alice:e1_key',
+      displayName: 'Alice Zhang',
+      bio: '',
+      tags: <String>[],
+      profileMarkdown: '',
+      handle: 'alice',
+      fullHandle: '@alice.awiki.ai',
+    );
+
+    expect(DidDisplayFormatter.profileHandleLabel(profile), '@alice.awiki.ai');
+    expect(DidDisplayFormatter.secondaryProfileName(profile), 'Alice Zhang');
+  });
+
+  test('profile metadata cleaner only removes exact handle and DID lines', () {
+    const markdown = '''
+# About me
+
+我的短号(handle)：alice.awiki.ai
+DID: did:wba:awiki.ai:alice:e1_key
+
+I use DID: examples in free-form prose.
+''';
+
+    expect(
+      DidDisplayFormatter.withoutRedundantIdentityMetadata(markdown),
+      '# About me\n\nI use DID: examples in free-form prose.',
+    );
+  });
+
   test('homepageUrl uses profileUri then handle and never displayName', () {
     expect(
       DidDisplayFormatter.homepageUrl(

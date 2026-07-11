@@ -1127,6 +1127,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatAddAttachment => 'Add attachment';
 
   @override
+  String get chatAddEmoji => 'Choose emoji';
+
+  @override
+  String get chatCaptureScreenshot => 'Capture screenshot';
+
+  @override
   String get chatRemoveAttachment => 'Remove attachment';
 
   @override

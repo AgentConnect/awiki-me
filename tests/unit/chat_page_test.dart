@@ -1,6 +1,7 @@
 // ignore_for_file: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/attachment_open_service.dart';
@@ -39,6 +40,25 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
+
+Uint8List _tinyPngBytes() => base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
+);
+
+Widget _testImageWidgetBuilder({
+  String? path,
+  Uint8List? bytes,
+  double? width,
+  double? height,
+  required BoxFit fit,
+  required Widget errorFallback,
+}) {
+  return SizedBox(
+    width: width ?? 120,
+    height: height ?? 80,
+    child: const ColoredBox(color: Color(0xFF0B65F8)),
+  );
+}
 
 class _StaticConversationListController extends ConversationListController {
   _StaticConversationListController(
@@ -691,21 +711,36 @@ void main() {
     expect(find.text('正在加载资料…'), findsOneWidget);
     expect(find.text('profile 加载完成后的介绍'), findsNothing);
 
+    const resolvedDid =
+        'did:wba:awiki.ai:profile-agent:e1_abcdefghijklmnopqrstuvwxyz0123456789';
     profileCompleter.complete(
       const UserProfile(
-        did: 'did:test:slow-agent',
+        did: resolvedDid,
         nickName: 'Profile Agent',
         bio: 'profile 加载完成后的介绍',
         tags: <String>['agent'],
-        profileMarkdown: '',
+        profileMarkdown:
+            '我的短号(handle)：profile-agent.awiki.ai\n\nDID: $resolvedDid\n\nprofile 加载完成后的介绍',
         handle: 'profile-agent',
+        fullHandle: 'profile-agent.awiki.ai',
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Profile Agent'), findsOneWidget);
     expect(find.text('profile 加载完成后的介绍'), findsOneWidget);
-    expect(find.text('@profile-agent'), findsOneWidget);
+    expect(find.text('@profile-agent.awiki.ai'), findsOneWidget);
+    final didText = tester.widget<Text>(
+      find.byKey(const Key('peer-info-dialog-did-value')),
+    );
+    expect(didText.data, contains('…'));
+    expect(didText.data, isNot(resolvedDid));
+    expect(
+      find.byKey(const Key('peer-info-dialog-copy-did-button')),
+      findsOneWidget,
+    );
+    expect(find.text('我的短号(handle)：profile-agent.awiki.ai'), findsNothing);
+    expect(find.text('DID: $resolvedDid'), findsNothing);
     expect(find.text('资料加载中'), findsNothing);
   });
 
@@ -3693,6 +3728,139 @@ void main() {
     expect(find.text('report.pdf'), findsOneWidget);
   });
 
+  testWidgets('emoji 面板把表情插入当前选区并可发送', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
+      threadId: 'dm:emoji',
+      displayName: 'Tester',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.enterText(find.byType(CupertinoTextField), 'hello world');
+    final field = tester.widget<CupertinoTextField>(
+      find.byType(CupertinoTextField),
+    );
+    field.controller!.selection = const TextSelection(
+      baseOffset: 6,
+      extentOffset: 11,
+    );
+
+    await tester.tap(find.byKey(const Key('chat-emoji-button')));
+    await tester.pump();
+    expect(find.byKey(const Key('chat-emoji-picker')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('chat-emoji-option:0')));
+    await tester.pump();
+
+    expect(field.controller!.text, 'hello 😀');
+    expect(field.controller!.selection.baseOffset, 'hello 😀'.length);
+    await tester.tap(find.byKey(const Key('chat-send-button')));
+    await tester.pumpAndSettle();
+    expect(gateway.lastSentContent, 'hello 😀');
+  });
+
+  testWidgets('收到的小图片自动下载并在消息气泡内直接显示', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      conversationId: 'dm:did:test:peer',
+      threadId: 'dm:inline-image',
+      displayName: 'Tester',
+      lastMessagePreview: '[图片]',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    final message = _messageWithConversation(
+      ChatMessage(
+        localId: 'inline-image',
+        remoteId: 'inline-image',
+        threadId: conversation.effectiveConversationId,
+        senderDid: conversation.targetDid!,
+        receiverDid: session.did,
+        content: '',
+        createdAt: DateTime(2026, 4, 5, 12, 1),
+        isMine: false,
+        sendState: MessageSendState.sent,
+        originalType: 'application/anp-attachment-manifest+json',
+        attachment: const ChatAttachment(
+          attachmentId: 'att-inline-image',
+          filename: 'photo.png',
+          mimeType: 'image/png',
+          sizeBytes: 128,
+          localPath: null,
+        ),
+      ),
+      conversation,
+    );
+    final messagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[conversation.effectiveConversationId] =
+          <ChatMessage>[message]
+      ..nextAttachmentDownloadResult = AttachmentDownloadResult(
+        attachmentId: 'att-inline-image',
+        filename: 'photo.png',
+        mimeType: 'image/png',
+        sizeBytes: _tinyPngBytes().length,
+        bytes: _tinyPngBytes(),
+      );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+          chatImageWidgetBuilderProvider.overrideWithValue(
+            _testImageWidgetBuilder,
+          ),
+        ],
+      ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(messagingService.downloadAttachmentCalls, 1);
+    expect(
+      find.byKey(const Key('chat-inline-image:inline-image')),
+      findsOneWidget,
+    );
+    expect(find.text('photo.png'), findsNothing);
+  });
+
   testWidgets('选择附件后输入框保持焦点', (tester) async {
     final gateway = FakeAwikiGateway();
     final picker = FakeAttachmentPickerService()
@@ -4014,6 +4182,73 @@ void main() {
     expect(find.text('mac-focus.md'), findsOneWidget);
     input = tester.widget<CupertinoTextField>(find.byType(CupertinoTextField));
     expect(input.focusNode?.hasFocus, isTrue);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 截图按钮把系统截图暂存为图片附件', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final picker = FakeAttachmentPickerService()
+      ..nextScreenshot = AttachmentDraft(
+        filename: 'screenshot-test.png',
+        mimeType: 'image/png',
+        bytes: _tinyPngBytes(),
+        sizeBytes: _tinyPngBytes().length,
+      );
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:mac-screenshot',
+      displayName: 'Tester',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1100, 760));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(
+            conversation: conversation,
+            embedded: true,
+            macStyle: true,
+          ),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          attachmentPickerServiceProvider.overrideWithValue(picker),
+          chatImageWidgetBuilderProvider.overrideWithValue(
+            _testImageWidgetBuilder,
+          ),
+        ],
+      ),
+    );
+
+    expect(find.byKey(const Key('chat-screenshot-button')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('chat-screenshot-button')));
+    await tester.pumpAndSettle();
+
+    expect(picker.screenshotCalls, 1);
+    expect(find.text('screenshot-test.png'), findsOneWidget);
+    expect(find.byKey(const Key('chat-pending-image-preview')), findsOneWidget);
+    expect(
+      find.byKey(const Key('chat-pending-attachment-preview')),
+      findsOneWidget,
+    );
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

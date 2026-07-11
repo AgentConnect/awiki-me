@@ -93,8 +93,10 @@ dart run tests/unit/runner.dart tests/unit/chat_page_test.dart
 dart run tests/unit/runner.dart tests/unit/onboarding_page_test.dart
 ```
 
-聊天附件入口需要同时覆盖按钮、桌面拖拽和剪贴板粘贴。拖拽/粘贴入口的
-deterministic 覆盖放在 `tests/unit/chat_page_test.dart`，附件来源解析覆盖放在
+聊天附件入口需要同时覆盖按钮、桌面拖拽、剪贴板粘贴和 macOS 交互式截图；
+图片附件还要覆盖内联显示、远端下载到 App cache 与文件卡回退。Composer 工具栏
+同时覆盖 emoji 在当前选区插入。上述 deterministic 覆盖放在
+`tests/unit/chat_page_test.dart`，附件来源与截图进程解析覆盖放在
 `tests/unit/attachment_picker_service_test.dart`；真实 App + CLI 附件互通仍由
 `dart run tests/e2e/runner.dart --case attachment` 或 `--case full` 验证。
 

@@ -436,6 +436,7 @@ class _RelationshipActionButtonInnerState
         ),
         child: _isBusy
             ? CupertinoActivityIndicator(
+                key: const Key('relationship-action-progress'),
                 radius: 7,
                 color: widget.destructive ? theme.danger : null,
               )

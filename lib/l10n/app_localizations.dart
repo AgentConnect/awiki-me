@@ -2114,6 +2114,18 @@ abstract class AppLocalizations {
   /// **'添加附件'**
   String get chatAddAttachment;
 
+  /// No description provided for @chatAddEmoji.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择表情'**
+  String get chatAddEmoji;
+
+  /// No description provided for @chatCaptureScreenshot.
+  ///
+  /// In zh, this message translates to:
+  /// **'截图'**
+  String get chatCaptureScreenshot;
+
   /// No description provided for @chatRemoveAttachment.
   ///
   /// In zh, this message translates to:
