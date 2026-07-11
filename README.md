@@ -165,6 +165,8 @@ The app still supports non-tenant build flags such as `AWIKI_E2E` and `AWIKI_E2E
 
 The first production storage generation is the UUID Storage Scope clean cut. It does not read the pre-release `awiki.ai`, `tenant-default`, split-item, or namespace-bundle formats. See [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md).
 
+Pre-release namespace data is never migrated during startup. Developers can inventory or explicitly archive/delete it with the dry-run-first [storage cleanup runbook](docs/pre-release-storage-cleanup.md).
+
 ## Testing
 
 See [docs/testing.md](docs/testing.md) for the full testing strategy.
