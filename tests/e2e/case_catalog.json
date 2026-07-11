@@ -498,7 +498,7 @@
       "exactOracles": [
         "CLI send is accepted and has a canonical message ID.",
         "Global and target-conversation unread move from baseline to exactly baseline+1.",
-        "The canonical row and one exact bubble are visible; opening clears list and navigation unread without rebound."
+        "After an App-shell rebuild, the canonical row shows the exact localized unread-count label and one exact bubble; opening clears list and navigation unread without rebound."
       ],
       "negativeChecks": [
         "Wrong conversation alias, duplicate bubble, incorrect badge delta, premature read, or rebound fails."
@@ -521,9 +521,9 @@
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Inject the E2E transport failure, tap the visible retry action, reconnect, rebuild the App shell, and requery.",
       "exactOracles": [
-        "Failed state is visible before retry.",
-        "Retry reaches terminal sent state.",
-        "Canonical ID/body remain exactly one after reconnect and widget/App-shell rebuild."
+        "The controlled failed row stays visible in the canonical conversation even when the write path uses a DID alias or a core reset arrives.",
+        "The visible retry performs exactly one real remote transport attempt, reports a typed failure code if it fails, and reaches terminal sent state.",
+        "Canonical ID/body remain exactly one after a legal desktop hidden/resumed lifecycle reconnect and widget/App-shell rebuild."
       ],
       "negativeChecks": [
         "Silent success, new duplicate on retry/replay, lost message, or stale failed state fails."

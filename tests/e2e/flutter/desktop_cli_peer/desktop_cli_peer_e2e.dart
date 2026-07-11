@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/app_services.dart';
@@ -33,6 +34,7 @@ import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversat
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
+import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:crypto/crypto.dart';
 import 'package:flutter/cupertino.dart' show CupertinoTextField;
 import 'package:flutter/services.dart';

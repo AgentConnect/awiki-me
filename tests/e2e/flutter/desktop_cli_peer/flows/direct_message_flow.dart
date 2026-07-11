@@ -185,7 +185,19 @@ Future<void> _verifyDirectTextRegression({
   );
   expect(failed.remoteId, isNull);
   await robot.expectMessageContentVisible(failed);
+  final retryAttemptsBefore = messaging.delegatedConversationTextAttempts;
   await robot.retryFailedText();
+  await robot.pumpUntil(
+    description: 'real retry transport outcome',
+    condition: () =>
+        messaging.delegatedConversationTextAttempts ==
+            retryAttemptsBefore + 1 &&
+        !messaging.conversationTextAttemptPending,
+  );
+  final retryFailureCode = messaging.lastConversationTextFailureCode;
+  if (retryFailureCode != null) {
+    fail('Real retry transport failed with typed code "$retryFailureCode".');
+  }
   final retried = await _waitForUiMessage(
     robot: robot,
     conversationId: conversationId,

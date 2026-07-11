@@ -203,11 +203,15 @@ The product oracle is fail-closed:
   while group and attachment slices use a later history stability window (not
   an OS process restart);
 - incoming direct messages require an exact unread baseline increment, matching
-  navigation badge and conversation count, read-clear on open, no rebound, and
-  a second-message increment;
-- the failure/retry slice uses an E2E-only transport fault that emits a failed
-  timeline patch, then the visible retry action delegates to the real remote
-  messaging service; it does not add a production mock or fallback;
+  navigation badge and conversation count, the exact localized conversation-row
+  unread label after an App-shell rebuild, read-clear on open, no rebound, and a
+  second-message increment;
+- the failure/retry slice uses an E2E-only transport fault that keeps one failed
+  row attached to the active canonical conversation across DID-alias writes and
+  core reset patches; the visible retry must issue exactly one real remote
+  transport attempt and records only its typed failure code for diagnostics;
+  the later reconnect uses the legal desktop inactive -> hidden -> inactive ->
+  resumed lifecycle path and does not add a production mock or fallback;
 - relationship checks require the exact `none -> following -> friend ->
   follower -> none` state sequence;
 - group mentions require one valid structured target DID; attachment checks

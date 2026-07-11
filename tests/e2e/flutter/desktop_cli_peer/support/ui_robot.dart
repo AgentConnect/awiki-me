@@ -161,6 +161,9 @@ class _DesktopAppRobot {
     required String conversationId,
     required int unreadCount,
   }) async {
+    if (unreadCount <= 0) {
+      fail('Unread badge oracle requires a positive count, got $unreadCount.');
+    }
     final row = find.byKey(Key('conversation-row:$conversationId'));
     await pumpUntilFinder(
       row,
@@ -175,10 +178,19 @@ class _DesktopAppRobot {
       unreadBadge,
       description: 'conversation row unread badge',
     );
-    expect(
-      find.descendant(of: unreadBadge, matching: find.text('$unreadCount')),
-      findsOneWidget,
+    final l10n = AppLocalizations.of(tester.element(unreadBadge));
+    final countLabel = unreadCount > 999 ? '999+' : '$unreadCount';
+    final expectedLabel = l10n.conversationsUnreadTag(countLabel);
+    final exactLabel = find.descendant(
+      of: unreadBadge,
+      matching: find.text(expectedLabel),
     );
+    await pumpUntilFinder(
+      exactLabel,
+      description:
+          'conversation row exact localized unread badge "$expectedLabel"',
+    );
+    expect(exactLabel, findsOneWidget);
   }
 
   Future<void> openConversationRow(String conversationId) => tapOne(
@@ -378,9 +390,17 @@ class _DesktopAppRobot {
   }
 
   Future<void> simulateReconnect() async {
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-    await tester.pump();
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    // Desktop integration tests use the legal foreground -> hidden ->
+    // foreground path. Entering `paused` suspends the test binding's frame
+    // scheduler and cannot be used as a synthetic reconnect boundary.
+    for (final state in const <AppLifecycleState>[
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+      AppLifecycleState.inactive,
+      AppLifecycleState.resumed,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
     await tester.pump();
     await pumpUntilFinder(
       find.bySemanticsIdentifier('e2e-authenticated'),
@@ -513,9 +533,14 @@ class _FailOnceMessagingService
   final MessagingService _delegate;
   final String ownerDid;
   bool _failNextConversationText = false;
+  int delegatedConversationTextAttempts = 0;
+  bool conversationTextAttemptPending = false;
+  String? lastConversationTextFailureCode;
   final Map<String, List<_PatchSink>> _patchSinks =
       <String, List<_PatchSink>>{};
   final Map<String, int> _patchVersions = <String, int>{};
+  final Map<String, Map<String, ChatMessage>> _injectedFailedMessages =
+      <String, Map<String, ChatMessage>>{};
 
   void failNextConversationText() {
     _failNextConversationText = true;
@@ -534,11 +559,14 @@ class _FailOnceMessagingService
       if (localId == null || localId.isEmpty) {
         throw StateError('Controlled E2E failure requires clientMessageId.');
       }
+      final presentationConversationId = _presentationConversationIdForSend(
+        conversation.conversationId,
+      );
       final target = _threadTarget(conversation.conversationId);
       final failed = ChatMessage(
         localId: localId,
-        conversationId: conversation.conversationId,
-        threadId: conversation.conversationId,
+        conversationId: presentationConversationId,
+        threadId: presentationConversationId,
         senderDid: ownerDid,
         receiverDid: target.kind == 'direct' ? target.id : null,
         groupId: target.kind == 'group' ? target.id : null,
@@ -547,29 +575,50 @@ class _FailOnceMessagingService
         isMine: true,
         sendState: MessageSendState.failed,
       );
-      final version = _nextPatchVersion(conversation.conversationId);
+      _injectedFailedMessages.putIfAbsent(
+        presentationConversationId,
+        () => <String, ChatMessage>{},
+      )[localId] = failed;
+      final version = _nextPatchVersion(presentationConversationId);
       for (final sink
-          in _patchSinks[conversation.conversationId] ?? const <_PatchSink>[]) {
+          in _patchSinks[presentationConversationId] ?? const <_PatchSink>[]) {
         sink.emit(
           ThreadMessagePatch(
             kind: ThreadMessagePatchKind.upsert,
             ownerDid: ownerDid,
             version: version,
-            threadKind: target.kind,
-            threadId: target.id,
-            conversationId: conversation.conversationId,
+            threadKind: 'conversation',
+            threadId: presentationConversationId,
+            conversationId: presentationConversationId,
             message: failed,
           ),
         );
       }
       throw StateError('controlled_e2e_transport_failure');
     }
-    return _delegate.sendConversationText(
-      conversation: conversation,
-      content: content,
-      clientMessageId: clientMessageId,
-      idempotencyKey: idempotencyKey,
-    );
+    delegatedConversationTextAttempts += 1;
+    conversationTextAttemptPending = true;
+    lastConversationTextFailureCode = null;
+    try {
+      final sent = await _delegate.sendConversationText(
+        conversation: conversation,
+        content: content,
+        clientMessageId: clientMessageId,
+        idempotencyKey: idempotencyKey,
+      );
+      _removeInjectedFailedMessage(
+        _presentationConversationIdForSend(conversation.conversationId),
+        clientMessageId,
+      );
+      return sent;
+    } on Object catch (error) {
+      lastConversationTextFailureCode = error is core.AwikiImCoreException
+          ? error.code
+          : error.runtimeType.toString();
+      rethrow;
+    } finally {
+      conversationTextAttemptPending = false;
+    }
   }
 
   @override
@@ -592,7 +641,7 @@ class _FailOnceMessagingService
             .listen(
               (patch) => sink.emit(
                 _withPatchVersion(
-                  patch,
+                  _retainInjectedFailures(conversation.conversationId, patch),
                   _nextPatchVersion(conversation.conversationId),
                 ),
               ),
@@ -638,11 +687,14 @@ class _FailOnceMessagingService
     int limit = 100,
     String? cursor,
     bool includeControlPayloads = false,
-  }) => _timelineDelegate.loadConversationTimeline(
-    conversation,
-    limit: limit,
-    cursor: cursor,
-    includeControlPayloads: includeControlPayloads,
+  }) async => _mergeInjectedFailures(
+    conversation.conversationId,
+    await _timelineDelegate.loadConversationTimeline(
+      conversation,
+      limit: limit,
+      cursor: cursor,
+      includeControlPayloads: includeControlPayloads,
+    ),
   );
 
   @override
@@ -655,7 +707,7 @@ class _FailOnceMessagingService
       limit: limit,
     );
     return _withPatchVersion(
-      patch,
+      _retainInjectedFailures(conversation.conversationId, patch),
       _nextPatchVersion(conversation.conversationId),
     );
   }
@@ -793,6 +845,85 @@ class _FailOnceMessagingService
   @override
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed) =>
       _delegate.retryByResendOriginalContent(failed);
+
+  ThreadMessagePatch _retainInjectedFailures(
+    String conversationId,
+    ThreadMessagePatch patch,
+  ) {
+    final message = patch.message;
+    if (message != null && message.sendState == MessageSendState.sent) {
+      _removeInjectedFailedMessage(conversationId, message.localId);
+      _removeInjectedFailedMessage(conversationId, message.remoteId);
+    }
+    if (patch.kind != ThreadMessagePatchKind.reset) {
+      return patch;
+    }
+    return ThreadMessagePatch(
+      kind: patch.kind,
+      ownerDid: patch.ownerDid,
+      version: patch.version,
+      threadKind: patch.threadKind,
+      threadId: patch.threadId,
+      conversationId: patch.conversationId,
+      messages: _mergeInjectedFailures(conversationId, patch.messages),
+      message: patch.message,
+      index: patch.index,
+      messageId: patch.messageId,
+      reason: patch.reason,
+    );
+  }
+
+  List<ChatMessage> _mergeInjectedFailures(
+    String conversationId,
+    List<ChatMessage> messages,
+  ) {
+    final injected = _injectedFailedMessages[conversationId];
+    if (injected == null || injected.isEmpty) {
+      return messages;
+    }
+    final merged = <ChatMessage>[...messages];
+    for (final failed in injected.values) {
+      final alreadyPresent = merged.any(
+        (message) =>
+            message.localId == failed.localId ||
+            message.remoteId == failed.localId,
+      );
+      if (!alreadyPresent) {
+        merged.add(failed);
+      }
+    }
+    return merged;
+  }
+
+  void _removeInjectedFailedMessage(String conversationId, String? messageId) {
+    final normalized = messageId?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return;
+    }
+    final injected = _injectedFailedMessages[conversationId];
+    injected?.remove(normalized);
+    if (injected != null && injected.isEmpty) {
+      _injectedFailedMessages.remove(conversationId);
+    }
+  }
+
+  String _presentationConversationIdForSend(String writeConversationId) {
+    final normalized = writeConversationId.trim();
+    if (_patchSinks.containsKey(normalized)) {
+      return normalized;
+    }
+    final activeConversationIds = _patchSinks.entries
+        .where((entry) => entry.value.isNotEmpty)
+        .map((entry) => entry.key)
+        .toSet();
+    if (activeConversationIds.length != 1) {
+      throw StateError(
+        'Controlled E2E failure requires exactly one active canonical '
+        'conversation timeline, found ${activeConversationIds.length}.',
+      );
+    }
+    return activeConversationIds.single;
+  }
 
   int _nextPatchVersion(String conversationId) {
     final next = (_patchVersions[conversationId] ?? 0) + 1;

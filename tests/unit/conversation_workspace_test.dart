@@ -2,6 +2,7 @@
 
 import 'dart:async';
 
+import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
@@ -1796,10 +1797,16 @@ void main() {
       Key('conversation-row:${conversation.effectiveConversationId}'),
     );
     expect(conversationRow, findsOneWidget);
+    final unreadTag = find.descendant(
+      of: conversationRow,
+      matching: find.byKey(const Key('conversation-preview-tag-unread')),
+    );
+    expect(unreadTag, findsOneWidget);
+    final l10n = AppLocalizations.of(tester.element(unreadTag));
     expect(
       find.descendant(
-        of: conversationRow,
-        matching: find.byKey(const Key('conversation-preview-tag-unread')),
+        of: unreadTag,
+        matching: find.text(l10n.conversationsUnreadTag('3')),
       ),
       findsOneWidget,
     );
