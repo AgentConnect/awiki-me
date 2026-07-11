@@ -1,0 +1,52 @@
+import 'dart:async';
+
+import 'package:awiki_me/src/app/tenant_aware_awiki_me_app.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test(
+    'tenant runtime opens only after previous dispose barrier completes',
+    () async {
+      final events = <String>[];
+      final disposed = Completer<void>();
+      final transition = openTenantRuntimeAfterDispose<String>(
+        previous: 'old-scope',
+        disposePrevious: (previous) async {
+          events.add('dispose:$previous:start');
+          await disposed.future;
+          events.add('dispose:$previous:done');
+        },
+        openNext: () async {
+          events.add('open:new-scope');
+          return 'new-scope';
+        },
+      );
+
+      await Future<void>.delayed(Duration.zero);
+      expect(events, <String>['dispose:old-scope:start']);
+      disposed.complete();
+
+      expect(await transition, 'new-scope');
+      expect(events, <String>[
+        'dispose:old-scope:start',
+        'dispose:old-scope:done',
+        'open:new-scope',
+      ]);
+    },
+  );
+
+  test(
+    'initial runtime opens directly when there is no previous scope',
+    () async {
+      var disposeCalled = false;
+      final result = await openTenantRuntimeAfterDispose<String>(
+        previous: null,
+        disposePrevious: (_) async => disposeCalled = true,
+        openNext: () async => 'first-scope',
+      );
+
+      expect(result, 'first-scope');
+      expect(disposeCalled, isFalse);
+    },
+  );
+}

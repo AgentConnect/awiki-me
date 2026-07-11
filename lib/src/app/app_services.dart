@@ -25,7 +25,6 @@ import '../application/profile_application_service.dart';
 import '../application/realtime_application_service.dart';
 import '../application/relationship_application_service.dart';
 import '../data/services/locale_preference_service.dart';
-import '../data/services/file_attachment_cache_service.dart';
 import '../data/services/method_channel_attachment_picker_service.dart';
 import '../data/services/user_service_peer_identity_service.dart';
 import '../domain/entities/realtime_update.dart';
@@ -195,8 +194,8 @@ final attachmentPickerServiceProvider = Provider<AttachmentPickerService>(
 );
 
 final attachmentCacheServiceProvider = Provider<AttachmentCacheService>(
-  (ref) => FileAttachmentCacheService(
-    stateNamespace: ref.watch(awikiEnvironmentConfigProvider).stateNamespace,
+  (ref) => throw UnimplementedError(
+    'attachmentCacheServiceProvider must be scope-overridden',
   ),
 );
 

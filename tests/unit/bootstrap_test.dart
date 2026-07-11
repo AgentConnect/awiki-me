@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/data/services/app_key_value_store.dart';
+import 'package:awiki_me/src/data/storage/platform_scope_secret_repository.dart';
+import 'package:awiki_me/src/data/storage/scope_secret_repository_factory.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -46,22 +48,18 @@ void main() {
   );
 
   test(
-    'custom app state root does not move im-core vault root key to file json',
+    'explicit root cannot select plaintext scope secrets in normal build',
     () async {
       final tempDir = await Directory.systemTemp.createTemp(
         'awiki-bootstrap-test-',
       );
       addTearDown(() async {
-        if (await tempDir.exists()) {
-          await tempDir.delete(recursive: true);
-        }
+        if (await tempDir.exists()) await tempDir.delete(recursive: true);
       });
 
-      final store = await AppBootstrap.buildVaultSecretStoreForTesting(
-        appStateRoot: tempDir.path,
-      );
+      final repository = buildScopeSecretRepository(appStateRoot: tempDir.path);
 
-      expect(store, isNot(isA<FileAppKeyValueStore>()));
+      expect(repository, isA<PlatformScopeSecretRepository>());
     },
   );
 }

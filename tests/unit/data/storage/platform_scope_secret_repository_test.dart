@@ -63,7 +63,7 @@ void main() {
       store.value = _record(StorageScopeId.generate()).envelope.encode();
       expect(
         (await repository.readExisting(scope)).status,
-        ScopeSecretReadStatus.corrupt,
+        ScopeSecretReadStatus.scopeMismatch,
       );
     },
   );

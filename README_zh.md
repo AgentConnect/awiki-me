@@ -146,23 +146,23 @@ dart run tests/e2e/runner.dart --case smoke
 - 本地显示名称（1-40 个可见字符）
 - 后端地址
 - DID Host
-- 隔离的本地状态命名空间
+- 不可变 UUID Storage Scope
 
 默认租户为 `AWiki`：
 
 ```text
 后端地址：https://awiki.ai
 DID Host：awiki.ai
-状态命名空间：awiki.ai
+Storage Scope：安装时生成的 UUID（不由域名派生）
 ```
 
-内置 AWiki 租户固定沿用历史 `awiki.ai` 命名空间，保证升级后原有身份、联系人、会话和本地缓存继续可见；自定义租户使用独立的 `tenant-<id>` 命名空间。切换租户会重建 App runtime，并保持不同自定义环境的数据隔离。租户名称只是本地显示标签，后续可以改名。已经产生本地数据的租户不能再修改后端地址或 DID Host；需要接入新环境时请添加租户配置。
+每个租户配置拥有不同且不可变的 `storage_scope_id`。数据路径、平台 secret account、im-core workspace/device context 只由该 UUID 派生，租户名和后端地址不再是本地 locator。切换租户时会先完整释放旧 runtime，再打开新 scope。显示名称可以原位修改；DID Host 变化必须创建新的租户配置和 scope；已有本地数据时，后端地址也不能在缺少稳定 realm 证明的情况下原位修改。
 
 Agent 和 Daemon 功能目前只支持默认 AWiki 主租户。其他租户进入智能体页面时会显示友好的暂不支持状态，并且不会调用 Agent 后端接口。
 
 测试 harness 仍可使用 `AWIKI_E2E`、`AWIKI_E2E_APP_STATE_ROOT` 等非租户构建参数。
 
-> **首发前存储决策：** `release/0707` 与 `release/0710` 尚未上线。首个正式存储版本将用不可变 UUID Storage Scope 替换按域名派生的“状态命名空间” locator。已批准契约见 [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md)。在代码 cutover 完成前，上文仍描述当前分支行为。
+首个正式存储版本已经采用 UUID Storage Scope clean cut，不读取预发布的 `awiki.ai`、`tenant-default`、split item 或 namespace bundle。契约见 [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md)。
 
 ## 测试
 
@@ -246,7 +246,7 @@ open macos/Runner.xcworkspace
 
 请打开 `Runner.xcworkspace`，不要直接打开 `Runner.xcodeproj`。如果 Xcode 报告 `Unable to load contents of file list: '/Target Support Files/Pods-Runner/...'`，通常是 `macos/Pods` 生成文件缺失或 CocoaPods 不在 `PATH`，重新执行 bootstrap 即可。
 
-macOS debug/profile 构建通常是 ad-hoc 签名。为避免本地未签名 runner 因 Keychain 写入失败被误判为注册失败，debug/profile 账号凭证会落到 App support 下的 `awiki_me_credentials.json`；release 构建仍走平台安全存储。im-core 身份 vault root key 与 device id 默认作为一个 namespace-scoped secret bundle 写入 macOS Keychain；在暂未使用 Developer ID 签名时，重装后首次访问这个 bundle 可能需要一次系统授权。具体边界见 [docs/identity-secret-storage.md](docs/identity-secret-storage.md)。
+macOS debug/profile 使用独立的 `ai.awiki.awikime.dev` 应用身份和开发 Keychain service；Release 使用 `ai.awiki.awikime` 与 `ai.awiki.awikime.scope-secrets`。每个 scope 在 `scope/<uuid>` account 下只有一个版本化 envelope；runtime 只能读取已有 envelope，只有显式 scope provisioning 可以创建。具体边界见 [docs/identity-secret-storage.md](docs/identity-secret-storage.md)。
 
 修改 macOS 签名、entitlements 或 secure-storage 选项后，至少运行：
 
@@ -262,7 +262,7 @@ AWiki Me 必须遵守以下约束：
 - 不新增 Python CLI 工具、Python dependency manifest、旧 credential migration 或旧 RPC gateway 路径。
 - App 不直接读取或持久化 DID 私钥、JWT 文件、vault record、Direct E2EE session/prekey secret、daemon subkey package。
 - root key 不能进入普通 JSON state、日志、UI、E2E report、performance trace、DTO dump 或测试 fixture。
-- 只有显式 `AWIKI_E2E_APP_STATE_ROOT` E2E 模式才使用私有 file test provider `awiki_me_im_core_vault.json`；该文件必须留在本地并保持 untracked。
+- 只有显式 E2E state root 才会选择 `awiki-me/e2e-scope-secrets` 下的 per-scope 私有 file provider；这些 `0600` envelope 文件必须留在本地并保持 untracked。
 - Group E2EE opaque 消息在没有单独安全设计前不能解密后投递给 Agent prompt。
 - 修改平台 runner、Pod/Gradle/Xcode 元数据、entitlements、bundle id 或签名设置前，确认任务确实需要；工具生成的无关平台变更应回退。
 

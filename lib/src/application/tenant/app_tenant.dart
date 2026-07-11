@@ -6,10 +6,6 @@ const String primaryTenantName = 'AWiki';
 const String primaryTenantBackendBaseUrl = 'https://awiki.ai';
 const String primaryTenantDidHost = 'awiki.ai';
 
-// Transitional UI compatibility only. Registry v1 never persists this value as
-// an identifier; Step 04 removes callers that still compare against it.
-const String defaultTenantId = 'default';
-
 final RegExp _canonicalUuidV4 = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
 );
@@ -116,10 +112,7 @@ class AppTenantProfile {
   final String createdAt;
   final String updatedAt;
 
-  // Compatibility accessors are not serialized and are removed in Step 04.
   String get id => tenantProfileId.value;
-  @Deprecated('Use storageScopeId; runtime cutover is Step 04')
-  String get stateNamespace => storageScopeId.value;
 
   bool get isArchived => lifecycle == AppTenantLifecycle.archived;
   bool get isPrimaryTenant => kind == AppTenantKind.builtInAwiki;
@@ -198,8 +191,6 @@ class AppTenantRegistry {
   final TenantProfileId activeTenantProfileId;
   final List<AppTenantProfile> tenants;
 
-  @Deprecated('Use activeTenantProfileId')
-  String get activeTenantId => activeTenantProfileId.value;
   List<AppTenantProfile> get visibleTenants =>
       tenants.where((tenant) => !tenant.isArchived).toList(growable: false);
   AppTenantProfile get activeTenant => tenants.singleWhere(
@@ -237,24 +228,13 @@ class AppTenantRegistry {
   AppTenantRegistry copyWith({
     int? revision,
     TenantProfileId? activeTenantProfileId,
-    String? activeTenantId,
     List<AppTenantProfile>? tenants,
   }) {
     final nextTenants = tenants ?? this.tenants;
-    TenantProfileId? compatibilityActiveId;
-    if (activeTenantId == defaultTenantId) {
-      compatibilityActiveId = nextTenants
-          .singleWhere((tenant) => tenant.isPrimaryTenant)
-          .tenantProfileId;
-    } else if (activeTenantId != null) {
-      compatibilityActiveId = TenantProfileId.parse(activeTenantId);
-    }
     return AppTenantRegistry(
       revision: revision ?? this.revision,
       activeTenantProfileId:
-          activeTenantProfileId ??
-          compatibilityActiveId ??
-          this.activeTenantProfileId,
+          activeTenantProfileId ?? this.activeTenantProfileId,
       tenants: nextTenants,
     );
   }

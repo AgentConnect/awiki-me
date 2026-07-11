@@ -1,12 +1,13 @@
 import '../../application/active_session_store.dart';
+import '../../application/tenant/app_tenant.dart';
 import 'app_key_value_store.dart';
 
 class KeyValueActiveSessionStore implements ActiveSessionStore {
   KeyValueActiveSessionStore({
     required AppKeyValueStore storage,
-    required String stateNamespace,
+    required StorageScopeId scopeId,
   }) : _storage = storage,
-       _key = 'awiki_me_active_identity.${_normalizeNamespace(stateNamespace)}';
+       _key = 'awiki_me_active_identity.scope.${scopeId.value}';
 
   final AppKeyValueStore _storage;
   final String _key;
@@ -31,14 +32,4 @@ class KeyValueActiveSessionStore implements ActiveSessionStore {
   Future<void> clearActiveIdentityId() {
     return _storage.delete(key: _key);
   }
-}
-
-String _normalizeNamespace(String value) {
-  final normalized = value
-      .trim()
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9._-]+'), '-')
-      .replaceAll(RegExp(r'-+'), '-')
-      .replaceAll(RegExp(r'^[-.]+|[-.]+$'), '');
-  return normalized.isEmpty ? 'default' : normalized;
 }

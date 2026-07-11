@@ -629,16 +629,17 @@
     },
     {
       "caseId": "NATIVE-E2E-001",
-      "feature": "Native IM Core smoke",
+      "feature": "Storage Scope native bootstrap smoke",
       "layer": "product_ui",
       "preconditions": "Flutter desktop and debug native IM Core artifacts are available.",
-      "action": "Open the real native IM Core bridge and validate its configured paths.",
+      "action": "Provision one Storage Scope through the real App bootstrap, reopen the same native vault, then remove its key and retry openExisting.",
       "exactOracles": [
-        "Native core opens successfully.",
-        "Path validation returns a structured result."
+        "Provision reaches ready only after the native VaultRequired validator opens.",
+        "A second real App bootstrap reads the identical existing root.",
+        "After key deletion, bootstrap returns vault_key_missing and does not recreate the item."
       ],
       "negativeChecks": [
-        "Native load/open failure or invalid path contract fails the case."
+        "Native load failure, context/path mismatch, root replacement, or missing-key recreation fails the case."
       ],
       "environment": "no_service",
       "cleanupPolicy": "none",

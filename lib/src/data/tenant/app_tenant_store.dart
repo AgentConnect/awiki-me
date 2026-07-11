@@ -6,7 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../application/tenant/app_tenant.dart';
-import '../im_core/awiki_im_core_paths.dart' show awikiE2eAppStateRoot;
+import '../storage/awiki_storage_roots.dart';
 import '../storage/awiki_storage_scope_layout.dart';
 import '../storage/scope_manifest.dart';
 import '../storage/scope_secret_envelope.dart';
@@ -24,13 +24,19 @@ class AppTenantStore {
   AppTenantStore({
     required this.appStateRoot,
     ScopeSecretRepository? secretRepository,
+    StorageScopeReadyValidator? readyValidator,
+    AppTenantProfile Function()? initialTenantFactory,
     StorageScopeFaultInjector? faultInjector,
   }) : _secretRepository =
            secretRepository ?? const UnavailableScopeSecretRepository(),
+       _readyValidator = readyValidator,
+       _initialTenantFactory = initialTenantFactory,
        _faultInjector = faultInjector;
 
   final String? appStateRoot;
   final ScopeSecretRepository _secretRepository;
+  final StorageScopeReadyValidator? _readyValidator;
+  final AppTenantProfile Function()? _initialTenantFactory;
   final StorageScopeFaultInjector? _faultInjector;
 
   static const int _maxTenantNameLength = 40;
@@ -128,6 +134,14 @@ class AppTenantStore {
   }
 
   Future<AppTenantRegistry> updateTenant(AppTenantUpdateInput input) async {
+    final next = await prepareUpdateTenant(input);
+    await saveRegistry(next, expectedRevision: next.revision - 1);
+    return next;
+  }
+
+  Future<AppTenantRegistry> prepareUpdateTenant(
+    AppTenantUpdateInput input,
+  ) async {
     final registry = await loadRegistry();
     final index = registry.tenants.indexWhere(
       (tenant) => tenant.id == input.id,
@@ -142,9 +156,13 @@ class AppTenantStore {
     final name = normalizeTenantName(input.name);
     final backend = normalizeTenantBackendBaseUrl(input.backendBaseUrl);
     final didHost = normalizeTenantDidHost(input.didHost);
+    if (didHost != existing.didHost) {
+      throw const AppTenantValidationException(
+        'tenant_realm_change_requires_new_scope',
+      );
+    }
     if (await tenantHasData(existing.id) &&
-        (backend.toLowerCase() != existing.backendBaseUrl.toLowerCase() ||
-            didHost != existing.didHost)) {
+        backend.toLowerCase() != existing.backendBaseUrl.toLowerCase()) {
       throw const AppTenantValidationException('tenant_has_data');
     }
     _assertUniqueName(registry, name, exceptId: existing.id);
@@ -161,7 +179,6 @@ class AppTenantStore {
       activeTenantProfileId: registry.activeTenantProfileId,
       tenants: _sort(tenants),
     );
-    await saveRegistry(next, expectedRevision: registry.revision);
     return next;
   }
 
@@ -248,11 +265,12 @@ class AppTenantStore {
     secretFactory: (scopeId) => ScopeSecretRecord(
       envelope: ScopeSecretEnvelope.create(scopeId: scopeId),
     ),
+    readyValidator: _readyValidator,
     faultInjector: _faultInjector,
   );
 
   Future<AppTenantRegistry> _createInitialRegistry() async {
-    final tenant = defaultTenantProfile();
+    final tenant = (_initialTenantFactory ?? () => defaultTenantProfile())();
     await _provision(tenant);
     final registry = AppTenantRegistry(
       revision: 1,
@@ -273,7 +291,17 @@ class AppTenantStore {
   Future<void> _validateRegistryScopes(AppTenantRegistry registry) async {
     for (final tenant in registry.tenants) {
       final layout = await layoutForScope(tenant.storageScopeId);
-      final manifest = await _manifestStore.readExisting(layout.manifestPath);
+      await layout.assertSafeExistingScope();
+      final current = await _manifestStore.readExisting(layout.manifestPath);
+      final manifest = current.lifecycle == StorageScopeLifecycle.provisioning
+          ? await _provisioner.recover(
+              layout: layout,
+              expectedOwner: tenant.tenantProfileId,
+            )
+          : current;
+      if (manifest == null) {
+        throw const FormatException('scope_not_ready');
+      }
       if (manifest.storageScopeId != tenant.storageScopeId ||
           manifest.ownerTenantProfileId != tenant.tenantProfileId) {
         throw const FormatException('scope_manifest_mismatch');
@@ -293,7 +321,7 @@ class AppTenantStore {
   );
 
   Future<(String, String, String)> _roots() async {
-    final explicit = _firstNonEmpty(appStateRoot, awikiE2eAppStateRoot());
+    final explicit = explicitAwikiAppStateRoot(appStateRoot);
     if (explicit != null) {
       return (
         p.join(explicit, 'support'),
@@ -440,9 +468,3 @@ bool _containsInvisible(String value) => value.runes.any(
       (rune >= 0x2060 && rune <= 0x206f) ||
       rune == 0xfeff,
 );
-
-String? _firstNonEmpty(String? first, String? second) {
-  if (first?.trim().isNotEmpty == true) return first!.trim();
-  if (second?.trim().isNotEmpty == true) return second!.trim();
-  return null;
-}

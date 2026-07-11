@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../application/config/awiki_environment_config.dart';
 import '../application/tenant/app_tenant.dart';
 import '../data/tenant/app_tenant_store.dart';
+import '../data/storage/scope_secret_repository_factory.dart';
+import '../data/im_core/storage_scope_im_core_validator.dart';
 import '../presentation/shared/awiki_me_design.dart';
 import '../presentation/shared/responsive_layout.dart';
 import 'app_locale.dart';
@@ -32,7 +34,16 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
   @override
   void initState() {
     super.initState();
-    _store = AppTenantStore(appStateRoot: widget.appStateRoot);
+    final scopeSecrets = buildScopeSecretRepository(
+      appStateRoot: widget.appStateRoot,
+    );
+    _store = AppTenantStore(
+      appStateRoot: widget.appStateRoot,
+      secretRepository: scopeSecrets,
+      readyValidator: StorageScopeImCoreValidator(
+        repository: scopeSecrets,
+      ).call,
+    );
     _startInitialLoad();
   }
 
@@ -44,16 +55,7 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
 
   Future<_TenantRuntime> _loadRuntime() async {
     final registry = await _store.loadRegistry();
-    try {
-      return await _createRuntime(registry);
-    } catch (_) {
-      if (registry.activeTenant.id == defaultTenantId) {
-        rethrow;
-      }
-      final fallback = registry.copyWith(activeTenantId: defaultTenantId);
-      await _store.saveRegistry(fallback);
-      return _createRuntime(fallback);
-    }
+    return _createRuntime(registry);
   }
 
   void _startInitialLoad() {
@@ -83,7 +85,6 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
       environment: AwikiEnvironmentConfig(
         baseUrl: tenant.backendBaseUrl,
         didDomain: tenant.didHost,
-        stateNamespace: tenant.stateNamespace,
         agentImEnabled: tenant.isPrimaryTenant,
       ),
     );
@@ -101,22 +102,20 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
   }) async {
     final previous = _runtime;
     final generation = ++_runtimeGeneration;
-    final future = _createRuntime(registry);
+    final future = openTenantRuntimeAfterDispose<_TenantRuntime>(
+      previous: previous,
+      disposePrevious: (runtime) => runtime.bootstrap.dispose(),
+      openNext: () => _createRuntime(registry),
+    );
     setState(() {
+      _runtime = null;
       _runtimeFuture = future;
     });
     late final _TenantRuntime next;
     try {
       next = await future;
     } catch (_) {
-      if (mounted &&
-          generation == _runtimeGeneration &&
-          identical(_runtimeFuture, future) &&
-          previous != null) {
-        setState(() {
-          _runtimeFuture = Future<_TenantRuntime>.value(previous);
-        });
-      }
+      await _restorePreviousRuntime(previous, generation, future);
       rethrow;
     }
     if (!mounted) {
@@ -132,20 +131,34 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
       await beforeActivate?.call();
     } catch (_) {
       await next.bootstrap.dispose();
-      if (mounted &&
-          generation == _runtimeGeneration &&
-          identical(_runtimeFuture, future) &&
-          previous != null) {
-        setState(() {
-          _runtimeFuture = Future<_TenantRuntime>.value(previous);
-        });
-      }
+      await _restorePreviousRuntime(previous, generation, future);
       rethrow;
     }
     setState(() {
       _runtime = next;
     });
-    await previous?.bootstrap.dispose();
+  }
+
+  Future<void> _restorePreviousRuntime(
+    _TenantRuntime? previous,
+    int generation,
+    Future<_TenantRuntime> failedFuture,
+  ) async {
+    if (previous == null ||
+        !mounted ||
+        generation != _runtimeGeneration ||
+        !identical(_runtimeFuture, failedFuture)) {
+      return;
+    }
+    final restored = await _createRuntime(previous.registry);
+    if (!mounted || generation != _runtimeGeneration) {
+      await restored.bootstrap.dispose();
+      return;
+    }
+    setState(() {
+      _runtime = restored;
+      _runtimeFuture = Future<_TenantRuntime>.value(restored);
+    });
   }
 
   @override
@@ -172,13 +185,23 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
 
   @override
   Future<AppTenantRegistry> updateTenant(AppTenantUpdateInput input) async {
-    final registry = await _store.updateTenant(input);
+    final registry = await _store.prepareUpdateTenant(input);
     final current = _runtime;
     if (current != null &&
         registry.activeTenant.id == current.registry.activeTenant.id) {
-      await _replaceRuntime(registry);
+      await _replaceRuntime(
+        registry,
+        beforeActivate: () => _store.saveRegistry(
+          registry,
+          expectedRevision: registry.revision - 1,
+        ),
+      );
       return registry;
     }
+    await _store.saveRegistry(
+      registry,
+      expectedRevision: registry.revision - 1,
+    );
     if (!mounted) {
       return registry;
     }
@@ -282,6 +305,15 @@ class _TenantBootstrapErrorApp extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<T> openTenantRuntimeAfterDispose<T>({
+  required T? previous,
+  required Future<void> Function(T previous) disposePrevious,
+  required Future<T> Function() openNext,
+}) async {
+  if (previous != null) await disposePrevious(previous);
+  return openNext();
 }
 
 class _TenantRuntime {

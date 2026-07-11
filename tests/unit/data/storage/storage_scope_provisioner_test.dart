@@ -187,13 +187,103 @@ void main() {
       throwsA(isA<FileSystemException>()),
     );
   });
+
+  test('layout rejects symlinked persistent and cache ancestors', () async {
+    final persistentRoot = await Directory.systemTemp.createTemp(
+      'awiki_scope_persistent_link_',
+    );
+    final persistentTarget = await Directory.systemTemp.createTemp(
+      'awiki_scope_persistent_target_',
+    );
+    final cacheRoot = await Directory.systemTemp.createTemp(
+      'awiki_scope_cache_link_',
+    );
+    final cacheTarget = await Directory.systemTemp.createTemp(
+      'awiki_scope_cache_target_',
+    );
+    addTearDown(() async {
+      for (final directory in <Directory>[
+        persistentRoot,
+        persistentTarget,
+        cacheRoot,
+        cacheTarget,
+      ]) {
+        if (await directory.exists()) await directory.delete(recursive: true);
+      }
+    });
+    final scope = StorageScopeId.generate();
+    final persistentLayout = AwikiStorageScopeLayout.fromRoots(
+      appSupportRoot: persistentRoot.path,
+      cacheRoot: cacheRoot.path,
+      tempRoot: root.path,
+      scopeId: scope,
+    );
+    await Directory(
+      '${persistentTarget.path}/storage-scopes/${scope.value}',
+    ).create(recursive: true);
+    await Link(persistentLayout.awikiRoot).create(persistentTarget.path);
+
+    await expectLater(
+      persistentLayout.assertSafeExistingScope(),
+      throwsA(isA<FileSystemException>()),
+    );
+
+    await Link(persistentLayout.awikiRoot).delete();
+    await _provisioner(secrets, manifests).provision(
+      layout: persistentLayout,
+      owner: _profile(scopeId: scope),
+    );
+    final cacheAwikiRoot = Directory('${cacheRoot.path}/awiki-me');
+    if (await cacheAwikiRoot.exists()) {
+      await cacheAwikiRoot.delete(recursive: true);
+    }
+    await Link(cacheAwikiRoot.path).create(cacheTarget.path);
+
+    await expectLater(
+      persistentLayout.ensureDataDirectories(),
+      throwsA(isA<FileSystemException>()),
+    );
+  });
+
+  test(
+    'scope is validated with existing secret before becoming ready',
+    () async {
+      final profile = _profile();
+      final layout = _layout(root, profile.storageScopeId);
+      var validations = 0;
+      final provisioner = StorageScopeProvisioner(
+        secrets: secrets,
+        manifests: manifests,
+        secretFactory: (scope) => ScopeSecretRecord(
+          envelope: ScopeSecretEnvelope.create(scopeId: scope),
+        ),
+        readyValidator: (candidate, manifest) async {
+          validations += 1;
+          expect(candidate.scopeId, profile.storageScopeId);
+          expect(manifest.lifecycle, StorageScopeLifecycle.provisioning);
+          expect(
+            (await secrets.readExisting(candidate.scopeId)).status,
+            ScopeSecretReadStatus.present,
+          );
+        },
+      );
+
+      final manifest = await provisioner.provision(
+        layout: layout,
+        owner: profile,
+      );
+
+      expect(validations, 1);
+      expect(manifest.lifecycle, StorageScopeLifecycle.ready);
+    },
+  );
 }
 
-AppTenantProfile _profile() {
+AppTenantProfile _profile({StorageScopeId? scopeId}) {
   final now = DateTime.utc(2026, 7, 11).toIso8601String();
   return AppTenantProfile(
     tenantProfileId: TenantProfileId.generate(),
-    storageScopeId: StorageScopeId.generate(),
+    storageScopeId: scopeId ?? StorageScopeId.generate(),
     kind: AppTenantKind.custom,
     name: 'Tenant',
     backendBaseUrl: 'https://tenant.example.com',

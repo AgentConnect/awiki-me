@@ -1,7 +1,6 @@
 # AWiki Me Storage Scope / Keychain / Identity Vault Contract
 
-Status: approved contract; scope control plane and typed platform secret provider implemented,
-runtime cutover tracked separately
+Status: active; scope control plane, typed platform provider, and runtime cutover implemented
 Authority: authoritative for AWiki Me tenant-local storage identity and host vault context
 
 本文档冻结 AWiki Me 首个正式版本的本地 tenant、Storage Scope、平台
@@ -142,6 +141,8 @@ Cache/temp：
 顶层`storage-scopes/<uuid>`一经发布永久不改名。未来layout或SQLite升级只能在同一
 scope root内原位完成。所有tenant-scoped path必须由单一`AwikiStorageScopeLayout`
 或等价typed layout提供，业务模块不得自行拼接domain/name路径。
+Layout在创建和打开时必须拒绝support/cache/temp trusted root以下任一scope路径祖先的
+symlink，不能只检查最终scope目录；目录创建仍需保持exclusive/contained语义。
 
 Manifest只保存非secret不变量。Keychain service/account不能从manifest自由读取，
 必须由编译期channel配置和scope ID派生，避免被篡改后指向其他secret item。

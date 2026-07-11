@@ -10,7 +10,6 @@ void main() {
     expect(config.messageServiceUrl, 'https://awiki.ai');
     expect(config.mailServiceUrl, 'https://awiki.ai');
     expect(config.didDomain, 'awiki.ai');
-    expect(config.stateNamespace, 'awiki.ai');
     expect(config.anpServiceUrl, 'https://awiki.ai/anp-im/rpc');
     expect(config.anpServiceDid, 'did:wba:awiki.ai');
     expect(config.daemonDownloadBaseUrl, 'https://awiki.ai/daemon');
@@ -30,7 +29,6 @@ void main() {
     expect(config.messageServiceUrl, 'https://anpclaw.com');
     expect(config.mailServiceUrl, 'https://anpclaw.com');
     expect(config.didDomain, 'anpclaw.com');
-    expect(config.stateNamespace, 'anpclaw.com');
     expect(config.anpServiceUrl, 'https://anpclaw.com/anp-im/rpc');
     expect(config.anpServiceDid, 'did:wba:anpclaw.com');
     expect(config.daemonDownloadBaseUrl, 'https://anpclaw.com/daemon');
@@ -54,7 +52,6 @@ void main() {
       messageServiceUrl: 'https://messages.example.test/',
       mailServiceUrl: 'https://mail.example.test/',
       didDomain: 'did.example.test',
-      stateNamespace: 'Customer Env / CN #1',
       anpServiceUrl: 'https://anp.example.test/rpc/',
       anpServiceDid: 'did:wba:anp.example.test',
       daemonDownloadBaseUrl: 'https://static.example.test/daemon/',
@@ -68,7 +65,6 @@ void main() {
     expect(config.messageServiceUrl, 'https://messages.example.test');
     expect(config.mailServiceUrl, 'https://mail.example.test');
     expect(config.didDomain, 'did.example.test');
-    expect(config.stateNamespace, 'customer-env-cn-1');
     expect(config.anpServiceUrl, 'https://anp.example.test/rpc');
     expect(config.anpServiceDid, 'did:wba:anp.example.test');
     expect(config.daemonDownloadBaseUrl, 'https://static.example.test/daemon');
@@ -80,23 +76,17 @@ void main() {
     expect(config.agentImEnabled, isTrue);
   });
 
-  test('state namespace works for arbitrary future backend roots', () {
-    final sameDomain = AwikiEnvironmentConfig(
+  test('network route config has no local storage locator', () {
+    final first = AwikiEnvironmentConfig(
       baseUrl: 'https://api.customer.example:8443/root/',
       didDomain: 'customer.example',
     );
-
-    expect(
-      sameDomain.stateNamespace,
-      'customer.example-api.customer.example-8443',
-    );
-
-    final explicit = AwikiEnvironmentConfig(
+    final second = AwikiEnvironmentConfig(
       baseUrl: 'https://anything.internal',
       didDomain: 'tenant.internal',
-      stateNamespace: 'tenant-alpha',
     );
 
-    expect(explicit.stateNamespace, 'tenant-alpha');
+    expect(first.baseUrl, isNot(second.baseUrl));
+    expect(first.didDomain, isNot(second.didDomain));
   });
 }

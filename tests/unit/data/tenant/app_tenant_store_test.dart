@@ -50,6 +50,28 @@ void main() {
     expect(raw, isNot(contains('tenant-default')));
   });
 
+  test('explicit test realm binds the fresh built-in scope manifest', () async {
+    store = AppTenantStore(
+      appStateRoot: root.path,
+      secretRepository: FakeScopeSecretRepository(),
+      initialTenantFactory: () => defaultTenantProfile().copyWith(
+        backendBaseUrl: 'https://awiki.info',
+        didHost: 'awiki.info',
+      ),
+    );
+
+    final registry = await store.loadRegistry();
+    final layout = await store.layoutForScope(
+      registry.activeTenant.storageScopeId,
+    );
+    final manifest = await const StorageScopeManifestStore().readExisting(
+      layout.manifestPath,
+    );
+
+    expect(registry.activeTenant.backendBaseUrl, 'https://awiki.info');
+    expect(manifest.didHostAtCreation, 'awiki.info');
+  });
+
   test('two tenants have distinct profile IDs scopes and paths', () async {
     final first = await store.loadRegistry();
     final second = await store.createTenant(
@@ -103,6 +125,84 @@ void main() {
     expect(
       (await store.layoutForScope(renamed.storageScopeId)).scopeRoot,
       before,
+    );
+  });
+
+  test(
+    'prepared tenant update is not persisted before activation commit',
+    () async {
+      final created = await store.createTenant(
+        const AppTenantCreateInput(
+          name: 'Prepared Tenant',
+          backendBaseUrl: 'https://prepared.example.com',
+          didHost: 'prepared.example.com',
+        ),
+      );
+      final tenant = created.visibleTenants.singleWhere(
+        (item) => !item.isPrimaryTenant,
+      );
+
+      final prepared = await store.prepareUpdateTenant(
+        AppTenantUpdateInput(
+          id: tenant.id,
+          name: 'Prepared Rename',
+          backendBaseUrl: tenant.backendBaseUrl,
+          didHost: tenant.didHost,
+        ),
+      );
+
+      expect(
+        (await store.loadRegistry()).tenants
+            .singleWhere((item) => item.id == tenant.id)
+            .name,
+        'Prepared Tenant',
+      );
+
+      await store.saveRegistry(
+        prepared,
+        expectedRevision: prepared.revision - 1,
+      );
+      expect(
+        (await store.loadRegistry()).tenants
+            .singleWhere((item) => item.id == tenant.id)
+            .name,
+        'Prepared Rename',
+      );
+    },
+  );
+
+  test('DID realm change requires a new tenant profile and scope', () async {
+    final created = await store.createTenant(
+      const AppTenantCreateInput(
+        name: 'Customer One',
+        backendBaseUrl: 'https://one.example.com',
+        didHost: 'one.example.com',
+      ),
+    );
+    final tenant = created.tenants.singleWhere((item) => !item.isPrimaryTenant);
+
+    await expectLater(
+      store.updateTenant(
+        AppTenantUpdateInput(
+          id: tenant.id,
+          name: tenant.name,
+          backendBaseUrl: 'https://two.example.com',
+          didHost: 'two.example.com',
+        ),
+      ),
+      throwsA(
+        isA<AppTenantValidationException>().having(
+          (error) => error.code,
+          'code',
+          'tenant_realm_change_requires_new_scope',
+        ),
+      ),
+    );
+    expect(
+      (await store.loadRegistry()).tenants
+          .singleWhere((item) => item.id == tenant.id)
+          .storageScopeId,
+      tenant.storageScopeId,
     );
   });
 
@@ -205,4 +305,26 @@ void main() {
       ScopeSecretReadStatus.present,
     );
   });
+
+  test(
+    'ready scope missing key is never reprovisioned during registry load',
+    () async {
+      final secrets = FakeScopeSecretRepository();
+      store = AppTenantStore(
+        appStateRoot: root.path,
+        secretRepository: secrets,
+      );
+      final registry = await store.loadRegistry();
+      final scope = registry.activeTenant.storageScopeId;
+      await secrets.delete(scope);
+
+      final reloaded = await store.loadRegistry();
+
+      expect(reloaded.activeTenant.storageScopeId, scope);
+      expect(
+        (await secrets.readExisting(scope)).status,
+        ScopeSecretReadStatus.missing,
+      );
+    },
+  );
 }

@@ -1,11 +1,14 @@
 import 'dart:io';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_config.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_paths.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_runtime.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_secret_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+const scopeValue = '22222222-2222-4222-8222-222222222222';
 
 void main() {
   test('open creates directories before invoking the SDK opener', () async {
@@ -22,11 +25,12 @@ void main() {
       appSupportRoot: '${root.path}/support',
       cacheRoot: '${root.path}/cache',
       tempRoot: '${root.path}/tmp',
+      scopeId: StorageScopeId.parse(scopeValue),
     );
+    await layout.scopeLayout.createScopeRootExclusive();
     var openerCalled = false;
     final vaultProvider = _FakeVaultSecretProvider(
       secrets: core.DeviceVaultRootKey.fromList(List<int>.filled(32, 7)),
-      deviceId: 'device-a',
     );
     final runtime = AwikiImCoreRuntime(
       config: const AwikiImCoreEnvironmentConfig(
@@ -34,6 +38,7 @@ void main() {
         didDomain: 'awiki.ai',
       ),
       paths: layout,
+      scopeId: StorageScopeId.parse(scopeValue),
       vaultSecretProvider: vaultProvider,
       openCore:
           ({
@@ -55,7 +60,10 @@ void main() {
               openOptions?.identitySecretVault?.workspaceId,
               layout.vaultWorkspaceId,
             );
-            expect(openOptions?.identitySecretVault?.deviceId, 'device-a');
+            expect(
+              openOptions?.identitySecretVault?.deviceId,
+              layout.vaultContextDeviceId,
+            );
             expect(
               openOptions?.identitySecretVault?.rootKey.bytes,
               List<int>.filled(32, 7),
@@ -81,16 +89,20 @@ void main() {
     });
 
     var openerCalled = false;
+    final layout = AwikiImCorePathLayout.fromRoots(
+      appSupportRoot: '${root.path}/support',
+      cacheRoot: '${root.path}/cache',
+      tempRoot: '${root.path}/tmp',
+      scopeId: StorageScopeId.parse(scopeValue),
+    );
+    await layout.scopeLayout.createScopeRootExclusive();
     final runtime = AwikiImCoreRuntime(
       config: const AwikiImCoreEnvironmentConfig(
         serviceBaseUrl: 'https://awiki.ai',
         didDomain: 'awiki.ai',
       ),
-      paths: AwikiImCorePathLayout.fromRoots(
-        appSupportRoot: '${root.path}/support',
-        cacheRoot: '${root.path}/cache',
-        tempRoot: '${root.path}/tmp',
-      ),
+      paths: layout,
+      scopeId: StorageScopeId.parse(scopeValue),
       vaultSecretProvider: _FailingVaultSecretProvider(),
       openCore:
           ({
@@ -103,9 +115,10 @@ void main() {
           },
     );
 
-    await expectLater(runtime.open(), throwsA(isA<StateError>()));
+    await expectLater(runtime.open(), throwsA(isA<AwikiVaultOpenException>()));
     expect(openerCalled, isFalse);
     expect(runtime.isOpen, isFalse);
+    expect(await Directory(layout.identityRootDir).exists(), isFalse);
   });
 
   test('currentClient fails clearly before an identity is selected', () async {
@@ -127,111 +140,36 @@ void main() {
         appSupportRoot: '${root.path}/support',
         cacheRoot: '${root.path}/cache',
         tempRoot: '${root.path}/tmp',
+        scopeId: StorageScopeId.parse(scopeValue),
       ),
+      scopeId: StorageScopeId.parse(scopeValue),
       vaultSecretProvider: _FakeVaultSecretProvider(),
     );
 
     await expectLater(runtime.currentClient(), throwsA(isA<StateError>()));
   });
-
-  test('legacy identity without vault metadata is eligible for migration', () {
-    final status = _vaultStatus(
-      selectedBackend: core.IdentitySecretStorageBackend.fileCompat,
-      vaultMetadataPresent: false,
-      vaultMetadataVerified: false,
-    );
-
-    expect(shouldMigrateLegacyIdentityVault(status), isTrue);
-  });
-
-  test(
-    'unverified existing vault metadata fails closed instead of remigrating',
-    () {
-      final status = _vaultStatus(
-        selectedBackend: core.IdentitySecretStorageBackend.fileCompat,
-        vaultMetadataPresent: true,
-        vaultMetadataVerified: false,
-        missing: const <String>['identity_vault_metadata_verified'],
-      );
-
-      expect(
-        () => shouldMigrateLegacyIdentityVault(status),
-        throwsA(
-          isA<StateError>().having(
-            (error) => error.toString(),
-            'message',
-            allOf(
-              contains('identity_vault_unverified'),
-              contains('identity-test'),
-            ),
-          ),
-        ),
-      );
-    },
-  );
-
-  test('vault backend does not request migration', () {
-    final status = _vaultStatus(
-      selectedBackend: core.IdentitySecretStorageBackend.vault,
-      vaultMetadataPresent: true,
-      vaultMetadataVerified: true,
-    );
-
-    expect(shouldMigrateLegacyIdentityVault(status), isFalse);
-  });
-}
-
-core.IdentityVaultStatus _vaultStatus({
-  required core.IdentitySecretStorageBackend selectedBackend,
-  required bool vaultMetadataPresent,
-  required bool vaultMetadataVerified,
-  List<String> missing = const <String>[],
-}) {
-  return core.IdentityVaultStatus(
-    identity: const core.IdentitySummary(
-      id: 'identity-test',
-      did: 'did:wba:awiki.ai:alice:e1_identity-test',
-      isDefault: true,
-      readyForAuth: true,
-      readyForMessaging: true,
-    ),
-    storagePolicy: core.IdentitySecretStoragePolicy.vaultRequired,
-    selectedBackend: selectedBackend,
-    vaultAvailable: true,
-    vaultMetadataPresent: vaultMetadataPresent,
-    vaultMetadataVerified: vaultMetadataVerified,
-    workspaceId: 'awiki-me-default',
-    deviceId: 'device-test',
-    plaintextCompatRetained: vaultMetadataPresent,
-    missing: missing,
-  );
 }
 
 class _FakeVaultSecretProvider implements AwikiImCoreVaultSecretProvider {
-  _FakeVaultSecretProvider({
-    core.DeviceVaultRootKey? secrets,
-    this.deviceId = 'device-test',
-  }) : _rootKey =
-           secrets ?? core.DeviceVaultRootKey.fromList(List<int>.filled(32, 3));
+  _FakeVaultSecretProvider({core.DeviceVaultRootKey? secrets})
+    : _rootKey =
+          secrets ?? core.DeviceVaultRootKey.fromList(List<int>.filled(32, 3));
 
   final core.DeviceVaultRootKey _rootKey;
-  final String deviceId;
   int calls = 0;
 
   @override
-  Future<AwikiImCoreVaultSecrets> getOrCreateSecrets({
-    required String stateNamespace,
-  }) async {
+  Future<AwikiImCoreVaultSecrets> openExisting(StorageScopeId scopeId) async {
+    expect(scopeId.value, scopeValue);
     calls += 1;
-    return AwikiImCoreVaultSecrets(rootKey: _rootKey, deviceId: deviceId);
+    return AwikiImCoreVaultSecrets(rootKey: _rootKey);
   }
 }
 
 class _FailingVaultSecretProvider implements AwikiImCoreVaultSecretProvider {
   @override
-  Future<AwikiImCoreVaultSecrets> getOrCreateSecrets({
-    required String stateNamespace,
-  }) async {
-    throw StateError('identity_vault_secret_bundle_unavailable');
+  Future<AwikiImCoreVaultSecrets> openExisting(StorageScopeId scopeId) async {
+    expect(scopeId.value, scopeValue);
+    throw const AwikiVaultOpenException('vault_key_missing');
   }
 }

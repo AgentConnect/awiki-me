@@ -120,8 +120,13 @@ class E2eFileScopeSecretRepository implements ScopeSecretRepository {
         ScopeSecretReadStatus.present,
         record: ScopeSecretRecord(envelope: envelope),
       );
-    } on FormatException {
-      return const ScopeSecretReadResult(ScopeSecretReadStatus.corrupt);
+    } on FormatException catch (error) {
+      return ScopeSecretReadResult(switch (error.message) {
+        'scope_secret_scope_mismatch' => ScopeSecretReadStatus.scopeMismatch,
+        'scope_secret_envelope_schema_unsupported' =>
+          ScopeSecretReadStatus.schemaUnsupported,
+        _ => ScopeSecretReadStatus.corrupt,
+      });
     } on FileSystemException {
       return const ScopeSecretReadResult(ScopeSecretReadStatus.accessDenied);
     }

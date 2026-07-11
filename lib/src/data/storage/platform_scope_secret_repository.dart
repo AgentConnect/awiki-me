@@ -79,8 +79,8 @@ class PlatformScopeSecretRepository implements ScopeSecretRepository {
           ),
         ),
       );
-    } on FormatException {
-      return const ScopeSecretReadResult(ScopeSecretReadStatus.corrupt);
+    } on FormatException catch (error) {
+      return ScopeSecretReadResult(_decodeReadStatus(error));
     }
   }
 
@@ -126,6 +126,15 @@ class PlatformScopeSecretRepository implements ScopeSecretRepository {
       throw _operationException(error);
     }
   }
+}
+
+ScopeSecretReadStatus _decodeReadStatus(FormatException error) {
+  return switch (error.message) {
+    'scope_secret_scope_mismatch' => ScopeSecretReadStatus.scopeMismatch,
+    'scope_secret_envelope_schema_unsupported' =>
+      ScopeSecretReadStatus.schemaUnsupported,
+    _ => ScopeSecretReadStatus.corrupt,
+  };
 }
 
 ScopeSecretPlatformStore platformScopeSecretStore() {

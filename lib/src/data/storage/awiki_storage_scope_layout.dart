@@ -34,6 +34,9 @@ class AwikiStorageScopeLayout {
   String get identityRegistryPath => p.join(identitiesRoot, 'registry.json');
   String get defaultIdentityPath => p.join(identitiesRoot, 'default');
   String get identityVaultRoot => p.join(imCoreRoot, 'identity-vault');
+  String get vaultWorkspaceId => 'awiki-me.scope.v1.${scopeId.value}';
+  String get vaultContextDeviceId =>
+      'awiki-me.scope-device.v1.${scopeId.value}';
   String get imCoreStateRoot => p.join(imCoreRoot, 'state');
   String get imCoreSqlitePath => p.join(imCoreStateRoot, 'im_core.sqlite');
   String get productRoot => p.join(scopeRoot, 'product');
@@ -48,9 +51,9 @@ class AwikiStorageScopeLayout {
   String get tempImCoreRoot => p.join(tempScopeRoot, 'im-core');
 
   Future<void> createScopeRootExclusive() async {
-    await _rejectSymlink(Directory(scopesRoot));
+    await _assertNoLinksBetween(supportRoot, scopesRoot);
     await Directory(scopesRoot).create(recursive: true);
-    await _rejectSymlink(Directory(scopesRoot));
+    await _assertNoLinksBetween(supportRoot, scopesRoot);
     final existing = await FileSystemEntity.type(scopeRoot, followLinks: false);
     if (existing != FileSystemEntityType.notFound) {
       throw const FileSystemException('storage_scope_already_exists');
@@ -74,28 +77,25 @@ class AwikiStorageScopeLayout {
       imCoreStateRoot,
       productRoot,
       attachmentsRoot,
-      cacheImCoreRoot,
-      tempImCoreRoot,
     ]) {
-      await _assertNoLinksBelowScope(path);
+      await _assertNoLinksBetween(scopeRoot, path);
+      await Directory(path).create(recursive: true);
+    }
+    for (final (root, path) in <(String, String)>[
+      (cacheRoot, cacheImCoreRoot),
+      (tempRoot, tempImCoreRoot),
+    ]) {
+      await _assertNoLinksBetween(root, path);
       await Directory(path).create(recursive: true);
     }
   }
 
   Future<void> assertSafeExistingScope() async {
     _assertContained(scopesRoot, scopeRoot);
-    await _rejectSymlink(Directory(scopeRoot));
+    await _assertNoLinksBetween(supportRoot, scopeRoot);
     final type = await FileSystemEntity.type(scopeRoot, followLinks: false);
     if (type != FileSystemEntityType.directory) {
       throw const FileSystemException('storage_scope_root_invalid');
-    }
-  }
-
-  Future<void> _assertNoLinksBelowScope(String target) async {
-    var current = p.normalize(target);
-    while (p.isWithin(scopeRoot, current)) {
-      await _rejectSymlink(Directory(current));
-      current = p.dirname(current);
     }
   }
 }
@@ -110,5 +110,21 @@ Future<void> _rejectSymlink(Directory directory) async {
   final type = await FileSystemEntity.type(directory.path, followLinks: false);
   if (type == FileSystemEntityType.link) {
     throw const FileSystemException('storage_scope_symlink_forbidden');
+  }
+}
+
+Future<void> _assertNoLinksBetween(String trustedRoot, String target) async {
+  final normalizedRoot = p.normalize(p.absolute(trustedRoot));
+  var current = p.normalize(p.absolute(target));
+  if (current != normalizedRoot && !p.isWithin(normalizedRoot, current)) {
+    throw const FormatException('storage_scope_path_escape');
+  }
+  while (current != normalizedRoot) {
+    await _rejectSymlink(Directory(current));
+    final parent = p.dirname(current);
+    if (parent == current) {
+      throw const FormatException('storage_scope_path_escape');
+    }
+    current = parent;
   }
 }

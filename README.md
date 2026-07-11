@@ -147,23 +147,23 @@ Tenant configuration is managed inside the app, not through Flutter `--dart-defi
 - local display name (1-40 visible characters)
 - backend base URL
 - DID host
-- an isolated local state namespace
+- an immutable UUID Storage Scope
 
 The default tenant is `AWiki`:
 
 ```text
 backend base URL: https://awiki.ai
 DID host: awiki.ai
-state namespace: awiki.ai
+storage scope: generated UUID (not derived from the domain)
 ```
 
-The built-in AWiki tenant deliberately keeps the legacy `awiki.ai` namespace so upgrades retain existing identities, contacts, conversations, and local caches. Custom tenants use their own `tenant-<id>` namespace. Switching tenants rebuilds the app runtime, keeping each custom environment isolated. Tenant names are local display labels and can be renamed later. Tenants with local data cannot have their backend URL or DID host edited; add a tenant configuration instead.
+Every tenant profile owns a different immutable `storage_scope_id`. Paths, the platform-secret account, and the im-core workspace/device context derive only from that UUID; tenant names and backend URLs never act as local locators. Switching tenants fully disposes the old runtime before opening the new scope. Names can be changed in place. A DID-host change requires a new tenant profile and scope; a backend route cannot be changed after local data exists without a future verified realm-binding flow.
 
 Agent and Daemon features are currently supported only on the default AWiki tenant. Other tenants show a friendly unsupported state on the Agents page and do not call Agent backend APIs.
 
 The app still supports non-tenant build flags such as `AWIKI_E2E` and `AWIKI_E2E_APP_STATE_ROOT` for test harnesses.
 
-> **Pre-release storage decision:** `release/0707` and `release/0710` have not been shipped. The first production storage generation will replace domain-derived `state namespace` locators with immutable UUID Storage Scopes. The approved contract is [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md). Until the implementation cutover lands, the text above continues to describe the current branch behavior.
+The first production storage generation is the UUID Storage Scope clean cut. It does not read the pre-release `awiki.ai`, `tenant-default`, split-item, or namespace-bundle formats. See [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md).
 
 ## Testing
 
@@ -262,7 +262,7 @@ open macos/Runner.xcworkspace
 
 Open `Runner.xcworkspace`, not `Runner.xcodeproj`. If Xcode reports `Unable to load contents of file list: '/Target Support Files/Pods-Runner/...'`, the generated `macos/Pods` support files are missing or CocoaPods is not on `PATH`; rerun the bootstrap script.
 
-macOS debug/profile builds are usually ad-hoc signed. To avoid a successful backend registration surfacing as a registration failure because a local unsigned runner cannot write Keychain, debug/profile account credentials are stored in `awiki_me_credentials.json` under the app support directory. Release builds still use platform secure storage. The im-core identity vault root key and device id are stored as one namespace-scoped macOS Keychain secret bundle by default; without Developer ID signing, reinstalling the app may require one system authorization prompt for that bundle. See [docs/identity-secret-storage.md](docs/identity-secret-storage.md).
+macOS debug/profile builds use the separate `ai.awiki.awikime.dev` application identity and development Keychain service; Release uses `ai.awiki.awikime` and `ai.awiki.awikime.scope-secrets`. Each scope has one versioned envelope at account `scope/<uuid>`. Runtime only reads an existing envelope; only explicit scope provisioning may create it. See [docs/identity-secret-storage.md](docs/identity-secret-storage.md).
 
 After changing macOS signing, entitlements, or secure-storage options, run:
 
@@ -278,7 +278,7 @@ AWiki Me must follow these constraints:
 - Do not add Python CLI tools, Python dependency manifests, legacy credential migrations, or old RPC gateway paths.
 - The App must not directly read or persist DID private keys, JWT files, vault records, Direct E2EE session/prekey secrets, or daemon subkey packages.
 - Root keys must not appear in ordinary JSON state, logs, UI, E2E reports, performance traces, DTO dumps, or fixtures.
-- Only explicit `AWIKI_E2E_APP_STATE_ROOT` E2E mode may use the private file test provider `awiki_me_im_core_vault.json`; that file must remain local and untracked.
+- Only an explicit E2E state root may select the private per-scope file provider under `awiki-me/e2e-scope-secrets`; those `0600` envelope files must remain local and untracked.
 - Group E2EE opaque messages must not be decrypted and delivered to Agent prompts without a separate security design.
 - Before changing platform runners, Pod/Gradle/Xcode metadata, entitlements, bundle IDs, or signing settings, confirm the task truly requires it. Revert unrelated platform files generated by tools.
 

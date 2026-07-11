@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
@@ -11,6 +12,8 @@ import 'package:awiki_me/src/data/im_core/awiki_im_core_paths.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_runtime.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_secret_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+const _testScopeValue = '33333333-3333-4333-8333-333333333333';
 
 void main() {
   test('mark-read resolves canonical direct and group thread refs', () {
@@ -372,7 +375,9 @@ class _FakeRuntime extends AwikiImCoreRuntime {
           appSupportRoot: '/tmp/awiki-me-test/support',
           cacheRoot: '/tmp/awiki-me-test/cache',
           tempRoot: '/tmp/awiki-me-test/tmp',
+          scopeId: StorageScopeId.parse(_testScopeValue),
         ),
+        scopeId: StorageScopeId.parse(_testScopeValue),
         vaultSecretProvider: _FakeVaultSecretProvider(),
       );
 
@@ -393,12 +398,10 @@ class _FakeRuntime extends AwikiImCoreRuntime {
 
 class _FakeVaultSecretProvider implements AwikiImCoreVaultSecretProvider {
   @override
-  Future<AwikiImCoreVaultSecrets> getOrCreateSecrets({
-    required String stateNamespace,
-  }) async {
+  Future<AwikiImCoreVaultSecrets> openExisting(StorageScopeId scopeId) async {
+    expect(scopeId.value, _testScopeValue);
     return AwikiImCoreVaultSecrets(
       rootKey: core.DeviceVaultRootKey.fromList(List<int>.filled(32, 1)),
-      deviceId: 'device-test',
     );
   }
 }

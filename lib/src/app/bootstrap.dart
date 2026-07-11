@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../application/config/awiki_environment_config.dart';
+import '../application/attachment_cache_service.dart';
 import '../application/agent/agent_control_service.dart';
 import '../application/agent/agent_control_status_store.dart';
 import '../application/app_session_service.dart';
@@ -41,12 +42,14 @@ import '../data/im_core/awiki_im_core_realtime_adapter.dart';
 import '../data/im_core/awiki_im_core_relationship_adapter.dart';
 import '../data/im_core/awiki_im_core_runtime.dart';
 import '../data/im_core/awiki_im_core_secret_storage.dart';
+import '../data/im_core/storage_scope_im_core_validator.dart';
 import '../data/local/awiki_product_local_store_sqlite.dart';
 import '../data/services/app_key_value_store.dart';
 import '../data/services/app_notification_facade.dart';
 import '../data/services/app_update_service.dart';
 import '../data/services/awiki_onboarding_support_service.dart';
 import '../data/services/key_value_active_session_store.dart';
+import '../data/services/file_attachment_cache_service.dart';
 import '../data/services/locale_preference_service.dart';
 import '../data/services/user_service_peer_identity_service.dart';
 import '../domain/repositories/awiki_account_gateway.dart';
@@ -58,6 +61,9 @@ import '../domain/services/realtime_gateway.dart';
 import '../domain/services/update_service.dart';
 import '../core/performance_logger.dart';
 import '../application/tenant/app_tenant.dart';
+import '../data/storage/awiki_storage_scope_layout.dart';
+import '../data/storage/scope_secret_repository_factory.dart';
+import '../data/tenant/app_tenant_store.dart';
 
 class AppBootstrap {
   AppBootstrap({
@@ -87,6 +93,8 @@ class AppBootstrap {
     this.realtimeApplicationService,
     this.productLocalStore,
     this.peerIdentityService,
+    this.attachmentCacheService,
+    this.storageScopeLayout,
   });
 
   final AwikiEnvironmentConfig environment;
@@ -115,6 +123,8 @@ class AppBootstrap {
   final RealtimeApplicationService? realtimeApplicationService;
   final ProductLocalStore? productLocalStore;
   final PeerIdentityService? peerIdentityService;
+  final AttachmentCacheService? attachmentCacheService;
+  final AwikiStorageScopeLayout? storageScopeLayout;
 
   static Future<AppBootstrap> create({
     AwikiEnvironmentConfig? environment,
@@ -122,184 +132,217 @@ class AppBootstrap {
     AppTenantProfile? tenant,
   }) async {
     final totalWatch = Stopwatch()..start();
+    final scopeSecretRepository = buildScopeSecretRepository(
+      appStateRoot: appStateRoot,
+    );
+    final tenantStore = AppTenantStore(
+      appStateRoot: appStateRoot,
+      secretRepository: scopeSecretRepository,
+      readyValidator: StorageScopeImCoreValidator(
+        repository: scopeSecretRepository,
+      ).call,
+      initialTenantFactory: environment != null && tenant == null
+          ? () => defaultTenantProfile().copyWith(
+              backendBaseUrl: environment.baseUrl,
+              didHost: environment.didDomain,
+            )
+          : null,
+    );
+    final registry = await tenantStore.loadRegistry();
+    final effectiveTenant = tenant ?? registry.activeTenant;
+    final registeredTenant = registry.tenants.singleWhere(
+      (item) =>
+          item.tenantProfileId == effectiveTenant.tenantProfileId &&
+          item.storageScopeId == effectiveTenant.storageScopeId,
+      orElse: () => throw const FormatException('tenant_scope_unregistered'),
+    );
     final effectiveEnvironment =
         environment ??
-        (tenant == null
-            ? AwikiEnvironmentConfig.fromEnvironment()
-            : AwikiEnvironmentConfig(
-                baseUrl: tenant.backendBaseUrl,
-                didDomain: tenant.didHost,
-                stateNamespace: tenant.stateNamespace,
-                agentImEnabled: tenant.isPrimaryTenant,
-              ));
+        AwikiEnvironmentConfig(
+          baseUrl: registeredTenant.backendBaseUrl,
+          didDomain: registeredTenant.didHost,
+          agentImEnabled: registeredTenant.isPrimaryTenant,
+        );
     final preferenceStorage = await AwikiPerformanceLogger.async(
       'bootstrap.preference_store',
       () => _buildPreferenceStore(appStateRoot: appStateRoot),
     );
 
-    final pathLayout = await AwikiPerformanceLogger.async(
-      'bootstrap.im_core_paths',
-      () => AwikiImCorePathLayout.fromPlatform(
-        appStateRoot: appStateRoot,
-        stateNamespace: effectiveEnvironment.stateNamespace,
-      ),
+    final storageScopeLayout = await tenantStore.layoutForScope(
+      registeredTenant.storageScopeId,
     );
-    final vaultSecretStorage = await AwikiPerformanceLogger.async(
-      'bootstrap.im_core_vault_secret_store',
-      () => _buildVaultSecretStore(appStateRoot: appStateRoot),
+    final pathLayout = AwikiImCorePathLayout.fromStorageScope(
+      storageScopeLayout,
     );
     final runtime = AwikiImCoreRuntime(
       config: AwikiImCoreEnvironmentConfig.fromAwikiEnvironment(
         effectiveEnvironment,
       ),
       paths: pathLayout,
-      vaultSecretProvider: StoredAwikiImCoreVaultSecretProvider(
-        storage: vaultSecretStorage,
+      scopeId: registeredTenant.storageScopeId,
+      vaultSecretProvider: ScopeAwikiImCoreVaultSecretProvider(
+        repository: scopeSecretRepository,
       ),
     );
-    final productLocalStore = AwikiProductLocalStoreSqlite(
-      stateNamespace: effectiveEnvironment.stateNamespace,
-    );
-    final activeSessionStore = KeyValueActiveSessionStore(
-      storage: preferenceStorage,
-      stateNamespace: effectiveEnvironment.stateNamespace,
-    );
+    await runtime.openAndValidate();
+    try {
+      final productLocalStore = AwikiProductLocalStoreSqlite(
+        databasePath: storageScopeLayout.productDatabasePath,
+      );
+      final activeSessionStore = KeyValueActiveSessionStore(
+        storage: preferenceStorage,
+        scopeId: registeredTenant.storageScopeId,
+      );
+      final attachmentCacheService = FileAttachmentCacheService(
+        rootDirectory: () async =>
+            Directory(storageScopeLayout.attachmentsRoot),
+      );
 
-    final identityAdapter = AwikiImCoreIdentityAdapter(runtime: runtime);
-    final authAdapter = AwikiImCoreAuthAdapter(runtime: runtime);
-    final messageAdapter = AwikiImCoreMessageAdapter(runtime: runtime);
-    final messageSyncAdapter = AwikiImCoreMessageSyncAdapter(runtime: runtime);
-    final conversationAdapter = AwikiImCoreConversationAdapter(
-      runtime: runtime,
-    );
-    final groupAdapter = AwikiImCoreGroupAdapter(runtime: runtime);
-    final profileAdapter = AwikiImCoreProfileAdapter(runtime: runtime);
-    final directoryAdapter = AwikiImCoreDirectoryAdapter(runtime: runtime);
-    final relationshipAdapter = AwikiImCoreRelationshipAdapter(
-      runtime: runtime,
-    );
-    final realtimeAdapter = AwikiImCoreRealtimeAdapter(runtime: runtime);
-    final messagingService = ImCoreMessagingService(messages: messageAdapter);
-    final messageSyncService = ImCoreMessageSyncService(
-      sync: messageSyncAdapter,
-    );
-    final agentInventoryPort = UserServiceAgentInventoryAdapter.fromEnvironment(
-      environment: effectiveEnvironment,
-    );
-    final messageAgentBindingPort = UserServiceMessageAgentBindingAdapter(
-      userServiceUrl: effectiveEnvironment.userServiceUrl,
-    );
-    final conversationService = ImCoreConversationService(
-      conversations: conversationAdapter,
-      localStore: productLocalStore,
-      agentInventory: agentInventoryPort,
-    );
-    final agentControlService = DefaultAgentControlService(
-      inventory: agentInventoryPort,
-      messages: messagingService,
-      messageAgentBindings: messageAgentBindingPort,
-      identities: identityAdapter,
-      environment: effectiveEnvironment,
-    );
-    final agentControlStatusStore = AwikiImCoreAgentControlStatusStore(
-      messages: messageAdapter,
-    );
-    final groupApplicationService = ImCoreGroupApplicationService(
-      groups: groupAdapter,
-    );
-    final profileApplicationService = ImCoreProfileApplicationService(
-      profiles: profileAdapter,
-    );
-    final directoryApplicationService = ImCoreDirectoryApplicationService(
-      directory: directoryAdapter,
-    );
-    final relationshipApplicationService = ImCoreRelationshipApplicationService(
-      relationships: relationshipAdapter,
-    );
-    final realtimeApplicationService = ImCoreRealtimeApplicationService(
-      realtime: realtimeAdapter,
-    );
-    final appSessionService = ImCoreAppSessionService(
-      runtime: runtime,
-      identities: identityAdapter,
-      auth: authAdapter,
-      activeSessionStore: activeSessionStore,
-      expectedDidDomain: effectiveEnvironment.didDomain,
-      realtime: realtimeAdapter,
-    );
-    final onboardingService = ImCoreOnboardingService(
-      identities: identityAdapter,
-      sessions: appSessionService,
-      profiles: profileAdapter,
-    );
-    final onboardingSupportService = AwikiOnboardingSupportService(
-      userServiceUrl: effectiveEnvironment.userServiceUrl,
-    );
-    final peerIdentityService = UserServicePeerIdentityService(
-      userServiceUrl: effectiveEnvironment.userServiceUrl,
-    );
+      final identityAdapter = AwikiImCoreIdentityAdapter(runtime: runtime);
+      final authAdapter = AwikiImCoreAuthAdapter(runtime: runtime);
+      final messageAdapter = AwikiImCoreMessageAdapter(runtime: runtime);
+      final messageSyncAdapter = AwikiImCoreMessageSyncAdapter(
+        runtime: runtime,
+      );
+      final conversationAdapter = AwikiImCoreConversationAdapter(
+        runtime: runtime,
+      );
+      final groupAdapter = AwikiImCoreGroupAdapter(runtime: runtime);
+      final profileAdapter = AwikiImCoreProfileAdapter(runtime: runtime);
+      final directoryAdapter = AwikiImCoreDirectoryAdapter(runtime: runtime);
+      final relationshipAdapter = AwikiImCoreRelationshipAdapter(
+        runtime: runtime,
+      );
+      final realtimeAdapter = AwikiImCoreRealtimeAdapter(runtime: runtime);
+      final messagingService = ImCoreMessagingService(messages: messageAdapter);
+      final messageSyncService = ImCoreMessageSyncService(
+        sync: messageSyncAdapter,
+      );
+      final agentInventoryPort =
+          UserServiceAgentInventoryAdapter.fromEnvironment(
+            environment: effectiveEnvironment,
+          );
+      final messageAgentBindingPort = UserServiceMessageAgentBindingAdapter(
+        userServiceUrl: effectiveEnvironment.userServiceUrl,
+      );
+      final conversationService = ImCoreConversationService(
+        conversations: conversationAdapter,
+        localStore: productLocalStore,
+        agentInventory: agentInventoryPort,
+      );
+      final agentControlService = DefaultAgentControlService(
+        inventory: agentInventoryPort,
+        messages: messagingService,
+        messageAgentBindings: messageAgentBindingPort,
+        identities: identityAdapter,
+        environment: effectiveEnvironment,
+      );
+      final agentControlStatusStore = AwikiImCoreAgentControlStatusStore(
+        messages: messageAdapter,
+      );
+      final groupApplicationService = ImCoreGroupApplicationService(
+        groups: groupAdapter,
+      );
+      final profileApplicationService = ImCoreProfileApplicationService(
+        profiles: profileAdapter,
+      );
+      final directoryApplicationService = ImCoreDirectoryApplicationService(
+        directory: directoryAdapter,
+      );
+      final relationshipApplicationService =
+          ImCoreRelationshipApplicationService(
+            relationships: relationshipAdapter,
+          );
+      final realtimeApplicationService = ImCoreRealtimeApplicationService(
+        realtime: realtimeAdapter,
+      );
+      final appSessionService = ImCoreAppSessionService(
+        runtime: runtime,
+        identities: identityAdapter,
+        auth: authAdapter,
+        activeSessionStore: activeSessionStore,
+        expectedDidDomain: effectiveEnvironment.didDomain,
+        realtime: realtimeAdapter,
+      );
+      final onboardingService = ImCoreOnboardingService(
+        identities: identityAdapter,
+        sessions: appSessionService,
+        profiles: profileAdapter,
+      );
+      final onboardingSupportService = AwikiOnboardingSupportService(
+        userServiceUrl: effectiveEnvironment.userServiceUrl,
+      );
+      final peerIdentityService = UserServicePeerIdentityService(
+        userServiceUrl: effectiveEnvironment.userServiceUrl,
+      );
 
-    final accountGateway = CompatAwikiAccountGateway(
-      sessions: appSessionService,
-      onboarding: onboardingService,
-      onboardingSupport: onboardingSupportService,
-    );
-    final gateway = CompatAwikiGateway(
-      sessions: appSessionService,
-      profiles: profileApplicationService,
-      relationships: relationshipApplicationService,
-      conversations: conversationService,
-      messages: messagingService,
-      groups: groupApplicationService,
-    );
-    final realtimeGateway = CompatRealtimeGateway(
-      realtime: realtimeApplicationService,
-    );
+      final accountGateway = CompatAwikiAccountGateway(
+        sessions: appSessionService,
+        onboarding: onboardingService,
+        onboardingSupport: onboardingSupportService,
+      );
+      final gateway = CompatAwikiGateway(
+        sessions: appSessionService,
+        profiles: profileApplicationService,
+        relationships: relationshipApplicationService,
+        conversations: conversationService,
+        messages: messagingService,
+        groups: groupApplicationService,
+      );
+      final realtimeGateway = CompatRealtimeGateway(
+        realtime: realtimeApplicationService,
+      );
 
-    final notificationFacade = await AppNotificationFacade.create();
-    final e2eeFacade = NoopE2eeFacade();
-    final localePreferenceService = LocalePreferenceService(
-      storage: preferenceStorage,
-    );
-    final updateService = AppUpdateService(storage: preferenceStorage);
-    final bootstrap = AppBootstrap(
-      environment: effectiveEnvironment,
-      accountGateway: accountGateway,
-      gateway: gateway,
-      realtimeGateway: realtimeGateway,
-      notificationFacade: notificationFacade,
-      e2eeFacade: e2eeFacade,
-      localePreferenceService: localePreferenceService,
-      updateService: updateService,
-      appSessionService: appSessionService,
-      identityCorePort: identityAdapter,
-      onboardingService: onboardingService,
-      onboardingSupportService: onboardingSupportService,
-      messagingService: messagingService,
-      messageSyncService: messageSyncService,
-      conversationService: conversationService,
-      agentInventoryPort: agentInventoryPort,
-      messageAgentBindingPort: messageAgentBindingPort,
-      agentControlService: agentControlService,
-      agentControlStatusStore: agentControlStatusStore,
-      groupApplicationService: groupApplicationService,
-      profileApplicationService: profileApplicationService,
-      directoryApplicationService: directoryApplicationService,
-      relationshipApplicationService: relationshipApplicationService,
-      realtimeApplicationService: realtimeApplicationService,
-      productLocalStore: productLocalStore,
-      peerIdentityService: peerIdentityService,
-    );
-    totalWatch.stop();
-    AwikiPerformanceLogger.log(
-      'bootstrap.create',
-      elapsed: totalWatch.elapsed,
-      fields: <String, Object?>{
-        'custom_state_root': appStateRoot?.trim().isNotEmpty == true,
-        'state_namespace': effectiveEnvironment.stateNamespace,
-      },
-    );
-    return bootstrap;
+      final notificationFacade = await AppNotificationFacade.create();
+      final e2eeFacade = NoopE2eeFacade();
+      final localePreferenceService = LocalePreferenceService(
+        storage: preferenceStorage,
+      );
+      final updateService = AppUpdateService(storage: preferenceStorage);
+      final bootstrap = AppBootstrap(
+        environment: effectiveEnvironment,
+        accountGateway: accountGateway,
+        gateway: gateway,
+        realtimeGateway: realtimeGateway,
+        notificationFacade: notificationFacade,
+        e2eeFacade: e2eeFacade,
+        localePreferenceService: localePreferenceService,
+        updateService: updateService,
+        appSessionService: appSessionService,
+        identityCorePort: identityAdapter,
+        onboardingService: onboardingService,
+        onboardingSupportService: onboardingSupportService,
+        messagingService: messagingService,
+        messageSyncService: messageSyncService,
+        conversationService: conversationService,
+        agentInventoryPort: agentInventoryPort,
+        messageAgentBindingPort: messageAgentBindingPort,
+        agentControlService: agentControlService,
+        agentControlStatusStore: agentControlStatusStore,
+        groupApplicationService: groupApplicationService,
+        profileApplicationService: profileApplicationService,
+        directoryApplicationService: directoryApplicationService,
+        relationshipApplicationService: relationshipApplicationService,
+        realtimeApplicationService: realtimeApplicationService,
+        productLocalStore: productLocalStore,
+        peerIdentityService: peerIdentityService,
+        attachmentCacheService: attachmentCacheService,
+        storageScopeLayout: storageScopeLayout,
+      );
+      totalWatch.stop();
+      AwikiPerformanceLogger.log(
+        'bootstrap.create',
+        elapsed: totalWatch.elapsed,
+        fields: <String, Object?>{
+          'custom_state_root': appStateRoot?.trim().isNotEmpty == true,
+          'storage_scope_bound': true,
+        },
+      );
+      return bootstrap;
+    } on Object {
+      await runtime.dispose();
+      rethrow;
+    }
   }
 
   Future<void> dispose() async {
@@ -310,19 +353,16 @@ class AppBootstrap {
         (appSessionService! as ImCoreAppSessionService)
             .disposeRuntime()
             .catchError((_) {}),
+      if (productLocalStore is AwikiProductLocalStoreSqlite)
+        (productLocalStore! as AwikiProductLocalStoreSqlite).close().catchError(
+          (_) {},
+        ),
     ]);
   }
 
   @visibleForTesting
   static Future<AppKeyValueStore> buildAccountStoreForTesting() {
     return _buildAccountStore();
-  }
-
-  @visibleForTesting
-  static Future<AppKeyValueStore> buildVaultSecretStoreForTesting({
-    String? appStateRoot,
-  }) {
-    return _buildVaultSecretStore(appStateRoot: appStateRoot);
   }
 
   static Future<AppKeyValueStore> _buildAccountStore({
@@ -351,21 +391,6 @@ class AppBootstrap {
     if (Platform.isMacOS) {
       // macOS debug builds are not consistently signed for Keychain access.
       return FileAppKeyValueStore.create();
-    }
-    return SecureAppKeyValueStore();
-  }
-
-  static Future<AppKeyValueStore> _buildVaultSecretStore({
-    String? appStateRoot,
-  }) async {
-    final e2eRoot = awikiE2eAppStateRoot();
-    if (e2eRoot != null) {
-      return FileAppKeyValueStore.create(
-        fileName: 'awiki_me_im_core_vault.json',
-        appStateRoot: e2eRoot,
-        strictRead: true,
-        privateFile: true,
-      );
     }
     return SecureAppKeyValueStore();
   }

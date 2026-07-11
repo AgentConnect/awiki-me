@@ -17,18 +17,25 @@ typedef StorageScopeFaultInjector =
     Future<void> Function(StorageScopeProvisionPoint point);
 typedef ScopeSecretRecordFactory =
     ScopeSecretRecord Function(StorageScopeId scopeId);
+typedef StorageScopeReadyValidator =
+    Future<void> Function(
+      AwikiStorageScopeLayout layout,
+      StorageScopeManifest manifest,
+    );
 
 class StorageScopeProvisioner {
   StorageScopeProvisioner({
     required this.secrets,
     required this.manifests,
     required this.secretFactory,
+    this.readyValidator,
     this.faultInjector,
   });
 
   final ScopeSecretRepository secrets;
   final StorageScopeManifestStore manifests;
   final ScopeSecretRecordFactory secretFactory;
+  final StorageScopeReadyValidator? readyValidator;
   final StorageScopeFaultInjector? faultInjector;
 
   Future<StorageScopeManifest> provision({
@@ -56,6 +63,7 @@ class StorageScopeProvisioner {
     await secrets.createExclusive(secretFactory(owner.storageScopeId));
     await _fault(StorageScopeProvisionPoint.secretCreated);
     await layout.ensureDataDirectories();
+    await readyValidator?.call(layout, manifest);
     await _fault(StorageScopeProvisionPoint.directoriesCreated);
     manifest = manifest.copyWith(
       lifecycle: StorageScopeLifecycle.ready,
@@ -88,6 +96,7 @@ class StorageScopeProvisioner {
     }
     if (secret.status == ScopeSecretReadStatus.present) {
       await layout.ensureDataDirectories();
+      await readyValidator?.call(layout, manifest);
       final ready = manifest.copyWith(
         lifecycle: StorageScopeLifecycle.ready,
         updatedAt: DateTime.now().toUtc().toIso8601String(),

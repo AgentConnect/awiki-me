@@ -2817,7 +2817,9 @@ class FakeAppTenantActions implements AppTenantActions {
       nextUseError = null;
       throw error;
     }
-    registry = registry.copyWith(activeTenantId: tenantId);
+    registry = registry.copyWith(
+      activeTenantProfileId: TenantProfileId.parse(tenantId),
+    );
     onChanged?.call();
     return registry;
   }

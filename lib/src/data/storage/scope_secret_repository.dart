@@ -6,6 +6,8 @@ enum ScopeSecretReadStatus {
   missing,
   accessDenied,
   corrupt,
+  scopeMismatch,
+  schemaUnsupported,
   providerUnavailable,
   unsupported,
 }

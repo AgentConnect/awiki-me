@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
@@ -12,6 +13,8 @@ import 'package:awiki_me/src/data/im_core/awiki_im_core_runtime.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_secret_storage.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+const _testScopeValue = '44444444-4444-4444-8444-444444444444';
 
 void main() {
   test(
@@ -329,7 +332,9 @@ class _FakeRuntime extends AwikiImCoreRuntime {
           appSupportRoot: '/tmp/awiki-me-test/support',
           cacheRoot: '/tmp/awiki-me-test/cache',
           tempRoot: '/tmp/awiki-me-test/tmp',
+          scopeId: StorageScopeId.parse(_testScopeValue),
         ),
+        scopeId: StorageScopeId.parse(_testScopeValue),
         vaultSecretProvider: _FakeVaultSecretProvider(),
       );
 
@@ -705,19 +710,19 @@ AwikiImCoreRuntime _unusedRuntime() {
       appSupportRoot: '/tmp/awiki-me-test/support',
       cacheRoot: '/tmp/awiki-me-test/cache',
       tempRoot: '/tmp/awiki-me-test/tmp',
+      scopeId: StorageScopeId.parse(_testScopeValue),
     ),
+    scopeId: StorageScopeId.parse(_testScopeValue),
     vaultSecretProvider: _FakeVaultSecretProvider(),
   );
 }
 
 class _FakeVaultSecretProvider implements AwikiImCoreVaultSecretProvider {
   @override
-  Future<AwikiImCoreVaultSecrets> getOrCreateSecrets({
-    required String stateNamespace,
-  }) async {
+  Future<AwikiImCoreVaultSecrets> openExisting(StorageScopeId scopeId) async {
+    expect(scopeId.value, _testScopeValue);
     return AwikiImCoreVaultSecrets(
       rootKey: core.DeviceVaultRootKey.fromList(List<int>.filled(32, 1)),
-      deviceId: 'device-test',
     );
   }
 }

@@ -7,7 +7,7 @@
 3. **约束**：
    - 不直接拼 message-service wire、读 raw SQLite、写 reliable checkpoint 或持有 DID/E2EE 私钥。
    - `ProductLocalStore` 只保存 App overlay，不建立第二套 durable message truth。
-   - tenant 切换必须隔离 runtime state、identity、conversation、cache 与 vault namespace。
+   - tenant 切换必须先释放旧 runtime，并按不可变 Storage Scope 隔离 identity、conversation、cache 与 vault。
    - 行为和 UI 变化同时更新 `tests/unit/`；真实 backend、CLI peer、平台或设备流程变化同步更新 `tests/e2e/`。
    - 平台 runner 变更只触及任务明确要求的平台，避免提交无关生成文件。
 
@@ -18,7 +18,7 @@
 | `lib/src/domain/` | Domain entities、ports 和纯业务约束 |
 | `lib/src/application/` | auth/session/messaging/groups/profile/agents/attachments/tenant 等用例编排 |
 | `lib/src/data/` | `awiki_im_core` adapters、service clients、local/secure storage 与 platform bridge |
-| `lib/src/data/storage/` | UUID Storage Scope registry/manifest/layout、provision/recovery、strict envelope、platform/E2E secret provider；runtime cutover 分阶段接入 |
+| `lib/src/data/storage/` | UUID Storage Scope registry/manifest/layout、provision/recovery、strict envelope、platform/E2E secret provider及统一root解析；runtime只可openExisting |
 | `lib/src/presentation/` | Flutter 页面、Riverpod providers、组件、响应式布局和反馈 |
 | `tests/unit/` | 快速确定性 unit/widget/provider/fake-backed tests；line/branch baseline 由 `tests/quality/coverage_baseline.json` 约束 |
 | `tests/e2e/` | audited suite manifest + case catalog/checker、killable runner、configs、Flutter implementations、真实远端 `awiki.info` App+CLI/backend/device flows、脱敏资源台账 |
