@@ -21,6 +21,7 @@ class AwikiImCoreDirectoryAdapter implements DirectoryCorePort {
       input: resolution.input,
       did: resolution.did,
       handle: resolution.handle,
+      conversationId: resolution.conversationId,
       profile: resolution.profile == null
           ? null
           : _mappers.userProfileFromCore(resolution.profile!),
@@ -37,6 +38,7 @@ class AwikiImCoreDirectoryAdapter implements DirectoryCorePort {
       input: resolution.input,
       did: resolution.did,
       handle: resolution.handle,
+      conversationId: resolution.conversationId,
       profile: resolution.profile == null
           ? null
           : _mappers.userProfileFromCore(resolution.profile!),

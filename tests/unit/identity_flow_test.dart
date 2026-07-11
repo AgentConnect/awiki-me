@@ -1,4 +1,5 @@
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
@@ -36,7 +37,23 @@ void main() {
     final gateway = FakeAwikiGateway()
       ..publicProfilesByQuery = <String, UserProfile>{
         'cgw.awiki.ai': peerProfile,
-      };
+      }
+      ..directoryConversationIdsByQuery = <String, String>{
+        'cgw.awiki.ai': 'dm:peer-scope:v1:canonical-peer',
+      }
+      ..conversations = <ConversationSummary>[
+        ConversationSummary(
+          conversationId: 'dm:did:test:peer',
+          threadId: 'dm:did:test:peer',
+          displayName: 'Legacy Peer',
+          lastMessagePreview: '',
+          lastMessageAt: DateTime(2026, 7, 1),
+          unreadCount: 0,
+          isGroup: false,
+          targetDid: 'did:test:peer',
+          targetPeer: 'cgw.awiki.ai',
+        ),
+      ];
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
       tester.binding.setSurfaceSize(null);
@@ -85,14 +102,17 @@ void main() {
     final conversation = tester
         .widget<ChatView>(find.byType(ChatView))
         .conversation;
-    expect(conversation.conversationId, 'dm:did:test:peer');
-    expect(conversation.threadId, 'dm:did:test:peer');
+    expect(conversation.conversationId, 'dm:peer-scope:v1:canonical-peer');
+    expect(conversation.threadId, 'dm:peer-scope:v1:canonical-peer');
     expect(conversation.threadId.startsWith('dm:pending:'), isFalse);
     final messaging = container.read(messagingServiceProvider);
     expect(messaging, isA<FakeMessagingService>());
     final fakeMessaging = messaging as FakeMessagingService;
     expect(fakeMessaging.conversationTimelineCalls, greaterThan(0));
-    expect(fakeMessaging.lastConversationTimelineId, 'dm:did:test:peer');
+    expect(
+      fakeMessaging.lastConversationTimelineId,
+      'dm:peer-scope:v1:canonical-peer',
+    );
     await container.read(conversationListProvider.notifier).refresh();
     await tester.pump();
     final recentConversations = container

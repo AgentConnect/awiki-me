@@ -592,6 +592,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   Map<String, List<GroupMemberSummary>> groupMembersByGroupId =
       <String, List<GroupMemberSummary>>{};
   Map<String, UserProfile> publicProfilesByQuery = <String, UserProfile>{};
+  Map<String, String> directoryConversationIdsByQuery = <String, String>{};
   Map<String, RelationshipSummary> relationshipsByDidOrHandle =
       <String, RelationshipSummary>{};
   SessionIdentity? importedCredential;
@@ -1507,6 +1508,9 @@ class FakeDirectoryApplicationService implements DirectoryApplicationService {
       input: peer,
       did: profile.did,
       handle: profile.fullHandle ?? profile.handle,
+      conversationId:
+          gateway.directoryConversationIdsByQuery[normalized] ??
+          gateway.directoryConversationIdsByQuery[profile.did],
       profile: profile,
     );
   }
