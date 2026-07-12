@@ -101,8 +101,16 @@ class DidDisplayFormatter {
 
   static String conversationTitle(
     ConversationSummary conversation,
-    AppLocalizations l10n,
-  ) {
+    AppLocalizations l10n, {
+    String? peerDisplayName,
+  }) {
+    final profileName = peerDisplayName?.trim() ?? '';
+    if (!conversation.isGroup && profileName.isNotEmpty) {
+      return profileName;
+    }
+    if (!conversation.isGroup && _usesHandleAsDisplayName(conversation)) {
+      return l10n.chatUnknownUser;
+    }
     final source = conversation.isGroup
         ? conversation.displayName
         : (conversation.targetDid?.trim().isNotEmpty == true
@@ -113,6 +121,14 @@ class DidDisplayFormatter {
       fallbackDid: source,
     );
     return compact.isEmpty ? l10n.chatConversationUntitled : compact;
+  }
+
+  static bool _usesHandleAsDisplayName(ConversationSummary conversation) {
+    final displayName = _cleanHandle(conversation.displayName).toLowerCase();
+    final targetPeer = _cleanHandle(conversation.targetPeer).toLowerCase();
+    return displayName.isNotEmpty &&
+        targetPeer.isNotEmpty &&
+        displayName == targetPeer;
   }
 
   static String profileName(UserProfile profile) {

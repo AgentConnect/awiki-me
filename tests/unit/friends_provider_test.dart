@@ -134,10 +134,42 @@ void main() {
 
     await container.read(friendsProvider.notifier).refresh();
 
-    expect(container.read(friendsProvider).isLoading, isFalse);
+    final state = container.read(friendsProvider);
+    expect(state.isLoading, isFalse);
+    expect(state.followersError, isA<UnsupportedError>());
+    expect(state.followingError, isNull);
     expect(service.listFollowersCalls, 1);
     expect(service.listFollowingCalls, 1);
   });
+
+  test(
+    'one failed relationship list preserves the successful result',
+    () async {
+      const following = RelationshipSummary(
+        did: 'did:test:alice',
+        displayName: 'Alice',
+        relationship: 'following',
+      );
+      final service =
+          _RelationshipService(
+              following: const <RelationshipSummary>[following],
+            )
+            ..followersResult = Future<CoreRelationshipPage>.error(
+              StateError('followers unavailable'),
+            );
+      final container = _container(service);
+      addTearDown(container.dispose);
+
+      await container.read(friendsProvider.notifier).refresh();
+
+      final state = container.read(friendsProvider);
+      expect(state.followers, isEmpty);
+      expect(state.followersError, isA<StateError>());
+      expect(state.following, const <RelationshipSummary>[following]);
+      expect(state.followingError, isNull);
+      expect(state.isLoading, isFalse);
+    },
+  );
 
   test(
     'handle follow uses overlay without inventing a DID relationship row',

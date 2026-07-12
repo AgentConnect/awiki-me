@@ -320,9 +320,7 @@ class _ComposerState extends ConsumerState<_Composer> {
     if (_showEmojiPicker) {
       setState(() => _showEmojiPicker = false);
     }
-    await widget.onScreenshot(
-      hideApp: HardwareKeyboard.instance.isShiftPressed,
-    );
+    await widget.onScreenshot(hideApp: false);
     if (!mounted || !widget.enabled) {
       return;
     }

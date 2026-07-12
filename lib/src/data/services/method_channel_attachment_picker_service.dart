@@ -91,14 +91,7 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     await _cleanupOldAttachmentTempFiles(directory);
     final filename = 'screenshot-${DateTime.now().microsecondsSinceEpoch}.png';
     final source = File(p.join(directory.path, filename));
-    var appHidden = false;
     try {
-      final shouldHideApp = await _isNativeShiftPressed(fallback: hideApp);
-      if (shouldHideApp) {
-        await _setMainWindowVisible(false);
-        appHidden = true;
-        await Future<void>.delayed(const Duration(milliseconds: 120));
-      }
       final result = await _processRunner('/usr/sbin/screencapture', <String>[
         '-i',
         '-x',
@@ -120,9 +113,6 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     } on ProcessException catch (error) {
       throw StateError('screenshot_capture_failed: ${error.errorCode}');
     } finally {
-      if (appHidden) {
-        await _setMainWindowVisible(true);
-      }
       try {
         if (await source.exists()) {
           await source.delete();
@@ -220,22 +210,6 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
       }
     }
     return null;
-  }
-
-  Future<void> _setMainWindowVisible(bool visible) {
-    return _channel.invokeMethod<void>('setMainWindowVisible', <String, Object>{
-      'visible': visible,
-    });
-  }
-
-  Future<bool> _isNativeShiftPressed({required bool fallback}) async {
-    try {
-      return await _channel.invokeMethod<bool>('isShiftPressed') ?? fallback;
-    } on MissingPluginException {
-      return fallback;
-    } on PlatformException {
-      return fallback;
-    }
   }
 
   @override

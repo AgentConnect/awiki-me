@@ -166,7 +166,7 @@ void main() {
 
     expect(gateway.lastFollowedDidOrHandle, 'did:test:follower-1');
     expect(gateway.following.single.did, 'did:test:follower-1');
-    expect(find.text('Erin'), findsNothing);
+    expect(find.text('Erin'), findsOneWidget);
   });
 
   testWidgets('回关联系人成功后列表刷新失败也保持乐观关注态', (tester) async {
@@ -209,7 +209,58 @@ void main() {
 
     expect(gateway.lastFollowedDidOrHandle, 'did:test:follower-1');
     expect(gateway.following.single.did, 'did:test:follower-1');
-    expect(find.text('Erin'), findsNothing);
+    expect(find.text('Erin'), findsOneWidget);
+  });
+
+  testWidgets('互相关注联系人同时显示在我关注的和关注我的', (tester) async {
+    const mutual = RelationshipSummary(
+      did: 'did:test:mutual',
+      displayName: 'Mutual Alice',
+      relationship: 'mutual',
+    );
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const FriendsPage(),
+        providerOverrides: <Override>[
+          friendsProvider.overrideWith(
+            (ref) => _StaticFriendsController(
+              ref,
+              const FriendsState(
+                following: <RelationshipSummary>[mutual],
+                followers: <RelationshipSummary>[mutual],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mutual Alice'), findsNWidgets(2));
+    expect(find.text('我关注的'), findsOneWidget);
+    expect(find.text('关注我的'), findsOneWidget);
+    expect(find.text('关注'), findsNothing);
+  });
+
+  testWidgets('联系人预览区分加载失败与真实空列表并支持重试', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const FriendsPage(),
+        providerOverrides: <Override>[
+          friendsProvider.overrideWith(
+            (ref) => _StaticFriendsController(
+              ref,
+              FriendsState(followersError: StateError('followers failed')),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('还没有关注任何人。'), findsOneWidget);
+    expect(find.text('操作失败，请稍后重试。'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
   });
 
   testWidgets('点击我关注的联系人会打开被点击对象的直聊', (tester) async {

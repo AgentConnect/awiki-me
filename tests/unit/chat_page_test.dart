@@ -651,7 +651,7 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('单聊页头在 profile 返回后用昵称替换 handle', (tester) async {
+  testWidgets('单聊页头等待 profile 时不闪现 handle，返回后显示昵称', (tester) async {
     final profileCompleter = Completer<UserProfile>();
     final profileService = _DelayedProfileApplicationService(profileCompleter);
     final gateway = FakeAwikiGateway();
@@ -669,6 +669,7 @@ void main() {
       unreadCount: 0,
       isGroup: false,
       targetDid: 'did:test:zsy',
+      targetPeer: 'zsy.awiki.ai',
     );
 
     await tester.pumpWidget(
@@ -687,7 +688,8 @@ void main() {
 
     Text headerTitle() =>
         tester.widget<Text>(find.byKey(const Key('chat-header-title')));
-    expect(headerTitle().data, 'zsy.awiki.ai');
+    expect(headerTitle().data, isNot('zsy.awiki.ai'));
+    expect(find.text('zsy.awiki.ai'), findsNothing);
     expect(profileService.loadPublicProfileCalls, 1);
 
     profileCompleter.complete(
@@ -704,6 +706,55 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(headerTitle().data, '张盛毅');
+    expect(profileService.loadPublicProfileCalls, 1);
+  });
+
+  testWidgets('最近会话等待 profile 时不显示 handle，并统一使用昵称', (tester) async {
+    final profileCompleter = Completer<UserProfile>();
+    final profileService = _DelayedProfileApplicationService(profileCompleter);
+    final conversation = ConversationSummary(
+      threadId: 'dm:nickname-list',
+      displayName: 'lzc.awiki.ai',
+      lastMessagePreview: 'hello',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:lzc',
+      targetPeer: 'lzc.awiki.ai',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(embedded: true, bottomInset: 0),
+        providerOverrides: <Override>[
+          profileApplicationServiceProvider.overrideWithValue(profileService),
+          conversationListProvider.overrideWith(
+            (ref) => _StaticConversationListController(
+              ref,
+              <ConversationSummary>[conversation],
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('lzc.awiki.ai'), findsNothing);
+
+    profileCompleter.complete(
+      const UserProfile(
+        did: 'did:test:lzc',
+        displayName: 'zhuocheng',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+        fullHandle: 'lzc.awiki.ai',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('zhuocheng'), findsOneWidget);
+    expect(find.text('lzc.awiki.ai'), findsNothing);
     expect(profileService.loadPublicProfileCalls, 1);
   });
 
@@ -4375,7 +4426,7 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
 
     expect(picker.screenshotCalls, 2);
-    expect(picker.lastScreenshotHideApp, isTrue);
+    expect(picker.lastScreenshotHideApp, isFalse);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

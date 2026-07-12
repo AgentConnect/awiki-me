@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../app/app_services.dart';
 import '../../application/ports/relationship_core_port.dart';
@@ -15,6 +16,8 @@ class FriendsState {
     this.followingAliases = const <String>{},
     this.notFollowingAliases = const <String>{},
     this.isLoading = false,
+    this.followersError,
+    this.followingError,
   });
 
   final List<RelationshipSummary> followers;
@@ -24,6 +27,10 @@ class FriendsState {
   final Set<String> followingAliases;
   final Set<String> notFollowingAliases;
   final bool isLoading;
+  final Object? followersError;
+  final Object? followingError;
+
+  bool get hasRefreshError => followersError != null || followingError != null;
 
   bool isFollowing(String did) {
     final target = _normalizeIdentity(did);
@@ -40,6 +47,10 @@ class FriendsState {
     Set<String>? followingAliases,
     Set<String>? notFollowingAliases,
     bool? isLoading,
+    Object? followersError,
+    bool clearFollowersError = false,
+    Object? followingError,
+    bool clearFollowingError = false,
   }) {
     return FriendsState(
       followers: followers ?? this.followers,
@@ -47,6 +58,12 @@ class FriendsState {
       followingAliases: followingAliases ?? this.followingAliases,
       notFollowingAliases: notFollowingAliases ?? this.notFollowingAliases,
       isLoading: isLoading ?? this.isLoading,
+      followersError: clearFollowersError
+          ? null
+          : (followersError ?? this.followersError),
+      followingError: clearFollowingError
+          ? null
+          : (followingError ?? this.followingError),
     );
   }
 }
@@ -65,49 +82,65 @@ class FriendsController extends StateNotifier<FriendsState> {
 
   Future<void> refresh() async {
     final generation = ++_refreshGeneration;
-    state = state.copyWith(isLoading: true);
-    try {
-      final relationships = ref.read(relationshipApplicationServiceProvider);
-      final pages = await Future.wait<CoreRelationshipPage>(
-        <Future<CoreRelationshipPage>>[
-          relationships.listFollowers(),
-          relationships.listFollowing(),
-        ],
-      ).timeout(refreshTimeout);
-      if (!mounted || generation != _refreshGeneration) {
-        return;
-      }
-      final followers = pages[0];
-      final following = pages[1];
-      final followingIdentities = following.items
+    state = state.copyWith(
+      isLoading: true,
+      clearFollowersError: true,
+      clearFollowingError: true,
+    );
+    final relationships = ref.read(relationshipApplicationServiceProvider);
+    final results = await Future.wait<_RelationshipRefreshResult>(
+      <Future<_RelationshipRefreshResult>>[
+        _loadRelationshipPage(relationships.listFollowers()),
+        _loadRelationshipPage(relationships.listFollowing()),
+      ],
+    );
+    if (!mounted || generation != _refreshGeneration) {
+      return;
+    }
+    final followersResult = results[0];
+    final followingResult = results[1];
+    final followingItems = followingResult.page?.items;
+    var followingAliases = state.followingAliases;
+    var notFollowingAliases = state.notFollowingAliases;
+    if (followingItems != null) {
+      final followingIdentities = followingItems
           .map((item) => _normalizeIdentity(item.did))
           .where((identity) => identity.isNotEmpty)
           .toSet();
-      state = state.copyWith(
-        followers: followers.items,
-        following: following.items,
-        followingAliases: state.followingAliases
-            .where((alias) => !followingIdentities.contains(alias))
-            .toSet(),
-        notFollowingAliases: state.notFollowingAliases
-            .where(followingIdentities.contains)
-            .toSet(),
-        isLoading: false,
+      followingAliases = state.followingAliases
+          .where((alias) => !followingIdentities.contains(alias))
+          .toSet();
+      notFollowingAliases = state.notFollowingAliases
+          .where(followingIdentities.contains)
+          .toSet();
+    }
+    state = FriendsState(
+      followers: followersResult.page?.items ?? state.followers,
+      following: followingItems ?? state.following,
+      followingAliases: followingAliases,
+      notFollowingAliases: notFollowingAliases,
+      isLoading: false,
+      followersError: followersResult.error,
+      followingError: followingResult.error,
+    );
+    if (state.hasRefreshError) {
+      debugPrint(
+        '[awiki_me][friends] relationship_refresh_failed '
+        'followers=${followersResult.error.runtimeType} '
+        'following=${followingResult.error.runtimeType}',
       );
-    } on UnsupportedError {
-      // TODO(im-core): show an explicit unavailable state once relationship
-      // list APIs land in the SDK. For now, don't let optional contacts data
-      // block profile/conversation/group refresh on macOS.
-      if (mounted && generation == _refreshGeneration) {
-        state = state.copyWith(isLoading: false);
-      }
-    } catch (_) {
-      // Relationship previews are optional sidebar data. A transient list
-      // refresh failure must not leave the contacts page stuck in a loading
-      // state or roll back a successful follow/unfollow action.
-      if (mounted && generation == _refreshGeneration) {
-        state = state.copyWith(isLoading: false);
-      }
+    }
+  }
+
+  Future<_RelationshipRefreshResult> _loadRelationshipPage(
+    Future<CoreRelationshipPage> operation,
+  ) async {
+    try {
+      return _RelationshipRefreshResult(
+        page: await operation.timeout(refreshTimeout),
+      );
+    } catch (error) {
+      return _RelationshipRefreshResult(error: error);
     }
   }
 
@@ -220,6 +253,13 @@ class FriendsController extends StateNotifier<FriendsState> {
 final friendsProvider = StateNotifierProvider<FriendsController, FriendsState>(
   (ref) => FriendsController(ref),
 );
+
+class _RelationshipRefreshResult {
+  const _RelationshipRefreshResult({this.page, this.error});
+
+  final CoreRelationshipPage? page;
+  final Object? error;
+}
 
 class RelationshipListState {
   const RelationshipListState({

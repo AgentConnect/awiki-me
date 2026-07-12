@@ -95,110 +95,21 @@ void main() {
   );
 
   test(
-    'captureScreenshot returns null when the system capture is cancelled',
+    'captureScreenshot never hides the app even when legacy hideApp is true',
     () async {
       final tempDir = await Directory.systemTemp.createTemp(
-        'awiki-screenshot-cancel-test-',
+        'awiki-screenshot-visible-test-',
       );
       addTearDown(() async {
         if (await tempDir.exists()) {
           await tempDir.delete(recursive: true);
         }
       });
-      const channel = MethodChannel('test.awiki/attachment-picker');
-      final visibility = <bool>[];
+      const channel = MethodChannel('test.awiki/attachment-picker-visible');
+      final channelCalls = <MethodCall>[];
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
-            if (call.method == 'isShiftPressed') {
-              return true;
-            }
-            if (call.method == 'setMainWindowVisible') {
-              visibility.add(
-                (call.arguments as Map<Object?, Object?>)['visible']! as bool,
-              );
-              return null;
-            }
-            throw MissingPluginException();
-          });
-      addTearDown(() {
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-            .setMockMethodCallHandler(channel, null);
-      });
-      final service = MethodChannelAttachmentPickerService(
-        channel: channel,
-        screenshotSupported: true,
-        temporaryDirectoryProvider: () async => tempDir,
-        processRunner: (_, _) async => ProcessResult(1, 1, '', ''),
-      );
-
-      expect(await service.captureScreenshot(hideApp: true), isNull);
-      expect(visibility, <bool>[false, true]);
-    },
-  );
-
-  test('captureScreenshot restores a hidden app when capture fails', () async {
-    final tempDir = await Directory.systemTemp.createTemp(
-      'awiki-screenshot-failure-test-',
-    );
-    addTearDown(() async {
-      if (await tempDir.exists()) {
-        await tempDir.delete(recursive: true);
-      }
-    });
-    const channel = MethodChannel('test.awiki/attachment-picker-failure');
-    final visibility = <bool>[];
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async {
-          if (call.method == 'isShiftPressed') {
-            return true;
-          }
-          visibility.add(
-            (call.arguments as Map<Object?, Object?>)['visible']! as bool,
-          );
-          return null;
-        });
-    addTearDown(() {
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, null);
-    });
-    final service = MethodChannelAttachmentPickerService(
-      channel: channel,
-      screenshotSupported: true,
-      temporaryDirectoryProvider: () async => tempDir,
-      processRunner: (_, _) async =>
-          throw const ProcessException('screencapture', <String>[]),
-    );
-
-    await expectLater(
-      service.captureScreenshot(hideApp: true),
-      throwsA(isA<StateError>()),
-    );
-    expect(visibility, <bool>[false, true]);
-  });
-
-  test(
-    'native modifier state prevents stale Shift from hiding the app',
-    () async {
-      final tempDir = await Directory.systemTemp.createTemp(
-        'awiki-screenshot-modifier-test-',
-      );
-      addTearDown(() async {
-        if (await tempDir.exists()) {
-          await tempDir.delete(recursive: true);
-        }
-      });
-      const channel = MethodChannel('test.awiki/attachment-picker-modifier');
-      final visibility = <bool>[];
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, (call) async {
-            if (call.method == 'isShiftPressed') {
-              return false;
-            }
-            if (call.method == 'setMainWindowVisible') {
-              visibility.add(
-                (call.arguments as Map<Object?, Object?>)['visible']! as bool,
-              );
-            }
+            channelCalls.add(call);
             return null;
           });
       addTearDown(() {
@@ -218,7 +129,7 @@ void main() {
       final draft = await service.captureScreenshot(hideApp: true);
 
       expect(draft, isNotNull);
-      expect(visibility, isEmpty);
+      expect(channelCalls, isEmpty);
       addTearDown(() async {
         final staged = File(draft!.localPath!);
         if (await staged.exists()) {
@@ -227,6 +138,41 @@ void main() {
       });
     },
   );
+
+  test('captureScreenshot keeps the app visible when capture fails', () async {
+    final tempDir = await Directory.systemTemp.createTemp(
+      'awiki-screenshot-failure-test-',
+    );
+    addTearDown(() async {
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    });
+    const channel = MethodChannel('test.awiki/attachment-picker-failure');
+    final channelCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          channelCalls.add(call);
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+    final service = MethodChannelAttachmentPickerService(
+      channel: channel,
+      screenshotSupported: true,
+      temporaryDirectoryProvider: () async => tempDir,
+      processRunner: (_, _) async =>
+          throw const ProcessException('screencapture', <String>[]),
+    );
+
+    await expectLater(
+      service.captureScreenshot(hideApp: true),
+      throwsA(isA<StateError>()),
+    );
+    expect(channelCalls, isEmpty);
+  });
 
   test(
     'macOS clipboard prefers a copied image file over its Finder icon',

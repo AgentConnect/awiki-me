@@ -56,10 +56,7 @@ class FriendsPage extends ConsumerWidget {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     final following = state.following.take(_previewLimit).toList();
-    final followers = state.followers
-        .where((item) => !state.isFollowing(item.did))
-        .take(_previewLimit)
-        .toList();
+    final followers = state.followers.take(_previewLimit).toList();
     final openGroups =
         onGroupTap ??
         () => AppNavigator.push(context, (_) => const GroupListPage());
@@ -71,55 +68,91 @@ class FriendsPage extends ConsumerWidget {
           onTap: openGroups,
         ),
       ),
-      if (following.isNotEmpty)
-        _FriendsSection(
-          title: context.l10n.friendsFollowing,
-          trailingLabel: context.l10n.friendsViewAll,
-          trailingKey: const Key('friends-following-view-all'),
-          onTrailingTap: () => _openRelationshipList(
-            context,
-            FriendsRelationshipListType.following,
-          ),
-          children: following
-              .map(
-                (item) => _FriendRow.contact(
-                  rowKey: Key('contact-row:${item.did.trim()}'),
-                  seed: _displayName(item),
-                  title: _displayName(item),
-                  avatarUri: item.avatarUri,
-                  onTap: () => _openContact(context, ref, item),
+      _FriendsSection(
+        title: context.l10n.friendsFollowing,
+        trailingLabel: following.isEmpty ? null : context.l10n.friendsViewAll,
+        trailingKey: following.isEmpty
+            ? null
+            : const Key('friends-following-view-all'),
+        onTrailingTap: following.isEmpty
+            ? null
+            : () => _openRelationshipList(
+                context,
+                FriendsRelationshipListType.following,
+              ),
+        children: state.followingError != null
+            ? <Widget>[
+                _FriendsPreviewStatus(
+                  message: context.l10n.operationFailedRetry,
+                  onRetry: () => ref.read(friendsProvider.notifier).refresh(),
                 ),
-              )
-              .toList(),
-        ),
-      if (followers.isNotEmpty)
-        _FriendsSection(
-          title: context.l10n.friendsFollowers,
-          trailingLabel: context.l10n.friendsViewAll,
-          trailingKey: const Key('friends-followers-view-all'),
-          onTrailingTap: () => _openRelationshipList(
-            context,
-            FriendsRelationshipListType.followers,
-          ),
-          children: followers
-              .map(
-                (item) => _FriendRow.contact(
-                  rowKey: Key('contact-row:${item.did.trim()}'),
-                  seed: _displayName(item),
-                  title: _displayName(item),
-                  avatarUri: item.avatarUri,
-                  trailing: _RelationshipActionButton(
-                    label: context.l10n.friendsFollow,
-                    onTap: () => _runRelationshipAction(
-                      ref,
-                      () => ref.read(friendsProvider.notifier).follow(item.did),
+              ]
+            : following.isEmpty
+            ? <Widget>[
+                _FriendsPreviewStatus(
+                  message: context.l10n.friendsFollowingEmpty,
+                ),
+              ]
+            : following
+                  .map(
+                    (item) => _FriendRow.contact(
+                      rowKey: Key('contact-row:${item.did.trim()}'),
+                      seed: _displayName(item),
+                      title: _displayName(item),
+                      avatarUri: item.avatarUri,
+                      onTap: () => _openContact(context, ref, item),
                     ),
-                  ),
-                  onTap: () => _openContact(context, ref, item),
+                  )
+                  .toList(),
+      ),
+      _FriendsSection(
+        title: context.l10n.friendsFollowers,
+        trailingLabel: followers.isEmpty ? null : context.l10n.friendsViewAll,
+        trailingKey: followers.isEmpty
+            ? null
+            : const Key('friends-followers-view-all'),
+        onTrailingTap: followers.isEmpty
+            ? null
+            : () => _openRelationshipList(
+                context,
+                FriendsRelationshipListType.followers,
+              ),
+        children: state.followersError != null
+            ? <Widget>[
+                _FriendsPreviewStatus(
+                  message: context.l10n.operationFailedRetry,
+                  onRetry: () => ref.read(friendsProvider.notifier).refresh(),
                 ),
-              )
-              .toList(),
-        ),
+              ]
+            : followers.isEmpty
+            ? <Widget>[
+                _FriendsPreviewStatus(
+                  message: context.l10n.friendsFollowersEmpty,
+                ),
+              ]
+            : followers
+                  .map(
+                    (item) => _FriendRow.contact(
+                      rowKey: Key('contact-row:${item.did.trim()}'),
+                      seed: _displayName(item),
+                      title: _displayName(item),
+                      avatarUri: item.avatarUri,
+                      trailing: state.isFollowing(item.did)
+                          ? null
+                          : _RelationshipActionButton(
+                              label: context.l10n.friendsFollow,
+                              onTap: () => _runRelationshipAction(
+                                ref,
+                                () => ref
+                                    .read(friendsProvider.notifier)
+                                    .follow(item.did),
+                              ),
+                            ),
+                      onTap: () => _openContact(context, ref, item),
+                    ),
+                  )
+                  .toList(),
+      ),
     ];
     if (state.isLoading) {
       sectionWidgets.add(
@@ -282,6 +315,48 @@ class _FriendsSection extends StatelessWidget {
             ),
           ),
           ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _FriendsPreviewStatus extends StatelessWidget {
+  const _FriendsPreviewStatus({required this.message, this.onRetry});
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.tabContentHorizontalPadding,
+        vertical: responsive.spacing(12),
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: theme.secondaryText,
+                fontSize: responsive.bodySm,
+              ),
+            ),
+          ),
+          if (onRetry != null)
+            CupertinoButton(
+              key: const Key('friends-preview-retry'),
+              padding: EdgeInsets.symmetric(
+                horizontal: responsive.spacing(10),
+                vertical: responsive.spacing(4),
+              ),
+              onPressed: onRetry,
+              child: Text(context.l10n.commonRetry),
+            ),
         ],
       ),
     );
