@@ -402,23 +402,62 @@ class DesktopE2eRunner {
 
   Future<void> _prepareCliWorkspace() async {
     await _cli(const <String>['--format', 'json', 'init']);
+    await _configureCliTenant(
+      workspaceDir: cliWorkspaceDir,
+      homeDir: cliHomeDir,
+    );
     await _writeCliConfig(cliWorkspaceDir);
     await _cli(const <String>['--format', 'json', 'config', 'show']);
   }
 
+  Future<void> _configureCliTenant({
+    required Directory workspaceDir,
+    required Directory homeDir,
+  }) async {
+    final peerConfig = _requireConfig();
+    final userServiceUrl =
+        peerConfig.userServiceUrl ?? peerConfig.serviceBaseUrl;
+    final messageServiceUrl =
+        peerConfig.messageServiceUrl ?? peerConfig.serviceBaseUrl;
+    if (userServiceUrl != peerConfig.serviceBaseUrl ||
+        messageServiceUrl != peerConfig.serviceBaseUrl) {
+      throw E2eFailure(
+        'Current CLI tenant configuration requires one backend base URL for '
+        'User-Service and Message-Service.',
+      );
+    }
+    await _cliForWorkspace(
+      workspaceDir: workspaceDir,
+      homeDir: homeDir,
+      args: <String>[
+        '--format',
+        'json',
+        'tenant',
+        'create',
+        'e2e',
+        '--backend-base-url',
+        peerConfig.serviceBaseUrl,
+        '--did-host',
+        peerConfig.didDomain,
+      ],
+    );
+    await _cliForWorkspace(
+      workspaceDir: workspaceDir,
+      homeDir: homeDir,
+      args: const <String>['--format', 'json', 'tenant', 'use', 'e2e'],
+    );
+  }
+
   Future<void> _writeCliConfig(Directory workspaceDir) async {
     final peerConfig = _requireConfig();
-    final file = File('${workspaceDir.path}/config.yaml');
+    final tenantConfig = File('${workspaceDir.path}/tenants/e2e/config.yaml');
+    final file = tenantConfig.existsSync()
+        ? tenantConfig
+        : File('${workspaceDir.path}/config.yaml');
     final configMap = file.existsSync()
         ? _toStringKeyMap(loadYaml(file.readAsStringSync()), path: 'config')
         : <String, Object?>{};
     final services = _mapAt(configMap, 'services', optional: true);
-    services['service_base_url'] = peerConfig.serviceBaseUrl;
-    services['user_service_endpoint'] =
-        peerConfig.userServiceUrl ?? peerConfig.serviceBaseUrl;
-    services['message_service_endpoint'] =
-        peerConfig.messageServiceUrl ?? peerConfig.serviceBaseUrl;
-    services['did_domain'] = peerConfig.didDomain;
     services['anp_service_endpoint'] =
         peerConfig.anpServiceUrl ?? '${peerConfig.serviceBaseUrl}/anp-im/rpc';
     services['anp_service_did'] =
@@ -431,11 +470,7 @@ class DesktopE2eRunner {
     if (options.dryRun) {
       _line(
         'would write CLI config: ${redactor.redact(file.path)} '
-        '(service_base_url=${peerConfig.serviceBaseUrl}, '
-        'user_service_endpoint=${peerConfig.userServiceUrl ?? peerConfig.serviceBaseUrl}, '
-        'message_service_endpoint=${peerConfig.messageServiceUrl ?? peerConfig.serviceBaseUrl}, '
-        'did_domain=${peerConfig.didDomain}, '
-        'anp_service_endpoint=${services['anp_service_endpoint']}, '
+        '(anp_service_endpoint=${services['anp_service_endpoint']}, '
         'anp_service_did=${services['anp_service_did']}, '
         'mail_service_url=${services['mail_service_url']})',
       );
@@ -506,6 +541,10 @@ class DesktopE2eRunner {
       workspaceDir: appIdentityWorkspaceDir,
       homeDir: appIdentityHomeDir,
       args: const <String>['--format', 'json', 'init'],
+    );
+    await _configureCliTenant(
+      workspaceDir: appIdentityWorkspaceDir,
+      homeDir: appIdentityHomeDir,
     );
     await _writeCliConfig(appIdentityWorkspaceDir);
     await _cliForWorkspace(

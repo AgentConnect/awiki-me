@@ -223,6 +223,7 @@ void runDesktopCliPeerE2e({
           messaging: messaging,
           config: config,
           nonce: messageNonce,
+          ownerDid: session.did,
         );
       }
 

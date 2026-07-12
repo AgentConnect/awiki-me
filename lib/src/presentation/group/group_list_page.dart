@@ -198,10 +198,11 @@ class GroupListPage extends ConsumerWidget {
 
   Future<void> _showJoinDialog(BuildContext context, WidgetRef ref) async {
     final textController = TextEditingController();
-    final sessionHandle = ref.read(sessionProvider).session?.handle?.trim();
-    final activeHandle = sessionHandle == null || sessionHandle.isEmpty
-        ? null
-        : sessionHandle;
+    final session = ref.read(sessionProvider).session;
+    final activeHandle = groupHandleForDid(
+      handle: session?.handle,
+      did: session?.did ?? '',
+    );
     var identityMode = activeHandle == null
         ? GroupIdentityMode.didOnly
         : GroupIdentityMode.handle;

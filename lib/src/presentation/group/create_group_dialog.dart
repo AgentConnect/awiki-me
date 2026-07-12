@@ -126,8 +126,8 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
   String _generatedSlug() => 'slug_${DateTime.now().millisecondsSinceEpoch}';
 
   String? get _activeHandle {
-    final handle = ref.read(sessionProvider).session?.handle?.trim();
-    return handle == null || handle.isEmpty ? null : handle;
+    final session = ref.read(sessionProvider).session;
+    return groupHandleForDid(handle: session?.handle, did: session?.did ?? '');
   }
 
   GroupIdentitySelection _identitySelection() {

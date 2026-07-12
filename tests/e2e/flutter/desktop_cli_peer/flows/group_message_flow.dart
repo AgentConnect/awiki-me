@@ -5,7 +5,19 @@ Future<void> _verifyGroupTextRegression({
   required MessagingService messaging,
   required _DesktopCliPeerSmokeConfig config,
   required String nonce,
+  required String ownerDid,
 }) async {
+  final appFullHandle = groupHandleForDid(
+    handle: config.appHandle,
+    did: ownerDid,
+  );
+  if (appFullHandle == null) {
+    fail('App Handle cannot be qualified from its authenticated DID.');
+  }
+  final cliHandle = config.cliHandle.trim().toLowerCase();
+  final cliFullHandle = cliHandle.contains('.')
+      ? cliHandle
+      : '$cliHandle.${config.environment.didDomain}';
   final groupName = 'AWiki E2E ${config.runId} $nonce';
   final group = await groups.createGroup(
     name: groupName,
@@ -13,12 +25,12 @@ Future<void> _verifyGroupTextRegression({
     description: 'AWiki Me desktop E2E group ${config.runId}',
     goal: 'Verify basic App and CLI peer group messaging.',
     rules: 'Only automated non-production E2E messages.',
-    identity: GroupIdentitySelection.handle(config.appHandle),
+    identity: GroupIdentitySelection.handle(appFullHandle),
   );
   expect(group.groupId.trim(), isNotEmpty);
   expect(group.displayName, isNotEmpty);
 
-  await groups.addMember(groupDid: group.groupId, memberRef: config.cliHandle);
+  await groups.addMember(groupDid: group.groupId, memberRef: cliFullHandle);
   await _waitForGroupMember(
     groups: groups,
     groupDid: group.groupId,

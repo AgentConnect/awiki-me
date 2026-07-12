@@ -25,10 +25,35 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('Handle group identity rejects empty values instead of downgrading', () {
     expect(() => GroupIdentitySelection.handle('   '), throwsArgumentError);
+    expect(() => GroupIdentitySelection.handle('alice'), throwsArgumentError);
     const didOnly = GroupIdentitySelection.didOnly();
     expect(didOnly.mode, GroupIdentityMode.didOnly);
     expect(didOnly.handle, isNull);
   });
+
+  test(
+    'group Handle is qualified only from a matching did:wba provider domain',
+    () {
+      expect(
+        groupHandleForDid(
+          handle: ' Alice ',
+          did: 'did:wba:AWIKI.INFO:user:alice:e1_key',
+        ),
+        'alice.awiki.info',
+      );
+      expect(
+        groupHandleForDid(
+          handle: 'Alice.Other.example',
+          did: 'did:wba:awiki.info:user:alice:e1_key',
+        ),
+        'alice.other.example',
+      );
+      expect(
+        groupHandleForDid(handle: 'alice', did: 'did:web:example.com:alice'),
+        isNull,
+      );
+    },
+  );
 
   test(
     'profile and directory services trim inputs and delegate to ports',

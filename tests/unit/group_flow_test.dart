@@ -29,7 +29,7 @@ class _RecoveryGroupController extends GroupController {
 
 void main() {
   const session = SessionIdentity(
-    did: 'did:test:me',
+    did: 'did:wba:awiki.ai:me:e1_key',
     credentialName: 'me.json',
     displayName: 'Me',
     handle: 'me',
@@ -83,7 +83,7 @@ void main() {
       expect(gateway.lastCreatedGroupRules, isEmpty);
       expect(gateway.lastCreatedGroupPrompt, isEmpty);
       expect(gateway.lastGroupIdentityMode, GroupIdentityMode.handle);
-      expect(gateway.lastGroupIdentityHandle, 'me');
+      expect(gateway.lastGroupIdentityHandle, 'me.awiki.ai');
       expect(find.byType(ChatView), findsOneWidget);
       expect(find.text('融资协作群'), findsWidgets);
     } finally {
@@ -116,7 +116,7 @@ void main() {
 
       expect(gateway.lastJoinedGroupDid, groupDid);
       expect(gateway.lastGroupIdentityMode, GroupIdentityMode.handle);
-      expect(gateway.lastGroupIdentityHandle, 'me');
+      expect(gateway.lastGroupIdentityHandle, 'me.awiki.ai');
       expect(find.byType(ChatView), findsOneWidget);
       expect(find.text('Joined $groupDid'), findsWidgets);
     } finally {
