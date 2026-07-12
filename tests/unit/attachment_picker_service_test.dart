@@ -110,7 +110,7 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
             channelCalls.add(call);
-            return null;
+            return call.method == 'preflightScreenCapturePermission';
           });
       addTearDown(() {
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -129,7 +129,9 @@ void main() {
       final draft = await service.captureScreenshot(hideApp: true);
 
       expect(draft, isNotNull);
-      expect(channelCalls, isEmpty);
+      expect(channelCalls.map((call) => call.method), <String>[
+        'preflightScreenCapturePermission',
+      ]);
       addTearDown(() async {
         final staged = File(draft!.localPath!);
         if (await staged.exists()) {
@@ -153,7 +155,7 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           channelCalls.add(call);
-          return null;
+          return call.method == 'preflightScreenCapturePermission';
         });
     addTearDown(() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -171,8 +173,52 @@ void main() {
       service.captureScreenshot(hideApp: true),
       throwsA(isA<StateError>()),
     );
-    expect(channelCalls, isEmpty);
+    expect(channelCalls.map((call) => call.method), <String>[
+      'preflightScreenCapturePermission',
+    ]);
   });
+
+  test(
+    'captureScreenshot requests permission once and never captures desktop when denied',
+    () async {
+      const channel = MethodChannel('test.awiki/attachment-picker-permission');
+      final channelCalls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            channelCalls.add(call);
+            return false;
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+      var processCalls = 0;
+      final service = MethodChannelAttachmentPickerService(
+        channel: channel,
+        screenshotSupported: true,
+        processRunner: (_, _) async {
+          processCalls += 1;
+          return ProcessResult(1, 0, '', '');
+        },
+      );
+
+      await expectLater(
+        service.captureScreenshot(),
+        throwsA(isA<StateError>()),
+      );
+      await expectLater(
+        service.captureScreenshot(),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(processCalls, 0);
+      expect(channelCalls.map((call) => call.method), <String>[
+        'preflightScreenCapturePermission',
+        'requestScreenCapturePermission',
+        'preflightScreenCapturePermission',
+      ]);
+    },
+  );
 
   test(
     'macOS clipboard prefers a copied image file over its Finder icon',

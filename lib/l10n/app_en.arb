@@ -458,6 +458,7 @@
   "chatAddAttachment": "Add attachment",
   "chatAddEmoji": "Choose emoji",
   "chatCaptureScreenshot": "Capture screenshot",
+  "screenshotPermissionRequired": "Screen Recording permission is not active. Allow the current AWiki Me app under Screen & System Audio Recording in System Settings, then quit and reopen it.",
   "chatRemoveAttachment": "Remove attachment",
   "chatViewAttachment": "View attachment",
   "chatAttachmentFileFallback": "File",

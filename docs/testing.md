@@ -100,6 +100,27 @@ dart run tests/unit/runner.dart tests/unit/onboarding_page_test.dart
 `tests/unit/attachment_picker_service_test.dart`；真实 App + CLI 附件互通仍由
 `dart run tests/e2e/runner.dart --case attachment` 或 `--case full` 验证。
 
+macOS 录屏权限绑定代码签名 designated requirement，而不只是 bundle ID。Debug App
+必须由 `DT9HA3J8KE` Team 的 Apple Development identity 签名；ad-hoc 签名会把 CDHash
+写进 requirement，二进制每次变化都会让 TCC 把它视为新的调用方，并在未授权时只返回
+桌面画面。Debug 的系统显示名必须是 `AWiki Me (Development)`，避免与已安装的
+Release `AWiki Me` 在“屏幕与系统音频录制”列表中同名，导致用户将权限授予错误的
+bundle ID。由旧构建切换时执行一次：
+
+```bash
+tccutil reset ScreenCapture ai.awiki.awikime.dev
+open "build/macos/Build/Products/Debug/AWiki Me.app"
+```
+
+系统设置中必须在上方的“录屏与系统录音”列表授权给
+`AWiki Me (Development)`，不能只加到下方的“仅系统录音”列表，也不能授权给旧的
+Release `AWiki Me`。允许后必须完全退出
+并重新启动 App。验证时同时检查 `codesign -dvvv` 中不存在
+`Signature=adhoc`、`TeamIdentifier=DT9HA3J8KE`，并检查 `codesign -dr -` 的 requirement
+由证书和 identifier 构成而不是 `cdhash`。截图服务还必须先调用 native preflight；权限
+未生效时单进程只请求一次授权，并且不得启动 `/usr/sbin/screencapture` 或接收只有桌面的
+图片。
+
 The repository configures `package:sqlite3` to use the system SQLite library
 through `hooks.user_defines.sqlite3.source: system`. This keeps the test gates
 from downloading a prebuilt SQLite dylib from GitHub during native asset build

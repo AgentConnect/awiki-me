@@ -44,6 +44,7 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
   final AttachmentClipboardImageReader _clipboardImageReader;
   final AttachmentClipboardFilesReader _clipboardFilesReader;
   final bool _preferClipboardFiles;
+  bool _screenCapturePermissionRequested = false;
   static const String _fallbackMimeType = 'application/octet-stream';
 
   @override
@@ -86,6 +87,9 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     if (!_screenshotSupported) {
       return null;
     }
+    if (!await _ensureScreenCapturePermission()) {
+      throw StateError('screenshot_screen_recording_permission_required');
+    }
     final directory = await _temporaryDirectoryProvider();
     await directory.create(recursive: true);
     await _cleanupOldAttachmentTempFiles(directory);
@@ -120,6 +124,33 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
       } catch (_) {
         // Best-effort source cleanup. The attachment copy has its own TTL.
       }
+    }
+  }
+
+  Future<bool> _ensureScreenCapturePermission() async {
+    try {
+      final granted =
+          await _channel.invokeMethod<bool>(
+            'preflightScreenCapturePermission',
+          ) ??
+          false;
+      if (granted) {
+        return true;
+      }
+      if (_screenCapturePermissionRequested) {
+        return false;
+      }
+      _screenCapturePermissionRequested = true;
+      return await _channel.invokeMethod<bool>(
+            'requestScreenCapturePermission',
+          ) ??
+          false;
+    } on MissingPluginException {
+      // Non-macOS/unit environments do not install the native permission
+      // bridge. Screenshot support is injected explicitly in those tests.
+      return true;
+    } on PlatformException {
+      return false;
     }
   }
 

@@ -72,4 +72,20 @@ void main() {
     expect(proxyMessage, AppMessage.networkUnavailableRetry());
     expect(handshakeMessage, AppMessage.networkUnavailableRetry());
   });
+
+  test('maps screenshot permission errors to actionable localized copy', () {
+    final message = AppMessage.fromError(
+      StateError('screenshot_screen_recording_permission_required'),
+    );
+
+    expect(message, AppMessage.screenshotPermissionRequired());
+    expect(
+      message.resolve(AppLocalizationsZh()),
+      '录屏权限尚未生效。请在系统设置的“录屏与系统录音”中允许当前 AWiki Me 应用，然后完全退出并重新打开。',
+    );
+    expect(
+      message.resolve(AppLocalizationsEn()),
+      'Screen Recording permission is not active. Allow the current AWiki Me app under Screen & System Audio Recording in System Settings, then quit and reopen it.',
+    );
+  });
 }

@@ -801,6 +801,10 @@ class MainFlutterWindow: NSWindow {
         self.pickAttachment(result: result)
       case "saveAttachment":
         self.saveAttachment(arguments: call.arguments, result: result)
+      case "preflightScreenCapturePermission":
+        result(CGPreflightScreenCaptureAccess())
+      case "requestScreenCapturePermission":
+        result(CGRequestScreenCaptureAccess())
       default:
         result(FlutterMethodNotImplemented)
       }
