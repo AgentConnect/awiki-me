@@ -15,6 +15,15 @@ Keychain bridge。长期 schema 与生命周期仍以
 | development/profile | `ai.awiki.awikime.dev` | service `ai.awiki.awikime.dev.scope-secrets` |
 | E2E | 显式测试 state root | private file provider，不访问平台 item |
 
+macOS Keychain item 使用不参与定位的友好显示标签：production/release 为
+`AWiki Me secure storage`，development/profile 为
+`AWiki Me secure storage (Development)`。所有 tenant 共用对应 channel 的显示标签；
+同一 application channel 下的通用安全存储 ACL 也使用相同显示标签，避免它在 Scope
+Vault 之前访问时显示另一套名称。
+稳定 locator 仍仅由上述 service 与 `scope/<canonical-uuid-v4>` account 组成。新 item
+创建时直接写入标签；旧 item 在成功读取后仅做 best-effort 标签元数据更新，更新失败不得
+影响 vault 读取。
+
 平台 account 永远是 `scope/<canonical-uuid-v4>`。Dart 和 macOS native bridge 都会
 拒绝任意 service、非 canonical account、scope mismatch 和 unknown schema。域名、tenant
 名称和 backend URL 不参与 locator。

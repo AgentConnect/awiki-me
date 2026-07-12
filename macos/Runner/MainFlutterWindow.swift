@@ -3,6 +3,30 @@ import FlutterMacOS
 import Security
 import UniformTypeIdentifiers
 
+enum ScopeSecretKeychainPresentation {
+  static func applicationLabel(for bundleIdentifier: String?) -> String? {
+    switch bundleIdentifier {
+    case "ai.awiki.awikime":
+      return "AWiki Me secure storage"
+    case "ai.awiki.awikime.dev":
+      return "AWiki Me secure storage (Development)"
+    default:
+      return nil
+    }
+  }
+
+  static func label(for service: String) -> String? {
+    switch service {
+    case "ai.awiki.awikime.scope-secrets":
+      return "AWiki Me secure storage"
+    case "ai.awiki.awikime.dev.scope-secrets":
+      return "AWiki Me secure storage (Development)"
+    default:
+      return nil
+    }
+  }
+}
+
 class MainFlutterWindow: NSWindow {
   private let awikiErrAuthorizationDenied = OSStatus(-60008)
   private let scopeSecretQueue = DispatchQueue(label: "ai.awiki.awikime.scope-secret-keychain")
@@ -284,6 +308,12 @@ class MainFlutterWindow: NSWindow {
     ) else { return }
     scopeSecretQueue.async {
       let response = self.readGenericPassword(service: request.service, account: request.account)
+      if response.status == errSecSuccess {
+        self.ensureScopeSecretDisplayLabel(
+          service: request.service,
+          account: request.account
+        )
+      }
       DispatchQueue.main.async {
         switch response.status {
         case errSecSuccess:
@@ -420,8 +450,14 @@ class MainFlutterWindow: NSWindow {
 
   private func addScopeSecretExclusive(service: String, account: String, value: String) -> OSStatus {
     guard let data = value.data(using: .utf8) else { return errSecParam }
+    guard let label = ScopeSecretKeychainPresentation.label(for: service) else {
+      return errSecParam
+    }
     var add = baseGenericPasswordQuery(service: service, account: account)
     add[kSecValueData] = data
+    // Presentation metadata only: every tenant may share this label because
+    // the stable locator remains the service/account pair.
+    add[kSecAttrLabel] = label
     if service == "ai.awiki.awikime.scope-secrets" {
       let accessResult = createCurrentBundleKeychainAccess()
       guard accessResult.status == errSecSuccess, let access = accessResult.access else {
@@ -432,6 +468,28 @@ class MainFlutterWindow: NSWindow {
     // Development has an intentionally separate service and uses the standard
     // current-app ACL. Production never falls back when its explicit ACL fails.
     return SecItemAdd(add as CFDictionary, nil)
+  }
+
+  private func ensureScopeSecretDisplayLabel(service: String, account: String) {
+    guard let label = ScopeSecretKeychainPresentation.label(for: service) else { return }
+    var attributesQuery = baseGenericPasswordQuery(service: service, account: account)
+    attributesQuery[kSecReturnAttributes] = true
+    attributesQuery[kSecMatchLimit] = kSecMatchLimitOne
+
+    var attributesRef: AnyObject?
+    guard
+      SecItemCopyMatching(attributesQuery as CFDictionary, &attributesRef) == errSecSuccess,
+      let attributes = attributesRef as? NSDictionary,
+      attributes[kSecAttrLabel] as? String != label
+    else { return }
+
+    // Best-effort presentation migration for items created before friendly
+    // labels existed. A denied metadata update must never block vault reads.
+    let locator = baseGenericPasswordQuery(service: service, account: account)
+    _ = SecItemUpdate(
+      locator as CFDictionary,
+      [kSecAttrLabel: label] as CFDictionary
+    )
   }
 
   private func validateScopeEnvelope(
@@ -661,6 +719,12 @@ class MainFlutterWindow: NSWindow {
   ) -> OSStatus {
     var add = baseGenericPasswordQuery(service: service, account: account)
     add[kSecValueData] = data
+    if service == "ai.awiki.awikime.secure_storage",
+       let label = ScopeSecretKeychainPresentation.applicationLabel(
+         for: Bundle.main.bundleIdentifier
+       ) {
+      add[kSecAttrLabel] = label
+    }
     if let access {
       add[kSecAttrAccess] = access
     }
@@ -686,7 +750,12 @@ class MainFlutterWindow: NSWindow {
   }
 
   private func createCurrentBundleKeychainAccess() -> (status: OSStatus, access: SecAccess?) {
-    let accessDescription = "AWiki Me secure storage" as CFString
+    guard let label = ScopeSecretKeychainPresentation.applicationLabel(
+      for: Bundle.main.bundleIdentifier
+    ) else {
+      return (errSecParam, nil)
+    }
+    let accessDescription = label as CFString
     // Trust the executable path instead of the .app bundle directory. Keychain
     // ACL checks are made against the process executable; using the bundle path
     // can leave items readable only after a per-launch authorization prompt.

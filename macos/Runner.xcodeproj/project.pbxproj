@@ -502,7 +502,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikiMe.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/awiki_me.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/awiki_me";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AWiki Me.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AWiki Me";
 			};
 			name = Debug;
 		};
@@ -517,7 +517,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikiMe.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/awiki_me.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/awiki_me";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AWiki Me.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AWiki Me";
 			};
 			name = Release;
 		};
@@ -532,7 +532,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikiMe.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/awiki_me.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/awiki_me";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AWiki Me.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AWiki Me";
 			};
 			name = Profile;
 		};
