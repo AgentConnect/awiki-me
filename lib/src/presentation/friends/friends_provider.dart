@@ -345,6 +345,7 @@ class RelationshipListController extends StateNotifier<RelationshipListState> {
     try {
       final page = await _loadPage(cursor: null);
       await _loadCachedPeerProfiles(page.items);
+      await _refreshMissingPeerProfiles(page.items);
       if (!mounted) {
         return;
       }
@@ -369,6 +370,7 @@ class RelationshipListController extends StateNotifier<RelationshipListState> {
     try {
       final page = await _loadPage(cursor: state.nextCursor);
       await _loadCachedPeerProfiles(page.items);
+      await _refreshMissingPeerProfiles(page.items);
       if (!mounted) {
         return;
       }
@@ -407,6 +409,18 @@ class RelationshipListController extends StateNotifier<RelationshipListState> {
     await ref
         .read(peerDisplayProfileProvider.notifier)
         .loadCached(ownerDid: ownerDid, dids: items.map((item) => item.did));
+  }
+
+  Future<void> _refreshMissingPeerProfiles(
+    Iterable<RelationshipSummary> items,
+  ) async {
+    final ownerDid = ref.read(sessionProvider).session?.did ?? '';
+    await ref
+        .read(peerDisplayProfileProvider.notifier)
+        .refreshRemoteMissing(
+          ownerDid: ownerDid,
+          dids: items.map((item) => item.did),
+        );
   }
 }
 

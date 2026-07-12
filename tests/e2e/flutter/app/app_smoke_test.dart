@@ -5,12 +5,14 @@ import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
+import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
@@ -37,6 +39,12 @@ class _StaticConversationListController extends ConversationListController {
   Future<void> refresh() async {
     // The integration smoke seeds the list synchronously so AppRuntime
     // initialization cannot race the UI flow under test.
+  }
+}
+
+class _StaticFriendsController extends FriendsController {
+  _StaticFriendsController(super.ref, FriendsState initialState) {
+    state = initialState;
   }
 }
 
@@ -440,6 +448,79 @@ void main() {
 
       expect(find.text('Tab Smoke Daemon'), findsWidgets);
       expect(control.listAgentsCalls, callsAfterFirstOpen);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+      await tester.binding.setSurfaceSize(null);
+    }
+  });
+
+  testWidgets('AwikiMeApp 查看全部会补齐并缓存关注用户资料', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'default',
+      handle: 'me',
+      displayName: 'Me',
+      jwtToken: 'test-jwt',
+    );
+    const peerDid = 'did:test:following-profile';
+    final harness = createFakeAwikiMeAppHarness(session: session);
+    harness.gateway
+      ..following = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: peerDid,
+          displayName: peerDid,
+          relationship: 'following',
+        ),
+      ]
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        peerDid: UserProfile(
+          did: peerDid,
+          displayName: '关注用户昵称',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          fullHandle: 'following-profile.awiki.ai',
+        ),
+      };
+
+    try {
+      await tester.pumpWidget(
+        AwikiMeApp(
+          bootstrap: harness.bootstrap,
+          providerOverrides: <Override>[
+            ...harness.providerOverrides,
+            friendsProvider.overrideWith(
+              (ref) => _StaticFriendsController(
+                ref,
+                const FriendsState(
+                  following: <RelationshipSummary>[
+                    RelationshipSummary(
+                      did: peerDid,
+                      displayName: peerDid,
+                      relationship: 'following',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(harness.gateway.loadPublicProfileQueries, isEmpty);
+
+      await _tapFirstFound(tester, <Finder>[
+        find.bySemanticsLabel('联系人'),
+        find.text('联系人'),
+      ]);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('friends-following-view-all')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('关注用户昵称'), findsWidgets);
+      expect(harness.gateway.loadPublicProfileQueries, <String>[peerDid]);
     } finally {
       debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);

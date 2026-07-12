@@ -590,6 +590,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   Map<String, List<GroupMemberSummary>> groupMembersByGroupId =
       <String, List<GroupMemberSummary>>{};
   Map<String, UserProfile> publicProfilesByQuery = <String, UserProfile>{};
+  final List<String> loadPublicProfileQueries = <String>[];
   Map<String, String> directoryConversationIdsByQuery = <String, String>{};
   Map<String, RelationshipSummary> relationshipsByDidOrHandle =
       <String, RelationshipSummary>{};
@@ -1101,6 +1102,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
 
   @override
   Future<UserProfile> loadPublicProfile(String didOrHandle) async {
+    loadPublicProfileQueries.add(didOrHandle);
     final normalized = normalizeTestIdentity(didOrHandle);
     if (publicProfilesByQuery.containsKey(didOrHandle)) {
       return publicProfilesByQuery[didOrHandle]!;

@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
@@ -26,6 +29,7 @@ class PeerDisplayProfileController
     : super(const PeerDisplayProfileState());
 
   final Ref ref;
+  final Map<String, Future<void>> _remoteLoads = <String, Future<void>>{};
 
   Future<void> loadCached({
     required String ownerDid,
@@ -96,6 +100,67 @@ class PeerDisplayProfileController
           avatarUri: projection.avatarUri,
         ),
     ]);
+  }
+
+  Future<void> refreshRemoteMissing({
+    required String ownerDid,
+    required Iterable<String> dids,
+    Duration timeout = const Duration(seconds: 12),
+  }) async {
+    final normalizedOwner = ownerDid.trim();
+    final requested = dids
+        .map((did) => did.trim())
+        .where((did) => did.isNotEmpty)
+        .toSet();
+    if (normalizedOwner.isEmpty || requested.isEmpty) {
+      return;
+    }
+    await loadCached(ownerDid: normalizedOwner, dids: requested);
+    if (state.ownerDid != normalizedOwner) {
+      return;
+    }
+    final missing = requested
+        .where((did) => !state.profiles.containsKey(did))
+        .toList(growable: false);
+    await Future.wait<void>(
+      missing.map((did) {
+        final key = '$normalizedOwner\u0000$did';
+        return _remoteLoads.putIfAbsent(
+          key,
+          () => _loadRemoteProfile(
+            ownerDid: normalizedOwner,
+            did: did,
+            timeout: timeout,
+            loadKey: key,
+          ),
+        );
+      }),
+    );
+  }
+
+  Future<void> _loadRemoteProfile({
+    required String ownerDid,
+    required String did,
+    required Duration timeout,
+    required String loadKey,
+  }) async {
+    try {
+      final profile = await ref
+          .read(profileApplicationServiceProvider)
+          .loadPublicProfile(did)
+          .timeout(timeout);
+      if (state.ownerDid != ownerDid) {
+        return;
+      }
+      updateFromRemote(ownerDid: ownerDid, profile: profile, requestedDid: did);
+    } catch (error) {
+      debugPrint(
+        '[awiki_me][profile_projection] remote_profile_refresh_failed '
+        'did=$did error=${error.runtimeType}',
+      );
+    } finally {
+      _remoteLoads.remove(loadKey);
+    }
   }
 
   void clear() {

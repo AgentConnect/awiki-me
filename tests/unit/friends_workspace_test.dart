@@ -404,6 +404,65 @@ void main() {
     }
   });
 
+  testWidgets('查看全部会并发补齐缺失 profile 并显示昵称', (tester) async {
+    const peerDid = 'did:test:profile-missing';
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'default',
+      handle: 'me',
+      displayName: 'Me',
+    );
+    final gateway = FakeAwikiGateway()
+      ..following = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: peerDid,
+          displayName: peerDid,
+          relationship: 'following',
+        ),
+      ]
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        peerDid: UserProfile(
+          did: peerDid,
+          displayName: '远端昵称',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          fullHandle: 'profile-missing.awiki.ai',
+        ),
+      };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const FriendsPage(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          friendsProvider.overrideWith(
+            (ref) => _StaticFriendsController(
+              ref,
+              const FriendsState(
+                following: <RelationshipSummary>[
+                  RelationshipSummary(
+                    did: peerDid,
+                    displayName: peerDid,
+                    relationship: 'following',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('friends-following-view-all')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('远端昵称'), findsOneWidget);
+    expect(gateway.loadPublicProfileQueries, <String>[peerDid]);
+  });
+
   testWidgets('关注列表加载失败时显示错误并支持重试', (tester) async {
     final gateway = FakeAwikiGateway()..failListFollowing = true;
 

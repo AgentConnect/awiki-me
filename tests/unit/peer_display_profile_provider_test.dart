@@ -1,7 +1,9 @@
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/directory_application_service.dart';
 import 'package:awiki_me/src/application/ports/directory_core_port.dart';
+import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/domain/entities/peer_display_profile.dart';
+import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -52,7 +54,7 @@ void main() {
     final container = ProviderContainer(
       overrides: <Override>[
         directoryApplicationServiceProvider.overrideWithValue(
-          _CachedDirectoryService(),
+          _EmptyCachedDirectoryService(),
         ),
       ],
     );
@@ -112,6 +114,38 @@ void main() {
       'bob.awiki.ai',
     );
   });
+
+  test('查看全部并发刷新本地缺失 profile 并缓存成功结果', () async {
+    final profiles = _RemoteProfileService();
+    final container = ProviderContainer(
+      overrides: <Override>[
+        directoryApplicationServiceProvider.overrideWithValue(
+          _EmptyCachedDirectoryService(),
+        ),
+        profileApplicationServiceProvider.overrideWithValue(profiles),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(peerDisplayProfileProvider.notifier);
+
+    await controller.refreshRemoteMissing(
+      ownerDid: 'did:test:owner',
+      dids: const <String>['did:test:alice', 'did:test:bob'],
+    );
+    await controller.refreshRemoteMissing(
+      ownerDid: 'did:test:owner',
+      dids: const <String>['did:test:alice', 'did:test:bob'],
+    );
+
+    expect(profiles.requests.toSet(), <String>{
+      'did:test:alice',
+      'did:test:bob',
+    });
+    expect(profiles.maxActiveRequests, 2);
+    final state = container.read(peerDisplayProfileProvider);
+    expect(state.forDid('did:test:alice')?.displayName, 'alice nickname');
+    expect(state.forDid('did:test:bob')?.displayName, 'bob nickname');
+  });
 }
 
 class _CachedDirectoryService implements DirectoryApplicationService {
@@ -132,6 +166,59 @@ class _CachedDirectoryService implements DirectoryApplicationService {
         )
         .toList();
   }
+
+  @override
+  Future<DirectoryPeerResolution> lookupHandle(String handle) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<DirectoryPeerResolution> resolvePeer(String peer) {
+    throw UnimplementedError();
+  }
+}
+
+class _RemoteProfileService implements ProfileApplicationService {
+  final List<String> requests = <String>[];
+  int activeRequests = 0;
+  int maxActiveRequests = 0;
+
+  @override
+  Future<UserProfile> loadPublicProfile(String didOrHandle) async {
+    requests.add(didOrHandle);
+    activeRequests += 1;
+    if (activeRequests > maxActiveRequests) {
+      maxActiveRequests = activeRequests;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    activeRequests -= 1;
+    final name = didOrHandle.split(':').last;
+    return UserProfile(
+      did: didOrHandle,
+      displayName: '$name nickname',
+      bio: '',
+      tags: const <String>[],
+      profileMarkdown: '',
+      fullHandle: '$name.awiki.ai',
+    );
+  }
+
+  @override
+  Future<UserProfile> loadMyProfile() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<UserProfile> updateProfile(ProfilePatch patch) {
+    throw UnimplementedError();
+  }
+}
+
+class _EmptyCachedDirectoryService implements DirectoryApplicationService {
+  @override
+  Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
+    Iterable<String> dids,
+  ) async => const <PeerDisplayProfile>[];
 
   @override
   Future<DirectoryPeerResolution> lookupHandle(String handle) {
