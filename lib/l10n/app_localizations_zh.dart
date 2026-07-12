@@ -906,6 +906,20 @@ class AppLocalizationsZh extends AppLocalizations {
   String get groupJoinDialogPlaceholder => '输入群组 Group DID';
 
   @override
+  String get groupIdentityModeLabel => '入群身份';
+
+  @override
+  String get groupIdentityHandle => 'Handle';
+
+  @override
+  String get groupIdentityDidOnly => 'DID';
+
+  @override
+  String groupIdentityCurrentHandle(String handle) {
+    return 'Handle：$handle';
+  }
+
+  @override
   String get groupNoDescription => '暂无群描述';
 
   @override
@@ -940,6 +954,40 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get groupCreateAction => '创建';
+
+  @override
+  String get groupRecoveryCompleted => '群身份已恢复';
+
+  @override
+  String groupRecoveryPending(int count) {
+    return '身份已恢复，仍有 $count 个群等待更新';
+  }
+
+  @override
+  String groupRecoveryBlocked(int count) {
+    return '身份已恢复，有 $count 个群需要处理';
+  }
+
+  @override
+  String get groupRecoveryStatusUnavailable => '身份已恢复，群更新将在稍后重试';
+
+  @override
+  String get groupRecoveryMembershipLayer => '成员关系';
+
+  @override
+  String get groupRecoveryEncryptionLayer => '群加密';
+
+  @override
+  String get groupRecoveryPhaseCompleted => '已完成';
+
+  @override
+  String get groupRecoveryPhasePending => '等待中';
+
+  @override
+  String get groupRecoveryPhaseBlocked => '已阻塞';
+
+  @override
+  String get groupRecoveryRetry => '重试群身份恢复';
 
   @override
   String get groupFieldName => '名称';

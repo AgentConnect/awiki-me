@@ -952,6 +952,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get groupJoinDialogPlaceholder => 'Enter the group DID';
 
   @override
+  String get groupIdentityModeLabel => 'Join identity';
+
+  @override
+  String get groupIdentityHandle => 'Handle';
+
+  @override
+  String get groupIdentityDidOnly => 'DID';
+
+  @override
+  String groupIdentityCurrentHandle(String handle) {
+    return 'Handle: $handle';
+  }
+
+  @override
   String get groupNoDescription => 'No group description yet';
 
   @override
@@ -987,6 +1001,41 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get groupCreateAction => 'Create';
+
+  @override
+  String get groupRecoveryCompleted => 'Group identity restored';
+
+  @override
+  String groupRecoveryPending(int count) {
+    return 'Identity restored; $count group updates are pending';
+  }
+
+  @override
+  String groupRecoveryBlocked(int count) {
+    return 'Identity restored; $count group updates need attention';
+  }
+
+  @override
+  String get groupRecoveryStatusUnavailable =>
+      'Identity restored; group updates will retry later';
+
+  @override
+  String get groupRecoveryMembershipLayer => 'Membership';
+
+  @override
+  String get groupRecoveryEncryptionLayer => 'Encryption';
+
+  @override
+  String get groupRecoveryPhaseCompleted => 'Completed';
+
+  @override
+  String get groupRecoveryPhasePending => 'Pending';
+
+  @override
+  String get groupRecoveryPhaseBlocked => 'Blocked';
+
+  @override
+  String get groupRecoveryRetry => 'Retry group recovery';
 
   @override
   String get groupFieldName => 'Name';

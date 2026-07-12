@@ -3,6 +3,7 @@ import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import '../../application/ports/group_core_port.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/group_member_summary.dart';
+import '../../domain/entities/group_identity.dart';
 import '../../domain/entities/group_summary.dart';
 import 'awiki_im_core_mappers.dart';
 import 'awiki_im_core_runtime.dart';
@@ -25,6 +26,7 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
     required String goal,
     required String rules,
     String? messagePrompt,
+    GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
   }) async {
     if ((_runtime.config.anpServiceDid ?? '').trim().isEmpty) {
       throw StateError('Group creation requires an ANP service DID.');
@@ -33,6 +35,8 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
       (client) => client.groups.createGroup(
         core.CreateGroupRequest(
           name: name,
+          identityMode: _coreIdentityMode(identity.mode),
+          identityHandle: identity.handle,
           slug: slug,
           description: description,
           goal: goal,
@@ -45,11 +49,43 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
   }
 
   @override
-  Future<GroupSummary> joinGroup(String groupDid) async {
+  Future<GroupSummary> joinGroup(
+    String groupDid, {
+    GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+  }) async {
     final result = await _runtime.withCurrentClient(
-      (client) => client.groups.joinGroup(groupDid),
+      (client) => client.groups.joinGroupWithIdentity(
+        mapCoreJoinGroupRequest(groupDid, identity),
+      ),
     );
     return _groupFromResult(result);
+  }
+
+  @override
+  Future<GroupRebindRecoverySummary> resumeRebindRecovery({
+    int limit = 100,
+  }) async {
+    final result = await _runtime.withCurrentClient(
+      (client) => client.groups.resumeRebindRecovery(limit: limit),
+    );
+    return GroupRebindRecoverySummary(
+      processed: result.processed,
+      completed: result.completed,
+      pending: result.pending,
+      blocked: result.blocked,
+      sendPausedGroupDids: result.sendPausedGroupDids,
+      items: result.items
+          .map(
+            (item) => GroupRebindRecoveryItem(
+              groupDid: item.groupDid,
+              layer: item.layer,
+              phase: item.phase,
+              blocked: item.blocked,
+            ),
+          )
+          .toList(growable: false),
+      warnings: result.warnings,
+    );
   }
 
   @override
@@ -143,4 +179,22 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
     }
     throw StateError('IM Core group response did not include a group.');
   }
+}
+
+core.JoinGroupRequest mapCoreJoinGroupRequest(
+  String groupDid,
+  GroupIdentitySelection identity,
+) {
+  return core.JoinGroupRequest(
+    groupDid: groupDid,
+    identityMode: _coreIdentityMode(identity.mode),
+    identityHandle: identity.handle,
+  );
+}
+
+core.GroupIdentityMode _coreIdentityMode(GroupIdentityMode mode) {
+  return switch (mode) {
+    GroupIdentityMode.handle => core.GroupIdentityMode.handle,
+    GroupIdentityMode.didOnly => core.GroupIdentityMode.didOnly,
+  };
 }

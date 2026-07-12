@@ -20,6 +20,7 @@ import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
+import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
@@ -547,13 +548,22 @@ class _FakeGroups implements GroupApplicationService {
     required String goal,
     required String rules,
     String? messagePrompt,
+    GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
   }) async => _group();
 
   @override
   Future<GroupSummary> getGroup(String groupDid) async => _group();
 
   @override
-  Future<GroupSummary> joinGroup(String groupDid) async => _group();
+  Future<GroupSummary> joinGroup(
+    String groupDid, {
+    GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+  }) async => _group();
+
+  @override
+  Future<GroupRebindRecoverySummary> resumeRebindRecovery({
+    int limit = 100,
+  }) async => GroupRebindRecoverySummary.empty;
 
   @override
   Future<void> leaveGroup(String groupDid) async {}

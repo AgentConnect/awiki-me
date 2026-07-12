@@ -9,6 +9,7 @@ import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_feedback.dart';
@@ -778,7 +779,8 @@ void main() {
 
   testWidgets('手机号提交时已注册 handle 走登录路径', (tester) async {
     final gateway = FakeAwikiGateway()
-      ..handleRegistrationStatus = HandleRegistrationStatus.registered;
+      ..handleRegistrationStatus = HandleRegistrationStatus.registered
+      ..failGroupRecovery = true;
 
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
@@ -801,6 +803,18 @@ void main() {
     expect(gateway.lookupHandleRegistrationCalls, 1);
     expect(gateway.recoverHandleCalls, 1);
     expect(gateway.registerHandleCalls, 0);
+    expect(gateway.resumeGroupRecoveryCalls, 1);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    expect(
+      container.read(sessionProvider).session?.did,
+      contains('e1_recovered'),
+    );
+    expect(
+      container.read(uiFeedbackProvider)?.message.id,
+      'groupRecoveryStatusUnavailable',
+    );
   });
 
   testWidgets('OpenServer 注册页只展示手机号和 handle 并走无验证码注册', (tester) async {

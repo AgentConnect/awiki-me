@@ -358,6 +358,15 @@
   "groupListLoading": "正在加载群数据...",
   "groupJoinDialogTitle": "通过 Group DID 入群",
   "groupJoinDialogPlaceholder": "输入群组 Group DID",
+  "groupIdentityModeLabel": "入群身份",
+  "groupIdentityHandle": "Handle",
+  "groupIdentityDidOnly": "DID",
+  "groupIdentityCurrentHandle": "Handle：{handle}",
+  "@groupIdentityCurrentHandle": {
+    "placeholders": {
+      "handle": {"type": "String"}
+    }
+  },
   "groupNoDescription": "暂无群描述",
   "groupMemberCount": "{count} 人",
   "@groupMemberCount": {
@@ -387,6 +396,26 @@
   "groupMembersEmpty": "暂无成员快照，先执行一次刷新群详情与成员。",
   "groupCreateTitle": "创建群聊",
   "groupCreateAction": "创建",
+  "groupRecoveryCompleted": "群身份已恢复",
+  "groupRecoveryPending": "身份已恢复，仍有 {count} 个群等待更新",
+  "@groupRecoveryPending": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "groupRecoveryBlocked": "身份已恢复，有 {count} 个群需要处理",
+  "@groupRecoveryBlocked": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "groupRecoveryStatusUnavailable": "身份已恢复，群更新将在稍后重试",
+  "groupRecoveryMembershipLayer": "成员关系",
+  "groupRecoveryEncryptionLayer": "群加密",
+  "groupRecoveryPhaseCompleted": "已完成",
+  "groupRecoveryPhasePending": "等待中",
+  "groupRecoveryPhaseBlocked": "已阻塞",
+  "groupRecoveryRetry": "重试群身份恢复",
   "groupFieldName": "名称",
   "groupFieldNamePlaceholder": "输入群聊名称",
   "groupCreating": "正在创建群组...",

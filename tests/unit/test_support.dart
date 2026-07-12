@@ -49,6 +49,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/message_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
+import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
@@ -613,6 +614,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   String? lastCreatedGroupRules;
   String? lastCreatedGroupPrompt;
   String? lastJoinedGroupDid;
+  GroupIdentityMode? lastGroupIdentityMode;
+  String? lastGroupIdentityHandle;
   String? lastAddedGroupId;
   String? lastAddedMemberRef;
   String? lastAddedMemberRole;
@@ -661,6 +664,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int registerHandleWithEmailCalls = 0;
   int registerHandleWithoutContactVerificationCalls = 0;
   int recoverHandleCalls = 0;
+  int resumeGroupRecoveryCalls = 0;
+  bool failGroupRecovery = false;
+  GroupRebindRecoverySummary groupRecoverySummary =
+      GroupRebindRecoverySummary.empty;
   int logoutCalls = 0;
   int deleteLocalThreadCalls = 0;
   String? lastDeletedLocalThreadId;
@@ -810,6 +817,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     required String goal,
     required String rules,
     String? messagePrompt,
+    GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
   }) async {
     lastCreatedGroupName = name;
     lastCreatedGroupSlug = slug;
@@ -3175,7 +3183,10 @@ class FakeGroupApplicationService implements GroupApplicationService {
     required String goal,
     required String rules,
     String? messagePrompt,
+    GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
   }) {
+    gateway.lastGroupIdentityMode = identity.mode;
+    gateway.lastGroupIdentityHandle = identity.handle;
     return gateway.createGroup(
       name: name,
       slug: slug,
@@ -3190,8 +3201,24 @@ class FakeGroupApplicationService implements GroupApplicationService {
   Future<GroupSummary> getGroup(String groupDid) => gateway.getGroup(groupDid);
 
   @override
-  Future<GroupSummary> joinGroup(String groupDid) {
+  Future<GroupSummary> joinGroup(
+    String groupDid, {
+    GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+  }) {
+    gateway.lastGroupIdentityMode = identity.mode;
+    gateway.lastGroupIdentityHandle = identity.handle;
     return gateway.joinGroup(groupDid);
+  }
+
+  @override
+  Future<GroupRebindRecoverySummary> resumeRebindRecovery({
+    int limit = 100,
+  }) async {
+    gateway.resumeGroupRecoveryCalls += 1;
+    if (gateway.failGroupRecovery) {
+      throw StateError('group recovery unavailable');
+    }
+    return gateway.groupRecoverySummary;
   }
 
   @override

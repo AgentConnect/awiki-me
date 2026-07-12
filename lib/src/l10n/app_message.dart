@@ -152,6 +152,18 @@ class AppMessage {
   factory AppMessage.groupNameRequired() =>
       const AppMessage._('groupNameRequired');
 
+  factory AppMessage.groupRecoveryCompleted() =>
+      const AppMessage._('groupRecoveryCompleted');
+
+  factory AppMessage.groupRecoveryPending(int count) =>
+      AppMessage._('groupRecoveryPending', value: '$count');
+
+  factory AppMessage.groupRecoveryBlocked(int count) =>
+      AppMessage._('groupRecoveryBlocked', value: '$count');
+
+  factory AppMessage.groupRecoveryStatusUnavailable() =>
+      const AppMessage._('groupRecoveryStatusUnavailable');
+
   factory AppMessage.identityQueryRequired() =>
       const AppMessage._('identityQueryRequired');
 
@@ -429,6 +441,14 @@ class AppMessage {
             : l10n.linkOpenFailedWithDetail(detail!);
       case 'groupNameRequired':
         return l10n.groupNameRequired;
+      case 'groupRecoveryCompleted':
+        return l10n.groupRecoveryCompleted;
+      case 'groupRecoveryPending':
+        return l10n.groupRecoveryPending(int.tryParse(value ?? '') ?? 0);
+      case 'groupRecoveryBlocked':
+        return l10n.groupRecoveryBlocked(int.tryParse(value ?? '') ?? 0);
+      case 'groupRecoveryStatusUnavailable':
+        return l10n.groupRecoveryStatusUnavailable;
       case 'identityQueryRequired':
         return l10n.identityQueryRequired;
       case 'identityResolveFailed':

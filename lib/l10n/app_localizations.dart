@@ -1814,6 +1814,30 @@ abstract class AppLocalizations {
   /// **'输入群组 Group DID'**
   String get groupJoinDialogPlaceholder;
 
+  /// No description provided for @groupIdentityModeLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'入群身份'**
+  String get groupIdentityModeLabel;
+
+  /// No description provided for @groupIdentityHandle.
+  ///
+  /// In zh, this message translates to:
+  /// **'Handle'**
+  String get groupIdentityHandle;
+
+  /// No description provided for @groupIdentityDidOnly.
+  ///
+  /// In zh, this message translates to:
+  /// **'DID'**
+  String get groupIdentityDidOnly;
+
+  /// No description provided for @groupIdentityCurrentHandle.
+  ///
+  /// In zh, this message translates to:
+  /// **'Handle：{handle}'**
+  String groupIdentityCurrentHandle(String handle);
+
   /// No description provided for @groupNoDescription.
   ///
   /// In zh, this message translates to:
@@ -1873,6 +1897,66 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'创建'**
   String get groupCreateAction;
+
+  /// No description provided for @groupRecoveryCompleted.
+  ///
+  /// In zh, this message translates to:
+  /// **'群身份已恢复'**
+  String get groupRecoveryCompleted;
+
+  /// No description provided for @groupRecoveryPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份已恢复，仍有 {count} 个群等待更新'**
+  String groupRecoveryPending(int count);
+
+  /// No description provided for @groupRecoveryBlocked.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份已恢复，有 {count} 个群需要处理'**
+  String groupRecoveryBlocked(int count);
+
+  /// No description provided for @groupRecoveryStatusUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份已恢复，群更新将在稍后重试'**
+  String get groupRecoveryStatusUnavailable;
+
+  /// No description provided for @groupRecoveryMembershipLayer.
+  ///
+  /// In zh, this message translates to:
+  /// **'成员关系'**
+  String get groupRecoveryMembershipLayer;
+
+  /// No description provided for @groupRecoveryEncryptionLayer.
+  ///
+  /// In zh, this message translates to:
+  /// **'群加密'**
+  String get groupRecoveryEncryptionLayer;
+
+  /// No description provided for @groupRecoveryPhaseCompleted.
+  ///
+  /// In zh, this message translates to:
+  /// **'已完成'**
+  String get groupRecoveryPhaseCompleted;
+
+  /// No description provided for @groupRecoveryPhasePending.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待中'**
+  String get groupRecoveryPhasePending;
+
+  /// No description provided for @groupRecoveryPhaseBlocked.
+  ///
+  /// In zh, this message translates to:
+  /// **'已阻塞'**
+  String get groupRecoveryPhaseBlocked;
+
+  /// No description provided for @groupRecoveryRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试群身份恢复'**
+  String get groupRecoveryRetry;
 
   /// No description provided for @groupFieldName.
   ///

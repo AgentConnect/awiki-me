@@ -1,5 +1,6 @@
 import '../domain/entities/chat_message.dart';
 import '../domain/entities/group_member_summary.dart';
+import '../domain/entities/group_identity.dart';
 import '../domain/entities/group_summary.dart';
 import 'ports/group_core_port.dart';
 
@@ -11,9 +12,15 @@ abstract interface class GroupApplicationService {
     required String goal,
     required String rules,
     String? messagePrompt,
+    GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
   });
 
-  Future<GroupSummary> joinGroup(String groupDid);
+  Future<GroupSummary> joinGroup(
+    String groupDid, {
+    GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+  });
+
+  Future<GroupRebindRecoverySummary> resumeRebindRecovery({int limit = 100});
 
   Future<GroupSummary> getGroup(String groupDid);
 
@@ -58,6 +65,7 @@ class ImCoreGroupApplicationService implements GroupApplicationService {
     required String goal,
     required String rules,
     String? messagePrompt,
+    GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
   }) {
     return _groups.createGroup(
       name: name,
@@ -66,12 +74,19 @@ class ImCoreGroupApplicationService implements GroupApplicationService {
       goal: goal,
       rules: rules,
       messagePrompt: messagePrompt,
+      identity: identity,
     );
   }
 
   @override
-  Future<GroupSummary> joinGroup(String groupDid) =>
-      _groups.joinGroup(groupDid);
+  Future<GroupSummary> joinGroup(
+    String groupDid, {
+    GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+  }) => _groups.joinGroup(groupDid, identity: identity);
+
+  @override
+  Future<GroupRebindRecoverySummary> resumeRebindRecovery({int limit = 100}) =>
+      _groups.resumeRebindRecovery(limit: limit);
 
   @override
   Future<GroupSummary> getGroup(String groupDid) => _groups.getGroup(groupDid);

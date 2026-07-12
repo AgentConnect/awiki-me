@@ -13,6 +13,7 @@ import 'package:awiki_me/src/application/relationship_application_service.dart';
 import 'package:awiki_me/src/data/im_core/pending_im_core_group_mutation_adapter.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
+import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
@@ -22,6 +23,13 @@ import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('Handle group identity rejects empty values instead of downgrading', () {
+    expect(() => GroupIdentitySelection.handle('   '), throwsArgumentError);
+    const didOnly = GroupIdentitySelection.didOnly();
+    expect(didOnly.mode, GroupIdentityMode.didOnly);
+    expect(didOnly.handle, isNull);
+  });
+
   test(
     'profile and directory services trim inputs and delegate to ports',
     () async {
@@ -58,7 +66,13 @@ void main() {
         description: 'desc',
         goal: 'goal',
         rules: 'rules',
+        identity: GroupIdentitySelection.handle('alice.example.com'),
       );
+      await service.joinGroup(
+        'did:group',
+        identity: GroupIdentitySelection.handle('alice.example.com'),
+      );
+      final recovery = await service.resumeRebindRecovery(limit: 25);
       await service.listGroups(limit: 10);
       await service.addMember(
         groupDid: 'did:group',
@@ -69,6 +83,12 @@ void main() {
 
       expect(created.groupId, 'did:group');
       expect(groups.createdNames, ['Group']);
+      expect(groups.identities, [
+        'handle/alice.example.com',
+        'handle/alice.example.com',
+      ]);
+      expect(groups.recoveryLimit, 25);
+      expect(recovery.pending, 1);
       expect(groups.listLimit, 10);
       expect(groups.addedMembers, ['did:group/alice.awiki.ai/admin']);
       expect(groups.removedMembers, ['did:group/did:alice']);
@@ -163,6 +183,8 @@ class _FakeGroups implements GroupCorePort {
   final List<String> addedMembers = <String>[];
   final List<String> removedMembers = <String>[];
   int? listLimit;
+  int? recoveryLimit;
+  final List<String> identities = <String>[];
 
   @override
   Future<GroupSummary> createGroup({
@@ -172,8 +194,10 @@ class _FakeGroups implements GroupCorePort {
     required String goal,
     required String rules,
     String? messagePrompt,
+    GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
   }) async {
     createdNames.add(name);
+    identities.add('${identity.mode.name}/${identity.handle ?? ''}');
     return _group();
   }
 
@@ -191,7 +215,26 @@ class _FakeGroups implements GroupCorePort {
   Future<GroupSummary> getGroup(String groupDid) async => _group();
 
   @override
-  Future<GroupSummary> joinGroup(String groupDid) async => _group();
+  Future<GroupSummary> joinGroup(
+    String groupDid, {
+    GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+  }) async {
+    identities.add('${identity.mode.name}/${identity.handle ?? ''}');
+    return _group();
+  }
+
+  @override
+  Future<GroupRebindRecoverySummary> resumeRebindRecovery({
+    int limit = 100,
+  }) async {
+    recoveryLimit = limit;
+    return const GroupRebindRecoverySummary(
+      processed: 1,
+      completed: 0,
+      pending: 1,
+      blocked: 0,
+    );
+  }
 
   @override
   Future<void> leaveGroup(String groupDid) async {}

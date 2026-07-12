@@ -51,7 +51,7 @@ class _GroupMemberInviteDialogState
   final ScrollController _candidateScrollController = ScrollController();
   final Map<String, GroupInviteCandidate> _resolvedCandidates =
       <String, GroupInviteCandidate>{};
-  final Set<String> _selectedDids = <String>{};
+  final Set<String> _selectedRefs = <String>{};
 
   bool _isLoadingLocalCandidates = false;
   bool _showAllCandidates = false;
@@ -83,7 +83,7 @@ class _GroupMemberInviteDialogState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.groupId != widget.groupId ||
         oldWidget.existingMembers != widget.existingMembers) {
-      _selectedDids.removeWhere(_isExistingMemberDid);
+      _selectedRefs.removeWhere(_isExistingMemberRef);
     }
   }
 
@@ -159,17 +159,17 @@ class _GroupMemberInviteDialogState
   }
 
   Future<void> _submitSelected() async {
-    if (_selectedDids.isEmpty || _isSubmitting || _isResolving) {
+    if (_selectedRefs.isEmpty || _isSubmitting || _isResolving) {
       return;
     }
     final l10n = context.l10n;
-    final candidatesByDid = <String, GroupInviteCandidate>{
+    final candidatesByRef = <String, GroupInviteCandidate>{
       for (final candidate in _allCandidates(watch: false))
-        _normalizeDid(candidate.did): candidate,
+        candidate.selectionKey: candidate,
     };
     final selected = <GroupInviteCandidate>[
-      for (final did in _selectedDids)
-        if (candidatesByDid[did] != null) candidatesByDid[did]!,
+      for (final memberRef in _selectedRefs)
+        if (candidatesByRef[memberRef] != null) candidatesByRef[memberRef]!,
     ];
     if (selected.isEmpty) {
       return;
@@ -185,8 +185,11 @@ class _GroupMemberInviteDialogState
       try {
         latestGroup = await ref
             .read(groupProvider.notifier)
-            .addGroupMember(groupId: widget.groupId, memberRef: candidate.did);
-        _selectedDids.remove(_normalizeDid(candidate.did));
+            .addGroupMember(
+              groupId: widget.groupId,
+              memberRef: candidate.memberRef,
+            );
+        _selectedRefs.remove(candidate.selectionKey);
       } catch (error) {
         failed.add('${candidate.localizedDisplayName(l10n)}: $error');
       }
@@ -228,7 +231,7 @@ class _GroupMemberInviteDialogState
     final visibleCandidates = hasMore
         ? candidates.take(_defaultVisibleLimit).toList()
         : candidates;
-    final selectedCount = _selectedDids.length;
+    final selectedCount = _selectedRefs.length;
     final candidateSectionTitle = _normalizedQuery.isEmpty
         ? context.l10n.groupInviteCandidates
         : context.l10n.groupInviteSearchResults;
@@ -292,8 +295,8 @@ class _GroupMemberInviteDialogState
               child: _InviteCandidateList(
                 controller: _candidateScrollController,
                 candidates: visibleCandidates,
-                selectedDids: _selectedDids,
-                existingMemberDids: _existingMemberDids,
+                selectedRefs: _selectedRefs,
+                existingMemberRefs: _existingMemberRefs,
                 onToggle: _isSubmitting ? null : _toggleCandidate,
                 query: _normalizedQuery,
               ),
@@ -348,12 +351,15 @@ class _GroupMemberInviteDialogState
 
   String get _normalizedQuery => _normalizeSearchText(_query);
 
-  Set<String> get _existingMemberDids => <String>{
-    for (final member in widget.existingMembers)
-      if (member.did.trim().isNotEmpty) _normalizeDid(member.did),
+  Set<String> get _existingMemberRefs => <String>{
+    for (final member in widget.existingMembers) ...<String>{
+      if (member.did.trim().isNotEmpty) _normalizeMemberRef(member.did),
+      if (member.handle.trim().isNotEmpty) _normalizeMemberRef(member.handle),
+    },
   };
 
-  bool _isExistingMemberDid(String did) => _existingMemberDids.contains(did);
+  bool _isExistingMemberRef(String memberRef) =>
+      _existingMemberRefs.contains(memberRef);
 
   List<GroupInviteCandidate> _selectedCandidates(
     List<GroupInviteCandidate> filtered,
@@ -363,22 +369,22 @@ class _GroupMemberInviteDialogState
         ...filtered,
         ..._allCandidates(),
       ])
-        _normalizeDid(candidate.did): candidate,
+        candidate.selectionKey: candidate,
     };
     return <GroupInviteCandidate>[
-      for (final did in _selectedDids)
-        if (all[did] != null) all[did]!,
+      for (final memberRef in _selectedRefs)
+        if (all[memberRef] != null) all[memberRef]!,
     ];
   }
 
   void _toggleCandidate(GroupInviteCandidate candidate) {
-    final did = _normalizeDid(candidate.did);
-    if (did.isEmpty || _existingMemberDids.contains(did)) {
+    final memberRef = candidate.selectionKey;
+    if (memberRef.isEmpty || _existingMemberRefs.contains(memberRef)) {
       return;
     }
     setState(() {
-      if (!_selectedDids.remove(did)) {
-        _selectedDids.add(did);
+      if (!_selectedRefs.remove(memberRef)) {
+        _selectedRefs.add(memberRef);
       }
     });
   }
@@ -507,6 +513,16 @@ class GroupInviteCandidate {
   final String? avatarUri;
   final String? avatarSeed;
   final DateTime? lastInteractedAt;
+
+  String get memberRef {
+    final canonicalHandle = handle?.trim();
+    if (canonicalHandle != null && canonicalHandle.isNotEmpty) {
+      return canonicalHandle;
+    }
+    return did.trim();
+  }
+
+  String get selectionKey => _normalizeMemberRef(memberRef);
 
   factory GroupInviteCandidate.fromAgent(AgentSummary agent) {
     if (agent.kind != AgentKind.runtime || agent.agentDid.trim().isEmpty) {
@@ -994,16 +1010,16 @@ class _InviteCandidateList extends StatelessWidget {
   const _InviteCandidateList({
     required this.controller,
     required this.candidates,
-    required this.selectedDids,
-    required this.existingMemberDids,
+    required this.selectedRefs,
+    required this.existingMemberRefs,
     required this.onToggle,
     required this.query,
   });
 
   final ScrollController controller;
   final List<GroupInviteCandidate> candidates;
-  final Set<String> selectedDids;
-  final Set<String> existingMemberDids;
+  final Set<String> selectedRefs;
+  final Set<String> existingMemberRefs;
   final ValueChanged<GroupInviteCandidate>? onToggle;
   final String query;
 
@@ -1050,9 +1066,12 @@ class _InviteCandidateList extends StatelessWidget {
           ),
           itemBuilder: (context, index) {
             final candidate = candidates[index];
-            final did = _normalizeDid(candidate.did);
-            final isSelected = selectedDids.contains(did);
-            final disabledReason = existingMemberDids.contains(did)
+            final memberRef = candidate.selectionKey;
+            final currentDid = _normalizeMemberRef(candidate.did);
+            final isSelected = selectedRefs.contains(memberRef);
+            final disabledReason =
+                existingMemberRefs.contains(memberRef) ||
+                    existingMemberRefs.contains(currentDid)
                 ? context.l10n.groupInviteAlreadyInGroup
                 : null;
             return _InviteCandidateTile(
@@ -1321,6 +1340,8 @@ String? _firstNonEmpty(String? a, String? b) {
 }
 
 String _normalizeDid(String value) => value.trim();
+
+String _normalizeMemberRef(String value) => value.trim().toLowerCase();
 
 String _normalizeSearchText(String value) {
   var normalized = value.trim().toLowerCase();

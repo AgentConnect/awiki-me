@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_router.dart';
 import '../../app/ui_feedback.dart';
 import '../../domain/entities/group_member_summary.dart';
+import '../../domain/entities/group_identity.dart';
 import '../../domain/entities/group_summary.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
@@ -19,6 +20,7 @@ import '../shared/widgets/app_widgets.dart';
 import '../app_shell/providers/session_provider.dart';
 import 'create_group_dialog.dart';
 import 'group_chat_navigation.dart';
+import 'group_identity_selector.dart';
 import 'group_member_invite_dialog.dart';
 import 'group_provider.dart';
 
@@ -103,6 +105,39 @@ class GroupListPage extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
+            if (state.recoverySummary != null) ...<Widget>[
+              _GroupRecoveryStatusBand(
+                summary: state.recoverySummary!,
+                isLoading: state.isResumingRecovery,
+                onRetry: () async {
+                  try {
+                    final summary = await ref
+                        .read(groupProvider.notifier)
+                        .resumeRebindRecovery();
+                    if (!context.mounted) {
+                      return;
+                    }
+                    final feedback = ref.read(uiFeedbackProvider.notifier);
+                    if (summary.hasBlocked) {
+                      feedback.showInfo(
+                        AppMessage.groupRecoveryBlocked(summary.blocked),
+                      );
+                    } else if (summary.hasPending) {
+                      feedback.showInfo(
+                        AppMessage.groupRecoveryPending(summary.pending),
+                      );
+                    } else {
+                      feedback.showInfo(AppMessage.groupRecoveryCompleted());
+                    }
+                  } catch (error) {
+                    ref
+                        .read(uiFeedbackProvider.notifier)
+                        .showError(AppMessage.fromError(error));
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
             if (state.groups.isEmpty)
               AppCardSection(
                 color: theme.subtleSurface,
@@ -163,64 +198,204 @@ class GroupListPage extends ConsumerWidget {
 
   Future<void> _showJoinDialog(BuildContext context, WidgetRef ref) async {
     final textController = TextEditingController();
+    final sessionHandle = ref.read(sessionProvider).session?.handle?.trim();
+    final activeHandle = sessionHandle == null || sessionHandle.isEmpty
+        ? null
+        : sessionHandle;
+    var identityMode = activeHandle == null
+        ? GroupIdentityMode.didOnly
+        : GroupIdentityMode.handle;
     try {
       await AppNavigator.showDialog<void>(
         context,
-        (ctx) => CupertinoAlertDialog(
-          title: Text(context.l10n.groupJoinDialogTitle),
-          content: Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: AppTextField(
-              controller: textController,
-              label: context.l10n.groupJoinDialogTitle,
-              placeholder: context.l10n.groupJoinDialogPlaceholder,
-              keyboardType: TextInputType.text,
+        (ctx) => StatefulBuilder(
+          builder: (context, setDialogState) => CupertinoAlertDialog(
+            title: Text(context.l10n.groupJoinDialogTitle),
+            content: Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Column(
+                children: <Widget>[
+                  AppTextField(
+                    controller: textController,
+                    label: context.l10n.groupJoinDialogTitle,
+                    placeholder: context.l10n.groupJoinDialogPlaceholder,
+                    keyboardType: TextInputType.text,
+                  ),
+                  const SizedBox(height: 14),
+                  GroupIdentitySelector(
+                    handle: activeHandle,
+                    value: identityMode,
+                    enabled: true,
+                    onChanged: (value) =>
+                        setDialogState(() => identityMode = value),
+                  ),
+                ],
+              ),
             ),
-          ),
-          actions: <Widget>[
-            CupertinoDialogAction(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text(context.l10n.commonCancel),
-            ),
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              onPressed: () async {
-                final groupDid = textController.text.trim();
-                if (groupDid.isEmpty) {
-                  return;
-                }
-                Navigator.of(ctx).pop();
-                try {
-                  final group = await ref
-                      .read(groupProvider.notifier)
-                      .joinGroup(groupDid);
-                  await ref
-                      .read(groupProvider.notifier)
-                      .loadGroupMembers(group.groupId);
-                  if (!context.mounted) {
+            actions: <Widget>[
+              CupertinoDialogAction(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text(context.l10n.commonCancel),
+              ),
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: () async {
+                  final groupDid = textController.text.trim();
+                  if (groupDid.isEmpty) {
                     return;
                   }
-                  await openGroupChat(
-                    context,
-                    ref,
-                    group,
-                    closeCurrentRouteOnDesktop: true,
-                  );
-                } catch (error) {
-                  ref
-                      .read(uiFeedbackProvider.notifier)
-                      .showError(AppMessage.fromError(error));
-                }
-              },
-              child: Text(context.l10n.commonJoin),
-            ),
-          ],
+                  final identity = switch (identityMode) {
+                    GroupIdentityMode.handle => GroupIdentitySelection.handle(
+                      activeHandle ?? '',
+                    ),
+                    GroupIdentityMode.didOnly =>
+                      const GroupIdentitySelection.didOnly(),
+                  };
+                  Navigator.of(ctx).pop();
+                  try {
+                    final group = await ref
+                        .read(groupProvider.notifier)
+                        .joinGroup(groupDid, identity: identity);
+                    await ref
+                        .read(groupProvider.notifier)
+                        .loadGroupMembers(group.groupId);
+                    if (!context.mounted) {
+                      return;
+                    }
+                    await openGroupChat(
+                      context,
+                      ref,
+                      group,
+                      closeCurrentRouteOnDesktop: true,
+                    );
+                  } catch (error) {
+                    ref
+                        .read(uiFeedbackProvider.notifier)
+                        .showError(AppMessage.fromError(error));
+                  }
+                },
+                child: Text(context.l10n.commonJoin),
+              ),
+            ],
+          ),
         ),
       );
     } finally {
       textController.dispose();
     }
   }
+}
+
+class _GroupRecoveryStatusBand extends StatelessWidget {
+  const _GroupRecoveryStatusBand({
+    required this.summary,
+    required this.isLoading,
+    required this.onRetry,
+  });
+
+  final GroupRebindRecoverySummary summary;
+  final bool isLoading;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final title = summary.hasBlocked
+        ? context.l10n.groupRecoveryBlocked(summary.blocked)
+        : summary.hasPending
+        ? context.l10n.groupRecoveryPending(summary.pending)
+        : context.l10n.groupRecoveryCompleted;
+    final accent = summary.hasBlocked
+        ? const Color(0xFFB42318)
+        : summary.hasPending
+        ? const Color(0xFF8A5A00)
+        : const Color(0xFF067647);
+    return Container(
+      key: const Key('group-recovery-status-band'),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: accent.withValues(alpha: 0.24)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  title,
+                  style: AwikiMeTextStyles.cardTitle.copyWith(color: accent),
+                ),
+              ),
+              Semantics(
+                label: context.l10n.groupRecoveryRetry,
+                button: true,
+                child: CupertinoButton(
+                  key: const Key('group-recovery-retry-button'),
+                  padding: const EdgeInsets.all(8),
+                  minimumSize: const Size(40, 40),
+                  onPressed: isLoading ? null : onRetry,
+                  child: isLoading
+                      ? const CupertinoActivityIndicator(radius: 9)
+                      : Icon(CupertinoIcons.refresh, color: accent, size: 19),
+                ),
+              ),
+            ],
+          ),
+          if (summary.items.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 6),
+            for (final item in summary.items.take(6))
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        item.groupDid,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AwikiMeTextStyles.cardSubtitle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _recoveryLayerLabel(context, item.layer),
+                      style: AwikiMeTextStyles.cardSubtitle,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _recoveryPhaseLabel(context, item),
+                      style: AwikiMeTextStyles.cardSubtitle.copyWith(
+                        color: item.blocked ? accent : theme.secondaryText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+String _recoveryLayerLabel(BuildContext context, String layer) {
+  return layer == 'p6'
+      ? context.l10n.groupRecoveryEncryptionLayer
+      : context.l10n.groupRecoveryMembershipLayer;
+}
+
+String _recoveryPhaseLabel(BuildContext context, GroupRebindRecoveryItem item) {
+  if (item.blocked || item.phase == 'blocked') {
+    return context.l10n.groupRecoveryPhaseBlocked;
+  }
+  if (item.phase == 'complete' || item.phase == 'completed') {
+    return context.l10n.groupRecoveryPhaseCompleted;
+  }
+  return context.l10n.groupRecoveryPhasePending;
 }
 
 class GroupDetailPage extends ConsumerStatefulWidget {
@@ -679,11 +854,23 @@ class GroupMemberRow extends StatelessWidget {
         AvatarBadge(seed: title, size: 36, avatarUri: item.avatarUri),
         const SizedBox(width: 12),
         Expanded(
-          child: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AwikiMeTextStyles.cardTitle,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AwikiMeTextStyles.cardTitle,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _memberIdentityLabel(item),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AwikiMeTextStyles.cardSubtitle,
+              ),
+            ],
           ),
         ),
         if (showRemoveButton || onRemove != null) ...<Widget>[
@@ -740,7 +927,10 @@ Future<void> showRemoveGroupMemberDialog({
             try {
               final updated = await ref
                   .read(groupProvider.notifier)
-                  .removeGroupMember(groupId: groupId, memberRef: member.did);
+                  .removeGroupMember(
+                    groupId: groupId,
+                    memberRef: _memberProtocolRef(member),
+                  );
               onGroupUpdated(updated);
             } catch (error) {
               ref
@@ -766,6 +956,20 @@ String _memberDisplayLabel(GroupMemberSummary member) {
     return handle;
   }
   return DidDisplayFormatter.compactDid(did);
+}
+
+String _memberIdentityLabel(GroupMemberSummary member) {
+  final handle = member.handle.trim();
+  final did = member.did.trim();
+  if (handle.isEmpty || handle == did) {
+    return did;
+  }
+  return '@$handle · $did';
+}
+
+String _memberProtocolRef(GroupMemberSummary member) {
+  final handle = member.handle.trim();
+  return handle.isEmpty ? member.did.trim() : handle;
 }
 
 bool canManageGroupMembers(GroupSummary group) {

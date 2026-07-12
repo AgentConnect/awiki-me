@@ -5,6 +5,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
+import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
@@ -19,6 +20,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
+
+class _RecoveryGroupController extends GroupController {
+  _RecoveryGroupController(super.ref, GroupRebindRecoverySummary summary) {
+    state = GroupState(recoverySummary: summary);
+  }
+}
 
 void main() {
   const session = SessionIdentity(
@@ -75,6 +82,8 @@ void main() {
       expect(gateway.lastCreatedGroupGoal, isEmpty);
       expect(gateway.lastCreatedGroupRules, isEmpty);
       expect(gateway.lastCreatedGroupPrompt, isEmpty);
+      expect(gateway.lastGroupIdentityMode, GroupIdentityMode.handle);
+      expect(gateway.lastGroupIdentityHandle, 'me');
       expect(find.byType(ChatView), findsOneWidget);
       expect(find.text('融资协作群'), findsWidgets);
     } finally {
@@ -106,12 +115,157 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(gateway.lastJoinedGroupDid, groupDid);
+      expect(gateway.lastGroupIdentityMode, GroupIdentityMode.handle);
+      expect(gateway.lastGroupIdentityHandle, 'me');
       expect(find.byType(ChatView), findsOneWidget);
       expect(find.text('Joined $groupDid'), findsWidgets);
     } finally {
       debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);
     }
+  });
+
+  testWidgets('入群可以显式选择 DID-only 且不携带 Handle', (tester) async {
+    final gateway = FakeAwikiGateway()..loginResult = session;
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const GroupListPage(),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(CupertinoIcons.link));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('DID'));
+    await tester.pumpAndSettle();
+    const groupDid = 'did:wba:awiki.ai:group:e1_did_only';
+    await tester.enterText(find.byType(CupertinoTextField).last, groupDid);
+    await tester.tap(find.text('加入'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastJoinedGroupDid, groupDid);
+    expect(gateway.lastGroupIdentityMode, GroupIdentityMode.didOnly);
+    expect(gateway.lastGroupIdentityHandle, isNull);
+  });
+
+  testWidgets('无 Handle 时建群只提供 DID-only 且长身份布局不溢出', (tester) async {
+    const didOnlySession = SessionIdentity(
+      did: 'did:web:identity.example.com:users:a-very-long-identity-value',
+      credentialName: 'did-only.json',
+      displayName: 'DID only',
+      jwtToken: 'token',
+    );
+    final gateway = FakeAwikiGateway()..loginResult = didOnlySession;
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const GroupListPage(),
+        gateway: gateway,
+        session: didOnlySession,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('group-list-create-button')));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('group-identity-mode-control')),
+        matching: find.byType(
+          CupertinoSlidingSegmentedControl<GroupIdentityMode>,
+        ),
+      ),
+      findsNothing,
+    );
+    expect(find.text('DID'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.enterText(
+      find.byKey(const Key('create-group-name-input')),
+      'DID 群',
+    );
+    await tester.tap(find.byKey(const Key('create-group-submit-button')));
+    await tester.pumpAndSettle();
+    expect(gateway.lastGroupIdentityMode, GroupIdentityMode.didOnly);
+    expect(gateway.lastGroupIdentityHandle, isNull);
+  });
+
+  testWidgets('窄屏建群会省略长 Handle 且不遮挡操作', (tester) async {
+    const longHandle =
+        'alice-with-a-very-long-persona-name.identity-provider.example.com';
+    const longHandleSession = SessionIdentity(
+      did: 'did:web:identity-provider.example.com:alice',
+      credentialName: 'alice.json',
+      displayName: 'Alice',
+      handle: longHandle,
+      jwtToken: 'token',
+    );
+    final gateway = FakeAwikiGateway()..loginResult = longHandleSession;
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const GroupListPage(),
+        gateway: gateway,
+        session: longHandleSession,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('group-list-create-button')));
+    await tester.pumpAndSettle();
+    final handleText = tester.widget<Text>(
+      find.byKey(const Key('group-identity-handle-value')),
+    );
+    expect(handleText.maxLines, 1);
+    expect(handleText.overflow, TextOverflow.ellipsis);
+    expect(find.byKey(const Key('create-group-submit-button')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('群列表区分 recovery 的 P4 pending 与 P6 blocked', (tester) async {
+    const summary = GroupRebindRecoverySummary(
+      processed: 2,
+      completed: 0,
+      pending: 1,
+      blocked: 1,
+      sendPausedGroupDids: <String>['did:example:group'],
+      items: <GroupRebindRecoveryItem>[
+        GroupRebindRecoveryItem(
+          groupDid: 'did:example:group',
+          layer: 'p4',
+          phase: 'awaiting_p6',
+          blocked: false,
+        ),
+        GroupRebindRecoveryItem(
+          groupDid: 'did:example:group',
+          layer: 'p6',
+          phase: 'blocked',
+          blocked: true,
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const GroupListPage(),
+        providerOverrides: <Override>[
+          groupProvider.overrideWith(
+            (ref) => _RecoveryGroupController(ref, summary),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('group-recovery-status-band')), findsOneWidget);
+    expect(find.text('did:example:group'), findsNWidgets(2));
+    expect(find.text('成员关系'), findsOneWidget);
+    expect(find.text('群加密'), findsOneWidget);
+    expect(find.text('等待中'), findsOneWidget);
+    expect(find.text('已阻塞'), findsOneWidget);
   });
 
   testWidgets('通过 Group DID 加入群失败时停留列表并提示错误', (tester) async {
@@ -352,8 +506,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gateway.lastAddedGroupId, groupDid);
-    expect(gateway.lastAddedMemberRef, memberDid);
-    expect(find.text(memberHandle), findsOneWidget);
+    expect(gateway.lastAddedMemberRef, memberHandle);
+    expect(find.textContaining(memberHandle), findsOneWidget);
     expect(find.text(memberDid), findsNothing);
     expect(find.text('2 人'), findsOneWidget);
   });
@@ -486,8 +640,8 @@ void main() {
     expect(gateway.groupMembersByGroupId[groupDid]!.map((item) => item.did), [
       session.did,
       existingDid,
-      followerDid,
-      agentDid,
+      'followed.awiki.ai',
+      'agent-test.awiki.ai',
     ]);
     expect(find.text('4 人'), findsOneWidget);
   });
@@ -684,7 +838,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gateway.lastRemovedGroupId, groupDid);
-    expect(gateway.lastRemovedMemberRef, memberDid);
+    expect(gateway.lastRemovedMemberRef, 'bob.awiki.ai');
     expect(find.text('bob.awiki.ai'), findsNothing);
     expect(find.text('1 人'), findsOneWidget);
   });
@@ -793,7 +947,7 @@ void main() {
     expect(find.text('alice'), findsOneWidget);
     expect(find.text('owner'), findsOneWidget);
     expect(find.text('owner-role-hidden'), findsNothing);
-    expect(find.text('did:wba:awiki.ai:user:alice:e1_member'), findsNothing);
+    expect(find.text('did:wba:awiki.ai:user:alice:e1_member'), findsOneWidget);
 
     gateway
       ..listGroupMembersCompleter = memberRefresh
@@ -827,7 +981,7 @@ void main() {
 
     expect(gateway.listConversationsCalls, 0);
     expect(find.text('carol'), findsOneWidget);
-    expect(find.text('did:wba:awiki.ai:user:carol:e1_member'), findsNothing);
+    expect(find.text('did:wba:awiki.ai:user:carol:e1_member'), findsOneWidget);
     expect(find.text('member-role-hidden'), findsNothing);
     expect(
       find.descendant(

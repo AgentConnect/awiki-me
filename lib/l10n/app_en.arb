@@ -358,6 +358,15 @@
   "groupListLoading": "Loading group data...",
   "groupJoinDialogTitle": "Join with a Group DID",
   "groupJoinDialogPlaceholder": "Enter the group DID",
+  "groupIdentityModeLabel": "Join identity",
+  "groupIdentityHandle": "Handle",
+  "groupIdentityDidOnly": "DID",
+  "groupIdentityCurrentHandle": "Handle: {handle}",
+  "@groupIdentityCurrentHandle": {
+    "placeholders": {
+      "handle": {"type": "String"}
+    }
+  },
   "groupNoDescription": "No group description yet",
   "groupMemberCount": "{count} members",
   "@groupMemberCount": {
@@ -387,6 +396,26 @@
   "groupMembersEmpty": "No member snapshot yet. Refresh group details and members first.",
   "groupCreateTitle": "Create group chat",
   "groupCreateAction": "Create",
+  "groupRecoveryCompleted": "Group identity restored",
+  "groupRecoveryPending": "Identity restored; {count} group updates are pending",
+  "@groupRecoveryPending": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "groupRecoveryBlocked": "Identity restored; {count} group updates need attention",
+  "@groupRecoveryBlocked": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "groupRecoveryStatusUnavailable": "Identity restored; group updates will retry later",
+  "groupRecoveryMembershipLayer": "Membership",
+  "groupRecoveryEncryptionLayer": "Encryption",
+  "groupRecoveryPhaseCompleted": "Completed",
+  "groupRecoveryPhasePending": "Pending",
+  "groupRecoveryPhaseBlocked": "Blocked",
+  "groupRecoveryRetry": "Retry group recovery",
   "groupFieldName": "Name",
   "groupFieldNamePlaceholder": "Enter group chat name",
   "groupCreating": "Creating group...",

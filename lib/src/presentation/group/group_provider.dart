@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_services.dart';
 import '../../core/group_display_name.dart';
 import '../../domain/entities/group_member_summary.dart';
+import '../../domain/entities/group_identity.dart';
 import '../../domain/entities/group_summary.dart';
 import '../../domain/entities/user_profile.dart';
 import '../app_shell/providers/selected_conversation_provider.dart';
@@ -13,21 +14,29 @@ class GroupState {
     this.groups = const <GroupSummary>[],
     this.membersByGroup = const <String, List<GroupMemberSummary>>{},
     this.isLoading = false,
+    this.isResumingRecovery = false,
+    this.recoverySummary,
   });
 
   final List<GroupSummary> groups;
   final Map<String, List<GroupMemberSummary>> membersByGroup;
   final bool isLoading;
+  final bool isResumingRecovery;
+  final GroupRebindRecoverySummary? recoverySummary;
 
   GroupState copyWith({
     List<GroupSummary>? groups,
     Map<String, List<GroupMemberSummary>>? membersByGroup,
     bool? isLoading,
+    bool? isResumingRecovery,
+    GroupRebindRecoverySummary? recoverySummary,
   }) {
     return GroupState(
       groups: groups ?? this.groups,
       membersByGroup: membersByGroup ?? this.membersByGroup,
       isLoading: isLoading ?? this.isLoading,
+      isResumingRecovery: isResumingRecovery ?? this.isResumingRecovery,
+      recoverySummary: recoverySummary ?? this.recoverySummary,
     );
   }
 }
@@ -121,6 +130,7 @@ class GroupController extends StateNotifier<GroupState> {
     required String goal,
     required String rules,
     String? messagePrompt,
+    GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
   }) async {
     final created = await ref
         .read(groupApplicationServiceProvider)
@@ -131,17 +141,43 @@ class GroupController extends StateNotifier<GroupState> {
           goal: goal,
           rules: rules,
           messagePrompt: messagePrompt,
+          identity: identity,
         );
     upsertGroup(created);
     return created;
   }
 
-  Future<GroupSummary> joinGroup(String groupDid) async {
+  Future<GroupSummary> joinGroup(
+    String groupDid, {
+    GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+  }) async {
     final joined = await ref
         .read(groupApplicationServiceProvider)
-        .joinGroup(groupDid);
+        .joinGroup(groupDid, identity: identity);
     upsertGroup(joined);
     return joined;
+  }
+
+  Future<GroupRebindRecoverySummary> resumeRebindRecovery({
+    int limit = 100,
+  }) async {
+    if (state.isResumingRecovery) {
+      return state.recoverySummary ?? GroupRebindRecoverySummary.empty;
+    }
+    state = state.copyWith(isResumingRecovery: true);
+    try {
+      final summary = await ref
+          .read(groupApplicationServiceProvider)
+          .resumeRebindRecovery(limit: limit);
+      state = state.copyWith(
+        isResumingRecovery: false,
+        recoverySummary: summary,
+      );
+      return summary;
+    } catch (_) {
+      state = state.copyWith(isResumingRecovery: false);
+      rethrow;
+    }
   }
 
   Future<GroupSummary> addGroupMember({

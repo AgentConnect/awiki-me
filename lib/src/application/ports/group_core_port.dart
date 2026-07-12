@@ -1,5 +1,6 @@
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/group_member_summary.dart';
+import '../../domain/entities/group_identity.dart';
 import '../../domain/entities/group_summary.dart';
 
 abstract interface class GroupCorePort {
@@ -10,9 +11,15 @@ abstract interface class GroupCorePort {
     required String goal,
     required String rules,
     String? messagePrompt,
+    GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
   });
 
-  Future<GroupSummary> joinGroup(String groupDid);
+  Future<GroupSummary> joinGroup(
+    String groupDid, {
+    GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+  });
+
+  Future<GroupRebindRecoverySummary> resumeRebindRecovery({int limit = 100});
 
   Future<GroupSummary> getGroup(String groupDid);
 

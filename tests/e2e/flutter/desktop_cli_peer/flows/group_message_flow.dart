@@ -13,6 +13,7 @@ Future<void> _verifyGroupTextRegression({
     description: 'AWiki Me desktop E2E group ${config.runId}',
     goal: 'Verify basic App and CLI peer group messaging.',
     rules: 'Only automated non-production E2E messages.',
+    identity: GroupIdentitySelection.handle(config.appHandle),
   );
   expect(group.groupId.trim(), isNotEmpty);
   expect(group.displayName, isNotEmpty);
@@ -188,6 +189,9 @@ Future<void> _verifyGroupTextRegression({
       cliGroupText,
     ],
   );
+
+  final recovery = await groups.resumeRebindRecovery();
+  expect(recovery.blocked, 0);
 }
 
 Future<void> _waitForGroupMember({

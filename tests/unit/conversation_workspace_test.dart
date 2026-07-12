@@ -1253,8 +1253,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gateway.lastAddedGroupId, group.groupId);
-    expect(gateway.lastAddedMemberRef, memberDid);
-    expect(find.text(memberHandle), findsOneWidget);
+    expect(gateway.lastAddedMemberRef, memberHandle);
+    expect(find.textContaining(memberHandle), findsOneWidget);
     expect(find.text(memberDid), findsNothing);
     expect(find.text('3 人'), findsOneWidget);
 
@@ -1264,8 +1264,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gateway.lastRemovedGroupId, group.groupId);
-    expect(gateway.lastRemovedMemberRef, memberDid);
-    expect(find.text(memberHandle), findsNothing);
+    expect(gateway.lastRemovedMemberRef, memberHandle);
+    expect(find.textContaining(memberHandle), findsNothing);
     expect(find.text('2 人'), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = null;

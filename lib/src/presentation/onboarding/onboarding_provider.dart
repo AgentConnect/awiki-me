@@ -10,6 +10,7 @@ import '../../domain/entities/session_identity.dart';
 import '../../domain/repositories/awiki_account_gateway.dart';
 import '../../l10n/app_message.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
+import '../group/group_provider.dart';
 
 const Object _unset = Object();
 
@@ -126,6 +127,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
 
   final Ref ref;
   static const Duration _requestTimeout = Duration(seconds: 20);
+  static const Duration _groupRecoveryTimeout = Duration(seconds: 8);
   static const int _otpResendCooldownSeconds = 60;
   static const int _emailResendCooldownSeconds = 60;
   Timer? _otpResendTimer;
@@ -341,6 +343,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       final support = ref.read(onboardingSupportServiceProvider);
       final onboarding = ref.read(onboardingServiceProvider);
       final status = await support.lookupHandleRegistration(handle: handle);
+      final recovered = status == HandleRegistrationStatus.registered;
       final session = switch (status) {
         HandleRegistrationStatus.registered =>
           state.supportsPhoneOtpRecovery
@@ -362,7 +365,31 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       await ref
           .read(appRuntimeProvider.notifier)
           .activateSession(_legacySessionFromAppSession(session));
+      if (recovered) {
+        await _resumeGroupRecoveryBestEffort();
+      }
     });
+  }
+
+  Future<void> _resumeGroupRecoveryBestEffort() async {
+    try {
+      final summary = await ref
+          .read(groupProvider.notifier)
+          .resumeRebindRecovery()
+          .timeout(_groupRecoveryTimeout);
+      final feedback = ref.read(uiFeedbackProvider.notifier);
+      if (summary.hasBlocked) {
+        feedback.showInfo(AppMessage.groupRecoveryBlocked(summary.blocked));
+      } else if (summary.hasPending) {
+        feedback.showInfo(AppMessage.groupRecoveryPending(summary.pending));
+      } else if (summary.completed > 0) {
+        feedback.showInfo(AppMessage.groupRecoveryCompleted());
+      }
+    } catch (_) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showInfo(AppMessage.groupRecoveryStatusUnavailable());
+    }
   }
 
   Future<void> loginExistingWithOtp({
@@ -383,6 +410,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       await ref
           .read(appRuntimeProvider.notifier)
           .activateSession(_legacySessionFromAppSession(session));
+      await _resumeGroupRecoveryBestEffort();
     });
   }
 
